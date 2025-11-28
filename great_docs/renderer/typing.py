@@ -40,6 +40,7 @@ DocObjectKind: TypeAlias = Literal[
     "alias",
     "type",
     "typevar",
+    "type alias",
 ]
 
 DocstringDefinitionType: TypeAlias = (

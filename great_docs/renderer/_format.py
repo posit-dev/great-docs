@@ -261,7 +261,9 @@ def render_dataclass_init_parameter(param: gf.Parameter) -> str:
         The parameter
     """
     try:
-        annotation = cast("gf.ExprSubscript", param.annotation).slice
+        annotation = cast(
+            "gf.Expr", cast("gf.ExprSubscript", param.annotation).slice
+        )
     except AttributeError:
         # A dataclass that also defines an __init__ may have parameters
         # that do not have annotations.
