@@ -49,6 +49,7 @@ dev = [
     "pyright>=1.1.350",
     "build>=0.7",
     "twine>=3.4",
+    "pyright>=1.1.407",
 ]
 docs = [
     "jupyter>=1.0.0",
@@ -143,20 +144,20 @@ line-ending = "auto"
 [tool.pyright]
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
-include = ["great_docs"]
-exclude = [
-    "**/__pycache__",
-    "**/node_modules",
-    "**/.venv",
-    "**/build",
-    "**/dist",
-    "tests",
-    "docs",
+include = [
+   "great_docs/renderer/"
 ]
-reportMissingImports = true
+
+# These checks are not enabled on by "strict"
+reportUnnecessaryTypeIgnoreComment = true
+reportCallInDefaultInitializer = true
+reportPropertyTypeMismatch = true
+reportUnusedCallResult = true
+
+# These fail mainly because quartodoc is not fully type annotated
+reportUnknownMemberType = false
+reportUnknownVariableType = false
 reportMissingTypeStubs = false
-reportUnusedImport = true
-reportUnusedVariable = true
 
 [tool.mypy]
 python_version = "3.11"
