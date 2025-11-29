@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Literal
 
 from quartodoc.renderers.base import Renderer as _Renderer
 
-from .typing_information import TypeInformation
 
 if TYPE_CHECKING:
     from quartodoc import Builder, layout
@@ -56,5 +55,7 @@ class Renderer(_Renderer):
         """
         Render typing information and the interlinks
         """
+        from .typing_information import TypeInformation
+
         for module_path in self.typing_module_paths:
             TypeInformation(module_path, self, builder).write()

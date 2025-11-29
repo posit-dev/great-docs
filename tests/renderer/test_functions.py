@@ -1,4 +1,4 @@
-from qrenderer.tools import render_code_variable
+from great_docs.renderer._tools import render_code_variable
 
 
 def test_dataclass_with_keyword_only_signature():
