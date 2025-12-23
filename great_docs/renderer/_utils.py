@@ -73,19 +73,19 @@ class isDoc:
 
     @staticmethod
     def Function(el: DocMemberType) -> TypeGuard[layout.DocFunction]:
-        return el.obj.is_function
+        return el.obj.is_function  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
 
     @staticmethod
     def Class(el: DocMemberType) -> TypeGuard[layout.DocClass]:
-        return el.obj.is_class
+        return el.obj.is_class  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
 
     @staticmethod
     def Attribute(el: DocMemberType) -> TypeGuard[layout.DocAttribute]:
-        return el.obj.is_attribute
+        return el.obj.is_attribute  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
 
     @staticmethod
     def Module(el: DocMemberType) -> TypeGuard[layout.DocModule]:
-        return el.obj.is_attribute
+        return el.obj.is_attribute  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
 
 
 def griffe_to_doc(obj: gf.Object | gf.Alias) -> DocType:
@@ -94,7 +94,7 @@ def griffe_to_doc(obj: gf.Object | gf.Alias) -> DocType:
 
     The function recursively includes all members.
     """
-    return layout.Doc.from_griffe(
+    return layout.Doc.from_griffe(  # pyright: ignore[reportUnknownMemberType]
         obj.name,
         obj,
         members=[griffe_to_doc(m) for m in obj.all_members.values()],

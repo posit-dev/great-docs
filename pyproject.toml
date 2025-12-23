@@ -154,9 +154,7 @@ reportCallInDefaultInitializer = true
 reportPropertyTypeMismatch = true
 reportUnusedCallResult = true
 
-# These fail mainly because quartodoc is not fully type annotated
-reportUnknownMemberType = false
-reportUnknownVariableType = false
+# We need this because quartodoc is not fully type annotated
 reportMissingTypeStubs = false
 
 [tool.mypy]

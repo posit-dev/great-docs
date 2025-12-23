@@ -89,7 +89,7 @@ def set_class_attr(cls: type[RenderBase], name: str, value: Any):
         value = property(fget=fget, fset=fset, fdel=fdel, doc=value.__doc__)
     elif isinstance(value, cached_property):
         func = adjust_closure(value.func)
-        value = cached_property(func)
+        value = cached_property(func)  # pyright: ignore[reportUnknownVariableType]
         value.__set_name__(cls, name)
     elif isinstance(value, MethodType):
         # This is for @staticmethods

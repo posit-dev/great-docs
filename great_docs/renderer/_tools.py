@@ -55,7 +55,7 @@ def _render(obj: gf.Object):
             # not interested in dealing with them.
             if not isinstance(m, gf.Alias)
         ]
-        return layout.Doc.from_griffe(obj.name, obj, members=members)
+        return layout.Doc.from_griffe(obj.name, obj, members=members)  # pyright: ignore[reportUnknownMemberType]
 
     match layout_obj := toDocObject(obj):
         case layout.DocAttribute():

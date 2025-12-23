@@ -374,7 +374,7 @@ class __RenderDoc(RenderBase):
 
         patched_sections = cast(
             "list[gf.DocstringSection]",
-            qast.transform(self.obj.docstring.parsed),
+            qast.transform(self.obj.docstring.parsed),  # pyright: ignore[reportUnknownMemberType]
         )
         for section in patched_sections:
             title = (section.title or section.kind.value).title()
@@ -423,14 +423,14 @@ class __RenderDoc(RenderBase):
         [](`~functools.singledispatchmethod`) method for that type
         of section.
         """
-        new_el = qast.transform(el)
+        new_el = qast.transform(el)  # pyright: ignore[reportUnknownMemberType]
         if isinstance(new_el, qast.ExampleCode):
             return CodeBlock(el.value, Attr(classes=["python"]))
         return el.value
 
     @render_section.register
     def _(self, el: gf.DocstringSectionExamples):
-        return Blocks([self.render_section(qast.transform(c)) for c in el.value])
+        return Blocks([self.render_section(qast.transform(c)) for c in el.value])  # pyright: ignore[reportUnknownMemberType]
 
     @render_section.register
     def _(self, el: gf.DocstringSectionDeprecated):
