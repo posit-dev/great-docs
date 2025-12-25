@@ -18,16 +18,15 @@ from quartodoc.layout import (
 from quartodoc.pandoc.blocks import InlineContent
 
 from . import (
+    RenderAPIPage,
     RenderDoc,
     RenderDocAttribute,
     RenderDocClass,
     RenderDocFunction,
     RenderDocModule,
     RenderLayout,
-    RenderPage,
     RenderSection,
 )
-
 from ._griffe.docstrings import DCDocstringSection
 
 DisplayNameFormat: TypeAlias = Literal["full", "name", "short", "relative", "canonical"]
@@ -74,7 +73,7 @@ RenderObjType: TypeAlias = (
     | RenderDocAttribute
     | RenderDocModule
     | RenderLayout
-    | RenderPage
+    | RenderAPIPage
     | RenderSection
 )
 

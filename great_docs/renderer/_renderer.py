@@ -33,9 +33,9 @@ class Renderer(_Renderer):
         """
         Render a page
         """
-        from . import RenderPage
+        from . import RenderAPIPage
 
-        return str(RenderPage(el, self, self.header_level))
+        return str(RenderAPIPage(el, self, self.header_level))
 
     def summarize(self, el: layout.Layout):
         """

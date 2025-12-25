@@ -12,12 +12,12 @@ from quartodoc.layout import (
     Section,
 )
 
+from .api_page import RenderAPIPage
 from .docattribute import RenderDocAttribute
 from .docclass import RenderDocClass
 from .docfunction import RenderDocFunction
 from .docmodule import RenderDocModule
 from .layout import RenderLayout
-from .page import RenderPage
 from .section import RenderSection
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ _class_mapping: dict[type[Documentable], type[RenderObjType]] = {
     DocFunction: RenderDocFunction,
     DocModule: RenderDocModule,
     Layout: RenderLayout,
-    Page: RenderPage,
+    Page: RenderAPIPage,
     Section: RenderSection,
 }
 
@@ -56,7 +56,7 @@ def get_render_type(obj: Layout) -> type[RenderLayout]: ...
 
 
 @overload
-def get_render_type(obj: Page) -> type[RenderPage]: ...
+def get_render_type(obj: Page) -> type[RenderAPIPage]: ...
 
 
 @overload

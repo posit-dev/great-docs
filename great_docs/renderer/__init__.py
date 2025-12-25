@@ -1,3 +1,4 @@
+from ._render.api_page import RenderAPIPage
 from ._render.doc import RenderDoc
 from ._render.docattribute import RenderDocAttribute
 from ._render.docclass import RenderDocClass
@@ -12,7 +13,6 @@ from ._render.extending import (
 from ._render.layout import RenderLayout
 from ._render.mixin_call import RenderDocCallMixin
 from ._render.mixin_members import RenderDocMembersMixin
-from ._render.page import RenderPage
 from ._render.section import RenderSection
 from ._renderer import Renderer
 
@@ -26,7 +26,7 @@ __all__ = (
     "RenderDocCallMixin",
     "RenderDocMembersMixin",
     "RenderLayout",
-    "RenderPage",
+    "RenderAPIPage",
     "RenderSection",
     "exclude_attributes",
     "exclude_classes",

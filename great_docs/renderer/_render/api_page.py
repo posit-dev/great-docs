@@ -25,10 +25,13 @@ if TYPE_CHECKING:
     from ..typing import RenderObjType, SummaryItem
     from .doc import RenderDoc
 
+# NOTE: While quartodoc has Page.summary attribute, at the moment it is not used
+# so self.page.summary is None, always.
 
-class __RenderPage(RenderBase):
+
+class __RenderAPIPage(RenderBase):
     """
-    Render a Page object (layout.Page)
+    Render an API Page object (layout.Page)
     """
 
     def __post_init__(self):
@@ -51,7 +54,7 @@ class __RenderPage(RenderBase):
 
         level = self.level if self._has_one_object else self.level + 1
         render_objs: list[RenderObjType] = [
-            get_render_type(c)(c, self.renderer, level)  # pyright: ignore[reportCallIssue,reportArgumentType]
+            get_render_type(c)(c, self.renderer, level)  # type: ignore
             for c in self.page.contents
         ]
         return render_objs
@@ -108,7 +111,7 @@ class __RenderPage(RenderBase):
         return items
 
 
-class RenderPage(__RenderPage):
+class RenderAPIPage(__RenderAPIPage):
     """
-    Extend Rendering of a layout.Page object
+    Extend Rendering of an API Page
     """
