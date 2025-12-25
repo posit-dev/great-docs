@@ -25,7 +25,7 @@ from . import (
     RenderDocFunction,
     RenderDocModule,
     RenderLayout,
-    RenderSection,
+    RenderReferenceSection,
 )
 from ._griffe.docstrings import DCDocstringSection
 
@@ -74,7 +74,7 @@ RenderObjType: TypeAlias = (
     | RenderDocModule
     | RenderLayout
     | RenderAPIPage
-    | RenderSection
+    | RenderReferenceSection
 )
 
 AnyDocstringSection: TypeAlias = gf.DocstringSection | DCDocstringSection

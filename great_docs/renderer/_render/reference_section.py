@@ -18,9 +18,9 @@ if TYPE_CHECKING:
     from ..typing import RenderObjType
 
 
-class __RenderSection(RenderBase):
+class __RenderReferenceSection(RenderBase):
     """
-    Render a Section object (layout.Section)
+    Render a section object (layout.Section)
 
     This is a section of the index/reference page
     """
@@ -54,7 +54,7 @@ class __RenderSection(RenderBase):
         from . import get_render_type
 
         render_objs: list[RenderObjType] = [
-            get_render_type(c)(c, self.renderer)  # pyright: ignore[reportCallIssue,reportArgumentType]
+            get_render_type(c)(c, self.renderer)  # type: ignore
             for c in self.section.contents
         ]
         rows = [row for r in render_objs for row in r.render_summary()]
@@ -64,7 +64,7 @@ class __RenderSection(RenderBase):
         )
 
 
-class RenderSection(__RenderSection):
+class RenderReferenceSection(__RenderReferenceSection):
     """
-    Extend Rendering of a layout.Section object
+    Extend rendering of a section on the api-reference page
     """

@@ -13,7 +13,7 @@ from ._render.extending import (
 from ._render.layout import RenderLayout
 from ._render.mixin_call import RenderDocCallMixin
 from ._render.mixin_members import RenderDocMembersMixin
-from ._render.section import RenderSection
+from ._render.reference_section import RenderReferenceSection
 from ._renderer import Renderer
 
 __all__ = (
@@ -27,7 +27,7 @@ __all__ = (
     "RenderDocMembersMixin",
     "RenderLayout",
     "RenderAPIPage",
-    "RenderSection",
+    "RenderReferenceSection",
     "exclude_attributes",
     "exclude_classes",
     "exclude_functions",
