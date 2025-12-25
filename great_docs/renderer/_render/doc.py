@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 
     from ..typing import (
         Annotation,
+        AnyDocstringSection,
         DisplayNameFormat,
         DocObjectKind,
         SummaryItem,
@@ -362,26 +363,52 @@ class __RenderDoc(RenderBase):
         )
 
     @cached_property
-    def _sections(self) -> tuple[list[Block], list[str]]:
+    def sections_content(self) -> list[tuple[str, AnyDocstringSection]]:
         """
-        Sections of the docstring
+        The sections of the docstring before they are marked up
+
+        Subclasses can override this method to easily peek at the available
+        sections, remove, modify, or even add some more.
+
+        Returns
+        -------
+        :
+            List of (title, DocstringSection)
         """
-        sections: list[Block] = []
-        section_kinds: list[str] = []
+        items: list[tuple[str, AnyDocstringSection]] = []
 
         if not self.obj.docstring:
-            return sections, section_kinds
+            return []
 
         patched_sections = cast(
             "list[gf.DocstringSection]",
             qast.transform(self.obj.docstring.parsed),  # pyright: ignore[reportUnknownMemberType]
         )
-        for section in patched_sections:
-            title = (section.title or section.kind.value).title()
+
+        for i, section in enumerate(patched_sections):
+            section_kind: gf.DocstringSectionKind = section.kind
+            title = (section.title or section_kind).title()
+
+            if section_kind == "text":
+                assert i == 0, f"unexpected text section {section_kind}"
+
+            items.append((title, section))
+
+        return items
+
+    @cached_property
+    def sections(self) -> list[Block]:
+        """
+        Rendered sections of the docstring.
+
+        Each section is produced by parsing the docstring into titled sections
+        and wrapping the section content in markup-generating blocks.
+        """
+        sections: list[Block] = []
+        for title, section in self.sections_content:
             body = self.render_section(section) or ""
             slug = title.lower().replace(" ", "-")
             section_classes = [f"doc-{slug}"]
-
             if title in ("Text", "Deprecated"):
                 content = Div(body, Attr(classes=section_classes))
             else:
@@ -392,20 +419,13 @@ class __RenderDoc(RenderBase):
                 )
                 content = Blocks([header, body])
             sections.append(content)
-            section_kinds.append(section.kind.value)
-
-        return sections, section_kinds
+        return sections
 
     def render_body(self) -> BlockContent:
         """
         Render the docsting of the Doc object
         """
-        sections, _ = self._sections
-        if self.obj.name == "exclude_parameters":
-            print(self.obj.name, _)
-        if not sections:
-            return None
-        return Blocks(sections)
+        return None if not self.sections else Blocks(self.sections)
 
     @singledispatchmethod
     def render_section(self, el: gf.DocstringSection) -> BlockContent:

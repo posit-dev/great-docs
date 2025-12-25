@@ -14,7 +14,11 @@ from quartodoc.pandoc.blocks import (
 from quartodoc.pandoc.components import Attr
 from quartodoc.pandoc.inlines import Code
 
-from .._format import formatted_signature, pretty_code, repr_obj
+from .._format import formatted_signature, repr_obj
+from .._griffe.docstrings import (
+    DCDocstringSectionInitParameters,
+    DCDocstringSectionParameterAttributes,
+)
 from .doc import RenderDoc
 
 if TYPE_CHECKING:
@@ -32,6 +36,8 @@ DocstringSectionWithDefinitions: TypeAlias = (
     | gf.DocstringSectionRaises
     | gf.DocstringSectionWarns
     | gf.DocstringSectionAttributes
+    | DCDocstringSectionParameterAttributes
+    | DCDocstringSectionInitParameters
 )
 
 

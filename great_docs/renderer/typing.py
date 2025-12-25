@@ -28,6 +28,8 @@ from . import (
     RenderSection,
 )
 
+from ._griffe.docstrings import DCDocstringSection
+
 DisplayNameFormat: TypeAlias = Literal["full", "name", "short", "relative", "canonical"]
 DocObjectKind: TypeAlias = Literal[
     "module",
@@ -75,6 +77,8 @@ RenderObjType: TypeAlias = (
     | RenderPage
     | RenderSection
 )
+
+AnyDocstringSection: TypeAlias = gf.DocstringSection | DCDocstringSection
 
 Annotation: TypeAlias = str | gf.Expr
 
