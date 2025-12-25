@@ -7,7 +7,6 @@ from quartodoc.pandoc.blocks import Div
 from quartodoc.pandoc.components import Attr
 from quartodoc.pandoc.inlines import Code
 
-from .._format import pretty_code, render_attribute_declaration
 from .doc import RenderDoc
 
 if TYPE_CHECKING:
@@ -32,36 +31,17 @@ class __RenderDocAttribute(RenderDoc):
         self.obj: gf.Attribute = self.obj
 
     def render_signature(self) -> BlockContent:
-        if self.kind in ("type", "typevar"):
-            return self.render_type_signature()
-
         name = self.signature_name if self.show_signature_name else ""
-        annotation = (
-            pretty_code(str(self.render_annotation())) if self.show_signature_annotation else ""
-        )
-        declaration = str(self.render_variable_definition(name, annotation, self.obj.value))
+        annotation = self.obj.annotation if self.show_signature_annotation else None
+        default = getattr(self.obj, "value", None)
+
+        # For a TypeAlias, the name is the title and we can do without the annotation
+        if self.kind in ("type", "typevar"):
+            name, annotation = None, None
+
+        term = self.render_variable_definition(name, annotation, default)
         return Div(
-            Code(declaration).html,
-            Attr(classes=["doc-signature", f"doc-{self.kind}"]),
-        )
-
-    def render_type_signature(self) -> BlockContent:
-        """
-        The signature of a TypeAlias
-        """
-        stmt = render_attribute_declaration(self.obj)
-        i, j = stmt.find(":"), stmt.find("=")
-
-        if self.show_signature_name:
-            if not self.show_signature_annotation and i < j:
-                stmt = f"{stmt[:i]}{stmt[j:].strip()}"
-        else:
-            start = (self.show_signature_annotation and i) or j
-            value = stmt[start + 1].strip()
-
-        value = stmt[stmt.find("=") + 1 :].strip()
-        return Div(
-            Code(pretty_code(value)).html,
+            Code(str(term)).html,
             Attr(classes=["doc-signature", f"doc-{self.kind}"]),
         )
 

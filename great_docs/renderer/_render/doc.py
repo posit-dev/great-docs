@@ -20,9 +20,11 @@ from quartodoc.pandoc.components import Attr
 from quartodoc.pandoc.inlines import Code, Inline, Inlines, Link, Span
 
 from .._format import (
+    HAS_RUFF,
     format_see_also,
     markdown_escape,
     pretty_code,
+    render_formatted_expr,
     repr_obj,
 )
 from .._pandoc.inlines import InterLink
@@ -240,7 +242,7 @@ class __RenderDoc(RenderBase):
         ]
         return Span(codes, Attr(classes=["doc-labels"]))
 
-    def render_annotation(self, annotation: Annotation | None = None) -> Inline | str:
+    def render_annotation(self, annotation: Annotation | None = None) -> str:
         """
         Render an annotation
 
@@ -270,18 +272,38 @@ class __RenderDoc(RenderBase):
                 return InterLink(markdown_escape(ann.name), ann.canonical_path)
             else:
                 assert isinstance(ann, gf.Expr)
+                if isinstance(ann, gf.ExprSubscript) and ann.canonical_name == "InitVar":
+                    ann = cast("gf.Expr", ann.slice)
                 # A type annotation with ~ removes the qualname prefix
                 path_str = ann.canonical_path
                 if path_str[0] == "~":
                     return InterLink(ann.canonical_name, path_str[1:])
                 return "".join(str(_render(a)) for a in ann)
 
-        return _render(annotation)
+        return pretty_code(str(_render(annotation)))
+
+    def render_value(self, value: str | gf.Expr | None = None) -> str:
+        """
+        Render a value
+
+        Parameters
+        ----------
+        value
+            A value that can appear on the right-hand-side of an `=`
+            operator.
+
+        Returns
+        -------
+        :
+            Escaped and highlighted markdown represenation of the value.
+            It is not markedup as code.
+        """
+        return pretty_code(repr_obj(value))
 
     def render_variable_definition(
         self,
-        name: str,
-        annotation: str | None,
+        name: str | None,
+        annotation: str | gf.Expr | None,
         default: str | gf.Expr | None,
     ) -> Inline:
         """
@@ -293,39 +315,50 @@ class __RenderDoc(RenderBase):
         ----------
         name :
             Name of the variable
-
         annotation :
             Type Annotation of the variable or parameter
-
         default :
             Default value of the variable/parameter.
         """
-        lst: list[InlineContentItem] = []
+        items: list[InlineContentItem] = []
+
         if name:
-            lst.append(Span(name, Attr(classes=["doc-parameter-name"])))
+            items.append(Span(name, Attr(classes=["doc-parameter-name"])))
 
         if annotation:
-            if name:
-                lst.append(Span(":", Attr(classes=["doc-parameter-annotation-sep"])))
-            annotation = pretty_code(annotation)
-            lst.append(Span(annotation, Attr(classes=["doc-parameter-annotation"])))
+            if isinstance(annotation, gf.Expr):
+                # NOTE: We have two ways of rendering the annotation.
+                # - self.render_annotation: Is more intuitive but when we use it we
+                #   cannot format code that may be too wide.
+                # - render_formatted_expr: Has more moving parts it needs ruff but it
+                #   seems to work well so far.
+                annotation = (
+                    render_formatted_expr(annotation)
+                    if HAS_RUFF and len(str(annotation)) > 79
+                    else self.render_annotation(annotation)
+                )
 
-        # Equal sign depends on name and annotation
-        if name:
-            eq = " = " if annotation else "="
-            equals = Span(eq, Attr(classes=["doc-parameter-default-sep"]))
-        else:
-            equals = None
-
-        if default:
-            default = pretty_code(repr_obj(default))
-            lst.extend(
+            items.extend(
                 [
-                    equals,
-                    Span(default, Attr(classes=["doc-parameter-default"])),
+                    Span(":", Attr(classes=["doc-parameter-annotation-sep"])) if name else None,
+                    Span(annotation, Attr(classes=["doc-parameter-annotation"])),
                 ]
             )
-        return Inlines(lst)
+
+        if default is not None:
+            default = (
+                render_formatted_expr(default)
+                if isinstance(default, gf.Expr)
+                else self.render_value(default)
+            )
+
+            # Equal sign and space around it depends on name and annotation
+            equals = Span("=", Attr(classes=["doc-parameter-default-sep", "op"])) if name else None
+            space = " " if annotation else None
+            items.extend(
+                [space, equals, space, Span(default, Attr(classes=["doc-parameter-default"]))]
+            )
+        return Inlines(items)
 
     def render_title(self) -> BlockContent:
         """

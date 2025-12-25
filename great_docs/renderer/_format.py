@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import re
-from functools import partial, singledispatch
+import shutil
+import subprocess
+import tempfile
+from functools import lru_cache, partial, singledispatch
+from pathlib import Path
 from textwrap import dedent
 from typing import TYPE_CHECKING, cast
 
@@ -14,12 +18,14 @@ from ._pandoc.inlines import InterLink
 if TYPE_CHECKING:
     from typing import Any
 
+HAS_RUFF = bool(shutil.which("ruff"))
+
 # Pickout python identifiers from a string of code
 IDENTIFIER_RE = re.compile(r"\b(?P<identifier>[^\W\d]\w*)", flags=re.UNICODE)
 
 # Pickout quoted strings from a string of code
-STRING_RE = re.compile(
-    r"(?P<string>"  # group
+STR_RE = re.compile(
+    r"(?P<str>"  # group
     # Within quotes, match any character that has been backslashed
     # or that is not a double quote or backslash
     r'"(?:\\.|[^"\\])*"'  # double-quoted
@@ -28,6 +34,16 @@ STRING_RE = re.compile(
     ")",
     flags=re.UNICODE,
 )
+INT_RE = re.compile(r"^(?P<int>[+-]?\d+)$")
+FLOAT_RE = re.compile(r"^(?P<float>[+-]?(\d+\.\d*|\.\d+|\d+)([eE][+-]?\d+)?)$")
+BOOL_RE = re.compile(r"^(?P<bool>True|False)$")
+TYPE_RE_LOOKUP = {
+    # The second element of the tuple are the respective pygments highlight classes
+    "str": (STR_RE, "st"),
+    "int": (INT_RE, "dv"),
+    "float": (FLOAT_RE, "fl"),
+    "bool": (BOOL_RE, "va"),
+}
 
 # Pickout qualified path names at the beginning of every line
 _qualname = r"[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*"
@@ -75,19 +91,45 @@ def markdown_escape(s: str) -> str:
     return s
 
 
-def string_match_highlight_func(m: re.Match[str]) -> str:
+def _highlight_func(m: re.Match[str]) -> str:
     """
     Return matched group(string) wrapped in a Span for a string
+
+    Helper function for highlight_repr_value
     """
-    string_str = m.group("string")
-    return str(Span(string_str, Attr(classes=["st"])))
+    matched_type = cast("str", m.lastgroup)
+    klass = TYPE_RE_LOOKUP[matched_type][1]
+    value = m.group(matched_type)
+    return str(Span(value, Attr(classes=[klass])))
 
 
-def highlight_strings(s: str) -> str:
+@lru_cache(2048)
+def highlight_repr_value(value: str) -> str:
     """
-    Wrap quoted sub-strings in s with a hightlight group for strings
+    Highlight a repr value
+
+    Highlighting is done by creating a markdown span with a class
+    that matches that used by pygments. This function only highlights
+    values of type int, float and str, anything else is unmodified.
+
+    Parameters
+    ----------
+    value
+        A repr string value.
+
+    Returns
+    -------
+    :
+        Highlighted value. e.g.:
+        - `"4"` becomes `'[4]{.dv}'`
+        - `"3.14"` becomes `'[3.14]{.fl}'`
+        - `'"some"'` becomes `"['some']{.st}"`
     """
-    return STRING_RE.sub(string_match_highlight_func, s)
+    for pattern, _ in TYPE_RE_LOOKUP.values():
+        value, count = pattern.subn(_highlight_func, value)
+        if count > 0:
+            break
+    return value
 
 
 def format_see_also(s: str) -> str:
@@ -194,7 +236,7 @@ def pretty_code(s: str) -> str:
         the links, but should not be wrapped inside the <code>
         tags. Those tags should wrap the output of this function.
     """
-    return escape_quotes(escape_indents(highlight_strings(dedent(s))))
+    return escape_quotes(escape_indents(highlight_repr_value(dedent(s))))
 
 
 def interlink_groups(m: re.Match[str], lookup: dict[str, str]) -> str:
@@ -209,63 +251,78 @@ def interlink_groups(m: re.Match[str], lookup: dict[str, str]) -> str:
     return str(InterLink(identifier_str, canonical_path))
 
 
-def render_attribute_declaration(el: gf.Attribute) -> str:
+def render_formatted_expr(el: gf.Expr) -> str:
     """
-    Render expression with identifiers in them interlinked
-    """
-    if not el.value or isinstance(el.value, str):
-        return str(el.value)
+    Format and render expression any the identifiers interlinked
 
-    lookup = canonical_path_lookup_table(el.value)
-    interlink_func = partial(interlink_groups, lookup=lookup)
-    definition_str = "\n".join(el.lines)
-    return IDENTIFIER_RE.sub(interlink_func, definition_str)
-
-
-def render_dataclass_parameter(
-    param: gf.Parameter,
-    attr: gf.Attribute,
-) -> str:
-    """
-    Render a dataclass parameter
+    Uses ruff for formatting
 
     Parameters
     ----------
-    param :
-        The parameter
-    attr :
-        The attribute form of the parameter
+    el
+        An expression. This expression will most likely represent an annotation or
+        a value on the right hand side of an `=` operator.
+
+    Returns
+    -------
+    :
+        Expression in markdown with the identifiers interlinked (to be handled by the
+        interlinks filter). Any Spaces are encoded as `&nbsp;` and newlines with the
+        `<br>` tag.
     """
-    definition_str = "\n".join(attr.lines)
-
-    match param.annotation:
-        case gf.Expr():
-            lookup = canonical_path_lookup_table(param.annotation)
-            interlink_func = partial(interlink_groups, lookup=lookup)
-            res = IDENTIFIER_RE.sub(interlink_func, definition_str)
-        case _:
-            res = definition_str
-
-    return res
-
-
-def render_dataclass_init_parameter(param: gf.Parameter) -> str:
-    """
-    Render a dataclass parameter
-
-    Parameters
-    ----------
-    param :
-        The parameter
-    """
-    try:
-        annotation = cast("gf.Expr", cast("gf.ExprSubscript", param.annotation).slice)
-    except AttributeError:
-        # A dataclass that also defines an __init__ may have parameters
-        # that do not have annotations.
-        return param.name
-    lookup = canonical_path_lookup_table(annotation)
+    # This function works by:
+    # 1. Formatting (with ruff) the str represented by the expression.
+    # 2. Processes the expresssion and builds a {name: cannonical_path}
+    #    lookup table for all the named parts of the expression.
+    # 3. Creates a regex replacement function that uses the lookup table
+    #    and to substitute a matched name (identifier) with an interlink.
+    # 4. Does the regex substitution on the formatted string.
+    # 5. Escapes the result to "hard code" the indentation, etc
+    el_str = format_str(str(el))
+    lookup = canonical_path_lookup_table(el)
     interlink_func = partial(interlink_groups, lookup=lookup)
-    default = f"=  {param.default}" if param.default else ""
-    definition_str = f"{param.name}: {annotation} {default}"
-    return IDENTIFIER_RE.sub(interlink_func, definition_str)
+    return pretty_code(IDENTIFIER_RE.sub(interlink_func, el_str))
+
+
+def _tmp_stdin_filename() -> str:
+    """
+    Create a temp filename for ruff to use when formatting code snippets
+
+    The file serves mainly as virtual placeholder to infer things like
+    the location of the config file or as a reference for warnings and
+    errors. So a single filename should suffice for all calls to ruff.
+
+    ref: https://github.com/astral-sh/ruff/issues/17307
+    """
+    with tempfile.NamedTemporaryFile(suffix=".py", dir=Path.cwd()) as f:
+        filename = Path(f.name).name
+    return filename
+
+
+_STDIN_FILENAME = _tmp_stdin_filename()
+
+
+@lru_cache(maxsize=2048)
+def format_str(source: str) -> str:
+    """
+    Format Python source code using Ruff
+
+    This analogous to black.format_str.
+    """
+    proc = subprocess.run(
+        [
+            "ruff",
+            "format",
+            "--stdin-filename",
+            _STDIN_FILENAME,
+            "-",
+        ],
+        input=source,
+        text=True,
+        capture_output=True,
+    )
+
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip())
+
+    return proc.stdout

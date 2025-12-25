@@ -74,26 +74,19 @@ class __RenderDocCallMixin(RenderDoc):
             """
             name = getattr(el, "name", None) or ""
             default = getattr(el, "default", None)
-            annotation = (
-                pretty_code(str(self.render_annotation(el.annotation))) if el.annotation else None
-            )
+            annotation = el.annotation
 
-            # Parameter of kind *args or **kwargs have not default values
-            if isinstance(el, gf.DocstringParameter):
-                kind = self._parameter_kinds.get(el.name.strip("*"), None)
-                if kind in (
-                    gf.ParameterKind.var_keyword,
-                    gf.ParameterKind.var_positional,
-                ):
-                    default = None
+            # Parameter of kind *args or **kwargs have no default values
+            if isinstance(el, gf.DocstringParameter) and "*" in el.name:
+                default = None
 
-            term = str(self.render_variable_definition(name, annotation, default))
+            term = self.render_variable_definition(name, annotation, default)
 
             # Annotations are expressed in html so that contained interlink
             # references can be processed. Pandoc does not process any markup
             # within backquotes `...`, but it does if the markup is within
             # html code tags.
-            return Code(term).html, el.description
+            return Code(str(term)).html, el.description
 
         items = [render_section_item(item) for item in el.value]
         return Div(
@@ -133,6 +126,10 @@ class __RenderDocCallMixin(RenderDoc):
         return parameters
 
     def render_signature(self) -> BlockContent:
+        """
+        Render the signature of this callable
+        """
+        # For now, we do not do any interlinking in the signature
         name = self.signature_name if self.show_signature_name else ""
         sig = formatted_signature(name, self.render_signature_parameters())
         return Div(
@@ -175,7 +172,6 @@ class __RenderDocCallMixin(RenderDoc):
         This is a single item in the brackets of
 
             func(a, b, c=3, d=4, **kwargs)
-
         """
         default = None
         if el.kind == gf.ParameterKind.var_keyword:
@@ -185,14 +181,14 @@ class __RenderDocCallMixin(RenderDoc):
         else:
             name = el.name
             if el.default is not None:
-                default = el.default
+                default = repr_obj(el.default)
 
         if self.show_signature_annotation and el.annotation is not None:
             annotation, equals = f" : {el.annotation}", " = "
         else:
             annotation, equals = "", "="
 
-        default = (default and f"{equals}{repr_obj(default)}") or ""
+        default = (default and f"{equals}{default}") or ""
         return f"{name}{annotation}{default}"
 
 

@@ -14,9 +14,12 @@ from quartodoc.pandoc.blocks import (
     Header,
 )
 
-from . import RenderDocAttribute, RenderDocClass
 from ._pandoc.blocks import Meta
-from ._render import get_render_type
+from ._render import (
+    RenderDocAttribute,
+    RenderDocClass,
+    get_render_type,
+)
 from ._utils import griffe_to_doc, is_protocol, is_typealias, is_typevar
 
 if TYPE_CHECKING:

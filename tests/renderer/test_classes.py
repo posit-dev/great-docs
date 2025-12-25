@@ -32,7 +32,7 @@ def test_dataclass_parameters():
         Docstring of derived class
         """
 
-        c: float = 3
+        c: float = 3.0
         "Parameter c"
         y: ClassVar[str]
         "Derived Class variable y"
@@ -45,11 +45,21 @@ def test_dataclass_parameters():
             pass
     '''
     qmd = render_code_variable(code, "Derived")
+
+    def assert_in_qmd(name: str, annotation: str, default: str, co: str = ""):
+        """
+        Ensure that a parameter is rendered
+        """
+        assert f"<code>[{name}]{{.doc-parameter-name}}" in qmd
+        assert f"[{annotation}]{{.doc-parameter-annotation}}" in qmd
+        assert f"[[{default}]{{.{co}}}]{{.doc-parameter-default}}</code>" in qmd
+
     assert "## Init Parameters {.doc-init-parameters}" in qmd
-    assert "<code>a: [int](`int`) =  1</code>" in qmd
+    assert_in_qmd("a", "[int](`int`)", "1", "dv")
+
     assert "## Parameter Attributes {.doc-parameter-attributes}" in qmd
-    assert "<code>b: [float](`float`) = 2</code>" in qmd
-    assert "<code>c: [float](`float`) = 3</code>" in qmd
+    assert_in_qmd("b", "[float](`float`)", "2", "dv")
+    assert_in_qmd("c", "[float](`float`)", "3.0", "fl")
 
 
 def test_dataclass_parameter_docstrings():
