@@ -438,7 +438,7 @@ class __RenderDoc(RenderBase):
 
         for i, section in enumerate(sections):
             section_kind: gf.DocstringSectionKind = section.kind
-            title = (section.title or section_kind).title()
+            title = (section.title or section_kind).strip().title()
 
             if section_kind == "text":
                 assert i == 0, f"unexpected text section {section_kind}"
