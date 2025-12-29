@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, cast
 
 from quartodoc.pandoc.blocks import (
     Blocks,
+    DefinitionItem,
     Div,
 )
 from quartodoc.pandoc.components import Attr
@@ -16,8 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from quartodoc.layout import Link
-
-    from ..typing import SummaryItem
+    from quartodoc.pandoc.blocks import DefinitionItem
 
 
 class __RenderLink(RenderBase):
@@ -43,10 +43,11 @@ class __RenderLink(RenderBase):
             )
         )
 
-    def render_summary(self) -> Sequence[SummaryItem]:
+    def render_summary(self) -> Sequence[DefinitionItem]:
         link = InterLink(None, markdown_escape(self.link.name))
         text = self.obj.docstring.value.splitlines()[0] if self.obj.docstring else ""
         return [(str(link), text)]
+
 
 class RenderLink(__RenderLink):
     """

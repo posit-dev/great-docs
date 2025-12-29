@@ -44,7 +44,6 @@ if TYPE_CHECKING:
         Annotation,
         AnyDocstringSection,
         DocObjectKind,
-        SummaryItem,
     )
 
 
@@ -547,7 +546,7 @@ class __RenderDoc(RenderBase):
         """
         return self.doc.name
 
-    def render_summary(self) -> Sequence[SummaryItem]:
+    def render_summary(self) -> Sequence[DefinitionItem]:
         """
         Return a line item that summarises the object
         """
@@ -555,6 +554,7 @@ class __RenderDoc(RenderBase):
         link = Link(
             markdown_escape(self.summary_name),
             f"{self.page_path}#{self.doc.anchor}",
+            attr=Attr(classes=[f"doc-{self.kind}-name"]),
         )
         return [(str(link), self.docstring_subject)]
 

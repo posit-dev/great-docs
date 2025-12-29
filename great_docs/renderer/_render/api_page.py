@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, cast
 from quartodoc.pandoc.blocks import (
     BlockContent,
     Blocks,
+    DefinitionItem,
     Div,
     Header,
 )
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
 
     from quartodoc.layout import Page
 
-    from ..typing import RenderObjType, SummaryItem
+    from ..typing import RenderObjType
     from .doc import RenderDoc
 
 # NOTE: While quartodoc has Page.summary attribute, at the moment it is not used
@@ -93,7 +94,7 @@ class __RenderAPIPage(RenderBase):
         """
         return Blocks(self.render_objs)
 
-    def render_summary(self) -> Sequence[SummaryItem]:
+    def render_summary(self) -> Sequence[DefinitionItem]:
         page = self.page
         if page.summary is not None:
             link = Link(markdown_escape(page.summary.name), self.path)

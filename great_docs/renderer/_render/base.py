@@ -16,9 +16,9 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from quartodoc import layout
+    from quartodoc.pandoc.blocks import DefinitionItem
 
     from .. import Renderer
-    from ..typing import SummaryItem
 
 
 @dataclass
@@ -105,7 +105,7 @@ class __RenderBase(Block):
         return self.render_body()
 
     @cached_property
-    def summary(self) -> Sequence[SummaryItem]:
+    def summary(self) -> Sequence[DefinitionItem]:
         """
         The summary of the documented object
 
@@ -135,7 +135,7 @@ class __RenderBase(Block):
         """
         return ""
 
-    def render_summary(self) -> Sequence[SummaryItem]:
+    def render_summary(self) -> Sequence[DefinitionItem]:
         """
         Return a line(s) item that summarises the object
         """

@@ -56,12 +56,34 @@ table {
    color: $gray-800;
 }
 
-// docstring spacing and indentation
-section.doc-attributes > section.doc-attribute,
-section.doc-methods > section.doc-method {
-   @extend .ps-4;
-   border-left: 0.025rem solid $gray-500;
-   backgroud-color: cyan;
+/*---------------------------------- Reference Page -----------------------------------*/
+
+// definition-items
+.doc-index .doc-group > dl > dd {
+   @extend .mt-1;
+   @extend .mb-0;
+   @extend .ms-3;
+}
+
+// tables
+// Give all the tables on the index page the same with.
+// It looks better, but as table cells do not respond to
+// min-width styling, this is not a perfect solution.
+.doc-index .doc-group > table td:first-child{
+   width: 30%;
+}
+
+/*------------------------------------- API Page --------------------------------------*/
+
+// docstring object-name
+
+.doc-object span.doc-object-name:not(h1.title > span) {
+   opacity: 0.85;
+}
+
+// docstring object symbols
+.content code.doc-symbol {
+   font-size: 0.9rem;
 }
 
 // docstring signatures
@@ -88,49 +110,41 @@ section.doc-methods > section.doc-method {
    color: $primary;
 }
 
-// docstring object-name
+// docstring sections with definition-items
 
-.doc-object span.doc-object-name:not(h1.title > span) {
-   opacity: 0.85;
+$docstring-sections: ":is(.doc-parameters, .doc-other-parameters, .doc-returns, .doc-yields, .doc-receives, .doc-raises, .doc-warns, .doc-attributes, .doc-parameter-attributes, .doc-init-parameters, .doc-see-also)";
+
+#{$docstring-sections} dl > dt {
+  font-weight: normal;
 }
 
-// docstring definition-items
-.doc-text dl > dt,
-.doc-definition-items dt,
-.doc-see-also > dl > dt {
-   font-weight: normal;
+#{$docstring-sections} dl > dd {
+  @extend .mt-1;
+  @extend .mb-0;
+  @extend .ms-5;
 }
 
-.doc-text dl > dt,
-.doc-definition-items > dl > dt:not(:first-child) {
-   @extend .mt-3;
+#{$docstring-sections} dl > dt:not(:first-child) {
+  @extend .mt-3;
 }
 
-.doc-text dl > dd,
-.doc-definition-items > dl > dd,
-.doc-see-also > dl > dd {
-   @extend .mt-1;
-   @extend .mb-0;
-   @extend .ms-5;
-}
-
-.doc-definition-items > dl > dd > table {
+#{$docstring-sections} dl > dd > table {
    min-width: 33%;
    width: 0;
 }
 
-.doc-definition-items > dl > dd > table > thead {
+#{$docstring-sections} dl > dd > table > thead {
    border-top: 0rem solid $border-color;
    border-bottom: 0.15em solid $border-color;
 }
 
-.doc-definition-items > dl > dd > table td {
+#{$docstring-sections} dl > dd > table td {
    @extend .px-2;
    @extend .py-1;
 }
 
 // Definitions that are code
-.doc-definition-items dt code,
+#{$docstring-sections} dt code,
 .doc-signature > p > code {
    @extend .p-2;
    display: block;
@@ -146,23 +160,17 @@ section.doc-methods > section.doc-method {
    background-color: $signature-background-color;
 }
 
-.doc-definition-items dt code a,
+#{$docstring-sections} dt code a,
 .doc-signature > p > code a {
    color: $primary;
 }
 
-// docstring object symbols
-.content code.doc-symbol {
-   font-size: 0.9rem;
-}
-
-// Reference/Index
-
-// Give all the tables on the index page the same with.
-// It looks better, but as table cells do not respond to
-// min-width styling, this is not a perfect solution.
-.doc-summary-table td:first-child{
-   width: 30%;
+// docstring spacing and indentation
+section.doc-attributes > section.doc-attribute,
+section.doc-methods > section.doc-method {
+   @extend .ps-4;
+   border-left: 0.025rem solid $gray-500;
+   backgroud-color: cyan;
 }
 
 // sidebar
