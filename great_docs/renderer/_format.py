@@ -18,6 +18,8 @@ from ._pandoc.inlines import InterLink
 if TYPE_CHECKING:
     from typing import Any
 
+    from .typing import DisplayNameFormat
+
 HAS_RUFF = bool(shutil.which("ruff"))
 
 # Pickout python identifiers from a string of code
@@ -145,6 +147,28 @@ def format_see_also(s: str) -> str:
 
     content = QUALNAME_RE.sub(replace_func, dedent(s))
     return SEE_ALSO_MULTILINEITEM_RE.sub(" ", content)
+
+
+def format_name(obj: gf.Alias | gf.Object, format: DisplayNameFormat = "relative") -> str:
+    """
+    Return a name to use for the object
+
+    Parameters
+    ----------
+    format:
+        The format to use for the object's name.
+    """
+    if format in ("name", "short"):
+        res = obj.name
+    elif format == "relative":
+        res = ".".join(obj.path.split(".")[1:])
+    elif format == "full":
+        res = obj.path
+    elif format == "canonical":
+        res = obj.canonical_path
+    else:
+        raise ValueError(f"Unknown format {format!r} for an object name.")
+    return res
 
 
 @singledispatch
@@ -326,3 +350,22 @@ def format_str(source: str) -> str:
         raise RuntimeError(proc.stderr.strip())
 
     return proc.stdout
+
+
+def format_value(value: str | gf.Expr | None = None) -> str:
+    """
+    Render a value
+
+    Parameters
+    ----------
+    value
+        A value that can appear on the right-hand-side of an `=`
+        operator.
+
+    Returns
+    -------
+    :
+        Escaped and highlighted markdown represenation of the value.
+        It is not markedup as code.
+    """
+    return pretty_code(repr_obj(value))

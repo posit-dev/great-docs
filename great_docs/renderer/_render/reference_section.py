@@ -35,26 +35,32 @@ class __RenderReferenceSection(RenderBase):
             return Header(
                 self.level + 1,
                 f"{section.title}",
-                Attr(classes=["doc-summary"]),
+                Attr(classes=["doc-group"]),
             )
         elif section.subtitle:
             return Header(
                 self.level + 2,
                 f"{section.subtitle}",
-                Attr(classes=["doc-summary-subgroup"]),
+                Attr(classes=["doc-subgroup"]),
             )
 
     def render_description(self) -> BlockContent:
-        return self.section.desc
+        """
+        Render the description of the section
+        """
+        return Div(self.section.desc, Attr(classes=["doc-description"]))
 
     def render_body(self) -> BlockContent:
+        """
+        Render the body of the section
+        """
         if not self.section.contents:
             return
 
         from . import get_render_type
 
         render_objs: list[RenderObjType] = [
-            get_render_type(c)(c, self.renderer)  # type: ignore
+            get_render_type(c)(c, self.renderer)  # pyright: ignore[reportCallIssue,reportArgumentType]
             for c in self.section.contents
         ]
         rows = [row for r in render_objs for row in r.render_summary()]

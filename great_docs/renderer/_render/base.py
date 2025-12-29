@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import TYPE_CHECKING
 
-import griffe as gf
 from quartodoc.pandoc.blocks import (
     Block,
     BlockContent,
@@ -49,21 +48,9 @@ class __RenderBase(Block):
     show_title: bool = True
     """Whether to show the title of the object"""
 
-    show_signature: bool = True
-    """
-    Whether to show the signature
-
-    This only applies to objects that have signatures
-    """
-
     show_description: bool = True
     """
     Whether to show the description of the object
-
-    This only applies to objects that have descriptions that are not
-    considered part of the body documentation body.
-
-    This attribute is not well defined and it may change in the future.
     """
 
     show_body: bool = True
@@ -82,7 +69,6 @@ class __RenderBase(Block):
             Blocks(
                 [
                     self.title if self.show_title else None,
-                    self.signature if self.show_signature else None,
                     self.description if self.show_description else None,
                     self.body if self.show_body else None,
                 ]
@@ -99,18 +85,11 @@ class __RenderBase(Block):
         return self.render_title()
 
     @cached_property
-    def signature(self) -> BlockContent:
-        """
-        The signature of the object (if any)
-
-        Do not override this property.
-        """
-        return self.render_signature()
-
-    @cached_property
     def description(self) -> BlockContent:
         """
-        The description that the documented object
+        A short description that the documented object
+
+        What is consider as the description depends on the kind of object.
 
         Do not override this property.
         """
@@ -134,29 +113,14 @@ class __RenderBase(Block):
         """
         return self.render_summary()
 
-    def _describe_object(self, obj: gf.Object | gf.Alias) -> str:
-        """
-        Return oneline description of the griffe object
-        """
-        # oneline description of the object being documented
-        # This is the first line of the docstring
-        parts = obj.docstring.parsed if obj.docstring else []
-        section = parts[0] if parts else None
-        return section.value.split("\n")[0] if isinstance(section, gf.DocstringSectionText) else ""
-
     def render_title(self) -> BlockContent:
         """
         Render the header of a docstring, including any anchors
         """
 
-    def render_signature(self) -> BlockContent:
-        """
-        Render the signature of the object being documented
-        """
-
     def render_description(self) -> BlockContent:
         """
-        Render the description of the documentation page
+        Render the description of the object
         """
 
     def render_body(self) -> BlockContent:

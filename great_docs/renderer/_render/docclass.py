@@ -29,6 +29,9 @@ class __RenderDocClass(RenderDocMembersMixin, RenderDocCallMixin, RenderDoc):
         self.doc: layout.DocClass = self.doc
         self.obj: gf.Class = self.obj
 
+        if self.subject_above_signature is None:
+            self.subject_above_signature = True
+
     @cached_property
     def is_dataclass(self):
         """
@@ -39,7 +42,10 @@ class __RenderDocClass(RenderDocMembersMixin, RenderDocCallMixin, RenderDoc):
     @cached_property
     def attributes(self) -> list[layout.DocAttribute]:
         """
-        Override to exclude dataclass parameters
+        Attributes of a class
+
+        If class a dataclass, the parameters are excluded from the returned
+        attributes.
         """
         attributes = super().attributes
         if self.is_dataclass:
@@ -48,8 +54,22 @@ class __RenderDocClass(RenderDocMembersMixin, RenderDocCallMixin, RenderDoc):
         return attributes
 
     @cached_property
-    def sections_content(self):
-        items = super().sections_content
+    def attribute_member_pages(self) -> list[layout.MemberPage]:
+        """
+        Member pages of attributes
+
+        If class a dataclass, the parameters are excluded from the returned
+        pages of the attributes.
+        """
+        pages = super().attribute_member_pages
+        if self.is_dataclass:
+            params = {p.name for p in self.parameters}
+            pages = [p for p in pages if p.obj.name not in params]  # pyright: ignore[reportUnknownMemberType]
+        return pages
+
+    @cached_property
+    def docstring_sections_content(self):
+        items = super().docstring_sections_content
         titles = set(item[0] for item in items)
         if not self.is_dataclass or "Parameters" in titles or not len(self.parameters):
             return items

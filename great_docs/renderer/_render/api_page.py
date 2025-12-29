@@ -38,11 +38,8 @@ class __RenderAPIPage(RenderBase):
         self.page = cast("Page", self.layout_obj)
         """Page in the documentation"""
 
-    def __str__(self):
-        """
-        The Page object rendered to quarto markdown
-        """
-        return str(Blocks([self.title, self.description, self.body]))
+        self.path = f"{self.page.path}.qmd"
+        """All objects on this page are rendered at this path"""
 
     @property
     def _has_one_object(self):
@@ -50,11 +47,19 @@ class __RenderAPIPage(RenderBase):
 
     @cached_property
     def render_objs(self):
+        """
+        Render objects on the API page
+        """
         from . import get_render_type
 
         level = self.level if self._has_one_object else self.level + 1
         render_objs: list[RenderObjType] = [
-            get_render_type(c)(c, self.renderer, level)  # type: ignore
+            get_render_type(c)(  # pyright: ignore[reportCallIssue,reportArgumentType]
+                c,
+                self.renderer,
+                level,
+                page_path=self.path,
+            )
             for c in self.page.contents
         ]
         return render_objs
@@ -82,12 +87,6 @@ class __RenderAPIPage(RenderBase):
         )
         return header
 
-    def render_description(self) -> BlockContent:
-        """
-        Render the description of the documentation page
-        """
-        return self.page.summary.desc if self.page.summary else None
-
     def render_body(self) -> BlockContent:
         """
         Render the body of the documentation page
@@ -97,7 +96,7 @@ class __RenderAPIPage(RenderBase):
     def render_summary(self) -> Sequence[SummaryItem]:
         page = self.page
         if page.summary is not None:
-            link = Link(markdown_escape(page.summary.name), f"{page.path}.qmd")
+            link = Link(markdown_escape(page.summary.name), self.path)
             items = [(str(link), page.summary.desc)]
         elif len(page.contents) > 1 and not page.flatten:
             msg = (

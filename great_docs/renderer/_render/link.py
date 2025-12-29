@@ -45,8 +45,8 @@ class __RenderLink(RenderBase):
 
     def render_summary(self) -> Sequence[SummaryItem]:
         link = InterLink(None, markdown_escape(self.link.name))
-        return [(str(link), self._describe_object(self.obj))]
-
+        text = self.obj.docstring.value.splitlines()[0] if self.obj.docstring else ""
+        return [(str(link), text)]
 
 class RenderLink(__RenderLink):
     """

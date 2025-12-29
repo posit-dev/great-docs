@@ -30,6 +30,8 @@ class __RenderDocAttribute(RenderDoc):
         self.doc: layout.DocAttribute = self.doc
         self.obj: gf.Attribute = self.obj
 
+        self.subject_above_signature = self.subject_above_signature is None and not self.contained
+
     def render_signature(self) -> BlockContent:
         name = self.signature_name if self.show_signature_name else ""
         annotation = self.obj.annotation if self.show_signature_annotation else None

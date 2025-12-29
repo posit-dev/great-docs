@@ -88,17 +88,14 @@ class isDoc:
         return el.obj.is_attribute  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
 
 
-def griffe_to_doc(obj: gf.Object | gf.Alias) -> DocType:
+def griffe_to_doc(obj: gf.Object | gf.Alias, *, deep: bool = True) -> DocType:
     """
     Convert griffe object to a quartodoc documentable type
 
     The function recursively includes all members.
     """
-    return layout.Doc.from_griffe(  # pyright: ignore[reportUnknownMemberType]
-        obj.name,
-        obj,
-        members=[griffe_to_doc(m) for m in obj.all_members.values()],
-    )
+    members = [griffe_to_doc(m, deep=deep) for m in obj.all_members.values()] if deep else None
+    return layout.Doc.from_griffe(obj.name, obj, members=members)  # pyright: ignore[reportUnknownMemberType]
 
 
 def no_init(default: T) -> T:

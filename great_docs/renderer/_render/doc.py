@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from copy import copy
+from dataclasses import dataclass
 from functools import cached_property, singledispatchmethod
 from typing import TYPE_CHECKING, Literal, cast
 
@@ -21,7 +22,9 @@ from quartodoc.pandoc.inlines import Code, Inline, Inlines, Link, Span
 
 from .._format import (
     HAS_RUFF,
+    format_name,
     format_see_also,
+    format_value,
     markdown_escape,
     pretty_code,
     render_formatted_expr,
@@ -40,7 +43,6 @@ if TYPE_CHECKING:
     from ..typing import (
         Annotation,
         AnyDocstringSection,
-        DisplayNameFormat,
         DocObjectKind,
         SummaryItem,
     )
@@ -107,7 +109,18 @@ class __RenderDoc(RenderBase):
     within that of a class.
     """
 
-    page_path: str = field(init=False, repr=False, default="")
+    subject_above_signature: bool | None = None
+    """
+    Place the subject above the signature
+
+    If `bool`, the setting will always be respected.
+    If `None` the placement will depend on the context; the preffered
+    location will be above the signature but in some cases it will be
+    below.
+    """
+
+    # page_path: str = field(init=False, repr=False, default="")
+    page_path: str = ""
     """
     Name of the page where this object's rendered content
     will be written. It should be the name of the object
@@ -145,9 +158,6 @@ class __RenderDoc(RenderBase):
         """Griffe object (or alias)"""
 
         self.show_signature = self.renderer.show_signature
-
-        if not self.contained:
-            self.page_path = f"{self.doc.name}.qmd"
 
     @cached_property
     def kind(self) -> DocObjectKind:
@@ -191,37 +201,37 @@ class __RenderDoc(RenderBase):
         format = self.renderer.display_name_format
         if format == "auto":
             format = "full" if self.level == 1 else "name"
-        return markdown_escape(self.format_name(format))
+        elif format == "relative" and self.level > 1:
+            format = "name"
+        return markdown_escape(format_name(self.obj, format))
 
     @cached_property
     def raw_title(self) -> str:
         format = "canonical" if self.level == 1 else "name"
-        return markdown_escape(self.format_name(format))
+        return markdown_escape(format_name(self.obj, format))
 
     @cached_property
     def signature_name(self) -> str:
-        return self.format_name(self.renderer.signature_name_format)
+        return format_name(self.obj, self.renderer.signature_name_format)
 
-    def format_name(self, format: DisplayNameFormat = "relative") -> str:
+    def render_description(self) -> BlockContent:
         """
-        Return a name to use for the object
+        Render the description of the object
 
-        Parameters
-        ----------
-        format:
-            The format to use for the object's name.
+        The descriptions consists of the docstring subject and the
+        signature.
         """
-        if format in ("name", "short"):
-            res = self.obj.name
-        elif format == "relative":
-            res = ".".join(self.obj.path.split(".")[1:])
-        elif format == "full":
-            res = self.obj.path
-        elif format == "canonical":
-            res = self.obj.canonical_path
-        else:
-            raise ValueError(f"Unknown format {format!r} for an object name.")
-        return res
+        direction = 1 if self.subject_above_signature else -1
+        subject_and_signature = [
+            self.render_docstring_subject(),
+            self.render_signature() if self.show_signature else None,
+        ][::direction]
+        return Blocks(subject_and_signature)
+
+    def render_signature(self) -> BlockContent:
+        """
+        Render the signature of the object being documented
+        """
 
     def render_labels(self) -> Span | Literal[""]:
         """
@@ -282,24 +292,6 @@ class __RenderDoc(RenderBase):
 
         return pretty_code(str(_render(annotation)))
 
-    def render_value(self, value: str | gf.Expr | None = None) -> str:
-        """
-        Render a value
-
-        Parameters
-        ----------
-        value
-            A value that can appear on the right-hand-side of an `=`
-            operator.
-
-        Returns
-        -------
-        :
-            Escaped and highlighted markdown represenation of the value.
-            It is not markedup as code.
-        """
-        return pretty_code(repr_obj(value))
-
     def render_variable_definition(
         self,
         name: str | None,
@@ -349,7 +341,7 @@ class __RenderDoc(RenderBase):
             default = (
                 render_formatted_expr(default)
                 if isinstance(default, gf.Expr)
-                else self.render_value(default)
+                else format_value(default)
             )
 
             # Equal sign and space around it depends on name and annotation
@@ -396,7 +388,25 @@ class __RenderDoc(RenderBase):
         )
 
     @cached_property
-    def sections_content(self) -> list[tuple[str, AnyDocstringSection]]:
+    def docstring_subject(self) -> str | None:
+        """
+        The first line of docstring
+        """
+        if (
+            self.obj.docstring
+            and (sections := self.obj.docstring.parsed)
+            and isinstance(sections[0], gf.DocstringSectionText)
+        ):
+            return self.obj.docstring.value.splitlines()[0]
+
+    def render_docstring_subject(self) -> BlockContent:
+        """
+        Render the subject of docstring
+        """
+        return Div(Span(self.docstring_subject), Attr(classes=["doc-subject"]))
+
+    @cached_property
+    def docstring_sections_content(self) -> list[tuple[str, AnyDocstringSection]]:
         """
         The sections of the docstring before they are marked up
 
@@ -413,12 +423,20 @@ class __RenderDoc(RenderBase):
         if not self.obj.docstring:
             return []
 
-        patched_sections = cast(
+        sections = cast(
             "list[gf.DocstringSection]",
             qast.transform(self.obj.docstring.parsed),  # pyright: ignore[reportUnknownMemberType]
         )
 
-        for i, section in enumerate(patched_sections):
+        # Remove the docstring subject from the top of the docstring
+        if self.docstring_subject:
+            # The sections are cached value that we have to be careful not modify.
+            # We modify a copy of first section and we create a new list
+            first_section = copy(sections[0])
+            first_section.value = "\n".join(first_section.value.splitlines()[1:])
+            sections = [first_section, *sections[1:]]
+
+        for i, section in enumerate(sections):
             section_kind: gf.DocstringSectionKind = section.kind
             title = (section.title or section_kind).title()
 
@@ -430,7 +448,7 @@ class __RenderDoc(RenderBase):
         return items
 
     @cached_property
-    def sections(self) -> list[Block]:
+    def docstring_sections(self) -> list[Block]:
         """
         Rendered sections of the docstring.
 
@@ -438,8 +456,8 @@ class __RenderDoc(RenderBase):
         and wrapping the section content in markup-generating blocks.
         """
         sections: list[Block] = []
-        for title, section in self.sections_content:
-            body = self.render_section(section) or ""
+        for title, section in self.docstring_sections_content:
+            body = self.render_docstring_section(section) or ""
             slug = title.lower().replace(" ", "-")
             section_classes = [f"doc-{slug}"]
             if title in ("Text", "Deprecated"):
@@ -458,10 +476,10 @@ class __RenderDoc(RenderBase):
         """
         Render the docsting of the Doc object
         """
-        return None if not self.sections else Blocks(self.sections)
+        return None if not self.docstring_sections else Blocks(self.docstring_sections)
 
     @singledispatchmethod
-    def render_section(self, el: gf.DocstringSection) -> BlockContent:
+    def render_docstring_section(self, el: gf.DocstringSection) -> BlockContent:
         """
         Render a section of a docstring
 
@@ -481,11 +499,11 @@ class __RenderDoc(RenderBase):
             return CodeBlock(el.value, Attr(classes=["python"]))
         return el.value
 
-    @render_section.register
+    @render_docstring_section.register
     def _(self, el: gf.DocstringSectionExamples):
-        return Blocks([self.render_section(qast.transform(c)) for c in el.value])  # pyright: ignore[reportUnknownMemberType]
+        return Blocks([self.render_docstring_section(qast.transform(c)) for c in el.value])  # pyright: ignore[reportUnknownMemberType]
 
-    @render_section.register
+    @render_docstring_section.register
     def _(self, el: gf.DocstringSectionDeprecated):
         content = Div(
             Inlines(
@@ -501,14 +519,14 @@ class __RenderDoc(RenderBase):
         )
         return str(content)
 
-    @render_section.register
+    @render_docstring_section.register
     def _(self, el: gf.DocstringSectionAdmonition):
         """
         This catches unofficial numpydoc sections
         """
         return el.value.description
 
-    @render_section.register
+    @render_docstring_section.register
     def _(self, el: qast.DocstringSectionSeeAlso):
         """
         Render See Also section
@@ -538,10 +556,12 @@ class __RenderDoc(RenderBase):
             markdown_escape(self.summary_name),
             f"{self.page_path}#{self.doc.anchor}",
         )
-        return [(str(link), self._describe_object(self.obj))]
+        return [(str(link), self.docstring_subject)]
 
 
 class RenderDoc(__RenderDoc):
     """
-    Extend Rendering of a layout.Doc
+    Extend rendering of all objects that have docstrings
+
+    These are modules, classes, functions and attributes.
     """
