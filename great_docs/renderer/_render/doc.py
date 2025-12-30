@@ -18,7 +18,7 @@ from quartodoc.pandoc.blocks import (
     Header,
 )
 from quartodoc.pandoc.components import Attr
-from quartodoc.pandoc.inlines import Code, Inline, Inlines, Link, Span
+from quartodoc.pandoc.inlines import Inline, Inlines, Link, Span
 
 from .._format import (
     HAS_RUFF,
@@ -83,20 +83,6 @@ class __RenderDoc(RenderBase):
     show_object_name: bool = True
     """
     Whether to show the name of the object
-
-    This is part of the title
-    """
-
-    show_object_symbol: bool = True
-    """
-    Whether to show the symbol of the object
-
-    This is part of the title
-    """
-
-    show_object_labels: bool = True
-    """
-    Whether to show the labels of the object
 
     This is part of the title
     """
@@ -234,22 +220,36 @@ class __RenderDoc(RenderBase):
 
     def render_labels(self) -> Span | Literal[""]:
         """
-        Create codes used for doc labels
+        Render code for the labels that annotate the object names
 
-        Given the label names, it returns a Code object that
-        creates the following HTML
-        <span class="doc-labels">
-            <code class="doc-label doc-label-name1"></code>
-            <code class="doc-label doc-label-name2"></code>
-        </span>
+        The rendered markup has no content. You can style it with CSS or override
+        this method to output something different. Nothing is rendered if there are
+        no labels. If there is more than one label, each label has its own markup code.
+
+        Markup and Styling
+        ------------------
+        Returns a structure containing the label codes:
+
+        +-----------+-----------------+----------------------------------------------------------+
+        | Component | HTML Element    | CSS Selector                                             |
+        +===========+=================+==========================================================+
+        | Wrapper   | `<span>`{.html} | `.doc-content .doc-labels`{.css}                         |
+        +-----------+-----------------+----------------------------------------------------------+
+        | Label     | `<span>`{.html} | 1. `.doc-content .doc-labels > .doc-label`{.css}         |
+        |           |                 | 2. `.doc-content .doc-labels > .doc-label-{name}`{.css}  |
+        +-----------+-----------------+----------------------------------------------------------+
+
+        `{name}` is any of the following: `staticmethod`, `classmethod`,
+        `abstractmethod`, `cached`, `property,` `typing.overload`, `protocol`
+        Replace `.doc-content` with `.sidebar` to also target the labels in the sidebar.
         """
         if not self.labels:
             return ""
 
-        codes = [
-            Code(" ", Attr(classes=["doc-label", f"doc-label-{l.lower()}"])) for l in self.labels
+        labels = [
+            Span("", Attr(classes=["doc-label", f"doc-label-{l.lower()}"])) for l in self.labels
         ]
-        return Span(codes, Attr(classes=["doc-labels"]))
+        return Span(labels, Attr(classes=["doc-labels"]))
 
     def render_annotation(self, annotation: Annotation | None = None) -> str:
         """
@@ -355,16 +355,6 @@ class __RenderDoc(RenderBase):
         """
         Render the header of a docstring, including any anchors
         """
-        symbol = (
-            Code(
-                # Pandoc requires some space to create empty code tags
-                " ",
-                Attr(classes=["doc-symbol", f"doc-symbol-{self.kind}"]),
-            )
-            if self.show_object_symbol
-            else None
-        )
-
         name = (
             Span(
                 self.display_name,
@@ -374,15 +364,13 @@ class __RenderDoc(RenderBase):
             else None
         )
 
-        labels = self.render_labels() if self.show_object_labels else None
-
         classes = ["title", "doc-object", f"doc-{self.kind}"]
         if hasattr(self.obj, "members") and self.obj.members:
             classes.append("doc-has-member-docs")
 
         return Header(
             level=self.level,
-            content=Inlines([symbol, name, labels]),
+            content=Inlines([name, self.render_labels()]),
             attr=Attr(identifier=self.obj.path, classes=classes),
         )
 
@@ -549,6 +537,19 @@ class __RenderDoc(RenderBase):
     def render_summary(self) -> Sequence[DefinitionItem]:
         """
         Return a line item that summarises the object
+
+        Markup and Styling
+        ------------------
+
+        | HTML Elements   | CSS Selector                                              |
+        |:----------------|:----------------------------------------------------------|
+        | `<a>`{.html}    | `.doc-index .doc-group > dl dt > a.doc-{kind}-name`{.css} |
+        | `<p>`{.html}    | `.doc-index .doc-group > dl dd > p`{.css}                 |
+
+        See Also
+        --------
+        great_docs.renderer.RenderReferenceSection.render_body : For more context about
+        where the rendered link and text are placed.
         """
         # The page where this object will be written
         link = Link(

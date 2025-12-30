@@ -12,7 +12,7 @@ $table-striped-order: even;
 
 /*-- scss:rules --*/
 $class-symbol-color: $primary;
-$method-symbol-color: mix($primary, $teal-500, 20%);
+$method-symbol-color: mix($primary, $teal-600, 20%);
 $function-symbol-color: mix($primary, $cyan-500, 20%);
 $alias-symbol-color: mix($primary, $green-500, 20%);
 $module-symbol-color: mix($primary, $red-500, 20%);
@@ -180,131 +180,105 @@ section.doc-methods > section.doc-method {
    padding: 0.075rem 0.075rem;
 }
 
-.sidebar code.doc-symbol {
-   @extend .px-1;
-   font-size: 0.55rem;
+$doc-object-names: "span.doc-object-name:is(.doc-class-name, .doc-method-name, .doc-module-name, .doc-function-name, .doc-alias-name, .doc-attribute-name, .doc-type-name, .doc-typevar)";
+#{$doc-object-names}::before {
+  @extend .px-1;
+  font-size: 0.9rem;
+  font-family: monospace;
+  margin-right: 0.5rem;
+  border-radius: 0.25rem;
 }
 
-.sidebar ul > li > a:has(.doc-symbol) {
-   white-space: nowrap;
+.sidebar #{$doc-object-names}::before {
+  font-size: 0.55rem;
 }
 
-.content code.doc-symbol-class,
-.sidebar code.doc-symbol-class {
-   color: $class-symbol-color;
-   background-color: tint-color($class-symbol-color, 95%);
+span.doc-object-name.doc-class-name::before {
+  content: "class";
+  color: $class-symbol-color;
+  background-color: tint-color($class-symbol-color, 95%);
 }
 
-.content code.doc-symbol-method,
-.sidebar code.doc-symbol-method {
-   color: $method-symbol-color;
-   background-color: tint-color($method-symbol-color, 95%);
+span.doc-object-name.doc-method-name::before {
+  content: "meth";
+  color: $method-symbol-color;
+  background-color: tint-color($method-symbol-color, 95%);
 }
 
-.content code.doc-symbol-module,
-.sidebar code.doc-symbol-module {
-   color: $module-symbol-color;
-   background-color: tint-color($module-symbol-color, 95%);
+span.doc-object-name.doc-function-name::before {
+  content: "func";
+  color: $function-symbol-color;
+  background-color: tint-color($function-symbol-color, 95%);
 }
 
-.content code.doc-symbol-function,
-.sidebar code.doc-symbol-function {
-   color: $function-symbol-color;
-   background-color: tint-color($function-symbol-color, 95%);
+span.doc-object-name.doc-attribute-name::before {
+  content: "attr";
+  color: $attribute-symbol-color;
+  background-color: tint-color($attribute-symbol-color, 95%);
 }
 
-.content code.doc-symbol-alias,
-.sidebar code.doc-symbol-alias {
-   color: $alias-symbol-color;
-   background-color: tint-color($alias-symbol-color, 95%);
+span.doc-object-name.doc-module-name::before {
+  content: "mod";
+  color: $module-symbol-color;
+  background-color: tint-color($module-symbol-color, 95%);
 }
 
-.content code.doc-symbol-attribute,
-.sidebar code.doc-symbol-attribute {
-   color: $attribute-symbol-color;
-   background-color: tint-color($attribute-symbol-color, 95%);
+span.doc-object-name.doc-alias-name::before {
+  content: "alias";
+  color: $alias-symbol-color;
+  background-color: tint-color($alias-symbol-color, 95%);
 }
 
-.content code.doc-symbol-type,
-.sidebar code.doc-symbol-type {
-   color: $type-symbol-color;
-   background-color: tint-color($type-symbol-color, 95%);
+span.doc-object-name.doc-type-name::before {
+  content: "type";
+  color: $type-symbol-color;
+  background-color: tint-color($type-symbol-color, 95%);
 }
 
-.content code.doc-symbol-typevar,
-.sidebar code.doc-symbol-typevar {
-   color: $typevar-symbol-color;
-   background-color: tint-color($typevar-symbol-color, 95%);
-}
-
-code.doc-symbol-class::after {
-   content: "class";
-}
-
-code.doc-symbol-method::after {
-   content: "meth";
-}
-
-code.doc-symbol-module::after {
-   content: "mod";
-}
-
-code.doc-symbol-function::after {
-   content: "func";
-}
-
-code.doc-symbol-alias::after {
-   content: "alias";
-}
-
-code.doc-symbol-attribute::after {
-   content: "attr";
-}
-
-code.doc-symbol-type::after {
-   content: "type";
-}
-
-code.doc-symbol-typevar::after {
-   content: "typevar";
+span.doc-object-name.doc-typevar-name::before {
+  content: "typevar";
+  color: $typevar-symbol-color;
+  background-color: tint-color($typevar-symbol-color, 95%);
 }
 
 // docstring object labels
-
-.content code.doc-label {
-   @extend .fw-normal;
-   @extend .small;
-   font-size: 0.785rem;
-   color: $gray-800;
-   background-color: $gray-100;
+.content .doc-labels > .doc-label {
+  @extend .fw-normal;
+  @extend .small;
+  font-family: monospace;
+  font-size: 0.785rem;
+  color: $gray-800;
+  background-color: $gray-100;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
 }
 
-.content code.doc-label-staticmethod::after {
-   content: "staticmethod";
+.content .doc-labels > .doc-label-staticmethod::after {
+  content: "staticmethod";
 }
 
-.content code.doc-label-classmethod::after {
-   content: "classmethod";
+.content .doc-labels > .doc-label-classmethod::after {
+  content: "classmethod";
 }
 
-.content code.doc-label-abstractmethod::after {
-   content: "abstractmethod";
+.content .doc-labels > .doc-label-abstractmethod::after {
+  content: "abstractmethod";
 }
 
-.content code.doc-label-cached::after {
-   content: "cached";
+.content .doc-labels > .doc-label-cached::after {
+  content: "cached";
 }
 
-.content code.doc-label-property::after {
-   content: "property";
+.content .doc-labels > .doc-label-property::after {
+  content: "property";
 }
 
-.content code.doc-label-overload::after {
-   content: "typing.overload";
+.content .doc-labels > .doc-label-overload::after {
+  content: "typing.overload";
 }
 
-.content code.doc-label-protocol::after {
-   content: "Protocol";
+.content .doc-labels > .doc-label-protocol::after {
+  content: "Protocol";
 }
 
 /*-- scss:functions --*/

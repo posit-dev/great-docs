@@ -81,6 +81,25 @@ class __RenderReferenceSection(RenderBase):
         |:-------------|:-----------------|:--------------------------------------|
         | List         | `<dl>`{.html}    | `.doc-index .doc-group > dl`{.css}    |
         | Table        | `<table>`{.html} | `.doc-index .doc-group > table`{.css} |
+
+
+        The list or table contains object names with brief descriptions.
+        Each name links to the object's API reference page.
+
+        A useful styling customization is to add parentheses to function
+        and method names.
+
+        ```css
+        .doc-index .doc-group > dl dt > a.doc-function-name::after,
+        .doc-index .doc-group > dl dt > a.doc-method-name::after {
+          content: "()";
+        }
+        ```
+
+        See Also
+        --------
+        great_docs.renderer.RenderDoc.render_summary : This is where the items in the
+        list or table are rendered.
         """
         if not self.section.contents:
             return
