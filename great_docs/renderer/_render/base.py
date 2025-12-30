@@ -169,5 +169,5 @@ class RenderBase(__RenderBase):
         #
         # The "filling in" should only happen when extending the Render*
         # classes outside the package.
-        if cls.__module__[:10] != "great_docs":
+        if not cls.__module__.startswith("great_docs."):
             extend_base_class(cls)
