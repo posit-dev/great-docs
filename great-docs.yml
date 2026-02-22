@@ -29,6 +29,13 @@ github_style: widget
 # Use this to provide a marketing/presentation name (e.g., 'My Package').
 display_name: Great Docs
 
+# Custom Sections
+# ---------------
+sections:
+  - title: Recipes
+    dir: recipes
+    navbar_after: User Guide
+
 # Sidebar Filter
 # --------------
 sidebar_filter:

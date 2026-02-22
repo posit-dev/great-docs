@@ -1,0 +1,57 @@
+---
+title: "Document a CLI"
+description: "Auto-generate reference pages for Click-based command-line interfaces."
+---
+
+# Document a CLI
+
+If your package has a Click-based CLI, Great Docs can auto-discover it and generate reference pages for every command.
+
+## Enable CLI Docs
+
+```{.yaml filename="great-docs.yml"}
+cli:
+  enabled: true
+```
+
+That's all you need. Great Docs will:
+
+1. Find your Click commands via entry points or common module locations
+2. Capture `--help` output for each command and subcommand
+3. Generate `.qmd` pages in `reference/cli/`
+4. Add a "CLI Reference" sidebar section with a reference switcher
+
+## Auto-Discovery Order
+
+Great Docs looks for Click commands in these locations:
+
+1. `your_package.cli` — most common
+2. `your_package.__main__` — for `python -m` support
+3. `your_package.main` — alternative
+4. Entry point from `[project.scripts]` in `pyproject.toml`
+
+## Explicit Configuration
+
+If auto-discovery doesn't find your CLI, specify the module and object name:
+
+```{.yaml filename="great-docs.yml"}
+cli:
+  enabled: true
+  module: my_package.commands  # Where the Click group lives
+  name: app                    # Name of the Click group/command object
+```
+
+## What Gets Documented
+
+Each Click command gets a page showing:
+
+- Command name and help text
+- All options with types, defaults, and descriptions
+- All arguments
+- Subcommand listing (for groups)
+
+The output mimics a terminal `--help` display, styled for the web.
+
+## Sidebar Switcher
+
+When CLI docs are present, the reference sidebar gains a dropdown switcher that lets users toggle between **API Reference** and **CLI Reference** without leaving the reference section.

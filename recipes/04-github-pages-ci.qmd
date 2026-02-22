@@ -1,0 +1,76 @@
+---
+title: "Set Up GitHub Pages CI"
+description: "Automate documentation builds and deployment with GitHub Actions."
+---
+
+# Set Up GitHub Pages CI
+
+Great Docs includes a one-command setup for continuous deployment to GitHub Pages.
+
+## Quick Setup
+
+```{.bash filename="Terminal"}
+great-docs setup-github-pages
+```
+
+This generates a GitHub Actions workflow at `.github/workflows/docs.yml` that:
+
+1. Checks out your repository
+2. Installs Python and your package
+3. Runs `great-docs build`
+4. Deploys the `_site/` output to GitHub Pages
+
+## Enable GitHub Pages in Your Repo
+
+After pushing the workflow:
+
+1. Go to **Settings → Pages** in your GitHub repository
+2. Under **Source**, select **GitHub Actions**
+3. Push a commit to the configured branch (default: `main`)
+
+The workflow runs automatically on every push to the target branch.
+
+## Customizing the Workflow
+
+The generated workflow uses sensible defaults. Common customizations:
+
+### Change the Trigger Branch
+
+Edit `.github/workflows/docs.yml`:
+
+```yaml
+on:
+  push:
+    branches: [develop]  # Build on develop instead of main
+```
+
+### Pin the Python Version
+
+```yaml
+- uses: actions/setup-python@v5
+  with:
+    python-version: "3.12"  # Pin to a specific version
+```
+
+### Add a Changelog Token
+
+The changelog feature needs API access to fetch releases. In GitHub Actions, `GITHUB_TOKEN` is available automatically:
+
+```yaml
+- name: Build docs
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  run: great-docs build
+```
+
+The generated workflow already includes this — no extra setup needed.
+
+## Verifying the Deploy
+
+After the first successful run, your docs are live at:
+
+```
+https://<username>.github.io/<repo>/
+```
+
+Check the **Actions** tab in your repo to see build logs and troubleshoot any issues.

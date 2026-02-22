@@ -1,0 +1,75 @@
+---
+title: "Add Custom CSS"
+description: "Override default styles or add your own design touches to the rendered site."
+---
+
+# Add Custom CSS
+
+Great Docs ships a default stylesheet (`great-docs.css`) that works well out of the box. You can extend or override it with your own styles.
+
+## Where to Put Custom CSS
+
+Create a CSS file in your project and reference it in the site settings:
+
+```{.yaml filename="great-docs.yml"}
+site:
+  css:
+    - great-docs.css       # Keep the defaults
+    - my-custom-styles.css # Add your overrides
+```
+
+Place `my-custom-styles.css` in the same directory as `great-docs.yml` (your project root). It will be copied to the build directory during `great-docs build`.
+
+## Common Customizations
+
+### Change the Accent Color
+
+```css
+/* my-custom-styles.css */
+:root {
+  --bs-primary: #6a1b9a;       /* Purple accent */
+  --bs-link-color: #6a1b9a;
+}
+```
+
+### Widen the Content Area
+
+```css
+.container-fluid {
+  max-width: 1400px;
+}
+```
+
+### Style API Signatures
+
+```css
+/* Make function signatures stand out */
+.doc-signature {
+  background-color: #f8f9fa;
+  padding: 0.5rem 1rem;
+  border-left: 3px solid var(--bs-primary);
+  font-size: 0.95rem;
+}
+```
+
+### Hide the Table of Contents on Specific Pages
+
+Add to a page's frontmatter instead of CSS:
+
+```yaml
+---
+title: "My Page"
+toc: false
+---
+```
+
+## Dark Mode Considerations
+
+If dark mode is enabled, test your custom CSS in both light and dark themes. Use the `[data-bs-theme="dark"]` selector for dark-mode-specific overrides:
+
+```css
+[data-bs-theme="dark"] .doc-signature {
+  background-color: #1e1e1e;
+  border-left-color: #bb86fc;
+}
+```

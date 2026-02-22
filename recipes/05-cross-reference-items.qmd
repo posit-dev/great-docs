@@ -1,0 +1,58 @@
+---
+title: "Cross-Reference Related Items"
+description: "Link related classes, functions, and methods with @seealso directives."
+---
+
+# Cross-Reference Related Items
+
+Use the `@seealso` directive to create "See Also" links between related API items. This helps users discover connected functionality.
+
+## Basic Usage
+
+Add `@seealso` to a symbol's docstring with a comma-separated list of names:
+
+```python
+def encode(data: bytes, encoding: str = "utf-8") -> str:
+    """Encode bytes to a string.
+
+    @seealso decode, transcode
+    """
+    ...
+
+def decode(text: str, encoding: str = "utf-8") -> bytes:
+    """Decode a string to bytes.
+
+    @seealso encode
+    """
+    ...
+```
+
+The rendered docs will show a "See Also" section with clickable links to each referenced item.
+
+## Referencing Methods
+
+Use dotted notation for class methods:
+
+```python
+class Validator:
+    def check(self, data):
+        """Run all validation checks.
+
+        @seealso Validator.reset, Report
+        """
+        ...
+
+    def reset(self):
+        """Clear all validation state.
+
+        @seealso Validator.check
+        """
+        ...
+```
+
+## Tips
+
+- Names in `@seealso` must match the exported API name exactly
+- Multiple `@seealso` directives on the same symbol are merged
+- The directive line is stripped from the rendered output
+- Cross-references that can't be resolved are shown as plain text (no broken links)

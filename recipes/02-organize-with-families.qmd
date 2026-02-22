@@ -1,0 +1,66 @@
+---
+title: "Organize with Families"
+description: "Group related exports into named families for a cleaner reference layout."
+---
+
+# Organize with Families
+
+By default, Great Docs groups your API by object type (classes, functions, constants, etc.). Families let you create semantic groups instead — like "Validation Steps", "Data Loaders", or "Configuration".
+
+## Assigning a Family
+
+Add the `@family` directive to a symbol's docstring:
+
+```python
+def load_csv(path: str) -> DataFrame:
+    """Load a CSV file into a DataFrame.
+
+    @family Data Loaders
+    """
+    ...
+
+def load_parquet(path: str) -> DataFrame:
+    """Load a Parquet file into a DataFrame.
+
+    @family Data Loaders
+    """
+    ...
+```
+
+Both functions will appear together under a "Data Loaders" section in the reference.
+
+## Controlling Order Within a Family
+
+Use `@order` to set display order (lower numbers first):
+
+```python
+def connect(url: str) -> Connection:
+    """Open a database connection.
+
+    @family Database
+    @order 1
+    """
+    ...
+
+def query(conn: Connection, sql: str) -> Result:
+    """Execute a SQL query.
+
+    @family Database
+    @order 2
+    """
+    ...
+```
+
+## Mixing Families and Auto-Categorization
+
+Symbols without a `@family` directive fall through to type-based categorization. You can use families for the important groups and let everything else auto-sort:
+
+```{.yaml filename="great-docs.yml"}
+# No extra config needed — families are detected from docstrings
+```
+
+## Tips
+
+- Family names are case-sensitive: `@family Data Loaders` and `@family data loaders` are different groups
+- A symbol can belong to only one family
+- Family sections appear before type-based sections in the reference
