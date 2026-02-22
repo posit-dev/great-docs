@@ -1153,9 +1153,16 @@ class GreatDocs:
                             description = fm.get("description", "")
                             image = fm.get("image", "")
 
-                            # Add bread-crumbs: false
+                            # Add bread-crumbs: false and
+                            # page-navigation: false
+                            changed = False
                             if "bread-crumbs" not in fm:
                                 fm["bread-crumbs"] = False
+                                changed = True
+                            if "page-navigation" not in fm:
+                                fm["page-navigation"] = False
+                                changed = True
+                            if changed:
                                 parts[1] = "\n" + yaml.dump(
                                     fm, default_flow_style=False, sort_keys=False
                                 )
@@ -1207,6 +1214,7 @@ class GreatDocs:
             f'title: "{title}"',
             "bread-crumbs: false",
             "toc: false",
+            "page-navigation: false",
             "---",
             "",
         ]
@@ -1217,9 +1225,7 @@ class GreatDocs:
         if not entries:
             lines.append("*No pages found.*")
         else:
-            lines.append(f"A collection of {len(entries)} page(s).\n")
-            lines.append(":::::: {.column-page}")
-            lines.append("::::: {.grid}")
+            lines.append('<div class="section-cards">')
 
             for entry in entries:
                 href = entry["filename"]
@@ -1227,23 +1233,18 @@ class GreatDocs:
                 desc = entry.get("description", "")
                 image = entry.get("image", "")
 
-                lines.append(":::{.g-col-lg-6 .g-col-12}")
-                lines.append("<div style='padding: 10px;'>")
+                lines.append(f'<a href="{href}" class="section-card">')
 
                 if image:
-                    lines.append(
-                        f'<a href="{href}"><img src="{image}" '
-                        'style="width: 100%; padding-bottom: 8px;" /></a>'
-                    )
+                    lines.append(f'<img src="{image}" class="section-card-img" />')
 
-                lines.append(f"### [{entry_title}]({href})")
+                lines.append(f'<div class="section-card-title">{entry_title}</div>')
                 if desc:
-                    lines.append(f"\n{desc}")
-                lines.append("</div>")
-                lines.append(":::")
+                    lines.append(f'<div class="section-card-desc">{desc}</div>')
 
-            lines.append(":::::")
-            lines.append("::::::")
+                lines.append("</a>")
+
+            lines.append("</div>")
 
         lines.append("")
         index_file = dest_dir / "index.qmd"
