@@ -215,6 +215,19 @@ a.sidebar-item-toggle.text-start > i {
     padding-bottom: 4px;
 }
 
+/* Version badge in navbar title */
+.version-badge {
+    font-size: 0.65em;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.75);
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin-left: 6px;
+    vertical-align: middle;
+    letter-spacing: 0.02em;
+}
+
 #quarto-sidebar {
     background-color: #FAFAFD;
 }
@@ -1526,6 +1539,11 @@ body.quarto-dark .navbar {
 
 body.quarto-dark .navbar-brand img {
     border-color: #555;
+}
+
+body.quarto-dark .version-badge {
+    color: rgba(224, 224, 224, 0.75);
+    background-color: rgba(255, 255, 255, 0.1);
 }
 
 body.quarto-dark #navbarCollapse > ul.navbar-nav.navbar-nav-scroll.me-auto > li > a {

@@ -3235,7 +3235,7 @@ def test_add_changelog_to_navbar_idempotent():
 
         quarto_yml = build_dir / "_quarto.yml"
         quarto_yml.write_text(
-            "website:\n  navbar:\n    left:\n      - text: Home\n        href: index.qmd\n"
+            "website:\n  navbar:\n    left:\n      - text: Reference\n        href: reference/index.qmd\n"
         )
 
         docs = GreatDocs(project_path=tmp_dir)
@@ -3474,7 +3474,7 @@ def test_process_sections_navbar_after():
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
         (project_path / "great-docs.yml").write_text(
-            "sections:\n  - title: Tutorials\n    dir: tutorials\n    navbar_after: Home\n"
+            "sections:\n  - title: Tutorials\n    dir: tutorials\n    navbar_after: User Guide\n"
         )
         build_dir = project_path / "great-docs"
         build_dir.mkdir()
@@ -3483,8 +3483,6 @@ def test_process_sections_navbar_after():
             "website:\n"
             "  navbar:\n"
             "    left:\n"
-            "      - text: Home\n"
-            "        href: index.qmd\n"
             "      - text: User Guide\n"
             "        href: user-guide/index.qmd\n"
             "      - text: Reference\n"
@@ -3508,8 +3506,8 @@ def test_process_sections_navbar_after():
             for item in config["website"]["navbar"]["left"]
             if isinstance(item, dict)
         ]
-        # Tutorials should be right after Home
-        assert texts.index("Tutorials") == texts.index("Home") + 1
+        # Tutorials should be right after User Guide
+        assert texts.index("Tutorials") == texts.index("User Guide") + 1
         assert texts.index("Tutorials") < texts.index("Reference")
 
 
@@ -3527,8 +3525,8 @@ def test_process_sections_default_navbar_before_reference():
             "website:\n"
             "  navbar:\n"
             "    left:\n"
-            "      - text: Home\n"
-            "        href: index.qmd\n"
+            "      - text: User Guide\n"
+            "        href: user-guide/index.qmd\n"
             "      - text: Reference\n"
             "        href: reference/index.qmd\n"
             "  sidebar: []\n"
@@ -3664,7 +3662,7 @@ def test_sections_config_parsed():
             "sections:\n"
             "  - title: Examples\n"
             "    dir: examples\n"
-            "    navbar_after: Home\n"
+            "    navbar_after: User Guide\n"
             "  - title: Blog\n"
             "    dir: blog\n"
         )
@@ -3672,7 +3670,7 @@ def test_sections_config_parsed():
         assert len(config.sections) == 2
         assert config.sections[0]["title"] == "Examples"
         assert config.sections[0]["dir"] == "examples"
-        assert config.sections[0]["navbar_after"] == "Home"
+        assert config.sections[0]["navbar_after"] == "User Guide"
         assert config.sections[1]["title"] == "Blog"
 
 
@@ -3708,3 +3706,108 @@ def test_generate_section_index_with_descriptions():
         assert "img/card1.png" in content
         assert "Card Two" in content
         assert "Second card" in content
+
+
+# =============================================================================
+# Navbar Home Removal + Version Badge Tests
+# =============================================================================
+
+
+def test_navbar_no_home_new_build():
+    """Test that new builds don't include a Home navbar item."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        (project_path / "great-docs.yml").write_text("")
+        build_dir = project_path / "great-docs"
+        build_dir.mkdir()
+        quarto_yml = build_dir / "_quarto.yml"
+        quarto_yml.write_text("website:\n  title: TestPkg\nformat:\n  html:\n    theme: flatly\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._update_quarto_config()
+
+        import yaml
+
+        with open(quarto_yml) as f:
+            config = yaml.safe_load(f)
+
+        navbar_items = config["website"]["navbar"]["left"]
+        texts = [item.get("text") for item in navbar_items if isinstance(item, dict)]
+        assert "Home" not in texts
+        assert "Reference" in texts
+
+
+def test_navbar_home_removed_from_existing():
+    """Test that existing navbars with Home get it removed."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        (project_path / "great-docs.yml").write_text("")
+        build_dir = project_path / "great-docs"
+        build_dir.mkdir()
+        quarto_yml = build_dir / "_quarto.yml"
+        quarto_yml.write_text(
+            "website:\n"
+            "  title: TestPkg\n"
+            "  navbar:\n"
+            "    left:\n"
+            "      - text: Home\n"
+            "        href: index.qmd\n"
+            "      - text: Reference\n"
+            "        href: reference/index.qmd\n"
+            "format:\n  html:\n    theme: flatly\n"
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._update_quarto_config()
+
+        import yaml
+
+        with open(quarto_yml) as f:
+            config = yaml.safe_load(f)
+
+        navbar_items = config["website"]["navbar"]["left"]
+        texts = [item.get("text") for item in navbar_items if isinstance(item, dict)]
+        assert "Home" not in texts
+        assert "Reference" in texts
+
+
+def test_version_metadata_written():
+    """Test that _package_meta.json is written with version from pyproject.toml."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        (project_path / "great-docs.yml").write_text("")
+        (project_path / "pyproject.toml").write_text(
+            '[project]\nname = "test-pkg"\nversion = "2.3.4"\n'
+        )
+        build_dir = project_path / "great-docs"
+        build_dir.mkdir()
+        quarto_yml = build_dir / "_quarto.yml"
+        quarto_yml.write_text("website:\n  title: test-pkg\nformat:\n  html:\n    theme: flatly\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._update_quarto_config()
+
+        import json
+
+        meta_path = build_dir / "_package_meta.json"
+        assert meta_path.exists()
+        with open(meta_path) as f:
+            meta = json.load(f)
+        assert meta["version"] == "2.3.4"
+
+
+def test_version_metadata_not_written_when_missing():
+    """Test that _package_meta.json is not written when version is unavailable."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        (project_path / "great-docs.yml").write_text("")
+        build_dir = project_path / "great-docs"
+        build_dir.mkdir()
+        quarto_yml = build_dir / "_quarto.yml"
+        quarto_yml.write_text("website:\n  title: test-pkg\nformat:\n  html:\n    theme: flatly\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._update_quarto_config()
+
+        meta_path = build_dir / "_package_meta.json"
+        assert not meta_path.exists()

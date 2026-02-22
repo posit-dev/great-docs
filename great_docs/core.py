@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import shutil
@@ -623,6 +624,7 @@ class GreatDocs:
                     metadata["keywords"] = project.get("keywords", [])
                     metadata["description"] = project.get("description", "")
                     metadata["optional_dependencies"] = project.get("optional-dependencies", {})
+                    metadata["version"] = project.get("version", "")
 
             except Exception:
                 pass
@@ -2492,8 +2494,8 @@ class GreatDocs:
                     for item in navbar["left"]
                 )
                 if not has_user_guide:
-                    # Find the position after "Home" and before "Reference"
-                    insert_idx = 1  # Default: after Home
+                    # Find the position before "Reference"
+                    insert_idx = 0  # Default: beginning of navbar
                     for i, item in enumerate(navbar["left"]):
                         if isinstance(item, dict) and item.get("text") == "Reference":
                             insert_idx = i
@@ -6040,7 +6042,6 @@ toc: false
         if "navbar" not in config["website"]:
             navbar_config = {
                 "left": [
-                    {"text": "Home", "href": "index.qmd"},
                     {"text": "Reference", "href": "reference/index.qmd"},
                 ]
             }
@@ -6058,6 +6059,14 @@ toc: false
         else:
             # Update existing navbar: upgrade icon to widget if configured
             self._update_navbar_github_link(config, owner, repo, repo_url, github_style)
+
+            # Remove legacy "Home" link (package name in navbar already links home)
+            if "left" in config["website"]["navbar"]:
+                config["website"]["navbar"]["left"] = [
+                    item
+                    for item in config["website"]["navbar"]["left"]
+                    if not (isinstance(item, dict) and item.get("text") == "Home")
+                ]
 
         # Add GitHub widget script to page if using widget style
         if owner and repo and github_style == "widget":
@@ -6251,6 +6260,26 @@ toc: false
                     footer_html += f" Supported by {funder_name}."
 
                 config["website"]["page-footer"] = {"left": footer_html}
+
+        # Write package metadata JSON for post-render version badge injection
+        package_version = metadata.get("version", "")
+        if not package_version:
+            # Try importlib.metadata as fallback for dynamic versions
+            package_name = config.get("website", {}).get("title", "")
+            if package_name:
+                try:
+                    import importlib.metadata as importlib_metadata
+
+                    package_version = importlib_metadata.version(package_name)
+                except Exception:
+                    pass
+
+        if package_version:
+            meta_path = self.project_path / "_package_meta.json"
+            meta = {"version": package_version}
+            with open(meta_path, "w") as f:
+                json.dump(meta, f)
+            print(f"Wrote package metadata (version={package_version}) to {meta_path}")
 
         # Write back to file
         self._write_quarto_yml(quarto_yml, config)

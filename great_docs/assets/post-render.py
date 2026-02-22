@@ -797,6 +797,67 @@ inject_github_widget()
 
 
 # ============================================================================
+# Version Badge Injection
+# ============================================================================
+# Insert a version badge into the navbar title from _package_meta.json
+
+
+def inject_version_badge():
+    """
+    Inject a version badge next to the package name in the navbar.
+
+    Reads package version from ``_package_meta.json`` (written by the build)
+    and inserts a small badge span inside each ``<span class="navbar-title">``
+    element across all rendered HTML files.
+    """
+    meta_path = "_package_meta.json"
+    if not os.path.exists(meta_path):
+        print("No _package_meta.json found, skipping version badge injection")
+        return
+
+    with open(meta_path, "r") as f:
+        meta = json.load(f)
+
+    version = meta.get("version", "")
+    if not version:
+        print("No version in _package_meta.json, skipping version badge injection")
+        return
+
+    print(f"Injecting version badge v{version} into navbar...")
+
+    # Match <span class="navbar-title">PackageName</span>
+    navbar_title_pattern = re.compile(r'(<span class="navbar-title">)(.*?)(</span>)')
+
+    badge_html = f'<span class="version-badge">v{version}</span>'
+
+    badge_count = 0
+
+    for html_file in all_html_files:
+        with open(html_file, "r") as file:
+            content = file.read()
+
+        match = navbar_title_pattern.search(content)
+        if match:
+            # Only inject if badge not already present
+            if "version-badge" not in content:
+                replacement = f"{match.group(1)}{match.group(2)} {badge_html}{match.group(3)}"
+                content = navbar_title_pattern.sub(replacement, content)
+
+                with open(html_file, "w") as file:
+                    file.write(content)
+
+                badge_count += 1
+
+    if badge_count > 0:
+        print(f"Injected version badge into {badge_count} HTML files")
+    else:
+        print("No navbar titles found for version badge injection")
+
+
+inject_version_badge()
+
+
+# ============================================================================
 # Process CLI reference pages to style titles like API reference pages
 
 
