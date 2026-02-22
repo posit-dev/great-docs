@@ -1225,7 +1225,28 @@ class GreatDocs:
         if not entries:
             lines.append("*No pages found.*")
         else:
-            lines.append('<div class="section-cards">')
+            # Use inline styles to ensure card layout renders correctly
+            # regardless of Quarto's page-columns grid system
+            grid_style = (
+                "display: grid; "
+                "grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); "
+                "gap: 1rem; "
+                "margin-top: 0.5rem;"
+            )
+            card_style = (
+                "display: block; "
+                "padding: 1.25rem 1.5rem; "
+                "border: 1px solid #dee2e6; "
+                "border-radius: 0.5rem; "
+                "color: inherit; "
+                "text-decoration: none;"
+            )
+            title_style = (
+                "font-size: 1.1rem; font-weight: 600; margin-bottom: 0.35rem; color: #0d6efd;"
+            )
+            desc_style = "font-size: 0.9rem; color: #6c757d; line-height: 1.45;"
+
+            lines.append(f'<div class="section-cards" style="{grid_style}">')
 
             for entry in entries:
                 href = entry["filename"]
@@ -1233,14 +1254,22 @@ class GreatDocs:
                 desc = entry.get("description", "")
                 image = entry.get("image", "")
 
-                lines.append(f'<a href="{href}" class="section-card">')
+                lines.append(f'<a href="{href}" class="section-card" style="{card_style}">')
 
                 if image:
-                    lines.append(f'<img src="{image}" class="section-card-img" />')
+                    lines.append(
+                        f'<img src="{image}" class="section-card-img" '
+                        'style="width: 100%; border-radius: 0.375rem; '
+                        'margin-bottom: 0.75rem;" />'
+                    )
 
-                lines.append(f'<div class="section-card-title">{entry_title}</div>')
+                lines.append(
+                    f'<div class="section-card-title" style="{title_style}">{entry_title}</div>'
+                )
                 if desc:
-                    lines.append(f'<div class="section-card-desc">{desc}</div>')
+                    lines.append(
+                        f'<div class="section-card-desc" style="{desc_style}">{desc}</div>'
+                    )
 
                 lines.append("</a>")
 
