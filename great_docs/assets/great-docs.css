@@ -77,6 +77,20 @@ li a {
     text-underline-offset: 4px;
 }
 
+/* Author/funder icon links in the landing page margin sidebar */
+.column-margin a:has(.bi),
+.column-margin a:has(.fa-brands),
+.column-margin a:has(.ror-sidebar-icon) {
+    color: #495057;
+    text-decoration: none;
+}
+
+.column-margin a:has(.bi):hover,
+.column-margin a:has(.fa-brands):hover,
+.column-margin a:has(.ror-sidebar-icon):hover {
+    color: #212529;
+}
+
 dt {
     height: 32px;
     overflow-x: visible;
@@ -1195,6 +1209,19 @@ body.quarto-dark li a {
 body.quarto-dark p a:hover,
 body.quarto-dark li a:hover {
     color: #9dcaf0;
+}
+
+/* Author/funder icon links in dark mode */
+body.quarto-dark .column-margin a:has(.bi),
+body.quarto-dark .column-margin a:has(.fa-brands),
+body.quarto-dark .column-margin a:has(.ror-sidebar-icon) {
+    color: #adb5bd;
+}
+
+body.quarto-dark .column-margin a:has(.bi):hover,
+body.quarto-dark .column-margin a:has(.fa-brands):hover,
+body.quarto-dark .column-margin a:has(.ror-sidebar-icon):hover {
+    color: #dee2e6;
 }
 
 body.quarto-dark .table a {
