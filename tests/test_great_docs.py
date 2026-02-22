@@ -3336,6 +3336,130 @@ def test_fetch_github_releases_max_cap():
 
 
 # =========================================================================
+# Linkify GitHub References Tests
+# =========================================================================
+
+
+def test_linkify_bare_issue_number():
+    """Test that bare #NNN references become links."""
+    docs = GreatDocs()
+    text = "Fixed a bug (#42) and another issue #100."
+    result = docs._linkify_github_references(text, "owner", "repo")
+    assert "[#42](https://github.com/owner/repo/issues/42)" in result
+    assert "[#100](https://github.com/owner/repo/issues/100)" in result
+
+
+def test_linkify_gh_issue_and_pr():
+    """Test 'gh issue #NNN' and 'gh pr #NNN' patterns."""
+    docs = GreatDocs()
+    text = "Reported by @amureki (gh issue #662, gh pr #679)"
+    result = docs._linkify_github_references(text, "owner", "repo")
+    assert "[#662](https://github.com/owner/repo/issues/662)" in result
+    assert "[#679](https://github.com/owner/repo/issues/679)" in result
+    # The "gh issue" / "gh pr" prefix should be consumed
+    assert "gh issue" not in result
+    assert "gh pr" not in result
+
+
+def test_linkify_at_mention():
+    """Test @username becomes a link to GitHub profile."""
+    docs = GreatDocs()
+    text = "Reported and fixed by @amureki and @some-user."
+    result = docs._linkify_github_references(text, "o", "r")
+    assert "[@amureki](https://github.com/amureki)" in result
+    assert "[@some-user](https://github.com/some-user)" in result
+
+
+def test_linkify_no_double_linking():
+    """Test that already-linked references are not double-wrapped."""
+    docs = GreatDocs()
+    # After one pass, #42 becomes [#42](…/42); a second pass must not re-wrap
+    text = "[#42](https://github.com/owner/repo/issues/42)"
+    result = docs._linkify_github_references(text, "owner", "repo")
+    # Should still have exactly one link, not nested
+    assert result.count("[#42]") == 1
+
+
+def test_linkify_email_not_matched():
+    """Test that email addresses are not treated as @mentions."""
+    docs = GreatDocs()
+    text = "Contact user@example.com for help."
+    result = docs._linkify_github_references(text, "o", "r")
+    assert "[@example" not in result
+    assert "user@example.com" in result
+
+
+def test_linkify_case_insensitive_gh_prefix():
+    """Test that GH Issue / GH PR are matched case-insensitively."""
+    docs = GreatDocs()
+    text = "See GH Issue #10 and GH PR #20."
+    result = docs._linkify_github_references(text, "o", "r")
+    assert "[#10](https://github.com/o/r/issues/10)" in result
+    assert "[#20](https://github.com/o/r/issues/20)" in result
+
+
+def test_linkify_backslash_escaped_refs():
+    """Test that GitHub API backslash escapes (\\@, \\#) are handled."""
+    docs = GreatDocs()
+    # Raw body from GitHub API often contains \@ and \# escapes
+    text = r"Reported by \@hawkEye-01 (gh issue \#1167). Fixed by \@Mifrill (gh pr \#1168)"
+    result = docs._linkify_github_references(text, "dateutil", "dateutil")
+    assert "[@hawkEye-01](https://github.com/hawkEye-01)" in result
+    assert "[#1167](https://github.com/dateutil/dateutil/issues/1167)" in result
+    assert "[#1168](https://github.com/dateutil/dateutil/issues/1168)" in result
+    # No leftover backslashes before @ or #
+    assert "\\@" not in result
+    assert "\\#" not in result
+
+
+def test_linkify_backslash_escaped_quotes():
+    """Test that escaped quotes and apostrophes are cleaned up."""
+    docs = GreatDocs()
+    text = r"Fixed a bug where it doesn\'t work with \"special\" input."
+    result = docs._linkify_github_references(text, "o", "r")
+    assert "doesn't" in result
+    assert '"special"' in result
+    assert "\\" not in result
+
+
+def test_linkify_integrated_in_changelog():
+    """Test that linkification happens when generating changelog.qmd."""
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "pkg"\nversion = "1.0"\n\n'
+            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
+        )
+        (project_path / "great-docs.yml").write_text("")
+        build_dir = project_path / "great-docs"
+        build_dir.mkdir()
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        fake_releases = [
+            {
+                "tag_name": "v1.0.0",
+                "name": "Version 1.0",
+                "body": "Fixed #55 by @contributor (gh pr #60).",
+                "published_at": "2025-06-01T00:00:00Z",
+                "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
+                "prerelease": False,
+            },
+        ]
+
+        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
+            docs._generate_changelog_page()
+
+        content = (build_dir / "changelog.qmd").read_text()
+        assert "[#55](https://github.com/owner/repo/issues/55)" in content
+        assert "[#60](https://github.com/owner/repo/issues/60)" in content
+        assert "[@contributor](https://github.com/contributor)" in content
+
+
+# =========================================================================
 # Custom Sections Tests
 # =========================================================================
 
@@ -3800,9 +3924,7 @@ def test_version_metadata_from_github_release():
         build_dir = project_path / "great-docs"
         build_dir.mkdir()
         quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "website:\n  title: test-pkg\nformat:\n  html:\n    theme: flatly\n"
-        )
+        quarto_yml.write_text("website:\n  title: test-pkg\nformat:\n  html:\n    theme: flatly\n")
 
         docs = GreatDocs(project_path=tmp_dir)
 
@@ -3837,9 +3959,7 @@ def test_version_metadata_not_written_no_releases():
         build_dir = project_path / "great-docs"
         build_dir.mkdir()
         quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "website:\n  title: test-pkg\nformat:\n  html:\n    theme: flatly\n"
-        )
+        quarto_yml.write_text("website:\n  title: test-pkg\nformat:\n  html:\n    theme: flatly\n")
 
         docs = GreatDocs(project_path=tmp_dir)
 
@@ -3862,9 +3982,7 @@ def test_version_metadata_not_written_no_github():
         build_dir = project_path / "great-docs"
         build_dir.mkdir()
         quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "website:\n  title: test-pkg\nformat:\n  html:\n    theme: flatly\n"
-        )
+        quarto_yml.write_text("website:\n  title: test-pkg\nformat:\n  html:\n    theme: flatly\n")
 
         docs = GreatDocs(project_path=tmp_dir)
         docs._update_quarto_config()
@@ -3902,9 +4020,7 @@ def test_version_metadata_strips_v_prefix():
         build_dir = project_path / "great-docs"
         build_dir.mkdir()
         quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "website:\n  title: test-pkg\nformat:\n  html:\n    theme: flatly\n"
-        )
+        quarto_yml.write_text("website:\n  title: test-pkg\nformat:\n  html:\n    theme: flatly\n")
 
         docs = GreatDocs(project_path=tmp_dir)
 

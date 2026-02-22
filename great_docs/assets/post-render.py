@@ -837,13 +837,9 @@ def inject_version_badge():
     print(f"Injecting version badge v{version} into navbar...")
 
     # Match <span class="navbar-title">PackageName</span>
-    navbar_title_pattern = re.compile(
-        r'(<span class="navbar-title">)(.*?)(</span>)'
-    )
+    navbar_title_pattern = re.compile(r'(<span class="navbar-title">)(.*?)(</span>)')
 
-    badge_html = (
-        f'<span class="version-badge"{title_attr}>v{version}</span>'
-    )
+    badge_html = f'<span class="version-badge"{title_attr}>v{version}</span>'
 
     badge_count = 0
 
@@ -855,10 +851,7 @@ def inject_version_badge():
         if match:
             # Only inject if badge not already present
             if "version-badge" not in content:
-                replacement = (
-                    f"{match.group(1)}{match.group(2)} "
-                    f"{badge_html}{match.group(3)}"
-                )
+                replacement = f"{match.group(1)}{match.group(2)} {badge_html}{match.group(3)}"
                 content = navbar_title_pattern.sub(replacement, content)
 
                 with open(html_file, "w") as file:

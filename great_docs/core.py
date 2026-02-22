@@ -927,6 +927,63 @@ class GreatDocs:
 
         return releases
 
+    @staticmethod
+    def _linkify_github_references(text: str, owner: str, repo: str) -> str:
+        """
+        Turn GitHub shorthand references into Markdown links.
+
+        Converts bare ``#123``, ``gh issue #123``, ``gh pr #123``, and
+        ``@username`` references into clickable Markdown links that point to
+        the correct GitHub URL.
+
+        Parameters
+        ----------
+        text
+            The Markdown body text from a GitHub Release.
+        owner
+            GitHub repository owner.
+        repo
+            GitHub repository name.
+
+        Returns
+        -------
+        str
+            Text with shorthand references replaced by Markdown links.
+        """
+        base = f"https://github.com/{owner}/{repo}"
+
+        # 0.  Remove GitHub's backslash escapes (the API often returns
+        #     \@, \#, \', \" which break Markdown rendering and block
+        #     the regex patterns below).
+        text = re.sub(r"\\([\\@#'\"])", r"\1", text)
+
+        # 1.  "gh issue #NNN" / "gh pr #NNN"  (case-insensitive)
+        text = re.sub(
+            r"(?i)\bgh\s+(?:issue|pr)\s+#(\d+)",
+            rf"[#\1]({base}/issues/\1)",
+            text,
+        )
+
+        # 2.  Bare "#NNN" not already inside a Markdown link.
+        #     Skip when preceded by '[' (link text from step 1) or
+        #     when inside a URL (preceded by '/').
+        text = re.sub(
+            r"(?<!\[)(?<!/)#(\d+)\b",
+            rf"[#\1]({base}/issues/\1)",
+            text,
+        )
+
+        # 3.  "@username" – valid GitHub usernames: alphanumeric + hyphens,
+        #     1-39 chars, not starting/ending with hyphen.
+        #     Negative look-behind avoids matching email addresses.
+        text = re.sub(
+            r"(?<![\w.])@([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?)",
+            r"[@\1](https://github.com/\1)",
+            text,
+        )
+
+        return text
+
     def _generate_changelog_page(self) -> str | None:
         """
         Generate a changelog.qmd page from GitHub Releases.
@@ -989,6 +1046,7 @@ class GreatDocs:
             # --- body ---------------------------------------------------
             body = (rel.get("body") or "").strip()
             if body:
+                body = self._linkify_github_references(body, owner, repo)
                 lines.append(body)
                 lines.append("")
 
@@ -6285,24 +6343,16 @@ toc: false
                         meta["published_at"] = published
                     with open(meta_path, "w") as f:
                         json.dump(meta, f)
-                    print(
-                        f"Wrote package metadata (version={version_str}) "
-                        f"to {meta_path}"
-                    )
+                    print(f"Wrote package metadata (version={version_str}) to {meta_path}")
                 else:
                     # Tag with no version-like content — remove stale file
                     meta_path.unlink(missing_ok=True)
             else:
-                print(
-                    "No GitHub releases found; skipping version badge metadata"
-                )
+                print("No GitHub releases found; skipping version badge metadata")
                 # Remove stale metadata from a previous build
                 meta_path.unlink(missing_ok=True)
         else:
-            print(
-                "No GitHub repository info available; "
-                "skipping version badge metadata"
-            )
+            print("No GitHub repository info available; skipping version badge metadata")
             meta_path.unlink(missing_ok=True)
 
         # Write back to file
