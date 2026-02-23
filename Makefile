@@ -10,15 +10,22 @@ help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 .PHONY: test
-test: ## Run tests with pytest
-	@$(PYTHON) -m pytest tests/ -v
+test: ## Run core tests (fast, no package builds)
+	@$(PYTHON) -m pytest tests/ -v \
+		--ignore=tests/test_integration.py \
+		--ignore=tests/test_synthetic.py
+
+.PHONY: test-synthetic
+test-synthetic: ## Run synthetic package tests
+	@$(PYTHON) -m pytest tests/test_synthetic.py -v
 
 .PHONY: test-integration
 test-integration: ## Run integration tests with external packages
 	@$(PYTHON) -m pytest tests/test_integration.py -v
 
 .PHONY: test-all
-test-all: test test-integration ## Run all tests including integration tests
+test-all: ## Run all tests (core + synthetic + integration)
+	@$(PYTHON) -m pytest tests/ -v
 
 .PHONY: test-coverage
 test-coverage: ## Run tests with coverage report
