@@ -4619,6 +4619,35 @@ class GreatDocs:
         # Categorize exports to get class method info
         categories = self._categorize_api_objects(package_name, exports)
 
+        # Build a mapping of module names → their expanded member names across
+        # all categories.  When a user lists a bare module name (e.g. "parser")
+        # in their reference config we expand it into the individual classes,
+        # functions, constants, etc. that _categorize_api_objects discovered.
+        _MEMBER_CATS = [
+            "classes",
+            "dataclasses",
+            "abstract_classes",
+            "protocols",
+            "enums",
+            "exceptions",
+            "namedtuples",
+            "typeddicts",
+            "functions",
+            "async_functions",
+            "constants",
+            "type_aliases",
+            "other",
+        ]
+        module_members: dict[str, list[str]] = {}
+        for cat_key in _MEMBER_CATS:
+            for qualified in categories.get(cat_key, []):
+                if "." in qualified:
+                    mod_prefix = qualified.split(".")[0]
+                    module_members.setdefault(mod_prefix, []).append(qualified)
+
+        # Use the same big-class threshold as auto-discovery
+        method_threshold = 5
+
         sections = []
 
         for section_config in reference_config:
@@ -4630,11 +4659,28 @@ class GreatDocs:
                 continue
 
             section_contents = []
+            # Track large classes that need companion method sections
+            large_classes_in_section: list[str] = []
 
             for item in contents_config:
                 if isinstance(item, str):
-                    # Simple string reference - use as-is
-                    section_contents.append(item)
+                    if item in module_members:
+                        # This is a module name — expand into its individual members
+                        for member in module_members[item]:
+                            method_count = categories["class_methods"].get(member, 0)
+                            if method_count > method_threshold:
+                                section_contents.append({"name": member, "members": []})
+                                large_classes_in_section.append(member)
+                            else:
+                                section_contents.append(member)
+                    else:
+                        # Regular item (class, function, etc.) — use as-is
+                        method_count = categories["class_methods"].get(item, 0)
+                        if method_count > method_threshold:
+                            section_contents.append({"name": item, "members": []})
+                            large_classes_in_section.append(item)
+                        else:
+                            section_contents.append(item)
                 elif isinstance(item, dict):
                     # Dict with name and optional members config
                     name = item.get("name", "")
@@ -4658,6 +4704,23 @@ class GreatDocs:
                         "contents": section_contents,
                     }
                 )
+
+            # Add companion method sections for large classes
+            for class_name in large_classes_in_section:
+                method_names = categories["class_method_names"].get(class_name, [])
+                if method_names:
+                    method_contents = [f"{class_name}.{m}" for m in method_names]
+                    sections.append(
+                        {
+                            "title": f"{class_name} Methods",
+                            "desc": f"Methods for the {class_name} class",
+                            "contents": method_contents,
+                        }
+                    )
+                    print(
+                        f"  Created separate section for {class_name} "
+                        f"with {len(method_names)} methods"
+                    )
 
         if sections:
             print(f"Generated {len(sections)} section(s) from reference config")
