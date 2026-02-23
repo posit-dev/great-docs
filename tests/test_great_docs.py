@@ -4035,3 +4035,350 @@ def test_version_metadata_strips_v_prefix():
             meta = json.load(f)
         # Should be "1.0.0" not "v1.0.0"
         assert meta["version"] == "1.0.0"
+
+
+# ── Module Introspection Tests ───────────────────────────────────────────
+
+
+def test_module_exports_categorized():
+    """Test that packages exporting submodules properly categorize their contents."""
+    import sys
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Create a package that exports submodules (like python-dateutil)
+        pkg_dir = Path(tmp_dir) / "modpkg"
+        pkg_dir.mkdir()
+
+        # Main __init__.py exports submodules
+        (pkg_dir / "__init__.py").write_text(
+            '"""A package with submodule exports."""\n__all__ = ["shapes", "colors"]\n'
+        )
+
+        # Create shapes submodule with classes and functions
+        shapes_dir = pkg_dir / "shapes"
+        shapes_dir.mkdir()
+        (shapes_dir / "__init__.py").write_text(
+            '"""Shapes module."""\n'
+            "class Circle:\n"
+            '    """A circle."""\n'
+            "    def area(self): pass\n"
+            "\n"
+            "class Square:\n"
+            '    """A square."""\n'
+            "    def area(self): pass\n"
+            "\n"
+            "def draw(shape):\n"
+            '    """Draw a shape."""\n'
+            "    pass\n"
+            "\n"
+            "MAX_SIDES = 100\n"
+        )
+
+        # Create colors submodule with functions
+        colors_dir = pkg_dir / "colors"
+        colors_dir.mkdir()
+        (colors_dir / "__init__.py").write_text(
+            '"""Colors module."""\n'
+            "def mix(a, b):\n"
+            '    """Mix two colors."""\n'
+            "    pass\n"
+            "\n"
+            "def blend(a, b, ratio=0.5):\n"
+            '    """Blend two colors."""\n'
+            "    pass\n"
+            "\n"
+            "RED = (255, 0, 0)\n"
+            "BLUE = (0, 0, 255)\n"
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            categories = docs._categorize_api_objects("modpkg", ["shapes", "colors"])
+
+            # Classes inside modules should be categorized with qualified names
+            assert "shapes.Circle" in categories["classes"]
+            assert "shapes.Square" in categories["classes"]
+
+            # Functions inside modules should be categorized with qualified names
+            assert "shapes.draw" in categories["functions"]
+            assert "colors.mix" in categories["functions"]
+            assert "colors.blend" in categories["functions"]
+
+            # Constants inside modules should be categorized
+            assert "shapes.MAX_SIDES" in categories["constants"]
+            assert "colors.RED" in categories["constants"]
+            assert "colors.BLUE" in categories["constants"]
+
+            # Nothing should be in "other"
+            assert categories["other"] == []
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_module_class_methods_tracked():
+    """Test that classes inside modules have methods properly counted."""
+    import sys
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "methpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '"""Package with module exports."""\n__all__ = ["models"]\n'
+        )
+
+        models_dir = pkg_dir / "models"
+        models_dir.mkdir()
+        (models_dir / "__init__.py").write_text(
+            '"""Models module."""\n'
+            "class BigModel:\n"
+            '    """A model with many methods."""\n'
+            "    def fit(self): pass\n"
+            "    def predict(self): pass\n"
+            "    def score(self): pass\n"
+            "    def transform(self): pass\n"
+            "    def validate(self): pass\n"
+            "    def serialize(self): pass\n"
+            "    def load(self): pass\n"
+            "\n"
+            "class SmallModel:\n"
+            '    """A model with few methods."""\n'
+            "    def fit(self): pass\n"
+            "    def predict(self): pass\n"
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            categories = docs._categorize_api_objects("methpkg", ["models"])
+
+            # BigModel should have 7 methods tracked
+            assert categories["class_methods"]["models.BigModel"] == 7
+            assert len(categories["class_method_names"]["models.BigModel"]) == 7
+            assert "fit" in categories["class_method_names"]["models.BigModel"]
+            assert "serialize" in categories["class_method_names"]["models.BigModel"]
+
+            # SmallModel should have 2 methods tracked
+            assert categories["class_methods"]["models.SmallModel"] == 2
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_module_big_class_splitting():
+    """Test that classes inside modules with >5 methods get separate sections."""
+    import sys
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "splitpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '"""Package with big class in submodule."""\n__all__ = ["engine"]\n'
+        )
+
+        engine_dir = pkg_dir / "engine"
+        engine_dir.mkdir()
+        (engine_dir / "__init__.py").write_text(
+            '"""Engine module."""\n'
+            "class Engine:\n"
+            '    """A big engine class."""\n'
+            "    def start(self): pass\n"
+            "    def stop(self): pass\n"
+            "    def accelerate(self): pass\n"
+            "    def brake(self): pass\n"
+            "    def reverse(self): pass\n"
+            "    def park(self): pass\n"
+            "    def idle(self): pass\n"
+            "\n"
+            "def create_engine():\n"
+            '    """Create an engine."""\n'
+            "    pass\n"
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            sections = docs._create_quartodoc_sections("splitpkg")
+
+            assert sections is not None
+
+            # Classes section should exist with engine.Engine having members: []
+            class_section = next((s for s in sections if s["title"] == "Classes"), None)
+            assert class_section is not None
+
+            big_class_entry = next(
+                (
+                    c
+                    for c in class_section["contents"]
+                    if isinstance(c, dict) and c.get("name") == "engine.Engine"
+                ),
+                None,
+            )
+            assert big_class_entry is not None
+            assert big_class_entry == {"name": "engine.Engine", "members": []}
+
+            # Separate method section for engine.Engine
+            method_section = next(
+                (s for s in sections if s["title"] == "engine.Engine Methods"),
+                None,
+            )
+            assert method_section is not None
+            assert len(method_section["contents"]) == 7
+            assert "engine.Engine.start" in method_section["contents"]
+            assert "engine.Engine.park" in method_section["contents"]
+
+            # Functions section should have create_engine
+            func_section = next((s for s in sections if s["title"] == "Functions"), None)
+            assert func_section is not None
+            assert "engine.create_engine" in func_section["contents"]
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_module_exception_subclassification():
+    """Test that exceptions inside modules are categorized correctly."""
+    import sys
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "errpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '"""Package with exceptions in submodule."""\n__all__ = ["errors"]\n'
+        )
+
+        errors_dir = pkg_dir / "errors"
+        errors_dir.mkdir()
+        (errors_dir / "__init__.py").write_text(
+            '"""Errors module."""\n'
+            "class ValidationError(ValueError):\n"
+            '    """Validation failed."""\n'
+            "    pass\n"
+            "\n"
+            "class NotFoundError(KeyError):\n"
+            '    """Item not found."""\n'
+            "    pass\n"
+            "\n"
+            "class Widget:\n"
+            '    """A regular class."""\n'
+            "    pass\n"
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            categories = docs._categorize_api_objects("errpkg", ["errors"])
+
+            # Exceptions should be in the exceptions category
+            assert "errors.ValidationError" in categories["exceptions"]
+            assert "errors.NotFoundError" in categories["exceptions"]
+
+            # Regular class should be in classes
+            assert "errors.Widget" in categories["classes"]
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_module_empty_submodule_goes_to_other():
+    """Test that modules with no documentable members go to 'other'."""
+    import sys
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "emptypkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '"""Package with empty submodule."""\n__all__ = ["empty_mod"]\n'
+        )
+
+        empty_dir = pkg_dir / "empty_mod"
+        empty_dir.mkdir()
+        (empty_dir / "__init__.py").write_text(
+            '"""Empty module with only private members."""\n_internal = 42\n_helper = lambda x: x\n'
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            categories = docs._categorize_api_objects("emptypkg", ["empty_mod"])
+
+            # Module with no public members should go to "other"
+            assert "empty_mod" in categories["other"]
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_module_mixed_with_top_level():
+    """Test packages with both module exports and top-level classes/functions."""
+    import sys
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "mixedpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '"""Mixed package."""\n'
+            '__all__ = ["TopClass", "top_func", "sub"]\n'
+            "\n"
+            "class TopClass:\n"
+            '    """A top-level class."""\n'
+            "    pass\n"
+            "\n"
+            "def top_func():\n"
+            '    """A top-level function."""\n'
+            "    pass\n"
+        )
+
+        sub_dir = pkg_dir / "sub"
+        sub_dir.mkdir()
+        (sub_dir / "__init__.py").write_text(
+            '"""Sub module."""\n'
+            "class SubClass:\n"
+            '    """A class inside a submodule."""\n'
+            "    pass\n"
+            "\n"
+            "def sub_func():\n"
+            '    """A function inside a submodule."""\n'
+            "    pass\n"
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            categories = docs._categorize_api_objects("mixedpkg", ["TopClass", "top_func", "sub"])
+
+            # Top-level items
+            assert "TopClass" in categories["classes"]
+            assert "top_func" in categories["functions"]
+
+            # Submodule items (qualified names)
+            assert "sub.SubClass" in categories["classes"]
+            assert "sub.sub_func" in categories["functions"]
+
+            # No "other"
+            assert categories["other"] == []
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_module_submodule_allowed_in_exports():
+    """Test that submodules are not excluded from _get_package_exports."""
+    import sys
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "subexpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '"""Package with submodule in __all__."""\n__all__ = ["mymod"]\n'
+        )
+
+        mod_dir = pkg_dir / "mymod"
+        mod_dir.mkdir()
+        (mod_dir / "__init__.py").write_text('"""My module."""\ndef hello(): pass\n')
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            exports = docs._get_package_exports("subexpkg")
+
+            # Submodules should NOT be excluded
+            assert exports is not None
+            assert "mymod" in exports
+        finally:
+            sys.path.remove(tmp_dir)
