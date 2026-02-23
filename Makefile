@@ -146,15 +146,32 @@ docs-install: ## Install documentation dependencies
 	@pip install -e ".[docs]"
 
 .PHONY: hub-build
-hub-build: ## Build all 50 synthetic package doc sites into the hub
-	@$(PYTHON) test-packages/synthetic/render_all.py --build
+hub-build: ## Full build of synthetic hub (200 packages, port 3333)
+	@$(PYTHON) test-packages/render_all.py --build
+
+.PHONY: hub-rebuild
+hub-rebuild: ## Selective rebuild: make hub-rebuild PKG="gdtest_minimal gdtest_v2_github_icon"
+	@test -n "$(PKG)" || (echo "Usage: make hub-rebuild PKG=\"name1 name2\"" && exit 1)
+	@$(PYTHON) test-packages/render_all.py --build --only $(PKG)
 
 .PHONY: hub-open
 hub-open: ## Open the synthetic package hub in the default browser
-	@open test-packages/synthetic/_rendered/_hub/index.html 2>/dev/null || \
-	 xdg-open test-packages/synthetic/_rendered/_hub/index.html 2>/dev/null || \
-	 echo "Hub page: test-packages/synthetic/_rendered/_hub/index.html"
+	@open test-packages/_rendered/_hub/index.html 2>/dev/null || \
+	 xdg-open test-packages/_rendered/_hub/index.html 2>/dev/null || \
+	 echo "Hub page: test-packages/_rendered/_hub/index.html"
 
 .PHONY: hub-serve
 hub-serve: ## Serve the synthetic package hub locally (port 3333)
-	@$(PYTHON) test-packages/synthetic/render_all.py --serve
+	@$(PYTHON) test-packages/render_all.py --serve
+
+.PHONY: hub-state
+hub-state: ## Show hub build state summary
+	@$(PYTHON) -c "\
+	import sys, json; sys.path.insert(0, 'test-packages'); \
+	from build_state import load_state, summary; \
+	from pathlib import Path; \
+	p = Path('test-packages/_rendered/_build_state.json'); \
+	s = load_state(p); \
+	info = summary(s); info['last_run_id'] = s.get('last_run_id'); \
+	print(json.dumps(info, indent=2))" 2>/dev/null || \
+	 echo "No build state found. Run 'make hub-build' first."
