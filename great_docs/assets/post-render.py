@@ -337,6 +337,139 @@ def strip_directives_from_html(html_content):
     return cleaned
 
 
+def translate_sphinx_roles(html_content):
+    """
+    Convert Sphinx cross-reference roles into clean HTML.
+
+    Quartodoc sometimes passes through Sphinx-style roles verbatim.  The most
+    common rendered patterns are:
+
+    * ``:py:exc:<code>ValueError</code>``  →  ``<code>ValueError</code>``
+    * ``:class:<code>Foo</code>``          →  ``<code>Foo</code>``
+    * ``:func:<code>bar</code>``           →  ``<code>bar()</code>``
+    * ``:func:`bar```  (inside ``<pre>``)  →  ``bar()``
+
+    For *function* and *method* roles the name gets trailing ``()`` so the reader
+    can tell it is callable.
+    """
+
+    _CALLABLE_ROLES = {"func", "meth"}
+
+    # Pattern 1 – role prefix followed by <code>…</code>
+    # e.g.  :py:class:<code>datetime.datetime</code>
+    #       :func:<code>get_object</code>
+    def _replace_code_role(m):
+        role = m.group("role")
+        inner = m.group("inner")
+        if role in _CALLABLE_ROLES and not inner.endswith("()"):
+            inner += "()"
+        return f"<code>{inner}</code>"
+
+    html_content = re.sub(
+        r":(?:py:)?(?P<role>exc|class|func|meth|attr|const|mod|obj|data|type):"
+        r"<code>(?P<inner>[^<]+)</code>",
+        _replace_code_role,
+        html_content,
+    )
+
+    # Pattern 2 – role with backtick-delimited text (inside <pre><code> blocks
+    # or other contexts where markdown didn't convert backticks to <code>)
+    # e.g.  :func:`get_zonefile_instance`
+    def _replace_backtick_role(m):
+        role = m.group("role")
+        inner = m.group("inner")
+        if role in _CALLABLE_ROLES and not inner.endswith("()"):
+            inner += "()"
+        return f"<code>{inner}</code>"
+
+    html_content = re.sub(
+        r":(?:py:)?(?P<role>exc|class|func|meth|attr|const|mod|obj|data|type):"
+        r"`(?P<inner>[^`]+)`",
+        _replace_backtick_role,
+        html_content,
+    )
+
+    return html_content
+
+
+def translate_rst_directives(html_content):
+    """
+    Convert RST admonition / version directives into styled HTML callouts.
+
+    Handles directives that appear as literal text in ``<p>`` tags after
+    quartodoc rendering, for example:
+
+    * ``<p>.. versionadded:: 2.8.1</p>``
+    * ``<p>.. deprecated:: 2.6 Use X instead.</p>``
+    * ``<p>.. note:: Some important note.</p>``
+    * ``<p>.. warning:: Be careful.</p>``
+
+    Each directive type gets a distinct icon, colour and label.
+    """
+
+    _DIRECTIVE_STYLES = {
+        # (icon, bg_color, border_color, label)
+        "versionadded": ("🆕", "#ECFDF5", "#059669", "Added in version"),
+        "versionchanged": ("🔄", "#EFF6FF", "#3B82F6", "Changed in version"),
+        "deprecated": ("⚠️", "#FEF2F2", "#DC2626", "Deprecated since version"),
+        "note": ("ℹ️", "#EFF6FF", "#3B82F6", "Note"),
+        "warning": ("⚠️", "#FFFBEB", "#D97706", "Warning"),
+        "caution": ("⚠️", "#FFFBEB", "#D97706", "Caution"),
+        "danger": ("🚨", "#FEF2F2", "#DC2626", "Danger"),
+        "important": ("❗", "#FFF7ED", "#EA580C", "Important"),
+        "tip": ("💡", "#ECFDF5", "#059669", "Tip"),
+        "hint": ("💡", "#ECFDF5", "#059669", "Hint"),
+    }
+
+    # Version directives have the version number right after ::
+    # e.g.  .. versionadded:: 2.8.1
+    #       .. deprecated:: 2.6 Use X instead.
+    _VERSION_DIRECTIVES = {"versionadded", "versionchanged", "deprecated"}
+
+    directive_names = "|".join(_DIRECTIVE_STYLES.keys())
+
+    def _replace_directive(m):
+        directive = m.group("directive")
+        body = (m.group("body") or "").strip()
+        style = _DIRECTIVE_STYLES[directive]
+        icon, bg, border, label = style
+
+        if directive in _VERSION_DIRECTIVES:
+            # Split version number from optional description
+            parts = body.split(None, 1) if body else []
+            version = parts[0] if parts else ""
+            desc = parts[1] if len(parts) > 1 else ""
+            title = f"{label} {version}" if version else label
+            content = desc
+        else:
+            title = label
+            content = body
+
+        # Build the callout HTML
+        content_html = f'<p style="margin: 0;">{content}</p>' if content else ""
+        return (
+            f'<div style="margin: 1rem 0; padding: 0.75rem 1rem; '
+            f"background-color: {bg}; "
+            f"border-left: 4px solid {border}; "
+            f'border-radius: 4px;">'
+            f'<p style="margin: 0 0 0.25rem 0; font-weight: 600; '
+            f'font-size: 0.875rem;">{icon} {title}</p>'
+            f"{content_html}"
+            f"</div>"
+        )
+
+    # Match <p>.. directive:: body</p>  (the entire <p> is the directive)
+    # The body may contain inline HTML tags (e.g. <code>...</code>) produced
+    # by the Sphinx-role translation step that runs before this function.
+    html_content = re.sub(
+        rf"<p>\s*\.\.\s+(?P<directive>{directive_names})::\s*(?P<body>.*?)\s*</p>",
+        _replace_directive,
+        html_content,
+    )
+
+    return html_content
+
+
 def extract_seealso_from_html(html_content):
     """
     Extract %seealso values from HTML content before stripping.
@@ -414,6 +547,12 @@ for html_file in html_files:
 
     # Strip %directive lines from rendered HTML (safety net for docstring directives)
     content = strip_directives_from_html(content)
+
+    # Translate Sphinx cross-reference roles (e.g. :py:exc:`ValueError`)
+    content = translate_sphinx_roles(content)
+
+    # Translate RST directives (e.g. .. versionadded:: 2.8.1)
+    content = translate_rst_directives(content)
 
     # Re-highlight the signature with Pygments for better syntax coloring
     content = highlight_signature_with_pygments(content)
