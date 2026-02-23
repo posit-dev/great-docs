@@ -29,7 +29,7 @@ SPEC = {
     ],
     "pyproject_toml": {
         "project": {
-            "name": "gdtest-v2-stress-everything",
+            "name": "gdtest-stress-everything",
             "version": "0.1.0",
             "description": "The ultimate stress test combining everything.",
         },
@@ -84,6 +84,9 @@ SPEC = {
     "files": {
         "gdtest_stress_everything/__init__.py": '''\
             """Package for the ultimate stress test combining everything."""
+
+            from .core import create_resource, ResourceManager
+            from .utils import format_output, validate_input
 
             __all__ = [
                 "create_resource",
@@ -402,7 +405,7 @@ SPEC = {
             "A step-by-step tutorial for new users.\n"
         ),
         "README.md": (
-            "# gdtest-v2-stress-everything\n"
+            "# gdtest-stress-everything\n"
             "\n"
             "![Version](https://img.shields.io/badge/version-0.1.0-blue)\n"
             "![Python](https://img.shields.io/badge/python-3.9+-green)\n"
@@ -412,7 +415,7 @@ SPEC = {
         ),
     },
     "expected": {
-        "detected_name": "gdtest-v2-stress-everything",
+        "detected_name": "gdtest-stress-everything",
         "detected_module": "gdtest_stress_everything",
         "detected_parser": "numpy",
         "export_names": [
