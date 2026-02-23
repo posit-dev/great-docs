@@ -4382,3 +4382,140 @@ def test_module_submodule_allowed_in_exports():
             assert "mymod" in exports
         finally:
             sys.path.remove(tmp_dir)
+
+
+def test_write_object_types_json():
+    """Test that _write_object_types_json writes correct type mapping."""
+    import json
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+
+        categories = docs._empty_categories()
+        categories["classes"] = ["MyClass", "parser.ParserInfo"]
+        categories["exceptions"] = ["parser.ParserError"]
+        categories["functions"] = ["parse", "easter.easter"]
+        categories["constants"] = ["DEFAULTPARSER"]
+        categories["enums"] = ["Color"]
+        categories["type_aliases"] = ["DateType"]
+        categories["other"] = ["sys"]
+        categories["class_method_names"] = {
+            "MyClass": ["fit", "predict"],
+            "parser.ParserInfo": ["info"],
+        }
+
+        docs._write_object_types_json(categories)
+
+        types_path = docs.project_path / "_object_types.json"
+        assert types_path.exists()
+
+        with open(types_path) as f:
+            obj_types = json.load(f)
+
+        # Classes (including module-qualified ones)
+        assert obj_types["MyClass"] == "class"
+        assert obj_types["parser.ParserInfo"] == "class"
+
+        # Exceptions
+        assert obj_types["parser.ParserError"] == "exception"
+
+        # Functions
+        assert obj_types["parse"] == "function"
+        assert obj_types["easter.easter"] == "function"
+
+        # Constants
+        assert obj_types["DEFAULTPARSER"] == "constant"
+
+        # Enums
+        assert obj_types["Color"] == "enum"
+
+        # Type aliases
+        assert obj_types["DateType"] == "type_alias"
+
+        # Other
+        assert obj_types["sys"] == "other"
+
+        # Methods
+        assert obj_types["MyClass.fit"] == "method"
+        assert obj_types["MyClass.predict"] == "method"
+        assert obj_types["parser.ParserInfo.info"] == "method"
+
+
+def test_write_object_types_json_empty_categories():
+    """Test that _write_object_types_json handles empty categories."""
+    import json
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        categories = docs._empty_categories()
+
+        docs._write_object_types_json(categories)
+
+        types_path = docs.project_path / "_object_types.json"
+        assert types_path.exists()
+
+        with open(types_path) as f:
+            obj_types = json.load(f)
+
+        assert obj_types == {}
+
+
+def test_object_types_integrated_with_categorization():
+    """Test that _categorize_api_objects + _write_object_types_json produce
+    correct types for a package with mixed exports."""
+    import sys
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "typepkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '"""Package with diverse types."""\n'
+            '__all__ = ["MyClass", "my_func", "MyError", "MAX_SIZE"]\n'
+            "\n"
+            "class MyClass:\n"
+            '    """A normal class."""\n'
+            "    def action(self): pass\n"
+            "\n"
+            "def my_func():\n"
+            '    """A function."""\n'
+            "    pass\n"
+            "\n"
+            "class MyError(Exception):\n"
+            '    """An exception."""\n'
+            "    pass\n"
+            "\n"
+            "MAX_SIZE = 1024\n"
+        )
+
+        sys.path.insert(0, tmp_dir)
+
+        # Create a build directory for the docs output
+        build_dir = Path(tmp_dir) / "docs"
+        build_dir.mkdir()
+
+        try:
+            docs = GreatDocs(project_path=str(build_dir))
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+            categories = docs._categorize_api_objects(
+                "typepkg", ["MyClass", "my_func", "MyError", "MAX_SIZE"]
+            )
+
+            docs._write_object_types_json(categories)
+
+            import json
+
+            types_path = docs.project_path / "_object_types.json"
+            assert types_path.exists()
+
+            with open(types_path) as f:
+                obj_types = json.load(f)
+
+            assert obj_types["MyClass"] == "class"
+            assert obj_types["my_func"] == "function"
+            assert obj_types["MyError"] == "exception"
+            assert obj_types["MAX_SIZE"] == "constant"
+            assert obj_types["MyClass.action"] == "method"
+        finally:
+            sys.path.remove(tmp_dir)
