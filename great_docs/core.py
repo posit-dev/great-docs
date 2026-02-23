@@ -3255,16 +3255,35 @@ class GreatDocs:
                 pass
 
             for name in filtered:
-                # First check if this is a submodule; these should be excluded
-                # because documenting them recursively documents all their members
+                # Check if this is a submodule; these are allowed through but will
+                # be introspected by _categorize_api_objects to discover their
+                # public classes and functions
+                is_submodule = False
+
+                # Check via runtime import first
                 if actual_package is not None:
                     runtime_obj = getattr(actual_package, name, None)
                     if runtime_obj is not None:
                         import types
 
                         if isinstance(runtime_obj, types.ModuleType):
-                            failed_exports[name] = "submodule (excluded from top-level docs)"
-                            continue
+                            is_submodule = True
+
+                # Fallback: check via griffe static analysis
+                # (handles packages where __all__ lists submodules that aren't
+                # auto-imported at runtime, e.g., lazy imports)
+                if not is_submodule and name in pkg.members:
+                    try:
+                        if pkg.members[name].kind.value == "module":
+                            is_submodule = True
+                    except Exception:
+                        pass
+
+                if is_submodule:
+                    # Submodules are passed through to categorization which will
+                    # drill into them to discover classes/functions
+                    safe_exports.append(name)
+                    continue
 
                 if quartodoc_get_object is not None:
                     try:
@@ -3982,8 +4001,154 @@ class GreatDocs:
                             categories["type_aliases"].append(name)
                         else:
                             categories["constants"].append(name)
+                    elif obj.kind.value == "module":
+                        # Drill into the module to discover its public classes and functions
+                        # Use qualified names like "module.ClassName" so quartodoc resolves
+                        # them relative to the package (e.g., dateutil:easter.easter)
+                        module_had_members = False
+                        try:
+                            for member_name, member in obj.members.items():
+                                if member_name.startswith("_"):
+                                    continue
+                                try:
+                                    member_kind = member.kind.value
+                                except (
+                                    griffe.CyclicAliasError,
+                                    griffe.AliasResolutionError,
+                                ):
+                                    continue
+                                except Exception:
+                                    continue
+
+                                qualified = f"{name}.{member_name}"
+
+                                # Validate with quartodoc if available
+                                # Try dynamic first, fall back to static if it fails
+                                if quartodoc_get_object is not None:
+                                    try:
+                                        qd_obj = quartodoc_get_object(
+                                            f"{normalized_name}:{qualified}"
+                                        )
+                                        _ = qd_obj.kind
+                                    except Exception:
+                                        # Dynamic mode failed; try static (no dynamic=True)
+                                        try:
+                                            from quartodoc import get_object as qd_get
+
+                                            qd_obj = qd_get(
+                                                f"{normalized_name}:{qualified}",
+                                                parser="numpy",
+                                            )
+                                            _ = qd_obj.kind
+                                        except Exception:
+                                            # Neither mode works; skip this member
+                                            continue
+
+                                if member_kind == "class":
+                                    sub = self._sub_classify_class(member)
+                                    _CLASS_SUB_MAP = {
+                                        "dataclass": "dataclasses",
+                                        "enum": "enums",
+                                        "exception": "exceptions",
+                                        "namedtuple": "namedtuples",
+                                        "typeddict": "typeddicts",
+                                        "protocol": "protocols",
+                                        "abc": "abstract_classes",
+                                        "class": "classes",
+                                    }
+                                    cat_key = _CLASS_SUB_MAP.get(sub, "classes")
+                                    categories[cat_key].append(qualified)
+                                    module_had_members = True
+
+                                    # Count public methods for classes inside modules
+                                    method_entries = []
+                                    try:
+                                        for meth_name, meth in member.members.items():
+                                            if meth_name.startswith("_"):
+                                                continue
+                                            try:
+                                                if meth.kind.value in ("function", "method"):
+                                                    lineno = getattr(meth, "lineno", float("inf"))
+                                                    if quartodoc_get_object is not None:
+                                                        try:
+                                                            qd_m = quartodoc_get_object(
+                                                                f"{normalized_name}:{qualified}.{meth_name}"
+                                                            )
+                                                            _ = qd_m.kind
+                                                            method_entries.append(
+                                                                (meth_name, lineno)
+                                                            )
+                                                        except Exception:
+                                                            # Dynamic failed; try static
+                                                            try:
+                                                                from quartodoc import (
+                                                                    get_object as qd_get,
+                                                                )
+
+                                                                qd_m = qd_get(
+                                                                    f"{normalized_name}:{qualified}.{meth_name}",
+                                                                    parser="numpy",
+                                                                )
+                                                                _ = qd_m.kind
+                                                                method_entries.append(
+                                                                    (meth_name, lineno)
+                                                                )
+                                                            except Exception:
+                                                                pass
+                                                    else:
+                                                        method_entries.append((meth_name, lineno))
+                                            except (
+                                                griffe.CyclicAliasError,
+                                                griffe.AliasResolutionError,
+                                            ):
+                                                pass
+                                            except Exception:
+                                                pass
+                                    except (
+                                        griffe.CyclicAliasError,
+                                        griffe.AliasResolutionError,
+                                    ):
+                                        pass
+
+                                    method_entries.sort(key=lambda x: x[1])
+                                    method_names_list = [e[0] for e in method_entries]
+                                    categories["class_methods"][qualified] = len(method_names_list)
+                                    categories["class_method_names"][qualified] = method_names_list
+                                    print(
+                                        f"{qualified}: class with "
+                                        f"{len(method_names_list)} public methods"
+                                    )
+
+                                elif member_kind == "function":
+                                    sub = self._sub_classify_function(member)
+                                    if sub == "async":
+                                        categories["async_functions"].append(qualified)
+                                    else:
+                                        categories["functions"].append(qualified)
+                                    module_had_members = True
+
+                                elif member_kind in ("attribute", "type alias"):
+                                    sub = self._sub_classify_attribute(member)
+                                    if sub == "type_alias":
+                                        categories["type_aliases"].append(qualified)
+                                    elif sub == "typevar":
+                                        categories["type_aliases"].append(qualified)
+                                    else:
+                                        categories["constants"].append(qualified)
+                                    module_had_members = True
+
+                        except (
+                            griffe.CyclicAliasError,
+                            griffe.AliasResolutionError,
+                        ):
+                            # Can't iterate module members
+                            pass
+
+                        if not module_had_members:
+                            # Module has no documentable public members
+                            categories["other"].append(name)
                     else:
-                        # Modules, aliases, etc.
+                        # Aliases and other unknown kinds
                         categories["other"].append(name)
 
                 except griffe.CyclicAliasError:
