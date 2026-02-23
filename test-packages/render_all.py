@@ -410,8 +410,6 @@ def _build_nav_html(
 
     # Prev/Next navigation
     ok_names = [r["name"] for r in results if r["status"] == "ok"]
-    prev_link = ""
-    next_link = ""
     if current_name in ok_names:
         ci = ok_names.index(current_name)
         if ci > 0:
@@ -420,12 +418,19 @@ def _build_nav_html(
                 f'<a href="{hub_prefix}/{prev_name}/index.html" '
                 f'class="gd-nav-arrow" title="{prev_name}">&#9664;</a>'
             )
+        else:
+            prev_link = '<span class="gd-nav-arrow-disabled" title="First package">&#9664;</span>'
         if ci < len(ok_names) - 1:
             next_name = ok_names[ci + 1]
             next_link = (
                 f'<a href="{hub_prefix}/{next_name}/index.html" '
                 f'class="gd-nav-arrow" title="{next_name}">&#9654;</a>'
             )
+        else:
+            next_link = '<span class="gd-nav-arrow-disabled" title="Last package">&#9654;</span>'
+    else:
+        prev_link = '<span class="gd-nav-arrow-disabled">&#9664;</span>'
+        next_link = '<span class="gd-nav-arrow-disabled">&#9654;</span>'
 
     stale_trigger_badge = (
         ' <span class="gd-nav-badge-stale" style="margin-left:4px">STALE</span>'
@@ -559,6 +564,20 @@ def _build_nav_html(
         border: 1px solid #45475a;
     }}
     .gd-nav-arrow:hover {{ background: #45475a; }}
+    .gd-nav-arrow-disabled {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        background: #313244;
+        color: #585b70 !important;
+        font-size: 12px;
+        border: 1px solid #45475a;
+        cursor: default;
+        opacity: 0.4;
+    }}
     .gd-nav-stats {{
         margin-left: auto;
         font-size: 11px;
