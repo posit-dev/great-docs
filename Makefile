@@ -153,26 +153,26 @@ docs-install: ## Install documentation dependencies
 	@pip install -e ".[docs]"
 
 .PHONY: hub-build
-hub-build: ## Full build of synthetic hub (200 packages, port 3333)
+hub-build: ## Full build of the Great Docs Gauntlet (200 packages, port 3333)
 	@$(PYTHON) test-packages/render_all.py --build
 
 .PHONY: hub-rebuild
-hub-rebuild: ## Selective rebuild: make hub-rebuild PKG="gdtest_minimal gdtest_v2_github_icon"
+hub-rebuild: ## Selective GDG rebuild: make hub-rebuild PKG="gdtest_minimal gdtest_github_icon"
 	@test -n "$(PKG)" || (echo "Usage: make hub-rebuild PKG=\"name1 name2\"" && exit 1)
 	@$(PYTHON) test-packages/render_all.py --build --only $(PKG)
 
 .PHONY: hub-open
-hub-open: ## Open the synthetic package hub in the default browser
+hub-open: ## Open the Great Docs Gauntlet in the default browser
 	@open test-packages/_rendered/_hub/index.html 2>/dev/null || \
 	 xdg-open test-packages/_rendered/_hub/index.html 2>/dev/null || \
-	 echo "Hub page: test-packages/_rendered/_hub/index.html"
+	 echo "GDG page: test-packages/_rendered/_hub/index.html"
 
 .PHONY: hub-serve
-hub-serve: ## Serve the synthetic package hub locally (port 3333)
+hub-serve: ## Serve the Great Docs Gauntlet locally (port 3333)
 	@$(PYTHON) test-packages/render_all.py --serve
 
 .PHONY: hub-state
-hub-state: ## Show hub build state summary
+hub-state: ## Show GDG build state summary
 	@$(PYTHON) -c "\
 	import sys, json; sys.path.insert(0, 'test-packages'); \
 	from build_state import load_state, summary; \

@@ -1,9 +1,9 @@
 """
-Master catalog of all 200 synthetic test packages.
+Great Docs Gauntlet (GDG) — master catalog of all 200 test packages.
 
 Provides the registry of package names, their specs, and dimension metadata.
-Specs are lazily imported from the `specs` sub-package so that adding a new
-package is as simple as dropping a new file into `specs/`.
+Specs are lazily imported from the ``specs`` sub-package so that adding a new
+package is as simple as dropping a new file into ``specs/``.
 """
 
 from __future__ import annotations

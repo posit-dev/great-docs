@@ -1,8 +1,8 @@
 # pyright: reportPrivateUsage=false
 """
-Tests for synthetic test packages.
+Tests for the Great Docs Gauntlet (GDG).
 
-These tests exercise Great Docs against spec-driven synthetic packages that
+These tests exercise Great Docs against spec-driven GDG packages that
 cover every feature dimension.  The tests are organized by assertion level:
 
 - **L0**: Package/module name detection (instant, no I/O)

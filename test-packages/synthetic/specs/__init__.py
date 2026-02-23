@@ -1,1 +1,1 @@
-# Spec sub-package for synthetic test packages
+# Spec sub-package for the Great Docs Gauntlet (GDG)

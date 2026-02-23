@@ -1,8 +1,8 @@
 """
-Unified catalog for all 200 synthetic test packages.
+Great Docs Gauntlet (GDG) — unified catalog for all 200 test packages.
 
-Re-exports everything from `synthetic.catalog`, which contains all
-packages (layout/structure and config/docstring) in a single catalog.
+Re-exports everything from ``synthetic.catalog``, which contains all
+GDG packages in a single catalog.
 
 >>> from catalog import ALL_PACKAGES, get_spec
 >>> len(ALL_PACKAGES)

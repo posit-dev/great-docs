@@ -1,4 +1,4 @@
-# Synthetic test package infrastructure for Great Docs
+# Great Docs Gauntlet (GDG) — synthetic test package infrastructure
 #
 # This module provides a spec-driven system for generating minimal, fake-but-valid
 # Python packages that exercise every Great Docs code path. See SYNTHETIC_TEST_PLAN.md

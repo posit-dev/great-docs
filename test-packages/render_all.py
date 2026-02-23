@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Render all 200 synthetic test package sites and serve them with a shared nav bar.
+Render all Great Docs Gauntlet (GDG) package sites and serve them with a shared nav bar.
 
 Usage:
     python test-packages/render_all.py              # build all + serve
@@ -11,9 +11,9 @@ Usage:
 The script:
   1. Generates each synthetic package into _rendered/<name>/
   2. Runs `great-docs init --force` + `great-docs build` on each
-  3. Collects all _site/ outputs into _rendered/_hub/<name>/
+  3. Collects all _site/ outputs into the GDG directory
   4. Injects a top navigation bar into every HTML file
-  5. Creates a hub index page at _rendered/_hub/index.html
+  5. Creates a GDG index page at _rendered/_hub/index.html
   6. Starts a local HTTP server on port 3333
 """
 
@@ -574,7 +574,7 @@ def _build_nav_html(
     </style>
 
     <div class="gd-topnav" id="gd-topnav">
-        <a href="{hub_prefix}/index.html" class="gd-nav-hub">&#9776; Hub</a>
+        <a href="{hub_prefix}/index.html" class="gd-nav-hub">&#9776; Hub#9776; GDG</a>
         <span class="gd-nav-sep">/</span>
 
         {prev_link}
@@ -690,7 +690,7 @@ def _create_log_page(name: str, log_path: str | None) -> str:
     </head>
     <body>
         <div class="topbar">
-            <a href="index.html">&larr; Hub</a>
+            <a href="index.html">&larr; GDG</a>
             <span class="sep">/</span>
             <a href="_detail_{name}.html">{html.escape(name)}</a>
             <span class="sep">/</span>
@@ -815,7 +815,7 @@ def _create_detail_page(r: dict, results: list[dict]) -> str:
     </head>
     <body>
         <div class="topbar">
-            <a href="index.html">&larr; Hub</a>
+            <a href="index.html">&larr; GDG</a>
             <span class="sep">/</span>
             <h1>#{num:03d} {html.escape(name)}</h1>
         </div>
@@ -929,7 +929,7 @@ def create_hub_page(results: list[dict]) -> None:
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Great Docs — Synthetic Package Hub</title>
+        <title>Great Docs Gauntlet</title>
         <style>
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             body {{
@@ -1000,7 +1000,7 @@ def create_hub_page(results: list[dict]) -> None:
     </head>
     <body>
         <div class="header">
-            <h1>Great Docs — Synthetic Package Hub</h1>
+            <h1>Great Docs Gauntlet</h1>
             <p>
                 Rendered documentation sites for all {len(results)} synthetic test packages,
                 covering layouts, config options, docstring patterns, user guides, and more.
@@ -1097,7 +1097,7 @@ def assemble_hub(
 
     ok_results = [r for r in results if r["status"] == "ok"]
 
-    # Copy _site/ dirs → _hub/<name>/
+    # Copy _site/ dirs → GDG/<name>/
     for r in ok_results:
         name = r["name"]
         site_dir = Path(r["site_dir"]) if r.get("site_dir") else None
@@ -1120,7 +1120,7 @@ def assemble_hub(
             shutil.copytree(site_dir, target)
             print(f"  Copied {name}")
 
-    # Inject nav bar into ALL packages in _hub/
+    # Inject nav bar into ALL packages in GDG
     print("\n  Injecting navigation bar ...")
     nav_count = 0
     for r in ok_results:
@@ -1226,7 +1226,7 @@ def _result_from_state(name: str, pkg_state: dict) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Render all 200 synthetic test package sites and serve via a hub.",
+        description="Render all Great Docs Gauntlet (GDG) package sites and serve via the GDG.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""\
             examples:

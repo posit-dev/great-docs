@@ -1,9 +1,9 @@
 """
-Package directory generator for synthetic test packages.
+Great Docs Gauntlet (GDG) — package directory generator.
 
 Creates real directory structures on disk from declarative spec dicts.
 Each spec defines the files, metadata, and expected outcomes for a
-minimal test package.
+minimal GDG test package.
 """
 
 from __future__ import annotations

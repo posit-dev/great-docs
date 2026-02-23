@@ -1,8 +1,8 @@
 """
-Shared build-state management for synthetic test-package hubs.
+Shared build-state management for the Great Docs Gauntlet (GDG).
 
 Tracks per-package build timestamps, statuses, and a per-run identifier so
-the hub UI can mark stale (not-rebuilt-this-run) packages.
+the GDG can mark stale (not-rebuilt-this-run) packages.
 
 State file layout (``_build_state.json``):
 
