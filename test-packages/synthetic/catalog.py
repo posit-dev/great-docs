@@ -1,9 +1,9 @@
 """
-Master catalog of all synthetic test packages.
+Master catalog of all 200 synthetic test packages.
 
 Provides the registry of package names, their specs, and dimension metadata.
-Specs are lazily imported from the ``specs`` sub-package so that adding a new
-package is as simple as dropping a new file into ``specs/``.
+Specs are lazily imported from the `specs` sub-package so that adding a new
+package is as simple as dropping a new file into `specs/`.
 """
 
 from __future__ import annotations
@@ -131,6 +131,114 @@ ALL_PACKAGES: list[str] = [
     "gdtest_config_minimal",  # 98
     "gdtest_config_parser",  # 99
     "gdtest_config_extra_keys",  # 100
+    # ── v2: Configuration option permutations (101–125) ──
+    # 01–25: Configuration option permutations
+    "gdtest_github_icon",  # 01
+    "gdtest_source_branch",  # 02
+    "gdtest_source_path",  # 03
+    "gdtest_source_title",  # 04
+    "gdtest_source_disabled",  # 05
+    "gdtest_sidebar_disabled",  # 06
+    "gdtest_sidebar_min_items",  # 07
+    "gdtest_cli_name",  # 08
+    "gdtest_dynamic_false",  # 09
+    "gdtest_parser_google",  # 10
+    "gdtest_parser_sphinx",  # 11
+    "gdtest_display_name",  # 12
+    "gdtest_funding",  # 13
+    "gdtest_authors_multi",  # 14
+    "gdtest_no_darkmode",  # 15
+    "gdtest_exclude_list",  # 16
+    "gdtest_jupyter_kernel",  # 17
+    "gdtest_config_sections",  # 18
+    "gdtest_config_ug_string",  # 19
+    "gdtest_config_ug_list",  # 20
+    "gdtest_config_changelog",  # 21
+    "gdtest_config_reference",  # 22
+    "gdtest_config_combo_a",  # 23
+    "gdtest_config_combo_b",  # 24
+    "gdtest_config_combo_c",  # 25
+    # 26–50: Docstring richness & post-render
+    "gdtest_rst_versionadded",  # 26
+    "gdtest_rst_deprecated",  # 27
+    "gdtest_rst_note",  # 28
+    "gdtest_rst_warning",  # 29
+    "gdtest_rst_tip",  # 30
+    "gdtest_rst_caution",  # 31
+    "gdtest_rst_danger",  # 32
+    "gdtest_rst_important",  # 33
+    "gdtest_rst_mixed_dirs",  # 34
+    "gdtest_sphinx_func_role",  # 35
+    "gdtest_sphinx_class_role",  # 36
+    "gdtest_sphinx_exc_role",  # 37
+    "gdtest_sphinx_meth_role",  # 38
+    "gdtest_sphinx_mixed_roles",  # 39
+    "gdtest_numpy_rich",  # 40
+    "gdtest_google_rich",  # 41
+    "gdtest_sphinx_rich",  # 42
+    "gdtest_docstring_examples",  # 43
+    "gdtest_docstring_notes",  # 44
+    "gdtest_docstring_warnings",  # 45
+    "gdtest_docstring_references",  # 46
+    "gdtest_docstring_seealso",  # 47
+    "gdtest_docstring_math",  # 48
+    "gdtest_docstring_tables",  # 49
+    "gdtest_docstring_combo",  # 50
+    # 51–65: User guide variations
+    "gdtest_ug_auto",  # 51
+    "gdtest_ug_numbered",  # 52
+    "gdtest_ug_sections_fm",  # 53
+    "gdtest_ug_subdirs",  # 54
+    "gdtest_ug_custom_dir",  # 55
+    "gdtest_ug_deep_nest",  # 56
+    "gdtest_ug_mixed_ext",  # 57
+    "gdtest_ug_many_pages",  # 58
+    "gdtest_ug_explicit_order",  # 59
+    "gdtest_ug_single_page",  # 60
+    "gdtest_ug_no_frontmatter",  # 61
+    "gdtest_ug_with_code",  # 62
+    "gdtest_ug_with_images",  # 63
+    "gdtest_ug_hyphen_dir",  # 64
+    "gdtest_ug_combo",  # 65
+    # 66–75: Custom sections
+    "gdtest_sec_examples",  # 66
+    "gdtest_sec_tutorials",  # 67
+    "gdtest_sec_recipes",  # 68
+    "gdtest_sec_blog",  # 69
+    "gdtest_sec_faq",  # 70
+    "gdtest_sec_multi",  # 71
+    "gdtest_sec_navbar_after",  # 72
+    "gdtest_sec_with_ug",  # 73
+    "gdtest_sec_with_ref",  # 74
+    "gdtest_sec_deep",  # 75
+    # 76–85: Reference config
+    "gdtest_ref_explicit",  # 76
+    "gdtest_ref_members_false",  # 77
+    "gdtest_ref_mixed",  # 78
+    "gdtest_ref_reorder",  # 79
+    "gdtest_ref_sectioned",  # 80
+    "gdtest_ref_single_section",  # 81
+    "gdtest_ref_module_expand",  # 82
+    "gdtest_ref_big_class",  # 83
+    "gdtest_ref_multi_big",  # 84
+    "gdtest_ref_title",  # 85
+    # 86–95: Site theming & display
+    "gdtest_theme_cosmo",  # 86
+    "gdtest_theme_lumen",  # 87
+    "gdtest_theme_cerulean",  # 88
+    "gdtest_toc_disabled",  # 89
+    "gdtest_toc_depth",  # 90
+    "gdtest_toc_title",  # 91
+    "gdtest_site_combo",  # 92
+    "gdtest_display_badges",  # 93
+    "gdtest_display_authors",  # 94
+    "gdtest_display_funding",  # 95
+    # 96–100: Cross-feature stress tests
+    "gdtest_stress_all_config",  # 96
+    "gdtest_stress_all_docstr",  # 97
+    "gdtest_stress_all_ug",  # 98
+    "gdtest_stress_all_sections",  # 99
+    "gdtest_stress_everything",  # 100
 ]
 
 
@@ -213,6 +321,94 @@ DIMENSIONS: dict[str, dict[str, str]] = {
     "H5": {"axis": "extras", "label": ".github/CONTRIBUTING.md"},
     "H6": {"axis": "extras", "label": "assets/"},
     "H7": {"axis": "extras", "label": "No extras"},
+    # ── v2 axes ──
+    # Config axes
+    "K1": {"axis": "config", "label": "github_style: icon"},
+    "K2": {"axis": "config", "label": "source.branch override"},
+    "K3": {"axis": "config", "label": "source.path override"},
+    "K4": {"axis": "config", "label": "source.placement: title"},
+    "K5": {"axis": "config", "label": "source.enabled: false"},
+    "K6": {"axis": "config", "label": "sidebar_filter.enabled: false"},
+    "K7": {"axis": "config", "label": "sidebar_filter.min_items"},
+    "K8": {"axis": "config", "label": "cli.name explicit"},
+    "K9": {"axis": "config", "label": "dynamic: false"},
+    "K10": {"axis": "config", "label": "parser: google"},
+    "K11": {"axis": "config", "label": "parser: sphinx"},
+    "K12": {"axis": "config", "label": "display_name override"},
+    "K13": {"axis": "config", "label": "funding config"},
+    "K14": {"axis": "config", "label": "multiple authors"},
+    "K15": {"axis": "config", "label": "dark_mode_toggle: false"},
+    "K16": {"axis": "config", "label": "exclude list"},
+    "K17": {"axis": "config", "label": "jupyter kernel"},
+    "K18": {"axis": "config", "label": "sections config"},
+    "K19": {"axis": "config", "label": "user_guide: string"},
+    "K20": {"axis": "config", "label": "user_guide: list"},
+    "K21": {"axis": "config", "label": "changelog config"},
+    "K22": {"axis": "config", "label": "reference config"},
+    # Docstring richness axes
+    "L1": {"axis": "docstring", "label": ".. versionadded::"},
+    "L2": {"axis": "docstring", "label": ".. deprecated::"},
+    "L3": {"axis": "docstring", "label": ".. note::"},
+    "L4": {"axis": "docstring", "label": ".. warning::"},
+    "L5": {"axis": "docstring", "label": ".. tip::"},
+    "L6": {"axis": "docstring", "label": ".. caution::"},
+    "L7": {"axis": "docstring", "label": ".. danger::"},
+    "L8": {"axis": "docstring", "label": ".. important::"},
+    "L9": {"axis": "docstring", "label": "Mixed RST directives"},
+    "L10": {"axis": "docstring", "label": ":py:func: role"},
+    "L11": {"axis": "docstring", "label": ":py:class: role"},
+    "L12": {"axis": "docstring", "label": ":py:exc: role"},
+    "L13": {"axis": "docstring", "label": ":py:meth: role"},
+    "L14": {"axis": "docstring", "label": "Mixed Sphinx roles"},
+    "L15": {"axis": "docstring", "label": "Rich numpy sections"},
+    "L16": {"axis": "docstring", "label": "Rich google sections"},
+    "L17": {"axis": "docstring", "label": "Rich sphinx sections"},
+    "L18": {"axis": "docstring", "label": "Examples section"},
+    "L19": {"axis": "docstring", "label": "Notes section"},
+    "L20": {"axis": "docstring", "label": "Warnings section"},
+    "L21": {"axis": "docstring", "label": "References section"},
+    "L22": {"axis": "docstring", "label": "See Also section"},
+    "L23": {"axis": "docstring", "label": "Math in docstrings"},
+    "L24": {"axis": "docstring", "label": "Tables in docstrings"},
+    # User guide axes
+    "M1": {"axis": "user_guide", "label": "Auto-discover UG"},
+    "M2": {"axis": "user_guide", "label": "Numbered UG files"},
+    "M3": {"axis": "user_guide", "label": "Frontmatter sections"},
+    "M4": {"axis": "user_guide", "label": "Subdirectory UG"},
+    "M5": {"axis": "user_guide", "label": "Custom UG dir"},
+    "M6": {"axis": "user_guide", "label": "Deeply nested UG"},
+    "M7": {"axis": "user_guide", "label": "Mixed .qmd/.md"},
+    "M8": {"axis": "user_guide", "label": "Many UG pages"},
+    "M9": {"axis": "user_guide", "label": "Explicit ordering"},
+    "M10": {"axis": "user_guide", "label": "Single page UG"},
+    "M11": {"axis": "user_guide", "label": "No frontmatter UG"},
+    "M12": {"axis": "user_guide", "label": "UG with code blocks"},
+    "M13": {"axis": "user_guide", "label": "Hyphenated UG dir"},
+    # Sections axes
+    "N1": {"axis": "sections", "label": "Examples section"},
+    "N2": {"axis": "sections", "label": "Tutorials section"},
+    "N3": {"axis": "sections", "label": "Recipes section"},
+    "N4": {"axis": "sections", "label": "Blog section"},
+    "N5": {"axis": "sections", "label": "FAQ section"},
+    "N6": {"axis": "sections", "label": "Multiple sections"},
+    "N7": {"axis": "sections", "label": "navbar_after"},
+    # Reference axes
+    "P1": {"axis": "reference", "label": "Explicit reference"},
+    "P2": {"axis": "reference", "label": "members: false"},
+    "P3": {"axis": "reference", "label": "Mixed auto+explicit"},
+    "P4": {"axis": "reference", "label": "Reordered sections"},
+    "P5": {"axis": "reference", "label": "Multi-section ref"},
+    "P6": {"axis": "reference", "label": "Module expansion"},
+    "P7": {"axis": "reference", "label": "Big class ref"},
+    "P8": {"axis": "reference", "label": "Reference title"},
+    # Site/theme axes
+    "Q1": {"axis": "theme", "label": "Cosmo theme"},
+    "Q2": {"axis": "theme", "label": "Lumen theme"},
+    "Q3": {"axis": "theme", "label": "Cerulean theme"},
+    "Q4": {"axis": "theme", "label": "TOC disabled"},
+    "Q5": {"axis": "theme", "label": "TOC depth 3"},
+    "Q6": {"axis": "theme", "label": "Custom TOC title"},
+    "Q7": {"axis": "theme", "label": "Site combo"},
 }
 
 
@@ -859,6 +1055,460 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "alongside valid ones. The build should succeed without errors — "
         "unknown keys should be silently ignored. Key test: forward-"
         "compatible config parsing."
+    ),
+    # ── v2 packages ──
+    # ── 01–25: Config options ─────────────────────────────────────────────
+    "gdtest_github_icon": (
+        "Tests github_style: 'icon' config (vs. default 'widget'). The GitHub "
+        "link in the navbar should render as a simple icon, not the full "
+        "star-count widget. Two functions (fetch, store) with NumPy docs."
+    ),
+    "gdtest_source_branch": (
+        "Tests source.branch: 'develop' override. Source links should point "
+        "to the 'develop' branch instead of auto-detected main/master. Two "
+        "functions (read_data, write_data) with NumPy docs."
+    ),
+    "gdtest_source_path": (
+        "Tests source.path: 'src/mylib' override. Source links should include "
+        "the custom path prefix. Module at top level but source links pretend "
+        "it's in src/mylib. Two functions (parse, format_output)."
+    ),
+    "gdtest_source_title": (
+        "Tests source.placement: 'title' (vs. default 'usage'). Source code "
+        "links should appear near the title/heading of each API entry, not "
+        "in the usage section. Two functions (compress, decompress)."
+    ),
+    "gdtest_source_disabled": (
+        "Tests source.enabled: false. No source code links should appear "
+        "anywhere in the rendered docs. Two functions (encrypt, decrypt) with "
+        "NumPy docstrings."
+    ),
+    "gdtest_sidebar_disabled": (
+        "Tests sidebar_filter.enabled: false. The sidebar search/filter "
+        "widget should NOT appear even if there are many items. Five "
+        "functions (a through e) to ensure enough items exist."
+    ),
+    "gdtest_sidebar_min_items": (
+        "Tests sidebar_filter.min_items: 3 (low threshold). The sidebar "
+        "filter should appear even with just 4 items because the threshold "
+        "is set low. Four functions (w, x, y, z)."
+    ),
+    "gdtest_cli_name": (
+        "Tests cli.name: 'mytool' (explicit CLI name). The CLI reference "
+        "should show 'mytool' as the command name. Has a Click app with "
+        "two commands (run, status)."
+    ),
+    "gdtest_dynamic_false": (
+        "Tests dynamic: false config. Uses static introspection instead of "
+        "runtime import. Two simple functions (greet, farewell) to verify "
+        "static analysis works."
+    ),
+    "gdtest_parser_google": (
+        "Tests parser: 'google' with all-Google docstrings. Five functions "
+        "with Args/Returns/Raises sections. Parser should correctly handle "
+        "Google format without falling back to numpy."
+    ),
+    "gdtest_parser_sphinx": (
+        "Tests parser: 'sphinx' with Sphinx :param:/:returns: docstrings. "
+        "Three functions and one class. Parser should correctly handle Sphinx "
+        "field list format."
+    ),
+    "gdtest_display_name": (
+        "Tests display_name: 'My Pretty Library'. Site title in navbar and "
+        "browser tab should show 'My Pretty Library', not the raw package "
+        "name. Two functions (init, cleanup)."
+    ),
+    "gdtest_funding": (
+        "Tests funding config with all fields: name, roles, homepage, ror. "
+        "The funding info should appear somewhere in the rendered site "
+        "(sidebar or footer). Two functions (donate, sponsor)."
+    ),
+    "gdtest_authors_multi": (
+        "Tests authors config with three author entries, each having name, "
+        "email, role, and github username. Author info should render in the "
+        "sidebar. Two functions (collaborate, review)."
+    ),
+    "gdtest_no_darkmode": (
+        "Tests dark_mode_toggle: false. The dark mode toggle switch should "
+        "NOT appear in the navbar. Two functions (light_func, bright_func)."
+    ),
+    "gdtest_exclude_list": (
+        "Tests exclude config list. Module has 5 exports but 2 are excluded "
+        "via config. Reference page should show only the 3 non-excluded items."
+    ),
+    "gdtest_jupyter_kernel": (
+        "Tests jupyter: 'python3' explicit kernel config. Doesn't change "
+        "behavior for non-notebook builds but exercises the config path. "
+        "Two functions (compute, evaluate)."
+    ),
+    "gdtest_config_sections": (
+        "Tests the sections config for custom page groups. Config defines "
+        "an 'Examples' section pointing to examples/ dir. Two example pages "
+        "should appear in the sidebar under 'Examples'."
+    ),
+    "gdtest_config_ug_string": (
+        "Tests user_guide: 'guides' (string pointing to custom dir). User "
+        "guide pages live in guides/ instead of user_guide/. Sidebar should "
+        "show them."
+    ),
+    "gdtest_config_ug_list": (
+        "Tests user_guide as explicit list of sections with pages. Config "
+        "defines exact ordering: 'Getting Started' (install, quickstart) "
+        "then 'Advanced' (customization). Sidebar should show this structure."
+    ),
+    "gdtest_config_changelog": (
+        "Tests changelog config: enabled: true, max_releases: 5. Since "
+        "there's no real GitHub repo, the changelog feature should degrade "
+        "gracefully without breaking the build."
+    ),
+    "gdtest_config_reference": (
+        "Tests reference config with explicit sections. Config defines two "
+        "reference sections: 'Core API' and 'Utilities'. On the reference "
+        "page these should appear as named section headings."
+    ),
+    "gdtest_config_combo_a": (
+        "Combination: display_name + authors + funding + github_icon + "
+        "source.placement=title. All these config options together should "
+        "not conflict. Site title ≠ package name."
+    ),
+    "gdtest_config_combo_b": (
+        "Combination: parser=google + dynamic=false + sidebar_filter.enabled="
+        "false + dark_mode_toggle=false + source.enabled=false. All opt-out "
+        "flags together."
+    ),
+    "gdtest_config_combo_c": (
+        "Combination: sections (examples + tutorials) + user_guide (list) + "
+        "reference (explicit). Full navigation structure defined by config."
+    ),
+    # ── 26–50: Docstring richness ─────────────────────────────────────────
+    "gdtest_rst_versionadded": (
+        "Docstrings contain '.. versionadded:: 2.0' RST directive. Post-render "
+        "should translate this into a styled callout div with version info. "
+        "Two functions with versionadded in their docstrings."
+    ),
+    "gdtest_rst_deprecated": (
+        "Docstrings contain '.. deprecated:: 1.5' with deprecation message. "
+        "Post-render should show a deprecation warning callout. Two functions "
+        "with deprecated directives."
+    ),
+    "gdtest_rst_note": (
+        "Docstrings contain '.. note::' with body text. Post-render should "
+        "translate into a note callout. Three functions with note blocks."
+    ),
+    "gdtest_rst_warning": (
+        "Docstrings contain '.. warning::' directive. Post-render should "
+        "translate into a warning callout (yellow/orange). Two functions "
+        "with warning blocks."
+    ),
+    "gdtest_rst_tip": (
+        "Docstrings contain '.. tip::' directive. Post-render should "
+        "translate into a tip callout. Two functions with helpful tips."
+    ),
+    "gdtest_rst_caution": (
+        "Docstrings contain '.. caution::' directive. Post-render should "
+        "translate into a caution callout (orange). Two functions."
+    ),
+    "gdtest_rst_danger": (
+        "Docstrings contain '.. danger::' directive. Post-render should "
+        "translate into a danger callout (red). Two functions with hazard "
+        "warnings."
+    ),
+    "gdtest_rst_important": (
+        "Docstrings contain '.. important::' directive. Post-render should "
+        "translate into an important callout. Two functions."
+    ),
+    "gdtest_rst_mixed_dirs": (
+        "Docstrings mix multiple RST directives: versionadded, deprecated, "
+        "note, warning, tip in the same module and sometimes SAME docstring. "
+        "All should render as distinct callouts."
+    ),
+    "gdtest_sphinx_func_role": (
+        "Docstrings contain :py:func:`other_func` cross-reference roles. "
+        "Post-render should strip the :py:func: prefix and add () to the "
+        "linked name. Three functions cross-referencing each other."
+    ),
+    "gdtest_sphinx_class_role": (
+        "Docstrings contain :py:class:`MyClass` cross-reference roles. "
+        "Post-render should strip :py:class: prefix, keeping the class name "
+        "without parentheses. One class and two functions."
+    ),
+    "gdtest_sphinx_exc_role": (
+        "Docstrings contain :py:exc:`ValueError` cross-reference roles. "
+        "Post-render should strip :py:exc: prefix. Functions that raise "
+        "named exceptions with Sphinx-style references."
+    ),
+    "gdtest_sphinx_meth_role": (
+        "Docstrings contain :py:meth:`MyClass.method` cross-reference roles. "
+        "Post-render should strip :py:meth: prefix and add (). One class "
+        "with methods referencing each other."
+    ),
+    "gdtest_sphinx_mixed_roles": (
+        "Docstrings mix :py:func:, :py:class:, :py:exc:, :py:meth:, and "
+        ":py:attr: roles in the same module. All should be translated "
+        "correctly by post-render."
+    ),
+    "gdtest_numpy_rich": (
+        "Rich NumPy-style docstrings with ALL standard sections: Parameters, "
+        "Returns, Raises, Notes, Examples, Warnings, References, See Also. "
+        "Every section should render properly."
+    ),
+    "gdtest_google_rich": (
+        "Rich Google-style docstrings with all standard sections: Args, "
+        "Returns, Raises, Note, Example, Warning, References, See Also. "
+        "All sections should render."
+    ),
+    "gdtest_sphinx_rich": (
+        "Rich Sphinx-style docstrings with :param:, :type:, :returns:, "
+        ":rtype:, :raises: field lists, plus prose Notes/Examples blocks. "
+        "Everything should parse and render."
+    ),
+    "gdtest_docstring_examples": (
+        "Docstrings with extended Examples sections containing multiple code "
+        "blocks, expected output, and prose explanation between blocks. Code "
+        "should render as syntax-highlighted blocks."
+    ),
+    "gdtest_docstring_notes": (
+        "Docstrings with detailed Notes sections including multi-paragraph "
+        "text, inline code, and references. Notes should render as flowing "
+        "prose below the parameter tables."
+    ),
+    "gdtest_docstring_warnings": (
+        "Docstrings with Warnings sections (NumPy style) describing hazards. "
+        "The Warnings section should render visually distinct from Notes, "
+        "ideally with some form of alert styling."
+    ),
+    "gdtest_docstring_references": (
+        "Docstrings with References sections containing bibliography entries "
+        "and links. References should render as a list below the main docs."
+    ),
+    "gdtest_docstring_seealso": (
+        "Docstrings with See Also sections listing related functions, each "
+        "with a brief description. Should render as a linked list of related "
+        "API entries."
+    ),
+    "gdtest_docstring_math": (
+        "Docstrings containing LaTeX math: inline $x^2 + y^2$ and display "
+        "blocks $$\\\\sum_{i=1}^{n} x_i$$. Math should render via KaTeX or "
+        "MathJax without breaking the page."
+    ),
+    "gdtest_docstring_tables": (
+        "Docstrings containing RST-style tables (grid tables and simple "
+        "tables). Tables should render as HTML tables in the output."
+    ),
+    "gdtest_docstring_combo": (
+        "Stress test: docstrings combining RST directives (versionadded, "
+        "note), Sphinx roles (:py:func:), rich sections (Notes, Examples, "
+        "See Also), math, and tables all in one module."
+    ),
+    # ── 51–65: User guide variations ──────────────────────────────────────
+    "gdtest_ug_auto": (
+        "Basic auto-discovered user guide: user_guide/ dir with 3 unnumbered "
+        ".qmd files. Sidebar should discover and list them alphabetically."
+    ),
+    "gdtest_ug_numbered": (
+        "Numbered user guide files: 01-intro.qmd, 02-install.qmd, "
+        "03-usage.qmd, 04-advanced.qmd. Should appear in numeric order in "
+        "the sidebar."
+    ),
+    "gdtest_ug_sections_fm": (
+        "User guide with frontmatter guide-section metadata grouping pages "
+        "into 'Getting Started' and 'Advanced Topics'. Sidebar should show "
+        "section headings."
+    ),
+    "gdtest_ug_subdirs": (
+        "User guide with subdirectories: user_guide/basics/ and "
+        "user_guide/advanced/. Pages should be grouped by subdirectory in "
+        "the sidebar."
+    ),
+    "gdtest_ug_custom_dir": (
+        "User guide lives in docs/ instead of user_guide/. Config sets "
+        "user_guide: 'docs'. Sidebar should find pages from the custom dir."
+    ),
+    "gdtest_ug_deep_nest": (
+        "Deeply nested user guide: user_guide/section1/subsection1/ with "
+        "pages at multiple levels. Tests multi-level directory traversal."
+    ),
+    "gdtest_ug_mixed_ext": (
+        "User guide with mixed file extensions: intro.qmd, setup.md, "
+        "advanced.qmd. Both .qmd and .md should appear in sidebar."
+    ),
+    "gdtest_ug_many_pages": (
+        "User guide with 12 pages to test scrolling/navigation with many entries in the sidebar."
+    ),
+    "gdtest_ug_explicit_order": (
+        "User guide ordering defined explicitly in great-docs.yml config. "
+        "Pages appear in config-specified order, not alphabetical."
+    ),
+    "gdtest_ug_single_page": (
+        "Minimal user guide with just one page. Sidebar should show a "
+        "User Guide section with a single entry."
+    ),
+    "gdtest_ug_no_frontmatter": (
+        "User guide .qmd files with NO YAML frontmatter. Title should be "
+        "inferred from the first heading or filename."
+    ),
+    "gdtest_ug_with_code": (
+        "User guide pages containing Python code blocks, both fenced and "
+        "executable. Code should be syntax-highlighted."
+    ),
+    "gdtest_ug_with_images": (
+        "User guide page referencing images from an assets directory. Images "
+        "should be copied and displayed correctly."
+    ),
+    "gdtest_ug_hyphen_dir": (
+        "User guide in user-guide/ (hyphenated). Both user_guide/ and "
+        "user-guide/ naming conventions should work."
+    ),
+    "gdtest_ug_combo": (
+        "Combination: numbered files + frontmatter sections + subdirs + "
+        "mixed extensions. Complex user guide structure."
+    ),
+    # ── 66–75: Custom sections ────────────────────────────────────────────
+    "gdtest_sec_examples": (
+        "Custom 'Examples' section via config sections. examples/ dir with "
+        "3 example pages. Should appear as a separate nav section."
+    ),
+    "gdtest_sec_tutorials": (
+        "Custom 'Tutorials' section. tutorials/ dir with step-by-step "
+        "pages. Should appear in sidebar."
+    ),
+    "gdtest_sec_recipes": (
+        "Custom 'Recipes' section. recipes/ dir with short how-to pages. "
+        "Should appear as its own sidebar section."
+    ),
+    "gdtest_sec_blog": (
+        "Custom 'Blog' section. blog/ dir with date-prefixed pages. "
+        "Tests a non-standard section type."
+    ),
+    "gdtest_sec_faq": (
+        "Custom 'FAQ' section. faq/ dir with question-based pages. "
+        "Should render as a separate sidebar group."
+    ),
+    "gdtest_sec_multi": (
+        "Multiple custom sections: Examples + Tutorials + Recipes. Three "
+        "different section dirs, all configured via sections list. All "
+        "should appear in the sidebar/navbar."
+    ),
+    "gdtest_sec_navbar_after": (
+        "Custom section with navbar_after specified. Section should appear "
+        "after a specific navbar item. Tests ordering control."
+    ),
+    "gdtest_sec_with_ug": (
+        "Custom section (Examples) combined with auto-discovered user guide. "
+        "Both should appear as separate sidebar groups without conflict."
+    ),
+    "gdtest_sec_with_ref": (
+        "Custom section (Tutorials) combined with explicit reference config. "
+        "Both custom nav sections and custom reference order should work."
+    ),
+    "gdtest_sec_deep": (
+        "Custom section with nested subdirectories: tutorials/beginner/ and "
+        "tutorials/advanced/. Deep structure within a custom section."
+    ),
+    # ── 76–85: Reference config ───────────────────────────────────────────
+    "gdtest_ref_explicit": (
+        "Reference config with explicit contents list defining which objects "
+        "appear on the reference page and in what order."
+    ),
+    "gdtest_ref_members_false": (
+        "Reference config with members: false on a class. The class should "
+        "appear but its methods should NOT be listed separately."
+    ),
+    "gdtest_ref_mixed": (
+        "Mix of explicit reference items and auto-discovered ones. Config "
+        "defines some sections explicitly, others are auto-generated."
+    ),
+    "gdtest_ref_reorder": (
+        "Reference config that reorders the default sections. Functions "
+        "appear before Classes, reversing the normal order."
+    ),
+    "gdtest_ref_sectioned": (
+        "Reference with 4 named sections: Constructors, Transformers, "
+        "Validators, Utilities. Each lists specific exports."
+    ),
+    "gdtest_ref_single_section": (
+        "Reference with a single named section containing all exports. "
+        "Everything under one heading."
+    ),
+    "gdtest_ref_module_expand": (
+        "Reference config that references a submodule name. The builder "
+        "should expand the module into its individual members."
+    ),
+    "gdtest_ref_big_class": (
+        "Reference config featuring a big class (>5 methods). Config sets "
+        "members: true explicitly. Big class methods should get their own "
+        "subsection."
+    ),
+    "gdtest_ref_multi_big": (
+        "Reference with multiple big classes in the same config. Each should "
+        "get its own methods subsection without name collisions."
+    ),
+    "gdtest_ref_title": (
+        "Reference config with title: 'API Docs' instead of default. The "
+        "reference page heading should use this custom title."
+    ),
+    # ── 86–95: Site theming & display ─────────────────────────────────────
+    "gdtest_theme_cosmo": (
+        "Tests site.theme: 'cosmo'. The site should render with the Cosmo "
+        "Bootstrap theme. All pages should apply the theme consistently."
+    ),
+    "gdtest_theme_lumen": ("Tests site.theme: 'lumen'. Site renders with the Lumen theme."),
+    "gdtest_theme_cerulean": (
+        "Tests site.theme: 'cerulean'. Site renders with the Cerulean theme."
+    ),
+    "gdtest_toc_disabled": (
+        "Tests site.toc: false. No table of contents should appear on any "
+        "page. The layout should adjust to fill the space."
+    ),
+    "gdtest_toc_depth": (
+        "Tests site.toc-depth: 3 (deeper than default 2). The table of "
+        "contents should show h3 headings as well as h2."
+    ),
+    "gdtest_toc_title": (
+        "Tests site.toc-title: 'Contents' (vs. default 'On this page'). "
+        "The TOC heading should show 'Contents'."
+    ),
+    "gdtest_site_combo": (
+        "Combination: cosmo theme + toc-depth:3 + custom toc-title + "
+        "display_name. All site settings together."
+    ),
+    "gdtest_display_badges": (
+        "Package with complex README containing badges, version shields, "
+        "and download counts. Landing page should render these correctly."
+    ),
+    "gdtest_display_authors": (
+        "Authors displayed with all metadata: name, email, role, github, "
+        "and a URL avatar. Sidebar should show author cards."
+    ),
+    "gdtest_display_funding": (
+        "Funding org with name, roles, homepage, and ROR identifier. "
+        "Footer or sidebar should show the funding acknowledgment."
+    ),
+    # ── 96–100: Cross-feature stress ──────────────────────────────────────
+    "gdtest_stress_all_config": (
+        "ALL config options set to non-default values at once. Every toggle "
+        "flipped. Build should succeed without conflicts."
+    ),
+    "gdtest_stress_all_docstr": (
+        "Module with every docstring feature: RST directives, Sphinx roles, "
+        "all NumPy sections, math, tables, examples, code blocks. "
+        "Post-render should handle everything."
+    ),
+    "gdtest_stress_all_ug": (
+        "Maximum user guide complexity: 8 pages, frontmatter sections, "
+        "subdirs, mixed extensions, numbered, with code blocks. Everything "
+        "together."
+    ),
+    "gdtest_stress_all_sections": (
+        "Five custom sections (Examples, Tutorials, Recipes, FAQ, Blog) "
+        "combined with user guide and explicit reference. Maximum navigation "
+        "complexity."
+    ),
+    "gdtest_stress_everything": (
+        "The ultimate stress test: ALL config options + all docstring features "
+        "+ complex user guide + multiple custom sections + explicit reference "
+        "+ non-default theme + authors + funding. If this builds, everything "
+        "works."
     ),
 }
 

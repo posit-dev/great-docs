@@ -6,7 +6,7 @@ Usage:
     python test-packages/render_all.py              # build all + serve
     python test-packages/render_all.py --build      # build only
     python test-packages/render_all.py --serve      # serve previously built
-    python test-packages/render_all.py --only gdtest_minimal gdtest_v2_github_icon
+    python test-packages/render_all.py --only gdtest_minimal gdtest_github_icon
 
 The script:
   1. Generates each synthetic package into _rendered/<name>/
@@ -51,7 +51,6 @@ from build_state import (
     start_selective_run,
 )
 from catalog import (
-    _SUITE_B_SET,
     ALL_PACKAGES,
     AXIS_COLORS,
     DIMENSIONS,
@@ -74,8 +73,6 @@ PORT = 3333
 
 def _spec_file_exists(name: str) -> bool:
     """Check whether the spec module exists on disk for *name*."""
-    if name in _SUITE_B_SET:
-        return (_THIS_DIR / "synthetic_v2" / "specs" / f"{name}.py").exists()
     return (_THIS_DIR / "synthetic" / "specs" / f"{name}.py").exists()
 
 
@@ -1236,7 +1233,7 @@ def main():
               python render_all.py                     # full build + serve
               python render_all.py --build             # full build only
               python render_all.py --serve             # serve previously built hub
-              python render_all.py --only gdtest_minimal gdtest_v2_github_icon
+              python render_all.py --only gdtest_minimal gdtest_github_icon
         """),
     )
     parser.add_argument("--build", action="store_true", help="Build only (don't start server)")
