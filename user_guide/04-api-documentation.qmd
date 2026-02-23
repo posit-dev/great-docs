@@ -15,8 +15,9 @@ When you run `great-docs init` or `great-docs build`, Great Docs:
 1. **Finds your package** – Looks in standard locations (`src/`, `python/`, project root)
 2. **Uses static analysis** – Analyzes your code with `griffe` without importing it
 3. **Discovers public names** – Finds all non-private names (not starting with `_`)
-4. **Categorizes items** – Separates classes, functions, and other exports
-5. **Generates configuration** – Creates quartodoc sections in `_quarto.yml`
+4. **Introspects submodules** – Drills into exported modules to discover their classes, functions, and constants
+5. **Categorizes items** – Classifies every export into one of 13 object types
+6. **Generates configuration** – Creates quartodoc sections in `_quarto.yml`
 
 ### Static Analysis Benefits
 
@@ -29,11 +30,34 @@ Great Docs uses static analysis rather than importing your package. This means:
 
 ## What Gets Documented
 
-By default, Great Docs documents:
+By default, Great Docs documents everything it discovers in your package's public API. Each export is classified into one of the following object types:
 
-- **Classes** – All public classes with their methods
-- **Functions** – All public functions
-- **Module-level constants** – Public constants and type aliases
+### Class-like Types
+
+- **Classes** – Regular public classes with their methods
+- **Dataclasses** – Classes decorated with `@dataclass`
+- **Abstract Classes** – Classes inheriting from `ABC` or using `ABCMeta`
+- **Protocols** – Structural typing protocols (`typing.Protocol` subclasses)
+- **Enumerations** – `Enum` subclasses
+- **Exceptions** – `Exception` and `BaseException` subclasses
+- **Named Tuples** – `NamedTuple` definitions
+- **Typed Dicts** – `TypedDict` definitions
+
+### Function-like Types
+
+- **Functions** – Synchronous public functions
+- **Async Functions** – Functions defined with `async def`
+
+### Data Types
+
+- **Constants** – Module-level constants and data
+- **Type Aliases** – Type alias definitions (including `TypeVar`)
+
+### Other
+
+- **Other** – Anything that doesn't fit the above categories
+
+Each type is placed into its own section in the generated reference and receives a distinct visual badge (see [Type Labels](#type-labels) below).
 
 ### Exclusion Rules
 
@@ -102,13 +126,28 @@ This creates better navigation for classes with many methods.
 
 ### Default Sections
 
-Great Docs creates these sections by default:
+Great Docs creates sections automatically based on what it discovers. Only non-empty sections appear:
 
-1. **Classes** – All public classes
-2. **Functions** – All public functions
-3. **[ClassName] Methods** – For large classes with >5 methods
+| Section | Description |
+| --- | --- |
+| **Classes** | Regular public classes |
+| **Dataclasses** | Data-holding classes |
+| **Abstract Classes** | Abstract base classes |
+| **Protocols** | Structural typing protocols |
+| **Enumerations** | Enum types |
+| **Exceptions** | Exception classes |
+| **Named Tuples** | NamedTuple types |
+| **Typed Dicts** | TypedDict types |
+| **Functions** | Synchronous functions |
+| **Async Functions** | Asynchronous functions (`async def`) |
+| **Constants** | Module-level constants and data |
+| **Type Aliases** | Type alias definitions |
+| **Other** | Additional exports |
+| **[ClassName] Methods** | Created for classes with >5 methods |
 
-These default section names are serviceable for most projects, giving users a clear starting point for navigating your API. However, you're encouraged to customize the organization using the `reference` config in `great-docs.yml` to create sections that better reflect your package's domain.
+A typical package might only produce a few of these (e.g., Classes, Functions, and Constants). The section structure is automatically tailored to your package's contents.
+
+You're encouraged to customize the organization using the `reference` config in `great-docs.yml` to create sections that better reflect your package's domain.
 
 ### Custom Organization with `reference` Config
 
@@ -187,13 +226,80 @@ source:
   enabled: false
 ```
 
+## Submodule Introspection
+
+When your package exports submodules (e.g., `dateutil.parser`, `dateutil.tz`), Great Docs automatically drills into each module to discover its public classes, functions, and constants. This means you can list a module name in your `reference` config and Great Docs will expand it into all of its individual members.
+
+For example, if your package exports a `parser` submodule containing a `parse()` function, a `parser` class, and a `ParserError` exception, writing:
+
+```{.yaml filename="great-docs.yml"}
+reference:
+  - title: Parser
+    desc: Date string parsing
+    contents:
+      - parser
+```
+
+will automatically expand to document `parser.parse`, `parser.parser`, `parser.ParserError`, and all other public members of the `parser` module. Each member is classified into the correct object type and receives appropriate visual treatment.
+
+This is particularly useful for packages like `dateutil` that organize their API into topical submodules rather than exporting everything from the top-level `__init__.py`.
+
+## Sphinx & RST Cleanup
+
+Docstrings sometimes contain Sphinx cross-reference roles (like `` :py:exc:`ValueError` ``) or RST directives (like `.. versionadded:: 2.0`). These constructs are designed for Sphinx but appear as literal text in non-Sphinx renderers.
+
+Great Docs automatically translates these into clean, styled HTML during the post-render step.
+
+### Sphinx Cross-Reference Roles
+
+Sphinx roles like `:py:class:`, `:func:`, and `:exc:` are converted into plain inline code formatting:
+
+| Source (in docstring) | Rendered output |
+| --- | --- |
+| `` :py:exc:`ValueError` `` | `ValueError` |
+| `` :py:class:`datetime.datetime` `` | `datetime.datetime` |
+| `` :func:`my_function` `` | `my_function()` |
+| `` :meth:`MyClass.run` `` | `MyClass.run()` |
+
+Function and method roles automatically receive trailing `()` to indicate they are callable.
+
+### RST Admonition & Version Directives
+
+RST directives are converted into styled callout boxes with appropriate icons and colors:
+
+| Directive | Appearance |
+| --- | --- |
+| `.. versionadded:: 2.0` | 🆕 Green callout: "Added in version 2.0" |
+| `.. versionchanged:: 3.1` | 🔄 Blue callout: "Changed in version 3.1" |
+| `.. deprecated:: 2.6` | ⚠️ Red callout: "Deprecated since version 2.6" |
+| `.. note:: ...` | ℹ️ Blue callout |
+| `.. warning:: ...` | ⚠️ Amber callout |
+| `.. tip:: ...` | 💡 Green callout |
+| `.. danger:: ...` | 🚨 Red callout |
+| `.. important:: ...` | ❗ Orange callout |
+
+Optional description text after the version number is preserved in the callout body.
+
 ## Visual Enhancements
 
 Great Docs applies consistent styling to your API documentation, making it easier to scan and understand at a glance.
 
-### Type Labels
+### Type Labels {#type-labels}
 
-Each documented item displays a colored label indicating its type. Classes appear with an indigo label, making them easy to spot as primary building blocks. Methods show a cyan label with their full qualified name (like `Class.method()`), clearly indicating they belong to a class. Functions display a violet label (like `function()`), distinguishing them from methods. These visual cues help readers quickly identify what kind of object they're looking at.
+Each documented item displays a colored badge indicating its object type:
+
+| Type | Color | Used For |
+| --- | --- | --- |
+| **class** | Indigo | Classes, dataclasses, protocols, ABCs, named tuples, typed dicts |
+| **exception** | Red | Exception classes |
+| **enum** | Indigo | Enum types |
+| **function** | Violet | Functions (shown with trailing `()`) |
+| **method** | Cyan | Class methods (shown as `Class.method()`) |
+| **constant** | Amber | Module-level constants |
+| **type alias** | Green | Type alias definitions |
+| **other** | Gray | Uncategorized exports |
+
+Great Docs uses a metadata file (`_object_types.json`) generated during the build to determine the correct badge for each item. This ensures accurate classification even for edge cases like constants that start with an uppercase letter or functions named after classes.
 
 ### Code Styling
 
