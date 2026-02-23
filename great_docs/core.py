@@ -3823,6 +3823,56 @@ class GreatDocs:
             "all_functions": [],
         }
 
+    def _write_object_types_json(self, categories: dict) -> None:
+        """
+        Write ``_object_types.json`` mapping each documented name to its type.
+
+        The post-render script reads this file instead of relying on heuristics
+        (e.g. first-character case) to classify objects for badges and
+        parentheses.
+
+        Parameters
+        ----------
+        categories
+            Dictionary returned by ``_categorize_api_objects``.
+        """
+        import json
+
+        # Map each category key to the type label used by post-render
+        _CATEGORY_TYPE_MAP = {
+            "classes": "class",
+            "dataclasses": "class",
+            "enums": "enum",
+            "exceptions": "exception",
+            "namedtuples": "class",
+            "typeddicts": "class",
+            "protocols": "class",
+            "abstract_classes": "class",
+            "functions": "function",
+            "async_functions": "function",
+            "constants": "constant",
+            "type_aliases": "type_alias",
+            "other": "other",
+        }
+
+        object_types: dict[str, str] = {}
+
+        for cat_key, obj_type in _CATEGORY_TYPE_MAP.items():
+            for name in categories.get(cat_key, []):
+                object_types[name] = obj_type
+
+        # Methods: ClassName.method → "method"
+        for class_name, method_names in categories.get("class_method_names", {}).items():
+            for method in method_names:
+                object_types[f"{class_name}.{method}"] = "method"
+
+        types_path = self.project_path / "_object_types.json"
+        types_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(types_path, "w") as f:
+            json.dump(object_types, f, indent=2, sort_keys=True)
+
+        print(f"Wrote object type metadata ({len(object_types)} items) to {types_path}")
+
     def _categorize_api_objects(self, package_name: str, exports: list) -> dict:
         """
         Categorize API objects using griffe introspection.
@@ -4369,6 +4419,9 @@ class GreatDocs:
                 {"title": "Other", "desc": "Additional exports", "contents": categories["other"]}
             )
 
+        # Write object type metadata for post-render classification
+        self._write_object_types_json(categories)
+
         return sections if sections else None
 
     def _extract_all_directives(self, package_name: str) -> dict:
@@ -4608,6 +4661,9 @@ class GreatDocs:
 
         if sections:
             print(f"Generated {len(sections)} section(s) from reference config")
+
+        # Write object type metadata for post-render classification
+        self._write_object_types_json(categories)
 
         return sections if sections else None
 

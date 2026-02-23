@@ -28,6 +28,19 @@ if os.path.exists(source_links_path):
 else:
     print("No source links file found, skipping source link injection")
 
+# Load object type metadata for accurate classification
+# Keys are object names (e.g., "parser.ParserError"), values are type strings
+# ("class", "exception", "function", "method", "constant", "enum", "type_alias", "other")
+object_types = {}
+object_types_path = "_object_types.json"
+if os.path.exists(object_types_path):
+    print(f"Loading object types from {object_types_path}")
+    with open(object_types_path, "r") as f:
+        object_types = json.load(f)
+    print(f"Loaded {len(object_types)} object type entries")
+else:
+    print("No object types file found, falling back to heuristic classification")
+
 
 def get_source_link_html(item_name):
     """Generate HTML for a source link given an item name."""
@@ -412,6 +425,19 @@ for html_file in html_files:
     content = content.splitlines(keepends=True)
 
     # Determine the classification of each h1 tag based on its content
+    # Use object_types metadata from introspection when available,
+    # falling back to heuristics only when the metadata is missing
+    _TYPE_BADGE_STYLES = {
+        "class": ("class", "#6366f1", "#EEF2FF"),
+        "exception": ("exception", "#dc2626", "#FEF2F2"),
+        "enum": ("enum", "#6366f1", "#EEF2FF"),
+        "function": ("function", "#7c3aed", "#F5F3FF"),
+        "method": ("method", "#0891b2", "#ECFEFF"),
+        "constant": ("constant", "#d97706", "#FFFBEB"),
+        "type_alias": ("type alias", "#059669", "#ECFDF5"),
+        "other": ("other", "#6b7280", "#F9FAFB"),
+    }
+
     classification_info = {}
     for i, line in enumerate(content):
         # Look for both class="title" and styled h1 tags
@@ -423,14 +449,20 @@ for html_file in html_files:
         if h1_match:
             original_h1_content = h1_match.group(1).strip()
 
-            # Store classification based on original content
-            if original_h1_content and original_h1_content[0].isupper():
-                if "." in original_h1_content:
-                    classification_info[i] = ("method", "#0891b2", "#ECFEFF")
-                else:
-                    classification_info[i] = ("class", "#6366f1", "#EEF2FF")
+            # Try metadata lookup first (use item_name_from_file as key)
+            obj_type = object_types.get(item_name_from_file)
+
+            if obj_type and obj_type in _TYPE_BADGE_STYLES:
+                classification_info[i] = _TYPE_BADGE_STYLES[obj_type]
             else:
-                classification_info[i] = ("function", "#7c3aed", "#F5F3FF")
+                # Fallback heuristic (only when metadata is unavailable)
+                if original_h1_content and original_h1_content[0].isupper():
+                    if "." in original_h1_content:
+                        classification_info[i] = _TYPE_BADGE_STYLES["method"]
+                    else:
+                        classification_info[i] = _TYPE_BADGE_STYLES["class"]
+                else:
+                    classification_info[i] = _TYPE_BADGE_STYLES["function"]
 
     # Remove the literal text `Validate.` from the h1 tag
     # TODO: Add line below stating the class name for the method
@@ -442,10 +474,10 @@ for html_file in html_files:
         for line in content
     ]
 
-    # If the inner content of the h1 tag either:
-    # - has a literal `.` in it, or
-    # - doesn't start with a capital letter,
-    # then add `()` to the end of the content of the h1 tag
+    # Add `()` only to functions and methods in the h1 title
+    # Uses object_types metadata when available, otherwise falls back to heuristics
+    _CALLABLE_TYPES = {"function", "method"}
+
     for i, line in enumerate(content):
         # Use regex to find h1 tags (both class="title" and styled versions)
         h1_match = re.search(r'<h1\s+class="title">', line)
@@ -459,9 +491,19 @@ for html_file in html_files:
             end = line.find("</h1>", start)
             h1_content = line[start:end].strip()
 
-            # Check if the content meets the criteria
-            if "." in h1_content or (h1_content and not h1_content[0].isupper()):
-                # Modify the content
+            # Determine whether this item should get ()
+            obj_type = object_types.get(item_name_from_file)
+
+            if obj_type:
+                # Metadata available — only add () for functions/methods
+                should_add_parens = obj_type in _CALLABLE_TYPES
+            else:
+                # Fallback heuristic (original behaviour)
+                should_add_parens = "." in h1_content or (
+                    h1_content and not h1_content[0].isupper()
+                )
+
+            if should_add_parens:
                 h1_content += "()"
 
             # Replace the h1 tag with the modified content
@@ -689,17 +731,20 @@ if os.path.exists(index_file):
     table_pattern = r'<table class="caption-top table">\s*<tbody>(.*?)</tbody>\s*</table>'
     content = re.sub(table_pattern, convert_table_to_dl, content, flags=re.DOTALL)
 
-    # Add () to methods and functions in <a> tags within <dt> elements
+    # Add () only to functions and methods in <a> tags within <dt> elements
     def add_parens_to_functions(match):
         full_tag = match.group(0)
         link_text = match.group(1)
 
-        # Rules for adding ():
-        # - Don't touch capitalized content (classes)
-        # - Add () if text has a period (methods)
-        # - Add () if text doesn't start with capital (functions)
+        # Use object_types metadata when available
+        obj_type = object_types.get(link_text)
+        if obj_type:
+            if obj_type in ("function", "method"):
+                return full_tag.replace(f">{link_text}</a>", f">{link_text}()</a>")
+            return full_tag
+
+        # Fallback heuristic (only when metadata is unavailable)
         if "." in link_text or (link_text and not link_text[0].isupper()):
-            # Replace the link text with the same text + ()
             return full_tag.replace(f">{link_text}</a>", f">{link_text}()</a>")
 
         return full_tag
