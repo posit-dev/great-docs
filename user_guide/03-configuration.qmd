@@ -338,7 +338,7 @@ See [Changelog](changelog.qmd) for full details on authentication, CLI usage, an
 
 ## Custom Sections
 
-Add custom page groups (examples, tutorials, blog, etc.) to your site. Each section gets a navbar link, sidebar, and auto-generated index page:
+Add custom page groups (examples, tutorials, blog, etc.) to your site. Each section gets a navbar link and an auto-generated index page:
 
 ```{.yaml filename="great-docs.yml"}
 sections:
@@ -347,11 +347,14 @@ sections:
     navbar_after: User Guide  # Position in navbar (optional)
   - title: Tutorials
     dir: tutorials
+  - title: Blog              # Blog with Quarto's listing directive
+    dir: blog
+    type: blog               # "blog" for listing page; omit for card grid
 ```
 
-If the directory contains an `index.qmd`, that file is used as the landing page. Otherwise, a gallery-style index is auto-generated from each page's frontmatter.
+Default sections get a card-grid index and sidebar navigation. Blog-type sections use Quarto's native `listing:` directive — posts are sorted by date and displayed with author, categories, and descriptions.
 
-See [Custom Sections](custom-sections.qmd) for full details.
+See [Custom Sections](custom-sections.qmd) and [Blog](blog.qmd) for full details.
 
 ## Author Information
 
@@ -466,6 +469,9 @@ sections:
   - title: Tutorials
     dir: tutorials
     navbar_after: Examples
+  - title: Blog
+    dir: blog
+    type: blog
 
 # API Reference Structure
 reference:

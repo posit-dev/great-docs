@@ -1,0 +1,206 @@
+---
+title: "Blog"
+guide-section: "Core Concepts"
+bread-crumbs: false
+---
+
+# Blog
+
+Great Docs supports adding a blog to your documentation site using Quarto's native [listing](https://quarto.org/docs/websites/website-listings.html) feature. Blog posts are automatically sorted by date, display author and category metadata, and include built-in search.
+
+## Quick Start
+
+1. Create a `blog/` directory with each post in its own subdirectory:
+
+```
+my-package/
+├── blog/
+│   ├── welcome-post/
+│   │   └── index.qmd
+│   └── v0.2-release/
+│       └── index.qmd
+├── great-docs.yml
+└── ...
+```
+
+2. Add the blog section to `great-docs.yml` with `type: blog`:
+
+```{.yaml filename="great-docs.yml"}
+sections:
+  - title: Blog
+    dir: blog
+    type: blog
+```
+
+3. Run `great-docs build` — a **Blog** link appears in the navbar, and the listing page is generated automatically.
+
+## Post Structure
+
+Each blog post lives in its own subdirectory under `blog/`, with an `index.qmd` file containing the post content. This is the same convention used by Quarto's blog projects.
+
+```
+blog/
+├── welcome-post/
+│   ├── index.qmd
+│   └── images/
+│       └── hero.png       # Post-specific images
+├── v0.2-release/
+│   └── index.qmd
+└── tips-and-tricks/
+    └── index.qmd
+```
+
+### Post Frontmatter
+
+Each post's `index.qmd` should include frontmatter with metadata that Quarto uses for the listing page:
+
+```{.yaml filename="blog/welcome-post/index.qmd"}
+---
+title: "Welcome to Our Blog"
+author: Vivian Smith
+date: 2024-01-15
+categories: [announcements, getting-started]
+description: "An introduction to us and what we're building."
+---
+```
+
+| Field          | Required | Description |
+|----------------|----------|-------------|
+| `title`        | Yes      | Post title, shown in listing and as the page heading |
+| `date`         | Yes      | Publication date (`YYYY-MM-DD`); controls sort order |
+| `author`       | No       | Author name, displayed in the listing |
+| `categories`   | No       | List of tags for filtering posts |
+| `description`  | No       | Summary text shown in the listing |
+| `image`        | No       | Thumbnail image for the listing card |
+
+## Listing Page
+
+When no `index.qmd` exists at the root of the blog directory, Great Docs auto-generates one using Quarto's `listing:` directive:
+
+```{.yaml}
+---
+title: "Blog"
+listing:
+  type: default
+  sort: "date desc"
+  contents:
+    - "**.qmd"
+---
+```
+
+This produces a listing page that:
+
+- sorts posts by date (newest first)
+- shows title, author, date, description, and categories
+- includes client-side search across all posts
+- links each entry to the full post
+
+### Custom Listing Page
+
+To customize the listing layout, provide your own `blog/index.qmd`. For example, to use a table layout (like [Great Tables' blog](https://posit-dev.github.io/great-tables/blog/)):
+
+```{.yaml filename="blog/index.qmd"}
+---
+title: "Blog"
+listing:
+  type: table
+  sort: "date desc"
+  feed: true
+  contents:
+    - "**.qmd"
+---
+```
+
+Quarto supports three listing types:
+
+| Type      | Description |
+|-----------|-------------|
+| `default` | Card-style listing with thumbnails |
+| `grid`    | Grid of equal-sized cards |
+| `table`   | Compact table with sortable columns |
+
+See [Quarto Listings](https://quarto.org/docs/websites/website-listings.html) for all options, including custom templates and feeds.
+
+## How It Differs from Default Sections
+
+Blog sections (`type: blog`) differ from default sections in several ways:
+
+| Feature | Default Sections | Blog Sections |
+|---------|-----------------|---------------|
+| Index page | Card grid (auto-generated) | Quarto listing (auto-generated) |
+| Sidebar | Yes (with page links) | No |
+| Sort order | Alphabetical | By date (newest first) |
+| Post metadata | `title`, `description` | `title`, `date`, `author`, `categories`, `description` |
+| Frontmatter modification | Adds `bread-crumbs: false` | No modification |
+| File structure | Flat `.qmd` files | Subdirectories with `index.qmd` |
+
+## Configuration
+
+The blog section is configured as part of the `sections` array in `great-docs.yml`:
+
+```{.yaml filename="great-docs.yml"}
+sections:
+  - title: Blog              # Navbar link text
+    dir: blog                # Source directory
+    type: blog               # Use Quarto's listing directive
+    navbar_after: Reference  # Position in navbar (optional)
+```
+
+## Example: Full Blog Setup
+
+Here's a complete example with three posts:
+
+### Directory Structure
+
+```
+my-package/
+├── blog/
+│   ├── introducing-the-project/
+│   │   └── index.qmd
+│   ├── february-update/
+│   │   └── index.qmd
+│   └── v0.2-release/
+│       └── index.qmd
+├── my_package/
+│   └── __init__.py
+├── great-docs.yml
+└── pyproject.toml
+```
+
+### Configuration
+
+```{.yaml filename="great-docs.yml"}
+sections:
+  - title: Blog
+    dir: blog
+    type: blog
+```
+
+### Blog Post
+
+```{.markdown filename="blog/v0.2-release/index.qmd"}
+---
+title: "Version 0.2 Release Notes"
+author: Vivian Smith
+date: 2024-03-10
+categories: [releases]
+description: "New features and improvements in v0.2."
+---
+
+We're happy to announce the v0.2 release!
+
+## New Features
+
+- blog support via Quarto's listing directive
+- improved dark mode styling
+- better section card colors
+
+## Breaking Changes
+
+None in this release.
+```
+
+## Next Steps
+
+- **[Custom Sections](custom-sections.qmd)** – Add non-blog sections (examples, tutorials, etc.)
+- **[Configuration](configuration.qmd)** – See all available `great-docs.yml` options

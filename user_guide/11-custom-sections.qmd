@@ -6,7 +6,7 @@ bread-crumbs: false
 
 # Custom Sections
 
-Great Docs lets you add any number of custom page groups to your documentation site — examples, tutorials, blog posts, demos, or anything else. Each section gets its own navbar link, sidebar navigation, and an auto-generated index page.
+Great Docs lets you add any number of custom page groups to your documentation site — examples, tutorials, demos, or anything else. Each section gets its own navbar link, sidebar navigation, and an auto-generated index page. For blog-style content, there's a dedicated `type: blog` mode that uses Quarto's native listing directive.
 
 ## Quick Start
 
@@ -41,6 +41,7 @@ sections:
   - title: Examples          # Navbar link text (required)
     dir: examples            # Source directory (required)
     navbar_after: User Guide  # Insert after this navbar item (optional)
+    type: default            # Section type: "default" or "blog" (optional)
 ```
 
 ### Required Fields
@@ -55,6 +56,7 @@ sections:
 | Field          | Default            | Description |
 |----------------|--------------------|-------------|
 | `navbar_after` | Before "Reference" | Name of an existing navbar item to place this section after |
+| `type`         | `default`          | `"default"` for card-grid index with sidebar; `"blog"` for Quarto listing page |
 
 ## Multiple Sections
 
@@ -69,6 +71,7 @@ sections:
     navbar_after: Examples
   - title: Blog
     dir: blog
+    type: blog
     navbar_after: Reference
 ```
 
@@ -77,6 +80,11 @@ This produces a navbar like:
 ```
 Home | User Guide | Examples | Tutorials | Reference | Blog
 ```
+
+::: {.callout-tip}
+## Blog sections
+The `type: blog` option uses Quarto's native listing directive for date-sorted, searchable blog posts. See [Blog](blog.qmd) for the full guide.
+:::
 
 ## Navbar Positioning
 
@@ -206,5 +214,6 @@ sections:
 
 ## Next Steps
 
+- **[Blog](blog.qmd)** – Set up a blog with Quarto's listing directive
 - **[Configuration](configuration.qmd)** – See all available `great-docs.yml` options
 - **[User Guides](user-guides.qmd)** – Set up the User Guide section
