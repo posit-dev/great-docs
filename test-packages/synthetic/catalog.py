@@ -1370,11 +1370,11 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
     ),
     "gdtest_sec_tutorials": (
         "Custom 'Tutorials' section. tutorials/ dir with step-by-step "
-        "pages. Should appear in sidebar."
+        "pages. Should appear as a separate nav section."
     ),
     "gdtest_sec_recipes": (
         "Custom 'Recipes' section. recipes/ dir with short how-to pages. "
-        "Should appear as its own sidebar section."
+        "Should appear as a separate nav section."
     ),
     "gdtest_sec_blog": (
         "Custom 'Blog' section. blog/ dir with date-prefixed pages. "
@@ -1382,12 +1382,12 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
     ),
     "gdtest_sec_faq": (
         "Custom 'FAQ' section. faq/ dir with question-based pages. "
-        "Should render as a separate sidebar group."
+        "Should appear as a separate nav section."
     ),
     "gdtest_sec_multi": (
         "Multiple custom sections: Examples + Tutorials + Recipes. Three "
         "different section dirs, all configured via sections list. All "
-        "should appear in the sidebar/navbar."
+        "should appear as separate nav sections."
     ),
     "gdtest_sec_navbar_after": (
         "Custom section with navbar_after specified. Section should appear "
@@ -1395,7 +1395,7 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
     ),
     "gdtest_sec_with_ug": (
         "Custom section (Examples) combined with auto-discovered user guide. "
-        "Both should appear as separate sidebar groups without conflict."
+        "Both should appear as separate nav sections without conflict."
     ),
     "gdtest_sec_with_ref": (
         "Custom section (Tutorials) combined with explicit reference config. "
