@@ -1102,9 +1102,17 @@ class GreatDocs:
         if not sections_config:
             return 0
 
+        # Sections must be a list of dicts
+        if not isinstance(sections_config, list):
+            print(f"   ⚠️  'sections' must be a list, got {type(sections_config).__name__}")
+            return 0
+
         processed = 0
 
         for section_cfg in sections_config:
+            if not isinstance(section_cfg, dict):
+                print(f"   ⚠️  Section entry must be a dict, skipping: {section_cfg}")
+                continue
             title = section_cfg.get("title")
             src_dir = section_cfg.get("dir")
             if not title or not src_dir:
@@ -5128,6 +5136,9 @@ class GreatDocs:
             Active ``sections:`` YAML block, or a commented-out template.
         """
         if sections:
+            # Sections must be a list of dicts; skip if wrong type
+            if not isinstance(sections, list):
+                return ""
             parts = [
                 "# Custom Sections",
                 "# ----------------",
@@ -5135,6 +5146,8 @@ class GreatDocs:
                 "sections:",
             ]
             for sec in sections:
+                if not isinstance(sec, dict):
+                    continue
                 title = sec.get("title", "Untitled")
                 dir_name = sec.get("dir", "")
                 sec_type = sec.get("type", "")
