@@ -593,7 +593,7 @@ def _build_nav_html(
     </style>
 
     <div class="gd-topnav" id="gd-topnav">
-        <a href="{hub_prefix}/index.html" class="gd-nav-hub">&#9776; Hub#9776; GDG</a>
+        <a href="{hub_prefix}/index.html" class="gd-nav-hub">&#9776; GDG</a>
         <span class="gd-nav-sep">/</span>
 
         {prev_link}
