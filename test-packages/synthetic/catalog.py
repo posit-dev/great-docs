@@ -1377,8 +1377,8 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "Should appear as a separate nav section."
     ),
     "gdtest_sec_blog": (
-        "Custom 'Blog' section. blog/ dir with date-prefixed pages. "
-        "Tests a non-standard section type."
+        "Blog section using Quarto's native listing directive. blog/ dir "
+        "with posts in subdirectories. Uses type: blog for auto-listing."
     ),
     "gdtest_sec_faq": (
         "Custom 'FAQ' section. faq/ dir with question-based pages. "
