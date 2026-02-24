@@ -19,18 +19,10 @@ SPEC = {
         },
     },
     "config": {
-        "sections": {
-            "examples": {
-                "title": "Examples",
-                "description": "Example use cases",
-                "path": "examples",
-            },
-            "tutorials": {
-                "title": "Tutorials",
-                "description": "Step-by-step tutorials",
-                "path": "tutorials",
-            },
-        },
+        "sections": [
+            {"title": "Examples", "dir": "examples"},
+            {"title": "Tutorials", "dir": "tutorials"},
+        ],
         "user_guide": [
             {"title": "Basics", "contents": ["intro.qmd"]},
             {"title": "Advanced Topics", "contents": ["advanced.qmd"]},
