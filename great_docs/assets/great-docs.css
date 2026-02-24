@@ -2087,6 +2087,18 @@ body.quarto-dark .section-card:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
+body.quarto-dark .section-card-title {
+    color: #599CFF !important;
+}
+
+body.quarto-dark .section-card-desc {
+    color: #9ca3af !important;
+}
+
+body.quarto-dark .section-card:hover {
+    border-color: #599CFF;
+}
+
 /* Disable transitions on initial page load to prevent flash */
 html:not(.theme-loaded) *,
 html:not(.theme-loaded) *::before,
