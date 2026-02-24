@@ -1443,6 +1443,9 @@ if os.path.exists(index_file):
     nav_replacement = r"\1\2\3"
     content = re.sub(nav_pattern, nav_replacement, content, flags=re.DOTALL)
 
+    # Clean up Sphinx cross-reference roles in index descriptions
+    content = translate_sphinx_roles(content)
+
     with open(index_file, "w") as file:
         file.write(content)
 
