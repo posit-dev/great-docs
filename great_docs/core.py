@@ -4989,6 +4989,37 @@ class GreatDocs:
 
         return dn_yaml, site_yaml, funding_yaml
 
+    @staticmethod
+    def _format_sections_yaml(sections: list | None = None) -> str:
+        """
+        Build YAML fragment for custom sections (examples, tutorials, etc.).
+
+        Parameters
+        ----------
+        sections
+            List of section dicts, each with ``title`` and ``dir`` keys.
+
+        Returns
+        -------
+        str
+            Active ``sections:`` YAML block, or a commented-out template.
+        """
+        if sections:
+            parts = [
+                "# Custom Sections",
+                "# ----------------",
+                "# Additional page groups (examples, tutorials, blog, etc.)",
+                "sections:",
+            ]
+            for sec in sections:
+                title = sec.get("title", "Untitled")
+                dir_name = sec.get("dir", "")
+                parts.append(f'  - title: "{title}"')
+                if dir_name:
+                    parts.append(f"    dir: {dir_name}")
+            return "\n".join(parts) + "\n"
+        return ""
+
     def _generate_initial_config(self, force: bool = False) -> bool:
         """
         Generate an initial great-docs.yml with discovered exports.
@@ -5022,6 +5053,7 @@ class GreatDocs:
         existing_funding: dict | None = None
         existing_display_name: str | None = None
         existing_site: dict | None = None
+        existing_sections: list | None = None
         if config_path.exists():
             try:
                 existing_config = Config(config_path.parent)
@@ -5038,6 +5070,10 @@ class GreatDocs:
                 }
                 if site_cfg and site_cfg != _defaults:
                     existing_site = site_cfg
+                # Preserve custom sections (examples, tutorials, etc.)
+                _sections = existing_config.sections
+                if _sections:
+                    existing_sections = _sections
             except Exception:
                 pass
 
@@ -5051,6 +5087,7 @@ class GreatDocs:
                 existing_display_name=existing_display_name,
                 existing_site=existing_site,
                 existing_funding=existing_funding,
+                existing_sections=existing_sections,
             )
             config_path.write_text(config_content, encoding="utf-8")
             print(f"Created {config_path}")
@@ -5077,6 +5114,7 @@ class GreatDocs:
                 existing_display_name=existing_display_name,
                 existing_site=existing_site,
                 existing_funding=existing_funding,
+                existing_sections=existing_sections,
             )
             config_path.write_text(config_content, encoding="utf-8")
             print(f"Created {config_path}")
@@ -5106,6 +5144,7 @@ class GreatDocs:
             existing_display_name=existing_display_name,
             existing_site=existing_site,
             existing_funding=existing_funding,
+            existing_sections=existing_sections,
         )
 
         config_path.write_text(config_content, encoding="utf-8")
@@ -5120,6 +5159,7 @@ class GreatDocs:
         existing_display_name: str | None = None,
         existing_site: dict | None = None,
         existing_funding: dict | None = None,
+        existing_sections: list | None = None,
     ) -> str:
         """
         Generate minimal great-docs.yml without reference section.
@@ -5138,6 +5178,8 @@ class GreatDocs:
             Preserved non-default site settings from a pre-existing config.
         existing_funding
             Preserved funding metadata from a pre-existing config.
+        existing_sections
+            Preserved custom sections from a pre-existing config.
 
         Returns
         -------
@@ -5165,6 +5207,9 @@ class GreatDocs:
 
         # display_name line (either active or omitted)
         dn_section = f"\n{dn_yaml}" if dn_yaml else ""
+
+        # Build sections YAML
+        sections_yaml = self._format_sections_yaml(existing_sections)
 
         return f"""# Great Docs Configuration
 # See https://rich-iannone.github.io/great-docs/user-guide/03-configuration.html
@@ -5195,7 +5240,7 @@ dynamic: {dynamic_str}
 {authors_section}
 {funding_yaml}
 {site_yaml}
-# Jupyter Kernel
+{sections_yaml}# Jupyter Kernel
 # --------------
 # Jupyter kernel to use for executing code cells in .qmd files.
 # This is set at the project level so it applies to all pages, including
@@ -5237,6 +5282,7 @@ jupyter: python3
         existing_display_name: str | None = None,
         existing_site: dict | None = None,
         existing_funding: dict | None = None,
+        existing_sections: list | None = None,
     ) -> str:
         """
         Generate great-docs.yml with a reference section from discovered exports.
@@ -5259,6 +5305,8 @@ jupyter: python3
             Preserved non-default site settings from a pre-existing config.
         existing_funding
             Preserved funding metadata from a pre-existing config.
+        existing_sections
+            Preserved custom sections from a pre-existing config.
 
         Returns
         -------
@@ -5435,6 +5483,13 @@ jupyter: python3
             ]
         )
         lines.extend(site_yaml.rstrip("\n").splitlines())
+
+        # Add custom sections if preserved
+        sections_yaml = self._format_sections_yaml(existing_sections)
+        if sections_yaml:
+            lines.append("")
+            lines.extend(sections_yaml.rstrip("\n").splitlines())
+
         lines.extend(
             [
                 "",
