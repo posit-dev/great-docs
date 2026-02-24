@@ -337,6 +337,148 @@ def strip_directives_from_html(html_content):
     return cleaned
 
 
+def translate_sphinx_fields(html_content):
+    """
+    Convert Sphinx field-list directives into structured doc sections.
+
+    After quartodoc rendering, Sphinx-style docstrings with ``:param:``,
+    ``:type:``, ``:returns:``, ``:rtype:``, and ``:raises:`` fields end up
+    mashed into a single ``<p>`` tag::
+
+        <p>:param x: Desc. :type x: int :returns: Desc. :rtype: str :raises ValueError: Desc.</p>
+
+    This function parses those fields and emits the same ``<section>`` /
+    ``<dl>`` / ``<dt>`` / ``<dd>`` structure that quartodoc produces for
+    NumPy-style Parameters / Returns / Raises sections.
+    """
+
+    # Regex for a <p> tag whose text contains Sphinx field markers.
+    # Allow inline HTML (e.g. <code>...</code>) inside the field text, but
+    # prevent matching across paragraph boundaries by refusing </p> in the body.
+    _FIELD_P = re.compile(
+        r"<p>((?:(?!</p>).)*?:(?:param|type|returns?|rtype|raises?)(?:(?!</p>).)*)</p>",
+        re.DOTALL,
+    )
+
+    # Individual field markers within the text.
+    # The body captures everything up to the next field marker or end of string,
+    # including inline HTML tags like <code>.
+    _FIELD_TOKEN = re.compile(
+        r":(?P<directive>param|type|returns?|rtype|raises?)"
+        r"(?:\s+(?P<name>[^:]*?))?:\s*(?P<body>(?:(?!:(?:param|type|returns?|rtype|raises?)\b).)*)",
+        re.DOTALL,
+    )
+
+    def _build_sections(m):
+        text = m.group(1)
+        fields = list(_FIELD_TOKEN.finditer(text))
+
+        if not fields:
+            return m.group(0)
+
+        # Collect structured data
+        params = {}  # name -> {"desc": ..., "type": ...}
+        returns = {}  # key -> {"desc": ..., "type": ...}
+        raises = []  # [(exception, desc), ...]
+
+        ret_idx = 0
+        for field in fields:
+            directive = field.group("directive")
+            name = (field.group("name") or "").strip()
+            body = (field.group("body") or "").strip()
+
+            if directive == "param":
+                params.setdefault(name, {"desc": "", "type": ""})
+                params[name]["desc"] = body
+            elif directive == "type":
+                params.setdefault(name, {"desc": "", "type": ""})
+                params[name]["type"] = body
+            elif directive in ("returns", "return"):
+                key = f"_ret_{ret_idx}"
+                returns[key] = {"desc": body, "type": ""}
+                ret_idx += 1
+            elif directive == "rtype":
+                # Assign to the last return entry, or create one
+                if returns:
+                    last_key = list(returns.keys())[-1]
+                    returns[last_key]["type"] = body
+                else:
+                    returns["_ret_0"] = {"desc": "", "type": body}
+            elif directive in ("raises", "raise"):
+                raises.append((name, body))
+
+        parts = []
+
+        # ── Parameters section ───────────────────────────────────────────
+        if params:
+            items = []
+            for pname, pinfo in params.items():
+                ptype = pinfo["type"]
+                pdesc = pinfo["desc"]
+                if ptype:
+                    dt = (
+                        f'<dt><code><span class="parameter-name">'
+                        f"<strong>{pname}</strong></span> "
+                        f'<span class="parameter-annotation-sep">:</span> '
+                        f'<span class="parameter-annotation">{ptype}</span>'
+                        f"</code></dt>"
+                    )
+                else:
+                    dt = (
+                        f'<dt><code><span class="parameter-name">'
+                        f"<strong>{pname}</strong></span></code></dt>"
+                    )
+                dd = f"<dd>\n<p>{pdesc}</p>\n</dd>" if pdesc else "<dd></dd>"
+                items.append(dt + "\n" + dd)
+            parts.append(
+                '<section id="parameters" class="level1 doc-section doc-section-parameters">\n'
+                '<h1 class="doc-section doc-section-parameters">Parameters</h1>\n'
+                "<dl>\n" + "\n".join(items) + "\n</dl>\n</section>"
+            )
+
+        # ── Returns section ──────────────────────────────────────────────
+        if returns:
+            items = []
+            for _key, rinfo in returns.items():
+                rtype = rinfo["type"]
+                rdesc = rinfo["desc"]
+                if rtype:
+                    dt = (
+                        f'<dt><code><span class="parameter-name"></span> '
+                        f'<span class="parameter-annotation-sep" '
+                        f'style="margin-left: -8px;"></span> '
+                        f'<span class="parameter-annotation">{rtype}</span>'
+                        f"</code></dt>"
+                    )
+                else:
+                    dt = "<dt></dt>"
+                dd = f"<dd>\n<p>{rdesc}</p>\n</dd>" if rdesc else "<dd></dd>"
+                items.append(dt + "\n" + dd)
+            parts.append(
+                '<section id="returns" class="level1 doc-section doc-section-returns">\n'
+                '<h1 class="doc-section doc-section-returns">Returns</h1>\n'
+                "<dl>\n" + "\n".join(items) + "\n</dl>\n</section>"
+            )
+
+        # ── Raises section ───────────────────────────────────────────────
+        if raises:
+            items = []
+            for exc, desc in raises:
+                dt = f'<dt><code><span class="parameter-annotation">{exc}</span></code></dt>'
+                dd = f"<dd>\n<p>{desc}</p>\n</dd>" if desc else "<dd></dd>"
+                items.append(dt + "\n" + dd)
+            parts.append(
+                '<section id="raises" class="level1 doc-section doc-section-raises">\n'
+                '<h1 class="doc-section doc-section-raises">Raises</h1>\n'
+                "<dl>\n" + "\n".join(items) + "\n</dl>\n</section>"
+            )
+
+        return "\n".join(parts)
+
+    html_content = _FIELD_P.sub(_build_sections, html_content)
+    return html_content
+
+
 def translate_sphinx_roles(html_content):
     """
     Convert Sphinx cross-reference roles into clean HTML.
@@ -658,6 +800,9 @@ for html_file in html_files:
 
     # Strip %directive lines from rendered HTML (safety net for docstring directives)
     content = strip_directives_from_html(content)
+
+    # Translate Sphinx field lists (:param, :type, :returns, :rtype, :raises)
+    content = translate_sphinx_fields(content)
 
     # Translate Sphinx cross-reference roles (e.g. :py:exc:`ValueError`)
     content = translate_sphinx_roles(content)
