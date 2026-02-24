@@ -7771,7 +7771,7 @@ toc: false
         rather than the generated `docs/` directory to avoid checking transient files.
 
         In `.qmd` files, you can exclude specific URLs from checking by adding
-        `{.gd-no-link}` immediately after the URL::
+        `{.gd-no-link}` immediately after the URL:
 
             Visit http://example.com{.gd-no-link} for an example.
             Also works with inline code: `http://example.com`{.gd-no-link}
