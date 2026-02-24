@@ -111,6 +111,29 @@ dd {
     margin-left: 0;
 }
 
+/* Warnings section: h1 header above, body in callout box */
+.doc-section-warnings > h1 {
+    color: Crimson;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    border-left: none;
+    border-bottom: none;
+    padding-left: 0;
+}
+
+.doc-section-warnings > h1::before {
+    content: "⚠️ ";
+}
+
+.doc-section-warnings > p {
+    margin: 0.5rem 0;
+    padding: 0.75rem 1rem;
+    background-color: #FEF2F2;
+    border-left: 4px solid #DC2626;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
 .table td {
     padding-left: 0px;
 }
@@ -1463,6 +1486,17 @@ body.quarto-dark .doc-section dd {
 }
 
 body.quarto-dark .doc-section-parameters dt code {
+    color: var(--gd-text-primary);
+}
+
+/* Warnings section dark mode */
+body.quarto-dark .doc-section-warnings > h1 {
+    color: #FCA5A5;
+}
+
+body.quarto-dark .doc-section-warnings > p {
+    background-color: rgba(220, 38, 38, 0.1);
+    border-left-color: #EF4444;
     color: var(--gd-text-primary);
 }
 
