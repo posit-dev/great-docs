@@ -600,7 +600,47 @@ def translate_rst_directives(html_content):
             f"</div>"
         )
 
-    # Match <p>.. directive:: body</p>  (the entire <p> is the directive)
+    # Pattern 1 – directive <p> followed by a <pre><code> block body.
+    # RST block directives like ``.. note::`` with indented body text
+    # become: <p>.. note::</p>\n<pre><code>body text</code></pre>
+    def _replace_block_directive(m):
+        directive = m.group("directive")
+        pre_body = m.group("pre_body").strip()
+        style = _DIRECTIVE_STYLES[directive]
+        icon, bg, border, label = style
+
+        if directive in _VERSION_DIRECTIVES:
+            parts = pre_body.split(None, 1) if pre_body else []
+            version = parts[0] if parts else ""
+            desc = parts[1] if len(parts) > 1 else ""
+            title = f"{label} {version}" if version else label
+            content = desc
+        else:
+            title = label
+            content = pre_body
+
+        content_html = f'<p style="margin: 0;">{content}</p>' if content else ""
+        return (
+            f'<div style="margin: 1rem 0; padding: 0.75rem 1rem; '
+            f"background-color: {bg}; "
+            f"border-left: 4px solid {border}; "
+            f'border-radius: 4px;">'
+            f'<p style="margin: 0 0 0.25rem 0; font-weight: 600; '
+            f'font-size: 0.875rem;">{icon} {title}</p>'
+            f"{content_html}"
+            f"</div>"
+        )
+
+    html_content = re.sub(
+        rf"<p>\s*\.\.\s+(?P<directive>{directive_names})::\s*</p>"
+        r"\s*<pre><code>(?P<pre_body>.*?)</code></pre>",
+        _replace_block_directive,
+        html_content,
+        flags=re.DOTALL,
+    )
+
+    # Pattern 2 – directive with inline body text in the same <p> tag.
+    # e.g. <p>.. versionadded:: 2.8.1</p>
     # The body may contain inline HTML tags (e.g. <code>...</code>) produced
     # by the Sphinx-role translation step that runs before this function.
     html_content = re.sub(
