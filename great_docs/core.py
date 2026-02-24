@@ -4859,6 +4859,50 @@ class GreatDocs:
 
         return "\n".join(lines)
 
+    def _format_rich_authors_yaml(self, authors: list[dict]) -> str:
+        """
+        Format rich author metadata (from existing great-docs.yml) as YAML.
+
+        Unlike ``_format_authors_yaml`` which adds commented placeholders,
+        this method emits all fields that are actually present, preserving
+        the original rich metadata.
+
+        Parameters
+        ----------
+        authors
+            List of author dicts with fields like name, email, role, github, etc.
+
+        Returns
+        -------
+        str
+            YAML-formatted authors section, or empty string if no authors.
+        """
+        if not authors:
+            return ""
+
+        _AUTHOR_FIELDS = ("name", "email", "role", "affiliation", "github", "orcid", "homepage")
+
+        lines = [
+            "# Author Information",
+            "# ------------------",
+            "# Author metadata for display in the landing page sidebar",
+            "authors:",
+        ]
+
+        for author in authors:
+            first = True
+            for field in _AUTHOR_FIELDS:
+                val = author.get(field)
+                if val:
+                    prefix = "  - " if first else "    "
+                    lines.append(f"{prefix}{field}: {val}")
+                    first = False
+            if first:
+                # No fields emitted — skip this author
+                continue
+
+        return "\n".join(lines)
+
     def _generate_initial_config(self, force: bool = False) -> bool:
         """
         Generate an initial great-docs.yml with discovered exports.
@@ -4885,12 +4929,25 @@ class GreatDocs:
                 print("Skipping great-docs.yml")
                 return False
 
+        # Preserve rich authors/funding from existing config before overwriting
+        existing_authors = []
+        existing_funding = None
+        if config_path.exists():
+            try:
+                existing_config = Config(config_path.parent)
+                existing_authors = existing_config.authors or []
+                existing_funding = getattr(existing_config, "funding", None)
+            except Exception:
+                pass
+
         # Detect package name
         package_name = self._detect_package_name()
         if not package_name:
             print("Warning: Could not detect package name, creating minimal config")
             # Create minimal config without reference section
-            config_content = self._generate_minimal_config()
+            config_content = self._generate_minimal_config(
+                existing_authors=existing_authors,
+            )
             config_path.write_text(config_content, encoding="utf-8")
             print(f"Created {config_path}")
             return True
@@ -4910,7 +4967,9 @@ class GreatDocs:
             print("Testing dynamic introspection mode...")
             dynamic_mode = self._detect_dynamic_mode(importable_name)
             config_content = self._generate_minimal_config(
-                parser=parser_style, dynamic=dynamic_mode
+                parser=parser_style,
+                dynamic=dynamic_mode,
+                existing_authors=existing_authors,
             )
             config_path.write_text(config_content, encoding="utf-8")
             print(f"Created {config_path}")
@@ -4932,14 +4991,23 @@ class GreatDocs:
 
         # Generate config content
         config_content = self._generate_config_with_reference(
-            categories, importable_name, parser=parser_style, dynamic=dynamic_mode
+            categories,
+            importable_name,
+            parser=parser_style,
+            dynamic=dynamic_mode,
+            existing_authors=existing_authors,
         )
 
         config_path.write_text(config_content, encoding="utf-8")
         print(f"Created {config_path}")
         return True
 
-    def _generate_minimal_config(self, parser: str = "numpy", dynamic: bool = True) -> str:
+    def _generate_minimal_config(
+        self,
+        parser: str = "numpy",
+        dynamic: bool = True,
+        existing_authors: list | None = None,
+    ) -> str:
         """
         Generate minimal great-docs.yml without reference section.
 
@@ -4949,6 +5017,8 @@ class GreatDocs:
             The docstring parser style ("numpy", "google", or "sphinx").
         dynamic
             Whether to use dynamic introspection mode for quartodoc.
+        existing_authors
+            Rich author metadata from a pre-existing great-docs.yml to preserve.
 
         Returns
         -------
@@ -4957,9 +5027,12 @@ class GreatDocs:
         """
         dynamic_str = "true" if dynamic else "false"
 
-        # Extract authors from pyproject.toml
-        authors = self._extract_authors_from_pyproject()
-        authors_yaml = self._format_authors_yaml(authors)
+        # Use existing rich authors if available, otherwise extract from pyproject.toml
+        if existing_authors:
+            authors_yaml = self._format_rich_authors_yaml(existing_authors)
+        else:
+            authors = self._extract_authors_from_pyproject()
+            authors_yaml = self._format_authors_yaml(authors)
 
         # Build the config with optional authors section
         authors_section = f"\n{authors_yaml}\n" if authors_yaml else ""
@@ -5044,7 +5117,12 @@ jupyter: python3
 """
 
     def _generate_config_with_reference(
-        self, categories: dict, package_name: str, parser: str = "numpy", dynamic: bool = True
+        self,
+        categories: dict,
+        package_name: str,
+        parser: str = "numpy",
+        dynamic: bool = True,
+        existing_authors: list | None = None,
     ) -> str:
         """
         Generate great-docs.yml with a reference section from discovered exports.
@@ -5059,6 +5137,8 @@ jupyter: python3
             The docstring parser style ("numpy", "google", or "sphinx").
         dynamic
             Whether to use dynamic introspection mode for quartodoc.
+        existing_authors
+            Rich author metadata from a pre-existing great-docs.yml to preserve.
 
         Returns
         -------
@@ -5067,9 +5147,12 @@ jupyter: python3
         """
         dynamic_str = "true" if dynamic else "false"
 
-        # Extract authors from pyproject.toml
-        authors = self._extract_authors_from_pyproject()
-        authors_yaml = self._format_authors_yaml(authors)
+        # Use existing rich authors if available, otherwise extract from pyproject.toml
+        if existing_authors:
+            authors_yaml = self._format_rich_authors_yaml(existing_authors)
+        else:
+            authors = self._extract_authors_from_pyproject()
+            authors_yaml = self._format_authors_yaml(authors)
 
         lines = [
             "# Great Docs Configuration",
