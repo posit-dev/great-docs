@@ -479,6 +479,198 @@ def translate_sphinx_fields(html_content):
     return html_content
 
 
+def translate_google_fields(html_content):
+    """
+    Convert Google-style docstring sections into structured doc sections.
+
+    After quartodoc rendering, Google-style docstrings with sections like
+    ``Args:``, ``Returns:``, ``Raises:``, ``Note:``, ``Example:``,
+    ``Warning:``, ``References:``, and ``See Also:`` end up as flat
+    ``<p>`` tags::
+
+        <p>Args: items: desc. strict: desc.</p>
+        <p>Returns: A dict...</p><pre><code>details</code></pre>
+        <p>Raises: ValueError: desc. TypeError: desc.</p>
+        <p>Note: text</p>
+
+    Indented continuation text renders as ``<pre><code>`` blocks adjacent
+    to the section ``<p>``.  This function detects both patterns and emits
+    the same ``<section>``/``<h1>``/``<dl>``/``<dt>``/``<dd>`` markup that
+    quartodoc produces for NumPy-style sections.
+    """
+
+    _PARAM_SECTIONS = {"Args", "Arguments", "Parameters", "Params"}
+    _RETURN_SECTIONS = {"Returns", "Return"}
+    _RAISE_SECTIONS = {"Raises", "Raise"}
+    _SECTION_MAP = {
+        "Note": "notes",
+        "Notes": "notes",
+        "Example": "examples",
+        "Examples": "examples",
+        "Warning": "warnings",
+        "Warnings": "warnings",
+        "References": "references",
+        "See Also": "see-also",
+    }
+
+    ALL_SECTIONS = _PARAM_SECTIONS | _RETURN_SECTIONS | _RAISE_SECTIONS | set(_SECTION_MAP)
+    # Sort longest-first so "See Also" matches before "See"
+    section_names = "|".join(re.escape(s) for s in sorted(ALL_SECTIONS, key=len, reverse=True))
+
+    # Match <p>SectionName: body</p>, optionally followed by <pre><code>…</code></pre>
+    _GOOGLE_P = re.compile(
+        rf"<p>(?P<section>{section_names}):\s*(?P<body>(?:(?!</p>).)*)</p>"
+        r"(?:\s*<pre><code>(?P<pre_body>.*?)</code></pre>)?",
+        re.DOTALL,
+    )
+
+    # ── helpers ──────────────────────────────────────────────────────────
+
+    def _dbl_bt(text):
+        """Convert ``word`` → <code>word</code>."""
+        return re.sub(r"``(.*?)``", r"<code>\1</code>", text)
+
+    def _pre_to_html(pre_text):
+        """Convert <pre> block text (bullet lists + backticks) to HTML."""
+        lines = pre_text.split("\n")
+        out, in_list = [], False
+        for line in lines:
+            line = _dbl_bt(line)
+            stripped = line.strip()
+            if stripped.startswith("- "):
+                if not in_list:
+                    out.append("<ul>")
+                    in_list = True
+                out.append(f"<li>{stripped[2:]}</li>")
+            else:
+                if in_list:
+                    out.append("</ul>")
+                    in_list = False
+                if stripped:
+                    out.append(f"<p>{stripped}</p>")
+        if in_list:
+            out.append("</ul>")
+        return "\n".join(out)
+
+    def _parse_params(body):
+        """Parse 'name: desc. name2: desc2.' into [(name, desc), …]."""
+        hits = list(re.finditer(r"(?:^|(?<=\.\s))([a-z_]\w*)\s*:\s*", body))
+        if not hits:
+            return []
+        params = []
+        for i, hit in enumerate(hits):
+            name = hit.group(1)
+            start = hit.end()
+            end = hits[i + 1].start() if i + 1 < len(hits) else len(body)
+            desc = body[start:end].strip()
+            params.append((name, desc))
+        return params
+
+    def _parse_raises(body):
+        """Parse 'ExcType: desc. ExcType2: desc2.' into [(exc, desc), …]."""
+        hits = list(re.finditer(r"(?:^|(?<=\.\s))([A-Z][a-zA-Z]+)\s*:\s*", body))
+        if not hits:
+            return []
+        raises = []
+        for i, hit in enumerate(hits):
+            exc = hit.group(1)
+            start = hit.end()
+            end = hits[i + 1].start() if i + 1 < len(hits) else len(body)
+            desc = body[start:end].strip()
+            raises.append((exc, desc))
+        return raises
+
+    # ── main replacer ────────────────────────────────────────────────────
+
+    def _replace(m):
+        section = m.group("section")
+        body = (m.group("body") or "").strip()
+        pre_body = m.group("pre_body").strip() if m.group("pre_body") else None
+
+        # ── Args / Parameters ─────────────────────────────────────────
+        if section in _PARAM_SECTIONS:
+            full = f"{body} {pre_body}" if pre_body and body else (body or pre_body or "")
+            params = _parse_params(full)
+            if not params:
+                return m.group(0)
+            items = []
+            for pname, pdesc in params:
+                pdesc = _dbl_bt(pdesc)
+                dt = (
+                    f'<dt><code><span class="parameter-name">'
+                    f"<strong>{pname}</strong></span></code></dt>"
+                )
+                dd = f"<dd>\n<p>{pdesc}</p>\n</dd>" if pdesc else "<dd></dd>"
+                items.append(f"{dt}\n{dd}")
+            return (
+                '<section id="parameters" class="level1 doc-section doc-section-parameters">\n'
+                '<h1 class="doc-section doc-section-parameters">Parameters</h1>\n'
+                "<dl>\n" + "\n".join(items) + "\n</dl>\n</section>"
+            )
+
+        # ── Returns ───────────────────────────────────────────────────
+        if section in _RETURN_SECTIONS:
+            parts = []
+            if body:
+                parts.append(f"<p>{_dbl_bt(body)}</p>")
+            if pre_body:
+                parts.append(_pre_to_html(pre_body))
+            content = "\n".join(parts)
+            return (
+                '<section id="returns" class="level1 doc-section doc-section-returns">\n'
+                '<h1 class="doc-section doc-section-returns">Returns</h1>\n'
+                f"{content}\n</section>"
+            )
+
+        # ── Raises ────────────────────────────────────────────────────
+        if section in _RAISE_SECTIONS:
+            full = f"{body} {pre_body}" if pre_body and body else (body or pre_body or "")
+            raises = _parse_raises(full)
+            if not raises:
+                return m.group(0)
+            items = []
+            for exc, desc in raises:
+                desc = _dbl_bt(desc)
+                dt = f'<dt><code><span class="parameter-annotation">{exc}</span></code></dt>'
+                dd = f"<dd>\n<p>{desc}</p>\n</dd>" if desc else "<dd></dd>"
+                items.append(f"{dt}\n{dd}")
+            return (
+                '<section id="raises" class="level1 doc-section doc-section-raises">\n'
+                '<h1 class="doc-section doc-section-raises">Raises</h1>\n'
+                "<dl>\n" + "\n".join(items) + "\n</dl>\n</section>"
+            )
+
+        # ── Example / Examples (code blocks) ──────────────────────────
+        if section in {"Example", "Examples"}:
+            code_parts = []
+            if body:
+                code_parts.append(body)
+            if pre_body:
+                code_parts.append(pre_body)
+            code = "\n".join(code_parts)
+            return (
+                '<section id="examples" class="level1 doc-section doc-section-examples">\n'
+                '<h1 class="doc-section doc-section-examples">Examples</h1>\n'
+                f"<pre><code>{code}</code></pre>\n</section>"
+            )
+
+        # ── Other sections (Note, Warning, References, See Also) ─────
+        slug = _SECTION_MAP.get(section, section.lower().replace(" ", "-"))
+        full = body
+        if pre_body:
+            full = f"{body}\n{pre_body}" if body else pre_body
+        full = _dbl_bt(full)
+        content = f"<p>{full}</p>" if full else ""
+        return (
+            f'<section id="{slug}" class="level1 doc-section doc-section-{slug}">\n'
+            f'<h1 class="doc-section doc-section-{slug}">{section}</h1>\n'
+            f"{content}\n</section>"
+        )
+
+    html_content = _GOOGLE_P.sub(_replace, html_content)
+    return html_content
+
+
 def translate_sphinx_roles(html_content):
     """
     Convert Sphinx cross-reference roles into clean HTML.
@@ -888,6 +1080,9 @@ for html_file in html_files:
 
     # Translate Sphinx field lists (:param, :type, :returns, :rtype, :raises)
     content = translate_sphinx_fields(content)
+
+    # Translate Google-style field sections (Args:, Returns:, Raises:, etc.)
+    content = translate_google_fields(content)
 
     # Translate Sphinx cross-reference roles (e.g. :py:exc:`ValueError`)
     content = translate_sphinx_roles(content)
