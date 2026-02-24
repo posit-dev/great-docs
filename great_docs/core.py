@@ -6811,6 +6811,13 @@ toc: false
 
                 config["website"]["page-footer"] = {"left": footer_html}
 
+            else:
+                # No authors: still emit a footer if funding is configured
+                funding = metadata.get("funding")
+                if funding and isinstance(funding, dict) and funding.get("name"):
+                    funder_name = funding["name"]
+                    config["website"]["page-footer"] = {"left": f"Supported by {funder_name}."}
+
         # Write package metadata JSON for post-render version badge injection.
         # The version and release date come from the latest GitHub Release so
         # the badge always reflects what has actually been published.
