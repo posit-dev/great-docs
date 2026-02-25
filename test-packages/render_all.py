@@ -212,7 +212,7 @@ def build_package(name: str) -> dict:
 
         # ----------------------------------------------------------
         # Enrich the rendered landing page (_site/index.html) AFTER
-        # build.  The build step regenerates index.qmd, so we must
+        # build. The build step regenerates index.qmd, so we must
         # inject directly into the final HTML output.
         # ----------------------------------------------------------
         site_index = site_dir / "index.html"
@@ -220,22 +220,7 @@ def build_package(name: str) -> dict:
         if site_index.exists():
             extras: list[str] = []
 
-            # 1) Config disclosure triangle
-            if gd_yml.exists():
-                config_text = html.escape(gd_yml.read_text(encoding="utf-8").strip())
-                extras.append(
-                    '<details style="margin-top:1.5em">\n'
-                    "<summary style=\"cursor:pointer;font-family:'SF Mono',"
-                    "'Fira Code',monospace;font-size:13px\">"
-                    "<code>great-docs.yml</code></summary>\n"
-                    '<pre style="background:#f8f9fa;border:1px solid #dee2e6;'
-                    "border-radius:6px;padding:12px 16px;font-size:12px;"
-                    'line-height:1.5;overflow-x:auto;margin-top:8px">'
-                    f"{config_text}</pre>\n"
-                    "</details>\n"
-                )
-
-            # 2) Interactive file tree viewer
+            # Interactive file tree viewer
             try:
                 tree_html = _build_file_tree_html(
                     spec,
@@ -720,7 +705,7 @@ def _build_nav_html(
 def inject_nav_into_html(html_path: Path, nav_html: str) -> None:
     """Inject the navigation bar HTML right after <body...>.
 
-    If the file already contains a ``<!-- GD-NAV-START -->`` block it is
+    If the file already contains a `<!-- GD-NAV-START -->` block it is
     stripped first so that re-injection is idempotent.
     """
     content = html_path.read_text(encoding="utf-8")
@@ -830,7 +815,7 @@ _FILE_TREE_CSS = """\
 def _build_file_tree_html(spec: dict, config_path: Path | None = None) -> str:
     """Build an interactive file-tree viewer from a package spec.
 
-    Returns an HTML fragment with ``<details>`` elements for progressive
+    Returns an HTML fragment with `<details>` elements for progressive
     disclosure of directory structure and file contents.
 
     Parameters
@@ -838,10 +823,9 @@ def _build_file_tree_html(spec: dict, config_path: Path | None = None) -> str:
     spec
         The package spec dict.
     config_path
-        Optional path to the actual ``great-docs.yml`` on disk.  If provided
+        Optional path to the actual `great-docs.yml` on disk. If provided
         and the file exists, its contents are used (capturing any defaults
-        that ``great-docs init`` created).  Falls back to the spec's
-        ``config`` dict.
+        that `great-docs init` created). Falls back to the spec's `config` dict.
     """
     all_files: dict[str, str] = {}
 
@@ -1342,8 +1326,8 @@ def assemble_hub(
     state
         Build-state dict, used to mark stale packages in the nav bar.
     rebuilt_names
-        When given (selective rebuild), only these packages' ``_site/`` dirs
-        are re-copied.  ``None`` means copy everything (full rebuild).
+        When given (selective rebuild), only these packages' `_site/` dirs
+        are re-copied. `None` means copy everything (full rebuild).
     """
     print(f"\n{'=' * 70}")
     print("  Assembling hub")
