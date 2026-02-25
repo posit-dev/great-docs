@@ -9,20 +9,6 @@ from great_docs._directives import (
 class TestExtractDirectives:
     """Tests for extract_directives function."""
 
-    def test_extract_order(self):
-        """Test extracting %order directive."""
-        docstring = """
-        Short description.
-
-        %order 42
-
-        Parameters
-        ----------
-        x : int
-        """
-        directives = extract_directives(docstring)
-        assert directives.order == 42
-
     def test_extract_seealso(self):
         """Test extracting %seealso directive."""
         docstring = """
@@ -62,7 +48,6 @@ class TestExtractDirectives:
         docstring = """
         Validate column values are greater than a threshold.
 
-        %order 1
         %seealso func_1, func_2
 
         Parameters
@@ -71,21 +56,18 @@ class TestExtractDirectives:
             Target columns.
         """
         directives = extract_directives(docstring)
-        assert directives.order == 1
         assert directives.seealso == ["func_1", "func_2"]
         assert directives.nodoc is False
 
     def test_extract_from_none(self):
         """Test extracting from None returns empty directives."""
         directives = extract_directives(None)
-        assert directives.order is None
         assert directives.seealso == []
         assert directives.nodoc is False
 
     def test_extract_from_empty_string(self):
         """Test extracting from empty string returns empty directives."""
         directives = extract_directives("")
-        assert directives.order is None
         assert directives.seealso == []
         assert directives.nodoc is False
 
@@ -100,7 +82,6 @@ class TestExtractDirectives:
             The input value.
         """
         directives = extract_directives(docstring)
-        assert directives.order is None
         assert directives.seealso == []
         assert directives.nodoc is False
 
@@ -109,26 +90,26 @@ class TestExtractDirectives:
         docstring = """
         Short description.
 
-            %order 5
+            %seealso func_a, func_b
         """
         directives = extract_directives(docstring)
-        assert directives.order == 5
+        assert directives.seealso == ["func_a", "func_b"]
 
 
 class TestStripDirectives:
     """Tests for strip_directives function."""
 
-    def test_strip_order(self):
-        """Test stripping %order directive."""
+    def test_strip_single_directive(self):
+        """Test stripping a single directive."""
         docstring = """Short description.
 
-%order 1
+%seealso func_a, func_b
 
 Parameters
 ----------
 x : int"""
         result = strip_directives(docstring)
-        assert "%order" not in result
+        assert "%seealso" not in result
         assert "Short description." in result
         assert "Parameters" in result
 
@@ -136,15 +117,15 @@ x : int"""
         """Test stripping multiple directives."""
         docstring = """Short description.
 
-%order 1
 %seealso func_a, func_b
+%nodoc true
 
 Parameters
 ----------
 x : int"""
         result = strip_directives(docstring)
-        assert "%order" not in result
         assert "%seealso" not in result
+        assert "%nodoc" not in result
         assert "Short description." in result
         assert "Parameters" in result
 
@@ -155,7 +136,7 @@ x : int"""
 This is a longer explanation of what the function does.
 It spans multiple lines.
 
-%order 1
+%seealso func_a
 
 Parameters
 ----------
@@ -171,7 +152,7 @@ str
         assert "longer explanation" in result
         assert "Parameters" in result
         assert "Returns" in result
-        assert "%order" not in result
+        assert "%seealso" not in result
 
     def test_strip_cleans_blank_lines(self):
         """Test that stripping removes extra blank lines."""
@@ -199,24 +180,20 @@ Parameters
         """Test that indented directives are stripped."""
         docstring = """Short description.
 
-    %order 5
     %seealso func_a
+    %nodoc true
 
 Parameters
 ----------"""
         result = strip_directives(docstring)
-        assert "%order" not in result
         assert "%seealso" not in result
+        assert "%nodoc" not in result
 
 
 class TestHasDirectives:
     """Tests for has_directives function."""
 
     def test_has_order(self):
-        """Test detecting %order directive."""
-        assert has_directives("%order 1")
-
-    def test_has_seealso(self):
         """Test detecting %seealso directive."""
         assert has_directives("%seealso func_a")
 
@@ -245,11 +222,6 @@ class TestDocDirectives:
         directives = DocDirectives()
         assert not directives
 
-    def test_bool_true_with_order(self):
-        """Test that DocDirectives with order is truthy."""
-        directives = DocDirectives(order=1)
-        assert directives
-
     def test_bool_true_with_seealso(self):
         """Test that DocDirectives with seealso is truthy."""
         directives = DocDirectives(seealso=["func_a"])
@@ -271,7 +243,6 @@ class TestIntegration:
 
         This validation step checks values against a threshold.
 
-        %order 1
         %seealso func_1, func_2
 
         Parameters
@@ -289,12 +260,10 @@ class TestIntegration:
 
         # Extract directives
         directives = extract_directives(original)
-        assert directives.order == 1
         assert directives.seealso == ["func_1", "func_2"]
 
         # Strip directives
         cleaned = strip_directives(original)
-        assert "%order" not in cleaned
         assert "%seealso" not in cleaned
         assert "Validate column values" in cleaned
         assert "Parameters" in cleaned

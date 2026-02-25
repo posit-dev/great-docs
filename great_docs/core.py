@@ -4559,8 +4559,8 @@ class GreatDocs:
         """
         Extract Great Docs directives from all docstrings in the package.
 
-        Scans all exported classes, methods, and functions for @order,
-        @seealso, and @nodoc directives.
+        Scans all exported classes, methods, and functions for @seealso
+        and @nodoc directives.
 
         Parameters
         ----------

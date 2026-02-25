@@ -11,34 +11,30 @@ class DocDirectives:
 
     Attributes
     ----------
-    order
-        Ordering within a section (lower numbers appear first).
     seealso
         List of related items to cross-reference.
     nodoc
         If `True`, exclude this item from documentation.
     """
 
-    order: int | None = None
     seealso: list[str] = field(default_factory=list)
     nodoc: bool = False
 
     def __bool__(self) -> bool:
         """Return True if any directive was found."""
-        return bool(self.order is not None or self.seealso or self.nodoc)
+        return bool(self.seealso or self.nodoc)
 
 
 # Single-line directive patterns (with % prefix, no colon)
 # Each pattern matches a complete line starting with the directive
 DIRECTIVE_PATTERNS = {
-    "order": re.compile(r"^\s*%order\s+(\d+)\s*$", re.MULTILINE),
     "seealso": re.compile(r"^\s*%seealso\s+(.+?)\s*$", re.MULTILINE),
     "nodoc": re.compile(r"^\s*%nodoc(?:\s+(true|yes|1))?\s*$", re.MULTILINE | re.IGNORECASE),
 }
 
 # Combined pattern for stripping all directives (matches the whole line including newline)
 ALL_DIRECTIVES_PATTERN = re.compile(
-    r"^\s*%(?:order|seealso|nodoc)(?:\s+.*)?$\n?", re.MULTILINE | re.IGNORECASE
+    r"^\s*%(?:seealso|nodoc)(?:\s+.*)?$\n?", re.MULTILINE | re.IGNORECASE
 )
 
 
@@ -61,7 +57,6 @@ def extract_directives(docstring: str | None) -> DocDirectives:
     >>> doc = '''
     ... Short description.
     ...
-    ... %order 1
     ... %seealso func_a, func_b
     ...
     ... Parameters
@@ -69,8 +64,6 @@ def extract_directives(docstring: str | None) -> DocDirectives:
     ... x : int
     ... '''
     >>> directives = extract_directives(doc)
-    >>> directives.order
-    1
     >>> directives.seealso
     ['func_a', 'func_b']
     """
@@ -78,10 +71,6 @@ def extract_directives(docstring: str | None) -> DocDirectives:
 
     if not docstring:
         return directives
-
-    # Extract %order
-    if match := DIRECTIVE_PATTERNS["order"].search(docstring):
-        directives.order = int(match.group(1))
 
     # Extract %seealso (comma-separated list)
     if match := DIRECTIVE_PATTERNS["seealso"].search(docstring):
@@ -118,7 +107,7 @@ def strip_directives(docstring: str | None) -> str:
     >>> doc = '''
     ... Short description.
     ...
-    ... %order 1
+    ... %seealso func_a
     ...
     ... Parameters
     ... ----------
