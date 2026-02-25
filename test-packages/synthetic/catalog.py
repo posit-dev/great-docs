@@ -150,7 +150,10 @@ ALL_PACKAGES: list[str] = [
     "gdtest_config_combo_a",  # 23
     "gdtest_config_combo_b",  # 24
     "gdtest_config_combo_c",  # 25
-    # 26–50: Docstring richness & post-render
+    "gdtest_config_combo_d",  # 26
+    "gdtest_config_combo_e",  # 27
+    "gdtest_config_combo_f",  # 28
+    # 29–53: Docstring richness & post-render
     "gdtest_rst_versionadded",  # 26
     "gdtest_rst_deprecated",  # 27
     "gdtest_rst_note",  # 28
@@ -231,6 +234,12 @@ ALL_PACKAGES: list[str] = [
     "gdtest_stress_all_ug",  # 98
     "gdtest_stress_all_sections",  # 99
     "gdtest_stress_everything",  # 100
+    # 101–105: Cross-dimension combos (layout × docstrings × directives)
+    "gdtest_src_google_seealso",  # 101
+    "gdtest_hatch_nodoc",  # 102
+    "gdtest_pdm_big_class",  # 103
+    "gdtest_flit_enums",  # 104
+    "gdtest_namespace_ug",  # 105
 ]
 
 
