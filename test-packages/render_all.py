@@ -33,6 +33,8 @@ import textwrap
 import time
 from pathlib import Path
 
+import yaml
+
 # ── Path setup ───────────────────────────────────────────────────────────────
 
 _THIS_DIR = Path(__file__).resolve().parent
@@ -207,6 +209,58 @@ def build_package(name: str) -> dict:
                 "error": build_result.stderr or build_result.stdout,
                 "log": str(log_path),
             }
+
+        # ----------------------------------------------------------
+        # Enrich the rendered landing page (_site/index.html) AFTER
+        # build.  The build step regenerates index.qmd, so we must
+        # inject directly into the final HTML output.
+        # ----------------------------------------------------------
+        site_index = site_dir / "index.html"
+        gd_yml = pkg_dir / "great-docs.yml"
+        if site_index.exists():
+            extras: list[str] = []
+
+            # 1) Config disclosure triangle
+            if gd_yml.exists():
+                config_text = html.escape(gd_yml.read_text(encoding="utf-8").strip())
+                extras.append(
+                    '<details style="margin-top:1.5em">\n'
+                    "<summary style=\"cursor:pointer;font-family:'SF Mono',"
+                    "'Fira Code',monospace;font-size:13px\">"
+                    "<code>great-docs.yml</code></summary>\n"
+                    '<pre style="background:#f8f9fa;border:1px solid #dee2e6;'
+                    "border-radius:6px;padding:12px 16px;font-size:12px;"
+                    'line-height:1.5;overflow-x:auto;margin-top:8px">'
+                    f"{config_text}</pre>\n"
+                    "</details>\n"
+                )
+
+            # 2) Interactive file tree viewer
+            try:
+                tree_html = _build_file_tree_html(
+                    spec,
+                    config_path=gd_yml,
+                )
+                extras.append(
+                    '<details style="margin-top:1em">\n'
+                    '<summary style="cursor:pointer;font-weight:600;'
+                    'font-size:14px">Source files</summary>\n'
+                    f"{_FILE_TREE_CSS}\n"
+                    f"{tree_html}\n"
+                    "</details>\n"
+                )
+            except Exception:
+                pass  # non-fatal
+
+            if extras:
+                extras_block = "\n".join(extras)
+                site_html = site_index.read_text(encoding="utf-8")
+                site_html = site_html.replace(
+                    "</main>",
+                    f"{extras_block}\n</main>",
+                    1,
+                )
+                site_index.write_text(site_html, encoding="utf-8")
 
         log_lines.append("\nRESULT: ok")
         log_path.write_text("\n".join(log_lines), encoding="utf-8")
@@ -408,6 +462,20 @@ def _build_nav_html(
     stale_count = sum(1 for r in results if is_stale(state, r["name"])) if state else 0
     current_is_stale = is_stale(state, current_name) if state else False
 
+    # Elapsed build time for the current package
+    current_result = next((r for r in results if r["name"] == current_name), None)
+    elapsed_s = current_result.get("elapsed_s") if current_result else None
+    if elapsed_s is not None:
+        if elapsed_s >= 60:
+            mins = int(elapsed_s // 60)
+            secs = elapsed_s % 60
+            elapsed_str = f"{mins}m\u2009{secs:.0f}s"
+        else:
+            elapsed_str = f"{elapsed_s:.1f}s"
+        elapsed_html = f'<span class="gd-nav-elapsed">\u23f1 {elapsed_str}</span>'
+    else:
+        elapsed_html = ""
+
     # Prev/Next navigation
     ok_names = [r["name"] for r in results if r["status"] == "ok"]
     if current_name in ok_names:
@@ -588,6 +656,11 @@ def _build_nav_html(
     .gd-nav-stale-stat {{
         color: #f9e2af;
     }}
+    .gd-nav-elapsed {{
+        color: #94e2d5;
+        font-family: "SF Mono", "Fira Code", monospace;
+        font-size: 11px;
+    }}
     body {{ margin-top: 40px !important; }}
     #quarto-header {{ top: 40px !important; }}
     </style>
@@ -612,6 +685,7 @@ def _build_nav_html(
         <span class="gd-nav-stats">
             <span>{ok_count}/{len(results)} built</span>
             {stale_stat}
+            {elapsed_html}
         </span>
     </div>
 
@@ -723,6 +797,132 @@ def _create_log_page(name: str, log_path: str | None) -> str:
     """)
 
 
+# ── File-tree CSS (shared between landing pages and detail pages) ─────────
+
+_FILE_TREE_CSS = """\
+<style>
+.file-tree { font-family: "SF Mono", "Fira Code", monospace; font-size: 12px; }
+.file-tree details { margin-left: 8px; }
+.file-tree > details, .file-tree > .tree-file { margin-left: 0; }
+.file-tree summary {
+    cursor: pointer; padding: 3px 4px; border-radius: 4px;
+    color: #c9d1d9; list-style: none; user-select: none;
+}
+.file-tree summary::-webkit-details-marker { display: none; }
+.file-tree summary::before {
+    content: "▸ "; color: #6e7681; font-size: 10px; margin-right: 2px;
+}
+.file-tree details[open] > summary::before { content: "▾ "; }
+.file-tree summary:hover { background: #161b22; }
+.tree-icon { margin-right: 4px; font-size: 13px; }
+.tree-dir > summary { color: #79c0ff; }
+.tree-file > summary { color: #c9d1d9; }
+.tree-children { border-left: 1px solid #21262d; margin-left: 9px; padding-left: 4px; }
+.tree-code {
+    background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+    padding: 12px 16px; margin: 4px 0 8px 0; font-size: 11px;
+    line-height: 1.5; color: #c9d1d9; overflow-x: auto;
+    white-space: pre-wrap; word-wrap: break-word; max-height: 500px;
+}
+</style>"""
+
+
+def _build_file_tree_html(spec: dict, config_path: Path | None = None) -> str:
+    """Build an interactive file-tree viewer from a package spec.
+
+    Returns an HTML fragment with ``<details>`` elements for progressive
+    disclosure of directory structure and file contents.
+
+    Parameters
+    ----------
+    spec
+        The package spec dict.
+    config_path
+        Optional path to the actual ``great-docs.yml`` on disk.  If provided
+        and the file exists, its contents are used (capturing any defaults
+        that ``great-docs init`` created).  Falls back to the spec's
+        ``config`` dict.
+    """
+    all_files: dict[str, str] = {}
+
+    # Source files from the spec
+    for path, content in spec.get("files", {}).items():
+        all_files[path] = textwrap.dedent(content)
+
+    # great-docs.yml: prefer the on-disk version (includes init defaults)
+    if config_path and config_path.exists():
+        all_files["great-docs.yml"] = config_path.read_text(encoding="utf-8")
+    elif "config" in spec:
+        all_files["great-docs.yml"] = yaml.dump(
+            spec["config"], default_flow_style=False, sort_keys=False
+        )
+
+    if not all_files:
+        return "<p>No source files in spec.</p>"
+
+    # Build a nested tree structure: each dict key is a segment name,
+    # leaf values are file-content strings, branch values are sub-dicts.
+    tree: dict = {}
+    for path in sorted(all_files.keys()):
+        parts = path.split("/")
+        node = tree
+        for part in parts[:-1]:
+            if part not in node or not isinstance(node.get(part), dict):
+                node[part] = {}
+            node = node[part]
+        node[parts[-1]] = all_files[path]
+
+    # Language hint for syntax highlighting (cosmetic class)
+    ext_lang = {
+        "py": "python",
+        "yml": "yaml",
+        "yaml": "yaml",
+        "toml": "toml",
+        "md": "markdown",
+        "cfg": "ini",
+        "txt": "text",
+        "json": "json",
+        "js": "javascript",
+        "css": "css",
+        "html": "html",
+        "qmd": "quarto",
+    }
+
+    def _render(name: str, value, depth: int = 0) -> str:
+        indent = "  " * depth
+        if isinstance(value, dict):
+            children = "\n".join(
+                _render(k, v, depth + 1)
+                for k, v in sorted(
+                    value.items(), key=lambda kv: (not isinstance(kv[1], dict), kv[0])
+                )
+            )
+            return (
+                f'{indent}<details class="tree-dir">'
+                f'<summary><span class="tree-icon">\U0001f4c1</span> {html.escape(name)}/</summary>'
+                f'<div class="tree-children">\n{children}\n{indent}</div>'
+                f"</details>"
+            )
+        else:
+            ext = name.rsplit(".", 1)[-1] if "." in name else ""
+            lang = ext_lang.get(ext, "")
+            lang_attr = f' data-lang="{lang}"' if lang else ""
+            content = html.escape(str(value).rstrip())
+            return (
+                f'{indent}<details class="tree-file">'
+                f'<summary><span class="tree-icon">\U0001f4c4</span> {html.escape(name)}</summary>'
+                f'<pre class="tree-code"{lang_attr}>{content}</pre>'
+                f"</details>"
+            )
+
+    # Render top-level entries (dirs first, then files)
+    items = "\n".join(
+        _render(k, v)
+        for k, v in sorted(tree.items(), key=lambda kv: (not isinstance(kv[1], dict), kv[0]))
+    )
+    return f'<div class="file-tree">\n{items}\n</div>'
+
+
 def _create_detail_page(r: dict, results: list[dict]) -> str:
     """Create a detail/info page for a single package."""
     name = r["name"]
@@ -732,6 +932,16 @@ def _create_detail_page(r: dict, results: list[dict]) -> str:
     status = r["status"]
     dims = r.get("dimensions", [])
     badges = _dimension_badges(dims)
+
+    # Build the file tree from the spec
+    try:
+        spec = get_spec(name)
+        file_tree_html = _build_file_tree_html(
+            spec,
+            config_path=RENDERED_DIR / name / "great-docs.yml",
+        )
+    except Exception:
+        file_tree_html = "<p>Spec not available.</p>"
 
     if status == "ok":
         status_badge = (
@@ -830,6 +1040,29 @@ def _create_detail_page(r: dict, results: list[dict]) -> str:
                 color: #f38ba8; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;
             }}
             .badges-row {{ line-height: 1.8; }}
+            .file-tree {{ font-family: "SF Mono", "Fira Code", monospace; font-size: 12px; }}
+            .file-tree details {{ margin-left: 8px; }}
+            .file-tree > details, .file-tree > .tree-file {{ margin-left: 0; }}
+            .file-tree summary {{
+                cursor: pointer; padding: 3px 4px; border-radius: 4px;
+                color: #c9d1d9; list-style: none; user-select: none;
+            }}
+            .file-tree summary::-webkit-details-marker {{ display: none; }}
+            .file-tree summary::before {{
+                content: "▸ "; color: #6e7681; font-size: 10px; margin-right: 2px;
+            }}
+            .file-tree details[open] > summary::before {{ content: "▾ "; }}
+            .file-tree summary:hover {{ background: #161b22; }}
+            .tree-icon {{ margin-right: 4px; font-size: 13px; }}
+            .tree-dir > summary {{ color: #79c0ff; }}
+            .tree-file > summary {{ color: #c9d1d9; }}
+            .tree-children {{ border-left: 1px solid #21262d; margin-left: 9px; padding-left: 4px; }}
+            .tree-code {{
+                background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+                padding: 12px 16px; margin: 4px 0 8px 0; font-size: 11px;
+                line-height: 1.5; color: #c9d1d9; overflow-x: auto;
+                white-space: pre-wrap; word-wrap: break-word; max-height: 500px;
+            }}
         </style>
     </head>
     <body>
@@ -855,6 +1088,10 @@ def _create_detail_page(r: dict, results: list[dict]) -> str:
                 <h2>Dimensions</h2>
                 <div class="badges-row">{badges}</div>
                 <div style="margin-top:12px">{dim_html}</div>
+            </div>
+            <div class="section">
+                <h2>Source Files</h2>
+                {file_tree_html}
             </div>
         </div>
     </body>
@@ -1240,6 +1477,9 @@ def _result_from_state(name: str, pkg_state: dict) -> dict:
     log_path = LOGS_DIR / f"{name}.log"
     if log_path.exists():
         result["log"] = str(log_path)
+    elapsed = pkg_state.get("elapsed_s")
+    if elapsed is not None:
+        result["elapsed_s"] = elapsed
     return result
 
 
