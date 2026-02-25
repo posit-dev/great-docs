@@ -3423,6 +3423,20 @@ class GreatDocs:
                         # Try to access members to trigger any lazy resolution errors
                         _ = qd_obj.members
                         _ = qd_obj.kind
+
+                        # Exclude stdlib / third-party re-exports: if the object
+                        # is an alias whose canonical path lives outside this
+                        # package, it is a re-export and should not be documented.
+                        if (
+                            hasattr(qd_obj, "is_alias")
+                            and qd_obj.is_alias
+                            and hasattr(qd_obj, "canonical_path")
+                        ):
+                            canon = qd_obj.canonical_path
+                            if not canon.startswith(normalized_name + "."):
+                                failed_exports[name] = "external re-export"
+                                continue
+
                         safe_exports.append(name)
                     except griffe.CyclicAliasError:
                         failed_exports[name] = "cyclic alias"
@@ -6789,6 +6803,89 @@ toc: false
         if patched_count:
             print(f"   Injected overload signatures into {patched_count} reference page(s)")
 
+    def _fix_rst_code_blocks_in_qmd(self) -> None:
+        """
+        Convert RST-style `::` code blocks in quartodoc-generated `.qmd` files
+        to Markdown fenced code blocks.
+
+        RST docstrings use `::` at the end of a paragraph followed by an indented
+        block to denote code.  Quarto / Pandoc (in Markdown mode) does not recognize
+        this syntax, so the code renders as plain indented text without highlighting.
+
+        This method scans all reference ``.qmd`` files produced by ``quartodoc build``
+        and converts patterns like::
+
+            For example::
+
+                @overload
+                def utf8(value: str) -> bytes: ...
+
+        into::
+
+            For example:
+
+            ```python
+            @overload
+            def utf8(value: str) -> bytes: ...
+            ```
+
+        Must be called **after** `quartodoc build` and **before** `quarto render`.
+        """
+        ref_dir = self.project_path / "reference"
+        if not ref_dir.exists():
+            return
+
+        # Pattern: a line ending with `::` followed by a blank line and
+        # one or more indented lines (the code block).  We capture:
+        #   1) The text before the `::` (may be empty for a standalone `::`)
+        #   2) The indented block
+        rst_block_re = re.compile(
+            r"^(.*?)::[ ]*\n"  # line ending in ::
+            r"(\n)"  # mandatory blank line
+            r"((?:[ ]{4,}\S.*\n?)+)",  # one or more indented lines (≥4 spaces)
+            re.MULTILINE,
+        )
+
+        patched_count = 0
+
+        for qmd_file in sorted(ref_dir.glob("*.qmd")):
+            if qmd_file.name == "index.qmd":
+                continue
+
+            content = qmd_file.read_text()
+            original = content
+
+            def _replace_block(m):
+                prefix_text = m.group(1)
+                indented_block = m.group(3)
+
+                # Dedent the code block (remove common leading whitespace)
+                lines = indented_block.splitlines()
+                if lines:
+                    # Find minimum indentation
+                    min_indent = min(
+                        len(line) - len(line.lstrip()) for line in lines if line.strip()
+                    )
+                    dedented = "\n".join(line[min_indent:] for line in lines)
+                else:
+                    dedented = indented_block
+
+                # Reconstruct: keep the prefix text (with single `:`), blank line,
+                # then a fenced code block
+                prefix = prefix_text.rstrip()
+                if prefix:
+                    prefix += ":"
+                return f"{prefix}\n\n```python\n{dedented}\n```\n"
+
+            content = rst_block_re.sub(_replace_block, content)
+
+            if content != original:
+                qmd_file.write_text(content)
+                patched_count += 1
+
+        if patched_count:
+            print(f"   Converted RST code blocks in {patched_count} reference page(s)")
+
     def _update_quarto_config(self) -> None:
         """
         Update _quarto.yml with great-docs configuration.
@@ -8003,6 +8100,9 @@ toc: false
 
             # Step 1.5: Inject overload signatures into generated .qmd files
             self._inject_overload_signatures()
+
+            # Step 1.6: Convert RST :: code blocks to Markdown fenced blocks
+            self._fix_rst_code_blocks_in_qmd()
 
             # Get environment with QUARTO_PYTHON set for proper Python detection
             quarto_env = self._get_quarto_env()
