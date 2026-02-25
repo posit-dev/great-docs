@@ -6688,9 +6688,10 @@ toc: false
         reference ``.qmd`` files and **before** ``quarto render``.
         """
         try:
+            import griffe
             from quartodoc import get_object as qd_get_object
         except ImportError:
-            return  # quartodoc not installed; nothing to do
+            return  # quartodoc/griffe not installed; nothing to do
 
         ref_dir = self.project_path / "reference"
         if not ref_dir.exists():
@@ -6754,6 +6755,11 @@ toc: false
             except Exception:
                 continue
 
+            # Only functions can have @overload signatures; classes have a
+            # dict-style ``overloads`` attribute that would break iteration.
+            if not isinstance(obj, griffe.Function):
+                continue
+
             if not hasattr(obj, "overloads"):
                 continue
 
@@ -6762,13 +6768,15 @@ toc: false
             except Exception:
                 continue
 
-            if not overloads:
+            if not overloads or not isinstance(overloads, list):
                 continue
 
             # Build the overload signature lines
             func_name = obj.name
             sig_lines = []
             for ov in overloads:
+                if not hasattr(ov, "parameters"):
+                    continue
                 params = []
                 for p in ov.parameters:
                     ann = str(p.annotation) if p.annotation else ""
