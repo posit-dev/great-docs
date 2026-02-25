@@ -47,6 +47,13 @@ code span.cn-bool {
     font-weight: 500;
 }
 
+/* Spacer between overloaded function signatures */
+#cb1 code span.overload-spacer {
+    display: block;
+    height: 0.35em;
+    user-select: none;
+}
+
 .navbar-brand img {
     max-height: 45px;
     padding-right: 0px;
@@ -1339,6 +1346,13 @@ body.quarto-dark code span.cn-bool {
 
 body.quarto-dark #cb1 code span.op {
     color: var(--gd-syn-operator);
+}
+
+/* Spacer between overloaded function signatures - dark mode inherits from light */
+body.quarto-dark #cb1 code span.overload-spacer {
+    display: block;
+    height: 0.35em;
+    user-select: none;
 }
 
 /* Pandoc/Quarto syntax highlighting tokens - dark mode */

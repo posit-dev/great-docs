@@ -6660,6 +6660,135 @@ toc: false
             f.write(header_comment)
             yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
+    def _inject_overload_signatures(self) -> None:
+        """
+        Patch quartodoc-generated .qmd files to show ``@overload`` signatures.
+
+        Quartodoc renders only the implementation signature for overloaded
+        functions (e.g. ``process(data)``).  This method detects functions that
+        have ``@typing.overload`` decorated variants and replaces the single
+        implementation signature with all overload signatures including type
+        annotations and return types.
+
+        Must be called **after** ``quartodoc build`` has generated the
+        reference ``.qmd`` files and **before** ``quarto render``.
+        """
+        try:
+            from quartodoc import get_object as qd_get_object
+        except ImportError:
+            return  # quartodoc not installed; nothing to do
+
+        ref_dir = self.project_path / "reference"
+        if not ref_dir.exists():
+            return
+
+        # Read _quarto.yml to determine the package name and dynamic mode
+        quarto_yml = self.project_path / "_quarto.yml"
+        if not quarto_yml.exists():
+            return
+
+        with open(quarto_yml, "r") as f:
+            qconfig = yaml.safe_load(f) or {}
+
+        qdoc_cfg = qconfig.get("quartodoc", {})
+        package_name = qdoc_cfg.get("package")
+        dynamic = qdoc_cfg.get("dynamic", False)
+
+        if not package_name:
+            return
+
+        # Pattern to extract the full object path from the header anchor
+        # e.g. "# process { #gdtest_overloads.process }" -> "gdtest_overloads.process"
+        header_re = re.compile(r"^#\s+\S+\s+\{\s*#(\S+)\s*\}")
+
+        # Pattern to match the signature code block
+        sig_block_re = re.compile(
+            r"(```python\n)(.*?\n)(```)",
+            re.DOTALL,
+        )
+
+        patched_count = 0
+
+        for qmd_file in sorted(ref_dir.glob("*.qmd")):
+            if qmd_file.name == "index.qmd":
+                continue
+
+            content = qmd_file.read_text()
+
+            # Extract the object path from the header
+            header_match = header_re.search(content)
+            if not header_match:
+                continue
+
+            obj_path = header_match.group(1)  # e.g. "gdtest_overloads.process"
+
+            # Convert dotted path to quartodoc lookup format (module:name)
+            # The path is <package>.<name> or <package>.<module>.<name>
+            parts = obj_path.split(".")
+            if len(parts) < 2:
+                continue
+
+            # Try with the package name prefix
+            if obj_path.startswith(package_name + "."):
+                lookup = package_name + ":" + obj_path[len(package_name) + 1 :]
+            else:
+                lookup = obj_path.replace(".", ":", 1)
+
+            # Load the griffe object and check for overloads
+            try:
+                obj = qd_get_object(lookup, dynamic=dynamic)
+            except Exception:
+                continue
+
+            if not hasattr(obj, "overloads"):
+                continue
+
+            try:
+                overloads = obj.overloads
+            except Exception:
+                continue
+
+            if not overloads:
+                continue
+
+            # Build the overload signature lines
+            func_name = obj.name
+            sig_lines = []
+            for ov in overloads:
+                params = []
+                for p in ov.parameters:
+                    ann = str(p.annotation) if p.annotation else ""
+                    default = str(p.default) if p.default else ""
+                    if ann and default:
+                        params.append(f"{p.name}: {ann} = {default}")
+                    elif ann:
+                        params.append(f"{p.name}: {ann}")
+                    elif default:
+                        params.append(f"{p.name}={default}")
+                    else:
+                        params.append(p.name)
+
+                ret = str(ov.returns) if ov.returns else ""
+                sig = f"{func_name}({', '.join(params)})"
+                if ret:
+                    sig += f" -> {ret}"
+                sig_lines.append(sig)
+
+            if not sig_lines:
+                continue
+
+            new_sig_block = "```python\n" + "\n".join(sig_lines) + "\n```"
+
+            # Replace the first code block (the signature) in the file
+            new_content = sig_block_re.sub(new_sig_block, content, count=1)
+
+            if new_content != content:
+                qmd_file.write_text(new_content)
+                patched_count += 1
+
+        if patched_count:
+            print(f"   Injected overload signatures into {patched_count} reference page(s)")
+
     def _update_quarto_config(self) -> None:
         """
         Update _quarto.yml with great-docs configuration.
@@ -7871,6 +8000,9 @@ toc: false
                     sys.exit(1)
             else:
                 print("\n✅ API reference generated")
+
+            # Step 1.5: Inject overload signatures into generated .qmd files
+            self._inject_overload_signatures()
 
             # Get environment with QUARTO_PYTHON set for proper Python detection
             quarto_env = self._get_quarto_env()

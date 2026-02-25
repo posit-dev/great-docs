@@ -120,15 +120,17 @@ def highlight_signature_with_pygments(html_content):
                     rf'<span class="{pg_class}">([^<]*)</span>', r"\1", highlighted
                 )
 
-        # Special handling for the first line: make method/function name stand out
+        # Special handling: make method/function name stand out on every signature line
         # Pattern: ClassName.method_name( or function_name(
         # Replace the name before ( with a function class for better highlighting
-        first_line_pattern = re.compile(
+        # Uses re.MULTILINE so ^ matches each line (important for @overload signatures)
+        sig_name_pattern = re.compile(
             r'^(<span class="va">)(\w+)(</span>)(<span class="op">\.</span>)?'
-            r'(<span class="va">)?(\w+)?(</span>)?(\()'
+            r'(<span class="va">)?(\w+)?(</span>)?(\()',
+            re.MULTILINE,
         )
 
-        def enhance_first_line(m):
+        def enhance_sig_name(m):
             # If there's a dot, it's ClassName.method_name
             if m.group(4):  # Has dot
                 class_name = m.group(2)
@@ -143,7 +145,7 @@ def highlight_signature_with_pygments(html_content):
                 func_name = m.group(2)
                 return f'<span class="sig-name">{func_name}</span>('
 
-        highlighted = first_line_pattern.sub(enhance_first_line, highlighted, count=1)
+        highlighted = sig_name_pattern.sub(enhance_sig_name, highlighted)
 
         # Differentiate None from True/False
         # None gets 'cn-none' class, True/False get 'cn-bool' class
@@ -167,13 +169,28 @@ def highlight_signature_with_pygments(html_content):
         )
 
         # Wrap each line in a span with proper id for line linking
+        # For overloaded functions (multiple signature lines), insert a blank spacer
+        # span between each signature for visual separation.
         lines = highlighted.split("\n")
+        # Filter out empty trailing lines
+        while lines and not lines[-1].strip():
+            lines.pop()
+        is_overloaded = len(lines) > 1 and all(line.strip() == "" or "(" in line for line in lines)
         wrapped_lines = []
-        for i, line in enumerate(lines, 1):
-            if line:  # Skip empty lines at the end
-                wrapped_lines.append(
-                    f'<span id="cb1-{i}"><a href="#cb1-{i}" aria-hidden="true" tabindex="-1"></a>{line}</span>'
-                )
+        line_num = 1
+        for idx, line in enumerate(lines):
+            if not line and not is_overloaded:
+                continue  # Skip empty lines for non-overloaded functions
+            if not line:
+                continue  # Skip blank lines; we insert spacers ourselves
+            wrapped_lines.append(
+                f'<span id="cb1-{line_num}"><a href="#cb1-{line_num}" aria-hidden="true" tabindex="-1"></a>{line}</span>'
+            )
+            line_num += 1
+            # Add a blank spacer line between overload signatures (not after the last)
+            if is_overloaded and idx < len(lines) - 1:
+                wrapped_lines.append(f'<span id="cb1-{line_num}" class="overload-spacer"> </span>')
+                line_num += 1
 
         new_code = "\n".join(wrapped_lines)
 
