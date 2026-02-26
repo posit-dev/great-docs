@@ -30,7 +30,7 @@ else:
 
 # Load object type metadata for accurate classification
 # Keys are object names (e.g., "parser.ParserError"), values are type strings
-# ("class", "exception", "function", "method", "constant", "enum", "type_alias", "other")
+# ("class", "namedtuple", "typeddict", "exception", "function", "method", "constant", "enum", "type_alias", "other")
 object_types = {}
 object_types_path = "_object_types.json"
 if os.path.exists(object_types_path):
@@ -1264,6 +1264,8 @@ for html_file in html_files:
     # falling back to heuristics only when the metadata is missing
     _TYPE_BADGE_STYLES = {
         "class": ("class", "#6366f1", "#EEF2FF"),
+        "namedtuple": ("NamedTuple", "#6366f1", "#EEF2FF"),
+        "typeddict": ("TypedDict", "#6366f1", "#EEF2FF"),
         "exception": ("exception", "#dc2626", "#FEF2F2"),
         "enum": ("enum", "#6366f1", "#EEF2FF"),
         "function": ("function", "#7c3aed", "#F5F3FF"),
