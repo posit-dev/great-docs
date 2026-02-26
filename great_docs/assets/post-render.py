@@ -1256,9 +1256,10 @@ for html_file in html_files:
     # Format signatures with multiple arguments onto separate lines
     content = format_signature_multiline(content)
 
-    # For non-callable types (e.g., TypedDict), strip empty () from the signature
+    # For non-callable types (e.g., TypedDict, Enum), strip empty () from the signature
     # TypedDicts are structural type definitions, not constructors
-    _NON_CALLABLE_SIGNATURE_TYPES = {"typeddict"}
+    # Enums are accessed via members (e.g., Color.RED), not called
+    _NON_CALLABLE_SIGNATURE_TYPES = {"typeddict", "enum"}
     obj_type_for_sig = object_types.get(item_name_from_file)
     if obj_type_for_sig and obj_type_for_sig in _NON_CALLABLE_SIGNATURE_TYPES:
         content = re.sub(
