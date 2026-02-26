@@ -4519,3 +4519,158 @@ def test_object_types_integrated_with_categorization():
             assert obj_types["MyClass.action"] == "method"
         finally:
             sys.path.remove(tmp_dir)
+
+
+# ── Fallback categorization (griffe unavailable) ─────────────────────
+
+
+def test_categorize_fallback_functions_not_other():
+    """Functions must be categorized as 'functions', not 'other', when griffe
+    cannot load the package and the inspect-based fallback is used."""
+    import sys
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "fbpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '"""Fallback test package."""\n'
+            '__all__ = ["greet", "farewell"]\n'
+            "\n"
+            "def greet(name: str) -> str:\n"
+            '    """Say hello."""\n'
+            "    return f'Hello, {name}'\n"
+            "\n"
+            "def farewell(name: str) -> str:\n"
+            '    """Say goodbye."""\n'
+            "    return f'Goodbye, {name}'\n"
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            categories = docs._categorize_api_objects_fallback("fbpkg", ["greet", "farewell"])
+
+            assert "greet" in categories["functions"]
+            assert "farewell" in categories["functions"]
+            assert categories["other"] == []
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_categorize_fallback_mixed_types():
+    """Fallback categorization must correctly distinguish classes, functions,
+    exceptions, dataclasses, and constants."""
+    import sys
+    from dataclasses import dataclass
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "mixfb"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '"""Mixed fallback test package."""\n'
+            "from dataclasses import dataclass\n"
+            "\n"
+            '__all__ = ["Widget", "Config", "WidgetError", "build", "MAX"]\n'
+            "\n"
+            "class Widget:\n"
+            '    """A widget."""\n'
+            "    pass\n"
+            "\n"
+            "@dataclass\n"
+            "class Config:\n"
+            '    """A config."""\n'
+            "    name: str = 'default'\n"
+            "\n"
+            "class WidgetError(Exception):\n"
+            '    """A widget error."""\n'
+            "    pass\n"
+            "\n"
+            "def build() -> Widget:\n"
+            '    """Build a widget."""\n'
+            "    return Widget()\n"
+            "\n"
+            "MAX = 100\n"
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            categories = docs._categorize_api_objects_fallback(
+                "mixfb", ["Widget", "Config", "WidgetError", "build", "MAX"]
+            )
+
+            assert "Widget" in categories["classes"]
+            assert "Config" in categories["dataclasses"]
+            assert "WidgetError" in categories["exceptions"]
+            assert "build" in categories["functions"]
+            assert "MAX" in categories["constants"]
+            assert categories["other"] == []
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_categorize_fallback_discovers_module_by_dir():
+    """When the normalized project name doesn't match the actual module,
+    the fallback must discover and import the correct module directory."""
+    import sys
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Project name normalizes to 'my_v2_pkg' but the actual module is 'mypkg'
+        pkg_dir = Path(tmp_dir) / "mypkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '"""Package with mismatched name."""\n'
+            '__all__ = ["do_stuff"]\n'
+            "\n"
+            "def do_stuff():\n"
+            '    """Do stuff."""\n'
+            "    pass\n"
+        )
+
+        # Also create pyproject.toml so _find_package_root works
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "my-v2-pkg"\nversion = "0.1.0"\n'
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            categories = docs._categorize_api_objects_fallback(
+                "my_v2_pkg",  # wrong name — should discover 'mypkg'
+                ["do_stuff"],
+            )
+
+            assert "do_stuff" in categories["functions"]
+            assert categories["other"] == []
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_categorize_fallback_skips_metadata():
+    """Metadata variables like __version__ must be skipped by the fallback."""
+    import sys
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "metapkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '"""Metadata test."""\n'
+            '__version__ = "1.0.0"\n'
+            '__all__ = ["run"]\n'
+            "\n"
+            "def run():\n"
+            '    """Run."""\n'
+            "    pass\n"
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            categories = docs._categorize_api_objects_fallback("metapkg", ["__version__", "run"])
+
+            assert "run" in categories["functions"]
+            assert "__version__" not in categories["functions"]
+            assert "__version__" not in categories["other"]
+            assert "__version__" not in categories["constants"]
+        finally:
+            sys.path.remove(tmp_dir)
