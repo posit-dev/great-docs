@@ -240,6 +240,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_pdm_big_class",  # 103
     "gdtest_flit_enums",  # 104
     "gdtest_namespace_ug",  # 105
+    # 106: Subdirectory user guide with numeric prefixes
+    "gdtest_ug_subdir_numbered",  # 106
 ]
 
 
