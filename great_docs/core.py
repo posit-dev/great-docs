@@ -7151,6 +7151,20 @@ toc: false
                 prefix_text = m.group(1)
                 indented_block = m.group(3)
 
+                # Skip known RST directives — they should be preserved for
+                # the post-render script to handle (e.g. .. note::, .. math::)
+                _RST_DIRECTIVES = {
+                    "versionadded", "versionchanged", "deprecated",
+                    "note", "warning", "caution", "danger",
+                    "important", "tip", "hint",
+                    "math", "seealso", "todo",
+                }
+                stripped_prefix = prefix_text.strip()
+                if stripped_prefix.startswith(".."):
+                    directive_name = stripped_prefix[2:].strip()
+                    if directive_name in _RST_DIRECTIVES:
+                        return m.group(0)  # leave untouched
+
                 # Dedent the code block (remove common leading whitespace)
                 lines = indented_block.splitlines()
                 if lines:

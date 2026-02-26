@@ -881,6 +881,58 @@ def translate_rst_directives(html_content):
         html_content,
     )
 
+    # Pattern 3 – directive misinterpreted as a return-type annotation in a
+    # <dt>/<dd> pair.  quartodoc's numpy parser sometimes treats directives
+    # like ``.. versionadded:: 2.0`` at the end of a docstring as an extra
+    # return entry, producing:
+    #   <dt><code>...<span class="parameter-annotation">.. versionadded:: 2.0
+    #   </span></code></dt>
+    #   <dd><p>Optional description.</p></dd>
+    def _replace_dt_directive(m):
+        directive = m.group("directive")
+        body = (m.group("body") or "").strip()
+        dd_body = (m.group("dd_body") or "").strip()
+        style = _DIRECTIVE_STYLES[directive]
+        icon, bg, border, label = style
+
+        if directive in _VERSION_DIRECTIVES:
+            parts = body.split(None, 1) if body else []
+            version = parts[0] if parts else ""
+            desc = parts[1] if len(parts) > 1 else ""
+            if dd_body and not desc:
+                desc = dd_body
+            elif dd_body:
+                desc = f"{desc} {dd_body}"
+            title = f"{label} {version}" if version else label
+            content = desc
+        else:
+            title = label
+            content = dd_body if dd_body else body
+
+        content_html = f'<p style="margin: 0;">{content}</p>' if content else ""
+        return (
+            f'<div style="margin: 1rem 0; padding: 0.75rem 1rem; '
+            f"background-color: {bg}; "
+            f"border-left: 4px solid {border}; "
+            f'border-radius: 4px;">'
+            f'<p style="margin: 0 0 0.25rem 0; font-weight: 600; '
+            f'font-size: 0.875rem;">{icon} {title}</p>'
+            f"{content_html}"
+            f"</div>"
+        )
+
+    _dt_pattern = re.compile(
+        rf'<dt><code><span class="parameter-name">[^<]*</span>\s*'
+        rf'<span class="parameter-annotation-sep"[^>]*>[^<]*</span>\s*'
+        rf'<span class="parameter-annotation">'
+        rf"\.\.\s+(?P<directive>{directive_names})::\s*(?P<body>[^<]*?)"
+        rf"</span></code></dt>"
+        rf"\s*<dd>\s*(?:<p>(?P<dd_body>.*?)</p>\s*)?</dd>",
+        re.DOTALL,
+    )
+    _dt_count = len(_dt_pattern.findall(html_content))
+    html_content = _dt_pattern.sub(_replace_dt_directive, html_content)
+
     return html_content
 
 
