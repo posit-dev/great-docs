@@ -7251,16 +7251,34 @@ toc: false
                 indented_block = m.group(3)
 
                 # Skip known RST directives — they should be preserved for
-                # the post-render script to handle (e.g. .. note::, .. math::)
+                # the post-render script to handle (e.g. .. note::, .. warning::)
                 _RST_DIRECTIVES = {
                     "versionadded", "versionchanged", "deprecated",
                     "note", "warning", "caution", "danger",
                     "important", "tip", "hint",
-                    "math", "seealso", "todo",
+                    "seealso", "todo",
                 }
                 stripped_prefix = prefix_text.strip()
                 if stripped_prefix.startswith(".."):
                     directive_name = stripped_prefix[2:].strip()
+                    if directive_name == "math":
+                        # Convert RST .. math:: to Quarto display math $$...$$
+                        # We must do this at QMD level because Pandoc treats
+                        # trailing :: as a code-block introducer, mangling the
+                        # directive into literal text + a code block.
+                        lines = indented_block.splitlines()
+                        if lines:
+                            min_indent = min(
+                                len(line) - len(line.lstrip())
+                                for line in lines
+                                if line.strip()
+                            )
+                            dedented = "\n".join(
+                                line[min_indent:] for line in lines
+                            )
+                        else:
+                            dedented = indented_block
+                        return f"\n$$\n{dedented.strip()}\n$$\n"
                     if directive_name in _RST_DIRECTIVES:
                         return m.group(0)  # leave untouched
 
@@ -7283,6 +7301,13 @@ toc: false
                 return f"{prefix}\n\n```python\n{dedented}\n```\n"
 
             content = rst_block_re.sub(_replace_block, content)
+
+            # Convert RST inline math :math:`...` → $...$
+            content = re.sub(
+                r":math:`([^`]+)`",
+                r"$\1$",
+                content,
+            )
 
             if content != original:
                 qmd_file.write_text(content)
