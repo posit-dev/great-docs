@@ -1422,6 +1422,18 @@ for html_file in html_files:
         content_str,
     )
 
+    # Normalize single quotes to double quotes in parameter default values
+    content_str = re.sub(
+        r'<span class="parameter-default">&#39;([^&]*)&#39;</span>',
+        r'<span class="parameter-default">&quot;\1&quot;</span>',
+        content_str,
+    )
+    content_str = re.sub(
+        r"""<span class="parameter-default">'([^']*)'</span>""",
+        r'<span class="parameter-default">"\1"</span>',
+        content_str,
+    )
+
     # Fix double asterisks in **kwargs and **attributes style parameters
     # Pattern: ****name** -> **name (with proper styling)
     content_str = re.sub(r"\*\*\*\*(\w+)\*\*", r"**<strong>\1</strong>", content_str)
