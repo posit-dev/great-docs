@@ -4674,3 +4674,157 @@ def test_categorize_fallback_skips_metadata():
             assert "__version__" not in categories["constants"]
         finally:
             sys.path.remove(tmp_dir)
+
+
+# =========================================================================
+# RST Math Conversion Tests
+# =========================================================================
+
+
+class TestFixRstMathInQmd:
+    """Tests for .. math:: and :math: conversion in _fix_rst_code_blocks_in_qmd."""
+
+    def _run_fix(self, qmd_content: str) -> str:
+        """Create a temp project with a .qmd file, run the fixer, return result."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            project_path = Path(tmp_dir) / "great-docs"
+            ref_dir = project_path / "reference"
+            ref_dir.mkdir(parents=True)
+            qmd_file = ref_dir / "func.qmd"
+            qmd_file.write_text(qmd_content)
+
+            config_path = project_path.parent / "great-docs.yml"
+            config_path.write_text("")
+
+            docs = GreatDocs(project_path=str(project_path.parent))
+            docs.project_path = project_path
+            docs._fix_rst_code_blocks_in_qmd()
+
+            return qmd_file.read_text()
+
+    def test_display_math_converted_to_dollar_signs(self):
+        """.. math:: with indented LaTeX becomes $$...$$ block."""
+        qmd = (
+            "Some text:\n\n.. math::\n\n    \\|x\\| = \\sqrt{\\sum_{i=1}^{n} x_i^2}\n\nMore text.\n"
+        )
+        result = self._run_fix(qmd)
+        assert "$$" in result
+        assert "\\|x\\| = \\sqrt{\\sum_{i=1}^{n} x_i^2}" in result
+        assert ".. math::" not in result
+
+    def test_display_math_multiline(self):
+        """.. math:: with multi-line LaTeX is properly converted."""
+        qmd = (
+            "The softmax:\n"
+            "\n"
+            ".. math::\n"
+            "\n"
+            "    \\sigma(z)_i = \\frac{e^{z_i}}\n"
+            "    {\\sum_{j=1}^{K} e^{z_j}}\n"
+            "\n"
+            "End.\n"
+        )
+        result = self._run_fix(qmd)
+        assert "$$" in result
+        assert "\\sigma(z)_i" in result
+        assert ".. math::" not in result
+
+    def test_multiple_display_math_blocks(self):
+        """Multiple .. math:: blocks in same file are all converted."""
+        qmd = (
+            "First:\n"
+            "\n"
+            ".. math::\n"
+            "\n"
+            "    a^2 + b^2 = c^2\n"
+            "\n"
+            "Second:\n"
+            "\n"
+            ".. math::\n"
+            "\n"
+            "    E = mc^2\n"
+            "\n"
+            "Done.\n"
+        )
+        result = self._run_fix(qmd)
+        assert result.count("$$") == 4  # Two blocks, each with opening + closing $$
+        assert "a^2 + b^2 = c^2" in result
+        assert "E = mc^2" in result
+
+    def test_inline_math_converted(self):
+        r"""RST :math:`...` becomes $...$."""
+        qmd = "The distance :math:`d(x, y)` is computed.\n"
+        result = self._run_fix(qmd)
+        assert "$d(x, y)$" in result
+        assert ":math:" not in result
+
+    def test_multiple_inline_math(self):
+        """Multiple :math: on the same line are all converted."""
+        qmd = "For :math:`x` and :math:`y`, compute :math:`x + y`.\n"
+        result = self._run_fix(qmd)
+        assert "$x$" in result
+        assert "$y$" in result
+        assert "$x + y$" in result
+        assert ":math:" not in result
+
+    def test_inline_math_with_complex_expression(self):
+        r"""Inline math with complex LaTeX is correctly converted."""
+        qmd = "The sigmoid is :math:`\\sigma(x) = \\frac{1}{1 + e^{-x}}`.\n"
+        result = self._run_fix(qmd)
+        assert "$\\sigma(x) = \\frac{1}{1 + e^{-x}}$" in result
+        assert ":math:" not in result
+
+    def test_non_math_directives_preserved(self):
+        """Other RST directives like .. note:: are not converted to math."""
+        qmd = ".. note::\n\n    This is a note.\n\n"
+        result = self._run_fix(qmd)
+        assert ".. note::" in result
+        assert "$$" not in result
+
+    def test_regular_code_block_still_converted(self):
+        """Normal :: code blocks are still converted to fenced blocks."""
+        qmd = "Example::\n\n    x = 1\n    y = 2\n\n"
+        result = self._run_fix(qmd)
+        assert "```python" in result
+        assert "x = 1" in result
+        assert "::" not in result.split("```")[0]  # :: removed from intro text
+
+    def test_mixed_math_and_code(self):
+        """File with both math and code blocks handles each correctly."""
+        qmd = "The formula:\n\n.. math::\n\n    E = mc^2\n\nExample::\n\n    result = compute()\n\n"
+        result = self._run_fix(qmd)
+        assert "$$" in result
+        assert "E = mc^2" in result
+        assert "```python" in result
+        assert "result = compute()" in result
+
+    def test_index_qmd_skipped(self):
+        """index.qmd files are not processed."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            project_path = Path(tmp_dir) / "great-docs"
+            ref_dir = project_path / "reference"
+            ref_dir.mkdir(parents=True)
+
+            index = ref_dir / "index.qmd"
+            index.write_text(".. math::\n\n    x = 1\n")
+
+            config_path = project_path.parent / "great-docs.yml"
+            config_path.write_text("")
+
+            docs = GreatDocs(project_path=str(project_path.parent))
+            docs.project_path = project_path
+            docs._fix_rst_code_blocks_in_qmd()
+
+            # index.qmd should be unchanged
+            assert ".. math::" in index.read_text()
+
+    def test_no_reference_dir(self):
+        """No crash when reference/ directory does not exist."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config_path = Path(tmp_dir) / "great-docs.yml"
+            config_path.write_text("")
+
+            docs = GreatDocs(project_path=tmp_dir)
+            docs.project_path = Path(tmp_dir) / "great-docs"
+            # Should not raise
+            docs._fix_rst_code_blocks_in_qmd()
