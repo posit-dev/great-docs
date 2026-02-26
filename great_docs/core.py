@@ -4161,12 +4161,10 @@ class GreatDocs:
                 pkg = griffe.load(normalized_name)
             except Exception as e:
                 print(f"Warning: Could not load package with griffe ({type(e).__name__})")
-                # Fallback to simple categorization
-                skip_names = {"__version__", "__author__", "__email__", "__all__"}
-                filtered_exports = [e for e in exports if e not in skip_names]
-                empty = self._empty_categories()
-                empty["other"] = filtered_exports
-                return empty
+                # Fallback: use importlib + inspect to categorize exports
+                return self._categorize_api_objects_fallback(
+                    normalized_name, exports
+                )
 
             categories = self._empty_categories()
             failed_introspection = []
@@ -4538,12 +4536,113 @@ class GreatDocs:
 
         except ImportError:
             print("Warning: griffe not available, using fallback categorization")
-            # Fallback if griffe isn't installed
-            skip_names = {"__version__", "__author__", "__email__", "__all__"}
-            filtered_exports = [e for e in exports if e not in skip_names]
-            empty = self._empty_categories()
-            empty["other"] = filtered_exports
-            return empty
+            # Fallback: use importlib + inspect to categorize exports
+            normalized_name = package_name.replace("-", "_")
+            return self._categorize_api_objects_fallback(
+                normalized_name, exports
+            )
+
+    def _categorize_api_objects_fallback(
+        self, package_name: str, exports: list[str]
+    ) -> dict:
+        """
+        Categorize API objects using importlib + inspect when griffe is unavailable.
+
+        This fallback is used when griffe cannot load the package (e.g. during
+        ``great-docs init`` when the package is not yet on sys.path). It
+        attempts to import the module via ``importlib`` and uses ``inspect`` to
+        distinguish functions from classes and other objects.
+
+        Parameters
+        ----------
+        package_name
+            The normalized importable package name.
+        exports
+            List of exported names to categorize.
+
+        Returns
+        -------
+        dict
+            Categories dictionary with the same structure as
+            ``_categorize_api_objects``.
+        """
+        import inspect
+
+        skip_names = {"__version__", "__author__", "__email__", "__all__"}
+        filtered_exports = [e for e in exports if e not in skip_names]
+        categories = self._empty_categories()
+
+        try:
+            mod = __import__(package_name)
+        except Exception:
+            # The normalized project name may not match the actual module name.
+            # Try to discover the correct module by scanning the package root for
+            # Python packages (dirs with __init__.py), just like _get_package_exports.
+            mod = None
+            try:
+                package_root = self._find_package_root()
+                for child in sorted(package_root.iterdir()):
+                    if (
+                        child.is_dir()
+                        and not child.name.startswith((".", "_"))
+                        and child.name not in ("great-docs", "docs", "tests", "test")
+                        and (child / "__init__.py").exists()
+                    ):
+                        try:
+                            mod = __import__(child.name)
+                            print(f"  Fallback: imported '{child.name}' "
+                                  f"(project name was '{package_name}')")
+                            break
+                        except Exception:
+                            continue
+            except Exception:
+                pass
+
+            if mod is None:
+                # Neither the normalized name nor any discovered module worked
+                categories["other"] = filtered_exports
+                return categories
+
+        for name in filtered_exports:
+            obj = getattr(mod, name, None)
+            if obj is None:
+                categories["other"].append(name)
+                continue
+
+            if inspect.isclass(obj):
+                if issubclass(obj, Exception):
+                    categories["exceptions"].append(name)
+                elif hasattr(obj, "__dataclass_fields__"):
+                    categories["dataclasses"].append(name)
+                else:
+                    categories["classes"].append(name)
+            elif inspect.isfunction(obj) or inspect.isbuiltin(obj):
+                if inspect.iscoroutinefunction(obj):
+                    categories["async_functions"].append(name)
+                else:
+                    categories["functions"].append(name)
+            elif inspect.ismodule(obj):
+                categories["other"].append(name)
+            else:
+                # Constants, type aliases, etc.
+                categories["constants"].append(name)
+
+        # Build convenience union keys
+        categories["all_classes"] = (
+            categories["classes"]
+            + categories["dataclasses"]
+            + categories["enums"]
+            + categories["exceptions"]
+            + categories["namedtuples"]
+            + categories["typeddicts"]
+            + categories["protocols"]
+            + categories["abstract_classes"]
+        )
+        categories["all_functions"] = (
+            categories["functions"] + categories["async_functions"]
+        )
+
+        return categories
 
     def _create_quartodoc_sections(self, package_name: str) -> list | None:
         """
