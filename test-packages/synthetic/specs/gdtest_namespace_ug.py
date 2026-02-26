@@ -37,6 +37,8 @@ SPEC = {
         "gdtest_namespace_ug/__init__.py": '''\
             """Namespace package with nested user guide."""
 
+            from .core import initialize, shutdown
+
             __version__ = "0.1.0"
             __all__ = ["initialize", "shutdown"]
         ''',
@@ -72,6 +74,13 @@ SPEC = {
                 """
                 pass
         ''',
+        "user-guide/index.qmd": """\
+            ---
+            title: User Guide
+            ---
+
+            Welcome to the gdtest-namespace-ug user guide.
+        """,
         "user-guide/getting-started/index.qmd": """\
             ---
             title: Getting Started
@@ -118,26 +127,14 @@ SPEC = {
 
             Pass a config dict to `initialize()`.
         """,
-        "user-guide/advanced/deployment/index.qmd": """\
+        "user-guide/advanced/deployment.qmd": """\
             ---
             title: Deployment
-            ---
-
-            Deployment strategies.
-        """,
-        "user-guide/advanced/deployment/docker.qmd": """\
-            ---
-            title: Docker
             ---
 
             ## Docker Deployment
 
             Use the provided Dockerfile.
-        """,
-        "user-guide/advanced/deployment/cloud.qmd": """\
-            ---
-            title: Cloud
-            ---
 
             ## Cloud Deployment
 
