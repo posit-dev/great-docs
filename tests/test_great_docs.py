@@ -1,6 +1,9 @@
 # pyright: reportPrivateUsage=false
 import tempfile
 from pathlib import Path
+
+import pytest
+
 from great_docs import GreatDocs, Config, load_config, create_default_config
 
 
@@ -4828,3 +4831,344 @@ class TestFixRstMathInQmd:
             docs.project_path = Path(tmp_dir) / "great-docs"
             # Should not raise
             docs._fix_rst_code_blocks_in_qmd()
+
+
+# =========================================================================
+# RST Table Conversion Tests
+# =========================================================================
+
+
+class TestFixRstTablesInQmd:
+    """Tests for RST simple-table and grid-table conversion in _fix_rst_tables_in_qmd."""
+
+    def _run_fix(self, qmd_content: str) -> str:
+        """Create a temp project with a .qmd file, run the fixer, return result."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            project_path = Path(tmp_dir) / "great-docs"
+            ref_dir = project_path / "reference"
+            ref_dir.mkdir(parents=True)
+            qmd_file = ref_dir / "func.qmd"
+            qmd_file.write_text(qmd_content)
+
+            config_path = project_path.parent / "great-docs.yml"
+            config_path.write_text("")
+
+            docs = GreatDocs(project_path=str(project_path.parent))
+            docs.project_path = project_path
+            docs._fix_rst_tables_in_qmd()
+
+            return qmd_file.read_text()
+
+    def test_simple_table_three_separators(self):
+        """RST simple table with 3 separators (header/body) converts to Markdown pipe table."""
+        qmd = (
+            "The following table:\n"
+            "\n"
+            "========  =========  ===========\n"
+            "Method    Speed      Memory\n"
+            "========  =========  ===========\n"
+            "Quick     O(n log n) O(log n)\n"
+            "Merge     O(n log n) O(n)\n"
+            "Bubble    O(n^2)     O(1)\n"
+            "========  =========  ===========\n"
+            "\n"
+            "More text after.\n"
+        )
+        result = self._run_fix(qmd)
+        # Should contain Markdown pipe table
+        assert "| Method | Speed | Memory |" in result
+        assert "| --- | --- | --- |" in result
+        assert "| Quick | O(n log n) | O(log n) |" in result
+        assert "| Merge | O(n log n) | O(n) |" in result
+        assert "| Bubble | O(n^2) | O(1) |" in result
+        # RST separators should be gone
+        assert "========" not in result
+        # Surrounding text preserved
+        assert "The following table:" in result
+        assert "More text after." in result
+
+    def test_simple_table_two_separators(self):
+        """RST simple table with 2 separators converts correctly."""
+        qmd = (
+            "==========  =====\n"
+            "Metric      Value\n"
+            "count       100\n"
+            "mean        42.5\n"
+            "std         12.3\n"
+            "==========  =====\n"
+        )
+        result = self._run_fix(qmd)
+        assert "| Metric | Value |" in result
+        assert "| --- | --- |" in result
+        assert "| count | 100 |" in result
+        assert "| mean | 42.5 |" in result
+        assert "| std | 12.3 |" in result
+        assert "========" not in result
+
+    def test_grid_table_with_header(self):
+        """RST grid table with = header separator converts correctly."""
+        qmd = (
+            "+--------+-------+\n"
+            "| Name   | Value |\n"
+            "+========+=======+\n"
+            "| alpha  | 1     |\n"
+            "| beta   | 2     |\n"
+            "+--------+-------+\n"
+        )
+        result = self._run_fix(qmd)
+        assert "| Name | Value |" in result
+        assert "| --- | --- |" in result
+        assert "| alpha | 1 |" in result
+        assert "| beta | 2 |" in result
+        assert "+--------+" not in result
+
+    def test_grid_table_without_header(self):
+        """RST grid table with only - borders treats first row as header."""
+        qmd = (
+            "+--------+-------+\n"
+            "| Name   | Value |\n"
+            "+--------+-------+\n"
+            "| alpha  | 1     |\n"
+            "+--------+-------+\n"
+        )
+        result = self._run_fix(qmd)
+        assert "| Name | Value |" in result
+        assert "| --- | --- |" in result
+        assert "| alpha | 1 |" in result
+
+    def test_multiple_tables_in_one_file(self):
+        """Multiple RST tables in a single file are all converted."""
+        qmd = (
+            "First table:\n"
+            "\n"
+            "====  =====\n"
+            "A     B\n"
+            "====  =====\n"
+            "1     2\n"
+            "====  =====\n"
+            "\n"
+            "Second table:\n"
+            "\n"
+            "=====  ======\n"
+            "X      Y\n"
+            "=====  ======\n"
+            "10     20\n"
+            "=====  ======\n"
+        )
+        result = self._run_fix(qmd)
+        assert "| A | B |" in result
+        assert "| 1 | 2 |" in result
+        assert "| X | Y |" in result
+        assert "| 10 | 20 |" in result
+        assert "========" not in result
+        assert "=====" not in result
+
+    def test_cell_values_wider_than_header(self):
+        """Cell values wider than the column header are fully captured."""
+        qmd = (
+            "========  =========  ===========\n"
+            "Method    Speed      Memory\n"
+            "========  =========  ===========\n"
+            "Quick     O(n log n) O(log n)\n"
+            "========  =========  ===========\n"
+        )
+        result = self._run_fix(qmd)
+        # O(n log n) is wider than "=========" — ensure it's not truncated
+        assert "O(n log n)" in result
+        assert "O(n log n |" not in result.replace("O(n log n) |", "")
+
+    def test_no_tables_unchanged(self):
+        """Files without RST tables are not modified."""
+        qmd = "No tables here.\n\nJust some text.\n"
+        result = self._run_fix(qmd)
+        assert result == qmd
+
+    def test_index_qmd_skipped(self):
+        """index.qmd files are not processed."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            project_path = Path(tmp_dir) / "great-docs"
+            ref_dir = project_path / "reference"
+            ref_dir.mkdir(parents=True)
+
+            index = ref_dir / "index.qmd"
+            index.write_text(
+                "========  =====\nA         B\n========  =====\n1         2\n========  =====\n"
+            )
+
+            config_path = project_path.parent / "great-docs.yml"
+            config_path.write_text("")
+
+            docs = GreatDocs(project_path=str(project_path.parent))
+            docs.project_path = project_path
+            docs._fix_rst_tables_in_qmd()
+
+            # index.qmd should be unchanged
+            assert "========" in index.read_text()
+
+    def test_no_reference_dir(self):
+        """No crash when reference/ directory does not exist."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config_path = Path(tmp_dir) / "great-docs.yml"
+            config_path.write_text("")
+
+            docs = GreatDocs(project_path=tmp_dir)
+            docs.project_path = Path(tmp_dir) / "great-docs"
+            # Should not raise
+            docs._fix_rst_tables_in_qmd()
+
+
+# =========================================================================
+# RST Table Conversion Unit Tests (module-level helpers)
+# =========================================================================
+
+
+class TestRstSimpleTableToMd:
+    """Unit tests for _rst_simple_table_to_md."""
+
+    def test_basic_three_column(self):
+        from great_docs.core import _rst_simple_table_to_md
+
+        lines = [
+            "========  =========  ===========",
+            "Method    Speed      Memory",
+            "========  =========  ===========",
+            "Quick     O(n log n) O(log n)",
+            "Merge     O(n log n) O(n)",
+            "Bubble    O(n^2)     O(1)",
+            "========  =========  ===========",
+        ]
+        result = _rst_simple_table_to_md(lines)
+        assert result is not None
+        assert "| Method | Speed | Memory |" in result
+        assert "| Quick | O(n log n) | O(log n) |" in result
+
+    def test_two_column(self):
+        from great_docs.core import _rst_simple_table_to_md
+
+        lines = [
+            "==========  =====",
+            "Metric      Value",
+            "==========  =====",
+            "count       100",
+            "mean        42.5",
+            "std         12.3",
+            "==========  =====",
+        ]
+        result = _rst_simple_table_to_md(lines)
+        assert result is not None
+        assert "| Metric | Value |" in result
+        assert "| count | 100 |" in result
+        assert "| std | 12.3 |" in result
+
+    def test_insufficient_separators_returns_none(self):
+        from great_docs.core import _rst_simple_table_to_md
+
+        lines = [
+            "========  =========",
+            "Method    Speed",
+        ]
+        result = _rst_simple_table_to_md(lines)
+        assert result is None
+
+
+class TestRstGridTableToMd:
+    """Unit tests for _rst_grid_table_to_md."""
+
+    def test_basic_grid_table(self):
+        from great_docs.core import _rst_grid_table_to_md
+
+        lines = [
+            "+--------+-------+",
+            "| Name   | Value |",
+            "+========+=======+",
+            "| alpha  | 1     |",
+            "| beta   | 2     |",
+            "+--------+-------+",
+        ]
+        result = _rst_grid_table_to_md(lines)
+        assert result is not None
+        assert "| Name | Value |" in result
+        assert "| alpha | 1 |" in result
+        assert "| beta | 2 |" in result
+
+    def test_no_header_separator(self):
+        from great_docs.core import _rst_grid_table_to_md
+
+        lines = [
+            "+--------+-------+",
+            "| Name   | Value |",
+            "+--------+-------+",
+            "| alpha  | 1     |",
+            "+--------+-------+",
+        ]
+        result = _rst_grid_table_to_md(lines)
+        assert result is not None
+        assert "| Name | Value |" in result
+        assert "| alpha | 1 |" in result
+
+    def test_single_column_returns_none(self):
+        from great_docs.core import _rst_grid_table_to_md
+
+        lines = ["+--------+"]
+        result = _rst_grid_table_to_md(lines)
+        assert result is None
+
+
+# =========================================================================
+# GDG Site 144: gdtest_docstring_tables — RST Tables in Docstrings
+# =========================================================================
+
+
+class TestGdgSite144DocstringTables:
+    """
+    Verify that site 144 (gdtest_docstring_tables) renders RST tables
+    as proper HTML <table> elements in the built output.
+    """
+
+    SITE_DIR = (
+        Path(__file__).resolve().parent.parent
+        / "test-packages"
+        / "_rendered"
+        / "gdtest_docstring_tables"
+        / "great-docs"
+        / "_site"
+    )
+
+    @pytest.fixture(autouse=True)
+    def _skip_if_not_built(self):
+        if not self.SITE_DIR.exists():
+            pytest.skip("Site 144 not built; run: make hub-rebuild PKG=gdtest_docstring_tables")
+
+    def _read_html(self, *parts: str) -> str:
+        path = self.SITE_DIR.joinpath(*parts)
+        assert path.exists(), f"Expected page not found: {path}"
+        return path.read_text(encoding="utf-8")
+
+    def test_compare_methods_has_table(self):
+        """compare_methods reference page contains an HTML table with expected data."""
+        html = self._read_html("reference", "compare_methods.html")
+        assert "<table" in html, "Expected <table> element in compare_methods.html"
+        assert "<thead>" in html, "Expected <thead> in table"
+        assert "<th>Method</th>" in html
+        assert "<th>Speed</th>" in html
+        assert "<th>Memory</th>" in html
+        # Body data
+        assert "O(n log n)" in html
+        assert "O(n^2)" in html
+        assert "O(log n)" in html
+        # Raw RST separators should NOT appear
+        assert "========" not in html
+
+    def test_format_report_has_table(self):
+        """format_report reference page contains an HTML table with expected data."""
+        html = self._read_html("reference", "format_report.html")
+        assert "<table" in html, "Expected <table> element in format_report.html"
+        assert "<thead>" in html, "Expected <thead> in table"
+        assert "<th>Metric</th>" in html
+        assert "<th>Value</th>" in html
+        # Body data
+        assert ">count<" in html
+        assert ">100<" in html
+        assert ">42.5<" in html
+        # Raw RST separators should NOT appear
+        assert "========" not in html
