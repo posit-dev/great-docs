@@ -1413,6 +1413,15 @@ for html_file in html_files:
     return_value_replacement = r'<span class="parameter-name"></span> <span class="parameter-annotation-sep" style="margin-left: -8px;"></span>'
     content_str = re.sub(return_value_pattern, return_value_replacement, content_str)
 
+    # Remove empty annotation separator + annotation (e.g., Attributes with no type)
+    # Pattern: ` <span class="parameter-annotation-sep">:</span> <span class="parameter-annotation"></span>`
+    # This leaves just the parameter name without a trailing colon and space.
+    content_str = re.sub(
+        r' <span class="parameter-annotation-sep"[^>]*>:</span>\s*<span class="parameter-annotation"></span>',
+        "",
+        content_str,
+    )
+
     # Fix double asterisks in **kwargs and **attributes style parameters
     # Pattern: ****name** -> **name (with proper styling)
     content_str = re.sub(r"\*\*\*\*(\w+)\*\*", r"**<strong>\1</strong>", content_str)
