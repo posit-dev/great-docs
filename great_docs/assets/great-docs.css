@@ -143,6 +143,7 @@ dd {
 
 .table td {
     padding-left: 0px;
+    text-indent: 0.5rem;
 }
 
 code {
