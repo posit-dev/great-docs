@@ -95,6 +95,40 @@ user_guide/
 ├── 20-customization.qmd     # guide-section: "Advanced"
 ```
 
+### Subdirectory-Based Sections
+
+As an alternative to `guide-section` frontmatter, you can organize pages into subdirectories. Each subdirectory becomes a section in the sidebar, with the section title derived from the subdirectory's `index.qmd` title (or the directory name if there is no `index.qmd`):
+
+```{.default filename="user_guide/"}
+user_guide/
+├── index.qmd                        # Root page (appears first in sidebar)
+├── getting-started/
+│   ├── index.qmd                    # Section title: "Getting Started"
+│   ├── installation.qmd
+│   └── quickstart.qmd
+└── advanced/
+    ├── index.qmd                    # Section title: "Advanced Usage"
+    ├── configuration.qmd
+    └── deployment.qmd
+```
+
+This produces a sidebar like:
+
+```{.default filename="Sidebar navigation"}
+User Guide
+├── User Guide           # Root index.qmd
+├── Getting Started
+│   ├── Installation
+│   └── Quickstart
+└── Advanced Usage
+    ├── Configuration
+    └── Deployment
+```
+
+A root-level `index.qmd` is recommended so the "User Guide" navbar link has a landing page. Subdirectory `index.qmd` files provide section titles but don't appear as separate pages in the sidebar — their title is used as the collapsible section heading.
+
+This approach works well for larger user guides where the directory structure itself communicates the organization, while `guide-section` frontmatter is better suited for flat file layouts.
+
 ## Writing Pages
 
 User Guide pages are standard Quarto Markdown files, which means you have access to all of Quarto's powerful features for creating rich, interactive documentation. Here are some of the most useful features for writing guides.
