@@ -561,8 +561,8 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
     "gdtest_typed_containers": (
         "Coordinate (NamedTuple) and UserProfile (TypedDict) — typed "
         "container types with field-level annotations. On the Reference page "
-        "you should see a 'Classes' section. Each type's fields should appear "
-        "with their type annotations intact."
+        "you should see a 'Named Tuples' section and a 'Typed Dicts' section. "
+        "Each type's fields should appear with their type annotations intact."
     ),
     "gdtest_protocols": (
         "Serializable (ABC) and Renderable (Protocol) with abstract methods. "
