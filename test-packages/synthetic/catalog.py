@@ -548,14 +548,15 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
     ),
     "gdtest_dataclasses": (
         "Two @dataclass types (Config, Record) with typed fields, defaults, "
-        "and field() calls. On the Reference page you should see a 'Classes' "
-        "section. Each dataclass should show its field signatures with type "
-        "annotations and default values rendered in the constructor docs."
+        "and field() calls. On the Reference page you should see a "
+        "'Dataclasses' section. Each dataclass should show its field "
+        "signatures with type annotations and default values rendered in "
+        "the constructor docs."
     ),
     "gdtest_enums": (
         "Two enum types: Color (Enum with RED/GREEN/BLUE) and Priority "
         "(IntEnum with LOW/MEDIUM/HIGH). On the Reference page you should "
-        "see a 'Classes' section listing both. Enum members and their values "
+        "see an 'Enums' section listing both. Enum members and their values "
         "should be visible in the rendered docs."
     ),
     "gdtest_typed_containers": (
