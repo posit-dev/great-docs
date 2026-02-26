@@ -41,6 +41,15 @@ if os.path.exists(object_types_path):
 else:
     print("No object types file found, falling back to heuristic classification")
 
+# Load constant value metadata for displaying values on constant reference pages.
+# Keys are constant names, values are dicts with optional "value" and "annotation".
+constant_values: dict[str, dict[str, str]] = {}
+constant_values_path = "_constant_values.json"
+if os.path.exists(constant_values_path):
+    with open(constant_values_path, "r") as f:
+        constant_values = json.load(f)
+    print(f"Loaded {len(constant_values)} constant value entries")
+
 # Load dataclass attributes metadata for fixing incomplete Attributes tables.
 # Written by great-docs core during build step 1.7.
 # Keys are fully qualified object paths (e.g., "pkg.Config"), values are
@@ -1513,6 +1522,29 @@ for html_file in html_files:
     # Fix return value formatting in individual function pages, removing the `:` before the
     # return value and adjusting the style of the parameter annotation separator
     content_str = "".join(content)
+
+    # Inject constant value/annotation into constant reference pages.
+    # Replaces the bare ``<p><code>NAME</code></p>`` that quartodoc emits with a
+    # styled display showing the type annotation and assigned value.
+    obj_type_for_value = object_types.get(item_name_from_file)
+    if obj_type_for_value == "constant" and item_name_from_file in constant_values:
+        meta = constant_values[item_name_from_file]
+        annotation = meta.get("annotation", "")
+        value = meta.get("value", "")
+
+        # Build the display string:  NAME: type = value
+        parts = [f"<code>{item_name_from_file}</code>"]
+        if annotation:
+            parts.append(f'<code style="color: #6b7280;">: {annotation}</code>')
+        if value:
+            parts.append(f'<code style="color: #6b7280;"> = {value}</code>')
+        replacement_html = "<p>" + "".join(parts) + "</p>"
+
+        # Replace the original bare name paragraph
+        bare_name_html = f"<p><code>{item_name_from_file}</code></p>"
+        if bare_name_html in content_str:
+            content_str = content_str.replace(bare_name_html, replacement_html, 1)
+
     return_value_pattern = (
         r'<span class="parameter-name"></span> <span class="parameter-annotation-sep">:</span>'
     )
