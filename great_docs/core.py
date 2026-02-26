@@ -5030,6 +5030,7 @@ class GreatDocs:
 
         First checks for explicit `reference` configuration in great-docs.yml.
         If not found, falls back to auto-generating sections from discovered exports.
+        After obtaining sections, filters out any items marked with `%nodoc`.
 
         Parameters
         ----------
@@ -5044,11 +5045,84 @@ class GreatDocs:
         # First, check for explicit reference config in great-docs.yml
         config_sections = self._create_quartodoc_sections_from_config(package_name)
         if config_sections:
-            return config_sections
+            sections = config_sections
+        else:
+            # Fall back to auto-generated sections from discovered exports
+            print("No reference config found, using auto-discovery")
+            sections = self._create_quartodoc_sections(package_name)
 
-        # Fall back to auto-generated sections from discovered exports
-        print("No reference config found, using auto-discovery")
-        return self._create_quartodoc_sections(package_name)
+        # Apply %nodoc filtering to remove excluded items
+        if sections:
+            sections = self._apply_nodoc_filter(package_name, sections)
+
+        return sections
+
+    def _apply_nodoc_filter(
+        self, package_name: str, sections: list[dict]
+    ) -> list[dict] | None:
+        """
+        Filter out items marked with `%nodoc` from quartodoc sections.
+
+        Extracts directives from all docstrings in the package and removes
+        any items (and their companion method sections) whose docstrings
+        contain the `%nodoc` directive.
+
+        Parameters
+        ----------
+        package_name
+            The name of the package to scan for directives.
+        sections
+            The quartodoc sections to filter.
+
+        Returns
+        -------
+        list[dict] | None
+            Filtered sections with `%nodoc` items removed, or None if all
+            items were excluded.
+        """
+        directive_map = self._extract_all_directives(package_name)
+        if not directive_map:
+            return sections
+
+        # Collect names of items marked with %nodoc
+        nodoc_names: set[str] = set()
+        for name, directives in directive_map.items():
+            if directives.nodoc:
+                nodoc_names.add(name)
+
+        if not nodoc_names:
+            return sections
+
+        print(f"Excluding {len(nodoc_names)} item(s) marked with %nodoc: {', '.join(sorted(nodoc_names))}")
+
+        def _item_name(item: str | dict) -> str:
+            """Extract the bare object name from a section content item."""
+            if isinstance(item, dict):
+                return item.get("name", "")
+            return item
+
+        filtered_sections = []
+        for section in sections:
+            contents = section.get("contents", [])
+            filtered_contents = [
+                item for item in contents
+                if _item_name(item) not in nodoc_names
+            ]
+
+            # Also drop companion method sections whose parent class is %nodoc
+            title = section.get("title", "")
+            # Companion sections have titles like "ClassName Methods"
+            if title.endswith(" Methods"):
+                class_name = title[: -len(" Methods")]
+                if class_name in nodoc_names:
+                    continue
+
+            if filtered_contents:
+                filtered_sections.append(
+                    {**section, "contents": filtered_contents}
+                )
+
+        return filtered_sections if filtered_sections else None
 
     def _extract_authors_from_pyproject(self) -> list[dict[str, str]]:
         """
