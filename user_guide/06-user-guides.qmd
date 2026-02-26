@@ -125,9 +125,35 @@ User Guide
     └── Deployment
 ```
 
-A root-level `index.qmd` is recommended so the "User Guide" navbar link has a landing page. Subdirectory `index.qmd` files provide section titles but don't appear as separate pages in the sidebar — their title is used as the collapsible section heading.
+A root-level `index.qmd` is recommended so the "User Guide" navbar link has a landing page. Subdirectory `index.qmd` files provide section titles but don't appear as separate pages in the sidebar. Rather, their title is used as the collapsible section heading.
 
-This approach works well for larger user guides where the directory structure itself communicates the organization, while `guide-section` frontmatter is better suited for flat file layouts.
+Subdirectories are sorted alphabetically by directory name. To control the order of sections and pages within them, use numeric prefixes. They are stripped from both directory names and filenames in URLs and navigation:
+
+```{.default filename="user_guide/"}
+user_guide/
+├── index.qmd
+├── 01-getting-started/
+│   ├── index.qmd                    # Section title: "Getting Started"
+│   ├── 01-installation.qmd
+│   └── 02-quickstart.qmd
+├── 02-guides/
+│   ├── index.qmd                    # Section title: "Guides"
+│   ├── 01-configuration.qmd
+│   └── 02-troubleshooting.qmd
+└── 03-advanced/
+    ├── index.qmd                    # Section title: "Advanced"
+    └── 01-deployment.qmd
+```
+
+The prefixes control ordering but don't appear in the output:
+
+- `01-getting-started/` → `getting-started/` in URLs
+- `01-installation.qmd` → `installation.html` in rendered pages
+- Numbering restarts at `01-` in each subdirectory
+
+This pattern gives you full control over section and page order while keeping URLs clean.
+
+The subdirectory approach works well for larger user guides where the directory structure itself communicates the organization, while `guide-section` frontmatter is better suited for flat file layouts.
 
 ## Writing Pages
 
