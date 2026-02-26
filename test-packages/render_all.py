@@ -7,6 +7,7 @@ Usage:
     python test-packages/render_all.py --build      # build only
     python test-packages/render_all.py --serve      # serve previously built
     python test-packages/render_all.py --only gdtest_minimal gdtest_github_icon
+    python test-packages/render_all.py --build --skip-ok   # resume interrupted build
 
 The script:
   1. Generates each synthetic package into _rendered/<name>/
@@ -271,11 +272,15 @@ def build_all(
     *,
     run_id: str | None = None,
     state: dict | None = None,
+    skip_ok: bool = False,
 ) -> list[dict]:
     """Build all (or selected) synthetic packages.
 
     When *run_id* and *state* are supplied each result is recorded into the
     state dict (caller is responsible for saving to disk).
+
+    When *skip_ok* is ``True``, packages whose status in *state* is already
+    ``"ok"`` are skipped. This lets an interrupted full build resume quickly.
     """
     names = packages or ALL_PACKAGES
     results = []
@@ -293,7 +298,19 @@ def build_all(
     print(f"  Building {total} synthetic package sites")
     print(f"{'=' * 70}\n")
 
+    skipped = 0
     for i, name in enumerate(available, 1):
+        # Resume support: skip packages already built successfully
+        if skip_ok and state is not None:
+            pkg_state = state.get("packages", {}).get(name, {})
+            if pkg_state.get("status") == "ok":
+                print(f"[{i:3d}/{total}] {name} ... SKIP (already ok)")
+                # Advance run_id so this package isn't marked stale
+                if run_id is not None:
+                    pkg_state["run_id"] = run_id
+                skipped += 1
+                continue
+
         print(f"[{i:3d}/{total}] {name} ... ", end="", flush=True)
         t0 = time.monotonic()
         result = build_package(name)
@@ -326,6 +343,8 @@ def build_all(
     if logged:
         print(f"\n  Build logs saved to: {LOGS_DIR}/")
         print(f"  ({len(logged)} log files written)")
+    if skipped:
+        print(f"  ({skipped} packages skipped — already ok)")
 
     return results
 
@@ -1477,6 +1496,7 @@ def main():
             examples:
               python render_all.py                     # full build + serve
               python render_all.py --build             # full build only
+              python render_all.py --build --skip-ok   # resume interrupted build
               python render_all.py --serve             # serve previously built hub
               python render_all.py --only gdtest_minimal gdtest_github_icon
         """),
@@ -1491,6 +1511,11 @@ def main():
     )
     parser.add_argument("--port", type=int, default=PORT, help=f"Server port (default: {PORT})")
     parser.add_argument("--no-serve", action="store_true", help="Alias for --build")
+    parser.add_argument(
+        "--skip-ok",
+        action="store_true",
+        help="Skip packages already built successfully (resume interrupted build)",
+    )
     args = parser.parse_args()
 
     if args.serve:
@@ -1529,15 +1554,39 @@ def main():
 
     else:
         # ── Full rebuild ─────────────────────────────────────────────────
-        reset_for_full_rebuild(state, rid)
-        results = build_all(run_id=rid, state=state)
-        save_state(STATE_FILE, state)
+        if args.skip_ok and state.get("packages"):
+            # Resume mode: keep existing state, only rebuild non-ok packages
+            start_selective_run(state, rid)
+            results = build_all(run_id=rid, state=state, skip_ok=True)
+            save_state(STATE_FILE, state)
 
-        assemble_hub(results, state=state)
+            # Combine fresh results with historical ok results
+            built_set = {r["name"] for r in results}
+            combined: list[dict] = []
+            for name in ALL_PACKAGES:
+                if name in built_set:
+                    combined.append(next(r for r in results if r["name"] == name))
+                elif name in state.get("packages", {}):
+                    combined.append(_result_from_state(name, state["packages"][name]))
 
-        ok = sum(1 for r in results if r["status"] == "ok")
-        fail = sum(1 for r in results if r["status"] != "ok")
-        print(f"\n  Summary: {ok} OK, {fail} failed out of {len(results)}")
+            assemble_hub(combined, state=state)
+
+            total_ok = sum(1 for r in combined if r["status"] == "ok")
+            total_fail = sum(1 for r in combined if r["status"] != "ok")
+            freshly_built = len(results)
+            skipped_n = len(combined) - freshly_built
+            print(f"\n  Summary: {total_ok} OK, {total_fail} failed out of {len(combined)}")
+            print(f"  ({skipped_n} skipped, {freshly_built} built)")
+        else:
+            reset_for_full_rebuild(state, rid)
+            results = build_all(run_id=rid, state=state)
+            save_state(STATE_FILE, state)
+
+            assemble_hub(results, state=state)
+
+            ok = sum(1 for r in results if r["status"] == "ok")
+            fail = sum(1 for r in results if r["status"] != "ok")
+            print(f"\n  Summary: {ok} OK, {fail} failed out of {len(results)}")
 
     print(f"  State saved: {STATE_FILE}")
 

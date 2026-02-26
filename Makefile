@@ -156,6 +156,10 @@ docs-install: ## Install documentation dependencies
 hub-build: ## Full build of the Great Docs Gauntlet (200 packages, port 3333)
 	@$(PYTHON) test-packages/render_all.py --build
 
+.PHONY: hub-resume
+hub-resume: ## Resume an interrupted full GDG build (skip already-ok packages)
+	@$(PYTHON) test-packages/render_all.py --build --skip-ok
+
 .PHONY: hub-rebuild
 hub-rebuild: ## Selective GDG rebuild: make hub-rebuild PKG="gdtest_minimal gdtest_github_icon"
 	@test -n "$(PKG)" || (echo "Usage: make hub-rebuild PKG=\"name1 name2\"" && exit 1)
