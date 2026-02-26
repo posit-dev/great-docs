@@ -32,11 +32,33 @@ def _get_functions():
 
     source = _SCRIPT.read_text()
 
+    from pygments import highlight as _highlight
+    from pygments.formatters import HtmlFormatter as _HtmlFormatter
+    from pygments.lexers import PythonLexer as _PythonLexer
+
     # Build a minimal namespace with the imports the functions need
-    ns = {"re": _re, "__builtins__": __builtins__}
+    ns = {
+        "re": _re,
+        "__builtins__": __builtins__,
+        "highlight": _highlight,
+        "HtmlFormatter": _HtmlFormatter,
+        "PythonLexer": _PythonLexer,
+    }
+
+    # Extract PYGMENTS_TO_QUARTO_CLASS dict (needed by fix_plain_doctest_code_blocks)
+    cm_start = source.find("PYGMENTS_TO_QUARTO_CLASS = {")
+    if cm_start != -1:
+        cm_rest = source[cm_start:]
+        cm_end = cm_rest.find("}\n") + 2
+        exec(cm_rest[:cm_end], ns)
 
     # Extract function definitions by finding their source blocks
-    funcs_to_extract = ["translate_sphinx_roles", "translate_rst_directives", "translate_rst_math"]
+    funcs_to_extract = [
+        "translate_sphinx_roles",
+        "translate_rst_directives",
+        "translate_rst_math",
+        "fix_plain_doctest_code_blocks",
+    ]
 
     for func_name in funcs_to_extract:
         # Find the function in the source
@@ -61,10 +83,20 @@ def _get_functions():
         func_source = "\n".join(func_lines)
         exec(func_source, ns)
 
-    return ns["translate_sphinx_roles"], ns["translate_rst_directives"], ns["translate_rst_math"]
+    return (
+        ns["translate_sphinx_roles"],
+        ns["translate_rst_directives"],
+        ns["translate_rst_math"],
+        ns["fix_plain_doctest_code_blocks"],
+    )
 
 
-translate_sphinx_roles, translate_rst_directives, translate_rst_math = _get_functions()
+(
+    translate_sphinx_roles,
+    translate_rst_directives,
+    translate_rst_math,
+    fix_plain_doctest_code_blocks,
+) = _get_functions()
 
 
 # ── translate_sphinx_roles ──────────────────────────────────────────────────
@@ -385,3 +417,69 @@ class TestTranslateRstMath:
         assert 'class="math display"' in result
         # span tags should be stripped, leaving just the LaTeX
         assert "<span" not in result.split('class="math display"')[1].split("</p>")[0]
+
+
+# ── fix_plain_doctest_code_blocks ────────────────────────────────────────────
+
+
+class TestFixPlainDoctestCodeBlocks:
+    """Tests for fix_plain_doctest_code_blocks (site 137 regression)."""
+
+    def test_single_plain_doctest_converted(self):
+        """A plain <pre><code> block with >>> gets proper sourceCode styling."""
+        html = "<pre><code>&gt;&gt;&gt; foo(\"hello\")\n'world'</code></pre>"
+        result = fix_plain_doctest_code_blocks(html)
+        assert 'class="sourceCode python' in result
+        assert 'class="code-copy-outer-scaffold"' in result
+        assert "<pre><code>" not in result
+
+    def test_consecutive_plain_doctests_all_converted(self):
+        """Multiple consecutive plain doctest blocks are all converted."""
+        html = (
+            # First block (already styled by Quarto — should be left alone)
+            '<div class="sourceCode" id="cb1">'
+            '<pre class="sourceCode python code-with-copy">'
+            '<code class="sourceCode python">'
+            '<span class="op">&gt;&gt;&gt;</span> schedule("cleanup")\n'
+            '<span class="va">True</span></code></pre></div>\n'
+            # Second block (plain — should be converted)
+            '<pre><code>&gt;&gt;&gt; schedule("backup", delay=60.0)\n'
+            "True</code></pre>\n"
+            # Third block (plain — should be converted)
+            '<pre><code>&gt;&gt;&gt; schedule("cleanup")\n'
+            "False</code></pre>"
+        )
+        result = fix_plain_doctest_code_blocks(html)
+        # The already-styled block should remain
+        assert result.count('class="sourceCode python') >= 3
+        # No plain <pre><code> blocks should remain
+        assert "<pre><code>" not in result
+
+    def test_plain_code_block_without_doctest_unchanged(self):
+        """A plain <pre><code> without >>> is left as-is."""
+        html = "<pre><code>just some plain text</code></pre>"
+        result = fix_plain_doctest_code_blocks(html)
+        assert result == html
+
+    def test_unique_cb_ids_no_collision(self):
+        """Generated cb IDs don't collide with existing ones."""
+        html = (
+            '<div class="sourceCode" id="cb3">'
+            '<pre class="sourceCode python"><code class="sourceCode python">'
+            "existing</code></pre></div>\n"
+            "<pre><code>&gt;&gt;&gt; first()\n1</code></pre>\n"
+            "<pre><code>&gt;&gt;&gt; second()\n2</code></pre>"
+        )
+        result = fix_plain_doctest_code_blocks(html)
+        # Existing cb3 plus two new blocks should give cb4 and cb5
+        assert 'id="cb4"' in result
+        assert 'id="cb5"' in result
+
+    def test_html_entities_decoded_for_highlighting(self):
+        """HTML entities in the plain block are decoded before Pygments."""
+        html = "<pre><code>&gt;&gt;&gt; x &lt; 10 &amp; y &gt; 5\nTrue</code></pre>"
+        result = fix_plain_doctest_code_blocks(html)
+        # Should be in a sourceCode block, not plain
+        assert 'class="sourceCode python' in result
+        # The original plain block should be gone
+        assert "<pre><code>" not in result
