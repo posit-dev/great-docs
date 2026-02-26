@@ -7316,6 +7316,195 @@ toc: false
         if patched_count:
             print(f"   Converted RST code blocks in {patched_count} reference page(s)")
 
+    def _fix_rst_tables_in_qmd(self) -> None:
+        """
+        Convert RST-style tables in quartodoc-generated ``.qmd`` files to
+        Markdown pipe tables.
+
+        RST docstrings may contain **simple tables** (delimited by ``=====``
+        rows) or **grid tables** (delimited by ``+-----+`` borders).  Quarto /
+        Pandoc in Markdown mode does not recognize either syntax; the content
+        is collapsed into a single paragraph of plain text.
+
+        This method scans every reference ``.qmd`` file produced by
+        ``quartodoc build`` and rewrites any RST table it finds as a Markdown
+        pipe table that Quarto renders correctly.
+
+        Must be called **after** ``quartodoc build`` and **before**
+        ``quarto render``.
+        """
+        ref_dir = self.project_path / "reference"
+        if not ref_dir.exists():
+            return
+
+        patched_count = 0
+
+        for qmd_file in sorted(ref_dir.glob("*.qmd")):
+            if qmd_file.name == "index.qmd":
+                continue
+
+            content = qmd_file.read_text()
+            original = content
+
+            content = self._convert_rst_simple_tables(content)
+            content = self._convert_rst_grid_tables(content)
+
+            if content != original:
+                qmd_file.write_text(content)
+                patched_count += 1
+
+        if patched_count:
+            print(f"   Converted RST tables in {patched_count} reference page(s)")
+
+    @staticmethod
+    def _convert_rst_simple_tables(text: str) -> str:
+        """
+        Convert RST simple tables to Markdown pipe tables.
+
+        RST simple tables look like::
+
+            ========  =========  ===========
+            Method    Speed      Memory
+            ========  =========  ===========
+            Quick     O(n log n) O(log n)
+            Merge     O(n log n) O(n)
+            ========  =========  ===========
+
+        The ``=====`` separator lines define column boundaries by their
+        start/end positions. This method parses those boundaries and
+        extracts cell values positionally.
+        """
+        lines = text.split("\n")
+        result = []
+        i = 0
+
+        while i < len(lines):
+            line = lines[i]
+
+            # Detect an RST simple-table separator: a line composed only of
+            # ``=`` runs separated by spaces (at least two columns).
+            if re.match(r"^=+(\s+=+)+\s*$", line):
+                # Found the opening separator — collect the full table.
+                # RST simple tables have either 2 separators (header +
+                # closing) or 3 separators (opening, header/body, closing).
+                table_lines = [line]
+                sep_count = 1
+                # Determine the second column start from the separator to
+                # validate whether subsequent lines are table data.
+                second_col_match = re.search(r"\s+(=+)", line)
+                second_col_start = (
+                    second_col_match.start(1) if second_col_match else 4
+                )
+                j = i + 1
+                while j < len(lines):
+                    cur = lines[j]
+                    is_sep = bool(re.match(r"^=+(\s+=+)+\s*$", cur))
+                    table_lines.append(cur)
+                    if is_sep:
+                        sep_count += 1
+                        # RST simple tables have at most 3 separators:
+                        # opening, optional header/body, closing.
+                        if sep_count >= 3:
+                            # Definitely the closing separator.
+                            j += 1
+                            break
+                        # After the 2nd separator, check whether more
+                        # table data rows follow immediately (meaning
+                        # this is a header/body separator, not closing).
+                        # In RST simple tables, body rows follow directly
+                        # without blank lines.  We peek at the next line
+                        # and check it has content at the second column
+                        # position (a strong indicator of table data vs.
+                        # freeform prose).
+                        peek = j + 1
+                        if (
+                            peek < len(lines)
+                            and lines[peek].strip()
+                            and not re.match(
+                                r"^=+(\s+=+)+\s*$", lines[peek]
+                            )
+                            and len(lines[peek]) > second_col_start
+                            and lines[peek][second_col_start] != " "
+                        ):
+                            # Looks like a data row — keep going.
+                            pass
+                        else:
+                            # No table data follows — closing separator.
+                            j += 1
+                            break
+                    j += 1
+
+                # Parse the collected table lines
+                md_table = _rst_simple_table_to_md(table_lines)
+                if md_table is not None:
+                    result.append(md_table)
+                    i = j
+                    continue
+                else:
+                    # Parsing failed — leave the original text
+                    result.append(line)
+                    i += 1
+            else:
+                result.append(line)
+                i += 1
+
+        return "\n".join(result)
+
+    @staticmethod
+    def _convert_rst_grid_tables(text: str) -> str:
+        """
+        Convert RST grid tables to Markdown pipe tables.
+
+        RST grid tables look like::
+
+            +--------+-------+
+            | Name   | Value |
+            +========+=======+
+            | alpha  | 1     |
+            | beta   | 2     |
+            +--------+-------+
+        """
+        lines = text.split("\n")
+        result = []
+        i = 0
+
+        while i < len(lines):
+            line = lines[i]
+
+            # Detect grid table start: +---+---+ pattern
+            if re.match(r"^\+[-=]+(\+[-=]+)+\+\s*$", line):
+                table_lines = [line]
+                j = i + 1
+                while j < len(lines):
+                    if re.match(r"^\+[-=]+(\+[-=]+)+\+\s*$", lines[j]):
+                        table_lines.append(lines[j])
+                        # Check if this is the closing border (next line is
+                        # not a table row)
+                        if j + 1 >= len(lines) or not re.match(
+                            r"^\|", lines[j + 1]
+                        ):
+                            j += 1
+                            break
+                    elif re.match(r"^\|", lines[j]):
+                        table_lines.append(lines[j])
+                    else:
+                        break
+                    j += 1
+
+                md_table = _rst_grid_table_to_md(table_lines)
+                if md_table is not None:
+                    result.append(md_table)
+                    i = j
+                    continue
+                else:
+                    result.append(line)
+                    i += 1
+            else:
+                result.append(line)
+                i += 1
+
+        return "\n".join(result)
+
     def _fix_dataclass_attributes_in_qmd(self) -> None:
         """
         Write `_dataclass_attrs.json` so that `post-render.py` can rebuild
@@ -8651,6 +8840,9 @@ toc: false
             # Step 1.6: Convert RST :: code blocks to Markdown fenced blocks
             self._fix_rst_code_blocks_in_qmd()
 
+            # Step 1.6b: Convert RST tables to Markdown pipe tables
+            self._fix_rst_tables_in_qmd()
+
             # Step 1.7: Ensure all dataclass fields appear in Attributes tables
             self._fix_dataclass_attributes_in_qmd()
 
@@ -9609,3 +9801,214 @@ toc: false
             pass
 
         return results
+
+
+# ---------------------------------------------------------------------------
+# Module-level helpers for RST table conversion
+# ---------------------------------------------------------------------------
+
+
+def _rst_simple_table_to_md(table_lines: list[str]) -> str | None:
+    """
+    Convert an RST simple table (list of raw lines) to a Markdown pipe table.
+
+    Returns the Markdown string, or ``None`` if parsing fails.
+
+    RST simple tables use ``=====`` separator lines whose column positions
+    define the column boundaries.  The first data row (between the first and
+    second separator) is the header.
+
+    Example input::
+
+        ========  =========  ===========
+        Method    Speed      Memory
+        ========  =========  ===========
+        Quick     O(n log n) O(log n)
+        Merge     O(n log n) O(n)
+        ========  =========  ===========
+    """
+    # Filter out blank lines and find separator lines
+    separators = [
+        (idx, line)
+        for idx, line in enumerate(table_lines)
+        if re.match(r"^=+(\s+=+)+\s*$", line)
+    ]
+    if len(separators) < 2:
+        return None
+
+    # Use the first separator to determine column boundaries
+    sep_line = separators[0][1]
+    col_spans = []  # list of (start, end) character positions
+    for m in re.finditer(r"=+", sep_line):
+        col_spans.append((m.start(), m.end()))
+
+    if not col_spans:
+        return None
+
+    def _extract_cells(line: str) -> list[str]:
+        """Extract cell values from a line using the column spans.
+
+        For all columns except the last, the cell extends from the start
+        of the current column to the start of the next column (so that
+        values slightly wider than the ``=====`` header, such as
+        ``O(n log n)``, are captured in full).  The last column extends
+        to the end of the line.
+        """
+        cells = []
+        for idx, (start, _end) in enumerate(col_spans):
+            if idx + 1 < len(col_spans):
+                # Extend to the start of the next column
+                next_start = col_spans[idx + 1][0]
+                cell = line[start:next_start] if len(line) > start else ""
+            else:
+                # Last column — extend to end of line
+                cell = line[start:] if len(line) > start else ""
+            cells.append(cell.strip())
+        return cells
+
+    # Determine header and body rows based on separator count
+    # 2 separators: first separator, header row, second separator — no body
+    # 3 separators: sep, header, sep, body rows, sep
+    # Most common: 2 separators with header and body between first and last
+    first_sep_idx = separators[0][0]
+    last_sep_idx = separators[-1][0]
+
+    # Content rows are all non-separator lines between first and last separator
+    data_rows = []
+    header_rows = []
+
+    if len(separators) == 2:
+        # Everything between the two separators
+        for idx in range(first_sep_idx + 1, last_sep_idx):
+            line = table_lines[idx]
+            if not re.match(r"^=+(\s+=+)+\s*$", line):
+                data_rows.append(_extract_cells(line))
+        # First row is the header, rest are body
+        if data_rows:
+            header_rows = [data_rows[0]]
+            data_rows = data_rows[1:]
+    elif len(separators) >= 3:
+        # Header is between first and second separator
+        second_sep_idx = separators[1][0]
+        for idx in range(first_sep_idx + 1, second_sep_idx):
+            line = table_lines[idx]
+            if not re.match(r"^=+(\s+=+)+\s*$", line):
+                header_rows.append(_extract_cells(line))
+        # Body is between second and last separator
+        for idx in range(second_sep_idx + 1, last_sep_idx):
+            line = table_lines[idx]
+            if not re.match(r"^=+(\s+=+)+\s*$", line):
+                data_rows.append(_extract_cells(line))
+
+    if not header_rows:
+        return None
+
+    num_cols = len(col_spans)
+
+    # Build the Markdown pipe table
+    md_lines = []
+
+    # Header row (use last header row if multiple)
+    header = header_rows[-1]
+    # Pad if needed
+    while len(header) < num_cols:
+        header.append("")
+    md_lines.append("| " + " | ".join(header) + " |")
+
+    # Separator
+    md_lines.append("| " + " | ".join("---" for _ in range(num_cols)) + " |")
+
+    # Body rows
+    for row in data_rows:
+        while len(row) < num_cols:
+            row.append("")
+        md_lines.append("| " + " | ".join(row) + " |")
+
+    return "\n".join(md_lines)
+
+
+def _rst_grid_table_to_md(table_lines: list[str]) -> str | None:
+    """
+    Convert an RST grid table (list of raw lines) to a Markdown pipe table.
+
+    Returns the Markdown string, or ``None`` if parsing fails.
+
+    RST grid tables use ``+`` at column intersections, ``-`` or ``=`` for
+    horizontal borders, and ``|`` for vertical borders::
+
+        +--------+-------+
+        | Name   | Value |
+        +========+=======+
+        | alpha  | 1     |
+        +--------+-------+
+    """
+    # Identify column boundaries from the first border line
+    border_line = table_lines[0]
+    col_positions = [m.start() for m in re.finditer(r"\+", border_line)]
+
+    if len(col_positions) < 2:
+        return None
+
+    # Column spans: pairs of consecutive + positions
+    col_spans = list(zip(col_positions[:-1], col_positions[1:]))
+
+    def _extract_cells(line: str) -> list[str]:
+        cells = []
+        for start, end in col_spans:
+            # Skip the leading | character
+            cell = line[start + 1 : end] if len(line) > start else ""
+            cells.append(cell.strip())
+        return cells
+
+    # Separate rows.  Border lines (starting with +) delimit rows.
+    # Lines starting with | are data.
+    # An ``=`` border separates header from body.
+    header_rows: list[list[str]] = []
+    body_rows: list[list[str]] = []
+    has_header_sep = False
+    current_rows: list[list[str]] = []
+
+    for line in table_lines:
+        if re.match(r"^\+[=+]+\+\s*$", line):
+            # Header separator (uses =)
+            has_header_sep = True
+            header_rows = current_rows
+            current_rows = []
+        elif re.match(r"^\+[-+]+\+\s*$", line):
+            # Regular border — finishes the current row group
+            continue
+        elif line.startswith("|"):
+            current_rows.append(_extract_cells(line))
+
+    body_rows = current_rows
+
+    if has_header_sep:
+        if not header_rows:
+            return None
+    else:
+        # No header separator — treat the first row as header
+        all_rows = body_rows
+        if not all_rows:
+            return None
+        header_rows = [all_rows[0]]
+        body_rows = all_rows[1:]
+
+    num_cols = len(col_spans)
+    md_lines = []
+
+    # Header
+    header = header_rows[-1] if header_rows else [""] * num_cols
+    while len(header) < num_cols:
+        header.append("")
+    md_lines.append("| " + " | ".join(header) + " |")
+
+    # Separator
+    md_lines.append("| " + " | ".join("---" for _ in range(num_cols)) + " |")
+
+    # Body
+    for row in body_rows:
+        while len(row) < num_cols:
+            row.append("")
+        md_lines.append("| " + " | ".join(row) + " |")
+
+    return "\n".join(md_lines)
