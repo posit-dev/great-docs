@@ -741,9 +741,10 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
     ),
     "gdtest_user_guide_cli": (
         "User guide (F1) combined with CLI documentation. Has user_guide/ "
-        "with two pages plus a Click CLI. The sidebar should show both "
-        "'User Guide' and 'CLI Reference' sections. On the Reference page "
-        "you should see two functions (process, analyze)."
+        "with two pages plus a Click CLI. The top nav should show both "
+        "'User Guide' and 'Reference'. On the Reference page you should "
+        "see two functions (process, analyze) and a sidebar switcher to "
+        "toggle between API and CLI reference."
     ),
     "gdtest_explicit_big_class": (
         "Explicit reference config with a big class. Config defines sections "
