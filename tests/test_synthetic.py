@@ -527,6 +527,95 @@ def test_generator_with_config_override(tmp_path: Path):
     assert "google" in content
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# L2: CLI Config Preservation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
+def test_L2_cli_config_preserved(pkg_name: str, tmp_path: Path):
+    """``great-docs init --force`` preserves CLI config when cli_enabled is True."""
+    pkg_dir, spec = _make_package(pkg_name, tmp_path)
+    expected = spec.get("expected", {})
+    if not expected.get("cli_enabled"):
+        pytest.skip("No 'cli_enabled' in spec expected outcomes")
+
+    docs = GreatDocs(project_path=str(pkg_dir))
+    docs.install(force=True)
+
+    import yaml
+
+    config_path = pkg_dir / "great-docs.yml"
+    assert config_path.exists(), "great-docs.yml was not created"
+
+    with open(config_path, encoding="utf-8") as f:
+        config_data = yaml.safe_load(f)
+
+    assert config_data is not None, "great-docs.yml is empty"
+    cli_section = config_data.get("cli")
+    assert cli_section is not None, "CLI section missing from great-docs.yml"
+    assert cli_section.get("enabled") is True, f"CLI should be enabled but got: {cli_section}"
+
+
+@pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
+def test_L2_cli_discovery(pkg_name: str, tmp_path: Path):
+    """Click CLI commands are discovered for packages with cli_enabled=True."""
+    pkg_dir, spec = _make_package(pkg_name, tmp_path)
+    expected = spec.get("expected", {})
+    if not expected.get("cli_enabled"):
+        pytest.skip("No 'cli_enabled' in spec expected outcomes")
+
+    # Install the package so imports work
+    docs = GreatDocs(project_path=str(pkg_dir))
+    docs.install(force=True)
+
+    detected_name = docs._detect_package_name()
+    assert detected_name is not None
+
+    cli_info = docs._discover_click_cli(detected_name)
+    assert cli_info is not None, (
+        f"CLI discovery returned None for {detected_name!r}; expected a Click CLI to be found"
+    )
+    assert "commands" in cli_info or "name" in cli_info, (
+        f"CLI info missing expected keys: {list(cli_info.keys())}"
+    )
+
+
+@pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
+def test_L2_cli_nested_groups(pkg_name: str, tmp_path: Path):
+    """Nested Click groups are correctly discovered."""
+    pkg_dir, spec = _make_package(pkg_name, tmp_path)
+    expected = spec.get("expected", {})
+    if not expected.get("cli_has_groups"):
+        pytest.skip("No 'cli_has_groups' in spec expected outcomes")
+
+    docs = GreatDocs(project_path=str(pkg_dir))
+    docs.install(force=True)
+
+    detected_name = docs._detect_package_name()
+    assert detected_name is not None
+
+    cli_info = docs._discover_click_cli(detected_name)
+    assert cli_info is not None, "CLI discovery returned None for nested groups"
+
+    # CLI info should have subcommands
+    commands = cli_info.get("commands", [])
+    assert len(commands) > 0, "No commands found in CLI group"
+
+    # Check expected group names
+    if "cli_group_names" in expected:
+        command_names = {cmd.get("name") for cmd in commands}
+        for group_name in expected["cli_group_names"]:
+            assert group_name in command_names, (
+                f"Expected group {group_name!r} not found in CLI commands: {sorted(command_names)}"
+            )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Generator Sanity
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
 def test_all_phase1_specs_loadable():
     """All Phase 1 specs can be loaded from the catalog."""
     for name in PHASE1_PACKAGES:
