@@ -740,6 +740,107 @@ def test_L3_cli_sidebar_no_wrong_level_paths(pkg_name: str, tmp_path: Path):
             )
 
 
+@pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
+def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
+    """CLI-enabled packages get a 'CLI Reference' navbar entry in _quarto.yml."""
+    pkg_dir, spec = _make_package(pkg_name, tmp_path)
+    expected = spec.get("expected", {})
+    if not expected.get("cli_enabled"):
+        pytest.skip("No 'cli_enabled' in spec")
+
+    import yaml
+
+    docs = GreatDocs(project_path=str(pkg_dir))
+    docs.install(force=True)
+    docs._prepare_build_directory()
+
+    detected_name = docs._detect_package_name()
+    assert detected_name is not None
+
+    cli_info = docs._discover_click_cli(detected_name)
+    assert cli_info is not None
+
+    cli_files = docs._generate_cli_reference_pages(cli_info)
+    assert cli_files, "No CLI files generated"
+
+    docs._update_sidebar_with_cli(cli_files)
+
+    quarto_yml = docs.project_path / "_quarto.yml"
+    assert quarto_yml.exists(), "_quarto.yml was not created"
+
+    with open(quarto_yml, encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    navbar_left = config.get("website", {}).get("navbar", {}).get("left", [])
+    cli_navbar_items = [
+        item for item in navbar_left
+        if isinstance(item, dict) and item.get("text") == "CLI Reference"
+    ]
+    assert len(cli_navbar_items) == 1, (
+        f"Expected exactly one 'CLI Reference' navbar entry, "
+        f"got {len(cli_navbar_items)}. Navbar left: {navbar_left}"
+    )
+    assert cli_navbar_items[0].get("href") == "reference/cli/index.qmd", (
+        f"CLI Reference navbar link points to wrong href: {cli_navbar_items[0]}"
+    )
+
+    # Also verify the cli-reference sidebar exists
+    sidebar = config.get("website", {}).get("sidebar", [])
+    cli_sidebars = [
+        s for s in sidebar
+        if isinstance(s, dict) and s.get("id") == "cli-reference"
+    ]
+    assert len(cli_sidebars) == 1, (
+        f"Expected exactly one 'cli-reference' sidebar, "
+        f"got {len(cli_sidebars)}"
+    )
+
+
+@pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
+def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
+    """Packages with both CLI and user guide show all three navbar sections."""
+    pkg_dir, spec = _make_package(pkg_name, tmp_path)
+    expected = spec.get("expected", {})
+    if not (expected.get("cli_enabled") and expected.get("has_user_guide")):
+        pytest.skip("Need both 'cli_enabled' and 'has_user_guide' in spec")
+
+    import yaml
+
+    docs = GreatDocs(project_path=str(pkg_dir))
+    docs.install(force=True)
+    docs._prepare_build_directory()
+
+    # Generate CLI docs
+    detected_name = docs._detect_package_name()
+    assert detected_name is not None
+    cli_info = docs._discover_click_cli(detected_name)
+    assert cli_info is not None
+    cli_files = docs._generate_cli_reference_pages(cli_info)
+    docs._update_sidebar_with_cli(cli_files)
+
+    # Process user guide
+    docs._process_user_guide()
+
+    quarto_yml = docs.project_path / "_quarto.yml"
+    with open(quarto_yml, encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    navbar_left = config.get("website", {}).get("navbar", {}).get("left", [])
+    navbar_texts = [
+        item.get("text") for item in navbar_left if isinstance(item, dict)
+    ]
+
+    assert "User Guide" in navbar_texts, (
+        f"'User Guide' missing from navbar. Got: {navbar_texts}"
+    )
+    assert "Reference" in navbar_texts, (
+        f"'Reference' missing from navbar. Got: {navbar_texts}"
+    )
+    assert "CLI Reference" in navbar_texts, (
+        f"'CLI Reference' missing from navbar. Got: {navbar_texts}"
+    )
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # L2: CLI Config Preservation
 # ═══════════════════════════════════════════════════════════════════════════════
