@@ -302,8 +302,29 @@ class Config:
 
     @property
     def reference(self) -> list[dict[str, Any]]:
-        """Get the API reference configuration (explicit section ordering)."""
-        return self.get("reference", [])
+        """Get the API reference configuration (explicit section ordering).
+
+        Returns only when the value is a list of section dicts.  A plain dict
+        (e.g. ``{"title": "API Docs"}``) is treated as metadata, not as
+        explicit sections, and returns an empty list.
+        """
+        val = self.get("reference", [])
+        if isinstance(val, list):
+            return val
+        # A dict value is a title/metadata override, not section definitions
+        return []
+
+    @property
+    def reference_title(self) -> str | None:
+        """Get the custom API reference title, if set.
+
+        Supports ``reference: {title: "Custom Title"}`` in great-docs.yml.
+        Returns ``None`` when no custom title is configured.
+        """
+        val = self.get("reference", [])
+        if isinstance(val, dict):
+            return val.get("title")
+        return None
 
     @property
     def authors(self) -> list[dict[str, Any]]:

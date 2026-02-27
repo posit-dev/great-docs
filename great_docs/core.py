@@ -4998,6 +4998,8 @@ class GreatDocs:
         sections = []
 
         for section_config in reference_config:
+            if not isinstance(section_config, dict):
+                continue
             title = section_config.get("title", "Untitled")
             desc = section_config.get("desc", "")
             contents_config = section_config.get("contents", [])
@@ -5102,6 +5104,8 @@ class GreatDocs:
         sections = []
 
         for section_config in reference_config:
+            if not isinstance(section_config, dict):
+                continue
             title = section_config.get("title", "Untitled")
             desc = section_config.get("desc", "")
             contents_config = section_config.get("contents", [])
@@ -5530,6 +5534,8 @@ class GreatDocs:
         """
         lines: list[str] = []
         for i, section in enumerate(reference):
+            if not isinstance(section, dict):
+                continue
             if i > 0:
                 lines.append("")
             title = section.get("title", "Untitled")
