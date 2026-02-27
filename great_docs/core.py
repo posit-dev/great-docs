@@ -2041,6 +2041,16 @@ class GreatDocs:
                     ] + contents
                 break
 
+        # Add CLI Reference navbar link if not present
+        navbar = config["website"].get("navbar", {})
+        if "left" in navbar:
+            has_cli_link = any(
+                isinstance(item, dict) and item.get("text") == "CLI Reference"
+                for item in navbar["left"]
+            )
+            if not has_cli_link:
+                navbar["left"].append({"text": "CLI Reference", "href": "reference/cli/index.qmd"})
+
         self._write_quarto_yml(quarto_yml, config)
 
         print(
