@@ -23,10 +23,17 @@ SPEC = {
     "config": {
         "reference": [
             {
+                "title": "Core API",
+                "desc": "Top-level functions",
+                "contents": [
+                    {"name": "main_func"},
+                ],
+            },
+            {
                 "title": "Utils API",
                 "desc": "Utility functions",
                 "contents": [
-                    {"name": "gdtest_ref_module_expand.utils"},
+                    {"name": "utils"},
                 ],
             },
         ],
