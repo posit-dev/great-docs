@@ -462,6 +462,58 @@ def test_L2_explicit_reference_config(pkg_name: str, tmp_path: Path):
             assert found, f"{class_name} not found in any section"
 
 
+@pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
+def test_L2_explicit_reference_survives_init(pkg_name: str, tmp_path: Path):
+    """``init --force`` preserves explicit reference sections from great-docs.yml."""
+    pkg_dir, spec = _make_package(pkg_name, tmp_path)
+    expected = spec.get("expected", {})
+    if not expected.get("explicit_reference"):
+        pytest.skip("Not an explicit reference config spec")
+
+    import yaml
+
+    config = spec.get("config", {})
+    original_reference = config.get("reference", [])
+    assert original_reference, "Spec says explicit_reference but no reference config found"
+
+    original_titles = [s["title"] for s in original_reference]
+
+    # Run init --force (this overwrites great-docs.yml)
+    docs = GreatDocs(project_path=str(pkg_dir))
+    docs.install(force=True)
+
+    # Re-read the generated config
+    config_path = pkg_dir / "great-docs.yml"
+    with open(config_path, encoding="utf-8") as f:
+        config_data = yaml.safe_load(f)
+
+    regenerated_reference = config_data.get("reference", [])
+    assert regenerated_reference, "reference sections are missing after init --force"
+
+    # Section titles must match the original explicit config
+    regenerated_titles = [s["title"] for s in regenerated_reference]
+    assert regenerated_titles == original_titles, (
+        f"init --force changed explicit reference section titles.\n"
+        f"  Original: {original_titles}\n"
+        f"  After init: {regenerated_titles}"
+    )
+
+    # Verify members:false entries are preserved
+    if "members_false_classes" in expected:
+        for class_name in expected["members_false_classes"]:
+            found = False
+            for section in regenerated_reference:
+                for item in section.get("contents", []):
+                    if isinstance(item, dict) and item.get("name") == class_name:
+                        assert item.get("members") is False, (
+                            f"{class_name} should have members: false after init, got {item}"
+                        )
+                        found = True
+            assert found, (
+                f"{class_name} not found in any section after init --force"
+            )
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # L2: Name / Module Mismatch
 # ═══════════════════════════════════════════════════════════════════════════════
