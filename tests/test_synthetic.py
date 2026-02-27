@@ -742,7 +742,7 @@ def test_L3_cli_sidebar_no_wrong_level_paths(pkg_name: str, tmp_path: Path):
 
 @pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
 def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
-    """CLI-enabled packages get a 'CLI Reference' navbar entry in _quarto.yml."""
+    """CLI-enabled packages do NOT get a separate navbar entry; the sidebar switcher handles it."""
     pkg_dir, spec = _make_package(pkg_name, tmp_path)
     expected = spec.get("expected", {})
     if not expected.get("cli_enabled"):
@@ -771,20 +771,19 @@ def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
     with open(quarto_yml, encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
+    # CLI Reference should NOT appear as a separate navbar entry —
+    # navigation between API and CLI is handled by the reference-switcher widget
     navbar_left = config.get("website", {}).get("navbar", {}).get("left", [])
     cli_navbar_items = [
         item for item in navbar_left
         if isinstance(item, dict) and item.get("text") == "CLI Reference"
     ]
-    assert len(cli_navbar_items) == 1, (
-        f"Expected exactly one 'CLI Reference' navbar entry, "
-        f"got {len(cli_navbar_items)}. Navbar left: {navbar_left}"
-    )
-    assert cli_navbar_items[0].get("href") == "reference/cli/index.qmd", (
-        f"CLI Reference navbar link points to wrong href: {cli_navbar_items[0]}"
+    assert len(cli_navbar_items) == 0, (
+        f"'CLI Reference' should not appear in the navbar (handled by switcher). "
+        f"Navbar left: {navbar_left}"
     )
 
-    # Also verify the cli-reference sidebar exists
+    # The cli-reference sidebar should still be created
     sidebar = config.get("website", {}).get("sidebar", [])
     cli_sidebars = [
         s for s in sidebar
@@ -836,8 +835,9 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
     assert "Reference" in navbar_texts, (
         f"'Reference' missing from navbar. Got: {navbar_texts}"
     )
-    assert "CLI Reference" in navbar_texts, (
-        f"'CLI Reference' missing from navbar. Got: {navbar_texts}"
+    assert "CLI Reference" not in navbar_texts, (
+        f"'CLI Reference' should not be a separate navbar entry (handled by switcher). "
+        f"Got: {navbar_texts}"
     )
 
 
