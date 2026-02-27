@@ -27,7 +27,7 @@ SPEC = {
                 "desc": "Build functions",
                 "contents": [
                     {"name": "build"},
-                    {"name": "compile"},
+                    {"name": "compile_source"},
                 ],
             },
             {
@@ -41,7 +41,7 @@ SPEC = {
         ],
     },
     "files": {
-        "gdtest_ref_explicit/__init__.py": '"""Test package for explicit reference config."""\n\nfrom .builders import build, compile\nfrom .runners import execute, run\n\n__all__ = ["build", "compile", "execute", "run"]\n',
+        "gdtest_ref_explicit/__init__.py": '"""Test package for explicit reference config."""\n\nfrom .builders import build, compile_source\nfrom .runners import execute, run\n\n__all__ = ["build", "compile_source", "execute", "run"]\n',
         "gdtest_ref_explicit/builders.py": '''
             """Builder functions for compiling and building targets."""
 
@@ -65,7 +65,7 @@ SPEC = {
                 pass
 
 
-            def compile(source: str) -> bytes:
+            def compile_source(source: str) -> bytes:
                 """Compile source code into bytes.
 
                 Parameters
@@ -80,7 +80,7 @@ SPEC = {
 
                 Examples
                 --------
-                >>> compile("print('hello')")
+                >>> compile_source("print('hello')")
                 b'...'
                 """
                 return source.encode()
@@ -136,7 +136,7 @@ SPEC = {
         "detected_name": "gdtest-ref-explicit",
         "detected_module": "gdtest_ref_explicit",
         "detected_parser": "numpy",
-        "export_names": ["build", "compile", "execute", "run"],
+        "export_names": ["build", "compile_source", "execute", "run"],
         "num_exports": 4,
     },
 }
