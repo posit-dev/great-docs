@@ -1676,6 +1676,60 @@ def test_R4_multi_module_no_duplicate_entries():
 
 
 @requires_bs4
+def test_R4_config_all_on_builds_with_dict_reference():
+    """A reference config that is a dict (title override) should not crash init.
+
+    The gdtest_config_all_on spec uses ``reference: {title: "API Reference"}``
+    — a dict, not a list of sections. This must be treated as a title override
+    and auto-discovery should generate the reference sections normally.
+    """
+    pkg = "gdtest_config_all_on"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ref = _ref_dir(pkg)
+    expected_exports = {"process", "Config"}
+
+    # Reference pages should exist for the auto-discovered exports
+    ref_pages = {f.stem for f in ref.glob("*.html") if f.name != "index.html"}
+    missing = expected_exports - ref_pages
+    assert not missing, f"Missing reference pages after dict-reference config: {missing}"
+
+    # The reference index should have section headings
+    ref_index = ref / "index.html"
+    assert ref_index.exists(), "No reference/index.html"
+    soup = _load_html(ref_index)
+    headings = [h.get_text().strip() for h in soup.select("h1, h2, h3")]
+    assert len(headings) > 0, "Reference index has no headings"
+
+
+@requires_bs4
+def test_R4_ref_module_expand_uses_short_names():
+    """Reference config with a submodule name should render successfully.
+
+    The gdtest_ref_module_expand spec references ``utils`` (a submodule) in the
+    reference config contents. The rendered output should contain a page for
+    the utils module and its member functions should appear on that page.
+    """
+    pkg = "gdtest_ref_module_expand"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ref = _ref_dir(pkg)
+    ref_pages = {f.stem for f in ref.glob("*.html") if f.name != "index.html"}
+
+    # The submodule should have a reference page
+    assert "utils" in ref_pages, f"No reference page for 'utils' submodule. Got {ref_pages}"
+
+    # The utils page should contain the individual function names
+    utils_page = ref / "utils.html"
+    soup = _load_html(utils_page)
+    text = soup.get_text()
+    for func in ("util_a", "util_b", "util_c"):
+        assert func in text, f"Function '{func}' not found on utils.html reference page"
+
+
+@requires_bs4
 @pytest.mark.parametrize("pkg_name", ["gdtest_seealso", "gdtest_nodoc"])
 def test_R4_directives_stripped_from_html(pkg_name: str):
     """Great Docs directives (%seealso, %nodoc) should not appear in HTML."""
