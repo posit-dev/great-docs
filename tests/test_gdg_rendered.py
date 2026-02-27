@@ -1302,6 +1302,99 @@ def test_R4_cli_pages_generated():
     assert len(ref_pages) > 0, "No reference pages generated for gdtest_cli_click"
 
 
+@requires_bs4
+def test_R4_cli_reference_directory_exists():
+    """CLI-enabled packages should have a reference/cli/ directory."""
+    pkg = "gdtest_cli_click"
+    if not _has_rendered_site(pkg):
+        pytest.skip("gdtest_cli_click not rendered")
+
+    cli_dir = _ref_dir(pkg) / "cli"
+    assert cli_dir.exists(), "No reference/cli/ directory found"
+    assert (cli_dir / "index.html").exists(), "No CLI index.html page"
+
+
+@requires_bs4
+def test_R4_cli_index_page_content():
+    """CLI index page should contain command name and help text."""
+    pkg = "gdtest_cli_click"
+    if not _has_rendered_site(pkg):
+        pytest.skip("gdtest_cli_click not rendered")
+
+    cli_index = _ref_dir(pkg) / "cli" / "index.html"
+    if not cli_index.exists():
+        pytest.skip("CLI index.html not found")
+
+    soup = _load_html(cli_index)
+    page_text = soup.get_text()
+
+    # The CLI help text from the Click command should appear
+    assert "format" in page_text.lower() or "gdtest" in page_text.lower(), (
+        "CLI index page does not contain expected help text"
+    )
+
+
+@requires_bs4
+def test_R4_cli_nested_groups_rendered():
+    """Nested Click groups should produce subcommand pages."""
+    pkg = "gdtest_cli_nested"
+    if not _has_rendered_site(pkg):
+        pytest.skip("gdtest_cli_nested not rendered")
+
+    cli_dir = _ref_dir(pkg) / "cli"
+    assert cli_dir.exists(), "No reference/cli/ directory found"
+
+    # Should have group pages for task and config
+    assert (cli_dir / "task.html").exists(), "No task group page"
+    assert (cli_dir / "config.html").exists(), "No config group page"
+
+
+@requires_bs4
+def test_R4_cli_nested_subcommand_pages():
+    """Nested subcommands should have their own pages."""
+    pkg = "gdtest_cli_nested"
+    if not _has_rendered_site(pkg):
+        pytest.skip("gdtest_cli_nested not rendered")
+
+    cli_dir = _ref_dir(pkg) / "cli"
+
+    # task subcommands
+    assert (cli_dir / "task" / "run.html").exists(), "No task/run.html page"
+    assert (cli_dir / "task" / "list.html").exists(), "No task/list.html page"
+
+    # config subcommands
+    assert (cli_dir / "config" / "get.html").exists(), "No config/get.html page"
+    assert (cli_dir / "config" / "set.html").exists(), "No config/set.html page"
+
+
+@requires_bs4
+def test_R4_cli_sidebar_has_cli_section():
+    """Rendered reference pages should have a CLI Reference sidebar section."""
+    pkg = "gdtest_cli_click"
+    if not _has_rendered_site(pkg):
+        pytest.skip("gdtest_cli_click not rendered")
+
+    # CLI sidebar section appears on reference pages, not the home page
+    cli_index = _ref_dir(pkg) / "cli" / "index.html"
+    if not cli_index.exists():
+        pytest.skip("No CLI index.html")
+
+    soup = _load_html(cli_index)
+    # Look for sidebar links pointing to CLI reference pages
+    sidebar_links = soup.select("a.sidebar-link, a.sidebar-item-text")
+    link_hrefs = [a.get("href", "") for a in sidebar_links]
+    link_texts = [a.get_text(strip=True) for a in sidebar_links]
+
+    has_cli_link = any("cli" in href for href in link_hrefs) or any(
+        "cli" in text.lower() for text in link_texts
+    )
+    assert has_cli_link, (
+        f"Sidebar does not contain CLI reference link.\n"
+        f"  Link texts: {link_texts}\n"
+        f"  Link hrefs: {link_hrefs}"
+    )
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # R4: Math Rendering
 # ═══════════════════════════════════════════════════════════════════════════════
