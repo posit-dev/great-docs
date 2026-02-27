@@ -528,6 +528,167 @@ def test_generator_with_config_override(tmp_path: Path):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# L3: CLI Sidebar Structure
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
+def test_L3_cli_sidebar_flat_paths(pkg_name: str, tmp_path: Path):
+    """Flat CLI (no nested groups) produces only plain path strings in the sidebar."""
+    pkg_dir, spec = _make_package(pkg_name, tmp_path)
+    expected = spec.get("expected", {})
+    if not expected.get("cli_enabled"):
+        pytest.skip("No 'cli_enabled' in spec")
+    if expected.get("cli_has_groups"):
+        pytest.skip("This test is for flat (non-grouped) CLIs only")
+
+    docs = GreatDocs(project_path=str(pkg_dir))
+    docs.install(force=True)
+
+    detected_name = docs._detect_package_name()
+    assert detected_name is not None
+
+    cli_info = docs._discover_click_cli(detected_name)
+    assert cli_info is not None
+
+    sidebar_items = docs._generate_cli_reference_pages(cli_info)
+    assert len(sidebar_items) >= 1, "No sidebar items generated"
+
+    # First item should be the main index page
+    assert sidebar_items[0] == "reference/cli/index.qmd"
+
+    # Every item should be a plain path string (no section dicts)
+    for item in sidebar_items:
+        assert isinstance(item, str), (
+            f"Expected plain path string, got dict: {item}"
+        )
+        assert item.startswith("reference/cli/"), (
+            f"Sidebar path {item!r} does not start with 'reference/cli/'"
+        )
+        assert item.endswith(".qmd"), (
+            f"Sidebar path {item!r} does not end with '.qmd'"
+        )
+
+
+@pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
+def test_L3_cli_sidebar_nested_structure(pkg_name: str, tmp_path: Path):
+    """Nested CLI groups produce hierarchical section/contents sidebar items."""
+    pkg_dir, spec = _make_package(pkg_name, tmp_path)
+    expected = spec.get("expected", {})
+    if not expected.get("cli_has_groups"):
+        pytest.skip("No 'cli_has_groups' in spec")
+
+    docs = GreatDocs(project_path=str(pkg_dir))
+    docs.install(force=True)
+
+    detected_name = docs._detect_package_name()
+    assert detected_name is not None
+
+    cli_info = docs._discover_click_cli(detected_name)
+    assert cli_info is not None
+
+    sidebar_items = docs._generate_cli_reference_pages(cli_info)
+    assert len(sidebar_items) >= 2, "Too few sidebar items for a grouped CLI"
+
+    # First item should be the main index
+    assert sidebar_items[0] == "reference/cli/index.qmd"
+
+    # Collect section dicts from the sidebar items
+    section_items = [item for item in sidebar_items if isinstance(item, dict)]
+    assert len(section_items) > 0, (
+        f"No section dicts found in sidebar items; "
+        f"nested groups should use {{section: ..., contents: [...]}} structure. "
+        f"Got: {sidebar_items}"
+    )
+
+    # Verify each expected group appears as a section
+    if "cli_group_names" in expected:
+        section_names = {s["section"] for s in section_items}
+        for group_name in expected["cli_group_names"]:
+            assert group_name in section_names, (
+                f"Expected group {group_name!r} as a sidebar section, "
+                f"but only found: {sorted(section_names)}"
+            )
+
+    # Every section dict must have 'section' and 'contents' keys
+    for item in section_items:
+        assert "section" in item, f"Missing 'section' key in sidebar item: {item}"
+        assert "contents" in item, f"Missing 'contents' key in sidebar item: {item}"
+        assert len(item["contents"]) >= 1, (
+            f"Section {item['section']!r} has empty contents"
+        )
+
+
+@pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
+def test_L3_cli_sidebar_no_wrong_level_paths(pkg_name: str, tmp_path: Path):
+    """Nested subcommand paths must not be flattened to reference/cli/<leaf>.qmd."""
+    pkg_dir, spec = _make_package(pkg_name, tmp_path)
+    expected = spec.get("expected", {})
+    if not expected.get("cli_has_groups"):
+        pytest.skip("No 'cli_has_groups' in spec")
+
+    docs = GreatDocs(project_path=str(pkg_dir))
+    docs.install(force=True)
+
+    detected_name = docs._detect_package_name()
+    assert detected_name is not None
+
+    cli_info = docs._discover_click_cli(detected_name)
+    assert cli_info is not None
+
+    sidebar_items = docs._generate_cli_reference_pages(cli_info)
+
+    # Collect all string paths (including those inside section dicts)
+    def _collect_paths(items: list) -> list[str]:
+        paths = []
+        for item in items:
+            if isinstance(item, str):
+                paths.append(item)
+            elif isinstance(item, dict) and "contents" in item:
+                paths.extend(_collect_paths(item["contents"]))
+        return paths
+
+    all_paths = _collect_paths(sidebar_items)
+
+    # Every path must point to an actual file on disk.
+    # _generate_cli_reference_pages writes files under docs.project_path
+    # (i.e. <pkg_dir>/great-docs/).
+    docs_dir = docs.project_path
+    for path in all_paths:
+        full = docs_dir / path
+        assert full.exists(), (
+            f"Sidebar path {path!r} does not exist on disk at {full}"
+        )
+
+    # Leaf subcommand paths (those inside a group dir on disk) must use
+    # the nested prefix, not the bare reference/cli/ prefix.
+    group_names = expected.get("cli_group_names", [])
+    for path in all_paths:
+        # Skip the index and the group overview pages themselves
+        if path == "reference/cli/index.qmd":
+            continue
+        stem = path.split("/")[-1].replace(".qmd", "")
+        if stem in [g.replace("-", "_") for g in group_names]:
+            continue  # group overview page like reference/cli/task.qmd
+        # Any remaining page that lives in a subdirectory on disk should
+        # have the nested prefix in the sidebar path.
+        parts = path.removeprefix("reference/cli/").split("/")
+        if len(parts) > 1:
+            # This is fine — path is already nested
+            continue
+        # Single-segment path: make sure it doesn't belong to a group subdir
+        for group in group_names:
+            nested_file = (
+                docs_dir / "reference" / "cli" / group.replace("-", "_") / f"{stem}.qmd"
+            )
+            assert not nested_file.exists(), (
+                f"Sidebar has flat path {path!r} but the file exists "
+                f"at {nested_file.relative_to(docs_dir)} — the path should "
+                f"be nested under the group"
+            )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # L2: CLI Config Preservation
 # ═══════════════════════════════════════════════════════════════════════════════
 
