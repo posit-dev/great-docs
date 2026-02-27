@@ -4355,9 +4355,20 @@ class GreatDocs:
                         # Use qualified names like "module.ClassName" so quartodoc resolves
                         # them relative to the package (e.g., dateutil:easter.easter)
                         module_had_members = False
+                        # Build a set of short names already in the exports list so we
+                        # can skip submodule members that are re-exported at the package
+                        # level (avoids duplicate entries like both "Model" and
+                        # "models.Model" appearing in the reference).
+                        _exports_set = set(exports)
                         try:
                             for member_name, member in obj.members.items():
                                 if member_name.startswith("_"):
+                                    continue
+                                # If this member is already re-exported at the
+                                # package level (i.e. its short name is in
+                                # __all__ / exports), skip the qualified version
+                                # to avoid duplicate reference entries.
+                                if member_name in _exports_set:
                                     continue
                                 try:
                                     member_kind = member.kind.value
