@@ -379,7 +379,7 @@ def translate_sphinx_fields(html_content):
     """
     Convert Sphinx field-list directives into structured doc sections.
 
-    After quartodoc rendering, Sphinx-style docstrings with `:param:`,
+    After rendering, Sphinx-style docstrings with `:param:`,
     `:type:`, `:returns:`, `:rtype:`, and `:raises:` fields end up
     mashed into a single `<p>` tag:
 
@@ -388,7 +388,7 @@ def translate_sphinx_fields(html_content):
     ```
 
     This function parses those fields and emits the same `<section>` /
-    `<dl>` / `<dt>` / `<dd>` structure that quartodoc produces for
+    `<dl>` / `<dt>` / `<dd>` structure that the renderer produces for
     NumPy-style Parameters / Returns / Raises sections.
     """
 
@@ -523,7 +523,7 @@ def translate_google_fields(html_content):
     """
     Convert Google-style docstring sections into structured doc sections.
 
-    After quartodoc rendering, Google-style docstrings with sections like
+    After rendering, Google-style docstrings with sections like
     ``Args:``, ``Returns:``, ``Raises:``, ``Note:``, ``Example:``,
     ``Warning:``, ``References:``, and ``See Also:`` end up as flat
     ``<p>`` tags::
@@ -536,7 +536,7 @@ def translate_google_fields(html_content):
     Indented continuation text renders as ``<pre><code>`` blocks adjacent
     to the section ``<p>``.  This function detects both patterns and emits
     the same ``<section>``/``<h1>``/``<dl>``/``<dt>``/``<dd>`` markup that
-    quartodoc produces for NumPy-style sections.
+    the renderer produces for NumPy-style sections.
     """
 
     _PARAM_SECTIONS = {"Args", "Arguments", "Parameters", "Params"}
@@ -715,7 +715,7 @@ def translate_sphinx_roles(html_content):
     """
     Convert Sphinx cross-reference roles into clean HTML.
 
-    Quartodoc sometimes passes through Sphinx-style roles verbatim.  The most
+    The renderer sometimes passes through Sphinx-style roles verbatim.  The most
     common rendered patterns are:
 
     * ``:py:exc:<code>ValueError</code>``  →  ``<code>ValueError</code>``
@@ -771,7 +771,7 @@ def translate_rst_directives(html_content):
     Convert RST admonition / version directives into styled HTML callouts.
 
     Handles directives that appear as literal text in ``<p>`` tags after
-    quartodoc rendering, for example:
+    rendering, for example:
 
     * ``<p>.. versionadded:: 2.8.1</p>``
     * ``<p>.. deprecated:: 2.6 Use X instead.</p>``
@@ -882,7 +882,7 @@ def translate_rst_directives(html_content):
     )
 
     # Pattern 3 – directive misinterpreted as a return-type annotation in a
-    # <dt>/<dd> pair.  quartodoc's numpy parser sometimes treats directives
+    # <dt>/<dd> pair.  the renderer's numpy parser sometimes treats directives
     # like ``.. versionadded:: 2.0`` at the end of a docstring as an extra
     # return entry, producing:
     #   <dt><code>...<span class="parameter-annotation">.. versionadded:: 2.0
@@ -941,12 +941,12 @@ def translate_bold_section_headers(html_content):
     Convert bold-text section headings into proper doc-section markup.
 
     Sphinx-format docstrings sometimes use ``**Examples**::`` to introduce
-    a section.  After quartodoc rendering this becomes::
+    a section.  After rendering this becomes::
 
         <p><strong>Examples</strong>::</p>
 
     This function converts those into the same ``<section>``/``<h1>``
-    structure that quartodoc uses for NumPy-style sections so the page
+    structure that the renderer uses for NumPy-style sections so the page
     has a consistent look.
     """
 
@@ -985,7 +985,7 @@ def fix_doctest_blockquotes(html_content):
     """
     Convert nested blockquotes from doctest `>>>` lines into code blocks.
 
-    When quartodoc produces an Example section with raw `>>>` lines in the
+    When the renderer produces an Example section with raw `>>>` lines in the
     `.qmd` file, Quarto/Pandoc interprets the leading `>` characters as
     Markdown blockquote markers.  A `>>>` line becomes triple-nested
     `<blockquote>` elements:
@@ -1040,7 +1040,7 @@ def fix_plain_doctest_code_blocks(html_content):
     Convert plain ``<pre><code>`` blocks containing doctest ``>>>`` lines
     into properly highlighted Python code blocks.
 
-    When quartodoc renders consecutive doctest examples separated by blank
+    When the renderer renders consecutive doctest examples separated by blank
     lines, only the first block gets a proper ```` ```python ```` fence.
     Subsequent blocks become 4-space-indented text in the ``.qmd``, which
     Quarto renders as plain ``<pre><code>`` without syntax highlighting.
@@ -1135,7 +1135,7 @@ def translate_rst_math(html_content):
     """
     Convert RST `.. math::` directives into display-math blocks.
 
-    After quartodoc rendering, a `.. math::` block in a docstring becomes
+    After rendering, a `.. math::` block in a docstring becomes
     literal HTML of the form:
 
     ```html
@@ -1202,7 +1202,7 @@ def translate_rst_references(html_content):
     """
     Convert RST citation references into a styled numbered list.
 
-    After quartodoc rendering, RST citations like::
+    After rendering, RST citations like::
 
         .. [1] Author (Year). "Title."
         .. [2] https://example.com
@@ -1322,7 +1322,7 @@ def generate_seealso_html(seealso_items):
 def fix_dataclass_attributes(content_str):
     """Rebuild the Attributes table for dataclass pages using *_dataclass_attrs.json* metadata.
 
-    Quartodoc may only discover a subset of dataclass fields.  This function
+    The renderer may only discover a subset of dataclass fields.  This function
     replaces the ``<tbody>`` of the Attributes ``<table>`` with the complete
     set of fields recorded in the metadata file.
     """
@@ -1694,7 +1694,7 @@ for html_file in html_files:
     content_str = "".join(content)
 
     # Inject constant value/annotation into constant reference pages.
-    # Replaces the bare ``<p><code>NAME</code></p>`` that quartodoc emits with a
+    # Replaces the bare ``<p><code>NAME</code></p>`` that the renderer emits with a
     # styled display showing the type annotation and assigned value.
     obj_type_for_value = object_types.get(item_name_from_file)
     if obj_type_for_value == "constant" and item_name_from_file in constant_values:
@@ -1766,7 +1766,7 @@ for html_file in html_files:
     content = [line.replace("<h2", "<h3").replace("</h2>", "</h3>") for line in content]
 
     # Inject decorator/descriptor badges into member-level headings (h3 tags)
-    # Method headings are originally h2 in quartodoc output, converted to h3 above.
+    # Method headings are originally h2 in the renderer output, converted to h3 above.
     # These headings have data-anchor-id attributes like "pkg.Class.method"
     # We look up the member type in object_types to add classmethod/staticmethod/property badges.
     # Also style member headings in code font and append () for callable members.

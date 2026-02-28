@@ -13,7 +13,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "display_name": None,
     # Docstring parser format
     "parser": "numpy",  # "numpy" (default), "google", or "sphinx"
-    # Dynamic introspection mode for quartodoc
+    # Dynamic introspection mode for API reference generation
     "dynamic": True,  # True (default) or False for packages with cyclic aliases
     # Jupyter kernel for executing code cells
     "jupyter": "python3",  # Default kernel for Quarto computations
@@ -253,7 +253,7 @@ class Config:
 
     @property
     def dynamic(self) -> bool:
-        """Get the dynamic introspection mode for quartodoc."""
+        """Get the dynamic introspection mode for API reference generation."""
         return self.get("dynamic", True)
 
     @property
@@ -411,7 +411,7 @@ def create_default_config() -> str:
 
 # Dynamic Introspection
 # ---------------------
-# When true, quartodoc uses runtime introspection (more accurate for complex packages).
+# When true, the renderer uses runtime introspection (more accurate for complex packages).
 # When false, uses static analysis only (better for packages with cyclic aliases).
 # This is auto-detected during initialization based on what works for your package.
 # dynamic: true
