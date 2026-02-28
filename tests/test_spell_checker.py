@@ -195,7 +195,7 @@ title: "Technical Terms"
 
 This project uses Python with pytest for testing.
 It uses JSON and YAML configuration files.
-The API documentation is generated with quartodoc.
+The API documentation is generated with great-docs.
 """)
 
             gd = GreatDocs(project_path=project_path)
