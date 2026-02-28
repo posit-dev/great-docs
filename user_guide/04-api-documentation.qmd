@@ -17,7 +17,7 @@ When you run `great-docs init` or `great-docs build`, Great Docs:
 3. **Discovers public names** – Finds all non-private names (not starting with `_`)
 4. **Introspects submodules** – Drills into exported modules to discover their classes, functions, and constants
 5. **Categorizes items** – Classifies every export into one of 13 object types
-6. **Generates configuration** – Creates quartodoc sections in `_quarto.yml`
+6. **Generates configuration** – Creates API reference sections in `_quarto.yml`
 
 ### Static Analysis Benefits
 

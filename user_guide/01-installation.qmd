@@ -116,8 +116,7 @@ Great Docs automatically installs these dependencies:
 
 | Package | Purpose |
 |---------|---------|
-| `quartodoc` | Generates API documentation from docstrings |
-| `griffe` | Static analysis for API discovery |
+| `griffe` | Static analysis and API discovery |
 | `click` | Command-line interface |
 | `pyyaml` | YAML configuration handling |
 

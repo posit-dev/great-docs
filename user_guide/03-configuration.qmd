@@ -108,7 +108,7 @@ When you run `great-docs init`, Great Docs analyzes your package's docstrings to
 - **Google style** is identifiable by section headers with colons (e.g., `Args:`, `Returns:`)
 - **Sphinx style** is identifiable by field markers (e.g., `:param:`, `:returns:`, `:rtype:`)
 
-The detected style is saved to `great-docs.yml` and forwarded to quartodoc during builds.
+The detected style is saved to `great-docs.yml` and forwarded to the API reference renderer during builds.
 
 ### Manual Configuration
 
@@ -188,7 +188,7 @@ def my_function(x, y):
 
 ## Dynamic Introspection
 
-Great Docs uses [quartodoc](https://machow.github.io/quartodoc/) to generate API reference pages. By default, quartodoc uses **dynamic introspection** (importing your package at runtime), which produces the most accurate documentation for complex packages with re-exports and aliases.
+Great Docs uses its built-in renderer to generate API reference pages. By default, it uses **dynamic introspection** (importing your package at runtime), which produces the most accurate documentation for complex packages with re-exports and aliases.
 
 ```{.yaml filename="great-docs.yml"}
 dynamic: true   # Default: true
@@ -197,7 +197,7 @@ dynamic: true   # Default: true
 Some packages have internal attributes that cause errors during dynamic introspection. If this happens, Great Docs will **automatically retry the build with static analysis** (`dynamic: false`). You'll see a message like:
 
 ```
-⚠️  quartodoc build failed with dynamic introspection.
+⚠️  API reference build failed with dynamic introspection.
    Retrying with static analysis (dynamic: false)...
 ```
 
@@ -521,9 +521,9 @@ This creates a file with all available options as comments, making it easy to en
 
 ## Quarto Configuration
 
-Great Docs generates and maintains a `_quarto.yml` file in your docs directory. This file controls how Quarto renders your site, including navigation, theming, and the quartodoc API reference configuration.
+Great Docs generates and maintains a `_quarto.yml` file in your docs directory. This file controls how Quarto renders your site, including navigation, theming, and the API reference configuration.
 
-**Should you edit it?** Generally, no. Great Docs updates this file automatically during `great-docs build` to keep API sections in sync with your package exports. Manual edits to the `quartodoc.sections` area will be overwritten. However, you can safely customize other parts like the site title, theme, or additional navbar items.
+**Should you edit it?** Generally, no. Great Docs updates this file automatically during `great-docs build` to keep API sections in sync with your package exports. Manual edits to the API reference sections will be overwritten. However, you can safely customize other parts like the site title, theme, or additional navbar items.
 
 **Should you commit it?** Yes: commit `_quarto.yml` along with your other docs files. This ensures your documentation builds consistently across environments, including GitHub Actions CI.
 

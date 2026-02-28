@@ -183,7 +183,7 @@ Usage: great-docs build [OPTIONS]
 
   Build your documentation site.
 
-  Runs quartodoc to generate API reference, then quarto render
+  Generates API reference pages and runs quarto render
   to build the HTML site.
 
 Options:
