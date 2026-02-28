@@ -1319,7 +1319,7 @@ class MdRenderer(Renderer):
             _is_callable = isinstance(el, layout.DocFunction) or (
                 hasattr(obj, "kind") and obj.kind.value in _callable_kinds
             )
-            if _is_callable:
+            if _is_callable and not _str_dispname.endswith("()"):
                 _str_dispname += "()"
 
             # Determine the object-type CSS class for type-badge styling
