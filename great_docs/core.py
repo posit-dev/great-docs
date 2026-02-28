@@ -5561,6 +5561,51 @@ class GreatDocs:
         return lines
 
     @staticmethod
+    def _format_user_guide_yaml(user_guide_config: str | list | None = None) -> str:
+        """
+        Build YAML fragment for user_guide configuration.
+
+        Parameters
+        ----------
+        user_guide_config
+            - ``str``: custom directory path for user guide files
+            - ``list``: explicit section ordering
+            - ``None``: omit (auto-discover from conventional directories)
+
+        Returns
+        -------
+        str
+            Active ``user_guide:`` YAML block, or empty string when None.
+        """
+        if user_guide_config is None:
+            return ""
+
+        if isinstance(user_guide_config, str):
+            return (
+                "# User Guide Directory\n"
+                "# --------------------\n"
+                "# Custom directory for user guide source files\n"
+                f"user_guide: {user_guide_config}\n"
+            )
+
+        if isinstance(user_guide_config, list):
+            parts = [
+                "# User Guide",
+                "# ----------",
+                "# Explicit section ordering for user guide pages",
+                "user_guide:",
+            ]
+            for item in user_guide_config:
+                if isinstance(item, dict):
+                    for k, v in item.items():
+                        parts.append(f"  - {k}: {v}")
+                else:
+                    parts.append(f"  - {item}")
+            return "\n".join(parts) + "\n"
+
+        return ""
+
+    @staticmethod
     def _format_sections_yaml(sections: list | None = None) -> str:
         """
         Build YAML fragment for custom sections (examples, tutorials, etc.).
@@ -5678,6 +5723,7 @@ class GreatDocs:
         existing_sections: list | None = None
         existing_cli: dict | None = None
         existing_reference: list | None = None
+        existing_user_guide: str | list | None = None
         if config_path.exists():
             try:
                 existing_config = Config(config_path.parent)
@@ -5709,6 +5755,10 @@ class GreatDocs:
                 _reference = existing_config.reference
                 if _reference:
                     existing_reference = _reference
+                # Preserve user_guide config (custom dir or explicit ordering)
+                _user_guide = existing_config.user_guide
+                if _user_guide is not None:
+                    existing_user_guide = _user_guide
             except Exception:
                 pass
 
@@ -5724,6 +5774,7 @@ class GreatDocs:
                 existing_funding=existing_funding,
                 existing_sections=existing_sections,
                 existing_cli=existing_cli,
+                existing_user_guide=existing_user_guide,
             )
             config_path.write_text(config_content, encoding="utf-8")
             print(f"Created {config_path}")
@@ -5752,6 +5803,7 @@ class GreatDocs:
                 existing_funding=existing_funding,
                 existing_sections=existing_sections,
                 existing_cli=existing_cli,
+                existing_user_guide=existing_user_guide,
             )
             config_path.write_text(config_content, encoding="utf-8")
             print(f"Created {config_path}")
@@ -5784,6 +5836,7 @@ class GreatDocs:
             existing_sections=existing_sections,
             existing_cli=existing_cli,
             existing_reference=existing_reference,
+            existing_user_guide=existing_user_guide,
         )
 
         config_path.write_text(config_content, encoding="utf-8")
@@ -5800,6 +5853,7 @@ class GreatDocs:
         existing_funding: dict | None = None,
         existing_sections: list | None = None,
         existing_cli: dict | None = None,
+        existing_user_guide: str | list | None = None,
     ) -> str:
         """
         Generate minimal great-docs.yml without reference section.
@@ -5822,6 +5876,8 @@ class GreatDocs:
             Preserved custom sections from a pre-existing config.
         existing_cli
             Preserved CLI documentation config from a pre-existing config.
+        existing_user_guide
+            Preserved user_guide config from a pre-existing config.
 
         Returns
         -------
@@ -5856,6 +5912,9 @@ class GreatDocs:
         # Build CLI section
         cli_yaml = self._format_cli_yaml(existing_cli)
 
+        # Build user_guide section
+        user_guide_yaml = self._format_user_guide_yaml(existing_user_guide)
+
         return f"""# Great Docs Configuration
 # See https://rich-iannone.github.io/great-docs/user-guide/03-configuration.html
 
@@ -5885,7 +5944,7 @@ dynamic: {dynamic_str}
 {authors_section}
 {funding_yaml}
 {site_yaml}
-{sections_yaml}# Jupyter Kernel
+{sections_yaml}{user_guide_yaml}# Jupyter Kernel
 # --------------
 # Jupyter kernel to use for executing code cells in .qmd files.
 # This is set at the project level so it applies to all pages, including
@@ -5931,6 +5990,7 @@ jupyter: python3
         existing_sections: list | None = None,
         existing_cli: dict | None = None,
         existing_reference: list | None = None,
+        existing_user_guide: str | list | None = None,
     ) -> str:
         """
         Generate great-docs.yml with a reference section from discovered exports.
@@ -5961,6 +6021,8 @@ jupyter: python3
             Preserved explicit reference sections from a pre-existing config.
             When provided, these sections are used as-is instead of auto-generating
             from discovered exports.
+        existing_user_guide
+            Preserved user_guide config from a pre-existing config.
 
         Returns
         -------
@@ -6150,6 +6212,12 @@ jupyter: python3
         if sections_yaml:
             lines.append("")
             lines.extend(sections_yaml.rstrip("\n").splitlines())
+
+        # Add user_guide if preserved
+        user_guide_yaml = self._format_user_guide_yaml(existing_user_guide)
+        if user_guide_yaml:
+            lines.append("")
+            lines.extend(user_guide_yaml.rstrip("\n").splitlines())
 
         lines.extend(
             [
