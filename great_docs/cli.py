@@ -96,11 +96,11 @@ def build(project_path, watch, no_refresh):
     1. Creates great-docs/ directory with all assets
     2. Copies user guide files from project root
     3. Generates index.qmd from README.md
-    4. Refreshes quartodoc configuration (discovers API changes)
+    4. Refreshes API reference configuration (discovers API changes)
     5. Generates llms.txt and llms-full.txt for AI/LLM indexing
     6. Creates source links to GitHub
     7. Generates CLI reference pages (if enabled)
-    8. Runs quartodoc to generate API reference
+    8. Generates API reference pages
     9. Runs Quarto to render the final HTML site in great-docs/_site/
 
     Use --no-refresh to skip API discovery for faster rebuilds when your

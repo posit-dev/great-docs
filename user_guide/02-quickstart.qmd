@@ -67,7 +67,7 @@ This single command:
 5. Copies user guide files from `user_guide/` directory (if present)
 6. Generates `llms.txt` and `llms-full.txt` for AI documentation indexing
 7. Creates source links JSON for GitHub integration
-8. Runs `quartodoc build` to generate API reference pages
+8. Generates API reference pages
 9. Runs `quarto render` to build the HTML site
 
 The built site is in `great-docs/_site/`.

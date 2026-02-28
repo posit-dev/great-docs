@@ -69,10 +69,10 @@ def test_parse_package_exports():
     assert "main" in exports
 
 
-def test_create_quartodoc_sections():
-    """Test auto-generation of quartodoc sections."""
+def test_create_api_sections():
+    """Test auto-generation of API reference sections."""
     docs = GreatDocs()
-    sections = docs._create_quartodoc_sections("great_docs")
+    sections = docs._create_api_sections("great_docs")
 
     assert sections is not None
     assert len(sections) > 0
@@ -168,7 +168,7 @@ def some_function():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            sections = docs._create_quartodoc_sections("testpkg")
+            sections = docs._create_api_sections("testpkg")
 
             assert sections is not None
 
@@ -358,12 +358,12 @@ name = "test-package"
 description = "A test package"
 """)
 
-        # Create great-docs directory and _quarto.yml with quartodoc config
+        # Create great-docs directory and _quarto.yml with API reference config
         great_docs_dir = Path(tmp_dir) / "great-docs"
         great_docs_dir.mkdir()
         quarto_yml = great_docs_dir / "_quarto.yml"
         quarto_yml.write_text("""
-quartodoc:
+api-reference:
   package: test_package
   sections:
     - title: Main
@@ -402,14 +402,14 @@ def test_generate_llms_txt_with_site_url():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        # Create great-docs directory and _quarto.yml with quartodoc config and site URL
+        # Create great-docs directory and _quarto.yml with API reference config and site URL
         great_docs_dir = Path(tmp_dir) / "great-docs"
         great_docs_dir.mkdir()
         quarto_yml = great_docs_dir / "_quarto.yml"
         quarto_yml.write_text("""
 website:
   site-url: https://example.com/docs
-quartodoc:
+api-reference:
   package: test_package
   sections:
     - title: Main
@@ -4200,7 +4200,7 @@ def test_module_big_class_splitting():
         sys.path.insert(0, tmp_dir)
         try:
             docs = GreatDocs(project_path=tmp_dir)
-            sections = docs._create_quartodoc_sections("splitpkg")
+            sections = docs._create_api_sections("splitpkg")
 
             assert sections is not None
 
@@ -4680,441 +4680,6 @@ def test_categorize_fallback_skips_metadata():
 
 
 # =========================================================================
-# RST Math Conversion Tests
-# =========================================================================
-
-
-class TestFixRstMathInQmd:
-    """Tests for .. math:: and :math: conversion in _fix_rst_code_blocks_in_qmd."""
-
-    def _run_fix(self, qmd_content: str) -> str:
-        """Create a temp project with a .qmd file, run the fixer, return result."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            project_path = Path(tmp_dir) / "great-docs"
-            ref_dir = project_path / "reference"
-            ref_dir.mkdir(parents=True)
-            qmd_file = ref_dir / "func.qmd"
-            qmd_file.write_text(qmd_content)
-
-            config_path = project_path.parent / "great-docs.yml"
-            config_path.write_text("")
-
-            docs = GreatDocs(project_path=str(project_path.parent))
-            docs.project_path = project_path
-            docs._fix_rst_code_blocks_in_qmd()
-
-            return qmd_file.read_text()
-
-    def test_display_math_converted_to_dollar_signs(self):
-        """.. math:: with indented LaTeX becomes $$...$$ block."""
-        qmd = (
-            "Some text:\n\n.. math::\n\n    \\|x\\| = \\sqrt{\\sum_{i=1}^{n} x_i^2}\n\nMore text.\n"
-        )
-        result = self._run_fix(qmd)
-        assert "$$" in result
-        assert "\\|x\\| = \\sqrt{\\sum_{i=1}^{n} x_i^2}" in result
-        assert ".. math::" not in result
-
-    def test_display_math_multiline(self):
-        """.. math:: with multi-line LaTeX is properly converted."""
-        qmd = (
-            "The softmax:\n"
-            "\n"
-            ".. math::\n"
-            "\n"
-            "    \\sigma(z)_i = \\frac{e^{z_i}}\n"
-            "    {\\sum_{j=1}^{K} e^{z_j}}\n"
-            "\n"
-            "End.\n"
-        )
-        result = self._run_fix(qmd)
-        assert "$$" in result
-        assert "\\sigma(z)_i" in result
-        assert ".. math::" not in result
-
-    def test_multiple_display_math_blocks(self):
-        """Multiple .. math:: blocks in same file are all converted."""
-        qmd = (
-            "First:\n"
-            "\n"
-            ".. math::\n"
-            "\n"
-            "    a^2 + b^2 = c^2\n"
-            "\n"
-            "Second:\n"
-            "\n"
-            ".. math::\n"
-            "\n"
-            "    E = mc^2\n"
-            "\n"
-            "Done.\n"
-        )
-        result = self._run_fix(qmd)
-        assert result.count("$$") == 4  # Two blocks, each with opening + closing $$
-        assert "a^2 + b^2 = c^2" in result
-        assert "E = mc^2" in result
-
-    def test_inline_math_converted(self):
-        r"""RST :math:`...` becomes $...$."""
-        qmd = "The distance :math:`d(x, y)` is computed.\n"
-        result = self._run_fix(qmd)
-        assert "$d(x, y)$" in result
-        assert ":math:" not in result
-
-    def test_multiple_inline_math(self):
-        """Multiple :math: on the same line are all converted."""
-        qmd = "For :math:`x` and :math:`y`, compute :math:`x + y`.\n"
-        result = self._run_fix(qmd)
-        assert "$x$" in result
-        assert "$y$" in result
-        assert "$x + y$" in result
-        assert ":math:" not in result
-
-    def test_inline_math_with_complex_expression(self):
-        r"""Inline math with complex LaTeX is correctly converted."""
-        qmd = "The sigmoid is :math:`\\sigma(x) = \\frac{1}{1 + e^{-x}}`.\n"
-        result = self._run_fix(qmd)
-        assert "$\\sigma(x) = \\frac{1}{1 + e^{-x}}$" in result
-        assert ":math:" not in result
-
-    def test_non_math_directives_preserved(self):
-        """Other RST directives like .. note:: are not converted to math."""
-        qmd = ".. note::\n\n    This is a note.\n\n"
-        result = self._run_fix(qmd)
-        assert ".. note::" in result
-        assert "$$" not in result
-
-    def test_regular_code_block_still_converted(self):
-        """Normal :: code blocks are still converted to fenced blocks."""
-        qmd = "Example::\n\n    x = 1\n    y = 2\n\n"
-        result = self._run_fix(qmd)
-        assert "```python" in result
-        assert "x = 1" in result
-        assert "::" not in result.split("```")[0]  # :: removed from intro text
-
-    def test_mixed_math_and_code(self):
-        """File with both math and code blocks handles each correctly."""
-        qmd = "The formula:\n\n.. math::\n\n    E = mc^2\n\nExample::\n\n    result = compute()\n\n"
-        result = self._run_fix(qmd)
-        assert "$$" in result
-        assert "E = mc^2" in result
-        assert "```python" in result
-        assert "result = compute()" in result
-
-    def test_index_qmd_skipped(self):
-        """index.qmd files are not processed."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            project_path = Path(tmp_dir) / "great-docs"
-            ref_dir = project_path / "reference"
-            ref_dir.mkdir(parents=True)
-
-            index = ref_dir / "index.qmd"
-            index.write_text(".. math::\n\n    x = 1\n")
-
-            config_path = project_path.parent / "great-docs.yml"
-            config_path.write_text("")
-
-            docs = GreatDocs(project_path=str(project_path.parent))
-            docs.project_path = project_path
-            docs._fix_rst_code_blocks_in_qmd()
-
-            # index.qmd should be unchanged
-            assert ".. math::" in index.read_text()
-
-    def test_no_reference_dir(self):
-        """No crash when reference/ directory does not exist."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            config_path = Path(tmp_dir) / "great-docs.yml"
-            config_path.write_text("")
-
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path = Path(tmp_dir) / "great-docs"
-            # Should not raise
-            docs._fix_rst_code_blocks_in_qmd()
-
-
-# =========================================================================
-# RST Table Conversion Tests
-# =========================================================================
-
-
-class TestFixRstTablesInQmd:
-    """Tests for RST simple-table and grid-table conversion in _fix_rst_tables_in_qmd."""
-
-    def _run_fix(self, qmd_content: str) -> str:
-        """Create a temp project with a .qmd file, run the fixer, return result."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            project_path = Path(tmp_dir) / "great-docs"
-            ref_dir = project_path / "reference"
-            ref_dir.mkdir(parents=True)
-            qmd_file = ref_dir / "func.qmd"
-            qmd_file.write_text(qmd_content)
-
-            config_path = project_path.parent / "great-docs.yml"
-            config_path.write_text("")
-
-            docs = GreatDocs(project_path=str(project_path.parent))
-            docs.project_path = project_path
-            docs._fix_rst_tables_in_qmd()
-
-            return qmd_file.read_text()
-
-    def test_simple_table_three_separators(self):
-        """RST simple table with 3 separators (header/body) converts to Markdown pipe table."""
-        qmd = (
-            "The following table:\n"
-            "\n"
-            "========  =========  ===========\n"
-            "Method    Speed      Memory\n"
-            "========  =========  ===========\n"
-            "Quick     O(n log n) O(log n)\n"
-            "Merge     O(n log n) O(n)\n"
-            "Bubble    O(n^2)     O(1)\n"
-            "========  =========  ===========\n"
-            "\n"
-            "More text after.\n"
-        )
-        result = self._run_fix(qmd)
-        # Should contain Markdown pipe table
-        assert "| Method | Speed | Memory |" in result
-        assert "| --- | --- | --- |" in result
-        assert "| Quick | O(n log n) | O(log n) |" in result
-        assert "| Merge | O(n log n) | O(n) |" in result
-        assert "| Bubble | O(n^2) | O(1) |" in result
-        # RST separators should be gone
-        assert "========" not in result
-        # Surrounding text preserved
-        assert "The following table:" in result
-        assert "More text after." in result
-
-    def test_simple_table_two_separators(self):
-        """RST simple table with 2 separators converts correctly."""
-        qmd = (
-            "==========  =====\n"
-            "Metric      Value\n"
-            "count       100\n"
-            "mean        42.5\n"
-            "std         12.3\n"
-            "==========  =====\n"
-        )
-        result = self._run_fix(qmd)
-        assert "| Metric | Value |" in result
-        assert "| --- | --- |" in result
-        assert "| count | 100 |" in result
-        assert "| mean | 42.5 |" in result
-        assert "| std | 12.3 |" in result
-        assert "========" not in result
-
-    def test_grid_table_with_header(self):
-        """RST grid table with = header separator converts correctly."""
-        qmd = (
-            "+--------+-------+\n"
-            "| Name   | Value |\n"
-            "+========+=======+\n"
-            "| alpha  | 1     |\n"
-            "| beta   | 2     |\n"
-            "+--------+-------+\n"
-        )
-        result = self._run_fix(qmd)
-        assert "| Name | Value |" in result
-        assert "| --- | --- |" in result
-        assert "| alpha | 1 |" in result
-        assert "| beta | 2 |" in result
-        assert "+--------+" not in result
-
-    def test_grid_table_without_header(self):
-        """RST grid table with only - borders treats first row as header."""
-        qmd = (
-            "+--------+-------+\n"
-            "| Name   | Value |\n"
-            "+--------+-------+\n"
-            "| alpha  | 1     |\n"
-            "+--------+-------+\n"
-        )
-        result = self._run_fix(qmd)
-        assert "| Name | Value |" in result
-        assert "| --- | --- |" in result
-        assert "| alpha | 1 |" in result
-
-    def test_multiple_tables_in_one_file(self):
-        """Multiple RST tables in a single file are all converted."""
-        qmd = (
-            "First table:\n"
-            "\n"
-            "====  =====\n"
-            "A     B\n"
-            "====  =====\n"
-            "1     2\n"
-            "====  =====\n"
-            "\n"
-            "Second table:\n"
-            "\n"
-            "=====  ======\n"
-            "X      Y\n"
-            "=====  ======\n"
-            "10     20\n"
-            "=====  ======\n"
-        )
-        result = self._run_fix(qmd)
-        assert "| A | B |" in result
-        assert "| 1 | 2 |" in result
-        assert "| X | Y |" in result
-        assert "| 10 | 20 |" in result
-        assert "========" not in result
-        assert "=====" not in result
-
-    def test_cell_values_wider_than_header(self):
-        """Cell values wider than the column header are fully captured."""
-        qmd = (
-            "========  =========  ===========\n"
-            "Method    Speed      Memory\n"
-            "========  =========  ===========\n"
-            "Quick     O(n log n) O(log n)\n"
-            "========  =========  ===========\n"
-        )
-        result = self._run_fix(qmd)
-        # O(n log n) is wider than "=========" — ensure it's not truncated
-        assert "O(n log n)" in result
-        assert "O(n log n |" not in result.replace("O(n log n) |", "")
-
-    def test_no_tables_unchanged(self):
-        """Files without RST tables are not modified."""
-        qmd = "No tables here.\n\nJust some text.\n"
-        result = self._run_fix(qmd)
-        assert result == qmd
-
-    def test_index_qmd_skipped(self):
-        """index.qmd files are not processed."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            project_path = Path(tmp_dir) / "great-docs"
-            ref_dir = project_path / "reference"
-            ref_dir.mkdir(parents=True)
-
-            index = ref_dir / "index.qmd"
-            index.write_text(
-                "========  =====\nA         B\n========  =====\n1         2\n========  =====\n"
-            )
-
-            config_path = project_path.parent / "great-docs.yml"
-            config_path.write_text("")
-
-            docs = GreatDocs(project_path=str(project_path.parent))
-            docs.project_path = project_path
-            docs._fix_rst_tables_in_qmd()
-
-            # index.qmd should be unchanged
-            assert "========" in index.read_text()
-
-    def test_no_reference_dir(self):
-        """No crash when reference/ directory does not exist."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            config_path = Path(tmp_dir) / "great-docs.yml"
-            config_path.write_text("")
-
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path = Path(tmp_dir) / "great-docs"
-            # Should not raise
-            docs._fix_rst_tables_in_qmd()
-
-
-# =========================================================================
-# RST Table Conversion Unit Tests (module-level helpers)
-# =========================================================================
-
-
-class TestRstSimpleTableToMd:
-    """Unit tests for _rst_simple_table_to_md."""
-
-    def test_basic_three_column(self):
-        from great_docs.core import _rst_simple_table_to_md
-
-        lines = [
-            "========  =========  ===========",
-            "Method    Speed      Memory",
-            "========  =========  ===========",
-            "Quick     O(n log n) O(log n)",
-            "Merge     O(n log n) O(n)",
-            "Bubble    O(n^2)     O(1)",
-            "========  =========  ===========",
-        ]
-        result = _rst_simple_table_to_md(lines)
-        assert result is not None
-        assert "| Method | Speed | Memory |" in result
-        assert "| Quick | O(n log n) | O(log n) |" in result
-
-    def test_two_column(self):
-        from great_docs.core import _rst_simple_table_to_md
-
-        lines = [
-            "==========  =====",
-            "Metric      Value",
-            "==========  =====",
-            "count       100",
-            "mean        42.5",
-            "std         12.3",
-            "==========  =====",
-        ]
-        result = _rst_simple_table_to_md(lines)
-        assert result is not None
-        assert "| Metric | Value |" in result
-        assert "| count | 100 |" in result
-        assert "| std | 12.3 |" in result
-
-    def test_insufficient_separators_returns_none(self):
-        from great_docs.core import _rst_simple_table_to_md
-
-        lines = [
-            "========  =========",
-            "Method    Speed",
-        ]
-        result = _rst_simple_table_to_md(lines)
-        assert result is None
-
-
-class TestRstGridTableToMd:
-    """Unit tests for _rst_grid_table_to_md."""
-
-    def test_basic_grid_table(self):
-        from great_docs.core import _rst_grid_table_to_md
-
-        lines = [
-            "+--------+-------+",
-            "| Name   | Value |",
-            "+========+=======+",
-            "| alpha  | 1     |",
-            "| beta   | 2     |",
-            "+--------+-------+",
-        ]
-        result = _rst_grid_table_to_md(lines)
-        assert result is not None
-        assert "| Name | Value |" in result
-        assert "| alpha | 1 |" in result
-        assert "| beta | 2 |" in result
-
-    def test_no_header_separator(self):
-        from great_docs.core import _rst_grid_table_to_md
-
-        lines = [
-            "+--------+-------+",
-            "| Name   | Value |",
-            "+--------+-------+",
-            "| alpha  | 1     |",
-            "+--------+-------+",
-        ]
-        result = _rst_grid_table_to_md(lines)
-        assert result is not None
-        assert "| Name | Value |" in result
-        assert "| alpha | 1 |" in result
-
-    def test_single_column_returns_none(self):
-        from great_docs.core import _rst_grid_table_to_md
-
-        lines = ["+--------+"]
-        result = _rst_grid_table_to_md(lines)
-        assert result is None
-
-
-# =========================================================================
 # GDG Site 144: gdtest_docstring_tables — RST Tables in Docstrings
 # =========================================================================
 
@@ -5172,3 +4737,1113 @@ class TestGdgSite144DocstringTables:
         assert ">42.5<" in html
         # Raw RST separators should NOT appear
         assert "========" not in html
+
+
+# =========================================================================
+# Renderer-Level Transform Tests (P0 workarounds absorbed into renderer)
+# =========================================================================
+
+
+class TestRendererDunderEscaping:
+    """Dunder names in render_header are escaped to prevent Pandoc bold interpretation."""
+
+    def test_dunder_name_escaped_in_heading(self):
+        """__repr__ in heading becomes \\_\\_repr\\_\\_ to avoid Pandoc bold."""
+        from great_docs._renderer.renderer import _escape_dunders
+
+        assert _escape_dunders("__repr__") == "\\_\\_repr\\_\\_"
+
+    def test_regular_name_unchanged(self):
+        from great_docs._renderer.renderer import _escape_dunders
+
+        assert _escape_dunders("process") == "process"
+
+    def test_dotted_dunder_escaped(self):
+        """Collection.__repr__ → Collection.\\_\\_repr\\_\\_"""
+        from great_docs._renderer.renderer import _escape_dunders
+
+        result = _escape_dunders("Collection.__repr__")
+        assert result == "Collection.\\_\\_repr\\_\\_"
+
+    def test_multiple_dunders_escaped(self):
+        from great_docs._renderer.renderer import _escape_dunders
+
+        result = _escape_dunders("__init__ and __del__")
+        assert result == "\\_\\_init\\_\\_ and \\_\\_del\\_\\_"
+
+    def test_single_underscore_not_escaped(self):
+        from great_docs._renderer.renderer import _escape_dunders
+
+        assert _escape_dunders("_private") == "_private"
+
+
+class TestRendererRstCodeBlocks:
+    """RST :: code blocks are converted to fenced code blocks at render time."""
+
+    def test_rst_code_block_to_fenced(self):
+        from great_docs._renderer.renderer import _convert_rst_text
+
+        text = "For example::\n\n    x = 1\n    y = 2\n"
+        result = _convert_rst_text(text)
+        assert "```python" in result
+        assert "x = 1" in result
+        assert "::" not in result.split("```")[0]
+
+    def test_rst_directive_converted_to_callout(self):
+        """RST directives like .. note:: are converted to Quarto callouts."""
+        from great_docs._renderer.renderer import _convert_rst_text
+
+        text = ".. note::\n\n    Important info\n"
+        result = _convert_rst_text(text)
+        assert ".callout-note" in result
+        assert "Important info" in result
+        assert ":::" in result
+
+    def test_math_directive_to_dollar_signs(self):
+        """.. math:: → $$...$$ display math."""
+        from great_docs._renderer.renderer import _convert_rst_text
+
+        text = "The formula:\n\n.. math::\n\n    a^2 + b^2 = c^2\n"
+        result = _convert_rst_text(text)
+        assert "$$" in result
+        assert "a^2 + b^2 = c^2" in result
+        assert ".. math::" not in result
+
+    def test_inline_math_converted(self):
+        """:math:`x^2` → $x^2$"""
+        from great_docs._renderer.renderer import _convert_rst_text
+
+        text = "The value :math:`x^2` is computed."
+        result = _convert_rst_text(text)
+        assert "$x^2$" in result
+        assert ":math:" not in result
+
+
+class TestRendererRstTables:
+    """RST tables are converted to Markdown pipe tables at render time."""
+
+    def test_simple_table_converted(self):
+        from great_docs._renderer.renderer import _convert_rst_text
+
+        text = (
+            "========  =========\n"
+            "Method    Speed\n"
+            "========  =========\n"
+            "Quick     Fast\n"
+            "Merge     Medium\n"
+            "========  =========\n"
+        )
+        result = _convert_rst_text(text)
+        assert "| Method" in result
+        assert "| Quick" in result
+        assert "| ---" in result
+        assert "========" not in result
+
+    def test_grid_table_converted(self):
+        from great_docs._renderer.renderer import _convert_rst_text
+
+        text = (
+            "+--------+-------+\n"
+            "| Name   | Value |\n"
+            "+========+=======+\n"
+            "| alpha  | 1     |\n"
+            "+--------+-------+\n"
+        )
+        result = _convert_rst_text(text)
+        assert "| Name" in result
+        assert "| alpha" in result
+        assert "| ---" in result
+        assert "+--------+" not in result
+
+
+class TestRendererOverloadSignatures:
+    """Overloaded functions render all @overload signatures."""
+
+    def test_render_overload_signatures(self):
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+        # Create a simple set of "overload" lines
+        sig_lines = ["process(data: str) -> bytes", "process(data: bytes) -> str"]
+        result = renderer._render_overload_signatures("process", [])
+        assert "```python" in result
+
+    def test_overload_empty_falls_back(self):
+        """Empty overloads list produces a basic signature."""
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+        result = renderer._render_overload_signatures("func", [])
+        assert "func()" in result
+
+
+class TestRendererDataclassAttributes:
+    """Dataclass field introspection ensures all fields appear in Attributes."""
+
+    def test_is_griffe_dataclass_true(self):
+        """A griffe object with 'dataclass' label is detected."""
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer.renderer import _is_griffe_dataclass
+
+        obj = MagicMock()
+        obj.labels = {"dataclass"}
+        assert _is_griffe_dataclass(obj) is True
+
+    def test_is_griffe_dataclass_false(self):
+        """A griffe object without 'dataclass' label returns False."""
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer.renderer import _is_griffe_dataclass
+
+        obj = MagicMock()
+        obj.labels = {"class"}
+        assert _is_griffe_dataclass(obj) is False
+
+    def test_get_dataclass_field_names(self):
+        """Dynamic import of a stdlib dataclass returns all field names."""
+        import dataclasses as _dc
+        import sys
+        import types
+
+        from great_docs._renderer.renderer import _get_dataclass_field_names
+
+        # Create a temporary dataclass in a temporary module
+        mod = types.ModuleType("_test_dc_mod")
+
+        @_dc.dataclass
+        class SampleDC:
+            name: str = ""
+            count: int = 0
+            items: list = _dc.field(default_factory=list)
+
+        mod.SampleDC = SampleDC
+        sys.modules["_test_dc_mod"] = mod
+
+        try:
+            obj = type(
+                "FakeObj",
+                (),
+                {"canonical_path": "_test_dc_mod.SampleDC", "path": "_test_dc_mod.SampleDC"},
+            )()
+            result = _get_dataclass_field_names(obj)
+            assert result == ["name", "count", "items"]
+        finally:
+            del sys.modules["_test_dc_mod"]
+
+    def test_get_param_descriptions(self):
+        """Parameter descriptions are extracted from parsed docstring sections."""
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer._griffe_compat import docstrings as ds
+        from great_docs._renderer.renderer import _get_param_descriptions
+
+        param1 = MagicMock(spec=ds.DocstringParameter)
+        param1.name = "name"
+        param1.description = "The name of the item."
+
+        param2 = MagicMock(spec=ds.DocstringParameter)
+        param2.name = "count"
+        param2.description = "Number of items."
+
+        section = MagicMock(spec=ds.DocstringSectionParameters)
+        section.value = [param1, param2]
+
+        docstring = MagicMock()
+        docstring.parsed = [section]
+
+        obj = MagicMock()
+        obj.docstring = docstring
+
+        result = _get_param_descriptions(obj)
+        assert result == {"name": "The name of the item.", "count": "Number of items."}
+
+    def test_get_dataclass_field_names_non_dataclass_returns_none(self):
+        """Non-dataclass returns None."""
+        from great_docs._renderer.renderer import _get_dataclass_field_names
+
+        obj = type("FakeObj", (), {"canonical_path": "os.path", "path": "os.path"})()
+        result = _get_dataclass_field_names(obj)
+        assert result is None
+
+
+class TestRendererSphinxRoles:
+    """Sphinx cross-reference roles → markdown code spans."""
+
+    def test_func_role(self):
+        from great_docs._renderer.renderer import _convert_sphinx_roles
+
+        assert _convert_sphinx_roles(":func:`get_object`") == "`get_object()`"
+
+    def test_class_role(self):
+        from great_docs._renderer.renderer import _convert_sphinx_roles
+
+        assert _convert_sphinx_roles(":class:`MyClass`") == "`MyClass`"
+
+    def test_exc_role(self):
+        from great_docs._renderer.renderer import _convert_sphinx_roles
+
+        assert _convert_sphinx_roles(":exc:`ValueError`") == "`ValueError`"
+
+    def test_py_prefix_role(self):
+        from great_docs._renderer.renderer import _convert_sphinx_roles
+
+        assert _convert_sphinx_roles(":py:func:`bar`") == "`bar()`"
+
+    def test_meth_role_appends_parens(self):
+        from great_docs._renderer.renderer import _convert_sphinx_roles
+
+        assert _convert_sphinx_roles(":meth:`run`") == "`run()`"
+
+    def test_attr_role_no_parens(self):
+        from great_docs._renderer.renderer import _convert_sphinx_roles
+
+        assert _convert_sphinx_roles(":attr:`name`") == "`name`"
+
+    def test_multiple_roles_in_text(self):
+        from great_docs._renderer.renderer import _convert_sphinx_roles
+
+        text = "Use :func:`foo` and :class:`Bar` together."
+        result = _convert_sphinx_roles(text)
+        assert result == "Use `foo()` and `Bar` together."
+
+    def test_func_already_has_parens(self):
+        from great_docs._renderer.renderer import _convert_sphinx_roles
+
+        assert _convert_sphinx_roles(":func:`foo()`") == "`foo()`"
+
+
+class TestRendererRstDirectives:
+    """RST admonition / version directives → Quarto callout blocks."""
+
+    def test_inline_note(self):
+        from great_docs._renderer.renderer import _convert_rst_directives
+
+        result = _convert_rst_directives(".. note:: Something important.")
+        assert ".callout-note" in result
+        assert "Something important." in result
+        assert ":::" in result
+
+    def test_inline_warning(self):
+        from great_docs._renderer.renderer import _convert_rst_directives
+
+        result = _convert_rst_directives(".. warning:: Be careful.")
+        assert ".callout-warning" in result
+        assert "Be careful." in result
+
+    def test_inline_versionadded(self):
+        from great_docs._renderer.renderer import _convert_rst_directives
+
+        result = _convert_rst_directives(".. versionadded:: 2.8.1")
+        assert ".callout-note" in result
+        assert "Added in version" in result
+        assert "2.8.1" in result
+
+    def test_inline_deprecated(self):
+        from great_docs._renderer.renderer import _convert_rst_directives
+
+        result = _convert_rst_directives(".. deprecated:: 2.6 Use X instead.")
+        assert ".callout-warning" in result
+        assert "Deprecated since version" in result
+        assert "2.6" in result
+
+    def test_block_note(self):
+        from great_docs._renderer.renderer import _convert_rst_directives
+
+        text = ".. note::\n\n    This is the note body.\n"
+        result = _convert_rst_directives(text)
+        assert ".callout-note" in result
+        assert "This is the note body." in result
+
+    def test_block_tip(self):
+        from great_docs._renderer.renderer import _convert_rst_directives
+
+        text = ".. tip::\n\n    Helpful advice.\n"
+        result = _convert_rst_directives(text)
+        assert ".callout-tip" in result
+        assert "Helpful advice." in result
+
+    def test_danger_maps_to_important(self):
+        from great_docs._renderer.renderer import _convert_rst_directives
+
+        result = _convert_rst_directives(".. danger:: Critical issue.")
+        assert ".callout-important" in result
+
+    def test_bare_directive(self):
+        from great_docs._renderer.renderer import _convert_rst_directives
+
+        result = _convert_rst_directives(".. note::")
+        assert ".callout-note" in result
+        assert ":::" in result
+
+    def test_versionchanged_with_block_body(self):
+        from great_docs._renderer.renderer import _convert_rst_directives
+
+        text = ".. versionchanged:: 3.0\n\n    New behaviour.\n"
+        result = _convert_rst_directives(text)
+        assert "Changed in version" in result
+        assert "3.0" in result
+
+
+class TestRendererBoldSectionHeaders:
+    """``**Examples**::`` → proper QMD section headings."""
+
+    def test_examples_header(self):
+        from great_docs._renderer.renderer import _convert_bold_section_headers
+
+        result = _convert_bold_section_headers("**Examples**::", 2)
+        assert "## Examples" in result
+        assert ".doc-section-examples" in result
+
+    def test_notes_header(self):
+        from great_docs._renderer.renderer import _convert_bold_section_headers
+
+        result = _convert_bold_section_headers("**Notes**::", 3)
+        assert "### Notes" in result
+        assert ".doc-section-notes" in result
+
+    def test_see_also_header(self):
+        from great_docs._renderer.renderer import _convert_bold_section_headers
+
+        result = _convert_bold_section_headers("**See Also**::", 2)
+        assert ".doc-section-see-also" in result
+
+    def test_non_matching_text_unchanged(self):
+        from great_docs._renderer.renderer import _convert_bold_section_headers
+
+        text = "This is **bold** text."
+        assert _convert_bold_section_headers(text, 2) == text
+
+
+class TestRendererSphinxFields:
+    """Sphinx-style ``:param:`` / ``:returns:`` / ``:raises:`` fields → sections."""
+
+    def test_param_and_type(self):
+        from great_docs._renderer.renderer import _convert_sphinx_fields
+
+        text = ":param x: The x value.\n:type x: int"
+        result = _convert_sphinx_fields(text, 2)
+        assert "## Parameters" in result
+        assert "x" in result
+        assert "int" in result
+        assert "The x value." in result
+
+    def test_returns_and_rtype(self):
+        from great_docs._renderer.renderer import _convert_sphinx_fields
+
+        text = ":returns: The result.\n:rtype: str"
+        result = _convert_sphinx_fields(text, 2)
+        assert "## Returns" in result
+        assert "str" in result
+        assert "The result." in result
+
+    def test_raises(self):
+        from great_docs._renderer.renderer import _convert_sphinx_fields
+
+        text = ":raises ValueError: If bad input."
+        result = _convert_sphinx_fields(text, 2)
+        assert "## Raises" in result
+        assert "ValueError" in result
+        assert "If bad input." in result
+
+    def test_combined_fields(self):
+        from great_docs._renderer.renderer import _convert_sphinx_fields
+
+        text = (
+            "Description text.\n\n"
+            ":param x: The x.\n"
+            ":type x: int\n"
+            ":returns: Result.\n"
+            ":rtype: str\n"
+            ":raises ValueError: Bad."
+        )
+        result = _convert_sphinx_fields(text, 2)
+        assert "Description text." in result
+        assert "## Parameters" in result
+        assert "## Returns" in result
+        assert "## Raises" in result
+
+    def test_no_fields_unchanged(self):
+        from great_docs._renderer.renderer import _convert_sphinx_fields
+
+        text = "Just normal text."
+        assert _convert_sphinx_fields(text, 2) == text
+
+
+class TestRendererGoogleSections:
+    """Google-style ``Args:`` / ``Returns:`` / ``Raises:`` sections → QMD."""
+
+    def test_args_section(self):
+        from great_docs._renderer.renderer import _convert_google_sections
+
+        text = "Args:\n    x: The x value.\n    y: The y value."
+        result = _convert_google_sections(text, 2)
+        assert "## Parameters" in result
+        assert "x" in result
+        assert "y" in result
+
+    def test_returns_section(self):
+        from great_docs._renderer.renderer import _convert_google_sections
+
+        text = "Returns:\n    A dict of results."
+        result = _convert_google_sections(text, 2)
+        assert "## Returns" in result
+        assert "A dict of results." in result
+
+    def test_raises_section(self):
+        from great_docs._renderer.renderer import _convert_google_sections
+
+        text = "Raises:\n    ValueError: If bad input.\n    TypeError: If wrong type."
+        result = _convert_google_sections(text, 2)
+        assert "## Raises" in result
+        assert "ValueError" in result
+        assert "TypeError" in result
+
+    def test_note_section(self):
+        from great_docs._renderer.renderer import _convert_google_sections
+
+        text = "Note:\n    This is important."
+        result = _convert_google_sections(text, 2)
+        assert "## Note" in result
+        assert ".doc-section-notes" in result
+
+    def test_example_section(self):
+        from great_docs._renderer.renderer import _convert_google_sections
+
+        text = "Examples:\n    >>> foo()\n    42"
+        result = _convert_google_sections(text, 3)
+        assert "### Examples" in result
+        assert ".doc-section-examples" in result
+
+    def test_combined_sections(self):
+        from great_docs._renderer.renderer import _convert_google_sections
+
+        text = (
+            "Description.\n\n"
+            "Args:\n    x: The x.\n\n"
+            "Returns:\n    The result.\n\n"
+            "Raises:\n    ValueError: Bad."
+        )
+        result = _convert_google_sections(text, 2)
+        assert "Description." in result
+        assert "## Parameters" in result
+        assert "## Returns" in result
+        assert "## Raises" in result
+
+    def test_no_sections_unchanged(self):
+        from great_docs._renderer.renderer import _convert_google_sections
+
+        text = "Just normal text."
+        assert _convert_google_sections(text, 2) == text
+
+
+class TestRendererDoctestFencing:
+    """Unfenced ``>>>`` doctest blocks → fenced ```python code blocks."""
+
+    def test_single_doctest_line(self):
+        from great_docs._renderer.renderer import _fence_doctest_blocks
+
+        text = ">>> print('hello')"
+        result = _fence_doctest_blocks(text)
+        assert "```python" in result
+        assert ">>> print('hello')" in result
+        assert result.endswith("```")
+
+    def test_multi_line_doctest(self):
+        from great_docs._renderer.renderer import _fence_doctest_blocks
+
+        text = ">>> x = 1\n>>> y = 2\n>>> x + y"
+        result = _fence_doctest_blocks(text)
+        assert result.count("```python") == 1
+        assert result.count("```") == 2
+
+    def test_doctest_with_continuation(self):
+        from great_docs._renderer.renderer import _fence_doctest_blocks
+
+        text = ">>> for i in range(3):\n...     print(i)"
+        result = _fence_doctest_blocks(text)
+        assert "```python" in result
+        assert "... " in result
+
+    def test_interspersed_text(self):
+        from great_docs._renderer.renderer import _fence_doctest_blocks
+
+        text = "First example:\n\n>>> x = 1\n\nSecond example:\n\n>>> y = 2"
+        result = _fence_doctest_blocks(text)
+        assert result.count("```python") == 2
+
+    def test_no_doctest_unchanged(self):
+        from great_docs._renderer.renderer import _fence_doctest_blocks
+
+        text = "Just some normal text."
+        assert _fence_doctest_blocks(text) == text
+
+    def test_bare_prompt(self):
+        from great_docs._renderer.renderer import _fence_doctest_blocks
+
+        text = ">>>"
+        result = _fence_doctest_blocks(text)
+        assert "```python" in result
+
+    def test_in_render_section_text(self):
+        """Doctest fencing is applied in _render_section_text."""
+        from great_docs._renderer.renderer import _convert_rst_text, _fence_doctest_blocks
+
+        text = "Example usage:\n\n>>> foo(42)\n>>> bar()"
+        result = _fence_doctest_blocks(_convert_rst_text(text))
+        assert "```python" in result
+        assert ">>> foo(42)" in result
+
+
+class TestRendererCallableParens:
+    """Callable objects get ``()`` appended to their heading name."""
+
+    def test_function_heading_has_parens(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        doc = MagicMock(spec=["name", "obj", "__class__"])
+        doc.name = "my_func"
+        doc.obj = MagicMock()
+        doc.obj.path = "pkg.my_func"
+        doc.obj.kind.value = "function"
+        doc.obj.labels = set()
+
+        # Make isinstance check work for DocFunction
+        from great_docs._renderer import layout
+
+        doc.__class__ = layout.DocFunction
+
+        result = renderer.render_header(doc)
+        assert "my_func()" in result
+        assert "# my_func()" in result
+
+    def test_class_heading_no_parens(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        doc = MagicMock(spec=["name", "obj", "__class__"])
+        doc.name = "MyClass"
+        doc.obj = MagicMock()
+        doc.obj.path = "pkg.MyClass"
+        doc.obj.kind.value = "class"
+        doc.obj.labels = {"class"}
+
+        from great_docs._renderer import layout
+
+        doc.__class__ = layout.DocClass
+
+        result = renderer.render_header(doc)
+        assert "MyClass" in result
+        assert "MyClass()" not in result
+
+
+class TestRendererTypeBadgeClasses:
+    """Headings get ``.doc-type-{kind}`` CSS classes."""
+
+    def test_function_type_class(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer import layout
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        doc = MagicMock(spec=["name", "obj", "__class__"])
+        doc.name = "my_func"
+        doc.obj = MagicMock()
+        doc.obj.path = "pkg.my_func"
+        doc.obj.kind.value = "function"
+        doc.obj.labels = set()
+        doc.__class__ = layout.DocFunction
+
+        result = renderer.render_header(doc)
+        assert ".doc-type-function" in result
+
+    def test_class_type_class(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer import layout
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        doc = MagicMock(spec=["name", "obj", "__class__"])
+        doc.name = "MyClass"
+        doc.obj = MagicMock()
+        doc.obj.path = "pkg.MyClass"
+        doc.obj.kind.value = "class"
+        doc.obj.labels = {"class"}
+        doc.__class__ = layout.DocClass
+
+        result = renderer.render_header(doc)
+        assert ".doc-type-class" in result
+
+    def test_enum_type_class(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer import layout
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        doc = MagicMock(spec=["name", "obj", "__class__"])
+        doc.name = "Color"
+        doc.obj = MagicMock()
+        doc.obj.path = "pkg.Color"
+        doc.obj.kind.value = "class"
+        doc.obj.labels = {"enum"}
+        doc.__class__ = layout.DocClass
+
+        result = renderer.render_header(doc)
+        assert ".doc-type-enum" in result
+
+    def test_attribute_type_class(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer import layout
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        doc = MagicMock(spec=["name", "obj", "__class__"])
+        doc.name = "MY_CONST"
+        doc.obj = MagicMock()
+        doc.obj.path = "pkg.MY_CONST"
+        doc.obj.kind.value = "attribute"
+        doc.obj.labels = set()
+        doc.__class__ = layout.DocAttribute
+
+        result = renderer.render_header(doc)
+        assert ".doc-type-attribute" in result
+        assert "MY_CONST()" not in result
+
+
+class TestRendererSignatureMultiline:
+    """Signatures with many arguments auto-wrap to multi-line."""
+
+    def test_short_sig_stays_single_line(self):
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+        result = renderer._signature_func_or_class(
+            type(
+                "FakeEl",
+                (),
+                {
+                    "name": "foo",
+                    "path": "pkg.foo",
+                    "parameters": [],
+                    "is_class": False,
+                    "parent": None,
+                },
+            )()
+        )
+        assert "foo()" in result
+        assert "\n    " not in result  # no indentation = single line
+
+    def test_long_sig_wraps(self):
+        """Signatures exceeding 80 chars wrap to multi-line."""
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer._griffe_compat import dataclasses as dc
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        params = []
+        for pname in ["very_long_param_one", "very_long_param_two", "very_long_param_three"]:
+            p = MagicMock(spec=dc.Parameter)
+            p.name = pname
+            p.kind = dc.ParameterKind.positional_or_keyword
+            p.annotation = None
+            p.default = None
+            params.append(p)
+
+        el = MagicMock()
+        el.name = "a_function_with_a_really_long_name"
+        el.path = "pkg.a_function_with_a_really_long_name"
+        el.is_class = False
+        el.parent = None
+        el.parameters = dc.Parameters(*params)
+
+        result = renderer._signature_func_or_class(el)
+        assert "\n    " in result  # has indentation = multi-line
+
+
+# =============================================================================
+# P3 renderer improvements
+# =============================================================================
+
+
+class TestRendererConstantValues:
+    """Constants include annotation and value in their signature."""
+
+    def test_bare_constant_signature(self):
+        """Constant with no annotation or value renders as plain name."""
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+        el = MagicMock()
+        el.name = "MY_CONST"
+        el.path = "pkg.MY_CONST"
+        el.is_class = False
+        el.parent = None
+        el.annotation = None
+        el.value = None
+
+        result = renderer._signature_module_or_attr(el)
+        assert result == "`MY_CONST`"
+
+    def test_constant_with_annotation(self):
+        """Constant with type annotation renders as ``NAME: type``."""
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+        el = MagicMock()
+        el.name = "TIMEOUT"
+        el.path = "pkg.TIMEOUT"
+        el.is_class = False
+        el.parent = None
+        el.annotation = "int"
+        el.value = None
+
+        result = renderer._signature_module_or_attr(el)
+        assert result == "`TIMEOUT: int`"
+
+    def test_constant_with_value(self):
+        """Constant with value renders as ``NAME = value``."""
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+        el = MagicMock()
+        el.name = "MAX_RETRIES"
+        el.path = "pkg.MAX_RETRIES"
+        el.is_class = False
+        el.parent = None
+        el.annotation = None
+        el.value = "3"
+
+        result = renderer._signature_module_or_attr(el)
+        assert result == "`MAX_RETRIES = 3`"
+
+    def test_constant_with_both(self):
+        """Constant with annotation and value renders as ``NAME: type = value``."""
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+        el = MagicMock()
+        el.name = "DEFAULT_PORT"
+        el.path = "pkg.DEFAULT_PORT"
+        el.is_class = False
+        el.parent = None
+        el.annotation = "int"
+        el.value = "8080"
+
+        result = renderer._signature_module_or_attr(el)
+        assert result == "`DEFAULT_PORT: int = 8080`"
+
+    def test_constant_long_value_skipped(self):
+        """Values exceeding 200 chars are not included."""
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+        el = MagicMock()
+        el.name = "BIG"
+        el.path = "pkg.BIG"
+        el.is_class = False
+        el.parent = None
+        el.annotation = "str"
+        el.value = "x" * 201
+
+        result = renderer._signature_module_or_attr(el)
+        assert result == "`BIG: str`"
+        assert "x" * 201 not in result
+
+
+class TestRendererNonCallableCleanup:
+    """Enums and TypedDicts do not get ``()`` in their signature."""
+
+    def test_enum_signature_no_parens(self):
+        """Enum class signature has no parentheses."""
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer._griffe_compat import dataclasses as dc
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        el = MagicMock(spec=dc.Class)
+        el.__class__ = dc.Class
+        el.name = "Color"
+        el.path = "pkg.Color"
+        el.is_class = True
+        el.parent = None
+        el.labels = {"enum"}
+        el.bases = []
+
+        result = renderer._signature_func_or_class(el)
+        assert "Color" in result
+        assert "Color()" not in result
+
+    def test_typeddict_signature_no_parens(self):
+        """TypedDict class signature has no parentheses."""
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer._griffe_compat import dataclasses as dc
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        el = MagicMock(spec=dc.Class)
+        el.__class__ = dc.Class
+        el.name = "Config"
+        el.path = "pkg.Config"
+        el.is_class = True
+        el.parent = None
+        el.labels = set()
+        el.bases = ["TypedDict"]
+
+        result = renderer._signature_func_or_class(el)
+        assert "Config" in result
+        assert "Config()" not in result
+
+    def test_regular_class_still_has_parens(self):
+        """Normal classes retain ``()`` in their signature."""
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer._griffe_compat import dataclasses as dc
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        el = MagicMock(spec=dc.Class)
+        el.__class__ = dc.Class
+        el.name = "Widget"
+        el.path = "pkg.Widget"
+        el.is_class = True
+        el.parent = None
+        el.labels = set()
+        el.bases = ["object"]
+        el.parameters = dc.Parameters()
+
+        result = renderer._signature_func_or_class(el)
+        assert "Widget()" in result
+
+
+class TestRendererSectionSeparators:
+    """Class member docs are separated by horizontal rules."""
+
+    def test_separators_between_methods(self):
+        """Methods section includes --- separators between member docs."""
+        from unittest.mock import MagicMock, patch
+
+        from great_docs._renderer import layout
+        from great_docs._renderer._griffe_compat import dataclasses as dc
+        from great_docs._renderer._griffe_compat import docstrings as ds
+        from great_docs._renderer.renderer import MdRenderer
+
+        renderer = MdRenderer()
+        renderer.display_name = "name"
+
+        # Build minimal griffe-level function objects
+        def _make_func_obj(name):
+            obj = MagicMock(spec=dc.Function)
+            obj.__class__ = dc.Function
+            obj.name = name
+            obj.path = f"pkg.MyClass.{name}"
+            obj.is_function = True
+            obj.is_attribute = False
+            obj.is_class = False
+            obj.kind.value = "function"
+            obj.labels = set()
+            obj.parent = MagicMock()
+            obj.parent.name = "MyClass"
+            obj.parent.is_class = True
+            obj.parameters = dc.Parameters()
+            obj.docstring = MagicMock(spec=dc.Docstring)
+            obj.docstring.parsed = [ds.DocstringSectionText(value=f"Docstring for {name}.")]
+            return obj
+
+        def _make_method_doc(name, func_obj):
+            doc = layout.DocFunction(
+                name=name,
+                obj=func_obj,
+                anchor=f"pkg.MyClass.{name}",
+                signature_name="relative",
+            )
+            return doc
+
+        func_foo = _make_func_obj("foo")
+        func_bar = _make_func_obj("bar")
+        method1 = _make_method_doc("foo", func_foo)
+        method2 = _make_method_doc("bar", func_bar)
+
+        cls_obj = MagicMock(spec=dc.Class)
+        cls_obj.__class__ = dc.Class
+        cls_obj.name = "MyClass"
+        cls_obj.path = "pkg.MyClass"
+        cls_obj.is_class = True
+        cls_obj.is_function = False
+        cls_obj.is_attribute = False
+        cls_obj.kind.value = "class"
+        cls_obj.labels = set()
+        cls_obj.bases = []
+        cls_obj.parent = None
+        cls_obj.parameters = dc.Parameters()
+        cls_obj.docstring = MagicMock(spec=dc.Docstring)
+        cls_obj.docstring.parsed = [ds.DocstringSectionText(value="A class.")]
+
+        el = layout.DocClass(
+            name="MyClass",
+            obj=cls_obj,
+            anchor="pkg.MyClass",
+            signature_name="relative",
+            members=[method1, method2],
+        )
+
+        result = renderer._render_doc_class_module(el)
+
+        # Should contain --- separator(s) between summary and members
+        assert "---" in result
+
+
+class TestRendererRstCitations:
+    """RST citation markers are converted to markdown numbered lists."""
+
+    def test_simple_citations(self):
+        """Basic ``.. [1]`` markers become numbered list items."""
+        from great_docs._renderer.renderer import _convert_rst_citations
+
+        text = ".. [1] Author (2023). Title.\n.. [2] Another ref."
+        result = _convert_rst_citations(text)
+        assert "1. Author (2023). Title." in result
+        assert "2. Another ref." in result
+        assert ".. [1]" not in result
+
+    def test_citation_with_url(self):
+        """Bare URLs in citation bodies get auto-linked."""
+        from great_docs._renderer.renderer import _convert_rst_citations
+
+        text = ".. [1] See https://example.com for details."
+        result = _convert_rst_citations(text)
+        assert "1." in result
+        assert "<https://example.com>" in result
+
+    def test_no_citations_unchanged(self):
+        """Text without citation markers passes through unchanged."""
+        from great_docs._renderer.renderer import _convert_rst_citations
+
+        text = "Regular paragraph text.\nNo citations here."
+        result = _convert_rst_citations(text)
+        assert result == text
+
+    def test_citations_in_convert_rst_text(self):
+        """Citations are converted as part of the full RST → Markdown pipeline."""
+        from great_docs._renderer.renderer import _convert_rst_text
+
+        text = "References\n\n.. [1] First ref.\n.. [2] Second ref."
+        result = _convert_rst_text(text)
+        assert "1. First ref." in result
+        assert "2. Second ref." in result
+
+    def test_multi_line_citation(self):
+        """Multi-line citations are joined."""
+        from great_docs._renderer.renderer import _convert_rst_citations
+
+        text = ".. [1] Author (2023).\n    Title of the work."
+        result = _convert_rst_citations(text)
+        assert "1. Author (2023). Title of the work." in result
+
+
+class TestRendererRstMathDisplay:
+    """``.. math::`` directive is converted to ``$$...$$`` display math."""
+
+    def test_math_directive_to_display_math(self):
+        """``.. math::`` block becomes ``$$`` display math."""
+        from great_docs._renderer.renderer import _convert_rst_text
+
+        text = "Some text.\n\n.. math::\n\n    E = mc^2\n"
+        result = _convert_rst_text(text)
+        assert "$$" in result
+        assert "E = mc^2" in result
+        assert ".. math::" not in result
+
+    def test_inline_math_converted(self):
+        """Inline ``:math:`` roles become ``$...$``."""
+        from great_docs._renderer.renderer import _convert_rst_text
+
+        text = "The formula :math:`x^2` is simple."
+        result = _convert_rst_text(text)
+        assert "$x^2$" in result
+        assert ":math:" not in result
+
+
+class TestRendererIsNonCallableClass:
+    """Helper function _is_non_callable_class detects enums and TypedDicts."""
+
+    def test_enum_detected(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer.renderer import _is_non_callable_class
+
+        obj = MagicMock()
+        obj.labels = {"enum"}
+        obj.bases = []
+        assert _is_non_callable_class(obj) is True
+
+    def test_typeddict_detected_by_base(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer.renderer import _is_non_callable_class
+
+        obj = MagicMock()
+        obj.labels = set()
+        obj.bases = ["TypedDict"]
+        assert _is_non_callable_class(obj) is True
+
+    def test_regular_class_not_detected(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer.renderer import _is_non_callable_class
+
+        obj = MagicMock()
+        obj.labels = set()
+        obj.bases = ["object"]
+        assert _is_non_callable_class(obj) is False
+
+    def test_int_enum_detected(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer.renderer import _is_non_callable_class
+
+        obj = MagicMock()
+        obj.labels = set()
+        obj.bases = ["IntEnum"]
+        assert _is_non_callable_class(obj) is True
+
+    def test_str_enum_detected(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._renderer.renderer import _is_non_callable_class
+
+        obj = MagicMock()
+        obj.labels = set()
+        obj.bases = ["StrEnum"]
+        assert _is_non_callable_class(obj) is True

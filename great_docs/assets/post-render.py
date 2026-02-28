@@ -379,7 +379,7 @@ def translate_sphinx_fields(html_content):
     """
     Convert Sphinx field-list directives into structured doc sections.
 
-    After quartodoc rendering, Sphinx-style docstrings with `:param:`,
+    After rendering, Sphinx-style docstrings with `:param:`,
     `:type:`, `:returns:`, `:rtype:`, and `:raises:` fields end up
     mashed into a single `<p>` tag:
 
@@ -388,7 +388,7 @@ def translate_sphinx_fields(html_content):
     ```
 
     This function parses those fields and emits the same `<section>` /
-    `<dl>` / `<dt>` / `<dd>` structure that quartodoc produces for
+    `<dl>` / `<dt>` / `<dd>` structure that the renderer produces for
     NumPy-style Parameters / Returns / Raises sections.
     """
 
@@ -523,7 +523,7 @@ def translate_google_fields(html_content):
     """
     Convert Google-style docstring sections into structured doc sections.
 
-    After quartodoc rendering, Google-style docstrings with sections like
+    After rendering, Google-style docstrings with sections like
     ``Args:``, ``Returns:``, ``Raises:``, ``Note:``, ``Example:``,
     ``Warning:``, ``References:``, and ``See Also:`` end up as flat
     ``<p>`` tags::
@@ -536,7 +536,7 @@ def translate_google_fields(html_content):
     Indented continuation text renders as ``<pre><code>`` blocks adjacent
     to the section ``<p>``.  This function detects both patterns and emits
     the same ``<section>``/``<h1>``/``<dl>``/``<dt>``/``<dd>`` markup that
-    quartodoc produces for NumPy-style sections.
+    the renderer produces for NumPy-style sections.
     """
 
     _PARAM_SECTIONS = {"Args", "Arguments", "Parameters", "Params"}
@@ -715,7 +715,7 @@ def translate_sphinx_roles(html_content):
     """
     Convert Sphinx cross-reference roles into clean HTML.
 
-    Quartodoc sometimes passes through Sphinx-style roles verbatim.  The most
+    The renderer sometimes passes through Sphinx-style roles verbatim.  The most
     common rendered patterns are:
 
     * ``:py:exc:<code>ValueError</code>``  →  ``<code>ValueError</code>``
@@ -771,7 +771,7 @@ def translate_rst_directives(html_content):
     Convert RST admonition / version directives into styled HTML callouts.
 
     Handles directives that appear as literal text in ``<p>`` tags after
-    quartodoc rendering, for example:
+    rendering, for example:
 
     * ``<p>.. versionadded:: 2.8.1</p>``
     * ``<p>.. deprecated:: 2.6 Use X instead.</p>``
@@ -882,7 +882,7 @@ def translate_rst_directives(html_content):
     )
 
     # Pattern 3 – directive misinterpreted as a return-type annotation in a
-    # <dt>/<dd> pair.  quartodoc's numpy parser sometimes treats directives
+    # <dt>/<dd> pair.  the renderer's numpy parser sometimes treats directives
     # like ``.. versionadded:: 2.0`` at the end of a docstring as an extra
     # return entry, producing:
     #   <dt><code>...<span class="parameter-annotation">.. versionadded:: 2.0
@@ -941,12 +941,12 @@ def translate_bold_section_headers(html_content):
     Convert bold-text section headings into proper doc-section markup.
 
     Sphinx-format docstrings sometimes use ``**Examples**::`` to introduce
-    a section.  After quartodoc rendering this becomes::
+    a section.  After rendering this becomes::
 
         <p><strong>Examples</strong>::</p>
 
     This function converts those into the same ``<section>``/``<h1>``
-    structure that quartodoc uses for NumPy-style sections so the page
+    structure that the renderer uses for NumPy-style sections so the page
     has a consistent look.
     """
 
@@ -985,7 +985,7 @@ def fix_doctest_blockquotes(html_content):
     """
     Convert nested blockquotes from doctest `>>>` lines into code blocks.
 
-    When quartodoc produces an Example section with raw `>>>` lines in the
+    When the renderer produces an Example section with raw `>>>` lines in the
     `.qmd` file, Quarto/Pandoc interprets the leading `>` characters as
     Markdown blockquote markers.  A `>>>` line becomes triple-nested
     `<blockquote>` elements:
@@ -1040,7 +1040,7 @@ def fix_plain_doctest_code_blocks(html_content):
     Convert plain ``<pre><code>`` blocks containing doctest ``>>>`` lines
     into properly highlighted Python code blocks.
 
-    When quartodoc renders consecutive doctest examples separated by blank
+    When the renderer renders consecutive doctest examples separated by blank
     lines, only the first block gets a proper ```` ```python ```` fence.
     Subsequent blocks become 4-space-indented text in the ``.qmd``, which
     Quarto renders as plain ``<pre><code>`` without syntax highlighting.
@@ -1135,7 +1135,7 @@ def translate_rst_math(html_content):
     """
     Convert RST `.. math::` directives into display-math blocks.
 
-    After quartodoc rendering, a `.. math::` block in a docstring becomes
+    After rendering, a `.. math::` block in a docstring becomes
     literal HTML of the form:
 
     ```html
@@ -1202,7 +1202,7 @@ def translate_rst_references(html_content):
     """
     Convert RST citation references into a styled numbered list.
 
-    After quartodoc rendering, RST citations like::
+    After rendering, RST citations like::
 
         .. [1] Author (Year). "Title."
         .. [2] https://example.com
@@ -1295,6 +1295,83 @@ def extract_seealso_from_html(html_content):
     return []
 
 
+def extract_seealso_from_doc_section(html_content):
+    """
+    Extract See Also items from rendered doc-section ``<section>`` blocks.
+
+    NumPy-style and Google-style docstrings produce sections like::
+
+        <section id="see-also" class="level1 doc-section doc-section-see-also">
+        <h1 ...>See Also</h1>
+        <p>transform : Transform data before analysis.</p>
+        </section>
+
+    This function parses those sections and returns a list of referenced
+    item names (e.g., ``["transform"]``).
+    """
+    # Match <section id="see-also" ...> ... </section> blocks
+    section_pat = re.compile(
+        r'<section[^>]*\bid=["\']see-also["\'][^>]*>'
+        r"(.*?)"
+        r"</section>",
+        re.DOTALL,
+    )
+    items = []
+    for m in section_pat.finditer(html_content):
+        body = m.group(1)
+        # Remove the heading tags
+        body = re.sub(r"<h[1-6][^>]*>.*?</h[1-6]>", "", body, flags=re.DOTALL)
+        # Strip HTML tags to get plain text
+        plain = re.sub(r"<[^>]+>", "", body).strip()
+        if not plain:
+            continue
+        # Parse entries: each may be "name : description" or "name: description"
+        # or multiple comma-separated or newline-separated entries
+        for line in plain.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            # Handle comma-separated items on a single line
+            parts = line.split(",")
+            for part in parts:
+                part = part.strip()
+                if not part:
+                    continue
+                # Extract the name before any " : " or ":" separator
+                # e.g., "transform : Transform data before analysis."
+                # e.g., "``validate``: Validate a schema before processing."
+                # Strip backticks first
+                part = part.replace("``", "").replace("`", "")
+                name_match = re.match(r"^([\w.]+)(?:\s*:\s*.*)?$", part)
+                if name_match:
+                    items.append(name_match.group(1))
+    return items
+
+
+def remove_seealso_doc_section(html_content):
+    """
+    Remove ``<section id="see-also" ...>`` blocks from the HTML.
+
+    Also removes the corresponding TOC entry.
+    """
+    # Remove the section block
+    html_content = re.sub(
+        r'<section[^>]*\bid=["\']see-also["\'][^>]*>'
+        r".*?"
+        r"</section>",
+        "",
+        html_content,
+        flags=re.DOTALL,
+    )
+    # Remove the TOC entry for See Also
+    html_content = re.sub(
+        r'\s*<li><a[^>]*href=["\']#see-also["\'][^>]*>See Also</a></li>',
+        "",
+        html_content,
+    )
+    return html_content
+
+
 def generate_seealso_html(seealso_items):
     """
     Generate HTML for a "See Also" section with links to other reference pages.
@@ -1322,7 +1399,7 @@ def generate_seealso_html(seealso_items):
 def fix_dataclass_attributes(content_str):
     """Rebuild the Attributes table for dataclass pages using *_dataclass_attrs.json* metadata.
 
-    Quartodoc may only discover a subset of dataclass fields.  This function
+    The renderer may only discover a subset of dataclass fields.  This function
     replaces the ``<tbody>`` of the Attributes ``<table>`` with the complete
     set of fields recorded in the metadata file.
     """
@@ -1537,7 +1614,10 @@ for html_file in html_files:
                 )
 
             if should_add_parens:
-                h1_content += "()"
+                # Strip HTML tags to check plain text for existing ()
+                _plain = re.sub(r"<[^>]+>", "", h1_content).strip()
+                if not _plain.endswith("()"):
+                    h1_content += "()"
 
             # Replace the h1 tag with the modified content
             content[i] = line[:start] + h1_content + line[end:]
@@ -1694,7 +1774,7 @@ for html_file in html_files:
     content_str = "".join(content)
 
     # Inject constant value/annotation into constant reference pages.
-    # Replaces the bare ``<p><code>NAME</code></p>`` that quartodoc emits with a
+    # Replaces the bare ``<p><code>NAME</code></p>`` that the renderer emits with a
     # styled display showing the type annotation and assigned value.
     obj_type_for_value = object_types.get(item_name_from_file)
     if obj_type_for_value == "constant" and item_name_from_file in constant_values:
@@ -1766,7 +1846,7 @@ for html_file in html_files:
     content = [line.replace("<h2", "<h3").replace("</h2>", "</h3>") for line in content]
 
     # Inject decorator/descriptor badges into member-level headings (h3 tags)
-    # Method headings are originally h2 in quartodoc output, converted to h3 above.
+    # Method headings are originally h2 in the renderer output, converted to h3 above.
     # These headings have data-anchor-id attributes like "pkg.Class.method"
     # We look up the member type in object_types to add classmethod/staticmethod/property badges.
     # Also style member headings in code font and append () for callable members.
@@ -1792,7 +1872,9 @@ for html_file in html_files:
                 display_text = h3_content
                 # Add () for callable members
                 if member_type and member_type in _CALLABLE_MEMBER_TYPES:
-                    display_text += "()"
+                    _plain_member = re.sub(r"<[^>]+>", "", display_text).strip()
+                    if not _plain_member.endswith("()"):
+                        display_text += "()"
 
                 badge_html = ""
                 if member_type and member_type in _MEMBER_BADGE_TYPES:
@@ -1815,9 +1897,10 @@ for html_file in html_files:
                 content[i] = line.replace(h3_content + "</h3>", new_heading + "</h3>")
                 # Add code font styling to the h3 tag
                 content[i] = re.sub(
-                    r'<h3 class="anchored"',
-                    f'<h3 class="anchored" style="{_MONO_FONT}"',
+                    r"<h3([^>]*?)(?<!style=)>",
+                    f'<h3\\1 style="{_MONO_FONT}">',
                     content[i],
+                    count=1,
                 )
     else:
         # Even without object_types, style member h3 headings in code font
@@ -1825,9 +1908,10 @@ for html_file in html_files:
             anchor_match = re.search(r'<h3[^>]*data-anchor-id="[^"]+"[^>]*>(.*?)</h3>', line)
             if anchor_match:
                 content[i] = re.sub(
-                    r'<h3 class="anchored"',
-                    f'<h3 class="anchored" style="{_MONO_FONT}"',
+                    r"<h3([^>]*?)(?<!style=)>",
+                    f'<h3\\1 style="{_MONO_FONT}">',
                     content[i],
+                    count=1,
                 )
 
     # Inject property badges into the Attributes table
@@ -1887,8 +1971,19 @@ for html_file in html_files:
                     )
                 break
 
-    # Inject "See Also" section if %seealso was found
+    # Merge See Also items from %seealso directives and doc-section blocks
     content_str = "".join(content)
+    doc_section_seealso = extract_seealso_from_doc_section(content_str)
+    if doc_section_seealso:
+        content_str = remove_seealso_doc_section(content_str)
+        # Merge with %seealso items (deduplicate, preserving order)
+        seen = set(seealso_items)
+        for item in doc_section_seealso:
+            if item not in seen:
+                seealso_items.append(item)
+                seen.add(item)
+
+    # Inject unified "See Also" section at the bottom
     if seealso_items:
         seealso_html = generate_seealso_html(seealso_items)
         # Insert before </main>

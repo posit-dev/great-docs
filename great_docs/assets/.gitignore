@@ -2,7 +2,7 @@
 _site/
 /.quarto/
 
-# Quartodoc generated files
+# Generated files
 reference/
 objects.json
 

@@ -1,6 +1,6 @@
 # Example Quarto Configuration with Great Docs
 
-This example shows how to configure your quartodoc project to use great-docs.
+This example shows how to configure your documentation project to use great-docs.
 
 ## Method 1: Using the CLI (Recommended)
 

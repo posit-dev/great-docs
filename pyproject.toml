@@ -30,7 +30,6 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "quartodoc>=0.11.1",
     "jupyter>=1.1.1",
     "pyyaml>=5.4.0",
     "click>=8.0.0",
@@ -52,7 +51,6 @@ dev = [
     "twine>=3.4",
 ]
 docs = [
-    "quartodoc>=0.7.0",
     "jupyter>=1.0.0",
 ]
 
@@ -182,7 +180,6 @@ exclude = [
 module = [
     "yaml.*",
     "griffe.*",
-    "quartodoc.*",
 ]
 ignore_missing_imports = true
 

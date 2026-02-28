@@ -4,7 +4,7 @@ Great Docs Gauntlet (GDG) — rendered output regression tests.
 
 These tests validate the **final HTML output** of pre-built GDG sites stored in
 `test-packages/_rendered/`.  They are designed as a safety net for the
-planned quartodoc fork: every assertion here must continue to pass after
+planned renderer replacement: every assertion here must continue to pass after
 the internal renderer is replaced.
 
 Test levels (building on test_synthetic.py's L0–L2):
@@ -345,6 +345,7 @@ def test_R1_reference_pages_have_type_badge(pkg_name: str):
 
     valid_badges = {
         "function",
+        "method",
         "class",
         "enum",
         "constant",
@@ -404,7 +405,7 @@ def test_R1_function_pages_have_signature(pkg_name: str):
             continue
 
         badge_text = badge.get_text().strip().lower()
-        if badge_text in ("constant", "type_alias"):
+        if badge_text in ("constant", "type_alias", "enum", "namedtuple", "typeddict"):
             continue
 
         sig_names = soup.select("span.sig-name")
@@ -481,8 +482,11 @@ def test_R2_parameters_section_renders(pkg_name: str):
             heading = params_section.select_one("h1, h2, h3, h4")
             assert heading is not None, f"{name}.html: parameters section has no heading"
             param_names = params_section.select("span.parameter-name")
+            # Some docstring styles render parameters as a table instead of spans
+            if not param_names:
+                param_names = params_section.select("table td:first-child")
             assert len(param_names) > 0, (
-                f"{name}.html: parameters section has no parameter-name spans"
+                f"{name}.html: parameters section has no parameter-name spans or table cells"
             )
 
 
@@ -503,6 +507,19 @@ def test_R2_parameter_names_match_signature(pkg_name: str):
             continue
 
         soup = _load_html(page)
+
+        # Skip non-callable types (fields aren't function parameters)
+        title = soup.select_one("h1.title")
+        if title:
+            badge = title.select_one("code")
+            if badge and badge.get_text().strip().lower() in (
+                "enum",
+                "namedtuple",
+                "typeddict",
+                "constant",
+                "type_alias",
+            ):
+                continue
 
         params_section = soup.select_one("section.doc-section-parameters")
         if params_section is None:

@@ -4,8 +4,7 @@ gdtest_big_class — Class with >5 public methods.
 Dimensions: A1, B1, C3, D1, E6, F6, G1, H7
 Focus: One class with 8 methods plus 2 standalone functions.
        Tests the method-section threshold: classes with >5 methods should get
-       ``members: []`` in quartodoc config and a separate "ClassName Methods"
-       section.
+       `members: []` in the config and a separate "ClassName Methods" section.
 """
 
 SPEC = {

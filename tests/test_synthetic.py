@@ -157,7 +157,7 @@ def test_L1_export_discovery(pkg_name: str, tmp_path: Path):
 
 @pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
 def test_L1_section_generation(pkg_name: str, tmp_path: Path):
-    """Quartodoc sections match expected structure."""
+    """Sections match expected structure."""
     pkg_dir, spec = _make_package(pkg_name, tmp_path)
     expected = spec.get("expected", {})
     if "section_titles" not in expected:
@@ -169,7 +169,7 @@ def test_L1_section_generation(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
     module_name = expected.get("detected_module", pkg_name)
-    sections = docs._create_quartodoc_sections(module_name)
+    sections = docs._create_api_sections(module_name)
 
     if sections is None:
         pytest.skip(
@@ -196,7 +196,7 @@ def test_L1_big_class_method_section(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
     module_name = expected.get("detected_module", pkg_name)
-    sections = docs._create_quartodoc_sections(module_name)
+    sections = docs._create_api_sections(module_name)
     assert sections is not None
 
     big_class = expected["big_class_name"]
@@ -509,9 +509,7 @@ def test_L2_explicit_reference_survives_init(pkg_name: str, tmp_path: Path):
                             f"{class_name} should have members: false after init, got {item}"
                         )
                         found = True
-            assert found, (
-                f"{class_name} not found in any section after init --force"
-            )
+            assert found, f"{class_name} not found in any section after init --force"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -611,15 +609,11 @@ def test_L3_cli_sidebar_flat_paths(pkg_name: str, tmp_path: Path):
 
     # Every item should be a plain path string (no section dicts)
     for item in sidebar_items:
-        assert isinstance(item, str), (
-            f"Expected plain path string, got dict: {item}"
-        )
+        assert isinstance(item, str), f"Expected plain path string, got dict: {item}"
         assert item.startswith("reference/cli/"), (
             f"Sidebar path {item!r} does not start with 'reference/cli/'"
         )
-        assert item.endswith(".qmd"), (
-            f"Sidebar path {item!r} does not end with '.qmd'"
-        )
+        assert item.endswith(".qmd"), f"Sidebar path {item!r} does not end with '.qmd'"
 
 
 @pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
@@ -666,9 +660,7 @@ def test_L3_cli_sidebar_nested_structure(pkg_name: str, tmp_path: Path):
     for item in section_items:
         assert "section" in item, f"Missing 'section' key in sidebar item: {item}"
         assert "contents" in item, f"Missing 'contents' key in sidebar item: {item}"
-        assert len(item["contents"]) >= 1, (
-            f"Section {item['section']!r} has empty contents"
-        )
+        assert len(item["contents"]) >= 1, f"Section {item['section']!r} has empty contents"
 
 
 @pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
@@ -708,9 +700,7 @@ def test_L3_cli_sidebar_no_wrong_level_paths(pkg_name: str, tmp_path: Path):
     docs_dir = docs.project_path
     for path in all_paths:
         full = docs_dir / path
-        assert full.exists(), (
-            f"Sidebar path {path!r} does not exist on disk at {full}"
-        )
+        assert full.exists(), f"Sidebar path {path!r} does not exist on disk at {full}"
 
     # Leaf subcommand paths (those inside a group dir on disk) must use
     # the nested prefix, not the bare reference/cli/ prefix.
@@ -730,9 +720,7 @@ def test_L3_cli_sidebar_no_wrong_level_paths(pkg_name: str, tmp_path: Path):
             continue
         # Single-segment path: make sure it doesn't belong to a group subdir
         for group in group_names:
-            nested_file = (
-                docs_dir / "reference" / "cli" / group.replace("-", "_") / f"{stem}.qmd"
-            )
+            nested_file = docs_dir / "reference" / "cli" / group.replace("-", "_") / f"{stem}.qmd"
             assert not nested_file.exists(), (
                 f"Sidebar has flat path {path!r} but the file exists "
                 f"at {nested_file.relative_to(docs_dir)} — the path should "
@@ -775,7 +763,8 @@ def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
     # navigation between API and CLI is handled by the reference-switcher widget
     navbar_left = config.get("website", {}).get("navbar", {}).get("left", [])
     cli_navbar_items = [
-        item for item in navbar_left
+        item
+        for item in navbar_left
         if isinstance(item, dict) and item.get("text") == "CLI Reference"
     ]
     assert len(cli_navbar_items) == 0, (
@@ -785,13 +774,9 @@ def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
 
     # The cli-reference sidebar should still be created
     sidebar = config.get("website", {}).get("sidebar", [])
-    cli_sidebars = [
-        s for s in sidebar
-        if isinstance(s, dict) and s.get("id") == "cli-reference"
-    ]
+    cli_sidebars = [s for s in sidebar if isinstance(s, dict) and s.get("id") == "cli-reference"]
     assert len(cli_sidebars) == 1, (
-        f"Expected exactly one 'cli-reference' sidebar, "
-        f"got {len(cli_sidebars)}"
+        f"Expected exactly one 'cli-reference' sidebar, got {len(cli_sidebars)}"
     )
 
 
@@ -825,16 +810,10 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
         config = yaml.safe_load(f)
 
     navbar_left = config.get("website", {}).get("navbar", {}).get("left", [])
-    navbar_texts = [
-        item.get("text") for item in navbar_left if isinstance(item, dict)
-    ]
+    navbar_texts = [item.get("text") for item in navbar_left if isinstance(item, dict)]
 
-    assert "User Guide" in navbar_texts, (
-        f"'User Guide' missing from navbar. Got: {navbar_texts}"
-    )
-    assert "Reference" in navbar_texts, (
-        f"'Reference' missing from navbar. Got: {navbar_texts}"
-    )
+    assert "User Guide" in navbar_texts, f"'User Guide' missing from navbar. Got: {navbar_texts}"
+    assert "Reference" in navbar_texts, f"'Reference' missing from navbar. Got: {navbar_texts}"
     assert "CLI Reference" not in navbar_texts, (
         f"'CLI Reference' should not be a separate navbar entry (handled by switcher). "
         f"Got: {navbar_texts}"

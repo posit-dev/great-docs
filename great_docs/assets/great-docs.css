@@ -108,6 +108,22 @@ dd {
     padding-left: 1.5rem;
 }
 
+/* Lists inside definition descriptions (e.g., Returns with bullet points) */
+dd > p + ul,
+dd > p + ol {
+    margin-top: -0.5em;  /* pull list closer to the preceding paragraph */
+}
+
+dd > ul > li::marker,
+dd > ol > li::marker {
+    color: #9ca3af;  /* lighter bullet / number color */
+}
+
+/* API reference section headings (Parameters, Returns, Examples, etc.) */
+h1.doc-section {
+    font-size: 22px;
+}
+
 /* Ensure parameter descriptions are indented within doc sections */
 .doc-section-parameters dd {
     padding-left: 1.5rem;

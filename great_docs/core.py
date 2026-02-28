@@ -110,8 +110,8 @@ class GreatDocs:
         # Create _quarto.yml configuration
         self._update_quarto_config()
 
-        # Add quartodoc configuration
-        self._add_quartodoc_config()
+        # Add API reference configuration
+        self._add_api_reference_config()
         self._update_sidebar_from_sections()
         self._update_reference_index_frontmatter()
 
@@ -525,10 +525,10 @@ class GreatDocs:
 
         Sets QUARTO_PYTHON to ensure Quarto uses the correct Python environment
         where the package and its dependencies are installed. This is essential
-        for notebook execution and quartodoc introspection.
+        for notebook execution and API introspection.
 
         Also sets PYTHONPATH to include the package root directory, ensuring that
-        griffe and quartodoc can find the package even if it's not installed.
+        griffe can find the package even if it's not installed.
 
         The method looks for Python in the following order:
         1. Virtual environment in the project root (.venv/bin/python or .venv/Scripts/python.exe)
@@ -564,7 +564,7 @@ class GreatDocs:
 
         env["QUARTO_PYTHON"] = python_path
 
-        # Add package root to PYTHONPATH so griffe/quartodoc can find the package
+        # Add package root to PYTHONPATH so griffe can find the package
         # even if it's not installed (e.g., during development)
         pythonpath_dirs = [str(package_root)]
 
@@ -3336,7 +3336,7 @@ class GreatDocs:
         """
         Discover public API objects using griffe introspection.
 
-        This method uses griffe (quartodoc's introspection library) to statically analyze the
+        This method uses griffe (the project's introspection module) to statically analyze the
         package and discover all public objects by filtering out private/internal names (those
         starting with underscore).
 
@@ -3410,25 +3410,25 @@ class GreatDocs:
                         f"{', '.join(sorted(user_excluded_found))}"
                     )
 
-            # Super-safe filtering: try each object with quartodoc's get_object
+            # Super-safe filtering: try each object with the renderer's get_object
             # If it fails for ANY reason, exclude it; this catches:
             # - Cyclic aliases
             # - Unresolvable aliases
             # - Rust/PyO3 objects (KeyError)
             # - Submodules (which would cause recursive documentation issues)
-            # - Any other edge case that would crash quartodoc build
+            # - Any other edge case that would crash the API reference build
             safe_exports = []
             failed_exports = {}  # name -> error type for reporting
 
-            # Try to use quartodoc's `get_object()` for validation
-            quartodoc_get_object = None
+            # Try to use the renderer's `get_object()` for validation
+            gd_get_object = None
             try:
                 from functools import partial
 
-                from quartodoc import get_object as qd_get_object
+                from great_docs._renderer.introspection import get_object as qd_get_object
 
-                # quartodoc uses `parser="numpy"` by default which affects alias resolution
-                quartodoc_get_object = partial(qd_get_object, dynamic=True, parser="numpy")
+                # uses `parser="numpy"` by default which affects alias resolution
+                gd_get_object = partial(qd_get_object, dynamic=True, parser="numpy")
             except ImportError:
                 pass
 
@@ -3472,10 +3472,10 @@ class GreatDocs:
                     safe_exports.append(name)
                     continue
 
-                if quartodoc_get_object is not None:
+                if gd_get_object is not None:
                     try:
-                        # Try to load the object exactly as quartodoc would
-                        qd_obj = quartodoc_get_object(f"{normalized_name}:{name}")
+                        # Try to load the object exactly as the renderer would
+                        qd_obj = gd_get_object(f"{normalized_name}:{name}")
                         # Try to access members to trigger any lazy resolution errors
                         _ = qd_obj.members
                         _ = qd_obj.kind
@@ -3501,10 +3501,10 @@ class GreatDocs:
                     except KeyError:
                         failed_exports[name] = "not found (likely Rust/PyO3)"
                     except Exception as e:
-                        # Catch-all for any other error that would crash quartodoc
+                        # Catch-all for any other error that would crash the build
                         failed_exports[name] = f"{type(e).__name__}"
                 else:
-                    # Fallback: use basic griffe check if quartodoc not available
+                    # Fallback: use basic griffe check if renderer not available
                     try:
                         obj = pkg.members[name]
                         _ = obj.kind
@@ -3681,12 +3681,8 @@ class GreatDocs:
         """
         Detect whether dynamic introspection mode works for a package.
 
-        Quartodoc's `dynamic: true` mode uses runtime introspection which is more
-        accurate but can fail for packages with certain module structures (e.g.,
-        PyO3/Rust bindings, complex re-exports) that cause cyclic alias errors.
-
         This method tests if dynamic mode works by attempting to load objects
-        with quartodoc's get_object function in dynamic mode AND accessing their
+        with the renderer's get_object function in dynamic mode AND accessing their
         members (which is what triggers cyclic alias errors in some packages).
 
         Parameters
@@ -3704,9 +3700,10 @@ class GreatDocs:
 
         try:
             import griffe
-            from quartodoc import get_object as qd_get_object
+
+            from great_docs._renderer.introspection import get_object as qd_get_object
         except ImportError:
-            # If quartodoc isn't available, default to True (will fail at build time anyway)
+            # If renderer isn't available, default to True (will fail at build time anyway)
             return True
 
         # Normalize package name
@@ -3734,7 +3731,7 @@ class GreatDocs:
             try:
                 obj = qd_get_object(f"{normalized_name}:{name}", dynamic=True)
                 # Access .members to trigger cyclic alias resolution
-                # This is what quartodoc does when rendering docs
+                # This is what the renderer does when rendering docs
                 _ = obj.members
                 _ = obj.kind
                 # For classes, try to access individual members too
@@ -4139,7 +4136,7 @@ class GreatDocs:
         """
         Categorize API objects using griffe introspection.
 
-        Uses griffe (quartodoc's introspection library) to analyze the package
+        Uses griffe (the project's introspection module) to analyze the package
         structure without importing it. This is safer and works with packages
         that have non-Python components (e.g., Rust bindings).
 
@@ -4178,14 +4175,14 @@ class GreatDocs:
             # Load the package using griffe
             normalized_name = package_name.replace("-", "_")
 
-            # Try to use quartodoc's `get_object()` for validation
-            quartodoc_get_object = None
+            # Try to use the renderer's `get_object()` for validation
+            gd_get_object = None
             try:
                 from functools import partial
 
-                from quartodoc import get_object as qd_get_object
+                from great_docs._renderer.introspection import get_object as qd_get_object
 
-                quartodoc_get_object = partial(qd_get_object, dynamic=True, parser="numpy")
+                gd_get_object = partial(qd_get_object, dynamic=True, parser="numpy")
             except ImportError:
                 pass
 
@@ -4241,7 +4238,7 @@ class GreatDocs:
                         # __init__ is excluded because its parameters are already shown
                         # in the class constructor signature.
                         # We need to handle each member individually to catch cyclic aliases
-                        # AND validate each method with quartodoc to catch type hint issues
+                        # AND validate each method with get_object to catch type hint issues
                         # Collect (method_name, lineno) tuples to preserve source order
                         _INIT_DUNDERS = {"__init__", "__new__", "__init_subclass__"}
                         method_entries = []
@@ -4263,10 +4260,10 @@ class GreatDocs:
                                         member_sub = self._sub_classify_function(member)
                                         # Get line number for source ordering
                                         lineno = getattr(member, "lineno", float("inf"))
-                                        # Validate with quartodoc if available
-                                        if quartodoc_get_object is not None:
+                                        # Validate with get_object if available
+                                        if gd_get_object is not None:
                                             try:
-                                                qd_obj = quartodoc_get_object(
+                                                qd_obj = gd_get_object(
                                                     f"{normalized_name}:{name}.{member_name}"
                                                 )
                                                 # Try to access properties that might fail
@@ -4283,7 +4280,7 @@ class GreatDocs:
                                                         f"{name}.{member_name}"
                                                     ] = member_sub
                                             except Exception:
-                                                # Method can't be documented by quartodoc
+                                                # Method can't be documented by the renderer
                                                 skipped_methods.append(member_name)
                                         else:
                                             method_entries.append((member_name, lineno))
@@ -4352,7 +4349,7 @@ class GreatDocs:
                             self._extract_constant_metadata(obj, name, categories)
                     elif obj.kind.value == "module":
                         # Drill into the module to discover its public classes and functions
-                        # Use qualified names like "module.ClassName" so quartodoc resolves
+                        # Use qualified names like "module.ClassName" so the renderer resolves
                         # them relative to the package (e.g., dateutil:easter.easter)
                         module_had_members = False
                         # Build a set of short names already in the exports list so we
@@ -4382,18 +4379,18 @@ class GreatDocs:
 
                                 qualified = f"{name}.{member_name}"
 
-                                # Validate with quartodoc if available
+                                # Validate with get_object if available
                                 # Try dynamic first, fall back to static if it fails
-                                if quartodoc_get_object is not None:
+                                if gd_get_object is not None:
                                     try:
-                                        qd_obj = quartodoc_get_object(
-                                            f"{normalized_name}:{qualified}"
-                                        )
+                                        qd_obj = gd_get_object(f"{normalized_name}:{qualified}")
                                         _ = qd_obj.kind
                                     except Exception:
                                         # Dynamic mode failed; try static (no dynamic=True)
                                         try:
-                                            from quartodoc import get_object as qd_get
+                                            from great_docs._renderer.introspection import (
+                                                get_object as qd_get,
+                                            )
 
                                             qd_obj = qd_get(
                                                 f"{normalized_name}:{qualified}",
@@ -4431,9 +4428,9 @@ class GreatDocs:
                                                     # Sub-classify for descriptor types
                                                     meth_sub = self._sub_classify_function(meth)
                                                     lineno = getattr(meth, "lineno", float("inf"))
-                                                    if quartodoc_get_object is not None:
+                                                    if gd_get_object is not None:
                                                         try:
-                                                            qd_m = quartodoc_get_object(
+                                                            qd_m = gd_get_object(
                                                                 f"{normalized_name}:{qualified}.{meth_name}"
                                                             )
                                                             _ = qd_m.kind
@@ -4452,7 +4449,7 @@ class GreatDocs:
                                                         except Exception:
                                                             # Dynamic failed; try static
                                                             try:
-                                                                from quartodoc import (
+                                                                from great_docs._renderer.introspection import (
                                                                     get_object as qd_get,
                                                                 )
 
@@ -4702,9 +4699,9 @@ class GreatDocs:
 
         return categories
 
-    def _create_quartodoc_sections(self, package_name: str) -> list | None:
+    def _create_api_sections(self, package_name: str) -> list | None:
         """
-        Create quartodoc sections based on discovered package exports.
+        Create API reference sections based on discovered package exports.
 
         Uses static analysis (griffe) to discover public objects.
 
@@ -4975,11 +4972,11 @@ class GreatDocs:
         self, reference_config: list[dict]
     ) -> list[dict] | None:
         """
-        Build quartodoc sections directly from reference config without validation.
+        Build API reference sections directly from reference config without validation.
 
         This is a fallback method used when auto-discovery fails but the user has
         explicitly specified their API structure in great-docs.yml. Unlike
-        `_create_quartodoc_sections_from_config`, this method doesn't attempt to
+        `_create_api_sections_from_config`, this method doesn't attempt to
         validate the references against discovered exports.
 
         Parameters
@@ -5039,12 +5036,12 @@ class GreatDocs:
 
         return sections if sections else None
 
-    def _create_quartodoc_sections_from_config(self, package_name: str) -> list | None:
+    def _create_api_sections_from_config(self, package_name: str) -> list | None:
         """
-        Create quartodoc sections from the `reference` config in great-docs.yml.
+        Create API reference sections from the `reference` config in great-docs.yml.
 
         This method reads the explicit section configuration from great-docs.yml
-        and generates quartodoc sections accordingly. If no `reference` config
+        and generates API reference sections accordingly. If no `reference` config
         is provided, returns None to fall back to auto-discovery.
 
         Parameters
@@ -5185,9 +5182,9 @@ class GreatDocs:
 
         return sections if sections else None
 
-    def _create_quartodoc_sections_with_config(self, package_name: str) -> list | None:
+    def _create_api_sections_with_config(self, package_name: str) -> list | None:
         """
-        Create quartodoc sections, prioritizing explicit config over auto-discovery.
+        Create API reference sections, prioritizing explicit config over auto-discovery.
 
         First checks for explicit `reference` configuration in great-docs.yml.
         If not found, falls back to auto-generating sections from discovered exports.
@@ -5204,13 +5201,13 @@ class GreatDocs:
             List of section dictionaries, or None if no exports found.
         """
         # First, check for explicit reference config in great-docs.yml
-        config_sections = self._create_quartodoc_sections_from_config(package_name)
+        config_sections = self._create_api_sections_from_config(package_name)
         if config_sections:
             sections = config_sections
         else:
             # Fall back to auto-generated sections from discovered exports
             print("No reference config found, using auto-discovery")
-            sections = self._create_quartodoc_sections(package_name)
+            sections = self._create_api_sections(package_name)
 
         # Apply %nodoc filtering to remove excluded items
         if sections:
@@ -5220,7 +5217,7 @@ class GreatDocs:
 
     def _apply_nodoc_filter(self, package_name: str, sections: list[dict]) -> list[dict] | None:
         """
-        Filter out items marked with `%nodoc` from quartodoc sections.
+        Filter out items marked with `%nodoc` from API reference sections.
 
         Extracts directives from all docstrings in the package and removes
         any items (and their companion method sections) whose docstrings
@@ -5231,7 +5228,7 @@ class GreatDocs:
         package_name
             The name of the package to scan for directives.
         sections
-            The quartodoc sections to filter.
+            The API reference sections to filter.
 
         Returns
         -------
@@ -5560,6 +5557,51 @@ class GreatDocs:
         return lines
 
     @staticmethod
+    def _format_user_guide_yaml(user_guide_config: str | list | None = None) -> str:
+        """
+        Build YAML fragment for user_guide configuration.
+
+        Parameters
+        ----------
+        user_guide_config
+            - ``str``: custom directory path for user guide files
+            - ``list``: explicit section ordering
+            - ``None``: omit (auto-discover from conventional directories)
+
+        Returns
+        -------
+        str
+            Active ``user_guide:`` YAML block, or empty string when None.
+        """
+        if user_guide_config is None:
+            return ""
+
+        if isinstance(user_guide_config, str):
+            return (
+                "# User Guide Directory\n"
+                "# --------------------\n"
+                "# Custom directory for user guide source files\n"
+                f"user_guide: {user_guide_config}\n"
+            )
+
+        if isinstance(user_guide_config, list):
+            parts = [
+                "# User Guide",
+                "# ----------",
+                "# Explicit section ordering for user guide pages",
+                "user_guide:",
+            ]
+            for item in user_guide_config:
+                if isinstance(item, dict):
+                    for k, v in item.items():
+                        parts.append(f"  - {k}: {v}")
+                else:
+                    parts.append(f"  - {item}")
+            return "\n".join(parts) + "\n"
+
+        return ""
+
+    @staticmethod
     def _format_sections_yaml(sections: list | None = None) -> str:
         """
         Build YAML fragment for custom sections (examples, tutorials, etc.).
@@ -5677,6 +5719,7 @@ class GreatDocs:
         existing_sections: list | None = None
         existing_cli: dict | None = None
         existing_reference: list | None = None
+        existing_user_guide: str | list | None = None
         if config_path.exists():
             try:
                 existing_config = Config(config_path.parent)
@@ -5708,6 +5751,10 @@ class GreatDocs:
                 _reference = existing_config.reference
                 if _reference:
                     existing_reference = _reference
+                # Preserve user_guide config (custom dir or explicit ordering)
+                _user_guide = existing_config.user_guide
+                if _user_guide is not None:
+                    existing_user_guide = _user_guide
             except Exception:
                 pass
 
@@ -5723,6 +5770,7 @@ class GreatDocs:
                 existing_funding=existing_funding,
                 existing_sections=existing_sections,
                 existing_cli=existing_cli,
+                existing_user_guide=existing_user_guide,
             )
             config_path.write_text(config_content, encoding="utf-8")
             print(f"Created {config_path}")
@@ -5751,6 +5799,7 @@ class GreatDocs:
                 existing_funding=existing_funding,
                 existing_sections=existing_sections,
                 existing_cli=existing_cli,
+                existing_user_guide=existing_user_guide,
             )
             config_path.write_text(config_content, encoding="utf-8")
             print(f"Created {config_path}")
@@ -5783,6 +5832,7 @@ class GreatDocs:
             existing_sections=existing_sections,
             existing_cli=existing_cli,
             existing_reference=existing_reference,
+            existing_user_guide=existing_user_guide,
         )
 
         config_path.write_text(config_content, encoding="utf-8")
@@ -5799,6 +5849,7 @@ class GreatDocs:
         existing_funding: dict | None = None,
         existing_sections: list | None = None,
         existing_cli: dict | None = None,
+        existing_user_guide: str | list | None = None,
     ) -> str:
         """
         Generate minimal great-docs.yml without reference section.
@@ -5808,7 +5859,7 @@ class GreatDocs:
         parser
             The docstring parser style ("numpy", "google", or "sphinx").
         dynamic
-            Whether to use dynamic introspection mode for quartodoc.
+            Whether to use dynamic introspection mode for API reference generation.
         existing_authors
             Rich author metadata from a pre-existing great-docs.yml to preserve.
         existing_display_name
@@ -5821,6 +5872,8 @@ class GreatDocs:
             Preserved custom sections from a pre-existing config.
         existing_cli
             Preserved CLI documentation config from a pre-existing config.
+        existing_user_guide
+            Preserved user_guide config from a pre-existing config.
 
         Returns
         -------
@@ -5855,6 +5908,9 @@ class GreatDocs:
         # Build CLI section
         cli_yaml = self._format_cli_yaml(existing_cli)
 
+        # Build user_guide section
+        user_guide_yaml = self._format_user_guide_yaml(existing_user_guide)
+
         return f"""# Great Docs Configuration
 # See https://rich-iannone.github.io/great-docs/user-guide/03-configuration.html
 
@@ -5884,7 +5940,7 @@ dynamic: {dynamic_str}
 {authors_section}
 {funding_yaml}
 {site_yaml}
-{sections_yaml}# Jupyter Kernel
+{sections_yaml}{user_guide_yaml}# Jupyter Kernel
 # --------------
 # Jupyter kernel to use for executing code cells in .qmd files.
 # This is set at the project level so it applies to all pages, including
@@ -5930,6 +5986,7 @@ jupyter: python3
         existing_sections: list | None = None,
         existing_cli: dict | None = None,
         existing_reference: list | None = None,
+        existing_user_guide: str | list | None = None,
     ) -> str:
         """
         Generate great-docs.yml with a reference section from discovered exports.
@@ -5943,7 +6000,7 @@ jupyter: python3
         parser
             The docstring parser style ("numpy", "google", or "sphinx").
         dynamic
-            Whether to use dynamic introspection mode for quartodoc.
+            Whether to use dynamic introspection mode for API reference generation.
         existing_authors
             Rich author metadata from a pre-existing great-docs.yml to preserve.
         existing_display_name
@@ -5960,6 +6017,8 @@ jupyter: python3
             Preserved explicit reference sections from a pre-existing config.
             When provided, these sections are used as-is instead of auto-generating
             from discovered exports.
+        existing_user_guide
+            Preserved user_guide config from a pre-existing config.
 
         Returns
         -------
@@ -6149,6 +6208,12 @@ jupyter: python3
         if sections_yaml:
             lines.append("")
             lines.extend(sections_yaml.rstrip("\n").splitlines())
+
+        # Add user_guide if preserved
+        user_guide_yaml = self._format_user_guide_yaml(existing_user_guide)
+        if user_guide_yaml:
+            lines.append("")
+            lines.extend(user_guide_yaml.rstrip("\n").splitlines())
 
         lines.extend(
             [
@@ -6969,20 +7034,20 @@ toc: false
 
         print(f"Created {index_qmd}")
 
-    def _add_quartodoc_config(self) -> None:
+    def _add_api_reference_config(self) -> None:
         """
-        Add quartodoc configuration to _quarto.yml if not present.
+        Add API reference configuration to _quarto.yml if not present.
 
-        Adds sensible defaults for quartodoc with automatic package detection.
+        Adds sensible defaults for API reference generation with automatic package detection.
         """
         quarto_yml = self.project_path / "_quarto.yml"
 
         with open(quarto_yml, "r") as f:
             config = yaml.safe_load(f) or {}
 
-        # Check if quartodoc config already exists
-        if "quartodoc" in config:
-            print("quartodoc configuration already exists, skipping")
+        # Check if API reference config already exists
+        if "api-reference" in config:
+            print("API reference configuration already exists, skipping")
             return
 
         # Detect package name (project name from pyproject.toml)
@@ -6991,16 +7056,16 @@ toc: false
         if not package_name:
             try:
                 response = input(
-                    "\nCould not auto-detect package name. Enter package name for quartodoc (or press Enter to skip): "
+                    "\nCould not auto-detect package name. Enter package name for API reference (or press Enter to skip): "
                 ).strip()
             except EOFError:
                 response = ""
             if not response:
-                print("Skipping quartodoc configuration")
+                print("Skipping API reference configuration")
                 return
             package_name = response
 
-        print(f"Adding quartodoc configuration for package: {package_name}")
+        print(f"Adding API reference configuration for package: {package_name}")
 
         # Detect actual module name (may differ from project name)
         # e.g., project 'py-yaml12' might have module 'yaml12'
@@ -7019,15 +7084,15 @@ toc: false
         if self._is_compiled_extension():
             print("Detected compiled extension package (PyO3/Rust/Cython)")
             print("Note: The package must be installed (`pip install -e .` or `maturin develop`)")
-            print("      for quartodoc to generate documentation.")
+            print("      for API reference generation.")
 
         # Try to auto-generate sections from discovered exports
         # Prioritizes explicit reference config from great-docs.yml over auto-discovery
-        sections = self._create_quartodoc_sections_with_config(importable_name)
+        sections = self._create_api_sections_with_config(importable_name)
 
-        # Add quartodoc configuration with sensible defaults
+        # Add API reference configuration with sensible defaults
         # Use the importable name (actual module name) for the package field
-        quartodoc_config = {
+        api_ref_config = {
             "package": importable_name,
             "dir": "reference",
             "title": "Reference",
@@ -7037,7 +7102,7 @@ toc: false
 
         # Get dynamic setting from great-docs.yml config (defaults to True)
         dynamic = self._config.dynamic
-        quartodoc_config["dynamic"] = dynamic
+        api_ref_config["dynamic"] = dynamic
         if not dynamic:
             print("Using static introspection mode (dynamic: false)")
 
@@ -7045,11 +7110,11 @@ toc: false
         parser = self._config.parser
         if parser and parser != "numpy":
             # Only add parser if it's not the default (numpy)
-            quartodoc_config["parser"] = parser
+            api_ref_config["parser"] = parser
             print(f"Using '{parser}' docstring parser")
         else:
             # Always explicitly set parser for clarity
-            quartodoc_config["parser"] = "numpy"
+            api_ref_config["parser"] = "numpy"
 
         # Get jupyter kernel from great-docs.yml config (defaults to python3)
         jupyter_kernel = self._config.jupyter
@@ -7059,35 +7124,35 @@ toc: false
 
         # Add sections if we found them
         if sections:
-            quartodoc_config["sections"] = sections
+            api_ref_config["sections"] = sections
             print(f"Auto-generated {len(sections)} section(s) from package exports")
         else:
             print("Could not auto-generate sections from package exports")
             print("You'll need to manually add sections to organize your API documentation.")
 
-        config["quartodoc"] = quartodoc_config
+        config["api-reference"] = api_ref_config
 
         # Write back to file
         self._write_quarto_yml(quarto_yml, config)
 
-        print(f"Added quartodoc configuration to {quarto_yml}")
+        print(f"Added API reference configuration to {quarto_yml}")
         if not sections:
-            print("See: https://machow.github.io/quartodoc/get-started/overview.html")
+            print("")
 
-    def _refresh_quartodoc_config(self) -> None:
+    def _refresh_api_reference_config(self) -> None:
         """
-        Refresh the quartodoc sections in _quarto.yml based on current package exports.
+        Refresh the API reference sections in _quarto.yml based on current package exports.
 
-        This method re-discovers the package API and updates the quartodoc sections without touching
+        This method re-discovers the package API and updates the API reference sections without touching
         other configuration. Use this when your package API has changed (new classes, methods, or
         functions added/removed).
 
         The method preserves:
 
-        - package name and other quartodoc settings
-        - all non-quartodoc configuration in _quarto.yml
+        - package name and other API reference settings
+        - all non-API reference configuration in _quarto.yml
 
-        Only the 'sections' key in quartodoc config is regenerated.
+        Only the 'sections' key in API reference config is regenerated.
         """
         quarto_yml = self.project_path / "_quarto.yml"
 
@@ -7098,29 +7163,29 @@ toc: false
         with open(quarto_yml, "r") as f:
             config = yaml.safe_load(f) or {}
 
-        if "quartodoc" not in config:
-            print("Error: No quartodoc configuration found. Run 'great-docs init' first.")
+        if "api-reference" not in config:
+            print("Error: No API reference configuration found. Run 'great-docs init' first.")
             return
 
         # Get the package name from existing config
-        package_name = config["quartodoc"].get("package")
+        package_name = config["api-reference"].get("package")
         if not package_name:
-            print("Error: No package name in quartodoc config.")
+            print("Error: No package name in API reference config.")
             return
 
         print(f"Re-discovering exports for package: {package_name}")
 
         # Re-generate sections from current package exports
         # Prioritizes explicit config from great-docs.yml over auto-discovery
-        sections = self._create_quartodoc_sections_with_config(package_name)
+        sections = self._create_api_sections_with_config(package_name)
 
         # Update parser and dynamic settings from great-docs.yml config
         parser = self._config.parser
         if parser:
-            config["quartodoc"]["parser"] = parser
+            config["api-reference"]["parser"] = parser
 
         dynamic = self._config.dynamic
-        config["quartodoc"]["dynamic"] = dynamic
+        config["api-reference"]["dynamic"] = dynamic
 
         # Update jupyter kernel from great-docs.yml config
         jupyter_kernel = self._config.jupyter
@@ -7128,8 +7193,8 @@ toc: false
             config["jupyter"] = jupyter_kernel
 
         if sections:
-            config["quartodoc"]["sections"] = sections
-            print(f"Updated quartodoc config with {len(sections)} section(s)")
+            config["api-reference"]["sections"] = sections
+            print(f"Updated API reference config with {len(sections)} section(s)")
 
             # Write back to file first, so sidebar update reads the new sections
             self._write_quarto_yml(quarto_yml, config)
@@ -7137,7 +7202,7 @@ toc: false
             # Now update the sidebar to match the new sections
             self._update_sidebar_from_sections()
 
-            print(f"✅ Refreshed quartodoc configuration in {quarto_yml}")
+            print(f"✅ Refreshed API reference configuration in {quarto_yml}")
         else:
             # Check if user has explicit reference config that should be applied
             # even though auto-discovery failed
@@ -7149,7 +7214,7 @@ toc: false
                 # Build sections directly from user config without validation
                 user_sections = self._build_sections_from_reference_config(reference_config)
                 if user_sections:
-                    config["quartodoc"]["sections"] = user_sections
+                    config["api-reference"]["sections"] = user_sections
                     self._write_quarto_yml(quarto_yml, config)
                     self._update_sidebar_from_sections()
                     print(f"✅ Applied {len(user_sections)} section(s) from great-docs.yml")
@@ -7179,630 +7244,6 @@ toc: false
         with open(quarto_yml, "w") as f:
             f.write(header_comment)
             yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-
-    def _inject_overload_signatures(self) -> None:
-        """
-        Patch quartodoc-generated .qmd files to show ``@overload`` signatures.
-
-        Quartodoc renders only the implementation signature for overloaded
-        functions (e.g. ``process(data)``).  This method detects functions that
-        have ``@typing.overload`` decorated variants and replaces the single
-        implementation signature with all overload signatures including type
-        annotations and return types.
-
-        Must be called **after** ``quartodoc build`` has generated the
-        reference ``.qmd`` files and **before** ``quarto render``.
-        """
-        try:
-            import griffe
-            from quartodoc import get_object as qd_get_object
-        except ImportError:
-            return  # quartodoc/griffe not installed; nothing to do
-
-        ref_dir = self.project_path / "reference"
-        if not ref_dir.exists():
-            return
-
-        # Read _quarto.yml to determine the package name and dynamic mode
-        quarto_yml = self.project_path / "_quarto.yml"
-        if not quarto_yml.exists():
-            return
-
-        with open(quarto_yml, "r") as f:
-            qconfig = yaml.safe_load(f) or {}
-
-        qdoc_cfg = qconfig.get("quartodoc", {})
-        package_name = qdoc_cfg.get("package")
-        dynamic = qdoc_cfg.get("dynamic", False)
-
-        if not package_name:
-            return
-
-        # Pattern to extract the full object path from the header anchor
-        # e.g. "# process { #gdtest_overloads.process }" -> "gdtest_overloads.process"
-        header_re = re.compile(r"^#\s+\S+\s+\{\s*#(\S+)\s*\}")
-
-        # Pattern to match the signature code block
-        sig_block_re = re.compile(
-            r"(```python\n)(.*?\n)(```)",
-            re.DOTALL,
-        )
-
-        patched_count = 0
-
-        for qmd_file in sorted(ref_dir.glob("*.qmd")):
-            if qmd_file.name == "index.qmd":
-                continue
-
-            content = qmd_file.read_text()
-
-            # Extract the object path from the header
-            header_match = header_re.search(content)
-            if not header_match:
-                continue
-
-            obj_path = header_match.group(1)  # e.g. "gdtest_overloads.process"
-
-            # Convert dotted path to quartodoc lookup format (module:name)
-            # The path is <package>.<name> or <package>.<module>.<name>
-            parts = obj_path.split(".")
-            if len(parts) < 2:
-                continue
-
-            # Try with the package name prefix
-            if obj_path.startswith(package_name + "."):
-                lookup = package_name + ":" + obj_path[len(package_name) + 1 :]
-            else:
-                lookup = obj_path.replace(".", ":", 1)
-
-            # Load the griffe object and check for overloads
-            try:
-                obj = qd_get_object(lookup, dynamic=dynamic)
-            except Exception:
-                continue
-
-            # Only functions can have @overload signatures; classes have a
-            # dict-style ``overloads`` attribute that would break iteration.
-            if not isinstance(obj, griffe.Function):
-                continue
-
-            if not hasattr(obj, "overloads"):
-                continue
-
-            try:
-                overloads = obj.overloads
-            except Exception:
-                continue
-
-            if not overloads or not isinstance(overloads, list):
-                continue
-
-            # Build the overload signature lines
-            func_name = obj.name
-            sig_lines = []
-            for ov in overloads:
-                if not hasattr(ov, "parameters"):
-                    continue
-                params = []
-                for p in ov.parameters:
-                    ann = str(p.annotation) if p.annotation else ""
-                    default = str(p.default) if p.default else ""
-                    if ann and default:
-                        params.append(f"{p.name}: {ann} = {default}")
-                    elif ann:
-                        params.append(f"{p.name}: {ann}")
-                    elif default:
-                        params.append(f"{p.name}={default}")
-                    else:
-                        params.append(p.name)
-
-                ret = str(ov.returns) if ov.returns else ""
-                sig = f"{func_name}({', '.join(params)})"
-                if ret:
-                    sig += f" -> {ret}"
-                sig_lines.append(sig)
-
-            if not sig_lines:
-                continue
-
-            new_sig_block = "```python\n" + "\n".join(sig_lines) + "\n```"
-
-            # Replace the first code block (the signature) in the file
-            new_content = sig_block_re.sub(new_sig_block, content, count=1)
-
-            if new_content != content:
-                qmd_file.write_text(new_content)
-                patched_count += 1
-
-        if patched_count:
-            print(f"   Injected overload signatures into {patched_count} reference page(s)")
-
-    def _fix_dunder_headings_in_qmd(self) -> None:
-        """
-        Escape dunder names in quartodoc-generated QMD headings so Pandoc doesn't
-        interpret the double underscores as bold/emphasis markers.
-
-        Quartodoc produces headings like::
-
-            # Collection.__repr__ { #gdtest_dunders.Collection.__repr__ }
-
-        Pandoc interprets ``__repr__`` as ``<strong>repr</strong>``, which breaks
-        the ``{ #anchor }`` attribute parsing and causes it to render as literal
-        text in the ``<h1>``.
-
-        This method escapes the underscores in the heading text only (not the
-        attribute block)::
-
-            # Collection.\\_\\_repr\\_\\_ { #gdtest_dunders.Collection.__repr__ }
-
-        Must be called **after** ``quartodoc build`` and **before** ``quarto render``.
-        """
-        ref_dir = self.project_path / "reference"
-        if not ref_dir.exists():
-            return
-
-        # Match headings containing dunder names (double underscore patterns)
-        # e.g.: # Collection.__repr__ { #gdtest_dunders.Collection.__repr__ }
-        # Group 1: heading prefix "# "
-        # Group 2: heading text before the attribute (e.g., "Collection.__repr__")
-        # Group 3: the attribute block (e.g., "{ #gdtest_dunders.Collection.__repr__ }")
-        dunder_heading_re = re.compile(
-            r"^(# )(.+__\w+__.*?)(\s*\{[^}]+\})\s*$",
-            re.MULTILINE,
-        )
-
-        patched_count = 0
-
-        for qmd_file in sorted(ref_dir.glob("*.qmd")):
-            if qmd_file.name == "index.qmd":
-                continue
-
-            content = qmd_file.read_text()
-            original = content
-
-            def _escape_heading(m):
-                prefix = m.group(1)  # "# "
-                name = m.group(2).strip()  # "Collection.__repr__"
-                attr = m.group(3).strip()  # "{ #gdtest_dunders.Collection.__repr__ }"
-                # Escape double underscores in heading text only
-                # __name__ → \_\_name\_\_
-                escaped = re.sub(r"__(\w+)__", r"\_\_\1\_\_", name)
-                return f"{prefix}{escaped} {attr}"
-
-            content = dunder_heading_re.sub(_escape_heading, content)
-
-            if content != original:
-                qmd_file.write_text(content)
-                patched_count += 1
-
-        if patched_count:
-            print(f"   Escaped dunder headings in {patched_count} reference page(s)")
-
-    def _fix_rst_code_blocks_in_qmd(self) -> None:
-        """
-        Convert RST-style `::` code blocks in quartodoc-generated `.qmd` files
-        to Markdown fenced code blocks.
-
-        RST docstrings use `::` at the end of a paragraph followed by an indented
-        block to denote code.  Quarto / Pandoc (in Markdown mode) does not recognize
-        this syntax, so the code renders as plain indented text without highlighting.
-
-        This method scans all reference ``.qmd`` files produced by ``quartodoc build``
-        and converts patterns like::
-
-            For example::
-
-                @overload
-                def utf8(value: str) -> bytes: ...
-
-        into::
-
-            For example:
-
-            ```python
-            @overload
-            def utf8(value: str) -> bytes: ...
-            ```
-
-        Must be called **after** `quartodoc build` and **before** `quarto render`.
-        """
-        ref_dir = self.project_path / "reference"
-        if not ref_dir.exists():
-            return
-
-        # Pattern: a line ending with `::` followed by a blank line and
-        # one or more indented lines (the code block).  We capture:
-        #   1) The text before the `::` (may be empty for a standalone `::`)
-        #   2) The indented block
-        rst_block_re = re.compile(
-            r"^(.*?)::[ ]*\n"  # line ending in ::
-            r"(\n)"  # mandatory blank line
-            r"((?:[ ]{4,}\S.*\n?)+)",  # one or more indented lines (≥4 spaces)
-            re.MULTILINE,
-        )
-
-        patched_count = 0
-
-        for qmd_file in sorted(ref_dir.glob("*.qmd")):
-            if qmd_file.name == "index.qmd":
-                continue
-
-            content = qmd_file.read_text()
-            original = content
-
-            def _replace_block(m):
-                prefix_text = m.group(1)
-                indented_block = m.group(3)
-
-                # Skip known RST directives — they should be preserved for
-                # the post-render script to handle (e.g. .. note::, .. warning::)
-                _RST_DIRECTIVES = {
-                    "versionadded",
-                    "versionchanged",
-                    "deprecated",
-                    "note",
-                    "warning",
-                    "caution",
-                    "danger",
-                    "important",
-                    "tip",
-                    "hint",
-                    "seealso",
-                    "todo",
-                }
-                stripped_prefix = prefix_text.strip()
-                if stripped_prefix.startswith(".."):
-                    directive_name = stripped_prefix[2:].strip()
-                    if directive_name == "math":
-                        # Convert RST .. math:: to Quarto display math $$...$$
-                        # We must do this at QMD level because Pandoc treats
-                        # trailing :: as a code-block introducer, mangling the
-                        # directive into literal text + a code block.
-                        lines = indented_block.splitlines()
-                        if lines:
-                            min_indent = min(
-                                len(line) - len(line.lstrip()) for line in lines if line.strip()
-                            )
-                            dedented = "\n".join(line[min_indent:] for line in lines)
-                        else:
-                            dedented = indented_block
-                        return f"\n$$\n{dedented.strip()}\n$$\n"
-                    if directive_name in _RST_DIRECTIVES:
-                        return m.group(0)  # leave untouched
-
-                # Dedent the code block (remove common leading whitespace)
-                lines = indented_block.splitlines()
-                if lines:
-                    # Find minimum indentation
-                    min_indent = min(
-                        len(line) - len(line.lstrip()) for line in lines if line.strip()
-                    )
-                    dedented = "\n".join(line[min_indent:] for line in lines)
-                else:
-                    dedented = indented_block
-
-                # Reconstruct: keep the prefix text (with single `:`), blank line,
-                # then a fenced code block
-                prefix = prefix_text.rstrip()
-                if prefix:
-                    prefix += ":"
-                return f"{prefix}\n\n```python\n{dedented}\n```\n"
-
-            content = rst_block_re.sub(_replace_block, content)
-
-            # Convert RST inline math :math:`...` → $...$
-            content = re.sub(
-                r":math:`([^`]+)`",
-                r"$\1$",
-                content,
-            )
-
-            if content != original:
-                qmd_file.write_text(content)
-                patched_count += 1
-
-        if patched_count:
-            print(f"   Converted RST code blocks in {patched_count} reference page(s)")
-
-    def _fix_rst_tables_in_qmd(self) -> None:
-        """
-        Convert RST-style tables in quartodoc-generated ``.qmd`` files to
-        Markdown pipe tables.
-
-        RST docstrings may contain **simple tables** (delimited by ``=====``
-        rows) or **grid tables** (delimited by ``+-----+`` borders).  Quarto /
-        Pandoc in Markdown mode does not recognize either syntax; the content
-        is collapsed into a single paragraph of plain text.
-
-        This method scans every reference ``.qmd`` file produced by
-        ``quartodoc build`` and rewrites any RST table it finds as a Markdown
-        pipe table that Quarto renders correctly.
-
-        Must be called **after** ``quartodoc build`` and **before**
-        ``quarto render``.
-        """
-        ref_dir = self.project_path / "reference"
-        if not ref_dir.exists():
-            return
-
-        patched_count = 0
-
-        for qmd_file in sorted(ref_dir.glob("*.qmd")):
-            if qmd_file.name == "index.qmd":
-                continue
-
-            content = qmd_file.read_text()
-            original = content
-
-            content = self._convert_rst_simple_tables(content)
-            content = self._convert_rst_grid_tables(content)
-
-            if content != original:
-                qmd_file.write_text(content)
-                patched_count += 1
-
-        if patched_count:
-            print(f"   Converted RST tables in {patched_count} reference page(s)")
-
-    @staticmethod
-    def _convert_rst_simple_tables(text: str) -> str:
-        """
-        Convert RST simple tables to Markdown pipe tables.
-
-        RST simple tables look like::
-
-            ========  =========  ===========
-            Method    Speed      Memory
-            ========  =========  ===========
-            Quick     O(n log n) O(log n)
-            Merge     O(n log n) O(n)
-            ========  =========  ===========
-
-        The ``=====`` separator lines define column boundaries by their
-        start/end positions. This method parses those boundaries and
-        extracts cell values positionally.
-        """
-        lines = text.split("\n")
-        result = []
-        i = 0
-
-        while i < len(lines):
-            line = lines[i]
-
-            # Detect an RST simple-table separator: a line composed only of
-            # ``=`` runs separated by spaces (at least two columns).
-            if re.match(r"^=+(\s+=+)+\s*$", line):
-                # Found the opening separator — collect the full table.
-                # RST simple tables have either 2 separators (header +
-                # closing) or 3 separators (opening, header/body, closing).
-                table_lines = [line]
-                sep_count = 1
-                # Determine the second column start from the separator to
-                # validate whether subsequent lines are table data.
-                second_col_match = re.search(r"\s+(=+)", line)
-                second_col_start = second_col_match.start(1) if second_col_match else 4
-                j = i + 1
-                while j < len(lines):
-                    cur = lines[j]
-                    is_sep = bool(re.match(r"^=+(\s+=+)+\s*$", cur))
-                    table_lines.append(cur)
-                    if is_sep:
-                        sep_count += 1
-                        # RST simple tables have at most 3 separators:
-                        # opening, optional header/body, closing.
-                        if sep_count >= 3:
-                            # Definitely the closing separator.
-                            j += 1
-                            break
-                        # After the 2nd separator, check whether more
-                        # table data rows follow immediately (meaning
-                        # this is a header/body separator, not closing).
-                        # In RST simple tables, body rows follow directly
-                        # without blank lines.  We peek at the next line
-                        # and check it has content at the second column
-                        # position (a strong indicator of table data vs.
-                        # freeform prose).
-                        peek = j + 1
-                        if (
-                            peek < len(lines)
-                            and lines[peek].strip()
-                            and not re.match(r"^=+(\s+=+)+\s*$", lines[peek])
-                            and len(lines[peek]) > second_col_start
-                            and lines[peek][second_col_start] != " "
-                        ):
-                            # Looks like a data row — keep going.
-                            pass
-                        else:
-                            # No table data follows — closing separator.
-                            j += 1
-                            break
-                    j += 1
-
-                # Parse the collected table lines
-                md_table = _rst_simple_table_to_md(table_lines)
-                if md_table is not None:
-                    result.append(md_table)
-                    i = j
-                    continue
-                else:
-                    # Parsing failed — leave the original text
-                    result.append(line)
-                    i += 1
-            else:
-                result.append(line)
-                i += 1
-
-        return "\n".join(result)
-
-    @staticmethod
-    def _convert_rst_grid_tables(text: str) -> str:
-        """
-        Convert RST grid tables to Markdown pipe tables.
-
-        RST grid tables look like::
-
-            +--------+-------+
-            | Name   | Value |
-            +========+=======+
-            | alpha  | 1     |
-            | beta   | 2     |
-            +--------+-------+
-        """
-        lines = text.split("\n")
-        result = []
-        i = 0
-
-        while i < len(lines):
-            line = lines[i]
-
-            # Detect grid table start: +---+---+ pattern
-            if re.match(r"^\+[-=]+(\+[-=]+)+\+\s*$", line):
-                table_lines = [line]
-                j = i + 1
-                while j < len(lines):
-                    if re.match(r"^\+[-=]+(\+[-=]+)+\+\s*$", lines[j]):
-                        table_lines.append(lines[j])
-                        # Check if this is the closing border (next line is
-                        # not a table row)
-                        if j + 1 >= len(lines) or not re.match(r"^\|", lines[j + 1]):
-                            j += 1
-                            break
-                    elif re.match(r"^\|", lines[j]):
-                        table_lines.append(lines[j])
-                    else:
-                        break
-                    j += 1
-
-                md_table = _rst_grid_table_to_md(table_lines)
-                if md_table is not None:
-                    result.append(md_table)
-                    i = j
-                    continue
-                else:
-                    result.append(line)
-                    i += 1
-            else:
-                result.append(line)
-                i += 1
-
-        return "\n".join(result)
-
-    def _fix_dataclass_attributes_in_qmd(self) -> None:
-        """
-        Write `_dataclass_attrs.json` so that `post-render.py` can rebuild
-        the Attributes tables for dataclass reference pages.
-
-        Quartodoc may only discover a subset of dataclass fields as attributes
-        (e.g. `bool` fields show up because `bool` has a descriptor, while
-        `str`, `list`, or `dict` fields are silently omitted).  Because
-        quartodoc re-runs automatically during `quarto render`, QMD-level
-        patches are overwritten.  Instead, this method extracts the complete
-        field information from the generated QMD files and writes it to a JSON
-        file.  `post-render.py` then reads this file and fixes the rendered
-        HTML Attributes tables.
-
-        Must be called **after** `quartodoc build` has generated the reference
-        `.qmd` files (the first explicit build, before `quarto render`).
-        """
-        try:
-            from quartodoc import get_object as qd_get_object
-        except ImportError:
-            return
-
-        ref_dir = self.project_path / "reference"
-        if not ref_dir.exists():
-            return
-
-        quarto_yml = self.project_path / "_quarto.yml"
-        if not quarto_yml.exists():
-            return
-
-        with open(quarto_yml, "r") as f:
-            qconfig = yaml.safe_load(f) or {}
-
-        qdoc_cfg = qconfig.get("quartodoc", {})
-        package_name = qdoc_cfg.get("package")
-        dynamic = qdoc_cfg.get("dynamic", False)
-
-        if not package_name:
-            return
-
-        header_re = re.compile(r"^#\s+\S+\s+\{\s*#(\S+)\s*\}")
-
-        # Pattern to extract parameter names + descriptions from the Parameters
-        # section of quartodoc-generated QMD.  Each entry looks like:
-        #
-        #   <code>[**name**]{.parameter-name} ...]{.parameter-annotation}</code>
-        #
-        #   :   Description text.
-        #
-        # Note: there is a blank line (\n\n) between the </code> line and the
-        # description line.
-        param_entry_re = re.compile(
-            r"\[\*\*(\w+)\*\*\]\{\.parameter-name\}[^\n]*\n\n"
-            r":   (.+)",
-        )
-
-        # Collect dataclass field info: { obj_path: { field: description, ... } }
-        dataclass_attrs: dict[str, dict[str, str]] = {}
-
-        for qmd_file in sorted(ref_dir.glob("*.qmd")):
-            if qmd_file.name == "index.qmd":
-                continue
-
-            content = qmd_file.read_text()
-
-            # Only process files that have an Attributes section
-            if "\n## Attributes" not in content:
-                continue
-
-            # Extract the object path from the header
-            header_match = header_re.search(content)
-            if not header_match:
-                continue
-
-            obj_path = header_match.group(1)
-
-            if obj_path.startswith(package_name + "."):
-                lookup = package_name + ":" + obj_path[len(package_name) + 1 :]
-            else:
-                lookup = obj_path.replace(".", ":", 1)
-
-            # Load the griffe object and check if it's a dataclass
-            try:
-                obj = qd_get_object(lookup, dynamic=dynamic)
-            except Exception:
-                continue
-
-            is_dataclass = False
-            try:
-                labels = obj.labels
-                if "dataclass" in labels:
-                    is_dataclass = True
-            except Exception:
-                pass
-
-            if not is_dataclass:
-                continue
-
-            # Extract parameter names and descriptions from the Parameters section
-            params: dict[str, str] = {}
-            for m in param_entry_re.finditer(content):
-                params[m.group(1)] = m.group(2).strip()
-
-            if not params:
-                continue
-
-            dataclass_attrs[obj_path] = params
-
-        # Write the JSON metadata file (even if empty, so post-render doesn't
-        # read stale data from a previous run).
-        json_path = self.project_path / "_dataclass_attrs.json"
-        with open(json_path, "w") as f:
-            json.dump(dataclass_attrs, f, indent=2)
-
-        if dataclass_attrs:
-            print(f"   Wrote dataclass attribute metadata for {len(dataclass_attrs)} class(es)")
 
     def _update_quarto_config(self) -> None:
         """
@@ -8197,7 +7638,7 @@ toc: false
 
     def _update_sidebar_from_sections(self) -> None:
         """
-        Update sidebar navigation based on quartodoc sections.
+        Update sidebar navigation based on API reference sections.
 
         Builds a structured sidebar with sections and their contents, and excludes the index page
         from showing the sidebar.
@@ -8210,11 +7651,11 @@ toc: false
         with open(quarto_yml, "r") as f:
             config = yaml.safe_load(f) or {}
 
-        # Get quartodoc sections if they exist
-        if "quartodoc" not in config or "sections" not in config["quartodoc"]:
+        # Get API reference sections if they exist
+        if "api-reference" not in config or "sections" not in config["api-reference"]:
             return
 
-        sections = config["quartodoc"]["sections"]
+        sections = config["api-reference"]["sections"]
         sidebar_contents = []
 
         # Build sidebar structure from sections
@@ -8299,13 +7740,13 @@ toc: false
         with open(quarto_yml, "r") as f:
             config = yaml.safe_load(f) or {}
 
-        # Get quartodoc sections and package info
-        if "quartodoc" not in config:
+        # Get API reference sections and package info
+        if "api-reference" not in config:
             return
 
-        quartodoc_config = config["quartodoc"]
-        sections = quartodoc_config.get("sections", [])
-        package_name = quartodoc_config.get("package")
+        api_ref_config = config["api-reference"]
+        sections = api_ref_config.get("sections", [])
+        package_name = api_ref_config.get("package")
 
         if not package_name or not sections:
             return
@@ -8461,13 +7902,13 @@ toc: false
         with open(quarto_yml, "r") as f:
             config = yaml.safe_load(f) or {}
 
-        # Get quartodoc sections and package info
-        if "quartodoc" not in config:
+        # Get API reference sections and package info
+        if "api-reference" not in config:
             return
 
-        quartodoc_config = config["quartodoc"]
-        sections = quartodoc_config.get("sections", [])
-        package_name = quartodoc_config.get("package")
+        api_ref_config = config["api-reference"]
+        sections = api_ref_config.get("sections", [])
+        package_name = api_ref_config.get("package")
 
         if not package_name:
             return
@@ -8778,15 +8219,15 @@ toc: false
         """
         Build the documentation site.
 
-        Runs `quartodoc build` followed by `quarto render`. By default, re-discovers package exports
-        and updates the quartodoc configuration before building.
+        Generates API reference pages followed by `quarto render`. By default, re-discovers package exports
+        and updates the API reference configuration before building.
 
         Parameters
         ----------
         watch
             If `True`, watch for changes and rebuild automatically.
         refresh
-            If `True` (default), re-discover package exports and update quartodoc config before
+            If `True` (default), re-discover package exports and update API reference config before
             building. Set to False for faster rebuilds when your package API hasn't changed.
 
         Examples
@@ -8870,10 +8311,10 @@ toc: false
         try:
             os.chdir(self.project_path)
 
-            # Step 0.5: Refresh quartodoc config if requested
+            # Step 0.5: Refresh API reference config if requested
             if refresh:
-                print("\n🔄 Refreshing quartodoc configuration...")
-                self._refresh_quartodoc_config()
+                print("\n🔄 Refreshing API reference configuration...")
+                self._refresh_api_reference_config()
 
             # Step 0.6: Generate llms.txt and llms-full.txt files
             print("\n📝 Generating llms.txt and llms-full.txt...")
@@ -8955,82 +8396,57 @@ toc: false
 
                 traceback.print_exc()
 
-            # Step 1: Run quartodoc build using Python module execution
-            # This ensures it uses the same Python environment as great-docs
-            print("\n📚 Step 1: Generating API reference with quartodoc...")
+            # Step 1: Build API reference using internal renderer (uses the internal renderer)
+            print("\n📚 Step 1: Generating API reference...")
 
-            # Get environment with PYTHONPATH set to include the package root
-            # This ensures griffe/quartodoc can find the package even if not installed
-            quartodoc_env = self._get_quarto_env()
+            # Set up PYTHONPATH so griffe can find the target package
+            build_env = self._get_quarto_env()
+            extra_paths = build_env.get("PYTHONPATH", "").split(os.pathsep)
+            for p in extra_paths:
+                if p and p not in sys.path:
+                    sys.path.insert(0, p)
 
-            result = run_streaming(
-                [sys.executable, "-m", "quartodoc", "build"],
-                env=quartodoc_env,
-            )
+            try:
+                from great_docs._renderer.introspection import Builder
 
-            if result.returncode != 0:
-                # Check if quartodoc is not installed
-                if "No module named quartodoc" in result.stderr:
-                    print("\n❌ quartodoc build failed:")
-                    print("\n⚠️  quartodoc is not installed in your environment.")
-                    print("\nTo fix this, install quartodoc:")
-                    print(f"  {sys.executable} -m pip install quartodoc")
-                    print("\nOr if using pip directly:")
-                    print("  pip install quartodoc")
-                    sys.exit(1)
-
+                quarto_yml = self.project_path / "_quarto.yml"
+                builder = Builder.from_quarto_config(str(quarto_yml))
+                builder.build()
+                print("\n✅ API reference generated")
+            except Exception as e:
                 # If dynamic mode was used, retry with static mode
                 dynamic = self._config.dynamic
                 if dynamic:
-                    print("\n⚠️  quartodoc build failed with dynamic introspection.")
+                    print("\n⚠️  API reference build failed with dynamic introspection.")
                     print("   Retrying with static analysis (dynamic: false)...\n")
 
-                    # Update _quarto.yml to set dynamic: false
-                    quarto_yml = self.project_path / "_quarto.yml"
                     with open(quarto_yml, "r") as f:
                         qconfig = yaml.safe_load(f) or {}
 
-                    if "quartodoc" in qconfig:
-                        qconfig["quartodoc"]["dynamic"] = False
+                    if "api-reference" in qconfig:
+                        qconfig["api-reference"]["dynamic"] = False
                         with open(quarto_yml, "w") as f:
                             yaml.dump(qconfig, f, default_flow_style=False, sort_keys=False)
 
-                    result = run_streaming(
-                        [sys.executable, "-m", "quartodoc", "build"],
-                        env=quartodoc_env,
-                    )
-
-                    if result.returncode != 0:
-                        print("\n❌ quartodoc build failed (static mode):")
-                        print(result.stderr)
-                        sys.exit(1)
-                    else:
+                    try:
+                        builder = Builder.from_quarto_config(str(quarto_yml))
+                        builder.build()
                         print("\n✅ API reference generated (using static analysis)")
                         print(
                             "   Tip: Add 'dynamic: false' to great-docs.yml "
                             "to skip the retry next time"
                         )
+                    except Exception as e2:
+                        print("\n❌ API reference build failed (static mode):")
+                        print(str(e2))
+                        sys.exit(1)
                 else:
-                    print("\n❌ quartodoc build failed:")
-                    print(result.stderr)
+                    print("\n❌ API reference build failed:")
+                    print(str(e))
+                    import traceback
+
+                    traceback.print_exc()
                     sys.exit(1)
-            else:
-                print("\n✅ API reference generated")
-
-            # Step 1.5: Inject overload signatures into generated .qmd files
-            self._inject_overload_signatures()
-
-            # Step 1.6: Convert RST :: code blocks to Markdown fenced blocks
-            self._fix_rst_code_blocks_in_qmd()
-
-            # Step 1.6b: Convert RST tables to Markdown pipe tables
-            self._fix_rst_tables_in_qmd()
-
-            # Step 1.7: Ensure all dataclass fields appear in Attributes tables
-            self._fix_dataclass_attributes_in_qmd()
-
-            # Step 1.8: Escape dunder names in headings so Pandoc parses attributes
-            self._fix_dunder_headings_in_qmd()
 
             # Get environment with QUARTO_PYTHON set for proper Python detection
             quarto_env = self._get_quarto_env()
@@ -9502,7 +8918,7 @@ toc: false
 
         ```python
         results = docs.spell_check(
-            custom_dictionary=["quartodoc", "griffe", "docstring", "navbar"]
+            custom_dictionary=["griffe", "docstring", "navbar"]
         )
         ```
         """
@@ -9582,7 +8998,6 @@ toc: false
             "pyproject",
             # Documentation tools
             "quarto",
-            "quartodoc",
             "sphinx",
             "mkdocs",
             "readthedocs",
@@ -9984,212 +9399,3 @@ toc: false
             pass
 
         return results
-
-
-# ---------------------------------------------------------------------------
-# Module-level helpers for RST table conversion
-# ---------------------------------------------------------------------------
-
-
-def _rst_simple_table_to_md(table_lines: list[str]) -> str | None:
-    """
-    Convert an RST simple table (list of raw lines) to a Markdown pipe table.
-
-    Returns the Markdown string, or ``None`` if parsing fails.
-
-    RST simple tables use ``=====`` separator lines whose column positions
-    define the column boundaries.  The first data row (between the first and
-    second separator) is the header.
-
-    Example input::
-
-        ========  =========  ===========
-        Method    Speed      Memory
-        ========  =========  ===========
-        Quick     O(n log n) O(log n)
-        Merge     O(n log n) O(n)
-        ========  =========  ===========
-    """
-    # Filter out blank lines and find separator lines
-    separators = [
-        (idx, line) for idx, line in enumerate(table_lines) if re.match(r"^=+(\s+=+)+\s*$", line)
-    ]
-    if len(separators) < 2:
-        return None
-
-    # Use the first separator to determine column boundaries
-    sep_line = separators[0][1]
-    col_spans = []  # list of (start, end) character positions
-    for m in re.finditer(r"=+", sep_line):
-        col_spans.append((m.start(), m.end()))
-
-    if not col_spans:
-        return None
-
-    def _extract_cells(line: str) -> list[str]:
-        """Extract cell values from a line using the column spans.
-
-        For all columns except the last, the cell extends from the start
-        of the current column to the start of the next column (so that
-        values slightly wider than the ``=====`` header, such as
-        ``O(n log n)``, are captured in full).  The last column extends
-        to the end of the line.
-        """
-        cells = []
-        for idx, (start, _end) in enumerate(col_spans):
-            if idx + 1 < len(col_spans):
-                # Extend to the start of the next column
-                next_start = col_spans[idx + 1][0]
-                cell = line[start:next_start] if len(line) > start else ""
-            else:
-                # Last column — extend to end of line
-                cell = line[start:] if len(line) > start else ""
-            cells.append(cell.strip())
-        return cells
-
-    # Determine header and body rows based on separator count
-    # 2 separators: first separator, header row, second separator — no body
-    # 3 separators: sep, header, sep, body rows, sep
-    # Most common: 2 separators with header and body between first and last
-    first_sep_idx = separators[0][0]
-    last_sep_idx = separators[-1][0]
-
-    # Content rows are all non-separator lines between first and last separator
-    data_rows = []
-    header_rows = []
-
-    if len(separators) == 2:
-        # Everything between the two separators
-        for idx in range(first_sep_idx + 1, last_sep_idx):
-            line = table_lines[idx]
-            if not re.match(r"^=+(\s+=+)+\s*$", line):
-                data_rows.append(_extract_cells(line))
-        # First row is the header, rest are body
-        if data_rows:
-            header_rows = [data_rows[0]]
-            data_rows = data_rows[1:]
-    elif len(separators) >= 3:
-        # Header is between first and second separator
-        second_sep_idx = separators[1][0]
-        for idx in range(first_sep_idx + 1, second_sep_idx):
-            line = table_lines[idx]
-            if not re.match(r"^=+(\s+=+)+\s*$", line):
-                header_rows.append(_extract_cells(line))
-        # Body is between second and last separator
-        for idx in range(second_sep_idx + 1, last_sep_idx):
-            line = table_lines[idx]
-            if not re.match(r"^=+(\s+=+)+\s*$", line):
-                data_rows.append(_extract_cells(line))
-
-    if not header_rows:
-        return None
-
-    num_cols = len(col_spans)
-
-    # Build the Markdown pipe table
-    md_lines = []
-
-    # Header row (use last header row if multiple)
-    header = header_rows[-1]
-    # Pad if needed
-    while len(header) < num_cols:
-        header.append("")
-    md_lines.append("| " + " | ".join(header) + " |")
-
-    # Separator
-    md_lines.append("| " + " | ".join("---" for _ in range(num_cols)) + " |")
-
-    # Body rows
-    for row in data_rows:
-        while len(row) < num_cols:
-            row.append("")
-        md_lines.append("| " + " | ".join(row) + " |")
-
-    return "\n".join(md_lines)
-
-
-def _rst_grid_table_to_md(table_lines: list[str]) -> str | None:
-    """
-    Convert an RST grid table (list of raw lines) to a Markdown pipe table.
-
-    Returns the Markdown string, or ``None`` if parsing fails.
-
-    RST grid tables use ``+`` at column intersections, ``-`` or ``=`` for
-    horizontal borders, and ``|`` for vertical borders::
-
-        +--------+-------+
-        | Name   | Value |
-        +========+=======+
-        | alpha  | 1     |
-        +--------+-------+
-    """
-    # Identify column boundaries from the first border line
-    border_line = table_lines[0]
-    col_positions = [m.start() for m in re.finditer(r"\+", border_line)]
-
-    if len(col_positions) < 2:
-        return None
-
-    # Column spans: pairs of consecutive + positions
-    col_spans = list(zip(col_positions[:-1], col_positions[1:]))
-
-    def _extract_cells(line: str) -> list[str]:
-        cells = []
-        for start, end in col_spans:
-            # Skip the leading | character
-            cell = line[start + 1 : end] if len(line) > start else ""
-            cells.append(cell.strip())
-        return cells
-
-    # Separate rows.  Border lines (starting with +) delimit rows.
-    # Lines starting with | are data.
-    # An ``=`` border separates header from body.
-    header_rows: list[list[str]] = []
-    body_rows: list[list[str]] = []
-    has_header_sep = False
-    current_rows: list[list[str]] = []
-
-    for line in table_lines:
-        if re.match(r"^\+[=+]+\+\s*$", line):
-            # Header separator (uses =)
-            has_header_sep = True
-            header_rows = current_rows
-            current_rows = []
-        elif re.match(r"^\+[-+]+\+\s*$", line):
-            # Regular border — finishes the current row group
-            continue
-        elif line.startswith("|"):
-            current_rows.append(_extract_cells(line))
-
-    body_rows = current_rows
-
-    if has_header_sep:
-        if not header_rows:
-            return None
-    else:
-        # No header separator — treat the first row as header
-        all_rows = body_rows
-        if not all_rows:
-            return None
-        header_rows = [all_rows[0]]
-        body_rows = all_rows[1:]
-
-    num_cols = len(col_spans)
-    md_lines = []
-
-    # Header
-    header = header_rows[-1] if header_rows else [""] * num_cols
-    while len(header) < num_cols:
-        header.append("")
-    md_lines.append("| " + " | ".join(header) + " |")
-
-    # Separator
-    md_lines.append("| " + " | ".join("---" for _ in range(num_cols)) + " |")
-
-    # Body
-    for row in body_rows:
-        while len(row) < num_cols:
-            row.append("")
-        md_lines.append("| " + " | ".join(row) + " |")
-
-    return "\n".join(md_lines)

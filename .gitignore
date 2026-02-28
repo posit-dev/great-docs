@@ -146,6 +146,10 @@ __marimo__/
 # Great Docs build directory (ephemeral, do not commit)
 great-docs/
 
+# Build artifacts that may land at repo root (e.g. from direct Builder calls)
+/objects.json
+/reference/
+
 # Integration test packages (external repos for testing)
 test-packages/*/
 !test-packages/synthetic/
