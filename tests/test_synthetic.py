@@ -169,7 +169,7 @@ def test_L1_section_generation(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
     module_name = expected.get("detected_module", pkg_name)
-    sections = docs._create_quartodoc_sections(module_name)
+    sections = docs._create_api_sections(module_name)
 
     if sections is None:
         pytest.skip(
@@ -196,7 +196,7 @@ def test_L1_big_class_method_section(pkg_name: str, tmp_path: Path):
 
     docs = GreatDocs(project_path=str(pkg_dir))
     module_name = expected.get("detected_module", pkg_name)
-    sections = docs._create_quartodoc_sections(module_name)
+    sections = docs._create_api_sections(module_name)
     assert sections is not None
 
     big_class = expected["big_class_name"]
