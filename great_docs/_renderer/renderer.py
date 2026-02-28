@@ -1311,7 +1311,7 @@ class MdRenderer(Renderer):
         """Render the header of a docstring, including any anchors."""
         if isinstance(el, layout.Doc):
             _str_dispname = _escape_dunders(el.name)
-            _anchor = f"{{ #{el.obj.path} }}"
+            _anchor_id = f"#{el.obj.path}"
 
             # Add () suffix for callable objects (functions, methods)
             _callable_kinds = {"function"}
@@ -1335,7 +1335,8 @@ class MdRenderer(Renderer):
                     elif "enum" in labels:
                         _type_class = " .doc-type-enum"
 
-            return f"{'#' * self.crnt_header_level} {_str_dispname} {{{_anchor}{_type_class}}}"
+            _attr_block = f"{{ {_anchor_id}{_type_class} }}"
+            return f"{'#' * self.crnt_header_level} {_str_dispname} {_attr_block}"
         elif isinstance(el, ds.DocstringSection):
             title = el.title or el.kind.value.title()
             anchor_part = _sanitize_title(title.lower())
@@ -1372,11 +1373,11 @@ class MdRenderer(Renderer):
 
         # AST patched types (must come before docstring section types)
         if isinstance(el, DocstringSectionWarnings):
-            return el.value
+            return _convert_rst_text(el.value)
         if isinstance(el, DocstringSectionSeeAlso):
             return convert_rst_link_to_md(el.value)
         if isinstance(el, DocstringSectionNotes):
-            return el.value
+            return _convert_rst_text(el.value)
         if isinstance(el, ExampleCode):
             return f"```python\n{el.value}\n```"
         if isinstance(el, ExampleText):

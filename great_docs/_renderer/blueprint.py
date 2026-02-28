@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from enum import Enum
 from functools import partial
 from textwrap import indent
 
@@ -97,8 +98,17 @@ def _is_external_alias(obj: dc.Alias | dc.Object, mod: dc.Module):
     return False
 
 
-def _to_simple_dict(el: _Base):
-    return {k: v for k, v in el._iter_fields()}
+def _to_simple_dict(el):
+    """Recursively convert a dataclass tree to plain dicts/lists for YAML."""
+    if isinstance(el, _Base):
+        return {k: _to_simple_dict(v) for k, v in el._iter_fields()}
+    if isinstance(el, list):
+        return [_to_simple_dict(item) for item in el]
+    if isinstance(el, tuple):
+        return [_to_simple_dict(item) for item in el]
+    if isinstance(el, Enum):
+        return el.value
+    return el
 
 
 def _non_default_entries(el: Auto):
