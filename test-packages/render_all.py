@@ -161,30 +161,38 @@ def build_package(name: str) -> dict:
     log_lines.append(f"{'=' * 70}")
 
     try:
-        # Init
-        log_lines.append("\n--- great-docs init ---")
-        init_result = subprocess.run(
-            [great_docs_cli, "init", "--force", "--project-path", str(pkg_dir)],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            env=env,
-        )
-        log_lines.append(f"exit code: {init_result.returncode}")
-        if init_result.stdout:
-            log_lines.append(f"stdout:\n{init_result.stdout}")
-        if init_result.stderr:
-            log_lines.append(f"stderr:\n{init_result.stderr}")
+        # Init: only run when no great-docs.yml exists yet (specs that
+        # provide their own config already have it written by
+        # generate_package).  Running init on a pre-configured package
+        # would overwrite the spec's custom settings.
+        has_config = (pkg_dir / "great-docs.yml").exists()
 
-        if init_result.returncode != 0:
-            log_lines.append("\nRESULT: init_failed")
-            log_path.write_text("\n".join(log_lines), encoding="utf-8")
-            return {
-                **_common,
-                "status": "init_failed",
-                "error": init_result.stderr or init_result.stdout,
-                "log": str(log_path),
-            }
+        if not has_config:
+            log_lines.append("\n--- great-docs init ---")
+            init_result = subprocess.run(
+                [great_docs_cli, "init", "--force", "--project-path", str(pkg_dir)],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                env=env,
+            )
+            log_lines.append(f"exit code: {init_result.returncode}")
+            if init_result.stdout:
+                log_lines.append(f"stdout:\n{init_result.stdout}")
+            if init_result.stderr:
+                log_lines.append(f"stderr:\n{init_result.stderr}")
+
+            if init_result.returncode != 0:
+                log_lines.append("\nRESULT: init_failed")
+                log_path.write_text("\n".join(log_lines), encoding="utf-8")
+                return {
+                    **_common,
+                    "status": "init_failed",
+                    "error": init_result.stderr or init_result.stdout,
+                    "log": str(log_path),
+                }
+        else:
+            log_lines.append("\n--- great-docs init SKIPPED (config exists) ---")
 
         # Build
         log_lines.append("\n--- great-docs build ---")
