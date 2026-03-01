@@ -2234,8 +2234,9 @@ class GreatDocs:
         if not user_guide_dir:
             return None
 
-        # Find all .qmd files (not in subdirectories that are likely asset folders)
-        qmd_files = []
+        # Find all .qmd and .md files (not in subdirectories that are likely asset folders)
+        guide_files = []
+        valid_extensions = {".qmd", ".md"}
         # Check if directory is completely empty
         dir_contents = list(user_guide_dir.iterdir())
         if not dir_contents:
@@ -2243,27 +2244,28 @@ class GreatDocs:
             return None
 
         for item in dir_contents:
-            if item.is_file() and item.suffix == ".qmd":
-                qmd_files.append(item)
+            if item.is_file() and item.suffix in valid_extensions:
+                guide_files.append(item)
             elif item.is_dir():
-                # Recursively check subdirectories for .qmd files at any depth
-                for subitem in item.rglob("*.qmd"):
-                    if subitem.is_file():
-                        qmd_files.append(subitem)
+                # Recursively check subdirectories for guide files at any depth
+                for ext in valid_extensions:
+                    for subitem in item.rglob(f"*{ext}"):
+                        if subitem.is_file():
+                            guide_files.append(subitem)
 
-        if not qmd_files:
-            print(f"   ⚠️  User guide directory '{user_guide_dir}' contains no .qmd files")
+        if not guide_files:
+            print(f"   ⚠️  User guide directory '{user_guide_dir}' contains no .qmd or .md files")
             return None
 
         # Sort files by name to respect ordering prefixes
-        qmd_files.sort(key=lambda p: p.name)
+        guide_files.sort(key=lambda p: p.name)
 
         # Parse each file to extract section and title from frontmatter
         files_info = []
         sections: dict[str, list] = {}
         has_index = False
 
-        for qmd_path in qmd_files:
+        for qmd_path in guide_files:
             file_info = self._parse_user_guide_file(qmd_path)
             if file_info:
                 files_info.append(file_info)
