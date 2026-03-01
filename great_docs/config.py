@@ -301,6 +301,18 @@ class Config:
         return val if isinstance(val, str) else None
 
     @property
+    def reference_enabled(self) -> bool:
+        """Whether API reference generation is enabled.
+
+        Returns ``False`` when the config contains ``reference: false``.
+        Defaults to ``True``.
+        """
+        val = self.get("reference", [])
+        if val is False:
+            return False
+        return True
+
+    @property
     def reference(self) -> list[dict[str, Any]]:
         """Get the API reference configuration (explicit section ordering).
 
