@@ -21,7 +21,13 @@ SPEC = {
         },
     },
     "files": {
-        "gdtest_ug_with_code/__init__.py": '"""Test package for user guide with code blocks."""\n',
+        "gdtest_ug_with_code/__init__.py": (
+            '"""Test package for user guide with code blocks."""\n'
+            '\n'
+            'from .core import process, transform\n'
+            '\n'
+            '__all__ = ["process", "transform"]\n'
+        ),
         "gdtest_ug_with_code/core.py": '''
             """Core process/transform functions."""
 
@@ -98,6 +104,7 @@ SPEC = {
     "expected": {
         "files_exist": [
             "great-docs/user-guide/tutorial.html",
+            "great-docs/reference/index.html",
         ],
         "files_contain": {
             "great-docs/user-guide/tutorial.html": [
@@ -106,6 +113,10 @@ SPEC = {
                 "runs and prints output",
                 "[2, 4, 6]",
                 "fenced (non-executable)",
+            ],
+            "great-docs/reference/index.html": [
+                "process",
+                "transform",
             ],
         },
     },
