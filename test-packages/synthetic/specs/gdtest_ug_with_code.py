@@ -74,20 +74,23 @@ SPEC = {
             "\n"
             "# Getting Started\n"
             "\n"
-            "Here's a basic example:\n"
+            "Here's a basic example that runs and prints output:\n"
             "\n"
-            "```python\n"
-            "from mylib import process\n"
+            "```{python}\n"
+            "from gdtest_ug_with_code.core import process\n"
             "\n"
             "result = process([1, 2, 3])\n"
             "print(result)\n"
             "```\n"
             "\n"
-            "And a more advanced one:\n"
+            "And a fenced (non-executable) code block showing a transform:\n"
             "\n"
             "```python\n"
+            "from gdtest_ug_with_code.core import transform\n"
+            "\n"
             'data = {"key": "value"}\n'
             "output = transform(data)\n"
+            "print(output)  # {'key': 'VALUE'}\n"
             "```\n"
         ),
         "README.md": ("# gdtest-ug-with-code\n\nTest user guide with Python code blocks.\n"),
@@ -100,8 +103,9 @@ SPEC = {
             "great-docs/user-guide/tutorial.html": [
                 "Tutorial",
                 "Getting Started",
-                "basic example",
-                "advanced one",
+                "runs and prints output",
+                "[2, 4, 6]",
+                "fenced (non-executable)",
             ],
         },
     },
