@@ -7,6 +7,11 @@ html.theme-loading body {
     visibility: hidden;
 }
 
+/* General heading weight - lighter H1/H2 for a cleaner look */
+h1, h2 {
+    font-weight: 500;
+}
+
 .table a {
     text-underline-offset: 4px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
