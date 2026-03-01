@@ -125,7 +125,7 @@ dd > ol > li::marker {
 }
 
 /* API reference section headings (Parameters, Returns, Examples, etc.) */
-h1.doc-section {
+h2.doc-section {
     font-size: 22px;
 }
 
@@ -139,8 +139,8 @@ h1.doc-section {
     margin-left: 0;
 }
 
-/* Warnings section: h1 header above, body in callout box */
-.doc-section-warnings > h1 {
+/* Warnings section: h2 header above, body in callout box */
+.doc-section-warnings > h2 {
     color: Crimson;
     font-weight: 600;
     margin-bottom: 0.5rem;
@@ -149,7 +149,7 @@ h1.doc-section {
     padding-left: 0;
 }
 
-.doc-section-warnings > h1::before {
+.doc-section-warnings > h2::before {
     content: "⚠️ ";
 }
 
@@ -1532,7 +1532,7 @@ body.quarto-dark .doc-section-parameters dt code {
 }
 
 /* Warnings section dark mode */
-body.quarto-dark .doc-section-warnings > h1 {
+body.quarto-dark .doc-section-warnings > h2 {
     color: #FCA5A5;
 }
 

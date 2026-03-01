@@ -1998,6 +1998,29 @@ for html_file in html_files:
     breadcrumb_pattern = r'<nav class="quarto-page-breadcrumbs[^"]*"[^>]*>.*?</nav>'
     content_str = re.sub(breadcrumb_pattern, "", content_str, flags=re.DOTALL)
 
+    # Shift all heading levels down by 1 within <main> content so that
+    # reference page titles use <h2> instead of <h1>, differentiating them
+    # from the top-level "Reference" heading on the index page.
+    main_start = content_str.find("<main")
+    main_end = content_str.find("</main>")
+    if main_start != -1 and main_end != -1:
+        before = content_str[:main_start]
+        main_content = content_str[main_start : main_end + len("</main>")]
+        after = content_str[main_end + len("</main>") :]
+
+        # Shift in reverse order (h5→h6, h4→h5, ..., h1→h2) to avoid
+        # double-shifting (e.g. h1→h2→h3).
+        for level in range(5, 0, -1):
+            main_content = main_content.replace(f"<h{level}", f"<h{level + 1}")
+            main_content = main_content.replace(f"</h{level}>", f"</h{level + 1}>")
+            main_content = re.sub(
+                rf'\bclass="level{level}\b',
+                f'class="level{level + 1}',
+                main_content,
+            )
+
+        content_str = before + main_content + after
+
     content = content_str.splitlines(keepends=True)
 
     with open(html_file, "w") as file:
@@ -2072,6 +2095,40 @@ if os.path.exists(index_file):
 
     # Clean up Sphinx cross-reference roles in index descriptions
     content = translate_sphinx_roles(content)
+
+    # Shift section headings down by 1 within <main> so that category headings
+    # (Classes, Methods, etc.) render as <h2>, visually subordinate to the
+    # <h1> "Reference" page title.  Skip the page title itself (class="title").
+    main_start = content.find("<main")
+    main_end = content.find("</main>")
+    if main_start != -1 and main_end != -1:
+        before = content[:main_start]
+        main_content = content[main_start : main_end + len("</main>")]
+        after = content[main_end + len("</main>") :]
+
+        # Protect the title heading from being shifted by replacing it with a
+        # temporary placeholder, then shifting everything else, then restoring.
+        title_pattern = re.compile(r'(<h1\s+class="title"[^>]*>.*?</h1>)', re.DOTALL)
+        title_placeholder = "<!--TITLE_PLACEHOLDER-->"
+        title_match = title_pattern.search(main_content)
+        if title_match:
+            saved_title = title_match.group(1)
+            main_content = main_content.replace(saved_title, title_placeholder, 1)
+
+        for level in range(5, 0, -1):
+            main_content = main_content.replace(f"<h{level}", f"<h{level + 1}")
+            main_content = main_content.replace(f"</h{level}>", f"</h{level + 1}>")
+            main_content = re.sub(
+                rf'\bclass="level{level}\b',
+                f'class="level{level + 1}',
+                main_content,
+            )
+
+        # Restore the title heading
+        if title_match:
+            main_content = main_content.replace(title_placeholder, saved_title, 1)
+
+        content = before + main_content + after
 
     with open(index_file, "w") as file:
         file.write(content)
