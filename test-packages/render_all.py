@@ -556,7 +556,7 @@ def _build_nav_html(
         padding: 4px 28px 4px 10px;
         font-size: 13px;
         cursor: pointer;
-        min-width: 260px;
+        min-width: 520px;
         text-align: left;
         position: relative;
     }}
