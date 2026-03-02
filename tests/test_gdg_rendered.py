@@ -2464,3 +2464,302 @@ def test_R4_ug_deep_nest_multi_level_structure():
     assert len(ug_sidebar) == 1, "Should have a user-guide sidebar"
     contents = ug_sidebar[0].get("contents", [])
     assert len(contents) >= 3, f"Sidebar should have at least 3 entries, got {len(contents)}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: User Guide — explicit ordering via config
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def test_R4_ug_explicit_order_config_sections():
+    """Explicit user guide ordering should produce titled sections in great-docs.yml."""
+    import yaml
+
+    pkg = "gdtest_ug_explicit_order"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    gd_yml = _RENDERED_DIR / pkg / "great-docs.yml"
+    assert gd_yml.exists(), "great-docs.yml should exist"
+
+    cfg = yaml.safe_load(gd_yml.read_text())
+    ug = cfg.get("user_guide", [])
+    assert isinstance(ug, list), "user_guide should be a list"
+    assert len(ug) == 2, f"user_guide should have 2 sections, got {len(ug)}"
+
+    titles = [s.get("title") for s in ug]
+    assert "First Steps" in titles, "Should have 'First Steps' section"
+    assert "Deep Dive" in titles, "Should have 'Deep Dive' section"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: User Guide — hyphenated directory name
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_R4_ug_hyphen_dir_pages_rendered():
+    """User guide from user-guide/ (hyphenated) should render pages correctly."""
+    pkg = "gdtest_ug_hyphen_dir"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ug_dir = _site_dir(pkg) / "user-guide"
+    for page_name in ("intro.html", "setup.html"):
+        page = ug_dir / page_name
+        assert page.exists(), f"Hyphen-dir UG page {page_name} should exist"
+
+    soup = _load_html(ug_dir / "intro.html")
+    text = soup.get_text()
+    assert "Introduction" in text, "intro page should contain 'Introduction'"
+
+    # Sidebar should list pages
+    cfg = _load_quarto_yml(pkg)
+    sidebars = cfg.get("website", {}).get("sidebar", [])
+    ug_sidebar = [s for s in sidebars if s.get("id") == "user-guide"]
+    assert len(ug_sidebar) == 1, "Should have a user-guide sidebar"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: User Guide — many pages (12)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_R4_ug_many_pages_all_twelve_rendered():
+    """User guide with 12 numbered pages should render all of them."""
+    pkg = "gdtest_ug_many_pages"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ug_dir = _site_dir(pkg) / "user-guide"
+    expected = [
+        "overview.html",
+        "installation.html",
+        "quickstart.html",
+        "configuration.html",
+        "basic-usage.html",
+        "advanced-usage.html",
+        "plugins.html",
+        "testing.html",
+        "deployment.html",
+        "troubleshooting.html",
+        "faq.html",
+        "appendix.html",
+    ]
+    for page_name in expected:
+        page = ug_dir / page_name
+        assert page.exists(), f"Many-pages UG page {page_name} should exist"
+
+    # Sidebar should list all 12 pages
+    cfg = _load_quarto_yml(pkg)
+    sidebars = cfg.get("website", {}).get("sidebar", [])
+    ug_sidebar = [s for s in sidebars if s.get("id") == "user-guide"]
+    assert len(ug_sidebar) == 1, "Should have a user-guide sidebar"
+    contents = ug_sidebar[0].get("contents", [])
+    assert len(contents) == 12, f"Sidebar should list 12 pages, got {len(contents)}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: User Guide — mixed .qmd and .md extensions
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_R4_ug_mixed_ext_both_formats_render():
+    """User guide with mixed .qmd and .md files should render all pages."""
+    pkg = "gdtest_ug_mixed_ext"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ug_dir = _site_dir(pkg) / "user-guide"
+    for page_name in ("intro.html", "setup.html", "advanced.html"):
+        page = ug_dir / page_name
+        assert page.exists(), f"Mixed-ext UG page {page_name} should exist"
+
+    # .md file should render with correct content
+    soup = _load_html(ug_dir / "setup.html")
+    text = soup.get_text()
+    assert "Setup" in text, "setup.md page should contain 'Setup'"
+
+    # Sidebar should include both .qmd and .md entries
+    cfg = _load_quarto_yml(pkg)
+    sidebars = cfg.get("website", {}).get("sidebar", [])
+    ug_sidebar = [s for s in sidebars if s.get("id") == "user-guide"]
+    assert len(ug_sidebar) == 1, "Should have a user-guide sidebar"
+    contents = ug_sidebar[0].get("contents", [])
+    exts = {str(c).rsplit(".", 1)[-1] for c in contents if isinstance(c, str)}
+    assert "md" in exts, "Sidebar should include .md file"
+    assert "qmd" in exts, "Sidebar should include .qmd file"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: User Guide — no frontmatter
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_R4_ug_no_frontmatter_pages_render():
+    """User guide pages without YAML frontmatter should still render."""
+    pkg = "gdtest_ug_no_frontmatter"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ug_dir = _site_dir(pkg) / "user-guide"
+    for page_name in ("intro.html", "usage.html"):
+        page = ug_dir / page_name
+        assert page.exists(), f"No-frontmatter UG page {page_name} should exist"
+
+    # Content from the .qmd body should still appear
+    soup = _load_html(ug_dir / "intro.html")
+    text = soup.get_text()
+    assert "Welcome to the project" in text, (
+        "Frontmatter-less page should still render body content"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: User Guide — numbered pages
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_R4_ug_numbered_pages_in_order():
+    """Numbered user guide pages should render and appear in sidebar order."""
+    pkg = "gdtest_ug_numbered"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ug_dir = _site_dir(pkg) / "user-guide"
+    expected = ["intro.html", "install.html", "usage.html", "advanced.html"]
+    for page_name in expected:
+        page = ug_dir / page_name
+        assert page.exists(), f"Numbered UG page {page_name} should exist"
+
+    # Sidebar should list pages in numeric order (number prefixes stripped)
+    cfg = _load_quarto_yml(pkg)
+    sidebars = cfg.get("website", {}).get("sidebar", [])
+    ug_sidebar = [s for s in sidebars if s.get("id") == "user-guide"]
+    assert len(ug_sidebar) == 1, "Should have a user-guide sidebar"
+    contents = ug_sidebar[0].get("contents", [])
+    assert len(contents) == 4, f"Sidebar should list 4 pages, got {len(contents)}"
+    # First entry should be intro (from 01-intro)
+    assert "intro" in str(contents[0]), "First sidebar entry should be intro"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: User Guide — guide-section frontmatter
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_R4_ug_sections_fm_sidebar_grouping():
+    """guide-section frontmatter should group pages into sidebar sections."""
+    pkg = "gdtest_ug_sections_fm"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ug_dir = _site_dir(pkg) / "user-guide"
+    for page_name in ("welcome.html", "install.html", "config.html", "extend.html"):
+        page = ug_dir / page_name
+        assert page.exists(), f"Sections-FM UG page {page_name} should exist"
+
+    # Sidebar should have two sections from guide-section frontmatter
+    cfg = _load_quarto_yml(pkg)
+    sidebars = cfg.get("website", {}).get("sidebar", [])
+    ug_sidebar = [s for s in sidebars if s.get("id") == "user-guide"]
+    assert len(ug_sidebar) == 1, "Should have a user-guide sidebar"
+    contents = ug_sidebar[0].get("contents", [])
+    section_titles = [c.get("section") for c in contents if isinstance(c, dict) and "section" in c]
+    assert "Getting Started" in section_titles, "Should have 'Getting Started' section"
+    assert "Advanced Topics" in section_titles, "Should have 'Advanced Topics' section"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: User Guide — single page
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_R4_ug_single_page_renders():
+    """Single-page user guide should still render with sidebar."""
+    pkg = "gdtest_ug_single_page"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    page = _site_dir(pkg) / "user-guide" / "getting-started.html"
+    assert page.exists(), "Single-page UG should exist"
+
+    soup = _load_html(page)
+    text = soup.get_text()
+    assert "Getting Started" in text, "Page should contain 'Getting Started'"
+    assert "single page" in text, "Page should contain 'single page' content"
+
+    # Sidebar should have exactly 1 entry
+    cfg = _load_quarto_yml(pkg)
+    sidebars = cfg.get("website", {}).get("sidebar", [])
+    ug_sidebar = [s for s in sidebars if s.get("id") == "user-guide"]
+    assert len(ug_sidebar) == 1, "Should have a user-guide sidebar"
+    contents = ug_sidebar[0].get("contents", [])
+    assert len(contents) == 1, f"Single-page UG sidebar should have 1 entry, got {len(contents)}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: User Guide — subdirectory organization
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_R4_ug_subdirs_pages_and_sections():
+    """Subdirectory-organized user guide should render pages with sidebar sections."""
+    pkg = "gdtest_ug_subdirs"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ug_dir = _site_dir(pkg) / "user-guide"
+    expected_pages = [
+        "basics/intro.html",
+        "basics/setup.html",
+        "advanced/customization.html",
+        "advanced/plugins.html",
+    ]
+    for rel_path in expected_pages:
+        page = ug_dir / rel_path
+        assert page.exists(), f"Subdirs UG page {rel_path} should exist"
+
+    # Sidebar should have sections matching subdirectory names
+    cfg = _load_quarto_yml(pkg)
+    sidebars = cfg.get("website", {}).get("sidebar", [])
+    ug_sidebar = [s for s in sidebars if s.get("id") == "user-guide"]
+    assert len(ug_sidebar) == 1, "Should have a user-guide sidebar"
+    contents = ug_sidebar[0].get("contents", [])
+    section_titles = [c.get("section") for c in contents if isinstance(c, dict) and "section" in c]
+    assert "Basics" in section_titles, "Sidebar should have 'Basics' section"
+    assert "Advanced" in section_titles, "Sidebar should have 'Advanced' section"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: User Guide — with image assets
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_R4_ug_with_images_renders_img_tags():
+    """User guide referencing assets should render with <img> tags."""
+    pkg = "gdtest_ug_with_images"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    page = _site_dir(pkg) / "user-guide" / "visual-guide.html"
+    assert page.exists(), "visual-guide.html should exist"
+
+    soup = _load_html(page)
+    text = soup.get_text()
+    assert "Visual Guide" in text, "Page should contain 'Visual Guide' title"
+    assert "architecture diagram" in text.lower() or "Architecture Diagram" in text, (
+        "Page should mention the architecture diagram"
+    )
+
+    # Should have <img> tags for the SVG assets
+    imgs = soup.find_all("img")
+    assert len(imgs) >= 1, "Page should have at least one <img> tag for assets"
