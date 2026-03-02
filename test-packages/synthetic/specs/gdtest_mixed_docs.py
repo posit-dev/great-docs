@@ -8,7 +8,7 @@ Focus: 4 functions — 2 with NumPy docstrings, 2 with Google docstrings.
 
 SPEC = {
     "name": "gdtest_mixed_docs",
-    "description": "Mixed docstring styles (NumPy + Google) in one package",
+    "description": "Mixed docstring styles (NumPy + Google); transform is %nodoc and should not appear",
     "dimensions": ["A1", "B1", "C4", "D5", "E6", "F6", "G1", "H7"],
     "pyproject_toml": {
         "project": {
@@ -112,6 +112,8 @@ SPEC = {
             def transform(data: str, upper: bool = False) -> str:
                 """Transform the input data.
 
+                %nodoc
+
                 Args:
                     data: The data string to transform.
                     upper: If True, convert to uppercase.
@@ -133,6 +135,7 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["Converter", "encode", "decode", "validate", "transform"],
         "num_exports": 5,
+        "nodoc_items": ['transform'],
         "section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
     },

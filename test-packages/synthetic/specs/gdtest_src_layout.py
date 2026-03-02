@@ -8,7 +8,7 @@ Focus: Package code lives under src/<pkg>/ — tests the _find_package_init
 
 SPEC = {
     "name": "gdtest_src_layout",
-    "description": "Modern src/ layout package",
+    "description": "Modern src/ layout package; destroy_widget is %nodoc and should not appear",
     "dimensions": ["A2", "B1", "C4", "D1", "E6", "F6", "G1", "H7"],
     # ── Project metadata ─────────────────────────────────────────────
     "pyproject_toml": {
@@ -107,6 +107,8 @@ SPEC = {
                 """
                 Destroy a widget and free its resources.
 
+                %nodoc
+
                 Parameters
                 ----------
                 widget
@@ -133,6 +135,7 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["Widget", "create_widget", "destroy_widget"],
         "num_exports": 3,
+        "nodoc_items": ['destroy_widget'],
         "section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
     },

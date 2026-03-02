@@ -8,7 +8,7 @@ Focus: 2 functions + 1 class with Sphinx-format docstrings (:param:, :returns:, 
 
 SPEC = {
     "name": "gdtest_sphinx",
-    "description": "Sphinx/reST-style docstrings",
+    "description": "Sphinx/reST-style docstrings; format_duration is %nodoc and should not appear",
     "dimensions": ["A1", "B1", "C4", "D3", "E6", "F6", "G1", "H7"],
     "pyproject_toml": {
         "project": {
@@ -78,6 +78,8 @@ SPEC = {
             def format_duration(seconds: float, precision: int = 2) -> str:
                 """Format a duration in seconds as a human-readable string.
 
+                %nodoc
+
                 :param seconds: The duration in seconds.
                 :param precision: Number of decimal places.
                 :returns: Formatted duration string (e.g., ``"1.50s"``).
@@ -97,6 +99,7 @@ SPEC = {
         "detected_parser": "sphinx",
         "export_names": ["Timer", "start_timer", "format_duration"],
         "num_exports": 3,
+        "nodoc_items": ['format_duration'],
         "section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
     },

@@ -8,7 +8,7 @@ Focus: Module with async functions to verify coroutine signatures
 
 SPEC = {
     "name": "gdtest_async_funcs",
-    "description": "Async functions (async def)",
+    "description": "Async functions (async def); async_save is %nodoc and should not appear",
     "dimensions": ["A1", "B1", "C13", "D1", "E6", "F6", "G1", "H7"],
     "pyproject_toml": {
         "project": {
@@ -67,6 +67,8 @@ SPEC = {
                 """
                 Save data asynchronously to a file.
 
+                %nodoc
+
                 Parameters
                 ----------
                 data
@@ -88,6 +90,7 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["async_fetch", "async_process", "async_save"],
         "num_exports": 3,
+        "nodoc_items": ["async_save"],
         "section_titles": ["Async Functions"],
         "has_user_guide": False,
     },

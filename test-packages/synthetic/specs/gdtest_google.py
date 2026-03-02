@@ -8,7 +8,7 @@ Focus: 3 functions with Google-format docstrings (Args:, Returns:).
 
 SPEC = {
     "name": "gdtest_google",
-    "description": "Google-style docstrings",
+    "description": "Google-style docstrings; disconnect is %nodoc and should not appear",
     "dimensions": ["A1", "B1", "C1", "D2", "E6", "F6", "G1", "H7"],
     "pyproject_toml": {
         "project": {
@@ -48,6 +48,8 @@ SPEC = {
             def disconnect(force: bool = False) -> None:
                 """Disconnect from the remote server.
 
+                %nodoc
+
                 Args:
                     force: If True, forcefully terminate the connection
                         without waiting for pending operations.
@@ -83,6 +85,7 @@ SPEC = {
         "detected_parser": "google",
         "export_names": ["connect", "disconnect", "send_message"],
         "num_exports": 3,
+        "nodoc_items": ["disconnect"],
         "section_titles": ["Functions"],
         "has_user_guide": False,
     },

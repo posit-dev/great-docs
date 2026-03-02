@@ -9,7 +9,7 @@ Focus: Uses [tool.hatch.build.targets.wheel.packages] to specify the
 
 SPEC = {
     "name": "gdtest_hatch",
-    "description": "Hatch build system with explicit wheel packages",
+    "description": "Hatch build system with explicit wheel packages; clean is %nodoc and should not appear",
     "dimensions": ["A5", "B1", "C4", "D1", "E6", "F6", "G1", "H7"],
     "pyproject_toml": {
         "project": {
@@ -66,7 +66,9 @@ SPEC = {
                     return True
 
                 def clean(self) -> None:
-                    """Remove build artifacts."""
+                    """
+                    Remove build artifacts.
+                    """
                     pass
 
 
@@ -90,6 +92,8 @@ SPEC = {
             def clean() -> None:
                 """
                 Clean all build artifacts.
+
+                %nodoc
                 """
                 pass
         ''',
@@ -105,6 +109,7 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["Builder", "build", "clean"],
         "num_exports": 3,
+        "nodoc_items": ["clean"],
         "section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
     },
