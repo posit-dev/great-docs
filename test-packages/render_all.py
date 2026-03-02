@@ -1291,18 +1291,20 @@ def _create_test_coverage_summary_page(results: list[dict]) -> str:
     hist_bars = []
     for s in range(max_score + 1):
         cnt = score_dist.get(s, 0)
-        if cnt == 0:
-            continue
-        bar_h = cnt / hist_max * 100
+        bar_h = cnt / hist_max * 100 if cnt > 0 else 0
         if s / max_score >= 0.7:
             color = "#a6e3a1"
         elif s / max_score >= 0.4:
             color = "#f9e2af"
         else:
             color = "#f38ba8"
+        cnt_label = f'<div class="hist-cnt">{cnt}</div>' if cnt > 0 else ""
         hist_bars.append(
             f'<div class="hist-col" title="Score {s}: {cnt} packages">'
+            f"{cnt_label}"
+            f'<div class="hist-bar-area">'
             f'<div class="hist-bar" style="height:{bar_h:.0f}%;background:{color}"></div>'
+            f"</div>"
             f'<div class="hist-label">{s}</div>'
             f"</div>"
         )
@@ -1366,11 +1368,13 @@ def _create_test_coverage_summary_page(results: list[dict]) -> str:
             .ded-icon {{ color: #a6e3a1; font-weight: 700; text-align: center; }}
             .hist-container {{
                 display: flex; align-items: flex-end; gap: 4px;
-                height: 100px; padding: 0 4px;
+                padding: 0 4px;
             }}
-            .hist-col {{ display: flex; flex-direction: column; align-items: center; flex: 1; height: 100%; justify-content: flex-end; }}
+            .hist-col {{ display: flex; flex-direction: column; align-items: center; flex: 1; justify-content: flex-end; }}
+            .hist-bar-area {{ height: 100px; width: 100%; display: flex; align-items: flex-end; }}
             .hist-bar {{ width: 100%; min-width: 8px; border-radius: 3px 3px 0 0; transition: height .3s; }}
-            .hist-label {{ font-size: 10px; color: #6e7681; margin-top: 4px; font-family: "SF Mono", monospace; }}
+            .hist-cnt {{ font-size: 10px; color: #ffffff; margin-bottom: 2px; font-family: "SF Mono", monospace; font-weight: 600; }}
+            .hist-label {{ font-size: 10px; color: #ffffff; margin-top: 4px; font-family: "SF Mono", monospace; }}
         </style>
     </head>
     <body>
