@@ -166,6 +166,19 @@ hub-rebuild: ## Selective GDG rebuild: make hub-rebuild PKG="gdtest_minimal gdte
 	@test -n "$(PKG)" || (echo "Usage: make hub-rebuild PKG=\"name1 name2\"" && exit 1)
 	@$(PYTHON) test-packages/render_all.py --build --only $(PKG)
 
+.PHONY: hub-refresh
+hub-refresh: ## Reassemble GDG hub pages (updates test coverage, no rebuild)
+	@$(PYTHON) -c "\
+	import sys; sys.path.insert(0, 'test-packages'); \
+	from build_state import load_state; \
+	from render_all import assemble_hub, STATE_FILE, _result_from_state; \
+	from synthetic.catalog import ALL_PACKAGES; \
+	state = load_state(STATE_FILE); \
+	pkgs = state.get('packages', {}); \
+	results = [_result_from_state(n, pkgs[n]) for n in ALL_PACKAGES if n in pkgs]; \
+	assemble_hub(results, state=state)" 2>/dev/null || \
+	 echo "No build state found. Run 'make hub-build' first."
+
 .PHONY: hub-open
 hub-open: ## Open the Great Docs Gauntlet in the default browser
 	@open test-packages/_rendered/_hub/index.html 2>/dev/null || \
