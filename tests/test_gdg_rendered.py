@@ -2169,3 +2169,298 @@ def test_R3_deep_nesting_pages_exist():
     has_deep_class = "DeepClass" in ref_pages or any(p.endswith(".DeepClass") for p in ref_pages)
     assert has_deep_func, f"deep_func not found in ref pages: {ref_pages}"
     assert has_deep_class, f"DeepClass not found in ref pages: {ref_pages}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: Changelog Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def test_R4_changelog_config_propagated():
+    """Changelog config should be written to great-docs.yml with enabled + max_releases."""
+    import yaml
+
+    pkg = "gdtest_config_changelog"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    gd_yml = _RENDERED_DIR / pkg / "great-docs.yml"
+    assert gd_yml.exists(), "great-docs.yml should exist"
+
+    cfg = yaml.safe_load(gd_yml.read_text())
+    changelog = cfg.get("changelog", {})
+    assert changelog.get("enabled") is True, "changelog.enabled should be True"
+    assert changelog.get("max_releases") == 5, "changelog.max_releases should be 5"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: Config Combo A — display_name, authors, funding
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_R4_config_combo_a_display_name_and_authors():
+    """Combo A: display_name in title, authors in footer, landing page content."""
+    pkg = "gdtest_config_combo_a"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    # Check _quarto.yml title matches display_name
+    cfg = _load_quarto_yml(pkg)
+    assert cfg["website"]["title"] == "Combo A Toolkit", "Website title should use display_name"
+
+    # Check authors in page-footer
+    footer = cfg.get("website", {}).get("page-footer", {})
+    footer_left = footer.get("left", "")
+    assert "Alice Smith" in footer_left, "Footer should mention Alice Smith"
+    assert "Bob Jones" in footer_left, "Footer should mention Bob Jones"
+
+    # Check landing page has display_name
+    index = _site_dir(pkg) / "index.html"
+    if index.exists():
+        soup = _load_html(index)
+        text = soup.get_text()
+        assert "Combo A Toolkit" in text, "Landing page should show display name"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: Config Combo B — all opt-out flags
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_R4_config_combo_b_opt_out_flags():
+    """Combo B: sidebar_filter, dark_mode_toggle, and source all disabled."""
+    pkg = "gdtest_config_combo_b"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    # _quarto.yml should NOT have sidebar-filter.js / dark-mode-toggle.js / theme-init.js
+    cfg = _load_quarto_yml(pkg)
+    html_cfg = cfg.get("format", {}).get("html", {})
+    after_body = html_cfg.get("include-after-body", [])
+    after_texts = " ".join(str(item) for item in after_body)
+    assert "sidebar-filter.js" not in after_texts, (
+        "sidebar-filter.js should be absent when sidebar_filter is disabled"
+    )
+    assert "dark-mode-toggle.js" not in after_texts, (
+        "dark-mode-toggle.js should be absent when dark_mode_toggle is disabled"
+    )
+
+    # source.enabled=false → no _source_links.json
+    source_links = _RENDERED_DIR / pkg / "great-docs" / "_source_links.json"
+    assert not source_links.exists(), "_source_links.json should not exist when source is disabled"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: Config user_guide as explicit list
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def test_R4_config_ug_list_sections_in_yml():
+    """user_guide as list of section dicts should propagate to great-docs.yml."""
+    import yaml
+
+    pkg = "gdtest_config_ug_list"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    gd_yml = _RENDERED_DIR / pkg / "great-docs.yml"
+    assert gd_yml.exists(), "great-docs.yml should exist"
+
+    cfg = yaml.safe_load(gd_yml.read_text())
+    ug = cfg.get("user_guide", [])
+    assert isinstance(ug, list), "user_guide should be a list"
+    assert len(ug) == 2, "user_guide should have 2 sections"
+
+    titles = [s.get("title") for s in ug]
+    assert "Getting Started" in titles, "Should have 'Getting Started' section"
+    assert "Advanced" in titles, "Should have 'Advanced' section"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: Config user_guide as string (custom directory)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_R4_config_ug_string_pages_rendered():
+    """user_guide as string pointing to 'guides' dir should render user guide pages."""
+    pkg = "gdtest_config_ug_string"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ug_dir = _site_dir(pkg) / "user-guide"
+    for page_name in ("intro.html", "setup.html"):
+        page = ug_dir / page_name
+        assert page.exists(), f"User guide page {page_name} should exist"
+
+    # Verify content
+    soup = _load_html(ug_dir / "intro.html")
+    text = soup.get_text()
+    assert "Introduction" in text, "intro page should contain 'Introduction'"
+
+    # Verify sidebar has user-guide section
+    cfg = _load_quarto_yml(pkg)
+    sidebars = cfg.get("website", {}).get("sidebar", [])
+    ug_sidebar = [s for s in sidebars if s.get("id") == "user-guide"]
+    assert len(ug_sidebar) == 1, "Should have a user-guide sidebar"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: Empty Module — zero exports
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_R4_empty_module_no_reference_dir():
+    """A package with zero exports should build without a reference directory."""
+    pkg = "gdtest_empty_module"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    # Should have a landing page
+    index = _site_dir(pkg) / "index.html"
+    assert index.exists(), "Empty module should still have index.html"
+
+    # Should NOT have a reference directory (nothing to document)
+    ref = _ref_dir(pkg)
+    assert not ref.exists(), "Empty module with __all__ = [] should not have a reference directory"
+
+    # Title should be present on landing page
+    soup = _load_html(index)
+    text = soup.get_text()
+    assert "gdtest-empty-module" in text, "Landing page should show package name"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: User Guide — auto-discovered
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_R4_ug_auto_pages_exist_with_content():
+    """Auto-discovered user guide should render all .qmd files with correct titles."""
+    pkg = "gdtest_ug_auto"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ug_dir = _site_dir(pkg) / "user-guide"
+    pages = {
+        "basics.html": "Basics",
+        "configuration.html": "Configuration",
+        "deployment.html": "Deployment",
+    }
+
+    for page_name, expected_title in pages.items():
+        page = ug_dir / page_name
+        assert page.exists(), f"Auto-discovered UG page {page_name} should exist"
+        soup = _load_html(page)
+        text = soup.get_text()
+        assert expected_title in text, f"{page_name} should contain '{expected_title}'"
+
+    # Sidebar should list all 3 pages
+    cfg = _load_quarto_yml(pkg)
+    sidebars = cfg.get("website", {}).get("sidebar", [])
+    ug_sidebar = [s for s in sidebars if s.get("id") == "user-guide"]
+    assert len(ug_sidebar) == 1, "Should have a user-guide sidebar"
+    contents = ug_sidebar[0].get("contents", [])
+    assert len(contents) == 3, f"User guide sidebar should list 3 pages, got {len(contents)}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: User Guide — combo (numbered, sections, subdirs, mixed extensions)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_R4_ug_combo_subdirs_and_sections():
+    """Complex user guide should render pages in subdirectories with sidebar sections."""
+    pkg = "gdtest_ug_combo"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ug_dir = _site_dir(pkg) / "user-guide"
+    expected_pages = [
+        "basics/intro.html",
+        "basics/install.html",
+        "advanced/config.html",
+        "advanced/extend.html",
+    ]
+    for rel_path in expected_pages:
+        page = ug_dir / rel_path
+        assert page.exists(), f"Combo UG page {rel_path} should exist"
+
+    # Sidebar should have sections
+    cfg = _load_quarto_yml(pkg)
+    sidebars = cfg.get("website", {}).get("sidebar", [])
+    ug_sidebar = [s for s in sidebars if s.get("id") == "user-guide"]
+    assert len(ug_sidebar) == 1, "Should have a user-guide sidebar"
+    contents = ug_sidebar[0].get("contents", [])
+    section_titles = [c.get("section") for c in contents if isinstance(c, dict) and "section" in c]
+    assert "Basics" in section_titles, "Sidebar should have 'Basics' section"
+    assert "Advanced" in section_titles, "Sidebar should have 'Advanced' section"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: User Guide — custom directory
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_R4_ug_custom_dir_pages_from_docs():
+    """User guide sourced from 'docs/' should render pages under user-guide/."""
+    pkg = "gdtest_ug_custom_dir"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ug_dir = _site_dir(pkg) / "user-guide"
+    for page_name in ("getting-started.html", "reference-guide.html"):
+        page = ug_dir / page_name
+        assert page.exists(), f"Custom-dir UG page {page_name} should exist"
+        soup = _load_html(page)
+        text = soup.get_text()
+        expected_title = page_name.replace(".html", "").replace("-", " ").title()
+        assert expected_title.split()[0] in text, f"{page_name} should have title content"
+
+    # Sidebar should list pages
+    cfg = _load_quarto_yml(pkg)
+    sidebars = cfg.get("website", {}).get("sidebar", [])
+    ug_sidebar = [s for s in sidebars if s.get("id") == "user-guide"]
+    assert len(ug_sidebar) == 1, "Should have a user-guide sidebar"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: User Guide — deeply nested subdirectories
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_R4_ug_deep_nest_multi_level_structure():
+    """Deeply nested user guide should render pages at multiple directory levels."""
+    pkg = "gdtest_ug_deep_nest"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ug_dir = _site_dir(pkg) / "user-guide"
+    deep_pages = [
+        "section1/topic1/details.html",
+        "section1/topic2/overview.html",
+        "section2/intro.html",
+    ]
+    for rel_path in deep_pages:
+        page = ug_dir / rel_path
+        assert page.exists(), f"Deep-nested UG page {rel_path} should exist"
+
+    # Verify content renders correctly at 3 levels deep
+    soup = _load_html(ug_dir / "section1" / "topic1" / "details.html")
+    text = soup.get_text()
+    assert "Topic 1 Details" in text, "3-level deep page should have correct title"
+
+    # Sidebar should have nested sections
+    cfg = _load_quarto_yml(pkg)
+    sidebars = cfg.get("website", {}).get("sidebar", [])
+    ug_sidebar = [s for s in sidebars if s.get("id") == "user-guide"]
+    assert len(ug_sidebar) == 1, "Should have a user-guide sidebar"
+    contents = ug_sidebar[0].get("contents", [])
+    assert len(contents) >= 3, f"Sidebar should have at least 3 entries, got {len(contents)}"
