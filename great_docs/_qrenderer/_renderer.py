@@ -22,8 +22,8 @@ class Renderer(_Renderer):
 
     header_level: int = 1
     show_signature: bool = True
-    display_name_format: DisplayNameFormat | Literal["auto"] = "auto"
-    signature_name_format: DisplayNameFormat = "name"
+    display_name_format: DisplayNameFormat = "doc"
+    signature_name_format: DisplayNameFormat = "doc"
     typing_module_paths: list[str] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
 
     style: str = field(init=False, default="q")

@@ -30,7 +30,7 @@ from . import (
 )
 from ._griffe.docstrings import DCDocstringSection
 
-DisplayNameFormat: TypeAlias = Literal["full", "name", "short", "relative", "canonical"]
+DisplayNameFormat: TypeAlias = Literal["doc", "full", "name", "short", "relative", "canonical"]
 DocObjectKind: TypeAlias = Literal[
     "module",
     "class",

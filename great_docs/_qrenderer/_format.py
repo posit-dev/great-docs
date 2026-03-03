@@ -19,6 +19,8 @@ from ._pandoc.inlines import InterLink
 if TYPE_CHECKING:
     from typing import Any
 
+    from great_docs._renderer import layout
+
     from .typing import DisplayNameFormat
 
 HAS_RUFF = bool(shutil.which("ruff"))
@@ -150,7 +152,7 @@ def format_see_also(s: str) -> str:
     return SEE_ALSO_MULTILINEITEM_RE.sub(" ", content)
 
 
-def format_name(obj: gf.Alias | gf.Object, format: DisplayNameFormat = "relative") -> str:
+def format_name(doc: layout.Doc, format: DisplayNameFormat = "relative") -> str:
     """
     Return a name to use for the object
 
@@ -159,7 +161,10 @@ def format_name(obj: gf.Alias | gf.Object, format: DisplayNameFormat = "relative
     format:
         The format to use for the object's name.
     """
-    if format in ("name", "short"):
+    obj = cast("gf.Alias | gf.Object", doc.obj)
+    if format == "doc":
+        res = doc.name
+    elif format in ("name", "short"):
         res = obj.name
     elif format == "relative":
         res = ".".join(obj.path.split(".")[1:])

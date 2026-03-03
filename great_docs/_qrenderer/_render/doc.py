@@ -17,6 +17,7 @@ from great_docs._renderer.pandoc.blocks import (
     DefinitionList,
     Div,
     Header,
+    Para,
 )
 from great_docs._renderer.pandoc.components import Attr
 from great_docs._renderer.pandoc.inlines import Inline, Inlines, Link, Span
@@ -130,6 +131,9 @@ class __RenderDoc(RenderBase):
     this the page_path will be an empty string.
     """
 
+    show_source_link: bool = True
+    """Whether to show a link to the source code"""
+
     def __post_init__(self):
         # The layout_obj is too general. It is typed to include all
         # classes of documentable objects. And for layout.Doc objects,
@@ -140,7 +144,7 @@ class __RenderDoc(RenderBase):
         self.doc = cast("layout.Doc", self.layout_obj)
         """Doc Object"""
 
-        self.obj = self.doc.obj
+        self.obj = cast("gf.Object | gf.Alias", self.doc.obj)
         """Griffe object (or alias)"""
 
         self.show_signature = self.renderer.show_signature
@@ -185,20 +189,15 @@ class __RenderDoc(RenderBase):
     @cached_property
     def display_name(self) -> str:
         format = self.renderer.display_name_format
-        if format == "auto":
-            format = "full" if self.level == 1 else "name"
-        elif format == "relative" and self.level > 1:
+        if format == "relative" and self.level > 1:
             format = "name"
-        return markdown_escape(format_name(self.obj, format))
+        name = format_name(self.doc, format)
 
-    @cached_property
-    def raw_title(self) -> str:
-        format = "canonical" if self.level == 1 else "name"
-        return markdown_escape(format_name(self.obj, format))
+        return markdown_escape(name)
 
     @cached_property
     def signature_name(self) -> str:
-        return format_name(self.obj, self.renderer.signature_name_format)
+        return format_name(self.doc, self.renderer.signature_name_format)
 
     def render_description(self) -> BlockContent:
         """
