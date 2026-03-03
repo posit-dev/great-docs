@@ -33,7 +33,7 @@ from .._format import (
     repr_obj,
 )
 from .._pandoc.inlines import InterLink
-from .._utils import is_protocol, is_typealias, is_typevar
+from .._utils import is_protocol, is_typealias, is_typevar, package_info
 from .base import RenderBase
 
 if TYPE_CHECKING:
@@ -209,6 +209,7 @@ class __RenderDoc(RenderBase):
         direction = 1 if self.subject_above_signature else -1
         subject_and_signature = [
             self.render_docstring_subject(),
+            self.render_usage_source(),
             self.render_signature() if self.show_signature else None,
         ][::direction]
         return Blocks(subject_and_signature)
@@ -559,6 +560,29 @@ class __RenderDoc(RenderBase):
             attr=Attr(classes=[f"doc-{self.kind}-name"]),
         )
         return [(str(link), self.docstring_subject)]
+
+    def render_usage_source(self) -> BlockContent:
+        """
+        Row with usage and source
+        """
+        source = self.source_link if self.show_source_link else None
+        return Div(
+            ["Usage", source],
+            attr=Attr(classes=["doc-usage-source"]),
+        )
+
+    @cached_property
+    def source_link(self) -> Link:
+        """
+        Link to source code where the object is described
+        """
+        base_url = package_info("GITHUB_REPO_URL")
+        branch = package_info("GIT_REF")
+        relative_path = self.obj.relative_package_filepath
+        start, end = self.obj.lineno, self.obj.endlineno
+        anchor = f"#L{start}-L{end}" if start != end else f"#L{start}"
+        url = f"{base_url}/blob/{branch}/{relative_path}{anchor}"
+        return Link("Source", url, attr=Attr(attributes={"target": "_blank", "rel": "noopener"}))
 
 
 class RenderDoc(__RenderDoc):

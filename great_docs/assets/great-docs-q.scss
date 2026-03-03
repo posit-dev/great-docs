@@ -110,9 +110,30 @@ header span.doc-object-name {
 }
 
 // docstring signatures
-.doc-signature.doc-class::before,
-.doc-signature.doc-method::before {
-  content: "USAGE";
+.doc-usage-source {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.doc-usage-source p {
+  margin-bottom: 0rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.doc-usage-source > p:first-child {
+  color: #AAA;
+}
+
+.doc-usage-source a {
+  color: steelblue !important;
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+.doc-signature div.sourceCode {
+  margin-top: 0.15rem;
 }
 
 .doc-signature > div:first-child {
@@ -138,8 +159,11 @@ header span.doc-object-name {
    color: $primary;
 }
 
-// docstring sections with definition-items
+.doc-text:has(+section) {
+  margin-bottom: 2rem;
+}
 
+// docstring sections with definition-items
 
 #{$docstring-sections} dl > dt {
   font-weight: normal;

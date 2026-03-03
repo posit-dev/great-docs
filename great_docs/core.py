@@ -47,6 +47,14 @@ class GreatDocs:
         # Whether API reference was successfully configured (set during build)
         self._has_api_reference = True
 
+        # Grab this package information for the renderer.
+        # Sometime after the transition, this info should be calculated outside this
+        # class.
+        _, _, url = self._get_github_repo_info()
+        metadata = self._get_package_metadata()
+        os.environ["GITHUB_REPO_URL"] = str(url)
+        os.environ["GIT_REF"] = self._detect_git_ref()
+
     def _prepare_build_directory(self) -> None:
         """
         Prepare the great-docs/ build directory with all necessary assets.

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from dataclasses import field
+from functools import lru_cache
 from typing import TYPE_CHECKING, cast
 
 import griffe as gf
@@ -8,7 +10,7 @@ import griffe as gf
 from great_docs._renderer import layout
 
 if TYPE_CHECKING:
-    from typing import TypeGuard, TypeVar
+    from typing import Literal, TypeGuard, TypeVar
 
     from .typing import DocMemberType, DocType  # noqa: TCH001
 
@@ -120,3 +122,18 @@ def is_field_init_false(el: gf.Parameter) -> bool:
     # field has only keyword arguments
     exprs = cast("list[gf.ExprKeyword]", el.default.arguments)
     return any(expr.value == "False" for expr in exprs if expr.name == "init")
+
+
+@lru_cache(4)
+def package_info(key: Literal["GITHUB_REPO_URL", "PACKAGE_ROOT"]) -> str | None:
+    """
+    Return some bit of package information
+
+    This information has been put into the environment GreatDocs.__init___
+
+    Returns
+    -------
+    str | None
+        A information or None.
+    """
+    return os.environ.get(key, None)
