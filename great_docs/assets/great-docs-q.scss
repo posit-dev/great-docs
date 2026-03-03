@@ -170,7 +170,6 @@ header span.doc-object-name {
 }
 
 #{$docstring-sections} dl > dd {
-  @extend .mt-1;
   @extend .mb-0;
 }
 
@@ -227,7 +226,7 @@ section.doc-methods > section.doc-method {
 }
 
 h2#{$docstring-sections} {
-  font-size: 1.375rem;
+  font-size: 1.295rem;
 }
 
 // sidebar
