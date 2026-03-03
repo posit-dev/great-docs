@@ -4,7 +4,9 @@ from typing import TYPE_CHECKING, cast
 
 from great_docs._renderer.pandoc.blocks import (
     Blocks,
+    Header,
 )
+from great_docs._renderer.pandoc.components import Attr
 
 from .base import RenderBase
 
@@ -39,10 +41,7 @@ class __RenderReferencePage(RenderBase):
         This method is currently ignored and overriding it will not give a
         useful result.
         """
-        # The header currently being rendered in great_docs._renderer
-        # should be rendered here.
-        # We need to know title of the page. It is not passed
-        # to the renderer.
+        return Header(1, self.layout.title, Attr(classes=["doc", "doc-index"])),
 
     def render_body(self) -> BlockContent:
         """

@@ -2092,12 +2092,6 @@ if os.path.exists(index_file):
     dt_link_pattern = r"<dt><a[^>]*>([^<]+)</a></dt>"
     content = re.sub(dt_link_pattern, add_parens_to_functions, content)
 
-    # Remove redundant "API Reference" top-level nav item
-    # Find the nav structure and flatten it by removing the top-level wrapper
-    nav_pattern = r'(<nav[^>]*>.*?<h2[^>]*>.*?</h2>\s*<ul>\s*)<li><a[^>]*href="[^"]*#api-reference"[^>]*>API Reference</a>\s*<ul[^>]*>(.*?)</ul></li>\s*(</ul>\s*</nav>)'
-    nav_replacement = r"\1\2\3"
-    content = re.sub(nav_pattern, nav_replacement, content, flags=re.DOTALL)
-
     # Clean up Sphinx cross-reference roles in index descriptions
     content = translate_sphinx_roles(content)
 

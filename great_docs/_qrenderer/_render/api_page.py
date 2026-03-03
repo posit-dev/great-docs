@@ -4,18 +4,16 @@ from copy import copy
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
-from great_docs._renderer.pandoc.components import Attr
 from great_docs._renderer.pandoc.inlines import Link
 
 from ..._renderer.pandoc.blocks import (
     BlockContent,
     Blocks,
     DefinitionItem,
-    Div,
     Header,
 )
 from .._format import markdown_escape
-from .._pandoc.blocks import RawHTMLBlockTag
+from .._pandoc.blocks import quarto_title
 from .base import RenderBase
 
 if TYPE_CHECKING:
@@ -80,12 +78,7 @@ class __RenderAPIPage(RenderBase):
         elif self.page.summary:
             title = Header(self.level, markdown_escape(self.page.summary.name))
 
-        header = RawHTMLBlockTag(
-            "header",
-            Div(title, Attr(classes=["quarto-title"])),
-            Attr("title-block-header", classes=["quarto-title-block", "default"]),
-        )
-        return header
+        return quarto_title(title)
 
     def render_body(self) -> BlockContent:
         """

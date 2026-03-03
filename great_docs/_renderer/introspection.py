@@ -438,7 +438,7 @@ class Builder:
         render_interlinks: bool = False,
         _fast_inventory=False,
     ):
-        self.layout = self.load_layout(sections=sections, package=package, options=options)
+        self.layout = self.load_layout(title, sections=sections, package=package, options=options)
 
         self.package = package
         self.version = None
@@ -468,9 +468,9 @@ class Builder:
 
         self._fast_inventory = _fast_inventory
 
-    def load_layout(self, sections: dict, package: str, options=None):
+    def load_layout(self, title: str, sections: dict, package: str, options=None):
         try:
-            return layout.Layout(sections=sections, package=package, options=options)
+            return layout.Layout(title, sections=sections, package=package, options=options)
         except (ValueError, TypeError) as e:
             raise ValueError(str(e)) from None
 
@@ -515,15 +515,9 @@ class Builder:
         content = self.renderer.summarize(blueprint_layout)
         _log.info(f"Writing index to directory: {self.dir}")
 
-        blocks = [Header(1, self.title, Attr(classes=["doc", "doc-index"]))]
-        if self.desc:
-            blocks.append(Para(self.desc))
-        blocks.append(content)
-        final = str(Blocks(blocks))
-
         p_index = Path(self.dir) / self.out_index
         p_index.parent.mkdir(exist_ok=True, parents=True)
-        p_index.write_text(final)
+        p_index.write_text(content)
 
         return str(p_index)
 

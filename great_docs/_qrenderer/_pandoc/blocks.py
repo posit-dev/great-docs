@@ -5,18 +5,20 @@ from typing import TYPE_CHECKING
 
 import yaml
 
+from great_docs._qrenderer._format import markdown_escape
 from great_docs._renderer.pandoc.blocks import (
     Block,
     BlockContent,
     Blocks,
+    Div,
     Header,
     blockcontent_to_str,
 )
+from great_docs._renderer.pandoc.components import Attr
 
 if TYPE_CHECKING:
     from typing import Any
 
-    from great_docs._renderer.pandoc.components import Attr
     from great_docs._renderer.pandoc.inlines import Code
 
 
@@ -79,3 +81,16 @@ class RenderedDocObject(Block):
     def __str__(self):
         lst = [b for b in (self.title, self.signature, self.body) if b]
         return str(Blocks(lst))
+
+
+def quarto_title(title: Header | str) -> Block:
+    """
+    Return a quarto-title block
+    """
+    if isinstance(title, str):
+        title = Header(1, markdown_escape(title))
+    return RawHTMLBlockTag(
+        "header",
+        Div(title, Attr(classes=["quarto-title"])),
+        Attr("title-block-header", classes=["quarto-title-block", "default"]),
+    )
