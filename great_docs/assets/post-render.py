@@ -2364,6 +2364,14 @@ def fix_script_paths():
             content = content.replace(old_filter_script, new_filter_script)
             modified = True
 
+        # Fix sidebar-wrap.js path
+        old_wrap_script = '<script src="sidebar-wrap.js"></script>'
+        new_wrap_script = f'<script src="{prefix}sidebar-wrap.js"></script>'
+
+        if old_wrap_script in content:
+            content = content.replace(old_wrap_script, new_wrap_script)
+            modified = True
+
         # Fix reference-switcher.js path
         old_ref_switcher = '<script src="reference-switcher.js"></script>'
         new_ref_switcher = f'<script src="{prefix}reference-switcher.js"></script>'
