@@ -6,7 +6,7 @@ bread-crumbs: false
 
 # Custom Sections
 
-Great Docs lets you add any number of custom page groups to your documentation site — examples, tutorials, demos, or anything else. Each section gets its own navbar link, sidebar navigation, and an auto-generated index page. For blog-style content, there's a dedicated `type: blog` mode that uses Quarto's native listing directive.
+Great Docs lets you add any number of custom page groups to your documentation site — examples, tutorials, demos, or anything else. Each section gets its own navbar link and sidebar navigation. By default, the navbar links directly to the first page in the section. Set `index: true` to generate a card-based index page instead. For blog-style content, there's a dedicated `type: blog` mode that uses Quarto's native listing directive.
 
 ## Quick Start
 
@@ -40,6 +40,7 @@ Each section is defined as an entry in the `sections` array:
 sections:
   - title: Examples          # Navbar link text (required)
     dir: examples            # Source directory (required)
+    index: true              # Generate card-based index page (optional)
     navbar_after: User Guide  # Insert after this navbar item (optional)
     type: default            # Section type: "default" or "blog" (optional)
 ```
@@ -55,6 +56,7 @@ sections:
 
 | Field          | Default            | Description |
 |----------------|--------------------|-------------|
+| `index`        | `false`            | When `true`, auto-generates a card-based index page; when `false`, navbar links to the first page |
 | `navbar_after` | Before "Reference" | Name of an existing navbar item to place this section after |
 | `type`         | `default`          | `"default"` for card-grid index with sidebar; `"blog"` for Quarto listing page |
 
@@ -128,13 +130,24 @@ image: "img/basic.png"
 
 ## Index Page
 
-### Auto-Generated
+### No Index (Default)
 
-If the section directory does **not** contain an `index.qmd`, Great Docs generates a gallery-style index page with cards for each page, using each file's `title`, `description`, and `image` from frontmatter.
+By default, sections do **not** get an index page. The navbar links directly to the first page in the section, and all pages are accessible via the sidebar. This is the simplest setup and works well when pages are self-explanatory.
+
+### Auto-Generated Index
+
+Set `index: true` to generate a gallery-style index page with cards for each page, using each file's `title`, `description`, and `image` from frontmatter:
+
+```{.yaml filename="great-docs.yml"}
+sections:
+  - title: Examples
+    dir: examples
+    index: true
+```
 
 ### Custom Index
 
-If you provide your own `index.qmd` in the directory, Great Docs uses it as-is. This gives you full control over the landing page layout — you can write custom HTML, use Quarto grid layouts, or embed interactive content.
+If you provide your own `index.qmd` in the directory, Great Docs uses it as-is — regardless of the `index` setting. This gives you full control over the landing page layout — you can write custom HTML, use Quarto grid layouts, or embed interactive content.
 
 ```
 examples/
