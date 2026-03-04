@@ -7086,6 +7086,17 @@ toc: false
         dynamic = self._config.dynamic
         config["api-reference"]["dynamic"] = dynamic
 
+        # Update title and desc from great-docs.yml config
+        ref_title = self._config.reference_title
+        if ref_title:
+            config["api-reference"]["title"] = ref_title
+        ref_desc = self._config.reference_desc
+        if ref_desc:
+            config["api-reference"]["desc"] = ref_desc
+        elif "desc" in config["api-reference"]:
+            # Remove desc if it was previously set but is now absent
+            del config["api-reference"]["desc"]
+
         # Update jupyter kernel from great-docs.yml config
         jupyter_kernel = self._config.jupyter
         if jupyter_kernel:
