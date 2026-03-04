@@ -1474,10 +1474,12 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
     "gdtest_long_names": (
         "Long object names to test sidebar smart line-breaking. Classes like "
         "DuckDBDocumentStore, PostgreSQLDocumentStore have methods such as "
-        "retrieve_by_similarity() and retrieve_hybrid_combination(). Section "
-        "titles include 'DuckDBDocumentStore Methods'. Key test: sidebar items "
-        "wrap at dots, underscores, and camelCase boundaries instead of "
-        "being truncated with ellipsis."
+        "retrieve_by_similarity() and retrieve_hybrid_combination(). Also "
+        "includes plain-text names: all-lowercase, all-uppercase, and "
+        "initial-cap (e.g. documentstorewithvectorsearchcapabilities). "
+        "Section titles include 'DuckDBDocumentStore Methods'. Key test: "
+        "sidebar items wrap at dots, underscores, and camelCase boundaries "
+        "instead of being truncated with ellipsis."
     ),
 }
 

@@ -10,7 +10,7 @@ Focus: Classes and methods with deliberately long, multi-segment names
 SPEC = {
     "name": "gdtest_long_names",
     "description": "Long object names for sidebar wrapping tests",
-    "dimensions": ["A1", "B1", "C3", "D1", "E6", "F6", "G1", "H7"],
+    "dimensions": ["A1", "B1", "C3", "D1", "E6", "F6", "G1", "H8"],
     "pyproject_toml": {
         "project": {
             "name": "gdtest-long-names",
@@ -47,6 +47,11 @@ SPEC = {
                 DocumentMetadataConfig,
                 EmbeddingVectorResult,
             )
+            from gdtest_long_names.plaintext import (
+                documentstorewithvectorsearchcapabilities,
+                EMBEDDINGPROVIDERWITHBATCHPROCESSINGSUPPORT,
+                Chunkerstrategywithoverlapdetection,
+            )
 
             __all__ = [
                 "BaseDocumentStore",
@@ -60,6 +65,9 @@ SPEC = {
                 "RetrievedDocumentChunk",
                 "DocumentMetadataConfig",
                 "EmbeddingVectorResult",
+                "documentstorewithvectorsearchcapabilities",
+                "EMBEDDINGPROVIDERWITHBATCHPROCESSINGSUPPORT",
+                "Chunkerstrategywithoverlapdetection",
             ]
         ''',
         "gdtest_long_names/store.py": '''\
@@ -291,6 +299,141 @@ SPEC = {
                     """Merge chunks that are too small to stand alone."""
                     return []
         ''',
+        "gdtest_long_names/plaintext.py": '''\
+            """Classes with long plain-text names (no special characters)."""
+
+
+            class documentstorewithvectorsearchcapabilities:
+                """
+                A store for documents supporting vector search.
+
+                This class name is entirely lowercase with no separators,
+                underscores, dots, or camelCase transitions.
+
+                Parameters
+                ----------
+                connectionstring
+                    Database connection string.
+                vectordimension
+                    Dimensionality of stored vectors.
+                """
+
+                def __init__(self, connectionstring: str, vectordimension: int = 1536):
+                    self.connectionstring = connectionstring
+                    self.vectordimension = vectordimension
+
+                def insertdocumentswithembeddings(self, docs: list) -> int:
+                    """Insert documents along with their embedding vectors."""
+                    return 0
+
+                def searchbyvectorsimilarity(self, query: str, topk: int = 10) -> list:
+                    """Search for documents by vector similarity."""
+                    return []
+
+                def rebuildvectorsearchindex(self) -> None:
+                    """Rebuild the internal vector search index."""
+                    pass
+
+                def deletedocumentsbyidentifier(self, docid: str) -> bool:
+                    """Delete a document by its unique identifier."""
+                    return False
+
+                def countdocumentsincollection(self) -> int:
+                    """Return the total number of documents stored."""
+                    return 0
+
+                def exportcollectiontojsonlines(self, filepath: str) -> int:
+                    """Export all documents to a JSON Lines file."""
+                    return 0
+
+
+            class EMBEDDINGPROVIDERWITHBATCHPROCESSINGSUPPORT:
+                """
+                All-uppercase embedding provider class.
+
+                This class name is entirely uppercase with no separators,
+                underscores, dots, or camelCase transitions.
+
+                Parameters
+                ----------
+                MODELIDENTIFIER
+                    Identifier for the embedding model.
+                BATCHLIMIT
+                    Maximum batch size for processing.
+                """
+
+                def __init__(self, MODELIDENTIFIER: str, BATCHLIMIT: int = 100):
+                    self.MODELIDENTIFIER = MODELIDENTIFIER
+                    self.BATCHLIMIT = BATCHLIMIT
+
+                def GENERATEEMBEDDINGSFROMTEXTINPUT(self, texts: list) -> list:
+                    """Generate embeddings from a list of text inputs."""
+                    return []
+
+                def CALCULATETOKENCOUNTFORTEXTS(self, texts: list) -> int:
+                    """Calculate total token count for the given texts."""
+                    return 0
+
+                def RETRIEVEMODELCONFIGURATION(self) -> dict:
+                    """Retrieve the current model configuration."""
+                    return {}
+
+                def VALIDATEINPUTTEXTLENGTHS(self, texts: list) -> bool:
+                    """Validate that all input texts are within length limits."""
+                    return True
+
+                def EXPORTEMBEDDINGSTOFILE(self, filepath: str) -> int:
+                    """Export computed embeddings to a file."""
+                    return 0
+
+                def RESETINTERNALBATCHCOUNTER(self) -> None:
+                    """Reset the internal batch processing counter."""
+                    pass
+
+
+            class Chunkerstrategywithoverlapdetection:
+                """
+                Initial-cap chunker strategy class.
+
+                This class name starts with an uppercase letter and the rest
+                is entirely lowercase, with no other separators.
+
+                Parameters
+                ----------
+                maxchunksize
+                    Maximum size of each chunk in characters.
+                overlapsize
+                    Number of overlapping characters between chunks.
+                """
+
+                def __init__(self, maxchunksize: int = 1000, overlapsize: int = 200):
+                    self.maxchunksize = maxchunksize
+                    self.overlapsize = overlapsize
+
+                def splitcontentintochunks(self, content: str) -> list:
+                    """Split document content into overlapping chunks."""
+                    return []
+
+                def detectoverlapboundaries(self, content: str) -> list:
+                    """Detect optimal overlap boundary positions."""
+                    return []
+
+                def mergeundersizedfragments(self, chunks: list) -> list:
+                    """Merge fragments that are too small to stand alone."""
+                    return []
+
+                def calculateoverlappercentage(self, chunks: list) -> float:
+                    """Calculate the average overlap percentage between chunks."""
+                    return 0.0
+
+                def exportchunkswithoverlap(self, filepath: str) -> int:
+                    """Export chunks with overlap markers to a file."""
+                    return 0
+
+                def resetinternalchunkcache(self) -> None:
+                    """Reset the internal chunk processing cache."""
+                    pass
+        ''',
         "gdtest_long_names/types.py": '''\
             """Type definitions and data containers."""
 
@@ -397,6 +540,15 @@ SPEC = {
                         "RetrievedDocumentChunk",
                         "DocumentMetadataConfig",
                         "EmbeddingVectorResult",
+                    ],
+                },
+                {
+                    "title": "Plain Text Names",
+                    "desc": "Classes with long names containing no special characters.",
+                    "contents": [
+                        "documentstorewithvectorsearchcapabilities",
+                        "EMBEDDINGPROVIDERWITHBATCHPROCESSINGSUPPORT",
+                        "Chunkerstrategywithoverlapdetection",
                     ],
                 },
             ],

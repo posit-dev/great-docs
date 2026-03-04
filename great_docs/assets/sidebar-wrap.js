@@ -76,8 +76,22 @@
             }
         }
 
+        // Final pass: for any token still longer than 10 characters (e.g.
+        // all-lowercase names with no camelCase/separator break points),
+        // insert a <wbr> every 10 characters as a fallback.
+        var CHUNK = 10;
         for (var i = 0; i < merged.length; i++) {
-            result.appendChild(document.createTextNode(merged[i]));
+            var token = merged[i];
+            if (token.length > CHUNK) {
+                for (var c = 0; c < token.length; c += CHUNK) {
+                    if (c > 0) {
+                        result.appendChild(document.createElement('wbr'));
+                    }
+                    result.appendChild(document.createTextNode(token.slice(c, c + CHUNK)));
+                }
+            } else {
+                result.appendChild(document.createTextNode(token));
+            }
             // Insert <wbr> between every pair of adjacent parts.
             if (i < merged.length - 1) {
                 result.appendChild(document.createElement('wbr'));
@@ -98,9 +112,11 @@
             var span = spans[i];
             var text = span.textContent;
             if (!text) continue;
-            // Only process items that contain separator characters or camelCase /
-            // acronym boundaries (skip plain short words like "API", "Classes")
-            if (!/[._()]/.test(text) && !/[a-z][A-Z]/.test(text) && !/[A-Z]{2,}[a-z]/.test(text)) continue;
+            // Only process items that contain separator characters, camelCase /
+            // acronym boundaries, or are simply too long to fit without wrapping.
+            // Skip plain short words like "API", "Classes".
+            var dominated = /[._()]/.test(text) || /[a-z][A-Z]/.test(text) || /[A-Z]{2,}[a-z]/.test(text);
+            if (!dominated && text.length <= 10) continue;
             // Replace the text content with smart-break nodes
             var fragment = insertSmartBreaks(text);
             span.textContent = '';
