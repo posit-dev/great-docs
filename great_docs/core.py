@@ -84,6 +84,7 @@ class GreatDocs:
         js_files = [
             "github-widget.js",
             "sidebar-filter.js",
+            "sidebar-wrap.js",
             "reference-switcher.js",
             "dark-mode-toggle.js",
             "theme-init.js",
@@ -7166,6 +7167,7 @@ toc: false
         for js_file in [
             "github-widget.js",
             "sidebar-filter.js",
+            "sidebar-wrap.js",
             "dark-mode-toggle.js",
             "theme-init.js",
         ]:
@@ -7288,6 +7290,21 @@ toc: false
                 )
                 if not has_gh_widget:
                     config["format"]["html"]["include-after-body"].append(gh_script_entry)
+
+        # Add sidebar smart-wrap script (inserts <wbr> for pretty line breaks)
+        if "include-after-body" not in config["format"]["html"]:
+            config["format"]["html"]["include-after-body"] = []
+        elif isinstance(config["format"]["html"]["include-after-body"], str):
+            config["format"]["html"]["include-after-body"] = [
+                config["format"]["html"]["include-after-body"]
+            ]
+
+        wrap_script_entry = {"text": '<script src="sidebar-wrap.js"></script>'}
+        has_wrap = any(
+            "sidebar-wrap" in str(item) for item in config["format"]["html"]["include-after-body"]
+        )
+        if not has_wrap:
+            config["format"]["html"]["include-after-body"].append(wrap_script_entry)
 
         # Add sidebar filter script if enabled
         if metadata.get("sidebar_filter_enabled", True):

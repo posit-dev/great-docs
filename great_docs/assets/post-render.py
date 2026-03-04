@@ -1459,7 +1459,7 @@ def fix_dataclass_attributes(content_str):
 
 # Process all HTML files in the `_site/reference/` directory (except `index.html`)
 # and apply the specified transformations
-html_files = [f for f in glob.glob("_site/reference/*.html") if not f.endswith("index.html")]
+html_files = [f for f in glob.glob("_site/reference/*.html") if os.path.basename(f) != "index.html"]
 
 print(f"Found {len(html_files)} HTML files to process")
 

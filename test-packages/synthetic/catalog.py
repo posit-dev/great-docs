@@ -244,6 +244,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_ug_subdir_numbered",  # 106
     # 107: Homepage modes
     "gdtest_homepage_ug",  # 107
+    # 108: Sidebar wrapping
+    "gdtest_long_names",  # 108
 ]
 
 
@@ -1467,6 +1469,15 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "Blended user-guide homepage mode (homepage: user_guide). The first "
         "user guide page becomes index.qmd with the metadata sidebar. No "
         "separate 'User Guide' navbar link is generated."
+    ),
+    # ── 108: Sidebar wrapping ─────────────────────────────────────────────
+    "gdtest_long_names": (
+        "Long object names to test sidebar smart line-breaking. Classes like "
+        "DuckDBDocumentStore, PostgreSQLDocumentStore have methods such as "
+        "retrieve_by_similarity() and retrieve_hybrid_combination(). Section "
+        "titles include 'DuckDBDocumentStore Methods'. Key test: sidebar items "
+        "wrap at dots, underscores, and camelCase boundaries instead of "
+        "being truncated with ellipsis."
     ),
 }
 
