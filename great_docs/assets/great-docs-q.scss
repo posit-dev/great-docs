@@ -22,6 +22,8 @@ $type-symbol-color: mix($primary, $purple-500, 20%);
 $typevar-symbol-color: mix($primary, $yellow-500, 20%);
 $signature-background-color: shade-color(tint-color($primary, 96%), 2%);
 
+$font-family-monospace: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
 // Selectors for similar groups of elements that are created by the renderer
 $docstring-sections: ":is(.doc-parameters, .doc-other-parameters, .doc-returns, .doc-yields, .doc-receives, .doc-raises, .doc-warns, .doc-attributes, .doc-parameter-attributes, .doc-init-parameters, .doc-see-also, .doc-examples)";
 $doc-object-names: "span.doc-object-name:is(.doc-class-name, .doc-method-name, .doc-module-name, .doc-function-name, .doc-alias-name, .doc-attribute-name, .doc-type-name, .doc-typevar)";
@@ -45,11 +47,6 @@ header p {
    @extend .mb-2;
 }
 
-h2#{$docstring-sections},
-header:has(span.doc-object-name) {
-   border-bottom:  1px solid #DEE2E6;
-}
-
 table {
    @extend .table-bordered;
    @extend .table-striped;
@@ -69,27 +66,37 @@ table {
 
 
 /*---------------------------------- Reference Page -----------------------------------*/
-
-// definition-items
-.doc-index .doc-group > dl > dd {
-   @extend .mt-1;
-   @extend .mb-0;
-   @extend .ms-3;
+.doc-reference section.doc-group > dl {
+  @extend .table;
+  border-top-style: dashed;
+  border-bottom-style: dashed;
+  padding-top: 0.5em;
 }
 
-// tables
-// Give all the tables on the index page the same with.
-// It looks better, but as table cells do not respond to
-// min-width styling, this is not a perfect solution.
-.doc-index .doc-group > table td:first-child{
-   width: 30%;
+.doc-reference section.doc-group > dl > dt {
+  margin-left: 0px !important;
+}
+
+.doc-reference dd > p:last-child {
+  margin-bottom: 0;
+}
+
+.doc-reference dt a {
+  color: inherit;
+  text-decoration: underline;
+  font-weight: bold;
+  font-family: $font-family-monospace;
+  font-size: 0.875em;
+  text-underline-offset: 0.25em;
+  text-decoration-thickness: 0.125em;
+  word-break: initial;
 }
 
 /*------------------------------------- API Page --------------------------------------*/
 
 // docstring object-name
 header span.doc-object-name {
-  font-family: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-family: $font-family-monospace;
   font-size: 1.25rem;
 }
 
