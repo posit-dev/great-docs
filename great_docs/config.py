@@ -359,6 +359,19 @@ class Config:
         return None
 
     @property
+    def reference_desc(self) -> str | None:
+        """Get the custom API reference description, if set.
+
+        Supports ``reference: {desc: "Description text..."}`` in great-docs.yml.
+        The description appears below the reference page heading.
+        Returns ``None`` when no description is configured.
+        """
+        val = self.get("reference", [])
+        if isinstance(val, dict):
+            return val.get("desc")
+        return None
+
+    @property
     def authors(self) -> list[dict[str, Any]]:
         """Get the rich author metadata."""
         return self.get("authors", [])

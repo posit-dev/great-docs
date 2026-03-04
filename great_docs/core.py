@@ -6972,13 +6972,17 @@ toc: false
 
         # Add API reference configuration with sensible defaults
         # Use the importable name (actual module name) for the package field
+        ref_title = self._config.reference_title or "Reference"
+        ref_desc = self._config.reference_desc
         api_ref_config = {
             "package": importable_name,
             "dir": "reference",
-            "title": "Reference",
+            "title": ref_title,
             "style": "pkgdown",
             "renderer": {"style": "markdown", "table_style": "description-list"},
         }
+        if ref_desc:
+            api_ref_config["desc"] = ref_desc
 
         # Get dynamic setting from great-docs.yml config (defaults to True)
         dynamic = self._config.dynamic
@@ -7017,7 +7021,7 @@ toc: false
                 for item in left
             )
             if not has_ref:
-                left.append({"text": "Reference", "href": "reference/index.qmd"})
+                left.append({"text": ref_title, "href": "reference/index.qmd"})
                 navbar["left"] = left
 
         # Add reference sidebar
