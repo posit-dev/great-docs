@@ -1761,6 +1761,56 @@ def test_R4_config_all_on_builds_with_dict_reference():
 
 
 @requires_bs4
+def test_R4_ref_title_custom_title_and_desc():
+    """Custom reference title and description should appear on the index page.
+
+    The gdtest_ref_title spec uses ``reference: {title: "API Docs", desc: ...}``
+    in great-docs.yml. The _quarto.yml should carry both the custom title and
+    desc, and the rendered reference index page should display them.
+    """
+    pkg = "gdtest_ref_title"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    # 1. _quarto.yml should have the custom title and desc
+    cfg = _load_quarto_yml(pkg)
+    api_ref = cfg.get("api-reference", {})
+    assert api_ref.get("title") == "API Docs", (
+        f"Expected api-reference.title='API Docs', got {api_ref.get('title')!r}"
+    )
+    assert api_ref.get("desc"), "Expected api-reference.desc to be set"
+
+    # 2. Navbar should use the custom title
+    navbar_left = cfg.get("website", {}).get("navbar", {}).get("left", [])
+    ref_nav = [
+        item
+        for item in navbar_left
+        if isinstance(item, dict) and "reference" in item.get("href", "")
+    ]
+    assert ref_nav, "No reference link in navbar"
+    assert ref_nav[0].get("text") == "API Docs", (
+        f"Navbar text should be 'API Docs', got {ref_nav[0].get('text')!r}"
+    )
+
+    # 3. Rendered index page should have the custom title as h1
+    ref_index = _ref_dir(pkg) / "index.html"
+    if not ref_index.exists():
+        pytest.skip("reference/index.html not found")
+
+    soup = _load_html(ref_index)
+    h1 = soup.select_one("h1")
+    assert h1 is not None, "No h1 on reference index page"
+    assert "API Docs" in h1.get_text(), f"Expected 'API Docs' in h1, got {h1.get_text()!r}"
+
+    # 4. Description paragraph should appear on the page
+    main = soup.select_one("main.content") or soup
+    text = main.get_text()
+    assert "Welcome to the API documentation" in text, (
+        "Expected description text on reference index page"
+    )
+
+
+@requires_bs4
 def test_R4_ref_module_expand_uses_short_names():
     """Reference config with a submodule name should render successfully.
 
