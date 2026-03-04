@@ -491,6 +491,18 @@ reference:
 
 The `title` replaces the default "Reference" text in both the page heading and the navbar. The `desc` appears as a paragraph below the heading, before the section listings. If omitted, the heading defaults to "Reference" with no introductory text.
 
+These keys can be combined with explicit `sections` for full control over both the page heading and the section structure:
+
+```{.yaml filename="great-docs.yml"}
+reference:
+  title: "API Docs"
+  desc: "All public symbols documented below."
+  sections:
+    - title: Core
+      contents:
+        - MyClass
+```
+
 ## Complete Example
 
 Here's a comprehensive configuration demonstrating all available options:
@@ -550,30 +562,28 @@ sections:
     type: blog
 
 # API Reference Structure
-# Use a dict for custom title/desc with auto-discovered sections:
-#   reference:
-#     title: "API Reference"
-#     desc: "Complete reference for the library's public API."
-# Or use a list for explicit section ordering:
 reference:
-  - title: Core Classes
-    desc: Main classes for the library
-    contents:
-      - name: MainClass
-        members: false
-      - HelperClass
+  title: "API Reference"
+  desc: "Complete reference for the library's public API."
+  sections:
+    - title: Core Classes
+      desc: Main classes for the library
+      contents:
+        - name: MainClass
+          members: false
+        - HelperClass
 
-  - title: MainClass Methods
-    desc: Methods for the MainClass
-    contents:
-      - MainClass.process
-      - MainClass.validate
+    - title: MainClass Methods
+      desc: Methods for the MainClass
+      contents:
+        - MainClass.process
+        - MainClass.validate
 
-  - title: Utility Functions
-    desc: Helper functions
-    contents:
-      - utility_func
-      - helper_func
+    - title: Utility Functions
+      desc: Helper functions
+      contents:
+        - utility_func
+        - helper_func
 
 # Authors
 authors:

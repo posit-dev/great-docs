@@ -183,13 +183,28 @@ reference:
     classes and functions available in the package.
 ```
 
-When set, the `title` replaces the default "Reference" heading on the API index page and in the navigation bar. The `desc` text appears as a paragraph immediately below the heading, providing context before the section listings. Sections are auto-generated from your package's public API.
+When set, the `title` replaces the default "Reference" heading on the API index page and in the navigation bar. The `desc` text appears as a paragraph immediately below the heading, providing context before the section listings.
+
+Without explicit `sections`, sections are auto-generated from your package's public API. You can also combine `title`/`desc` with explicit section ordering using a `sections` key:
+
+```{.yaml filename="great-docs.yml"}
+reference:
+  title: "API Reference"
+  desc: "Complete reference for all public symbols."
+  sections:
+    - title: Core
+      desc: Primary classes
+      contents:
+        - MyClass
+        - Config
+    - title: Utilities
+      desc: Helper functions
+      contents:
+        - format_output
+        - parse_input
+```
 
 If neither `title` nor `desc` is set, the page heading defaults to "Reference" with no introductory text.
-
-:::{.callout-note}
-The `title`/`desc` form and the explicit section list form are separate ways to use the `reference` key. Use `reference:` as a dict (with `title` and `desc`) for a custom heading with auto-discovered sections, or as a list of section dicts for full control over organization.
-:::
 
 ### Controlling Method Documentation
 
