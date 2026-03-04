@@ -1,19 +1,19 @@
 """
-gdtest_ref_title — Reference config with custom title.
+gdtest_ref_title — Reference config with custom title and description.
 
 Dimensions: P8
-Focus: Reference config using a dict with a custom title instead of a list of sections.
+Focus: Reference config using a dict with a custom title and description instead of a list of sections.
 """
 
 SPEC = {
     "name": "gdtest_ref_title",
-    "description": "Reference config with custom title.",
+    "description": "Reference config with custom title and description.",
     "dimensions": ["P8"],
     "pyproject_toml": {
         "project": {
             "name": "gdtest-ref-title",
             "version": "0.1.0",
-            "description": "Test reference config with custom title.",
+            "description": "Test reference config with custom title and description.",
         },
         "build-system": {
             "requires": ["setuptools"],
@@ -21,7 +21,10 @@ SPEC = {
         },
     },
     "config": {
-        "reference": {"title": "API Docs"},
+        "reference": {
+            "title": "API Docs",
+            "desc": "Welcome to the API documentation. This reference covers all public functions available in the package.",
+        },
     },
     "files": {
         "gdtest_ref_title/__init__.py": '''\

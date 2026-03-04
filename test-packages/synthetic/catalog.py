@@ -1404,8 +1404,9 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "get its own methods subsection without name collisions."
     ),
     "gdtest_ref_title": (
-        "Reference config with title: 'API Docs' instead of default. The "
-        "reference page heading should use this custom title."
+        "Reference config with title: 'API Docs' and a description paragraph "
+        "instead of default. The reference page heading should use this custom "
+        "title, followed by the description text."
     ),
     # ── 86–95: Site theming & display ─────────────────────────────────────
     "gdtest_theme_cosmo": (
