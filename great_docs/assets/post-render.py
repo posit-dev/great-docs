@@ -1604,24 +1604,10 @@ for html_file in html_files:
             # Determine whether this item should get ()
             obj_type = object_types.get(item_name_from_file)
 
-            if obj_type:
-                # Metadata available — only add () for functions/methods
-                should_add_parens = obj_type in _CALLABLE_TYPES
-            else:
-                # Fallback heuristic (original behaviour)
-                should_add_parens = "." in h1_content or (
-                    h1_content and not h1_content[0].isupper()
-                )
-
-            if should_add_parens:
-                # Strip HTML tags to check plain text for existing ()
-                _plain = re.sub(r"<[^>]+>", "", h1_content).strip()
-                if not _plain.endswith("()"):
-                    h1_content += "()"
-
             # Replace the h1 tag with the modified content
             content[i] = line[:start] + h1_content + line[end:]
 
+    # NOTE: Addes the labels next to the title names
     # Add classification labels using stored info
     for i, line in enumerate(content):
         if i in classification_info:
@@ -1722,57 +1708,6 @@ for html_file in html_files:
             first_p_line = i
             first_p_content = line
             break
-
-    # Determine where to insert the description paragraph
-    # If title is after header, insert after title; otherwise insert after header
-    if (
-        header_end_line is not None
-        and first_p_line is not None
-        and title_line is not None
-        and sourcecode_line is not None
-    ):
-        if title_line > header_end_line:
-            # Title is in a separate section, insert after title
-            insert_after_line = title_line
-        else:
-            # Title is in header, insert after header
-            insert_after_line = header_end_line
-
-        # Apply italic styling to the description
-        if "style=" not in first_p_content:
-            styled_p = first_p_content.replace(
-                "<p>",
-                '<p class="doc-description" style="font-size: 1rem; font-style: italic; margin-top: 0.25rem; line-height: 1.3;">',
-            )
-        else:
-            styled_p = first_p_content
-
-        # Remove the original <p> line
-        content.pop(first_p_line)
-
-        # Adjust sourcecode_line since we removed a line before it
-        if first_p_line < sourcecode_line:
-            sourcecode_line -= 1
-
-        # Insert the styled <p> line after the determined position (accounting for the removed line)
-        insert_position = (
-            insert_after_line + 1 if first_p_line > insert_after_line else insert_after_line
-        )
-        content.insert(insert_position, "\n")  # Add spacing
-        content.insert(insert_position + 1, styled_p)
-        content.insert(insert_position + 2, "\n")  # Add spacing
-
-        # Adjust sourcecode_line since we added lines before it
-        sourcecode_line += 3
-
-        # Add "USAGE" label and "SOURCE" link before the sourceCode div
-        # The SOURCE link will be on the right side, USAGE on the left
-        source_link = get_source_link_html(item_name_from_file)
-        if source_link:
-            usage_row = f'<div class="usage-source-row" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: -14px;"><span style="font-size: 12px; color: rgb(170, 170, 170);">USAGE</span>{source_link}</div>\n'
-        else:
-            usage_row = '<p style="font-size: 12px; color: rgb(170, 170, 170); margin-bottom: -14px;">USAGE</p>\n'
-        content.insert(sourcecode_line, usage_row)
 
     # Fix return value formatting in individual function pages, removing the `:` before the
     # return value and adjusting the style of the parameter annotation separator
@@ -1878,8 +1813,6 @@ for html_file in html_files:
                 # Add () for callable members
                 if member_type and member_type in _CALLABLE_MEMBER_TYPES:
                     _plain_member = re.sub(r"<[^>]+>", "", display_text).strip()
-                    if not _plain_member.endswith("()"):
-                        display_text += "()"
 
                 badge_html = ""
                 if member_type and member_type in _MEMBER_BADGE_TYPES:
@@ -2069,28 +2002,6 @@ if os.path.exists(index_file):
     # Replace all table structures with dl/dt/dd
     table_pattern = r'<table class="caption-top table">\s*<tbody>(.*?)</tbody>\s*</table>'
     content = re.sub(table_pattern, convert_table_to_dl, content, flags=re.DOTALL)
-
-    # Add () only to functions and methods in <a> tags within <dt> elements
-    def add_parens_to_functions(match):
-        full_tag = match.group(0)
-        link_text = match.group(1)
-
-        # Use object_types metadata when available
-        obj_type = object_types.get(link_text)
-        if obj_type:
-            if obj_type in ("function", "method"):
-                return full_tag.replace(f">{link_text}</a>", f">{link_text}()</a>")
-            return full_tag
-
-        # Fallback heuristic (only when metadata is unavailable)
-        if "." in link_text or (link_text and not link_text[0].isupper()):
-            return full_tag.replace(f">{link_text}</a>", f">{link_text}()</a>")
-
-        return full_tag
-
-    # Find all <a> tags within <dt> elements and apply the function
-    dt_link_pattern = r"<dt><a[^>]*>([^<]+)</a></dt>"
-    content = re.sub(dt_link_pattern, add_parens_to_functions, content)
 
     # Clean up Sphinx cross-reference roles in index descriptions
     content = translate_sphinx_roles(content)

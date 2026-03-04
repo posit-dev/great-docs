@@ -334,8 +334,8 @@ h2#{$docstring-sections} {
 }
 
 // Adorn callables with ()
-
-span.doc-method-name::after {
+span.doc-method-name::after,
+dt a.doc-method-name::after {
   content: "()";
 }
 
