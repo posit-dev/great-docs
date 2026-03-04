@@ -59,7 +59,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_releases": 50,
     },
     # Custom sections (generic page groups: examples, tutorials, blog, etc.)
-    # Each entry: {"title": str, "dir": str, "navbar_after": str | None}
+    # Each entry: {"title": str, "dir": str, "index": bool, "navbar_after": str | None}
     "sections": [],
     # Homepage mode
     # "index" (default): separate homepage from README / index source
@@ -491,15 +491,18 @@ def create_default_config() -> str:
 # Custom Sections
 # ---------------
 # Add custom page groups (examples, tutorials, blog, etc.) to the site.
-# Each section gets a navbar link, a sidebar, and an auto-generated index
-# page (unless you provide your own index.qmd in the directory).
+# Each section gets a navbar link and a sidebar. An auto-generated
+# card-based index page is created only when ``index: true`` is set;
+# otherwise the navbar links directly to the first page in the section.
+# If you provide your own index.qmd in the directory it is always used.
 #
 # sections:
 #   - title: Examples            # Navbar link text
 #     dir: examples              # Source directory (relative to project root)
+#     index: true                # Generate card-based index page (default: false)
 #     navbar_after: User Guide   # Place after this navbar item (optional)
 #   - title: Tutorials
-#     dir: tutorials
+#     dir: tutorials             # No index — navbar links to first page
 #   - title: Blog                # Blog section using Quarto's listing directive
 #     dir: blog
 #     type: blog                 # "blog" for Quarto listing, omit for card grid

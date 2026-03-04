@@ -1166,18 +1166,29 @@ class GreatDocs:
                 # Blog sections don't get a sidebar — the listing page
                 # is the primary navigation experience.
             else:
-                # Default: card-based sections with sidebar
+                # Default: sections with sidebar (index page is opt-in)
                 copied = self._copy_section_files(files, source_path, dest_dir)
 
                 has_user_index = any(f.name == "index.qmd" for f in files)
+                generate_index = section_cfg.get("index", False)
+
                 if has_user_index:
+                    # User provided their own index.qmd — always use it
                     index_href = f"{slug}/index.qmd"
-                else:
+                elif generate_index:
+                    # Auto-generate a card-based index page (opt-in)
                     self._generate_section_index(title, copied, slug, dest_dir)
                     index_href = f"{slug}/index.qmd"
+                else:
+                    # No index page — navbar links to the first content page
+                    first_page = next((p for p in copied if p["filename"] != "index.qmd"), None)
+                    if first_page:
+                        index_href = f"{slug}/{first_page['filename']}"
+                    else:
+                        index_href = f"{slug}/index.qmd"
 
                 # Add sidebar
-                self._add_section_sidebar(title, slug, copied, has_user_index)
+                self._add_section_sidebar(title, slug, copied, has_user_index, generate_index)
 
             # Add navbar link
             navbar_after = section_cfg.get("navbar_after")
@@ -1481,6 +1492,7 @@ class GreatDocs:
         slug: str,
         pages: list[dict],
         has_user_index: bool,
+        has_generated_index: bool = False,
     ) -> None:
         """
         Add a sidebar for the custom section to ``_quarto.yml``.
@@ -1495,6 +1507,8 @@ class GreatDocs:
             List of page dicts from ``_copy_section_files``.
         has_user_index
             Whether the user provided their own index.qmd.
+        has_generated_index
+            Whether an auto-generated index page was created.
         """
         quarto_yml = self.project_path / "_quarto.yml"
         config = self._read_quarto_config(quarto_yml)
@@ -1502,8 +1516,11 @@ class GreatDocs:
         sidebar_id = slug
         contents: list[dict | str] = []
 
-        # Add index as the first item
-        contents.append({"text": title, "href": f"{slug}/index.qmd"})
+        has_index = has_user_index or has_generated_index
+
+        if has_index:
+            # Add index as the first item when one exists
+            contents.append({"text": title, "href": f"{slug}/index.qmd"})
 
         # Add each page (except index.qmd)
         for page in pages:
