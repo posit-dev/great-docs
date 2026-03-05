@@ -1,25 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 48" width="240" height="48">
-  <defs>
-    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#4da3ff;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#5ccdd6;stop-opacity:1" />
-    </linearGradient>
-  </defs>
-  <!-- Book/document icon -->
-  <g transform="translate(4, 4)">
-    <!-- Back page -->
-    <rect x="6" y="2" width="28" height="36" rx="2" ry="2" fill="#5ccdd6" opacity="0.45"/>
-    <!-- Front page -->
-    <rect x="2" y="5" width="28" height="36" rx="2" ry="2" fill="url(#grad1)"/>
-    <!-- Page lines -->
-    <line x1="8" y1="14" x2="24" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.9"/>
-    <line x1="8" y1="19" x2="24" y2="19" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
-    <line x1="8" y1="24" x2="20" y2="24" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
-    <!-- Checkmark / "great" accent -->
-    <polyline points="19,28 22,31 28,24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
-  </g>
-  <!-- "Great Docs" text -->
-  <text x="50" y="33" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="26" font-weight="700" fill="#e8e8e8">
-    <tspan fill="url(#grad1)">Great</tspan><tspan dx="4" fill="#e8e8e8"> Docs</tspan>
-  </text>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="594px" height="241px" viewBox="0 0 594 241" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>great-docs</title>
+    <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd" opacity="0.507393973">
+        <path d="M504.5,13 C549.787349,13 586.5,49.7126505 586.5,95 L586.5,146 C586.5,191.287349 549.787349,228 504.5,228 L314,228 L314,13 L504.5,13 Z M493.127907,66.75 L370,66.75 L370,174.25 L493.127907,174.25 C510.801019,174.25 525.127907,159.923112 525.127907,142.25 L525.127907,142.25 L525.127907,98.75 C525.127907,81.076888 510.801019,66.75 493.127907,66.75 L493.127907,66.75 Z" id="Combined-Shape" fill="#5B0554"></path>
+        <path d="M116.686047,69.75 L116.156868,69.7542871 C98.9021198,70.0340465 84.9672209,83.9706776 84.6902484,101.226103 L84.6860465,101.75 L84.6860465,142.75 L84.6903336,143.279179 C84.970093,160.533927 98.9067241,174.468826 116.16215,174.745798 L116.686047,174.75 L239.813953,174.75 L239.813953,148.133721 L150.5,148.133721 L150.5,93.6113612 L297,93.6113612 L297,228 L106.5,228 C61.2126505,228 24.5,191.287349 24.5,146 L24.5,95 C24.5,49.7126505 61.2126505,13 106.5,13 L297,13 L297,69.75 L116.686047,69.75 Z" id="Combined-Shape" fill="#5B0554"></path>
+    </g>
 </svg>
