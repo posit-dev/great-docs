@@ -9,6 +9,12 @@ exclude:
   - create_default_config
   - load_config
 
+# Logo & Favicon
+# ---------------
+logo:
+  light: assets/logo.svg
+  dark: assets/logo-dark.svg
+
 # GitHub Integration
 # ------------------
 # GitHub link style: "widget" (shows stars count) or "icon" (simple icon)
