@@ -3915,6 +3915,7 @@ def test_process_sections_idempotent():
         ex_dir = project_path / "examples"
         ex_dir.mkdir()
         (ex_dir / "page.qmd").write_text('---\ntitle: "Page"\n---\n\nContent\n')
+        (ex_dir / "page2.qmd").write_text('---\ntitle: "Page 2"\n---\n\nMore\n')
 
         docs = GreatDocs(project_path=tmp_dir)
         docs._process_sections()
