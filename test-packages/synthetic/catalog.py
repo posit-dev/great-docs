@@ -247,6 +247,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_homepage_ug",  # 107
     # 108: Sidebar wrapping
     "gdtest_long_names",  # 108
+    # 109: Logo & favicon integration
+    "gdtest_logo",  # 109
 ]
 
 
@@ -1488,6 +1490,13 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "Section titles include 'DuckDBDocumentStore Methods'. Key test: "
         "sidebar items wrap at dots, underscores, and camelCase boundaries "
         "instead of being truncated with ellipsis."
+    ),
+    # ── 109: Logo & favicon integration ───────────────────────────────────
+    "gdtest_logo": (
+        "Logo and favicon integration. Provides light and dark SVG logos "
+        "via great-docs.yml config. Tests that the logo replaces the text "
+        "title in the navbar (navbar.title: false), copies logo files into "
+        "the build directory, and sets the SVG as favicon."
     ),
 }
 
