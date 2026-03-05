@@ -156,3 +156,4 @@ test-packages/*/
 
 # Rendered synthetic package hub (ephemeral)
 test-packages/synthetic/_rendered/
+.DS_Store
