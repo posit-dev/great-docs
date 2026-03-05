@@ -39,7 +39,7 @@ class __RenderDocAttribute(RenderDoc):
         default = getattr(self.obj, "value", None)
 
         # For a TypeAlias, the name is the title and we can do without the annotation
-        if self.kind in ("type", "typevar"):
+        if "type" in self.kind:
             name, annotation = None, None
 
         term = self.render_variable_definition(name, annotation, default)

@@ -12,14 +12,14 @@ $table-striped-bg: mix($primary, #FDFDFD, 2%);
 $table-striped-order: even;
 
 /*-- scss:rules --*/
-$class-symbol-color: $primary;
-$method-symbol-color: mix($primary, $teal-600, 20%);
-$function-symbol-color: mix($primary, $cyan-500, 20%);
-$alias-symbol-color: mix($primary, $green-500, 20%);
-$module-symbol-color: mix($primary, $red-500, 20%);
-$attribute-symbol-color: mix($primary, $orange-500, 20%);
-$type-symbol-color: mix($primary, $purple-500, 20%);
-$typevar-symbol-color: mix($primary, $yellow-500, 20%);
+$label-class-color: mix($primary, $indigo-500, 20%);
+$label-method-color: mix($primary, $cyan-600, 20%);
+$label-function-color: mix($primary, $pink-700, 20%);
+$label-exception-color: mix($primary, $red-600, 20%);
+$label-property-color: mix($primary, $teal-600, 20%);
+$label-constant-color: mix($primary, $orange-500, 20%);
+$label-typealias-color: mix($primary, $yellow-500, 20%);
+
 $signature-background-color: shade-color(tint-color($primary, 96%), 2%);
 
 $font-family-monospace: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -252,92 +252,87 @@ h2#{$docstring-sections} {
   font-size: 0.55rem;
 }
 
-.content span.doc-object-name.doc-class-name::before {
-  content: "class";
-  color: $class-symbol-color;
-  background-color: tint-color($class-symbol-color, 95%);
-}
-
-.content span.doc-object-name.doc-method-name::before {
-  content: "meth";
-  color: $method-symbol-color;
-  background-color: tint-color($method-symbol-color, 95%);
-}
-
-.content span.doc-object-name.doc-function-name::before {
-  content: "func";
-  color: $function-symbol-color;
-  background-color: tint-color($function-symbol-color, 95%);
-}
-
-.content span.doc-object-name.doc-attribute-name::before {
-  content: "attr";
-  color: $attribute-symbol-color;
-  background-color: tint-color($attribute-symbol-color, 95%);
-}
-
-.content span.doc-object-name.doc-module-name::before {
-  content: "mod";
-  color: $module-symbol-color;
-  background-color: tint-color($module-symbol-color, 95%);
-}
-
-.content span.doc-object-name.doc-alias-name::before {
-  content: "alias";
-  color: $alias-symbol-color;
-  background-color: tint-color($alias-symbol-color, 95%);
-}
-
-.content span.doc-object-name.doc-type-name::before {
-  content: "type";
-  color: $type-symbol-color;
-  background-color: tint-color($type-symbol-color, 95%);
-}
-
-.content span.doc-object-name.doc-typevar-name::before {
-  content: "typevar";
-  color: $typevar-symbol-color;
-  background-color: tint-color($typevar-symbol-color, 95%);
-}
-
 // docstring object labels
-.content .doc-labels > .doc-label {
+$all_labels: (
+  class,
+  namedtuple,
+  typeddict,
+  protocol,
+  abc,
+  enum,
+  method,
+  classmethod,
+  staticmethod,
+  function,
+  exception,
+  property,
+  constant,
+  typealias
+);
+$class-like-labels: (class, namedtuple, typeddict, protocol, abc, enum);
+$method-like-labels: (method, classmethod, staticmethod);
+
+.content span.doc-label::after {
   @extend .fw-normal;
   @extend .small;
-  font-family: monospace;
+  @extend code;
   font-size: 0.785rem;
-  color: $gray-800;
-  background-color: $gray-100;
   padding: 0.125rem 0.25rem;
+  margin-left: 1rem;
+  vertical-align: middle;
   border-radius: 0.25rem;
+  border-width: 1px;
+  border-style: solid;
 }
 
-.content .doc-labels > .doc-label-staticmethod::after {
-  content: "staticmethod";
+@each $label in $all_labels {
+  .content span.doc-label-#{$label}::after {
+    content: "#{$label}";
+  }
 }
 
-.content .doc-labels > .doc-label-classmethod::after {
-  content: "classmethod";
+.content {
+  @each $label in $class-like-labels {
+    span.doc-label-#{$label}::after {
+      color: $label-class-color;
+      border-color: $label-class-color;
+      background-color: tint-color($label-class-color, 95%);
+    }
+  }
 }
 
-.content .doc-labels > .doc-label-abstractmethod::after {
-  content: "abstractmethod";
+.content {
+  @each $label in $method-like-labels {
+    span.doc-label-#{$label}::after {
+      color: $label-method-color;
+      border-color: $label-method-color;
+      background-color: tint-color($label-method-color, 95%);
+    }
+  }
 }
 
-.content .doc-labels > .doc-label-cached::after {
-  content: "cached";
+.content span.doc-label-function::after {
+  color: $label-function-color;
+  border-color: $label-function-color;
+  background-color: tint-color($label-function-color, 95%);
 }
 
-.content .doc-labels > .doc-label-property::after {
-  content: "property";
+.content span.doc-label-property::after {
+  color: $label-property-color;
+  border-color: $label-property-color;
+  background-color: tint-color($label-property-color, 95%);
 }
 
-.content .doc-labels > .doc-label-overload::after {
-  content: "typing.overload";
+.content span.doc-label-constant::after {
+  color: $label-constant-color;
+  border-color: $label-constant-color;
+  background-color: tint-color($label-constant-color, 95%);
 }
 
-.content .doc-labels > .doc-label-protocol::after {
-  content: "Protocol";
+.content span.doc-label-typealias::after {
+  color: $label-typealias-color;
+  border-color: $label-typealias-color;
+  background-color: tint-color($label-typealias-color, 95%);
 }
 
 // Adorn callables with ()

@@ -35,6 +35,7 @@ DocObjectKind: TypeAlias = Literal[
     "module",
     "class",
     "method",
+    "property",
     "function",
     "attribute",
     "alias",

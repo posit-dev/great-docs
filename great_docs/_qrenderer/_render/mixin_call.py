@@ -135,7 +135,7 @@ class __RenderDocCallMixin(RenderDoc):
         sig = formatted_signature(name, self.render_signature_parameters())
         return Div(
             CodeBlock(sig, Attr(classes=["python"])),
-            Attr(classes=["doc-signature", f"doc-{self.kind}"]),
+            Attr(classes=["doc-signature", f"doc-{self.obj.kind}"]),
         )
 
     def render_signature_parameters(self) -> list[str]:

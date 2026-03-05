@@ -1527,53 +1527,6 @@ for html_file in html_files:
     # Convert back to lines for line-by-line processing
     content = content.splitlines(keepends=True)
 
-    # Determine the classification of each h1 tag based on its content
-    # Use object_types metadata from introspection when available,
-    # falling back to heuristics only when the metadata is missing
-    _TYPE_BADGE_STYLES = {
-        "class": ("class", "#6366f1", "#EEF2FF"),
-        "namedtuple": ("NamedTuple", "#6366f1", "#EEF2FF"),
-        "typeddict": ("TypedDict", "#6366f1", "#EEF2FF"),
-        "protocol": ("Protocol", "#6366f1", "#EEF2FF"),
-        "abc": ("ABC", "#6366f1", "#EEF2FF"),
-        "exception": ("exception", "#dc2626", "#FEF2F2"),
-        "enum": ("enum", "#6366f1", "#EEF2FF"),
-        "function": ("function", "#7c3aed", "#F5F3FF"),
-        "method": ("method", "#0891b2", "#ECFEFF"),
-        "classmethod": ("classmethod", "#0891b2", "#ECFEFF"),
-        "staticmethod": ("staticmethod", "#0891b2", "#ECFEFF"),
-        "property": ("property", "#0d9488", "#F0FDFA"),
-        "constant": ("constant", "#d97706", "#FFFBEB"),
-        "type_alias": ("type alias", "#059669", "#ECFDF5"),
-        "other": ("other", "#6b7280", "#F9FAFB"),
-    }
-
-    classification_info = {}
-    for i, line in enumerate(content):
-        # Look for both class="title" and styled h1 tags
-        h1_match = re.search(r'<h1\s+class="title">(.*?)</h1>', line)
-        if not h1_match:
-            # Also check for h1 tags with style attribute (for level1 section titles)
-            h1_match = re.search(r'<h1\s+style="[^"]*">(.*?)</h1>', line)
-
-        if h1_match:
-            original_h1_content = h1_match.group(1).strip()
-
-            # Try metadata lookup first (use item_name_from_file as key)
-            obj_type = object_types.get(item_name_from_file)
-
-            if obj_type and obj_type in _TYPE_BADGE_STYLES:
-                classification_info[i] = _TYPE_BADGE_STYLES[obj_type]
-            else:
-                # Fallback heuristic (only when metadata is unavailable)
-                if original_h1_content and original_h1_content[0].isupper():
-                    if "." in original_h1_content:
-                        classification_info[i] = _TYPE_BADGE_STYLES["method"]
-                    else:
-                        classification_info[i] = _TYPE_BADGE_STYLES["class"]
-                else:
-                    classification_info[i] = _TYPE_BADGE_STYLES["function"]
-
     # Remove the literal text `Validate.` from the h1 tag
     # TODO: Add line below stating the class name for the method
     content = [
@@ -1606,21 +1559,6 @@ for html_file in html_files:
 
             # Replace the h1 tag with the modified content
             content[i] = line[:start] + h1_content + line[end:]
-
-    # NOTE: Addes the labels next to the title names
-    # Add classification labels using stored info
-    for i, line in enumerate(content):
-        if i in classification_info:
-            h1_match = re.search(r"<h1[^>]*>(.*?)</h1>", line)
-            if h1_match:
-                h1_content = h1_match.group(1)
-                label_type, label_color, background_color = classification_info[i]
-
-                label_span = f'<span style="font-size: 1rem; border-style: solid; border-width: 1px; border-color: {label_color}; background-color: {background_color}; margin-left: 12px; vertical-align: 0.1rem;"><code style="background-color: transparent; color: {label_color};">{label_type}</code></span>'
-
-                new_h1_content = h1_content + label_span
-                new_line = line.replace(h1_content, new_h1_content)
-                content[i] = new_line
 
     # Wrap bare h1 tags (those with style attribute but no quarto-title wrapper) in proper structure
     for i, line in enumerate(content):
@@ -1784,103 +1722,6 @@ for html_file in html_files:
 
     # Turn all h2 tags into h3 tags
     content = [line.replace("<h2", "<h3").replace("</h2>", "</h3>") for line in content]
-
-    # Inject decorator/descriptor badges into member-level headings (h3 tags)
-    # Method headings are originally h2 in the renderer output, converted to h3 above.
-    # These headings have data-anchor-id attributes like "pkg.Class.method"
-    # We look up the member type in object_types to add classmethod/staticmethod/property badges.
-    # Also style member headings in code font and append () for callable members.
-    _MONO_FONT = "font-family: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.1rem;"
-    _CALLABLE_MEMBER_TYPES = {"method", "classmethod", "staticmethod", "function"}
-    if object_types:
-        _MEMBER_BADGE_TYPES = {"method", "classmethod", "staticmethod", "property"}
-        for i, line in enumerate(content):
-            anchor_match = re.search(r'<h3[^>]*data-anchor-id="([^"]+)"[^>]*>(.*?)</h3>', line)
-            if anchor_match:
-                anchor_id = anchor_match.group(1)
-                h3_content = anchor_match.group(2)
-
-                # Try to find a matching object_types key
-                # The anchor_id is like "pkg.Class.method"; object_types keys are "Class.method"
-                member_type = None
-                for key, val in object_types.items():
-                    if anchor_id.endswith(f".{key}") or anchor_id == key:
-                        member_type = val
-                        break
-
-                # Build the new heading content: code font + parens + badge
-                display_text = h3_content
-                # Add () for callable members
-                if member_type and member_type in _CALLABLE_MEMBER_TYPES:
-                    _plain_member = re.sub(r"<[^>]+>", "", display_text).strip()
-
-                badge_html = ""
-                if member_type and member_type in _MEMBER_BADGE_TYPES:
-                    badge_info = _TYPE_BADGE_STYLES.get(member_type)
-                    if badge_info:
-                        label_text, label_color, bg_color = badge_info
-                        badge_html = (
-                            f'<span style="font-size: 0.7rem; border-style: solid; '
-                            f"border-width: 1px; border-color: {label_color}; "
-                            f"background-color: {bg_color}; margin-left: 8px; "
-                            f"padding: 1px 6px; vertical-align: 0.1rem; "
-                            f'border-radius: 3px;">'
-                            f'<code style="background-color: transparent; '
-                            f'color: {label_color}; font-size: 0.7rem;">'
-                            f"{label_text}</code></span>"
-                        )
-
-                new_heading = display_text + badge_html
-                # Replace h3 content and add code font style
-                content[i] = line.replace(h3_content + "</h3>", new_heading + "</h3>")
-                # Add code font styling to the h3 tag
-                content[i] = re.sub(
-                    r"<h3([^>]*?)(?<!style=)>",
-                    f'<h3\\1 style="{_MONO_FONT}">',
-                    content[i],
-                    count=1,
-                )
-    else:
-        # Even without object_types, style member h3 headings in code font
-        for i, line in enumerate(content):
-            anchor_match = re.search(r'<h3[^>]*data-anchor-id="[^"]+"[^>]*>(.*?)</h3>', line)
-            if anchor_match:
-                content[i] = re.sub(
-                    r"<h3([^>]*?)(?<!style=)>",
-                    f'<h3\\1 style="{_MONO_FONT}">',
-                    content[i],
-                    count=1,
-                )
-
-    # Inject property badges into the Attributes table
-    # Attributes table cells: <td><a href="#pkg.Class.attr">attr_name</a></td>
-    if object_types:
-        property_badge_info = _TYPE_BADGE_STYLES.get("property")
-        if property_badge_info:
-            p_label, p_color, p_bg = property_badge_info
-            p_badge = (
-                f'<span style="font-size: 0.65rem; border-style: solid; '
-                f"border-width: 1px; border-color: {p_color}; "
-                f"background-color: {p_bg}; margin-left: 6px; "
-                f"padding: 0px 4px; vertical-align: 0.05rem; "
-                f'border-radius: 3px;">'
-                f'<code style="background-color: transparent; '
-                f'color: {p_color}; font-size: 0.65rem;">'
-                f"{p_label}</code></span>"
-            )
-            for i, line in enumerate(content):
-                td_match = re.search(r'<td><a href="#([^"]+)">([^<]+)</a></td>', line)
-                if td_match:
-                    anchor_ref = td_match.group(1)
-                    link_text = td_match.group(2)
-                    # Check if this attribute is a property
-                    for key, val in object_types.items():
-                        if (
-                            anchor_ref.endswith(f".{key}") or anchor_ref == key
-                        ) and val == "property":
-                            new_link = f"{link_text}</a>{p_badge}</td>"
-                            content[i] = line.replace(f"{link_text}</a></td>", new_link)
-                            break
 
     # Add separator lines between class details and individual members,
     # and between individual member sections.

@@ -70,9 +70,9 @@ class __RenderAPIPage(RenderPageMixin, RenderBase):
     def render_metadata(self) -> BlockContent:
         # Derive the title of the page from the first (top-level) object
         obj = self.render_objs[0]
-        title, labels = obj._title, obj._labels  # pyright: ignore[reportPrivateUsage]
+        title = obj._title  # pyright: ignore[reportPrivateUsage]
         return Meta({
-            "title": f"{title}{labels}",
+            "title": f"{title}",
             "body-classes": "doc-api-page",
         })
 

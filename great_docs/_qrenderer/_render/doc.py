@@ -3,10 +3,11 @@ from __future__ import annotations
 from copy import copy
 from dataclasses import dataclass
 from functools import cached_property, singledispatchmethod
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, cast
 
 import griffe as gf
 
+from great_docs._qrenderer._render._label import get_label
 from great_docs._renderer import ast as qast
 from great_docs._renderer import layout
 from great_docs._renderer.pandoc.blocks import (
@@ -34,7 +35,7 @@ from .._format import (
     repr_obj,
 )
 from .._pandoc.inlines import InterLink
-from .._utils import is_protocol, is_typealias, is_typevar, package_info
+from .._utils import package_info
 from .base import RenderBase
 
 if TYPE_CHECKING:
@@ -154,38 +155,17 @@ class __RenderDoc(RenderBase):
     def kind(self) -> DocObjectKind:
         """
         Return the object's kind
+
+        class, function, method, property, attribute, module, alias
         """
-        obj = self.obj
-        kind = obj.kind.value
-        if obj.is_function and obj.parent and obj.parent.is_class:
-            kind = "method"
-        if kind == "attribute":
-            if is_typealias(obj):
-                kind = "type"
-            elif is_typevar(obj):
-                kind = "typevar"
-        return kind
+        return self.obj.kind.value
 
     @cached_property
-    def labels(self) -> Sequence[str]:
+    def label(self) -> str:
         """
-        Return labels for an object (iff object is a function/method)
+        Return a label for the object
         """
-        # Only check for the labels we care about
-        lst = (
-            "cached",
-            "property",
-            "classmethod",
-            "staticmethod",
-            "abstractmethod",
-            "typing.overload",
-        )
-        if self.obj.is_function or self.obj.is_attribute:
-            return tuple(label.replace(".", "-") for label in lst if label in self.obj.labels)
-        elif self.obj.is_class and is_protocol(self.obj):
-            return ("Protocol",)
-        else:
-            return ()
+        return get_label(self.obj).lower()
 
     @cached_property
     def display_name(self) -> str:
@@ -221,24 +201,15 @@ class __RenderDoc(RenderBase):
         """
 
     @cached_property
-    def _labels(self) -> Span | Literal[""]:
-        """
-        Render code for the labels that annotate the object names
-        """
-        if not self.labels:
-            return ""
-
-        labels = [
-            Span("", Attr(classes=["doc-label", f"doc-label-{label.lower()}"]))
-            for label in self.labels
-        ]
-        return Span(labels, Attr(classes=["doc-labels"]))
-
-    @cached_property
     def _title(self) -> InlineContent:
         return Span(
             self.display_name,
-            Attr(classes=["doc-object-name", f"doc-{self.kind}-name"]),
+            Attr(classes=[
+                "doc-object-name",
+                f"doc-{self.kind}",
+                "doc-label",
+                f"doc-label-{self.label}"],
+            ),
         )
 
     def render_title(self) -> BlockContent:
@@ -256,11 +227,8 @@ class __RenderDoc(RenderBase):
 
         ```html
         <h2>
-            <span class="doc-object-name doc-attribute-name">
+            <span class="doc-object-name doc-attribute doc-label doc-label-property">
                 SomeClass.value
-            </span>
-            <span class="doc-labels">
-                <span class="doc-label doc-label-property"></span>
             </span>
         </h2>
         ```
@@ -269,7 +237,7 @@ class __RenderDoc(RenderBase):
         with (`.sidebar`). The markup for the labels is not rendered if there are no
         labels. If there is more than one label, each label has its own class code.
         """
-        return Header(level=self.level, content=Inlines([self._title, self._labels]))
+        return Header(level=self.level, content=self._title)
 
     def render_annotation(self, annotation: Annotation | None = None) -> str:
         """
@@ -553,7 +521,7 @@ class __RenderDoc(RenderBase):
         link = Link(
             markdown_escape(self.summary_name),
             f"{self.page_path}#{self.doc.anchor}",
-            attr=Attr(classes=[f"doc-{self.kind}-name"]),
+            attr=Attr(classes=[f"doc-{self.kind}", "doc-label", f"doc-label-{self.label}"]),
         )
         return [(str(link), self.docstring_subject)]
 
