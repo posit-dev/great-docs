@@ -2298,7 +2298,10 @@ html:not(.theme-loaded) *::after {
 }
 
 .gd-hero-logo {
+    display: block;
     width: auto;
+    margin-left: auto;
+    margin-right: auto;
     margin-bottom: 1.25rem;
 }
 
@@ -2330,10 +2333,14 @@ html:not(.theme-loaded) *::after {
 }
 
 /* Dark-mode hero logo switching */
-.gd-only-dark  { display: none; }
+.gd-hero .gd-only-dark  { display: none !important; }
 
-[data-bs-theme="dark"] .gd-only-light { display: none !important; }
-[data-bs-theme="dark"] .gd-only-dark  { display: block !important; margin-left: auto; margin-right: auto; }
+[data-bs-theme="dark"] .gd-hero .gd-only-light { display: none !important; }
+[data-bs-theme="dark"] .gd-hero .gd-only-dark  { display: block !important; margin-left: auto; margin-right: auto; }
+
+/* Dark-mode navbar logo switching */
+[data-bs-theme="dark"] .navbar-logo.light-content { display: none !important; }
+[data-bs-theme="dark"] .navbar-logo.dark-content  { display: inline !important; }
 
 /* Reduce top margin on first heading after hero */
 .gd-hero + section.level1 > h1:first-child,
