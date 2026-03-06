@@ -6516,11 +6516,17 @@ jupyter: python3
         return "\n".join(lines) + "\n"
 
     def _extract_badges_from_content(self, content: str) -> tuple[list[dict], str]:
-        """Extract badge image-links from the top of README/index content.
+        """Extract badge image-links from README/index content.
 
-        Scans the first block of contiguous badge lines for Markdown
-        ``[![alt](img)](url)`` patterns whose image URL matches known badge
-        hosts (shields.io, GitHub Actions, repostatus.org, etc.).
+        Supports two common README layouts:
+
+        1. **Top-of-file badges** — bare ``[![alt](img)](url)`` lines right
+           after the first heading.
+        2. **Centered-div badges** — badges inside a
+           ``<div align="center">`` block (common in repos like Pointblank,
+           Great Tables, etc.).  When this layout is detected, the entire
+           centered block (hero image, italic tagline, and badges) is
+           stripped because the hero section replaces it.
 
         Parameters
         ----------
@@ -6532,8 +6538,8 @@ jupyter: python3
         -------
         tuple[list[dict], str]
             ``(badges, cleaned_content)`` — a list of badge dicts (keys:
-            ``url``, ``img``, ``alt``) and the content with the contiguous
-            badge block removed from the top.
+            ``url``, ``img``, ``alt``) and the content with the badge block
+            removed.
         """
         import re
 
@@ -6548,6 +6554,8 @@ jupyter: python3
             "pyopensci.org",
             "zenodo.org/badge",
             "www.contributor-covenant.org",
+            "deepwiki.com",
+            "static.pepy.tech",
         )
 
         # Pattern: [![alt](img_url)](link_url)
@@ -6555,32 +6563,59 @@ jupyter: python3
             r"\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)]+)\)"
         )
 
-        badges: list[dict] = []
+        # ── Strategy 1: centered-div badges ─────────────────────────
+        # Look for <div align="center"> containing badge markdown.
+        center_div_re = re.compile(
+            r'^<div\s+align=["\']center["\']', re.IGNORECASE
+        )
         lines = content.split("\n")
-        badge_end_idx = 0  # index of first non-badge line after the badge block
+        div_start = None
+        div_end = None
 
-        # Find the badge block: contiguous lines at the top that contain badge
-        # patterns (skip leading blank lines and the first `# Title` heading)
+        for i, line in enumerate(lines):
+            if center_div_re.match(line.strip()):
+                # Found a centered div — scan forward for badges
+                div_badges: list[dict] = []
+                for j in range(i + 1, len(lines)):
+                    sline = lines[j].strip()
+                    if sline == "</div>":
+                        div_end = j
+                        break
+                    for alt, img, url in md_badge_re.findall(sline):
+                        if any(host in img for host in badge_hosts):
+                            div_badges.append({"alt": alt, "img": img, "url": url})
+
+                if div_badges and div_end is not None:
+                    div_start = i
+                    # Remove the entire centered div block
+                    remaining = lines[:div_start] + lines[div_end + 1:]
+                    cleaned = "\n".join(remaining)
+                    # Collapse excess blank lines at the splice point
+                    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+                    return div_badges, cleaned
+
+                # Not a badge div — keep scanning for other centered divs
+                continue
+
+        # ── Strategy 2: top-of-file badges ──────────────────────────
+        badges: list[dict] = []
+        badge_end_idx = 0
+
         started = False
         for i, line in enumerate(lines):
             stripped = line.strip()
 
-            # Skip leading blank lines
             if not started and not stripped:
                 continue
 
-            # Skip leading h1 heading (e.g. ``# Package Name``)
             if not started and stripped.startswith("# "):
                 started = True
                 continue
 
-            # Once we've passed the heading, look for badge lines
             if not started and stripped:
                 started = True
 
-            # Blank line between badge rows is OK
             if started and not stripped:
-                # Peek ahead to see if more badges follow
                 has_more_badges = False
                 for j in range(i + 1, min(i + 3, len(lines))):
                     if md_badge_re.search(lines[j]):
@@ -6592,21 +6627,16 @@ jupyter: python3
                 else:
                     break
 
-            # Check for badge markdown patterns in this line
             found_in_line = md_badge_re.findall(stripped)
             if found_in_line:
                 for alt, img, url in found_in_line:
-                    # Filter: img must match a known badge host
                     if any(host in img for host in badge_hosts):
                         badges.append({"alt": alt, "img": img, "url": url})
                 badge_end_idx = i + 1
             elif started:
-                # Non-blank, non-badge line — end of badge block
                 break
 
-        # Build cleaned content with the badge block removed
         if badges and badge_end_idx > 0:
-            # Remove lines up to badge_end_idx, but keep the h1 heading
             kept_before: list[str] = []
             for i in range(badge_end_idx):
                 stripped = lines[i].strip()
@@ -6615,10 +6645,8 @@ jupyter: python3
 
             remaining = lines[badge_end_idx:]
             cleaned = "\n".join(kept_before + remaining)
-            # Strip leading blank lines from the join point
             cleaned = cleaned.lstrip("\n")
             if kept_before:
-                # Re-add a single blank line after heading
                 heading = kept_before[0]
                 rest = "\n".join(remaining).lstrip("\n")
                 cleaned = heading + "\n\n" + rest
