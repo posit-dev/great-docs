@@ -1314,13 +1314,24 @@ def test_R4_logo_replaces_title():
     # Alt text should fall back to display_name
     assert navbar.get("logo-alt") == "Logo Test", "logo-alt should be the display_name"
 
-    # SVG favicon should be auto-set from the logo
-    assert cfg.get("website", {}).get("favicon") == "logo.svg", "favicon should be logo.svg"
+    # Favicon should be auto-generated from logo.svg and referenced in config
+    favicon = cfg.get("website", {}).get("favicon")
+    assert favicon in ("favicon.ico", "logo.svg"), (
+        f"favicon should be favicon.ico or logo.svg, got {favicon}"
+    )
 
     # Logo files should exist in the build directory
     build_dir = _RENDERED_DIR / pkg / "great-docs"
     assert (build_dir / "logo.svg").exists(), "logo.svg should be copied to build dir"
     assert (build_dir / "logo-dark.svg").exists(), "logo-dark.svg should be copied to build dir"
+
+    # Check for generated favicon files
+    if favicon == "favicon.ico":
+        assert (build_dir / "favicon.ico").exists(), "favicon.ico should exist"
+        assert (build_dir / "favicon.svg").exists(), "favicon.svg should exist"
+        assert (build_dir / "favicon-32x32.png").exists(), "favicon-32x32.png should exist"
+        assert (build_dir / "favicon-16x16.png").exists(), "favicon-16x16.png should exist"
+        assert (build_dir / "apple-touch-icon.png").exists(), "apple-touch-icon.png should exist"
 
 
 @requires_bs4
