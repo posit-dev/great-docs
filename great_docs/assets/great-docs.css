@@ -2338,9 +2338,11 @@ html:not(.theme-loaded) *::after {
 [data-bs-theme="dark"] .gd-hero .gd-only-light { display: none !important; }
 [data-bs-theme="dark"] .gd-hero .gd-only-dark  { display: block !important; margin-left: auto; margin-right: auto; }
 
-/* Dark-mode navbar logo switching */
-[data-bs-theme="dark"] .navbar-logo.light-content { display: none !important; }
-[data-bs-theme="dark"] .navbar-logo.dark-content  { display: inline !important; }
+/* Dark-mode navbar logo switching
+   Scope to html[...] so Quarto's nav[data-bs-theme="dark"] (dark navbar
+   background in the flatly theme) doesn't trigger these rules in light mode. */
+html[data-bs-theme="dark"] .navbar-logo.light-content { display: none !important; }
+html[data-bs-theme="dark"] .navbar-logo.dark-content  { display: inline !important; }
 
 /* Reduce top margin on first heading after hero */
 .gd-hero + section.level1 > h1:first-child,
