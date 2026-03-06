@@ -2297,6 +2297,14 @@ html:not(.theme-loaded) *::after {
     margin-bottom: 1.5rem;
 }
 
+/* When a column-margin sidebar is present, Quarto adds page-full to <main>
+   which sets all children to grid-column: body-content-start / page-end
+   (asymmetric into the margin).  Force the hero into a symmetric column
+   so text-align: center works correctly. */
+.page-columns > .gd-hero {
+    grid-column: body-content-start / body-content-end;
+}
+
 .gd-hero-logo {
     display: block;
     width: auto;
