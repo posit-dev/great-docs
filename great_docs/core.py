@@ -359,16 +359,14 @@ class GreatDocs:
         """
         Scan conventional paths for logo files.
 
-        Looks for logo files in the project root using common naming
-        conventions. If a matching file is found, returns a normalized
-        logo dict. Also checks for dark-mode variants automatically.
+        Looks for logo files in the project root using common naming conventions. If a matching file
+        is found, returns a normalized logo dict. Also checks for dark-mode variants automatically.
 
         Returns
         -------
         dict | None
-            A dict with ``light`` (and optionally ``dark``) keys pointing
-            to paths relative to the project root, or ``None`` if no logo
-            file was found.
+            A dict with `light` (and optionally `dark`) keys pointing to paths relative to the
+            project root, or `None` if no logo file was found.
         """
         package_root = self._find_package_root()
         package_name = self._detect_package_name() or ""
@@ -440,6 +438,133 @@ class GreatDocs:
             result["dark"] = found_path
 
         return result
+
+    def _generate_favicons(self, logo_src: Path, dest_dir: Path) -> dict[str, str]:
+        """
+        Generate favicon files from a source logo image.
+
+        Produces raster favicons from SVG or PNG sources using cairosvg and Pillow. For SVG sources,
+        cairosvg rasterizes to PNG first, then Pillow creates the multi-size ICO and
+        apple-touch-icon. For PNG sources, Pillow resizes directly.
+
+        Parameters
+        ----------
+        logo_src
+            Absolute path to the source logo file (SVG or PNG).
+        dest_dir
+            Directory to write generated favicon files into.
+
+        Returns
+        -------
+        dict[str, str]
+            Mapping of purpose to filename (relative to dest_dir). Possible keys: `"icon"` (primary
+            favicon), `"icon-svg"`, `"icon-32"`, `"icon-16"`, `"apple-touch-icon"`. Only includes
+            files that were successfully generated.
+        """
+        import io
+
+        import cairosvg
+        from PIL import Image
+
+        result: dict[str, str] = {}
+        suffix = logo_src.suffix.lower()
+
+        print(f"Favicon: generating from {logo_src.name}")
+
+        # --- SVG source ---
+        if suffix == ".svg":
+            # Always copy the SVG as favicon.svg (modern browsers support it)
+            shutil.copy2(logo_src, dest_dir / "favicon.svg")
+            result["icon-svg"] = "favicon.svg"
+            result["icon"] = "favicon.svg"
+
+            # Rasterize SVG → PNG preserving aspect ratio, then resize
+            png_data = cairosvg.svg2png(url=str(logo_src), scale=4)
+            raw = Image.open(io.BytesIO(png_data))
+
+            # Fit into a square canvas with transparent padding
+            master = self._fit_to_square(raw, 512)
+
+            # Generate standard favicon sizes
+            for size, name in [
+                (16, "favicon-16x16.png"),
+                (32, "favicon-32x32.png"),
+                (180, "apple-touch-icon.png"),
+            ]:
+                resized = master.resize((size, size), Image.Resampling.LANCZOS)
+                resized.save(dest_dir / name, "PNG")
+                if size == 16:
+                    result["icon-16"] = name
+                elif size == 32:
+                    result["icon-32"] = name
+                elif size == 180:
+                    result["apple-touch-icon"] = name
+
+            # Generate ICO with 16+32 sizes embedded
+            ico_16 = master.resize((16, 16), Image.Resampling.LANCZOS)
+            ico_32 = master.resize((32, 32), Image.Resampling.LANCZOS)
+            ico_16.save(
+                dest_dir / "favicon.ico",
+                format="ICO",
+                sizes=[(16, 16), (32, 32)],
+                append_images=[ico_32],
+            )
+            result["icon"] = "favicon.ico"
+
+        # --- PNG source ---
+        elif suffix == ".png":
+            raw = Image.open(logo_src)
+            # Fit into a square canvas with transparent padding
+            master = self._fit_to_square(raw, max(raw.size))
+
+            for size, name in [
+                (16, "favicon-16x16.png"),
+                (32, "favicon-32x32.png"),
+                (180, "apple-touch-icon.png"),
+            ]:
+                resized = master.resize((size, size), Image.Resampling.LANCZOS)
+                resized.save(dest_dir / name, "PNG")
+                if size == 16:
+                    result["icon-16"] = name
+                elif size == 32:
+                    result["icon-32"] = name
+                elif size == 180:
+                    result["apple-touch-icon"] = name
+
+            # Generate ICO
+            ico_16 = master.resize((16, 16), Image.Resampling.LANCZOS)
+            ico_32 = master.resize((32, 32), Image.Resampling.LANCZOS)
+            ico_16.save(
+                dest_dir / "favicon.ico",
+                format="ICO",
+                sizes=[(16, 16), (32, 32)],
+                append_images=[ico_32],
+            )
+            result["icon"] = "favicon.ico"
+            result["icon-32"] = "favicon-32x32.png"
+
+        if result:
+            files = ", ".join(dict.fromkeys(result.values()))
+            print(f"Favicon: created {files}")
+
+        return result
+
+    @staticmethod
+    def _fit_to_square(img: "Image.Image", size: int) -> "Image.Image":
+        """Fit an image into a square canvas, preserving aspect ratio.
+
+        The image is scaled to fit within ``size x size``, then centered
+        on a transparent canvas of exactly ``size x size``.
+        """
+        from PIL import Image
+
+        img = img.convert("RGBA")
+        img.thumbnail((size, size), Image.Resampling.LANCZOS)
+        canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        x = (size - img.width) // 2
+        y = (size - img.height) // 2
+        canvas.paste(img, (x, y), img)
+        return canvas
 
     def _normalize_package_name(self, package_name: str) -> str:
         """
@@ -1659,8 +1784,8 @@ class GreatDocs:
         dest_dir: Path,
     ) -> None:
         """
-        Add ``body-classes: gd-section-no-sidebar`` to frontmatter of every page
-        in a single-page section so CSS can expand the content area.
+        Add `body-classes: gd-section-no-sidebar` to frontmatter of every page in a single-page
+        section so CSS can expand the content area.
         """
         for page in pages:
             qmd_path = dest_dir / page["filename"]
@@ -3084,18 +3209,18 @@ class GreatDocs:
             content = f.read()
 
         # Inject toc: false into frontmatter (bread-crumbs: false is already set
-        # by _copy_user_guide_to_docs).  Keep the original frontmatter title so
+        # by _copy_user_guide_to_docs). Keep the original frontmatter title so
         # Quarto renders a proper title-block header matching other UG pages.
         content = self._add_frontmatter_option(content, "toc", False)
 
         # Build the metadata margin sidebar
         margin_content = self._build_metadata_margin()
 
-        # Split content into frontmatter and body.  Headings are NOT bumped
+        # Split content into frontmatter and body. Headings are NOT bumped
         # here, unlike _create_index_from_readme, because UG pages already
-        # have a frontmatter title.  Quarto absorbs the first body ``#``
-        # heading (matching the title) and ``shift-heading-level-by: -1``
-        # promotes the remaining ``##`` → ``<h1>``, ``###`` → ``<h2>``, etc.
+        # have a frontmatter title. Quarto absorbs the first body `#`
+        # heading (matching the title) and `shift-heading-level-by: -1`
+        # promotes the remaining `##` → `<h1>`, `###` → `<h2>`, etc.
         # — exactly the same as every other UG page.
         if content.startswith("---"):
             parts = content.split("---", 2)
@@ -3109,10 +3234,10 @@ class GreatDocs:
             frontmatter_block = ""
             body = content
 
-        # Strip the first ``# …`` heading from the body.  The frontmatter
-        # ``title`` already provides the title-block heading; keeping the
-        # body ``#`` would render as a duplicate paragraph because
-        # ``shift-heading-level-by: -1`` demotes it below heading level.
+        # Strip the first `# …` heading from the body. The frontmatter
+        # `title` already provides the title-block heading; keeping the
+        # body `#` would render as a duplicate paragraph because
+        # `shift-heading-level-by: -1` demotes it below heading level.
         import re
 
         body = re.sub(r"^#\s+[^\n]*\n?", "", body, count=1, flags=re.MULTILINE)
@@ -7522,21 +7647,59 @@ toc: false
             if not self._config.logo_show_title:
                 navbar["title"] = False
 
-            # Favicon: use explicit config, or copy the light logo as favicon.svg
+            # Favicon: use explicit config, or auto-generate from logo
             favicon_config = self._config.favicon
+            generated: dict[str, str] = {}
             if favicon_config is not None:
-                # User supplied explicit favicon
+                # User supplied explicit favicon — generate raster variants too
                 icon_src_path = favicon_config.get("icon")
                 if icon_src_path:
                     fav_src = package_root / icon_src_path
                     if fav_src.is_file():
-                        shutil.copy2(fav_src, self.project_path / fav_src.name)
-                        config["website"]["favicon"] = fav_src.name
+                        generated = self._generate_favicons(fav_src, self.project_path)
+                        if generated.get("icon"):
+                            config["website"]["favicon"] = generated["icon"]
+                        else:
+                            # Fallback: just copy the file
+                            shutil.copy2(fav_src, self.project_path / fav_src.name)
+                            config["website"]["favicon"] = fav_src.name
                     else:
                         print(f"Warning: Favicon file not found: {fav_src}")
-            elif light_src.is_file() and light_src.suffix.lower() == ".svg":
-                # Auto-use SVG logo as favicon (browsers support SVG favicons)
-                config["website"]["favicon"] = light_dest_name
+            elif light_src.is_file():
+                # Auto-generate favicons from the logo
+                generated = self._generate_favicons(light_src, self.project_path)
+                if generated.get("icon"):
+                    config["website"]["favicon"] = generated["icon"]
+
+            # Inject <link> tags for extra favicon assets
+            if generated:
+                favicon_links: list[str] = []
+                if generated.get("icon-svg"):
+                    favicon_links.append(
+                        '<link rel="icon" type="image/svg+xml" href="favicon.svg">'
+                    )
+                if generated.get("icon-32"):
+                    favicon_links.append(
+                        '<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">'
+                    )
+                if generated.get("icon-16"):
+                    favicon_links.append(
+                        '<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">'
+                    )
+                if generated.get("apple-touch-icon"):
+                    favicon_links.append(
+                        '<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">'
+                    )
+
+                if favicon_links:
+                    header_items = config["format"]["html"].get("include-in-header", [])
+                    if isinstance(header_items, str):
+                        header_items = [header_items]
+                    for link_tag in favicon_links:
+                        entry = {"text": link_tag}
+                        if not any(link_tag in str(item) for item in header_items):
+                            header_items.append(entry)
+                    config["format"]["html"]["include-in-header"] = header_items
 
         # Add GitHub widget script to page if using widget style
         if owner and repo and github_style == "widget":
