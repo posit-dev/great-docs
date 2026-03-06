@@ -2289,3 +2289,72 @@ html:not(.theme-loaded) *::after {
     }
 }
 
+/* ── Hero Section ─────────────────────────────────────── */
+
+.gd-hero {
+    text-align: center;
+    padding: 2.5rem 1rem 2rem;
+    margin-bottom: 1.5rem;
+}
+
+.gd-hero-logo {
+    width: auto;
+    margin-bottom: 1.25rem;
+}
+
+.gd-hero-name {
+    font-size: 3rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    line-height: 1.15;
+}
+
+.gd-hero-tagline {
+    font-size: 1.35rem;
+    max-width: 600px;
+    margin: 0 auto 1rem;
+    color: var(--bs-secondary-color, #6c757d);
+    line-height: 1.4;
+    text-wrap: balance;
+}
+
+.gd-hero-badges {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.gd-hero-badges img {
+    height: 20px;
+}
+
+/* Dark-mode hero logo switching */
+.gd-only-dark  { display: none; }
+
+[data-bs-theme="dark"] .gd-only-light { display: none !important; }
+[data-bs-theme="dark"] .gd-only-dark  { display: block !important; margin-left: auto; margin-right: auto; }
+
+/* Reduce top margin on first heading after hero */
+.gd-hero + section.level1 > h1:first-child,
+.gd-hero + section.level2 > h2:first-child {
+    margin-top: 0.5rem !important;
+}
+
+/* ── Hero Responsive ──────────────────────────────────── */
+
+@media (max-width: 768px) {
+    .gd-hero {
+        padding: 1.5rem 0.75rem 1.25rem;
+    }
+    .gd-hero-logo {
+        max-height: 140px !important;
+    }
+    .gd-hero-name {
+        font-size: 2.25rem;
+    }
+    .gd-hero-tagline {
+        font-size: 1.1rem;
+    }
+}
+
