@@ -2933,7 +2933,7 @@ def test_landing_page_has_sidebar_metadata():
         content = index_qmd.read_text()
 
         # Should have sidebar with metadata
-        assert ".column-margin" in content
+        assert ".gd-meta-sidebar" in content
         assert "View on PyPI" in content
         assert "Full license" in content
         assert ">=3.9" in content
