@@ -250,9 +250,16 @@ ALL_PACKAGES: list[str] = [
     "gdtest_long_names",  # 108
     # 109: Logo & favicon integration
     "gdtest_logo",  # 109
-    # 110–111: Hero section
+    # 110–117: Hero section
     "gdtest_hero_basic",  # 110
     "gdtest_hero_readme_badges",  # 111
+    "gdtest_hero_disabled",  # 112
+    "gdtest_hero_custom",  # 113
+    "gdtest_hero_wordmark",  # 114
+    "gdtest_hero_no_logo",  # 115
+    "gdtest_hero_explicit_badges",  # 116
+    "gdtest_hero_index_qmd",  # 117
+    "gdtest_hero_auto_logo",  # 118
 ]
 
 
@@ -1508,7 +1515,7 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "title in the navbar (navbar.title: false), copies logo files into "
         "the build directory, and sets the SVG as favicon."
     ),
-    # ── 110–111: Hero section ─────────────────────────────────────────────
+    # ── 110–117: Hero section ─────────────────────────────────────────────
     "gdtest_hero_basic": (
         "Hero section with logo, name, tagline, and top-of-file badges. "
         "Tests that providing a logo config auto-enables the hero section "
@@ -1518,6 +1525,41 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "Hero section from a README with centered-div badges. Tests the "
         'Pointblank-style <div align="center"> pattern where badges are '
         "extracted from inside a centered block and the block is stripped."
+    ),
+    "gdtest_hero_disabled": (
+        "Hero section explicitly disabled via hero: false. Tests that "
+        "setting hero: false prevents the hero from appearing even when "
+        "a logo is configured (which would normally auto-enable it)."
+    ),
+    "gdtest_hero_custom": (
+        "Hero with custom name, tagline, logo_height, and badges suppressed. "
+        "Tests that individual hero sub-options override defaults: custom name "
+        "instead of display_name, custom tagline, and badges: false."
+    ),
+    "gdtest_hero_wordmark": (
+        "Separate hero wordmark logo (light/dark) from navbar lettermark. "
+        "Tests that hero.logo can specify a different image with light/dark "
+        "variants from the top-level logo used in the navbar."
+    ),
+    "gdtest_hero_no_logo": (
+        "Hero with logo suppressed via hero.logo: false. Tests that the "
+        "hero section still renders name, tagline, and badges even when "
+        "the hero-specific logo is disabled."
+    ),
+    "gdtest_hero_explicit_badges": (
+        "Hero with an explicit badge list instead of auto-extraction. "
+        "Tests that providing a list under hero.badges displays those "
+        "explicit badges rather than extracting from the README."
+    ),
+    "gdtest_hero_index_qmd": (
+        "Hero section from an index.qmd source file. Tests that hero "
+        "generation works identically when the landing page source is "
+        "index.qmd rather than README.md."
+    ),
+    "gdtest_hero_auto_logo": (
+        "Auto-detect hero logo files from conventional paths. Tests that "
+        "placing logo-hero.svg and logo-hero-dark.svg in assets/ causes "
+        "the hero to use those files without explicit hero.logo config."
     ),
 }
 
