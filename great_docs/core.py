@@ -3304,9 +3304,7 @@ class GreatDocs:
 
         # Reassemble with margin content inserted after frontmatter
         if margin_content:
-            blended_content = (
-                f"{frontmatter_block}\n{hero_block}::: {{.gd-meta-sidebar}}\n{margin_content}\n:::\n\n{body}"
-            )
+            blended_content = f"{frontmatter_block}\n{hero_block}::: {{.gd-meta-sidebar}}\n{margin_content}\n:::\n\n{body}"
         else:
             blended_content = f"{frontmatter_block}\n{hero_block}{body}"
 
@@ -6570,8 +6568,8 @@ jupyter: python3
 
         return "\n".join(lines) + "\n"
 
-    def _extract_badges_from_content(self, content: str) -> tuple[list[dict], str]:
-        """Extract badge image-links from README/index content.
+    def _extract_badges_from_content(self, content: str) -> tuple[list[dict], str, dict]:
+        """Extract badge image-links and hero elements from README/index content.
 
         Supports two common README layouts:
 
@@ -6581,7 +6579,8 @@ jupyter: python3
            ``<div align="center">`` block (common in repos like Pointblank,
            Great Tables, etc.).  When this layout is detected, the entire
            centered block (hero image, italic tagline, and badges) is
-           stripped because the hero section replaces it.
+           stripped because the hero section replaces it.  The logo image
+           and tagline text are returned so the hero section can use them.
 
         Parameters
         ----------
@@ -6591,10 +6590,11 @@ jupyter: python3
 
         Returns
         -------
-        tuple[list[dict], str]
-            ``(badges, cleaned_content)`` — a list of badge dicts (keys:
-            ``url``, ``img``, ``alt``) and the content with the badge block
-            removed.
+        tuple[list[dict], str, dict]
+            ``(badges, cleaned_content, hero_extras)`` — a list of badge
+            dicts (keys: ``url``, ``img``, ``alt``), the content with the
+            badge block removed, and a dict of extracted hero elements
+            (optional keys: ``logo_url``, ``tagline``).
         """
         import re
 
@@ -6614,40 +6614,70 @@ jupyter: python3
         )
 
         # Pattern: [![alt](img_url)](link_url)
-        md_badge_re = re.compile(
-            r"\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)]+)\)"
-        )
+        md_badge_re = re.compile(r"\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)]+)\)")
 
         # ── Strategy 1: centered-div badges ─────────────────────────
         # Look for <div align="center"> containing badge markdown.
-        center_div_re = re.compile(
-            r'^<div\s+align=["\']center["\']', re.IGNORECASE
+        center_div_re = re.compile(r'^<div\s+align=["\']center["\']', re.IGNORECASE)
+        # Patterns for extracting hero elements from centered divs
+        # HTML <a><img></a> (linked logo image)
+        linked_img_re = re.compile(
+            r'<a\s[^>]*href="([^"]+)"[^>]*>\s*<img\s[^>]*src="([^"]+)"[^>]*/?>\s*</a>',
+            re.IGNORECASE,
         )
+        # Bare <img> tag (logo image without link)
+        bare_img_re = re.compile(
+            r'<img\s[^>]*src="([^"]+)"[^>]*/?>',
+            re.IGNORECASE,
+        )
+        # Italic tagline: *text* or _text_
+        italic_re = re.compile(r"^[*_](.+)[*_]$")
+
         lines = content.split("\n")
         div_start = None
         div_end = None
 
         for i, line in enumerate(lines):
             if center_div_re.match(line.strip()):
-                # Found a centered div — scan forward for badges
+                # Found a centered div — scan forward for badges and hero elements
                 div_badges: list[dict] = []
+                hero_extras: dict = {}
                 for j in range(i + 1, len(lines)):
                     sline = lines[j].strip()
                     if sline == "</div>":
                         div_end = j
                         break
+
+                    # Collect badges
                     for alt, img, url in md_badge_re.findall(sline):
                         if any(host in img for host in badge_hosts):
                             div_badges.append({"alt": alt, "img": img, "url": url})
 
+                    # Extract logo image (HTML <a><img> or bare <img>),
+                    # but skip lines that are markdown badge patterns
+                    if "logo_url" not in hero_extras and not md_badge_re.search(sline):
+                        linked_match = linked_img_re.search(sline)
+                        if linked_match:
+                            hero_extras["logo_url"] = linked_match.group(2)
+                        else:
+                            bare_match = bare_img_re.search(sline)
+                            if bare_match:
+                                hero_extras["logo_url"] = bare_match.group(1)
+
+                    # Extract italic tagline
+                    if "tagline" not in hero_extras:
+                        italic_match = italic_re.match(sline)
+                        if italic_match:
+                            hero_extras["tagline"] = italic_match.group(1)
+
                 if div_badges and div_end is not None:
                     div_start = i
                     # Remove the entire centered div block
-                    remaining = lines[:div_start] + lines[div_end + 1:]
+                    remaining = lines[:div_start] + lines[div_end + 1 :]
                     cleaned = "\n".join(remaining)
                     # Collapse excess blank lines at the splice point
                     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-                    return div_badges, cleaned
+                    return div_badges, cleaned, hero_extras
 
                 # Not a badge div — keep scanning for other centered divs
                 continue
@@ -6708,7 +6738,7 @@ jupyter: python3
         else:
             cleaned = content
 
-        return badges, cleaned
+        return badges, cleaned, {}
 
     def _build_hero_section(
         self,
@@ -6733,10 +6763,26 @@ jupyter: python3
         if self._config.hero_explicitly_disabled:
             return "", None
 
+        # ── Early badge + hero extraction from README ───────────────
+        # This must happen before the auto-enable check so we can
+        # use README hero elements (logo, tagline) to decide whether
+        # to auto-enable.
+        badges_config = self._config.hero_badges
+        badges: list[dict] = []
+        cleaned_content = None
+        readme_hero: dict = {}
+
+        if badges_config == "auto" and readme_content:
+            badges, cleaned, readme_hero = self._extract_badges_from_content(readme_content)
+            if badges:
+                cleaned_content = cleaned
+        elif isinstance(badges_config, list):
+            badges = badges_config
+
         if not self._config.hero_enabled:
             # Not explicitly enabled and no config-level logo — auto-enable
-            # if hero logo files are detected on disk.
-            if self._detect_hero_logo() is None:
+            # if hero logo files are detected on disk or README has hero content.
+            if self._detect_hero_logo() is None and not readme_hero:
                 return "", None
 
         metadata = self._get_package_metadata()
@@ -6754,6 +6800,8 @@ jupyter: python3
             logo_config = self._config.logo
         if logo_config is None:
             logo_config = self._detect_logo()
+        if logo_config is None and readme_hero.get("logo_url"):
+            logo_config = readme_hero["logo_url"]
         if logo_config is False:
             logo_config = None
 
@@ -6798,23 +6846,10 @@ jupyter: python3
         # ── Tagline ─────────────────────────────────────────────────
         tagline = self._config.hero_tagline
         if tagline is None:
-            tagline = metadata.get("description", "")
-        tagline_html = (
-            f'<p class="gd-hero-tagline">{tagline}</p>' if tagline else ""
-        )
+            tagline = readme_hero.get("tagline") or metadata.get("description", "")
+        tagline_html = f'<p class="gd-hero-tagline">{tagline}</p>' if tagline else ""
 
         # ── Badges ──────────────────────────────────────────────────
-        badges_config = self._config.hero_badges
-        badges: list[dict] = []
-        cleaned_content = None
-
-        if badges_config == "auto" and readme_content:
-            badges, cleaned = self._extract_badges_from_content(readme_content)
-            if badges:
-                cleaned_content = cleaned
-        elif isinstance(badges_config, list):
-            badges = badges_config
-
         badges_html = ""
         if badges:
             badge_items = []
@@ -7996,9 +8031,7 @@ toc: false
                     dark_logo_meta = {
                         "text": f'<meta name="gd-logo-dark" content="{dark_dest_name}">'
                     }
-                    header_list = config["format"]["html"].setdefault(
-                        "include-in-header", []
-                    )
+                    header_list = config["format"]["html"].setdefault("include-in-header", [])
                     if not any("gd-logo-dark" in str(h) for h in header_list):
                         header_list.append(dark_logo_meta)
                 else:

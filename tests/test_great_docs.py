@@ -6481,7 +6481,7 @@ class TestExtractBadgesFromContent:
             "Some body text.\n"
         )
         builder = self._make_builder()
-        badges, cleaned = builder._extract_badges_from_content(content)
+        badges, cleaned, hero_extras = builder._extract_badges_from_content(content)
 
         assert len(badges) == 2
         assert badges[0]["alt"] == "PyPI"
@@ -6490,6 +6490,8 @@ class TestExtractBadgesFromContent:
         assert "# My Package" in cleaned
         assert "Some body text." in cleaned
         assert "img.shields.io" not in cleaned
+        # No hero extras for top-of-file badges
+        assert hero_extras == {}
 
     def test_centered_div_badges_extracted(self):
         """Badges inside <div align="center"> are extracted and the entire div is stripped."""
@@ -6510,7 +6512,7 @@ class TestExtractBadgesFromContent:
             "Body text after.\n"
         )
         builder = self._make_builder()
-        badges, cleaned = builder._extract_badges_from_content(content)
+        badges, cleaned, hero_extras = builder._extract_badges_from_content(content)
 
         assert len(badges) == 3
         assert badges[0]["alt"] == "PyPI"
@@ -6523,21 +6525,51 @@ class TestExtractBadgesFromContent:
         # Surrounding content preserved
         assert "Install via pip" in cleaned
         assert "Body text after." in cleaned
+        # Hero extras extracted from centered div
+        assert hero_extras["logo_url"] == "logo.png"
+        assert hero_extras["tagline"] == "A cool tagline"
 
     def test_no_badges_returns_original(self):
         """Content without badges returns empty list and original content."""
         content = "# Title\n\nJust text, no badges.\n"
         builder = self._make_builder()
-        badges, cleaned = builder._extract_badges_from_content(content)
+        badges, cleaned, hero_extras = builder._extract_badges_from_content(content)
 
         assert badges == []
         assert cleaned == content
+        assert hero_extras == {}
 
     def test_non_badge_images_in_div_ignored(self):
         """A centered div without badge host URLs is not stripped."""
         content = '<div align="center">\n<img src="hero.png">\n</div>\n\nBody text.\n'
         builder = self._make_builder()
-        badges, cleaned = builder._extract_badges_from_content(content)
+        badges, cleaned, hero_extras = builder._extract_badges_from_content(content)
 
         assert badges == []
         assert "<div" in cleaned
+
+    def test_centered_div_linked_logo_extracted(self):
+        """A linked <a><img></a> logo in the centered div is extracted."""
+        content = (
+            '<div align="center">\n'
+            "\n"
+            '<a href="https://example.com/"><img src="https://example.com/logo.svg" width="65%"/></a>\n'
+            "\n"
+            "_Obtain Polars DataFrames of NOAA historical weather data_\n"
+            "\n"
+            "[![PyPI](https://img.shields.io/pypi/pyversions/pkg.svg)](https://pypi.org/project/pkg/)\n"
+            "[![Tests](https://github.com/user/pkg/actions/workflows/tests.yml/badge.svg)](https://github.com/user/pkg/actions)\n"
+            "\n"
+            "</div>\n"
+            "\n"
+            "## Features\n"
+            "Some text.\n"
+        )
+        builder = self._make_builder()
+        badges, cleaned, hero_extras = builder._extract_badges_from_content(content)
+
+        assert len(badges) == 2
+        assert hero_extras["logo_url"] == "https://example.com/logo.svg"
+        assert hero_extras["tagline"] == "Obtain Polars DataFrames of NOAA historical weather data"
+        assert "<div" not in cleaned
+        assert "## Features" in cleaned
