@@ -371,6 +371,132 @@ This generates the same set of raster variants as the logo-based approach, but u
 
 Source images don't need to be perfectly square. Non-square images are automatically centered on a transparent canvas, preserving the original aspect ratio. This means wide logos won't be distorted, rather they'll be padded with transparency above and below.
 
+## Hero Section
+
+The hero section is a prominent banner displayed at the top of the landing page, showcasing the package logo, name, tagline, and badges. It is generated automatically and gives your documentation a polished, professional look.
+
+### Auto-Enable Behavior
+
+The hero section auto-enables when a logo is configured (or auto-detected). No explicit configuration is needed: if you have a logo, you get a hero.
+
+The hero displays:
+
+- **Logo**: the package logo (with dark-mode support)
+- **Name**: the package display name
+- **Tagline**: the package description from `pyproject.toml`
+- **Badges**: auto-extracted from the README (shield.io badges, etc.)
+
+### Disabling the Hero
+
+To disable the hero entirely (e.g., if you want your `index.qmd` or `README.md` rendered as-is):
+
+```{.yaml filename="great-docs.yml"}
+hero: false
+```
+
+### Customizing the Hero
+
+Each hero component can be overridden or suppressed individually:
+
+```{.yaml filename="great-docs.yml"}
+hero:
+  name: "My Package"       # Override the auto-detected name
+  tagline: "A better way to build things"  # Override the description
+  logo_height: 120px       # Default: 200px
+  badges: false            # Suppress badge display
+```
+
+Set any component to `false` to suppress it:
+
+```{.yaml filename="great-docs.yml"}
+hero:
+  name: false              # Hide the name (logo and tagline only)
+  badges: false            # No badges
+```
+
+### Hero Logo vs. Navbar Logo
+
+By default, the hero uses the same logo as the navbar. But you may want a different image for the hero. For example, a detailed wordmark instead of a compact lettermark.
+
+Set a separate hero logo with light/dark variants:
+
+```{.yaml filename="great-docs.yml"}
+# Navbar: compact lettermark
+logo:
+  light: assets/logo-lettermark.svg
+  dark: assets/logo-lettermark-dark.svg
+
+# Hero: expanded wordmark
+hero:
+  logo:
+    light: assets/logo-wordmark.svg
+    dark: assets/logo-wordmark-dark.svg
+  logo_height: 150px
+```
+
+Or use a simple string for a single hero logo image:
+
+```{.yaml filename="great-docs.yml"}
+hero:
+  logo: assets/hero-logo.svg
+```
+
+### Hero Logo Auto-Detection
+
+Great Docs can also auto-detect hero-specific logo files from conventional file locations, with no configuration needed. Place files using these naming conventions:
+
+```
+my-package/
+├── assets/
+│   ├── logo-hero.svg          # Hero logo (single image)
+│   ├── logo-hero-light.svg    # Hero logo (light variant)
+│   └── logo-hero-dark.svg     # Hero logo (dark variant)
+```
+
+Auto-detection checks these paths (in priority order):
+
+1. `logo-hero.svg` / `logo-hero.png` (project root)
+2. `assets/logo-hero.svg` / `assets/logo-hero.png`
+3. `logo-hero-light.svg` / `logo-hero-light.png` (project root)
+4. `assets/logo-hero-light.svg` / `assets/logo-hero-light.png`
+
+If a file named `logo-hero-dark.svg` (or `logo-hero-dark.png`) exists alongside the primary hero logo, it is automatically used for dark mode.
+
+When hero logo files are detected, the hero section auto-enables even if no `logo` or `hero` config is set in `great-docs.yml`.
+
+The full logo fallback chain for the hero is:
+
+1. Explicit `hero.logo` in `great-docs.yml`
+2. Auto-detected hero logo files (`logo-hero.*`)
+3. Explicit top-level `logo` in `great-docs.yml`
+4. Auto-detected navbar logo files (`logo.*`)
+
+### Explicit Badge List
+
+By default, badges are auto-extracted from the README. You can provide an explicit list instead:
+
+```{.yaml filename="great-docs.yml"}
+hero:
+  badges:
+    - alt: PyPI version
+      img: https://img.shields.io/pypi/v/my-package
+      url: https://pypi.org/project/my-package/
+    - alt: License
+      img: https://img.shields.io/badge/license-MIT-green
+      url: https://opensource.org/licenses/MIT
+```
+
+### Hero Section Summary
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `hero` | `bool` \| `dict` | auto | `false` to disable; `true` or `{}` to enable; dict to customize |
+| `hero.name` | `str` \| `false` | display name | Package name shown in hero |
+| `hero.tagline` | `str` \| `false` | description | Tagline shown below the name |
+| `hero.logo` | `str` \| `dict` \| `false` | auto-detect | Hero-specific logo (can have `light`/`dark` keys); auto-detects `logo-hero.*` files |
+| `hero.logo_height` | `str` | `200px` | CSS max-height for the hero logo |
+| `hero.badges` | `list` \| `false` | `auto` | Explicit badge list or `false` to suppress |
+
 ## User Guide Directory
 
 By default, Great Docs looks for a `user_guide/` directory in your project root. To use a different location:
@@ -628,6 +754,16 @@ logo:
   light: assets/logo.svg
   dark: assets/logo-dark.svg
 favicon: assets/favicon.svg  # Optional: dedicated favicon image
+
+# Hero Section
+hero:
+  logo:
+    light: assets/hero-wordmark.svg   # Separate hero logo
+    dark: assets/hero-wordmark-dark.svg
+  logo_height: 150px
+  name: My Package
+  tagline: A better way to build things
+  # badges: false  # Uncomment to suppress badges
 
 # User Guide Directory
 # user_guide: docs/guides
