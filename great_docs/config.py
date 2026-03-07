@@ -477,6 +477,16 @@ class Config:
         return self.logo is not None
 
     @property
+    def hero_explicitly_disabled(self) -> bool:
+        """Whether the hero was explicitly turned off by the user."""
+        raw = self.get("hero")
+        if raw is False:
+            return True
+        if isinstance(raw, dict) and raw.get("enabled") is False:
+            return True
+        return False
+
+    @property
     def hero(self) -> dict[str, Any]:
         """Get the resolved hero configuration dict.
 
@@ -489,19 +499,21 @@ class Config:
         return {}
 
     @property
-    def hero_logo(self) -> str | dict | None:
-        """Get the hero logo, falling back to the top-level logo config.
+    def hero_logo(self) -> str | dict | None | bool:
+        """Get the explicit hero logo config.
 
-        Returns ``None`` when hero logo is explicitly suppressed (``false``).
+        Returns the hero-specific logo value only.  Returns ``False``
+        when explicitly suppressed, ``None`` when not configured.
+        The full fallback chain (auto-detected hero logos, navbar logo)
+        is handled in ``core._build_hero_section``.
         """
         hero = self.hero
         val = hero.get("logo") if hero else None
         if val is False:
-            return None
+            return False
         if val is not None:
             return val
-        # Fall back to top-level logo
-        return self.logo
+        return None
 
     @property
     def hero_logo_height(self) -> str:

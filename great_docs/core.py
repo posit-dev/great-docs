@@ -439,6 +439,61 @@ class GreatDocs:
 
         return result
 
+    def _detect_hero_logo(self) -> dict[str, str] | None:
+        """
+        Scan conventional paths for hero-specific logo files.
+
+        Looks for ``logo-hero.*`` files in the project root and ``assets/``
+        directory.  If a light/dark pair is found (``logo-hero-light.*`` and
+        ``logo-hero-dark.*``), both are returned.
+
+        Returns
+        -------
+        dict | None
+            A dict with ``light`` (and optionally ``dark``) keys, or ``None``
+            if no hero logo file was found.
+        """
+        package_root = self._find_package_root()
+
+        # Candidate paths in priority order
+        candidates = [
+            "logo-hero.svg",
+            "logo-hero.png",
+            "assets/logo-hero.svg",
+            "assets/logo-hero.png",
+            "logo-hero-light.svg",
+            "logo-hero-light.png",
+            "assets/logo-hero-light.svg",
+            "assets/logo-hero-light.png",
+        ]
+
+        found_path: str | None = None
+        for candidate in candidates:
+            if (package_root / candidate).is_file():
+                found_path = candidate
+                break
+
+        if found_path is None:
+            return None
+
+        result: dict[str, str] = {"light": found_path}
+
+        # Check for a dark variant alongside the found file
+        light_p = Path(found_path)
+        stem = light_p.stem.replace("-light", "")
+        parent = str(light_p.parent) if str(light_p.parent) != "." else ""
+
+        dark_name = f"{stem}-dark{light_p.suffix}"
+        dark_candidate = f"{parent}/{dark_name}" if parent else dark_name
+        if (package_root / dark_candidate).is_file():
+            result["dark"] = dark_candidate
+
+        # If no separate dark variant, use the same file for both
+        if "dark" not in result:
+            result["dark"] = found_path
+
+        return result
+
     def _generate_favicons(self, logo_src: Path, dest_dir: Path) -> dict[str, str]:
         """
         Generate favicon files from a source logo image.
@@ -6675,8 +6730,14 @@ jupyter: python3
             string when hero is disabled) and the cleaned README content
             (``None`` when no cleaning was performed).
         """
-        if not self._config.hero_enabled:
+        if self._config.hero_explicitly_disabled:
             return "", None
+
+        if not self._config.hero_enabled:
+            # Not explicitly enabled and no config-level logo — auto-enable
+            # if hero logo files are detected on disk.
+            if self._detect_hero_logo() is None:
+                return "", None
 
         metadata = self._get_package_metadata()
 
@@ -6684,6 +6745,32 @@ jupyter: python3
         logo_config = self._config.hero_logo
         logo_height = self._config.hero_logo_height
         logo_html = ""
+
+        # Fallback chain: explicit hero.logo → auto-detected hero logo
+        # → explicit top-level logo → auto-detected navbar logo
+        if logo_config is None:
+            logo_config = self._detect_hero_logo()
+        if logo_config is None:
+            logo_config = self._config.logo
+        if logo_config is None:
+            logo_config = self._detect_logo()
+        if logo_config is False:
+            logo_config = None
+
+        # Copy auto-detected logo files into the build dir so the HTML
+        # references resolve.  Files under assets/ are already copied by
+        # _copy_assets; root-level files need an explicit copy.
+        if logo_config and isinstance(logo_config, dict):
+            package_root = self._find_package_root()
+            for key in ("light", "dark"):
+                rel = logo_config.get(key)
+                if rel and not rel.startswith("assets/"):
+                    src = package_root / rel
+                    if src.is_file():
+                        dest = self.project_path / rel
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        if not dest.exists():
+                            shutil.copy2(src, dest)
 
         if logo_config:
             if isinstance(logo_config, dict):
