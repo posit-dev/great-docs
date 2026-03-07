@@ -533,6 +533,10 @@ class Builder:
         for page in pages:
             _log.info(f"Rendering {page.path}")
             rendered = self.renderer.render(page)
+
+            # Prepend frontmatter to disable prev/next page navigation
+            rendered = "---\npage-navigation: false\n---\n\n" + rendered
+
             html_path = Path(self.dir) / (page.path + self.out_page_suffix)
             html_path.parent.mkdir(exist_ok=True, parents=True)
 

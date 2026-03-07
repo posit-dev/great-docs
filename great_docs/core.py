@@ -2283,6 +2283,7 @@ class GreatDocs:
         lines.append("---")
         lines.append(f'title: "{title}"')
         lines.append("sidebar: cli-reference")
+        lines.append("page-navigation: false")
         lines.append("---")
         lines.append("")
 
@@ -8437,12 +8438,16 @@ toc: false
         with open(index_path, "r") as f:
             content = f.read()
 
-        # Check if frontmatter already exists; if so, leave it as is
+        # Check if frontmatter already exists; if so, inject page-navigation
         if content.startswith("---"):
+            if "page-navigation:" not in content.split("---", 2)[1]:
+                content = content.replace("---\n", "---\npage-navigation: false\n", 1)
+                with open(index_path, "w") as f:
+                    f.write(content)
             return
 
         # Add minimal frontmatter if none exists
-        content = f"---\n---\n\n{content}"
+        content = f"---\npage-navigation: false\n---\n\n{content}"
 
         # Write updated content
         with open(index_path, "w") as f:
