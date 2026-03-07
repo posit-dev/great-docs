@@ -539,9 +539,8 @@ body.quarto-light .navbar .quarto-navbar-tools .quarto-navigation-tool:hover {
     text-decoration-thickness: 2px;
 }
 
-/* Page navigation (prev/next) at bottom of pages - use code font for API names */
+/* Page navigation (prev/next) at bottom of pages */
 .nav-page-text {
-    font-family: var(--bs-font-monospace);
     font-size: 0.875em;
 }
 
