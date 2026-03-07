@@ -335,7 +335,7 @@ div.sidebar-item-container {
 }
 
 /* Hover effect for clickable sidebar links (not section headers) */
-#quarto-sidebar .sidebar-link:not([data-bs-toggle="collapse"]):hover {
+#quarto-sidebar .sidebar-link[href]:hover {
     background-color: rgba(0, 0, 0, 0.04);
     border-radius: 6px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -1747,7 +1747,7 @@ body.quarto-dark #quarto-sidebar .sidebar-item-text:hover {
 }
 
 /* Hover effect for clickable sidebar links in dark mode */
-body.quarto-dark #quarto-sidebar .sidebar-link:not([data-bs-toggle="collapse"]):hover {
+body.quarto-dark #quarto-sidebar .sidebar-link[href]:hover {
     background-color: transparent;
     border-radius: 6px;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
