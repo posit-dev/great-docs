@@ -8375,14 +8375,15 @@ toc: false
                 f' data-url="{ann_url}">'
             )
 
-            # Add meta tag to header
+            # Add meta tag to header (replace any existing announcement meta)
             header_list = config["format"]["html"].setdefault("include-in-header", [])
             if isinstance(header_list, str):
                 header_list = [header_list]
                 config["format"]["html"]["include-in-header"] = header_list
             ann_meta_entry = {"text": ann_meta_tag}
-            if not any("gd-announcement" in str(h) for h in header_list):
-                header_list.append(ann_meta_entry)
+            # Remove any stale announcement meta from a previous build
+            header_list[:] = [h for h in header_list if "gd-announcement" not in str(h)]
+            header_list.append(ann_meta_entry)
 
             # Add the banner script to after-body
             after_body = config["format"]["html"].setdefault("include-after-body", [])
