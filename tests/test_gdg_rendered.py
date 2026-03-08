@@ -3223,3 +3223,273 @@ def test_R4_hero_auto_logo_detection():
     assert nav_logo is not None
     nav_src = nav_logo.get("src", "")
     assert "logo-hero" not in nav_src, "Navbar should NOT use the hero logo"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Markdown (.md) Page Generation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def test_md_files_exist_for_html_pages():
+    """Every non-homepage HTML page should have a corresponding .md file."""
+    pkg = "gdtest_long_names"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    site = _site_dir(pkg)
+    html_files = sorted(site.rglob("*.html"))
+    assert len(html_files) > 0, "No HTML files found"
+
+    missing = []
+    for html_file in html_files:
+        rel = html_file.relative_to(site)
+        # Homepage is intentionally excluded
+        if str(rel) == "index.html":
+            continue
+        md_file = html_file.with_suffix(".md")
+        if not md_file.exists():
+            missing.append(str(rel))
+
+    assert not missing, f"Missing .md files for: {missing}"
+
+
+def test_md_homepage_excluded():
+    """The homepage (index.html) should NOT have a corresponding .md file."""
+    pkg = "gdtest_long_names"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    site = _site_dir(pkg)
+    assert not (site / "index.md").exists(), "index.md should not exist (homepage excluded)"
+
+
+def test_md_no_html_link_artifacts():
+    """Generated .md files should not contain relative .html links."""
+    pkg = "gdtest_long_names"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    site = _site_dir(pkg)
+    md_files = sorted(site.rglob("*.md"))
+    assert len(md_files) > 0, "No .md files found"
+
+    bad_links = []
+    html_link_re = re.compile(r"\]\([^)]*\.html\b")
+    for md_file in md_files:
+        content = md_file.read_text(encoding="utf-8")
+        matches = html_link_re.findall(content)
+        if matches:
+            rel = md_file.relative_to(site)
+            bad_links.append(f"{rel}: {matches}")
+
+    assert not bad_links, f".md files with .html links: {bad_links}"
+
+
+def test_md_no_redundant_parent_dir_links():
+    """Links within .md files should not redundantly traverse ../same-dir/."""
+    pkg = "gdtest_long_names"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    site = _site_dir(pkg)
+    md_files = sorted(site.rglob("*.md"))
+
+    bad_paths = []
+    for md_file in md_files:
+        content = md_file.read_text(encoding="utf-8")
+        rel = md_file.relative_to(site)
+        parent = str(rel.parent)
+        if parent == ".":
+            continue
+        # Check for ../parent-dir/ pattern pointing back to own directory
+        pattern = re.compile(re.escape(f"../{parent}/"))
+        if pattern.search(content):
+            bad_paths.append(str(rel))
+
+    assert not bad_paths, f".md files with redundant ../same-dir/ links: {bad_paths}"
+
+
+def test_md_no_parameter_annotation_spans():
+    """Generated .md files should not contain raw <span class='parameter-...'> HTML."""
+    pkg = "gdtest_long_names"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    site = _site_dir(pkg)
+    md_files = sorted(site.rglob("*.md"))
+
+    bad_files = []
+    span_re = re.compile(r'<span\s+class="parameter-')
+    for md_file in md_files:
+        content = md_file.read_text(encoding="utf-8")
+        if span_re.search(content):
+            rel = md_file.relative_to(site)
+            bad_files.append(str(rel))
+
+    assert not bad_files, f".md files with parameter-* spans: {bad_files}"
+
+
+def test_md_reference_pages_have_heading():
+    """Reference .md pages should start with a markdown heading."""
+    pkg = "gdtest_long_names"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ref = _ref_dir(pkg)
+    md_files = sorted(ref.glob("*.md"))
+    assert len(md_files) > 0, "No reference .md files found"
+
+    missing_heading = []
+    for md_file in md_files:
+        content = md_file.read_text(encoding="utf-8").strip()
+        if not content.startswith("#"):
+            missing_heading.append(md_file.name)
+
+    assert not missing_heading, f"Reference .md files without heading: {missing_heading}"
+
+
+def test_md_code_blocks_have_language():
+    """Python code blocks in .md should have ``` python, not bare ```."""
+    pkg = "gdtest_long_names"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ref = _ref_dir(pkg)
+    md_files = sorted(ref.glob("*.md"))
+
+    bare_fence_files = []
+    for md_file in md_files:
+        content = md_file.read_text(encoding="utf-8")
+        # Only flag bare fences that precede Python-looking content
+        lines = content.split("\n")
+        for i, line in enumerate(lines):
+            if line.strip() == "```" and i + 1 < len(lines):
+                next_line = lines[i + 1].strip()
+                # Looks like Python code after a bare fence
+                if next_line.startswith(("def ", "class ", "import ", "from ")):
+                    bare_fence_files.append(md_file.name)
+                    break
+
+    assert not bare_fence_files, (
+        f"Reference .md files with bare ``` before Python code: {bare_fence_files}"
+    )
+
+
+def test_md_long_names_produce_valid_filenames():
+    """Long object names should produce valid .md filenames that match the .html names."""
+    pkg = "gdtest_long_names"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ref = _ref_dir(pkg)
+    html_files = sorted(ref.glob("*.html"))
+    md_files = sorted(ref.glob("*.md"))
+
+    html_stems = {f.stem for f in html_files if f.name != "index.html"}
+    md_stems = {f.stem for f in md_files if f.name != "index.md"}
+
+    # All non-index HTML pages should have a matching .md
+    missing = html_stems - md_stems
+    assert not missing, f"HTML pages without matching .md: {missing}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Copy-Page Widget Integration
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_copy_page_script_present_on_reference_pages():
+    """Reference pages (non-homepage) should include the copy-page.js script."""
+    pkg = "gdtest_long_names"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ref = _ref_dir(pkg)
+    # Check a method page
+    html_files = sorted(ref.glob("*.html"))
+    non_index = [f for f in html_files if f.name != "index.html"]
+    assert len(non_index) > 0, "No non-index reference pages found"
+
+    page = non_index[0]
+    content = page.read_text(encoding="utf-8")
+    assert "copy-page.js" in content, f"{page.name} should include copy-page.js script"
+
+
+@requires_bs4
+def test_copy_page_script_absent_from_homepage():
+    """The homepage (index.html) should NOT include the copy-page.js script."""
+    pkg = "gdtest_long_names"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    site = _site_dir(pkg)
+    index = site / "index.html"
+    if not index.exists():
+        pytest.skip("No index.html found")
+
+    content = index.read_text(encoding="utf-8")
+    assert "copy-page.js" not in content, "Homepage should not include copy-page.js script"
+
+
+@requires_bs4
+def test_copy_page_widget_does_not_overlap_long_titles():
+    """On pages with long object names, the widget should not cause layout issues.
+
+    The widget uses float:right with white-space:nowrap, so the title text
+    should still be visible and the title element should exist alongside
+    the widget script. This test verifies that even the longest-named pages
+    have both a title and the widget script present.
+    """
+    pkg = "gdtest_long_names"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ref = _ref_dir(pkg)
+
+    # Find the pages with the longest names (>60 chars in the filename stem)
+    long_pages = [f for f in ref.glob("*.html") if len(f.stem) > 60]
+    assert len(long_pages) > 0, "Expected pages with very long names"
+
+    for page in long_pages:
+        soup = _load_html(page)
+        content = page.read_text(encoding="utf-8")
+
+        # Widget script should be present
+        assert "copy-page.js" in content, f"{page.name}: copy-page.js script missing"
+
+        # Title should exist and contain the object name
+        title_el = soup.select_one("h2.title, h1.title")
+        assert title_el is not None, f"{page.name}: no title element found"
+
+        title_text = title_el.get_text(strip=True)
+        assert len(title_text) > 30, (
+            f"{page.name}: title text too short ({title_text!r}), expected long name"
+        )
+
+        # The title should render in monospace font (code convention for API names)
+        style = title_el.get("style", "")
+        assert "monospace" in style or "SFMono" in style, (
+            f"{page.name}: title should use monospace font for code-like names"
+        )
+
+
+@requires_bs4
+def test_copy_page_md_url_derivable_from_html():
+    """The .md URL should be derivable by replacing .html with .md in the path.
+
+    This validates the assumption in copy-page.js's getMdUrl() function.
+    """
+    pkg = "gdtest_long_names"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ref = _ref_dir(pkg)
+    html_files = [f for f in ref.glob("*.html") if f.name != "index.html"]
+
+    for html_file in html_files[:5]:  # Spot-check 5 pages
+        md_file = html_file.with_suffix(".md")
+        assert md_file.exists(), f"No .md file for {html_file.name} — getMdUrl() would return 404"
+        # The .md should have meaningful content (not empty)
+        content = md_file.read_text(encoding="utf-8").strip()
+        assert len(content) > 50, f"{md_file.name} is too short ({len(content)} chars)"
