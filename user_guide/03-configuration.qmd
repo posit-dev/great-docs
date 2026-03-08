@@ -304,6 +304,58 @@ markdown_pages:
   widget: false
 ```
 
+## Announcement Banner
+
+Display a site-wide banner above the navbar to highlight important news, releases, or alerts. The banner appears on every page and can optionally be dismissed by the visitor.
+
+### Simple Form
+
+Pass a string to show a default info-style banner:
+
+```{.yaml filename="great-docs.yml"}
+announcement: "Version 2.0 is now available!"
+```
+
+This creates an info-styled (blue) banner that is dismissable by default.
+
+### Full Configuration
+
+Use a dict for full control over style, linking, and dismiss behavior:
+
+```{.yaml filename="great-docs.yml"}
+announcement:
+  content: "We've moved to a new domain — update your bookmarks!"
+  type: warning        # info (default), warning, success, or danger
+  dismissable: true    # Allow visitors to close the banner (default: true)
+  url: https://example.com/blog/migration  # Optional: makes the text a link
+```
+
+The available banner types and their colors:
+
+| Type | Light Mode | Dark Mode |
+|------|-----------|-----------|
+| `info` | Blue | Dark blue |
+| `warning` | Yellow (dark text) | Dark yellow |
+| `success` | Green | Dark green |
+| `danger` | Red | Dark red |
+
+### Dismiss Behavior
+
+When `dismissable: true` (the default), visitors can click the **×** button to hide the banner. The dismissal is stored in `sessionStorage`, so:
+- the banner stays hidden for the rest of the browsing session
+- the banner reappears in a new session or after the browser is closed
+- if you change the announcement text, the new message will appear even for visitors who dismissed the previous one
+
+### Disabling
+
+To explicitly disable the banner (or remove a previously configured one):
+
+```{.yaml filename="great-docs.yml"}
+announcement: false
+```
+
+Or simply remove the `announcement` key entirely — no banner is shown by default.
+
 ## Logo
 
 Great Docs can display a logo in the navbar instead of the plain-text package name. Logos are automatically detected from conventional file locations, or you can configure them explicitly.
