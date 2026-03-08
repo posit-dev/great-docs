@@ -94,6 +94,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # False: disable both.
     # Dict form: {"widget": False} generates .md pages but hides the widget.
     "markdown_pages": True,
+    # Announcement banner (site-wide banner above the navbar)
+    # None/False: no banner (default)
+    # str: banner message text (plain text or inline HTML)
+    # dict: {"content": str, "type": "info"|"warning"|"success"|"danger",
+    #        "dismissable": bool, "url": str|None}
+    "announcement": None,
 }
 
 
@@ -603,6 +609,33 @@ class Config:
             return {"icon": raw}
         if isinstance(raw, dict):
             return raw
+        return None
+
+    @property
+    def announcement(self) -> dict[str, Any] | None:
+        """Get the normalized announcement banner configuration.
+
+        Returns
+        -------
+        dict | None
+            Normalized dict with keys: content, type, dismissable, url.
+            Returns None if no announcement is configured.
+        """
+        raw = self.get("announcement")
+        if raw is None or raw is False:
+            return None
+        if isinstance(raw, str):
+            return {"content": raw, "type": "info", "dismissable": True, "url": None}
+        if isinstance(raw, dict):
+            content = raw.get("content")
+            if not content:
+                return None
+            return {
+                "content": content,
+                "type": raw.get("type", "info"),
+                "dismissable": raw.get("dismissable", True),
+                "url": raw.get("url"),
+            }
         return None
 
     def exists(self) -> bool:

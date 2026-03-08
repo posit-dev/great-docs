@@ -2522,3 +2522,29 @@ html[data-bs-theme="dark"] a.gd-view-md-btn:hover {
     }
 }
 
+/* ── Announcement Banner ── */
+.gd-announcement-banner {
+    font-family: var(--bs-body-font-family, system-ui, -apple-system, sans-serif);
+    line-height: 1.5;
+    letter-spacing: 0.01em;
+}
+.gd-announcement-banner a {
+    font-weight: 600;
+}
+.gd-announcement-banner a:hover {
+    opacity: 0.85;
+}
+/* Dark mode overrides */
+html[data-bs-theme="dark"] .gd-announcement-info {
+    background: #1a5bb5 !important;
+}
+html[data-bs-theme="dark"] .gd-announcement-warning {
+    background: #d4a800 !important;
+}
+html[data-bs-theme="dark"] .gd-announcement-success {
+    background: #126b3d !important;
+}
+html[data-bs-theme="dark"] .gd-announcement-danger {
+    background: #b02a37 !important;
+}
+

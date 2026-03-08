@@ -91,6 +91,8 @@ class GreatDocs:
         ]
         if self._config.markdown_pages_widget:
             js_files.append("copy-page.js")
+        if self._config.announcement:
+            js_files.append("announcement-banner.js")
         for js_file in js_files:
             js_src = self.assets_path / js_file
             if js_src.exists():
@@ -8354,6 +8356,48 @@ toc: false
                 if funding and isinstance(funding, dict) and funding.get("name"):
                     funder_name = funding["name"]
                     config["website"]["page-footer"] = {"left": f"Supported by {funder_name}."}
+
+        # Add announcement banner if configured
+        announcement = self._config.announcement
+        if announcement:
+            import html as html_mod
+
+            ann_content = html_mod.escape(announcement["content"])
+            ann_type = html_mod.escape(announcement.get("type", "info"))
+            ann_dismissable = "true" if announcement.get("dismissable", True) else "false"
+            ann_url = html_mod.escape(announcement.get("url") or "")
+
+            ann_meta_tag = (
+                f'<meta name="gd-announcement"'
+                f' data-content="{ann_content}"'
+                f' data-type="{ann_type}"'
+                f' data-dismissable="{ann_dismissable}"'
+                f' data-url="{ann_url}">'
+            )
+
+            # Add meta tag to header
+            header_list = config["format"]["html"].setdefault("include-in-header", [])
+            if isinstance(header_list, str):
+                header_list = [header_list]
+                config["format"]["html"]["include-in-header"] = header_list
+            ann_meta_entry = {"text": ann_meta_tag}
+            if not any("gd-announcement" in str(h) for h in header_list):
+                header_list.append(ann_meta_entry)
+
+            # Add the banner script to after-body
+            after_body = config["format"]["html"].setdefault("include-after-body", [])
+            if isinstance(after_body, str):
+                after_body = [after_body]
+                config["format"]["html"]["include-after-body"] = after_body
+            ann_script_entry = {"text": '<script src="announcement-banner.js"></script>'}
+            if not any("announcement-banner" in str(item) for item in after_body):
+                # Insert at position 0 so the banner script runs first
+                after_body.insert(0, ann_script_entry)
+
+            # Ensure the JS file is in resources
+            resources_list = config["project"].setdefault("resources", [])
+            if "announcement-banner.js" not in resources_list:
+                resources_list.append("announcement-banner.js")
 
         # Write package metadata JSON for post-render version badge injection.
         # The version and release date come from the latest GitHub Release so

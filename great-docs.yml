@@ -1,6 +1,16 @@
 # Great Docs Configuration
 # See https://rich-iannone.github.io/great-docs/user-guide/03-configuration.html
 
+# Announcement Banner
+# -------------------
+# Site-wide banner above the navbar.
+# Simple form: announcement: "Your message here"
+# Dict form with options:
+announcement:
+  content: "Great Docs v0.1 is now available!"
+  type: info
+  dismissable: true
+
 # Exclusions
 # ----------
 # Items to exclude from auto-documentation (affects 'init' and 'scan')
