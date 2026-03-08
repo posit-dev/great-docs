@@ -88,6 +88,7 @@ class GreatDocs:
             "reference-switcher.js",
             "dark-mode-toggle.js",
             "theme-init.js",
+            "copy-page.js",
         ]
         for js_file in js_files:
             js_src = self.assets_path / js_file
@@ -7887,6 +7888,7 @@ toc: false
             "sidebar-wrap.js",
             "dark-mode-toggle.js",
             "theme-init.js",
+            "copy-page.js",
         ]:
             if js_file not in config["project"]["resources"]:
                 config["project"]["resources"].append(js_file)
@@ -8132,6 +8134,21 @@ toc: false
                 )
                 if not has_gh_widget:
                     config["format"]["html"]["include-after-body"].append(gh_script_entry)
+
+        # Add copy-page widget script
+        if "include-after-body" not in config["format"]["html"]:
+            config["format"]["html"]["include-after-body"] = []
+        elif isinstance(config["format"]["html"]["include-after-body"], str):
+            config["format"]["html"]["include-after-body"] = [
+                config["format"]["html"]["include-after-body"]
+            ]
+
+        copy_page_entry = {"text": '<script src="copy-page.js"></script>'}
+        has_copy_page = any(
+            "copy-page" in str(item) for item in config["format"]["html"]["include-after-body"]
+        )
+        if not has_copy_page:
+            config["format"]["html"]["include-after-body"].append(copy_page_entry)
 
         # Add sidebar smart-wrap script (inserts <wbr> for pretty line breaks)
         if "include-after-body" not in config["format"]["html"]:

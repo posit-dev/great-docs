@@ -2501,3 +2501,303 @@ def inject_sidebar_body_classes():
 
 
 inject_sidebar_body_classes()
+
+
+# ============================================================================
+# Generate Markdown (.md) versions of each page
+# ============================================================================
+# Uses Quarto's bundled pandoc to convert the main content area of each
+# rendered HTML page to GitHub-Flavored Markdown.  The resulting .md files
+# live alongside the .html files in _site/ and are used by the copy-page
+# widget (copy to clipboard / view as plain Markdown).
+
+
+def generate_markdown_pages():
+    """
+    Create a .md companion for every .html page in _site/.
+
+    Steps for each page:
+      1. Extract the <main id="quarto-document-content"> inner HTML.
+      2. Strip navigation-only elements (prev/next links, breadcrumbs).
+      3. Replace _repr_html_ output blocks with a text placeholder.
+      4. Pipe the HTML fragment through ``quarto pandoc -f html -t gfm``.
+      5. Write the result as a .md file next to the original .html.
+    """
+    import shutil
+    import subprocess
+
+    # Verify quarto pandoc is available
+    pandoc_cmd = shutil.which("quarto")
+    if pandoc_cmd is None:
+        print("Warning: 'quarto' not found on PATH; skipping .md generation")
+        return
+
+    print("Generating Markdown (.md) pages...")
+    generated = 0
+    errors = 0
+
+    for html_file in all_html_files:
+        rel = os.path.relpath(html_file, "_site")
+
+        # Skip search.json and other non-page files
+        if not html_file.endswith(".html"):
+            continue
+
+        try:
+            with open(html_file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # ── 1. Extract main content ──────────────────────────────────
+            main_match = re.search(
+                r'<main\s+class="content"[^>]*>(.*?)</main>',
+                content,
+                re.DOTALL,
+            )
+            if not main_match:
+                continue  # No main content (e.g., search page)
+
+            main_html = main_match.group(1)
+
+            # ── 2. Strip nav elements & boilerplate ──────────────────────
+            # Remove page-navigation (prev/next links)
+            main_html = re.sub(
+                r'<nav\s+class="page-navigation".*?</nav>',
+                "",
+                main_html,
+                flags=re.DOTALL,
+            )
+            # Remove quarto-title-meta block (empty metadata div)
+            main_html = re.sub(
+                r'<div\s+class="quarto-title-meta">.*?</div>\s*',
+                "",
+                main_html,
+                flags=re.DOTALL,
+            )
+
+            # Unwrap the title-block-header: extract just the title heading
+            title_match = re.search(
+                r'<header[^>]*class="quarto-title-block[^"]*"[^>]*>'
+                r'.*?<div\s+class="quarto-title">\s*'
+                r"(<h[12][^>]*>)(.*?)(</h[12]>)"
+                r".*?</header>",
+                main_html,
+                re.DOTALL,
+            )
+            if title_match:
+                # Extract the heading text (strip inline HTML styling like type badges)
+                heading_tag_open = title_match.group(1)
+                heading_inner = title_match.group(2)
+                heading_tag_close = title_match.group(3)
+                # Remove inline <span> badges (class/method/function type labels)
+                heading_inner = re.sub(
+                    r'<span\s+style="[^"]*border-style:\s*solid[^"]*">.*?</span>',
+                    "",
+                    heading_inner,
+                    flags=re.DOTALL,
+                )
+                clean_title = f"{heading_tag_open}{heading_inner.strip()}{heading_tag_close}"
+                main_html = (
+                    main_html[: title_match.start()] + clean_title + main_html[title_match.end() :]
+                )
+
+            # Unwrap Quarto code-with-filename wrappers — extract the actual code block
+            main_html = re.sub(
+                r'<div\s+class="code-with-filename">\s*'
+                r'<div\s+class="code-with-filename-file">\s*<pre><strong>(.*?)</strong></pre>\s*</div>\s*'
+                r'<div\s+class="code-copy-outer-scaffold">\s*',
+                r"<p><strong>\1</strong></p>\n",
+                main_html,
+                flags=re.DOTALL,
+            )
+
+            # Strip code-copy-outer-scaffold wrappers (keep inner code block)
+            main_html = re.sub(
+                r'<div\s+class="code-copy-outer-scaffold">\s*',
+                "",
+                main_html,
+            )
+            # Remove the copy buttons
+            main_html = re.sub(
+                r'<button\s+title="Copy to Clipboard"[^>]*>.*?</button>',
+                "",
+                main_html,
+                flags=re.DOTALL,
+            )
+
+            # Strip USAGE/SOURCE row div (API reference pages)
+            main_html = re.sub(
+                r'<div\s+class="usage-source-row"[^>]*>.*?</div>',
+                "",
+                main_html,
+                flags=re.DOTALL,
+            )
+
+            # Remove source-link anchors
+            main_html = re.sub(
+                r'<a[^>]*class="source-link"[^>]*>.*?</a>',
+                "",
+                main_html,
+                flags=re.DOTALL,
+            )
+
+            # Add language hint to sourceCode blocks for pandoc
+            # Quarto uses class="sourceCode python" or data-filename
+            main_html = re.sub(
+                r'<div\s+id="(cb\d+)"\s+class="sourceCode"[^>]*>\s*'
+                r'<pre\s+class="sourceCode[^"]*code-with-copy"[^>]*>',
+                r'<div id="\1" class="sourceCode"><pre class="sourceCode">',
+                main_html,
+            )
+
+            # Clean up trailing </div> from code-with-filename and scaffold wrappers
+            # These are orphaned closing divs after we stripped the opening wrappers.
+            # Count and fix: each code-with-filename wrapper contributes 2 extra </div>
+            # This is tricky with regex, so we do a simpler approach: just close the
+            # remaining unmatched divs by stripping excess </div> at the end of sections.
+
+            # ── 3. Handle _repr_html_ blocks ────────────────────────────
+            # These are typically wrapped in a div with class "cell-output-display"
+            # containing complex HTML tables/widgets that don't convert to Markdown.
+            main_html = re.sub(
+                r'<div\s+class="cell-output-display"[^>]*>.*?</div>\s*(?=</div>|<div|<section|<h[1-6]|$)',
+                "<p><em>[Rich HTML output — view on the documentation site]</em></p>\n",
+                main_html,
+                flags=re.DOTALL,
+            )
+
+            # Strip section wrapper divs (pandoc passes them through as raw HTML)
+            main_html = re.sub(
+                r'<section\s+id="[^"]*"\s+class="[^"]*doc-section[^"]*">\s*',
+                "",
+                main_html,
+            )
+            main_html = re.sub(r"</section>\s*", "", main_html)
+
+            # Convert parameter definition lists to cleaner HTML before pandoc
+            # Replace <dl><dt>...<dd> parameter markup with simple paragraph lists
+            # that pandoc can convert to clean Markdown.
+            def _param_dl_to_html(m):
+                """Convert a <dl> block of parameters to simple HTML paragraphs."""
+                dl_html = m.group(0)
+                items = []
+                dt_dd_pattern = re.compile(
+                    r'<dt>.*?<span class="parameter-name">\s*<strong>(.*?)</strong>\s*</span>'
+                    r'(?:.*?<span class="parameter-annotation">(.*?)</span>)?'
+                    r'(?:.*?<span class="parameter-default">(.*?)</span>)?'
+                    r".*?</dt>\s*<dd>\s*(.*?)\s*</dd>",
+                    re.DOTALL,
+                )
+                for dt_dd in dt_dd_pattern.finditer(dl_html):
+                    name = dt_dd.group(1).strip().strip("`")
+                    annotation = dt_dd.group(2) or ""
+                    default = dt_dd.group(3) or ""
+                    desc = dt_dd.group(4) or ""
+                    # Clean HTML from description
+                    desc = re.sub(r"</?p>", "", desc).strip()
+
+                    sig = f"<strong>{name}</strong>"
+                    if annotation:
+                        sig += f" : <code>{annotation.strip()}</code>"
+                    if default:
+                        sig += f" = <code>{default.strip()}</code>"
+
+                    line = f"<li>{sig}"
+                    if desc:
+                        line += f" &mdash; {desc}"
+                    line += "</li>"
+                    items.append(line)
+
+                if items:
+                    return "<ul>\n" + "\n".join(items) + "\n</ul>"
+                return dl_html
+
+            main_html = re.sub(
+                r"<dl>.*?</dl>",
+                _param_dl_to_html,
+                main_html,
+                flags=re.DOTALL,
+            )
+
+            # Remove remaining doc-description paragraphs' inline styles
+            main_html = re.sub(
+                r'<p\s+class="doc-description"[^>]*>',
+                "<p><em>",
+                main_html,
+            )
+
+            # Strip remaining anchor tags within code block spans (line links)
+            main_html = re.sub(
+                r'<a\s+href="#cb\d+-\d+"[^>]*></a>',
+                "",
+                main_html,
+            )
+
+            # Remove signature highlighting span classes (sig-name, sig-class etc.)
+            main_html = re.sub(
+                r'<span\s+class="(?:sig-name|sig-class|cn-none|cn-bool)">(.*?)</span>',
+                r"\1",
+                main_html,
+            )
+
+            # ── 4. Convert with pandoc ───────────────────────────────────
+            result = subprocess.run(
+                ["quarto", "pandoc", "-f", "html", "-t", "gfm", "--wrap=none"],
+                input=main_html,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            if result.returncode != 0:
+                print(f"  pandoc error for {rel}: {result.stderr.strip()[:200]}")
+                errors += 1
+                continue
+
+            md_content = result.stdout
+
+            # ── 4b. Post-pandoc cleanup ──────────────────────────────────
+            # Remove leftover HTML div wrappers that pandoc preserved
+            md_content = re.sub(
+                r"^<div[^>]*>\s*$",
+                "",
+                md_content,
+                flags=re.MULTILINE,
+            )
+            md_content = re.sub(
+                r"^</div>\s*$",
+                "",
+                md_content,
+                flags=re.MULTILINE,
+            )
+
+            # Remove leftover <span> tags with parameter/annotation classes
+            md_content = re.sub(
+                r'<span\s+class="parameter-[^"]*">(.*?)</span>',
+                r"\1",
+                md_content,
+            )
+
+            # Clean up excessive blank lines (3+ → 2)
+            md_content = re.sub(r"\n{4,}", "\n\n\n", md_content)
+
+            # Strip trailing whitespace
+            md_content = md_content.strip() + "\n"
+
+            # ── 5. Write .md file ────────────────────────────────────────
+            md_file = html_file.rsplit(".", 1)[0] + ".md"
+            with open(md_file, "w", encoding="utf-8") as f:
+                f.write(md_content)
+
+            generated += 1
+
+        except subprocess.TimeoutExpired:
+            print(f"  pandoc timeout for {rel}")
+            errors += 1
+        except Exception as e:
+            print(f"  error processing {rel}: {e}")
+            errors += 1
+
+    print(f"Generated {generated} Markdown page(s) ({errors} error(s))")
+
+
+generate_markdown_pages()
