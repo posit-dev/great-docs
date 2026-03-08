@@ -9,7 +9,14 @@
 announcement:
   content: "Official launch on posit-dev coming soon, along with the first PyPI release!"
   type: info
+  style: ocean
   dismissable: true
+
+# Navbar Style
+# ------------
+# Animated gradient preset for the top navigation bar.
+# Available presets: ocean, sunset, aurora, berry, slate, flame, midnight, teal
+navbar_style: ocean
 
 # Exclusions
 # ----------
