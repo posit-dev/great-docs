@@ -73,53 +73,32 @@
         // Insert before the title block
         titleBlock.parentNode.insertBefore(widget, titleBlock);
 
-        // Clipboard helper with fallback for when the async Clipboard API
-        // is unavailable or the user-activation has expired (common after
-        // an async fetch in strict browsers).
-        function copyToClipboard(text) {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                return navigator.clipboard.writeText(text).catch(function() {
-                    return fallbackCopy(text);
-                });
-            }
-            return fallbackCopy(text);
-        }
+        // Pre-fetch the .md content so the clipboard write can happen
+        // synchronously inside the click handler (preserving user activation).
+        var mdUrl = getMdUrl();
+        var cachedMd = null;
 
-        function fallbackCopy(text) {
-            var ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.position = 'fixed';
-            ta.style.left = '-9999px';
-            document.body.appendChild(ta);
-            ta.select();
-            try {
-                document.execCommand('copy');
-            } catch (e) {
-                document.body.removeChild(ta);
-                return Promise.reject(e);
-            }
-            document.body.removeChild(ta);
-            return Promise.resolve();
-        }
+        fetch(mdUrl)
+            .then(function(response) {
+                if (!response.ok) throw new Error('not found');
+                return response.text();
+            })
+            .then(function(text) { cachedMd = text; })
+            .catch(function() { /* will show error on click */ });
 
-        // Copy handler
+        // Copy handler — writes from cache so clipboard API gets user activation
         copyBtn.addEventListener('click', function() {
-            var mdUrl = getMdUrl();
+            var label = copyBtn.querySelector('.gd-copy-page-label');
+            var origText = label.textContent;
 
-            fetch(mdUrl)
-                .then(function(response) {
-                    if (!response.ok) {
-                        throw new Error('Markdown file not found');
-                    }
-                    return response.text();
-                })
-                .then(function(text) {
-                    return copyToClipboard(text);
-                })
+            if (!cachedMd) {
+                label.textContent = 'Error';
+                setTimeout(function() { label.textContent = origText; }, 2000);
+                return;
+            }
+
+            navigator.clipboard.writeText(cachedMd)
                 .then(function() {
-                    // Show success feedback
-                    var label = copyBtn.querySelector('.gd-copy-page-label');
-                    var origText = label.textContent;
                     label.textContent = 'Copied!';
                     copyBtn.classList.add('gd-copy-success');
                     setTimeout(function() {
@@ -129,12 +108,8 @@
                 })
                 .catch(function(err) {
                     console.warn('Copy page failed:', err);
-                    var label = copyBtn.querySelector('.gd-copy-page-label');
-                    var origText = label.textContent;
                     label.textContent = 'Error';
-                    setTimeout(function() {
-                        label.textContent = origText;
-                    }, 2000);
+                    setTimeout(function() { label.textContent = origText; }, 2000);
                 });
         });
     }
