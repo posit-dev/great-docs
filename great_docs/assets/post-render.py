@@ -2667,12 +2667,29 @@ def generate_markdown_pages():
             )
 
             # Add language hint to sourceCode blocks for pandoc
-            # Quarto uses class="sourceCode python" or data-filename
+            # Quarto renders `class="sourceCode python"` on the pre/code and
+            # `data-filename="..."` on the wrapper div.  We extract the language
+            # and rewrite to `<pre><code class="language-python">` so pandoc
+            # emits ``` python fences.
+            def _rewrite_code_block(m):
+                full = m.group(0)
+                # Try extracting lang from <pre class="sourceCode yaml ...">
+                lang_m = re.search(r'<pre\s+class="sourceCode\s+(\w+)', full)
+                lang = lang_m.group(1) if lang_m else ""
+                # Extract the inner <code>...</code>
+                code_m = re.search(r"(<code[^>]*>)(.*?)(</code>)", full, re.DOTALL)
+                if not code_m:
+                    return full
+                code_content = code_m.group(2)
+                if lang:
+                    return f'<pre><code class="language-{lang}">{code_content}</code></pre>'
+                return f"<pre><code>{code_content}</code></pre>"
+
             main_html = re.sub(
-                r'<div\s+id="(cb\d+)"\s+class="sourceCode"[^>]*>\s*'
-                r'<pre\s+class="sourceCode[^"]*code-with-copy"[^>]*>',
-                r'<div id="\1" class="sourceCode"><pre class="sourceCode">',
+                r'<div\s+[^>]*class="sourceCode"[^>]*>\s*<pre[^>]*>.*?</pre>\s*</div>',
+                _rewrite_code_block,
                 main_html,
+                flags=re.DOTALL,
             )
 
             # Clean up trailing </div> from code-with-filename and scaffold wrappers
@@ -2698,6 +2715,66 @@ def generate_markdown_pages():
                 main_html,
             )
             main_html = re.sub(r"</section>\s*", "", main_html)
+
+            # Convert Quarto callout divs to Markdown-friendly blockquotes.
+            # The callout structure nests 5 divs deep, so we use a helper that
+            # tracks div depth to find the correct closing tag.
+            def _convert_callouts(html):
+                result = []
+                pos = 0
+                while True:
+                    start = html.find('<div class="callout ', pos)
+                    if start == -1:
+                        result.append(html[pos:])
+                        break
+                    result.append(html[pos:start])
+                    # Walk forward from start, tracking div depth to find the outer close
+                    depth = 0
+                    i = start
+                    end = len(html)
+                    while i < end:
+                        open_m = re.match(r"<div[\s>]", html[i:])
+                        close_m = re.match(r"</div>", html[i:])
+                        if open_m:
+                            depth += 1
+                            i += open_m.end()
+                        elif close_m:
+                            depth -= 1
+                            i += close_m.end()
+                            if depth == 0:
+                                break
+                        else:
+                            i += 1
+                    callout_html = html[start:i]
+                    # Extract type
+                    type_m = re.search(
+                        r"callout-(tip|note|warning|important|caution)", callout_html
+                    )
+                    callout_type = type_m.group(1).capitalize() if type_m else "Note"
+                    # Extract title text
+                    title_m = re.search(
+                        r'<div\s+class="callout-title-container[^"]*">\s*'
+                        r"(?:<span[^>]*>[^<]*</span>)?\s*(.*?)\s*</div>",
+                        callout_html,
+                        re.DOTALL,
+                    )
+                    title_text = title_m.group(1).strip() if title_m else ""
+                    # Extract body HTML
+                    body_m = re.search(
+                        r'<div\s+class="callout-body-container[^"]*">\s*(.*?)\s*</div>',
+                        callout_html,
+                        re.DOTALL,
+                    )
+                    body_html = body_m.group(1).strip() if body_m else ""
+                    if title_text:
+                        header = f"<p><strong>{callout_type}: {title_text}</strong></p>"
+                    else:
+                        header = f"<p><strong>{callout_type}</strong></p>"
+                    result.append(f"<blockquote>{header}\n{body_html}</blockquote>")
+                    pos = i
+                return "".join(result)
+
+            main_html = _convert_callouts(main_html)
 
             # Convert parameter definition lists to cleaner HTML before pandoc
             # Replace <dl><dt>...<dd> parameter markup with simple paragraph lists
@@ -2802,6 +2879,28 @@ def generate_markdown_pages():
                 r"\1",
                 md_content,
             )
+
+            # Rewrite internal .html links to .md (relative paths only)
+            md_content = re.sub(
+                r"\]\((\.\./[^)]*?)\.html(\)?)",
+                r"](\1.md\2",
+                md_content,
+            )
+            # Also in the same directory
+            md_content = re.sub(
+                r"\]\(([A-Za-z0-9_][^):/]*?)\.html(\)?)",
+                r"](\1.md\2",
+                md_content,
+            )
+
+            # Remove leftover <span> tags (screen-reader, callout-icon, etc.)
+            md_content = re.sub(
+                r'<span\s+class="[^"]*">(.*?)</span>',
+                r"\1",
+                md_content,
+            )
+            # Remove empty <i> tags (callout icons)
+            md_content = re.sub(r"<i[^>]*></i>", "", md_content)
 
             # Clean up excessive blank lines (3+ → 2)
             md_content = re.sub(r"\n{4,}", "\n\n\n", md_content)
