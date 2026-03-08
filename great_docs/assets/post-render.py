@@ -2893,6 +2893,18 @@ def generate_markdown_pages():
                 md_content,
             )
 
+            # Simplify redundant ../current_dir/ paths to ./
+            file_dir = os.path.dirname(rel)
+            if file_dir:
+                # e.g. for user-guide/changelog.md, rewrite
+                # ../user-guide/foo.md → foo.md
+                escaped = re.escape("../" + file_dir + "/")
+                md_content = re.sub(
+                    r"\]\(" + escaped + r"([^)]+)\)",
+                    r"](\1)",
+                    md_content,
+                )
+
             # Remove leftover <span> tags (screen-reader, callout-icon, etc.)
             md_content = re.sub(
                 r'<span\s+class="[^"]*">(.*?)</span>',
