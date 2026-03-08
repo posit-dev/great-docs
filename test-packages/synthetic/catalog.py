@@ -263,6 +263,10 @@ ALL_PACKAGES: list[str] = [
     # 119–120: Markdown pages config
     "gdtest_md_disabled",  # 119
     "gdtest_md_no_widget",  # 120
+    # 121–123: Announcement banner
+    "gdtest_announce_simple",  # 121
+    "gdtest_announce_dict",  # 122
+    "gdtest_announce_disabled",  # 123
 ]
 
 
@@ -370,6 +374,9 @@ DIMENSIONS: dict[str, dict[str, str]] = {
     "K22": {"axis": "config", "label": "reference config"},
     "K23": {"axis": "config", "label": "markdown_pages: false"},
     "K24": {"axis": "config", "label": "markdown_pages widget: false"},
+    "K25": {"axis": "config", "label": "announcement: string"},
+    "K26": {"axis": "config", "label": "announcement: dict"},
+    "K27": {"axis": "config", "label": "announcement: false"},
     # Docstring richness axes
     "L1": {"axis": "docstring", "label": ".. versionadded::"},
     "L2": {"axis": "docstring", "label": ".. deprecated::"},

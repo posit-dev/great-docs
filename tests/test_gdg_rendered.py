@@ -3882,3 +3882,147 @@ def test_md_no_widget_gd_options():
 
     opts = json.loads(opts_path.read_text(encoding="utf-8"))
     assert opts["markdown_pages"] is True
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: Announcement Banner
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def test_R4_announce_simple_meta_tag():
+    """gdtest_announce_simple: meta tag with announcement content is present."""
+    pkg = "gdtest_announce_simple"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    index = _site_dir(pkg) / "index.html"
+    content = index.read_text(encoding="utf-8")
+    assert 'name="gd-announcement"' in content, "Missing gd-announcement meta tag"
+    assert 'data-content="This is a test announcement!"' in content
+
+
+def test_R4_announce_simple_script_included():
+    """gdtest_announce_simple: announcement-banner.js is loaded."""
+    pkg = "gdtest_announce_simple"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    index = _site_dir(pkg) / "index.html"
+    content = index.read_text(encoding="utf-8")
+    assert "announcement-banner.js" in content
+
+
+def test_R4_announce_simple_defaults():
+    """gdtest_announce_simple: string config gets default type=info, dismissable=true."""
+    pkg = "gdtest_announce_simple"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    index = _site_dir(pkg) / "index.html"
+    content = index.read_text(encoding="utf-8")
+    assert 'data-type="info"' in content
+    assert 'data-dismissable="true"' in content
+
+
+def test_R4_announce_simple_js_file_exists():
+    """gdtest_announce_simple: announcement-banner.js is deployed to _site/."""
+    pkg = "gdtest_announce_simple"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    js_file = _site_dir(pkg) / "announcement-banner.js"
+    assert js_file.exists(), "announcement-banner.js not found in _site/"
+
+
+def test_R4_announce_simple_quarto_resources():
+    """gdtest_announce_simple: _quarto.yml includes announcement-banner.js in resources."""
+    pkg = "gdtest_announce_simple"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    cfg = _load_quarto_yml(pkg)
+    resources = cfg.get("project", {}).get("resources", [])
+    assert "announcement-banner.js" in resources
+
+
+def test_R4_announce_simple_on_all_pages():
+    """gdtest_announce_simple: meta tag appears on reference pages too (site-wide)."""
+    pkg = "gdtest_announce_simple"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ref = _ref_dir(pkg)
+    if not ref.exists():
+        pytest.skip("No reference directory")
+
+    for html_file in ref.glob("*.html"):
+        content = html_file.read_text(encoding="utf-8")
+        assert 'name="gd-announcement"' in content, (
+            f"{html_file.name}: missing gd-announcement meta tag"
+        )
+
+
+def test_R4_announce_dict_content():
+    """gdtest_announce_dict: dict config renders correct content and type."""
+    pkg = "gdtest_announce_dict"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    index = _site_dir(pkg) / "index.html"
+    content = index.read_text(encoding="utf-8")
+    assert 'data-content="Version 2.0 is here!"' in content
+    assert 'data-type="success"' in content
+
+
+def test_R4_announce_dict_dismissable_false():
+    """gdtest_announce_dict: dismissable=False is passed through."""
+    pkg = "gdtest_announce_dict"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    index = _site_dir(pkg) / "index.html"
+    content = index.read_text(encoding="utf-8")
+    assert 'data-dismissable="false"' in content
+
+
+def test_R4_announce_dict_url():
+    """gdtest_announce_dict: url attribute is included in the meta tag."""
+    pkg = "gdtest_announce_dict"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    index = _site_dir(pkg) / "index.html"
+    content = index.read_text(encoding="utf-8")
+    assert 'data-url="https://example.com/changelog"' in content
+
+
+def test_R4_announce_disabled_no_meta():
+    """gdtest_announce_disabled: no announcement meta tag when disabled."""
+    pkg = "gdtest_announce_disabled"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    index = _site_dir(pkg) / "index.html"
+    content = index.read_text(encoding="utf-8")
+    assert 'name="gd-announcement"' not in content
+
+
+def test_R4_announce_disabled_no_script():
+    """gdtest_announce_disabled: no announcement-banner.js when disabled."""
+    pkg = "gdtest_announce_disabled"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    index = _site_dir(pkg) / "index.html"
+    content = index.read_text(encoding="utf-8")
+    assert "announcement-banner.js" not in content
+
+
+def test_R4_announce_disabled_no_js_file():
+    """gdtest_announce_disabled: announcement-banner.js is not in _site/."""
+    pkg = "gdtest_announce_disabled"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    js_file = _site_dir(pkg) / "announcement-banner.js"
+    assert not js_file.exists(), "announcement-banner.js should not be deployed when disabled"
