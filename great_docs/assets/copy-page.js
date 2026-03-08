@@ -73,6 +73,35 @@
         // Insert before the title block
         titleBlock.parentNode.insertBefore(widget, titleBlock);
 
+        // Clipboard helper with fallback for when the async Clipboard API
+        // is unavailable or the user-activation has expired (common after
+        // an async fetch in strict browsers).
+        function copyToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                return navigator.clipboard.writeText(text).catch(function() {
+                    return fallbackCopy(text);
+                });
+            }
+            return fallbackCopy(text);
+        }
+
+        function fallbackCopy(text) {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+                document.execCommand('copy');
+            } catch (e) {
+                document.body.removeChild(ta);
+                return Promise.reject(e);
+            }
+            document.body.removeChild(ta);
+            return Promise.resolve();
+        }
+
         // Copy handler
         copyBtn.addEventListener('click', function() {
             var mdUrl = getMdUrl();
@@ -85,7 +114,7 @@
                     return response.text();
                 })
                 .then(function(text) {
-                    return navigator.clipboard.writeText(text);
+                    return copyToClipboard(text);
                 })
                 .then(function() {
                     // Show success feedback
@@ -107,6 +136,7 @@
                         label.textContent = origText;
                     }, 2000);
                 });
+        });
         });
     }
 

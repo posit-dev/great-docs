@@ -9241,13 +9241,18 @@ toc: false
         finally:
             os.chdir(original_dir)
 
-    def preview(self) -> None:
+    def preview(self, port: int = 3000) -> None:
         """
         Preview the documentation site locally.
 
-        Opens the built site in the default browser. If the site hasn't been built yet,
-        it will be built first. Use `great-docs build` to rebuild the site if you've
-        made changes.
+        Starts a local HTTP server and opens the built site in the default
+        browser.  If the site hasn't been built yet, it will be built first.
+        Use ``great-docs build`` to rebuild the site if you've made changes.
+
+        Parameters
+        ----------
+        port
+            The port number for the local HTTP server (default ``3000``).
 
         Examples
         --------
@@ -9260,7 +9265,11 @@ toc: false
         docs.preview()
         ```
         """
+        import functools
+        import http.server
+        import socketserver
         import sys
+        import threading
         import webbrowser
 
         print("Previewing documentation...")
@@ -9273,13 +9282,36 @@ toc: false
             print("Site not found, building first...")
             self.build()
 
-        # Open the site in the default browser
-        if index_html.exists():
-            print(f"\n🌐 Opening site in browser: {index_html}")
-            webbrowser.open(f"file://{index_html.absolute()}")
-        else:
+        if not index_html.exists():
             print("❌ Could not find built site")
             sys.exit(1)
+
+        handler = functools.partial(
+            http.server.SimpleHTTPRequestHandler,
+            directory=str(site_path),
+        )
+        # Allow quick restart after Ctrl-C
+        socketserver.TCPServer.allow_reuse_address = True
+
+        try:
+            httpd = socketserver.TCPServer(("", port), handler)
+        except OSError:
+            print(f"❌ Port {port} is already in use. Try a different port.")
+            sys.exit(1)
+
+        url = f"http://localhost:{port}/"
+        print(f"\n🌐 Serving site at {url}")
+        print("   Press Ctrl+C to stop\n")
+
+        # Open browser after a short delay so the server is ready
+        threading.Timer(0.3, webbrowser.open, args=(url,)).start()
+
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            httpd.server_close()
 
     def check_links(
         self,

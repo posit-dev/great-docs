@@ -161,22 +161,30 @@ def uninstall(project_path):
     type=click.Path(exists=True, file_okay=False, dir_okay=True),
     help="Path to your project root directory (default: current directory)",
 )
-def preview(project_path):
+@click.option(
+    "--port",
+    type=int,
+    default=3000,
+    show_default=True,
+    help="Port for the local preview server",
+)
+def preview(project_path, port):
     """Preview your documentation locally.
 
-    Opens the built documentation site in your default browser. If the site
-    hasn't been built yet, it will build it first.
+    Starts a local HTTP server and opens the built documentation site in your
+    default browser. If the site hasn't been built yet, it will build it first.
 
     The site is served from great-docs/_site/. Use 'great-docs build' to
     rebuild if you've made changes.
 
     \b
     Examples:
-      great-docs preview                    # Preview the built site
+      great-docs preview                    # Preview on port 3000
+      great-docs preview --port 8080        # Preview on port 8080
     """
     try:
         docs = GreatDocs(project_path=project_path)
-        docs.preview()
+        docs.preview(port=port)
     except KeyboardInterrupt:
         click.echo("\n👋 Server stopped")
     except Exception as e:
