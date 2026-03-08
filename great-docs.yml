@@ -7,7 +7,7 @@
 # Simple form: announcement: "Your message here"
 # Dict form with options:
 announcement:
-  content: "Great Docs v0.1 is now available!"
+  content: "Official launch on posit-dev coming soon, along with the first PyPI release!"
   type: info
   dismissable: true
 
