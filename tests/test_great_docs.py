@@ -756,6 +756,8 @@ def test_config_defaults():
         assert config.cli_module is None
         assert config.cli_name is None
         assert config.dark_mode_toggle is True
+        assert config.markdown_pages is True
+        assert config.markdown_pages_widget is True
         assert config.reference == []
         assert config.authors == []
 
@@ -6573,3 +6575,103 @@ class TestExtractBadgesFromContent:
         assert hero_extras["tagline"] == "Obtain Polars DataFrames of NOAA historical weather data"
         assert "<div" not in cleaned
         assert "## Features" in cleaned
+
+
+def test_config_markdown_pages_disabled():
+    """Test that markdown_pages: false excludes copy-page.js from Quarto config."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        config_file = project_path / "great-docs.yml"
+        config_file.write_text("markdown_pages: false\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        # Both should be false
+        assert docs._config.markdown_pages is False
+        assert docs._config.markdown_pages_widget is False
+
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._update_quarto_config()
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        with open(quarto_yml, "r") as f:
+            config = yaml.safe_load(f)
+
+        # copy-page.js should NOT be in resources
+        resources = config["project"].get("resources", [])
+        assert "copy-page.js" not in resources
+
+        # copy-page.js should NOT be in include-after-body
+        after_body = config["format"]["html"].get("include-after-body", [])
+        for item in after_body:
+            assert "copy-page" not in str(item)
+
+
+def test_config_markdown_pages_widget_disabled():
+    """Test that markdown_pages: {widget: false} generates .md but hides widget."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        config_file = project_path / "great-docs.yml"
+        config_file.write_text("markdown_pages:\n  widget: false\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        # .md generation enabled, widget disabled
+        assert docs._config.markdown_pages is True
+        assert docs._config.markdown_pages_widget is False
+
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._update_quarto_config()
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        with open(quarto_yml, "r") as f:
+            config = yaml.safe_load(f)
+
+        # copy-page.js should NOT be in resources
+        resources = config["project"].get("resources", [])
+        assert "copy-page.js" not in resources
+
+        # copy-page.js should NOT be in include-after-body
+        after_body = config["format"]["html"].get("include-after-body", [])
+        for item in after_body:
+            assert "copy-page" not in str(item)
+
+
+def test_config_markdown_pages_default_enabled():
+    """Test that markdown_pages defaults to true (copy-page.js included)."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._update_quarto_config()
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        with open(quarto_yml, "r") as f:
+            config = yaml.safe_load(f)
+
+        # copy-page.js SHOULD be in resources
+        resources = config["project"].get("resources", [])
+        assert "copy-page.js" in resources
+
+        # copy-page.js SHOULD be in include-after-body
+        after_body = config["format"]["html"].get("include-after-body", [])
+        has_copy_page = any("copy-page" in str(item) for item in after_body)
+        assert has_copy_page
