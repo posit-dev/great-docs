@@ -137,7 +137,6 @@
                     }, 2000);
                 });
         });
-        });
     }
 
     // Initialize when DOM is ready
