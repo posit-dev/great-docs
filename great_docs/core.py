@@ -88,8 +88,9 @@ class GreatDocs:
             "reference-switcher.js",
             "dark-mode-toggle.js",
             "theme-init.js",
-            "copy-page.js",
         ]
+        if self._config.markdown_pages_widget:
+            js_files.append("copy-page.js")
         for js_file in js_files:
             js_src = self.assets_path / js_file
             if js_src.exists():
@@ -114,6 +115,12 @@ class GreatDocs:
 
         # Create _quarto.yml configuration
         self._update_quarto_config()
+
+        # Write options JSON for the post-render script
+        gd_options = {"markdown_pages": self._config.markdown_pages}
+        gd_options_path = self.project_path / "_gd_options.json"
+        with open(gd_options_path, "w") as f:
+            json.dump(gd_options, f)
 
         # Add API reference configuration
         # (auto-skips if no documentable exports are found)
@@ -982,6 +989,10 @@ class GreatDocs:
 
         # Dark mode toggle
         metadata["dark_mode_toggle_enabled"] = self._config.dark_mode_toggle
+
+        # Markdown pages (.md generation + copy-page widget)
+        metadata["markdown_pages"] = self._config.markdown_pages
+        metadata["markdown_pages_widget"] = self._config.markdown_pages_widget
 
         # Funding organization
         metadata["funding"] = self._config.funding
@@ -7882,14 +7893,16 @@ toc: false
             config["project"]["resources"] = [config["project"]["resources"]]
 
         # Ensure JS files are included as resources
-        for js_file in [
+        js_resource_files = [
             "github-widget.js",
             "sidebar-filter.js",
             "sidebar-wrap.js",
             "dark-mode-toggle.js",
             "theme-init.js",
-            "copy-page.js",
-        ]:
+        ]
+        if self._config.markdown_pages_widget:
+            js_resource_files.append("copy-page.js")
+        for js_file in js_resource_files:
             if js_file not in config["project"]["resources"]:
                 config["project"]["resources"].append(js_file)
 
@@ -8135,20 +8148,21 @@ toc: false
                 if not has_gh_widget:
                     config["format"]["html"]["include-after-body"].append(gh_script_entry)
 
-        # Add copy-page widget script
-        if "include-after-body" not in config["format"]["html"]:
-            config["format"]["html"]["include-after-body"] = []
-        elif isinstance(config["format"]["html"]["include-after-body"], str):
-            config["format"]["html"]["include-after-body"] = [
-                config["format"]["html"]["include-after-body"]
-            ]
+        # Add copy-page widget script (if markdown_pages widget is enabled)
+        if metadata.get("markdown_pages_widget", True):
+            if "include-after-body" not in config["format"]["html"]:
+                config["format"]["html"]["include-after-body"] = []
+            elif isinstance(config["format"]["html"]["include-after-body"], str):
+                config["format"]["html"]["include-after-body"] = [
+                    config["format"]["html"]["include-after-body"]
+                ]
 
-        copy_page_entry = {"text": '<script src="copy-page.js"></script>'}
-        has_copy_page = any(
-            "copy-page" in str(item) for item in config["format"]["html"]["include-after-body"]
-        )
-        if not has_copy_page:
-            config["format"]["html"]["include-after-body"].append(copy_page_entry)
+            copy_page_entry = {"text": '<script src="copy-page.js"></script>'}
+            has_copy_page = any(
+                "copy-page" in str(item) for item in config["format"]["html"]["include-after-body"]
+            )
+            if not has_copy_page:
+                config["format"]["html"]["include-after-body"].append(copy_page_entry)
 
         # Add sidebar smart-wrap script (inserts <wbr> for pretty line breaks)
         if "include-after-body" not in config["format"]["html"]:

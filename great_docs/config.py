@@ -89,6 +89,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # dict: {"enabled": bool, "logo": str|dict|false, "logo_height": str,
     #        "name": str|false, "tagline": str|false, "badges": "auto"|list|false}
     "hero": None,
+    # Markdown pages (.md generation + copy-page widget)
+    # True (default): generate .md pages and show the copy/view widget.
+    # False: disable both.
+    # Dict form: {"widget": False} generates .md pages but hides the widget.
+    "markdown_pages": True,
 }
 
 
@@ -265,6 +270,22 @@ class Config:
     def dark_mode_toggle(self) -> bool:
         """Check if dark mode toggle is enabled."""
         return self.get("dark_mode_toggle", True)
+
+    @property
+    def markdown_pages(self) -> bool:
+        """Check if Markdown page generation is enabled."""
+        val = self.get("markdown_pages", True)
+        if isinstance(val, dict):
+            return val.get("enabled", True)
+        return bool(val)
+
+    @property
+    def markdown_pages_widget(self) -> bool:
+        """Check if the copy-page widget is shown (requires markdown_pages)."""
+        val = self.get("markdown_pages", True)
+        if isinstance(val, dict):
+            return val.get("widget", True) and val.get("enabled", True)
+        return bool(val)
 
     @property
     def parser(self) -> str:
@@ -724,6 +745,16 @@ def create_default_config() -> str:
 # ----------------
 # Enable/disable the dark mode toggle in navbar (default: true)
 # dark_mode_toggle: true
+
+# Markdown Pages
+# --------------
+# Generate .md companions for every HTML page and show a copy/view-as-Markdown
+# widget on each page.  Set to false to disable both (default: true).
+# markdown_pages: true
+#
+# To generate .md pages but hide the widget:
+# markdown_pages:
+#   widget: false
 
 # User Guide
 # ----------

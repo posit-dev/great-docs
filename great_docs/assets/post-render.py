@@ -62,6 +62,13 @@ if os.path.exists(dataclass_attrs_path):
     if dataclass_attrs_metadata:
         print(f"Loaded dataclass attribute metadata for {len(dataclass_attrs_metadata)} class(es)")
 
+# Load great-docs options (written by core.py during build)
+_gd_options: dict[str, object] = {}
+_gd_options_path = "_gd_options.json"
+if os.path.exists(_gd_options_path):
+    with open(_gd_options_path, "r") as f:
+        _gd_options = json.load(f)
+
 
 def get_source_link_html(item_name):
     """Generate HTML for a source link given an item name."""
@@ -2951,4 +2958,5 @@ def generate_markdown_pages():
     print(f"Generated {generated} Markdown page(s) ({errors} error(s))")
 
 
-generate_markdown_pages()
+if _gd_options.get("markdown_pages", True):
+    generate_markdown_pages()
