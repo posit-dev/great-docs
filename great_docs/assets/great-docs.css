@@ -433,6 +433,7 @@ div.sidebar-item-container {
    overflow-wrap is intentionally NOT set so the browser only breaks at
    those designated points (not in the middle of words). */
 #quarto-sidebar .sidebar-item-text {
+    font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     font-size: 0.85em;
     display: block;
     max-width: 100%;
