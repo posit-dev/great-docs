@@ -18,6 +18,10 @@ announcement:
 # Available presets: sky, peach, prism, lilac, slate, honey, dusk, mint
 navbar_style: sky
 
+# Subtle radial gradient glow at the top of the main content area.
+# Available presets: sky, peach, prism, lilac, slate, honey, dusk, mint
+content_style: lilac
+
 # Exclusions
 # ----------
 # Items to exclude from auto-documentation (affects 'init' and 'scan')
