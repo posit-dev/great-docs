@@ -280,6 +280,10 @@ ALL_PACKAGES: list[str] = [
     "gdtest_gradient_both",  # 133
     "gdtest_gradient_mixed",  # 134
     "gdtest_gradient_no_dismiss",  # 135
+    # 136–138: include_in_header
+    "gdtest_header_text",  # 136
+    "gdtest_header_list",  # 137
+    "gdtest_header_file",  # 138
 ]
 
 
@@ -402,6 +406,9 @@ DIMENSIONS: dict[str, dict[str, str]] = {
     "K37": {"axis": "config", "label": "gradient: both same"},
     "K38": {"axis": "config", "label": "gradient: mixed presets"},
     "K39": {"axis": "config", "label": "gradient: no dismiss"},
+    "K40": {"axis": "config", "label": "include_in_header: string"},
+    "K41": {"axis": "config", "label": "include_in_header: list"},
+    "K42": {"axis": "config", "label": "include_in_header: file"},
     # Docstring richness axes
     "L1": {"axis": "docstring", "label": ".. versionadded::"},
     "L2": {"axis": "docstring", "label": ".. deprecated::"},

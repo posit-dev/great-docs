@@ -4262,3 +4262,90 @@ def test_R5_no_dismiss_no_navbar_js():
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
     assert not (_site_dir(pkg) / "navbar-style.js").exists()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: include_in_header
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def test_R4_header_text_meta_tag_injected():
+    """gdtest_header_text: inline string config injects a custom meta tag."""
+    pkg = "gdtest_header_text"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    content = (_site_dir(pkg) / "index.html").read_text(encoding="utf-8")
+    assert 'name="gd-custom-test"' in content, "Custom meta tag not found in <head>"
+    assert 'content="header-text-injected"' in content
+
+
+def test_R4_header_text_quarto_yml():
+    """gdtest_header_text: _quarto.yml contains the user entry in include-in-header."""
+    pkg = "gdtest_header_text"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    cfg = _load_quarto_yml(pkg)
+    header_list = cfg.get("format", {}).get("html", {}).get("include-in-header", [])
+    texts = [str(item) for item in header_list]
+    assert any("gd-custom-test" in t for t in texts), "User entry missing from include-in-header"
+
+
+def test_R4_header_text_coexists_with_font_awesome():
+    """gdtest_header_text: user entry coexists with auto-injected Font Awesome."""
+    pkg = "gdtest_header_text"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    content = (_site_dir(pkg) / "index.html").read_text(encoding="utf-8")
+    assert "gd-custom-test" in content, "User meta tag missing"
+    assert "font-awesome" in content, "Font Awesome CDN missing"
+
+
+def test_R4_header_list_both_items_injected():
+    """gdtest_header_list: list config injects multiple meta tags."""
+    pkg = "gdtest_header_list"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    content = (_site_dir(pkg) / "index.html").read_text(encoding="utf-8")
+    assert 'name="gd-list-item-one"' in content, "First list entry not injected"
+    assert 'name="gd-list-item-two"' in content, "Second list entry not injected"
+
+
+def test_R4_header_list_quarto_yml():
+    """gdtest_header_list: _quarto.yml contains both user entries."""
+    pkg = "gdtest_header_list"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    cfg = _load_quarto_yml(pkg)
+    header_list = cfg.get("format", {}).get("html", {}).get("include-in-header", [])
+    texts = [str(item) for item in header_list]
+    combined = " ".join(texts)
+    assert "gd-list-item-one" in combined, "First entry missing from include-in-header"
+    assert "gd-list-item-two" in combined, "Second entry missing from include-in-header"
+
+
+def test_R4_header_file_content_injected():
+    """gdtest_header_file: file-referenced content appears in rendered HTML."""
+    pkg = "gdtest_header_file"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    content = (_site_dir(pkg) / "index.html").read_text(encoding="utf-8")
+    assert 'name="gd-file-inject"' in content, "File-based meta tag not injected"
+    assert 'content="from-external-file"' in content
+
+
+def test_R4_header_file_quarto_yml():
+    """gdtest_header_file: _quarto.yml contains the file entry."""
+    pkg = "gdtest_header_file"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    cfg = _load_quarto_yml(pkg)
+    header_list = cfg.get("format", {}).get("html", {}).get("include-in-header", [])
+    has_file_entry = any(isinstance(item, dict) and "file" in item for item in header_list)
+    assert has_file_entry, "File entry missing from include-in-header"
