@@ -2362,9 +2362,9 @@ def test_R4_config_combo_a_display_name_and_authors():
 
     # Check authors in page-footer
     footer = cfg.get("website", {}).get("page-footer", {})
-    footer_left = footer.get("left", "")
-    assert "Alice Smith" in footer_left, "Footer should mention Alice Smith"
-    assert "Bob Jones" in footer_left, "Footer should mention Bob Jones"
+    footer_center = footer.get("center", "")
+    assert "Alice Smith" in footer_center, "Footer should mention Alice Smith"
+    assert "Bob Jones" in footer_center, "Footer should mention Bob Jones"
 
     # Check landing page has display_name
     index = _site_dir(pkg) / "index.html"

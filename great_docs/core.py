@@ -8352,14 +8352,14 @@ toc: false
                     funder_name = funding["name"]
                     footer_html += f" Supported by {funder_name}."
 
-                config["website"]["page-footer"] = {"left": footer_html}
+                config["website"]["page-footer"] = {"center": footer_html}
 
             else:
                 # No authors: still emit a footer if funding is configured
                 funding = metadata.get("funding")
                 if funding and isinstance(funding, dict) and funding.get("name"):
                     funder_name = funding["name"]
-                    config["website"]["page-footer"] = {"left": f"Supported by {funder_name}."}
+                    config["website"]["page-footer"] = {"center": f"Supported by {funder_name}."}
 
         # Add announcement banner if configured
         announcement = self._config.announcement

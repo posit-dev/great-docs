@@ -518,6 +518,11 @@ body.quarto-light .navbar .quarto-navbar-tools .quarto-navigation-tool:hover {
     color: rgb(48, 48, 48);
 }
 
+.nav-footer-center {
+    color: rgb(48, 48, 48);
+    text-wrap: balance;
+}
+
 .nav-footer-right {
     color: rgb(48, 48, 48);
 }
@@ -529,8 +534,7 @@ body.quarto-light .navbar .quarto-navbar-tools .quarto-navigation-tool:hover {
         padding-right: calc((100vw - 900px) / 2);
     }
 
-    .nav-footer-left {
-        margin-left: 1rem;
+    .nav-footer-center {
         margin-top: 0.5rem;
     }
 }
@@ -550,14 +554,14 @@ body.quarto-light .navbar .quarto-navbar-tools .quarto-navigation-tool:hover {
 }
 
 /* Footer author links styling */
-.nav-footer-left a {
+.nav-footer-center a {
     color: inherit;
     text-decoration: underline;
     text-underline-offset: 2px;
     text-decoration-thickness: 1px;
 }
 
-.nav-footer-left a:hover {
+.nav-footer-center a:hover {
     text-decoration-thickness: 2px;
 }
 
