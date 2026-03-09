@@ -428,6 +428,30 @@ content_style:
   pages: homepage
 ```
 
+## Custom Head Content {#include-in-header}
+
+Use `include_in_header` to inject custom HTML into the `<head>` of every page. This is useful for adding analytics scripts, custom meta tags, external stylesheets, or any other `<head>` content.
+
+A single string is treated as inline HTML:
+
+```{.yaml filename="great-docs.yml"}
+include_in_header: '<link rel="stylesheet" href="https://example.com/custom.css">'
+```
+
+For multiple entries, use a list. Each item can be a string (inline HTML) or a dict with a `text` or `file` key:
+
+```{.yaml filename="great-docs.yml"}
+include_in_header:
+  - text: |
+      <script>
+        console.log("hello from great-docs");
+      </script>
+  - text: '<meta name="custom" content="value">'
+  - file: custom-head.html
+```
+
+Your entries are merged with Great Docs' own `<head>` injections (e.g., Font Awesome, theme scripts, etc.) so everything cooperates automatically.
+
 ## Logo
 
 Great Docs can display a logo in the navbar instead of the plain-text package name. Logos are automatically detected from conventional file locations, or you can configure them explicitly.
