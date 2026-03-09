@@ -8330,9 +8330,11 @@ toc: false
                 formatted_names: list[str] = []
                 for name in author_names:
                     if name in author_homepages:
-                        formatted_names.append(f'<a href="{author_homepages[name]}">{name}</a>')
+                        formatted_names.append(
+                            f'<a href="{author_homepages[name]}"><strong>{name}</strong></a>'
+                        )
                     else:
-                        formatted_names.append(name)
+                        formatted_names.append(f"<strong>{name}</strong>")
 
                 # Format as "Developed by Name1 and Name2." or "Developed by Name1, Name2, and Name3."
                 if len(formatted_names) == 1:
@@ -8355,7 +8357,7 @@ toc: false
                 funding = metadata.get("funding")
                 if funding and isinstance(funding, dict) and funding.get("name"):
                     funder_name = funding["name"]
-                    footer_html += f" Supported by {funder_name}."
+                    footer_html += f" Supported by <strong>{funder_name}</strong>."
 
                 config["website"]["page-footer"] = {"center": footer_html}
 
@@ -8364,7 +8366,9 @@ toc: false
                 funding = metadata.get("funding")
                 if funding and isinstance(funding, dict) and funding.get("name"):
                     funder_name = funding["name"]
-                    config["website"]["page-footer"] = {"center": f"Supported by {funder_name}."}
+                    config["website"]["page-footer"] = {
+                        "center": f"Supported by <strong>{funder_name}</strong>."
+                    }
 
         # Add "Supported by Posit" badge if funding name contains "Posit" as a word
         funding = metadata.get("funding")
