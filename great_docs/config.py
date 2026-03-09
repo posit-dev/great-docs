@@ -107,6 +107,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # str: preset name (applies to all pages)
     # dict: {"preset": str, "pages": "all"|"homepage"}
     "content_style": None,
+    # Custom HTML to include in the <head> of every page
+    # str: inline HTML text (e.g., a <script> or <link> tag)
+    # list[str | dict]: list of inline text strings or {"text": ...} / {"file": ...} entries
+    "include_in_header": [],
 }
 
 
@@ -645,6 +649,28 @@ class Config:
                 "style": raw.get("style"),
             }
         return None
+
+    @property
+    def include_in_header(self) -> list[dict[str, str]]:
+        """Get the normalized include-in-header entries.
+
+        Returns a list of Quarto-compatible include-in-header items
+        (each a dict with either a "text" or "file" key).
+        """
+        raw = self.get("include_in_header", [])
+        if raw is None:
+            return []
+        if isinstance(raw, str):
+            return [{"text": raw}]
+        if isinstance(raw, list):
+            result: list[dict[str, str]] = []
+            for item in raw:
+                if isinstance(item, str):
+                    result.append({"text": item})
+                elif isinstance(item, dict):
+                    result.append(item)
+            return result
+        return []
 
     @property
     def navbar_style(self) -> str | None:

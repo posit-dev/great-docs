@@ -7945,6 +7945,11 @@ toc: false
                 config["format"]["html"]["include-in-header"]
             ]
 
+        # Merge user-provided include-in-header entries from great-docs.yml
+        for entry in self._config.include_in_header:
+            if entry not in config["format"]["html"]["include-in-header"]:
+                config["format"]["html"]["include-in-header"].append(entry)
+
         # Add Font Awesome CDN if not already present
         fa_cdn = '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">'
         fa_entry = {"text": fa_cdn}
