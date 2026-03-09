@@ -2779,10 +2779,5 @@ html[data-bs-theme="dark"] .gd-content-glow.gd-content-glow-mint {
     header.headroom--unpinned {
         transform: translateY(0%) !important;
     }
-
-    /* Keep sidebars sticky through the footer region */
-    #quarto-content {
-        margin-bottom: 100vh;
-    }
 }
 

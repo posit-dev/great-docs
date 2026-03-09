@@ -50,3 +50,35 @@
   window.addEventListener("quarto-hrChanged", fixSidebars);
   mql.addEventListener("change", fixSidebars);
 })();
+
+/**
+ * Extend #quarto-content by the exact footer height so sticky sidebars
+ * don't unstick when the footer scrolls into view on desktop.
+ */
+(function () {
+  "use strict";
+
+  var mql = window.matchMedia("(min-width: 992px)");
+  var content = null;
+  var footer = null;
+
+  function update() {
+    if (!content) content = document.getElementById("quarto-content");
+    if (!footer) footer = document.querySelector("footer.footer");
+    if (!content || !footer) return;
+
+    if (mql.matches) {
+      content.style.marginBottom = footer.offsetHeight + "px";
+    } else {
+      content.style.marginBottom = "";
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", update);
+  } else {
+    update();
+  }
+  window.addEventListener("resize", update);
+  mql.addEventListener("change", update);
+})();
