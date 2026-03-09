@@ -396,7 +396,7 @@ div.sidebar-item-container {
 }
 
 #quarto-sidebar {
-    background-color: #FAFAFD;
+    background-color: #FAFAFD50;
 }
 
 /* ── Single-page section: expand content into sidebar space ──
