@@ -8361,6 +8361,23 @@ toc: false
                     funder_name = funding["name"]
                     config["website"]["page-footer"] = {"center": f"Supported by {funder_name}."}
 
+        # Add "Supported by Posit" badge if funding name contains "Posit" as a word
+        funding = metadata.get("funding")
+        if funding and isinstance(funding, dict) and funding.get("name"):
+            if re.search(r"\bPosit\b", funding["name"], re.IGNORECASE):
+                header_list = config["format"]["html"].setdefault("include-in-header", [])
+                if isinstance(header_list, str):
+                    header_list = [header_list]
+                    config["format"]["html"]["include-in-header"] = header_list
+                posit_badge_script = (
+                    '<script src="https://cdn.jsdelivr.net/gh/posit-dev/'
+                    'supported-by-posit/js/badge.min.js"></script>'
+                )
+                posit_entry = {"text": posit_badge_script}
+                has_posit_badge = any("supported-by-posit" in str(item) for item in header_list)
+                if not has_posit_badge:
+                    header_list.append(posit_entry)
+
         # Add announcement banner if configured
         announcement = self._config.announcement
         if announcement:
