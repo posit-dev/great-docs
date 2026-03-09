@@ -68,8 +68,11 @@
     if (!content || !footer) return;
 
     if (mql.matches) {
-      content.style.marginBottom = footer.offsetHeight + "px";
+      var h = footer.offsetHeight + "px";
+      content.style.paddingBottom = h;
+      content.style.marginBottom = "-" + h;
     } else {
+      content.style.paddingBottom = "";
       content.style.marginBottom = "";
     }
   }
