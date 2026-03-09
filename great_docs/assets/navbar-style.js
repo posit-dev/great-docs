@@ -52,28 +52,44 @@
 })();
 
 /**
- * Extend #quarto-content by the exact footer height so sticky sidebars
- * don't unstick when the footer scrolls into view on desktop.
+ * Move the footer inside #quarto-content on desktop so sticky sidebars
+ * remain pinned through the footer region.
+ *
+ * Sticky positioning is bounded by the parent container. Because the footer
+ * lives outside #quarto-content, the sidebars unstick when the container
+ * ends. Moving the footer inside extends the grid rows, keeping the
+ * sidebars' sticky context active through the footer.
  */
 (function () {
   "use strict";
 
   var mql = window.matchMedia("(min-width: 992px)");
-  var content = null;
-  var footer = null;
+  var moved = false;
+  var originalParent = null;
+  var originalNext = null;
 
   function update() {
-    if (!content) content = document.getElementById("quarto-content");
-    if (!footer) footer = document.querySelector("footer.footer");
+    var content = document.getElementById("quarto-content");
+    var footer = document.querySelector("footer.footer");
     if (!content || !footer) return;
 
-    if (mql.matches) {
-      var h = footer.offsetHeight + "px";
-      content.style.paddingBottom = h;
-      content.style.marginBottom = "-" + h;
-    } else {
-      content.style.paddingBottom = "";
-      content.style.marginBottom = "";
+    if (mql.matches && !moved) {
+      // Remember original position so we can restore on mobile
+      originalParent = footer.parentNode;
+      originalNext = footer.nextSibling;
+      // Move footer inside the grid container, spanning all columns
+      footer.style.gridColumn = "1 / -1";
+      content.appendChild(footer);
+      moved = true;
+    } else if (!mql.matches && moved) {
+      // Restore footer to its original position for mobile
+      footer.style.gridColumn = "";
+      if (originalNext) {
+        originalParent.insertBefore(footer, originalNext);
+      } else {
+        originalParent.appendChild(footer);
+      }
+      moved = false;
     }
   }
 
@@ -82,6 +98,5 @@
   } else {
     update();
   }
-  window.addEventListener("resize", update);
   mql.addEventListener("change", update);
 })();
