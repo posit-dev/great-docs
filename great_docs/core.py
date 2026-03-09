@@ -8357,7 +8357,12 @@ toc: false
                 funding = metadata.get("funding")
                 if funding and isinstance(funding, dict) and funding.get("name"):
                     funder_name = funding["name"]
-                    footer_html += f" Supported by <strong>{funder_name}</strong>."
+                    funder_url = funding.get("homepage", "")
+                    if funder_url:
+                        funder_label = f'<a href="{funder_url}"><strong>{funder_name}</strong></a>'
+                    else:
+                        funder_label = f"<strong>{funder_name}</strong>"
+                    footer_html += f" Supported by {funder_label}."
 
                 config["website"]["page-footer"] = {"center": footer_html}
 
@@ -8366,9 +8371,12 @@ toc: false
                 funding = metadata.get("funding")
                 if funding and isinstance(funding, dict) and funding.get("name"):
                     funder_name = funding["name"]
-                    config["website"]["page-footer"] = {
-                        "center": f"Supported by <strong>{funder_name}</strong>."
-                    }
+                    funder_url = funding.get("homepage", "")
+                    if funder_url:
+                        funder_label = f'<a href="{funder_url}"><strong>{funder_name}</strong></a>'
+                    else:
+                        funder_label = f"<strong>{funder_name}</strong>"
+                    config["website"]["page-footer"] = {"center": f"Supported by {funder_label}."}
 
         # Add "Supported by Posit" badge if funding name contains "Posit" as a word
         funding = metadata.get("funding")
