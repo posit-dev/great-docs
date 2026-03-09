@@ -534,20 +534,6 @@ body.quarto-light .navbar .quarto-navbar-tools .quarto-navigation-tool:hover {
     color: rgb(48, 48, 48);
 }
 
-/* Footer alignment - reduce excess spacing on mobile viewports */
-@media (max-width: 767.98px) {
-    .nav-footer-center {
-        margin-top: 0;
-        min-height: 0;
-    }
-
-    .nav-footer-left,
-    .nav-footer-center,
-    .nav-footer-right {
-        margin-bottom: 0;
-    }
-}
-
 /* Footer alignment - add left margin to match content area on large viewports */
 @media (min-width: 992px) {
     .nav-footer {

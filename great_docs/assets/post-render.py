@@ -2388,6 +2388,42 @@ def disable_sidebar_collapse():
 disable_sidebar_collapse()
 
 
+def remove_empty_footer_divs():
+    """
+    Remove empty nav-footer divs that contain only whitespace or &nbsp;.
+
+    Quarto always renders all three footer sections (left, center, right) even
+    when only one has content. The empty divs cause excess vertical spacing on
+    mobile viewports due to flex-wrap margins.
+    """
+    html_files = glob.glob("_site/**/*.html", recursive=True)
+    modified_count = 0
+
+    empty_div_pattern = re.compile(
+        r'\s*<div class="nav-footer-(left|center|right)">\s*'
+        r"(?:&nbsp;|\s)*"
+        r"</div>\s*",
+        re.DOTALL,
+    )
+
+    for html_file in html_files:
+        with open(html_file, "r") as f:
+            content = f.read()
+
+        original = content
+        content = empty_div_pattern.sub("\n", content)
+
+        if content != original:
+            with open(html_file, "w") as f:
+                f.write(content)
+            modified_count += 1
+
+    print(f"Removed empty footer divs from {modified_count} HTML files")
+
+
+remove_empty_footer_divs()
+
+
 def fix_script_paths():
     """
     Fix relative script paths for HTML files in subdirectories.
