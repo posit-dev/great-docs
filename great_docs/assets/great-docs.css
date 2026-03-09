@@ -2776,3 +2776,8 @@ html[data-bs-theme="dark"] .gd-content-glow.gd-content-glow-mint {
 
 /* Sticky navbar on desktop — disable headroom hide-on-scroll for non-mobile */
 @media (min-width: 992px) {
+    header.headroom--unpinned {
+        transform: translateY(0%) !important;
+    }
+}
+
