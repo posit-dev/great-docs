@@ -497,7 +497,49 @@ body.quarto-light .navbar .navbar-toggler-icon {
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(0,0,0,0.65)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
 }
 
-body.quarto-light .navbar .aa-DetachedSearchButton,
+/* Search button - styled to match dark-mode toggle and GitHub widget */
+#quarto-search .aa-DetachedSearchButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    color: var(--gd-navbar-text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+#quarto-search .aa-DetachedSearchButton:hover {
+    background: rgba(0, 0, 0, 0.10);
+    border-color: rgba(0, 0, 0, 0.25);
+}
+
+#quarto-search .aa-DetachedSearchButton:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.15);
+}
+
+#quarto-search .aa-DetachedSearchButton .aa-DetachedSearchButtonIcon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#quarto-search .aa-DetachedSearchButton .aa-DetachedSearchButtonIcon .aa-SubmitIcon {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    color: currentColor;
+}
+
+#quarto-search .aa-DetachedSearchButton .aa-DetachedSearchButtonPlaceholder {
+    display: none;
+}
+
 body.quarto-light .navbar .aa-DetachedSearchButton svg,
 body.quarto-light .navbar .aa-SubmitButton,
 body.quarto-light .navbar .aa-SubmitButton svg {
@@ -1985,10 +2027,25 @@ body.quarto-dark #quarto-search input {
     color: var(--gd-text-primary);
 }
 
-body.quarto-dark #quarto-search .aa-SubmitButton,
-body.quarto-dark #quarto-search .aa-DetachedSearchButton {
+body.quarto-dark #quarto-search .aa-SubmitButton {
     background-color: transparent;
     color: var(--gd-text-muted);
+}
+
+body.quarto-dark #quarto-search .aa-DetachedSearchButton {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #e0e0e0;
+}
+
+body.quarto-dark #quarto-search .aa-DetachedSearchButton:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+body.quarto-dark #quarto-search .aa-DetachedSearchButton:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
 }
 
 body.quarto-dark .navbar .quarto-navbar-tools button,
