@@ -2751,7 +2751,8 @@ html[data-bs-theme="dark"] .navbar[class*="gd-gradient-"] .nav-link.active {
     text-decoration-color: rgba(255, 255, 255, 0.75) !important;
 }
 html[data-bs-theme="dark"] .navbar[class*="gd-gradient-"] .navbar-toggler {
-    border-color: rgba(255, 255, 255, 0.3) !important;
+    border: none !important;
+    color: #e0e0e0 !important;
 }
 html[data-bs-theme="dark"] .navbar[class*="gd-gradient-"] .navbar-toggler-icon {
     filter: invert(1);
