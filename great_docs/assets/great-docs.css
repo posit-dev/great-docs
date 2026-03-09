@@ -2692,11 +2692,32 @@ html[data-bs-theme="dark"] .gd-announcement-banner[class*="gd-gradient-"] button
 }
 
 /* ── Content Area Gradient Glow ── */
-/* A subtle radial gradient at the top of the main content area,
-   inspired by Mintlify-style documentation sites. Uses the same
-   preset colour palette as the navbar/banner gradients but at
-   very low opacity, creating a soft "glow" that fades out. */
+/* ── Multi-pulse content glow ──
+   Three overlapping radial-gradient pulses that drift independently,
+   creating an organic, subtly animated glow at the top of the page.
+   Each pulse has its own center, size, speed, and opacity curve. */
 
+@keyframes gd-glow-drift-1 {
+    0%   { transform: translateX(0%) scale(1);     opacity: 0.6;  }
+    25%  { transform: translateX(5%) scale(1.08);   opacity: 0.42; }
+    50%  { transform: translateX(-3%) scale(1.02);  opacity: 0.55; }
+    75%  { transform: translateX(2%) scale(1.05);   opacity: 0.38; }
+    100% { transform: translateX(0%) scale(1);     opacity: 0.6;  }
+}
+@keyframes gd-glow-drift-2 {
+    0%   { transform: translateX(0%) scale(1);     opacity: 0.45; }
+    30%  { transform: translateX(-6%) scale(1.1);   opacity: 0.58; }
+    60%  { transform: translateX(4%) scale(0.96);   opacity: 0.35; }
+    100% { transform: translateX(0%) scale(1);     opacity: 0.45; }
+}
+@keyframes gd-glow-drift-3 {
+    0%   { transform: translateX(0%) scale(1);     opacity: 0.35; }
+    35%  { transform: translateX(3%) scale(1.12);   opacity: 0.52; }
+    70%  { transform: translateX(-5%) scale(1.04);  opacity: 0.28; }
+    100% { transform: translateX(0%) scale(1);     opacity: 0.35; }
+}
+
+/* Container — fixed overlay with vertical fade-out mask */
 .gd-content-glow {
     position: fixed;
     top: 0;
@@ -2705,74 +2726,55 @@ html[data-bs-theme="dark"] .gd-announcement-banner[class*="gd-gradient-"] button
     height: 600px;
     pointer-events: none;
     z-index: 0;
-    opacity: 0.7;
     mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
     -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
 }
 
-/* — Content glow: Sky — */
-.gd-content-glow.gd-content-glow-sky {
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, #c5e8f7, transparent);
-}
-html[data-bs-theme="dark"] .gd-content-glow.gd-content-glow-sky {
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, #023e8a, transparent);
+/* Shared pulse layer */
+.gd-glow-pulse {
+    position: absolute;
+    inset: 0;
 }
 
-/* — Content glow: Peach — */
-.gd-content-glow.gd-content-glow-peach {
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, #ffddc1, transparent);
-}
-html[data-bs-theme="dark"] .gd-content-glow.gd-content-glow-peach {
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, #cc4a1a, transparent);
-}
-
-/* — Content glow: Prism — */
-.gd-content-glow.gd-content-glow-prism {
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, #d0e8f5, transparent);
-}
-html[data-bs-theme="dark"] .gd-content-glow.gd-content-glow-prism {
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, #0c6a8a, transparent);
+/* Pulse 1 — large, left-of-centre, slowest */
+.gd-glow-pulse-1 {
+    background: radial-gradient(ellipse 65% 55% at 28% 0%, var(--gd-glow-color), transparent);
+    animation: gd-glow-drift-1 23s ease-in-out infinite;
+    opacity: 0.6;
 }
 
-/* — Content glow: Lilac — */
-.gd-content-glow.gd-content-glow-lilac {
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, #e8d0f0, transparent);
-}
-html[data-bs-theme="dark"] .gd-content-glow.gd-content-glow-lilac {
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, #561e64, transparent);
-}
-
-/* — Content glow: Slate — */
-.gd-content-glow.gd-content-glow-slate {
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, #dde2e6, transparent);
-}
-html[data-bs-theme="dark"] .gd-content-glow.gd-content-glow-slate {
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, #37474f, transparent);
+/* Pulse 2 — medium, right-of-centre */
+.gd-glow-pulse-2 {
+    background: radial-gradient(ellipse 50% 45% at 62% 5%, var(--gd-glow-color), transparent);
+    animation: gd-glow-drift-2 19s ease-in-out infinite;
+    opacity: 0.45;
 }
 
-/* — Content glow: Honey — */
-.gd-content-glow.gd-content-glow-honey {
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, #ffe0c2, transparent);
-}
-html[data-bs-theme="dark"] .gd-content-glow.gd-content-glow-honey {
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, #bf360c, transparent);
-}
-
-/* — Content glow: Dusk — */
-.gd-content-glow.gd-content-glow-dusk {
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, #d8daf0, transparent);
-}
-html[data-bs-theme="dark"] .gd-content-glow.gd-content-glow-dusk {
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, #141b55, transparent);
+/* Pulse 3 — smaller, far-right, subtlest */
+.gd-glow-pulse-3 {
+    background: radial-gradient(ellipse 45% 50% at 85% 0%, var(--gd-glow-color), transparent);
+    animation: gd-glow-drift-3 27s ease-in-out infinite;
+    opacity: 0.35;
 }
 
-/* — Content glow: Mint — */
-.gd-content-glow.gd-content-glow-mint {
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, #ccece8, transparent);
-}
-html[data-bs-theme="dark"] .gd-content-glow.gd-content-glow-mint {
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, #00695c, transparent);
-}
+/* ── Preset colour tokens ── */
+.gd-content-glow-sky   { --gd-glow-color: #c5e8f7; }
+.gd-content-glow-peach { --gd-glow-color: #ffddc1; }
+.gd-content-glow-prism { --gd-glow-color: #d0e8f5; }
+.gd-content-glow-lilac { --gd-glow-color: #e8d0f0; }
+.gd-content-glow-slate { --gd-glow-color: #dde2e6; }
+.gd-content-glow-honey { --gd-glow-color: #ffe0c2; }
+.gd-content-glow-dusk  { --gd-glow-color: #d8daf0; }
+.gd-content-glow-mint  { --gd-glow-color: #ccece8; }
+
+html[data-bs-theme="dark"] .gd-content-glow-sky   { --gd-glow-color: #023e8a; }
+html[data-bs-theme="dark"] .gd-content-glow-peach { --gd-glow-color: #cc4a1a; }
+html[data-bs-theme="dark"] .gd-content-glow-prism { --gd-glow-color: #0c6a8a; }
+html[data-bs-theme="dark"] .gd-content-glow-lilac { --gd-glow-color: #561e64; }
+html[data-bs-theme="dark"] .gd-content-glow-slate { --gd-glow-color: #37474f; }
+html[data-bs-theme="dark"] .gd-content-glow-honey { --gd-glow-color: #bf360c; }
+html[data-bs-theme="dark"] .gd-content-glow-dusk  { --gd-glow-color: #141b55; }
+html[data-bs-theme="dark"] .gd-content-glow-mint  { --gd-glow-color: #00695c; }
 
 /* Sticky navbar on desktop — disable headroom hide-on-scroll for non-mobile */
 @media (min-width: 992px) {

@@ -35,6 +35,11 @@
   if (content) {
     var glow = document.createElement("div");
     glow.className = "gd-content-glow gd-content-glow-" + preset;
+    for (var i = 1; i <= 3; i++) {
+      var pulse = document.createElement("div");
+      pulse.className = "gd-glow-pulse gd-glow-pulse-" + i;
+      glow.appendChild(pulse);
+    }
     document.body.appendChild(glow);
   }
 })();
