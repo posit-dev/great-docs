@@ -276,7 +276,10 @@ summary::marker {
 }
 
 #toc-title {
-    font-size: 16px;
+    font-weight: 600;
+    font-size: 15px;
+    color: dimgray;
+    text-transform: uppercase;
 }
 
 #toc-title > ul {
