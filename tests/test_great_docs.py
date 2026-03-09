@@ -6675,3 +6675,97 @@ def test_config_markdown_pages_default_enabled():
         after_body = config["format"]["html"].get("include-after-body", [])
         has_copy_page = any("copy-page" in str(item) for item in after_body)
         assert has_copy_page
+
+
+class TestPositBadgeInjection:
+    """Tests for automatic 'Supported by Posit' badge injection."""
+
+    def _build_with_funding(self, tmp_dir: str, funding_name: str | None = None) -> dict:
+        """Helper: set up a project with funding config, run _update_quarto_config, return config."""
+        import yaml
+
+        tmp = Path(tmp_dir)
+
+        (tmp / "pyproject.toml").write_text('[project]\nname = "test-pkg"\nversion = "0.1.0"\n')
+
+        yml_lines = ["display_name: Test\n"]
+        if funding_name is not None:
+            yml_lines.append(f"funding:\n  name: {funding_name}\n")
+        (tmp / "great-docs.yml").write_text("".join(yml_lines))
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._update_quarto_config()
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        with open(quarto_yml) as f:
+            return yaml.safe_load(f)
+
+    def _header_has_posit_badge(self, config: dict) -> bool:
+        header = config.get("format", {}).get("html", {}).get("include-in-header", [])
+        return any("supported-by-posit" in str(item) for item in header)
+
+    def test_posit_pbc_injects_badge(self):
+        """funding.name = 'Posit, PBC' should inject the badge."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config = self._build_with_funding(tmp_dir, "Posit, PBC")
+            assert self._header_has_posit_badge(config)
+
+    def test_posit_software_pbc_injects_badge(self):
+        """funding.name = 'Posit Software, PBC' should inject the badge."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config = self._build_with_funding(tmp_dir, "Posit Software, PBC")
+            assert self._header_has_posit_badge(config)
+
+    def test_posit_alone_injects_badge(self):
+        """funding.name = 'Posit' should inject the badge."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config = self._build_with_funding(tmp_dir, "Posit")
+            assert self._header_has_posit_badge(config)
+
+    def test_posit_case_insensitive(self):
+        """funding.name = 'posit' (lowercase) should inject the badge."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config = self._build_with_funding(tmp_dir, "posit")
+            assert self._header_has_posit_badge(config)
+
+    def test_no_funding_no_badge(self):
+        """No funding config should not inject the badge."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config = self._build_with_funding(tmp_dir, None)
+            assert not self._header_has_posit_badge(config)
+
+    def test_non_posit_funder_no_badge(self):
+        """funding.name = 'Acme Corp' should not inject the badge."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config = self._build_with_funding(tmp_dir, "Acme Corp")
+            assert not self._header_has_posit_badge(config)
+
+    def test_posit_as_substring_no_badge(self):
+        """funding.name = 'Compositor Labs' should not inject the badge (word boundary)."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config = self._build_with_funding(tmp_dir, "Compositor Labs")
+            assert not self._header_has_posit_badge(config)
+
+    def test_no_duplicate_badge(self):
+        """Running _update_quarto_config twice should not duplicate the badge."""
+        import yaml
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+
+            (tmp / "pyproject.toml").write_text('[project]\nname = "test-pkg"\nversion = "0.1.0"\n')
+            (tmp / "great-docs.yml").write_text("display_name: Test\nfunding:\n  name: Posit\n")
+
+            docs = GreatDocs(project_path=tmp_dir)
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs._update_quarto_config()
+            docs._update_quarto_config()  # second run
+
+            quarto_yml = docs.project_path / "_quarto.yml"
+            with open(quarto_yml) as f:
+                config = yaml.safe_load(f)
+
+            header = config.get("format", {}).get("html", {}).get("include-in-header", [])
+            badge_count = sum(1 for item in header if "supported-by-posit" in str(item))
+            assert badge_count == 1
