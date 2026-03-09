@@ -529,9 +529,9 @@ body.quarto-light .navbar .navbar-toggler-icon {
     justify-content: center;
 }
 
-#quarto-search .aa-DetachedSearchButton .aa-DetachedSearchButtonIcon .aa-SubmitIcon {
-    width: 15px;
-    height: 15px;
+.navbar #quarto-search.type-overlay .aa-Autocomplete svg.aa-SubmitIcon {
+    width: 20px;
+    height: 20px;
     margin: 0;
     color: currentColor;
 }
