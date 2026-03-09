@@ -20,7 +20,10 @@ navbar_style: sky
 
 # Subtle radial gradient glow at the top of the main content area.
 # Available presets: sky, peach, prism, lilac, slate, honey, dusk, mint
-content_style: lilac
+# Use a string for all pages, or dict with pages: "homepage" to limit scope.
+content_style:
+  preset: lilac
+  pages: homepage
 
 # Exclusions
 # ----------
