@@ -358,7 +358,7 @@ Or simply remove the `announcement` key entirely — no banner is shown by defau
 
 ## Animated Gradient Presets
 
-Both the announcement banner and the navbar support animated gradient backgrounds. Gradients shift slowly across the element, creating a subtle, eye-catching effect. Each preset includes paired light-mode and dark-mode color palettes.
+The announcement banner, navbar, and content area all support gradient backgrounds. The banner and navbar use animated gradients that shift slowly across the element, creating a subtle, eye-catching effect. The content area uses a soft radial glow at the top of the page. Each preset includes paired light-mode and dark-mode color palettes.
 
 ### Available Presets
 
@@ -395,9 +395,27 @@ navbar_style: peach
 
 This applies the animated gradient to the site's top navigation bar. In dark mode, text and icons are automatically adjusted to white for readability.
 
-### Combining Both
+### Gradient on the Content Area
 
-You can use the same or different presets for the banner and navbar:
+Use the top-level `content_style` key:
+
+```{.yaml filename="great-docs.yml"}
+content_style: lilac
+```
+
+This adds a subtle radial glow at the top of the main content area. The glow fades out smoothly and does not interfere with text or interactive elements. It uses the same preset names as the banner and navbar.
+
+By default the glow appears on all pages. To restrict it to the homepage only, use the dict form with a `pages` key:
+
+```{.yaml filename="great-docs.yml"}
+content_style:
+  preset: lilac
+  pages: homepage    # "all" (default) or "homepage"
+```
+
+### Combining All Three
+
+You can use the same or different presets for the banner, navbar, and content area:
 
 ```{.yaml filename="great-docs.yml"}
 announcement:
@@ -405,6 +423,9 @@ announcement:
   style: sky
 
 navbar_style: sky
+content_style:
+  preset: lilac
+  pages: homepage
 ```
 
 ## Logo
