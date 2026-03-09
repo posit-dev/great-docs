@@ -2059,6 +2059,14 @@ body.quarto-dark .navbar .quarto-navbar-tools .quarto-navigation-tool:hover {
     background-color: rgba(255, 255, 255, 0.1);
 }
 
+body.quarto-dark .navbar .navbar-toggler {
+    border: none;
+}
+
+body.quarto-dark .navbar .navbar-toggler-icon {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(255,255,255,0.85)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+}
+
 body.quarto-dark .aa-Panel {
     background-color: var(--gd-bg-secondary);
     border-color: var(--gd-border-color);
