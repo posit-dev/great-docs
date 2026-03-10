@@ -428,6 +428,50 @@ content_style:
   pages: homepage
 ```
 
+## Navbar Color
+
+Set a solid background color on the navbar with automatic contrast-aware text. Great Docs uses the [APCA (Accessible Perceptual Contrast Algorithm)](https://github.com/Myndex/SAPC-APCA) to determine whether white or black text provides maximum readability against your chosen background.
+
+### Single Color for Both Modes
+
+A plain string applies the same navbar color in both light and dark mode:
+
+```{.yaml filename="great-docs.yml"}
+navbar_color: steelblue
+```
+
+Any CSS named color (e.g., `navy`, `tomato`, `teal`) or hex value (`"#2c3e50"`) works.
+
+### Per-Mode Colors
+
+Use a dict with `light` and/or `dark` keys to set different navbar colors per mode:
+
+```{.yaml filename="great-docs.yml"}
+navbar_color:
+  light: "#2c3e50"
+  dark: "#1a237e"
+```
+
+You can also set only one mode — the other keeps the default navbar styling:
+
+```{.yaml filename="great-docs.yml"}
+navbar_color:
+  light: "#1b2838"
+```
+
+### How Text Color is Chosen
+
+You don't need to specify a text color. Great Docs automatically picks white or black text (and adjusts icons, search button, toggle, and hover states) based on the APCA contrast algorithm. Dark backgrounds get white text; light backgrounds get black text.
+
+### Precedence with `navbar_style`
+
+If both `navbar_style` (animated gradient) and `navbar_color` are set, the gradient takes precedence and `navbar_color` is ignored. To use a solid color, remove or comment out `navbar_style`:
+
+```{.yaml filename="great-docs.yml"}
+# navbar_style: peach      # ← commented out, so navbar_color takes effect
+navbar_color: "#2c3e50"
+```
+
 ## Custom Head Content {#include-in-header}
 
 Use `include_in_header` to inject custom HTML into the `<head>` of every page. This is useful for adding analytics scripts, custom meta tags, external stylesheets, or any other `<head>` content.
