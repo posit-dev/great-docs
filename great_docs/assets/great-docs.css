@@ -2613,6 +2613,9 @@ html[data-bs-theme="dark"] a.gd-view-md-btn:hover {
 
 /* ── Mobile: icon only ── */
 @media (max-width: 768px) {
+    .gd-copy-page {
+        margin-bottom: 10px;
+    }
     .gd-copy-page-label {
         display: none;
     }
