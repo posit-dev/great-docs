@@ -47,6 +47,12 @@ class GreatDocs:
         # Whether API reference was successfully configured (set during build)
         self._has_api_reference = True
 
+        # Set environment variables needed by the qrenderer (only when active)
+        if self._config.use_qrenderer:
+            _, _, url = self._get_github_repo_info()
+            os.environ["GITHUB_REPO_URL"] = str(url)
+            os.environ["GIT_REF"] = self._detect_git_ref()
+
     def _prepare_build_directory(self) -> None:
         """
         Prepare the great-docs/ build directory with all necessary assets.
@@ -79,6 +85,15 @@ class GreatDocs:
         css_src = self.assets_path / "great-docs.css"
         css_dst = self.project_path / "great-docs.css"
         shutil.copy2(css_src, css_dst)
+
+        # Copy qrenderer assets only when renderer: "q" is active
+        if self._config.use_qrenderer:
+            renderer_src = self.assets_path / "_renderer.py"
+            if renderer_src.exists():
+                shutil.copy2(renderer_src, self.project_path / "_renderer.py")
+            scss_src = self.assets_path / "great-docs-q.scss"
+            if scss_src.exists():
+                shutil.copy2(scss_src, self.project_path / "great-docs-q.scss")
 
         # Copy JavaScript files
         js_files = [
@@ -123,7 +138,10 @@ class GreatDocs:
         self._update_quarto_config()
 
         # Write options JSON for the post-render script
-        gd_options = {"markdown_pages": self._config.markdown_pages}
+        gd_options = {
+            "markdown_pages": self._config.markdown_pages,
+            "renderer": self._config.renderer,
+        }
         gd_options_path = self.project_path / "_gd_options.json"
         with open(gd_options_path, "w") as f:
             json.dump(gd_options, f)
@@ -7677,12 +7695,19 @@ toc: false
         # Use the importable name (actual module name) for the package field
         ref_title = self._config.reference_title or "Reference"
         ref_desc = self._config.reference_desc
+
+        # Select renderer based on config: "classic" (default) or "q" (new qrenderer)
+        if self._config.use_qrenderer:
+            renderer_config = {"style": "_renderer.py"}
+        else:
+            renderer_config = {"style": "markdown", "table_style": "description-list"}
+
         api_ref_config = {
             "package": importable_name,
             "dir": "reference",
             "title": ref_title,
             "style": "pkgdown",
-            "renderer": {"style": "markdown", "table_style": "description-list"},
+            "renderer": renderer_config,
         }
         if ref_desc:
             api_ref_config["desc"] = ref_desc

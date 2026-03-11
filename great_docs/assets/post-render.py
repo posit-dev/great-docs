@@ -69,6 +69,11 @@ if os.path.exists(_gd_options_path):
     with open(_gd_options_path, "r") as f:
         _gd_options = json.load(f)
 
+# Detect renderer mode: "classic" (default) or "q" (new qrenderer)
+# When renderer is "q", skip post-processing that the qrenderer handles natively
+_RENDERER = str(_gd_options.get("renderer", "classic"))
+_USE_QRENDERER = _RENDERER == "q"
+
 
 def get_source_link_html(item_name):
     """Generate HTML for a source link given an item name."""
@@ -1537,6 +1542,7 @@ for html_file in html_files:
     # Determine the classification of each h1 tag based on its content
     # Use object_types metadata from introspection when available,
     # falling back to heuristics only when the metadata is missing
+    # NOTE: Skipped when qrenderer is active (handles labels natively via CSS)
     _TYPE_BADGE_STYLES = {
         "class": ("class", "#6366f1", "#EEF2FF"),
         "namedtuple": ("NamedTuple", "#6366f1", "#EEF2FF"),
@@ -1556,30 +1562,31 @@ for html_file in html_files:
     }
 
     classification_info = {}
-    for i, line in enumerate(content):
-        # Look for both class="title" and styled h1 tags
-        h1_match = re.search(r'<h1\s+class="title">(.*?)</h1>', line)
-        if not h1_match:
-            # Also check for h1 tags with style attribute (for level1 section titles)
-            h1_match = re.search(r'<h1\s+style="[^"]*">(.*?)</h1>', line)
+    if not _USE_QRENDERER:
+        for i, line in enumerate(content):
+            # Look for both class="title" and styled h1 tags
+            h1_match = re.search(r'<h1\s+class="title">(.*?)</h1>', line)
+            if not h1_match:
+                # Also check for h1 tags with style attribute (for level1 section titles)
+                h1_match = re.search(r'<h1\s+style="[^"]*">(.*?)</h1>', line)
 
-        if h1_match:
-            original_h1_content = h1_match.group(1).strip()
+            if h1_match:
+                original_h1_content = h1_match.group(1).strip()
 
-            # Try metadata lookup first (use item_name_from_file as key)
-            obj_type = object_types.get(item_name_from_file)
+                # Try metadata lookup first (use item_name_from_file as key)
+                obj_type = object_types.get(item_name_from_file)
 
-            if obj_type and obj_type in _TYPE_BADGE_STYLES:
-                classification_info[i] = _TYPE_BADGE_STYLES[obj_type]
-            else:
-                # Fallback heuristic (only when metadata is unavailable)
-                if original_h1_content and original_h1_content[0].isupper():
-                    if "." in original_h1_content:
-                        classification_info[i] = _TYPE_BADGE_STYLES["method"]
-                    else:
-                        classification_info[i] = _TYPE_BADGE_STYLES["class"]
+                if obj_type and obj_type in _TYPE_BADGE_STYLES:
+                    classification_info[i] = _TYPE_BADGE_STYLES[obj_type]
                 else:
-                    classification_info[i] = _TYPE_BADGE_STYLES["function"]
+                    # Fallback heuristic (only when metadata is unavailable)
+                    if original_h1_content and original_h1_content[0].isupper():
+                        if "." in original_h1_content:
+                            classification_info[i] = _TYPE_BADGE_STYLES["method"]
+                        else:
+                            classification_info[i] = _TYPE_BADGE_STYLES["class"]
+                    else:
+                        classification_info[i] = _TYPE_BADGE_STYLES["function"]
 
     # Remove the literal text `Validate.` from the h1 tag
     # TODO: Add line below stating the class name for the method
@@ -1630,18 +1637,20 @@ for html_file in html_files:
             content[i] = line[:start] + h1_content + line[end:]
 
     # Add classification labels using stored info
-    for i, line in enumerate(content):
-        if i in classification_info:
-            h1_match = re.search(r"<h1[^>]*>(.*?)</h1>", line)
-            if h1_match:
-                h1_content = h1_match.group(1)
-                label_type, label_color, background_color = classification_info[i]
+    # NOTE: Skipped when qrenderer is active (labels rendered natively)
+    if not _USE_QRENDERER:
+        for i, line in enumerate(content):
+            if i in classification_info:
+                h1_match = re.search(r"<h1[^>]*>(.*?)</h1>", line)
+                if h1_match:
+                    h1_content = h1_match.group(1)
+                    label_type, label_color, background_color = classification_info[i]
 
-                label_span = f'<span style="font-size: 1rem; border-style: solid; border-width: 1px; border-color: {label_color}; background-color: {background_color}; margin-left: 12px; vertical-align: 0.1rem;"><code style="background-color: transparent; color: {label_color};">{label_type}</code></span>'
+                    label_span = f'<span style="font-size: 1rem; border-style: solid; border-width: 1px; border-color: {label_color}; background-color: {background_color}; margin-left: 12px; vertical-align: 0.1rem;"><code style="background-color: transparent; color: {label_color};">{label_type}</code></span>'
 
-                new_h1_content = h1_content + label_span
-                new_line = line.replace(h1_content, new_h1_content)
-                content[i] = new_line
+                    new_h1_content = h1_content + label_span
+                    new_line = line.replace(h1_content, new_h1_content)
+                    content[i] = new_line
 
     # Wrap bare h1 tags (those with style attribute but no quarto-title wrapper) in proper structure
     for i, line in enumerate(content):
@@ -1697,6 +1706,9 @@ for html_file in html_files:
     content = new_content
 
     # Move the first <p> tag (description) to immediately after the title header
+    # and inject USAGE/SOURCE labels before the sourceCode div.
+    # NOTE: Skipped when qrenderer is active (description positioning + usage/source
+    # are handled natively by the renderer)
     header_end_line = None
     first_p_line = None
     first_p_content = None
@@ -1704,82 +1716,83 @@ for html_file in html_files:
     title_line = None
     sourcecode_line = None
 
-    # First pass: find the header end, title, sourcecode, and the first <p> tag after sourceCode
-    for i, line in enumerate(content):
-        # Stop searching at end of main content to avoid picking up footer text
-        # (e.g. "Developed by ..." from page-footer) as a false description
-        if "</main>" in line:
-            break
+    if not _USE_QRENDERER:
+        # First pass: find the header end, title, sourcecode, and the first <p> tag after sourceCode
+        for i, line in enumerate(content):
+            # Stop searching at end of main content to avoid picking up footer text
+            # (e.g. "Developed by ..." from page-footer) as a false description
+            if "</main>" in line:
+                break
 
-        # Find where the header ends
-        if "</header>" in line:
-            header_end_line = i
+            # Find where the header ends
+            if "</header>" in line:
+                header_end_line = i
 
-        # Find the title line (either in header or in level1 section)
-        if '<h1 class="title"' in line or ("<h1 style=" in line and "SFMono-Regular" in line):
-            title_line = i
+            # Find the title line (either in header or in level1 section)
+            if '<h1 class="title"' in line or ("<h1 style=" in line and "SFMono-Regular" in line):
+                title_line = i
 
-        # Look for the sourceCode div
-        if '<div class="sourceCode" id="cb1">' in line:
-            found_sourcecode = True
-            sourcecode_line = i
+            # Look for the sourceCode div
+            if '<div class="sourceCode" id="cb1">' in line:
+                found_sourcecode = True
+                sourcecode_line = i
 
-        # Find the first <p> tag after we've seen the sourceCode div
-        if found_sourcecode and first_p_line is None and line.strip().startswith("<p"):
-            first_p_line = i
-            first_p_content = line
-            break
+            # Find the first <p> tag after we've seen the sourceCode div
+            if found_sourcecode and first_p_line is None and line.strip().startswith("<p"):
+                first_p_line = i
+                first_p_content = line
+                break
 
-    # Determine where to insert the description paragraph
-    # If title is after header, insert after title; otherwise insert after header
-    if (
-        header_end_line is not None
-        and first_p_line is not None
-        and title_line is not None
-        and sourcecode_line is not None
-    ):
-        if title_line > header_end_line:
-            # Title is in a separate section, insert after title
-            insert_after_line = title_line
-        else:
-            # Title is in header, insert after header
-            insert_after_line = header_end_line
+        # Determine where to insert the description paragraph
+        # If title is after header, insert after title; otherwise insert after header
+        if (
+            header_end_line is not None
+            and first_p_line is not None
+            and title_line is not None
+            and sourcecode_line is not None
+        ):
+            if title_line > header_end_line:
+                # Title is in a separate section, insert after title
+                insert_after_line = title_line
+            else:
+                # Title is in header, insert after header
+                insert_after_line = header_end_line
 
-        # Apply italic styling to the description
-        if "style=" not in first_p_content:
-            styled_p = first_p_content.replace(
-                "<p>",
-                '<p class="doc-description" style="font-size: 1rem; font-style: italic; margin-top: 0.25rem; line-height: 1.3;">',
+            # Apply italic styling to the description
+            if "style=" not in first_p_content:
+                styled_p = first_p_content.replace(
+                    "<p>",
+                    '<p class="doc-description" style="font-size: 1rem; font-style: italic; margin-top: 0.25rem; line-height: 1.3;">',
+                )
+            else:
+                styled_p = first_p_content
+
+            # Remove the original <p> line
+            content.pop(first_p_line)
+
+            # Adjust sourcecode_line since we removed a line before it
+            if first_p_line < sourcecode_line:
+                sourcecode_line -= 1
+
+            # Insert the styled <p> line after the determined position (accounting for the removed line)
+            insert_position = (
+                insert_after_line + 1 if first_p_line > insert_after_line else insert_after_line
             )
-        else:
-            styled_p = first_p_content
+            content.insert(insert_position, "\n")  # Add spacing
+            content.insert(insert_position + 1, styled_p)
+            content.insert(insert_position + 2, "\n")  # Add spacing
 
-        # Remove the original <p> line
-        content.pop(first_p_line)
+            # Adjust sourcecode_line since we added lines before it
+            sourcecode_line += 3
 
-        # Adjust sourcecode_line since we removed a line before it
-        if first_p_line < sourcecode_line:
-            sourcecode_line -= 1
-
-        # Insert the styled <p> line after the determined position (accounting for the removed line)
-        insert_position = (
-            insert_after_line + 1 if first_p_line > insert_after_line else insert_after_line
-        )
-        content.insert(insert_position, "\n")  # Add spacing
-        content.insert(insert_position + 1, styled_p)
-        content.insert(insert_position + 2, "\n")  # Add spacing
-
-        # Adjust sourcecode_line since we added lines before it
-        sourcecode_line += 3
-
-        # Add "USAGE" label and "SOURCE" link before the sourceCode div
-        # The SOURCE link will be on the right side, USAGE on the left
-        source_link = get_source_link_html(item_name_from_file)
-        if source_link:
-            usage_row = f'<div class="usage-source-row" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: -14px;"><span style="font-size: 12px; color: rgb(170, 170, 170);">USAGE</span>{source_link}</div>\n'
-        else:
-            usage_row = '<p style="font-size: 12px; color: rgb(170, 170, 170); margin-bottom: -14px;">USAGE</p>\n'
-        content.insert(sourcecode_line, usage_row)
+            # Add "USAGE" label and "SOURCE" link before the sourceCode div
+            # The SOURCE link will be on the right side, USAGE on the left
+            source_link = get_source_link_html(item_name_from_file)
+            if source_link:
+                usage_row = f'<div class="usage-source-row" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: -14px;"><span style="font-size: 12px; color: rgb(170, 170, 170);">USAGE</span>{source_link}</div>\n'
+            else:
+                usage_row = '<p style="font-size: 12px; color: rgb(170, 170, 170); margin-bottom: -14px;">USAGE</p>\n'
+            content.insert(sourcecode_line, usage_row)
 
     # Fix return value formatting in individual function pages, removing the `:` before the
     # return value and adjusting the style of the parameter annotation separator
@@ -1862,99 +1875,101 @@ for html_file in html_files:
     # These headings have data-anchor-id attributes like "pkg.Class.method"
     # We look up the member type in object_types to add classmethod/staticmethod/property badges.
     # Also style member headings in code font and append () for callable members.
+    # NOTE: Skipped when qrenderer is active (badges handled natively via SCSS)
     _MONO_FONT = "font-family: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.1rem;"
     _CALLABLE_MEMBER_TYPES = {"method", "classmethod", "staticmethod", "function"}
-    if object_types:
-        _MEMBER_BADGE_TYPES = {"method", "classmethod", "staticmethod", "property"}
-        for i, line in enumerate(content):
-            anchor_match = re.search(r'<h3[^>]*data-anchor-id="([^"]+)"[^>]*>(.*?)</h3>', line)
-            if anchor_match:
-                anchor_id = anchor_match.group(1)
-                h3_content = anchor_match.group(2)
-
-                # Try to find a matching object_types key
-                # The anchor_id is like "pkg.Class.method"; object_types keys are "Class.method"
-                member_type = None
-                for key, val in object_types.items():
-                    if anchor_id.endswith(f".{key}") or anchor_id == key:
-                        member_type = val
-                        break
-
-                # Build the new heading content: code font + parens + badge
-                display_text = h3_content
-                # Add () for callable members
-                if member_type and member_type in _CALLABLE_MEMBER_TYPES:
-                    _plain_member = re.sub(r"<[^>]+>", "", display_text).strip()
-                    if not _plain_member.endswith("()"):
-                        display_text += "()"
-
-                badge_html = ""
-                if member_type and member_type in _MEMBER_BADGE_TYPES:
-                    badge_info = _TYPE_BADGE_STYLES.get(member_type)
-                    if badge_info:
-                        label_text, label_color, bg_color = badge_info
-                        badge_html = (
-                            f'<span style="font-size: 0.7rem; border-style: solid; '
-                            f"border-width: 1px; border-color: {label_color}; "
-                            f"background-color: {bg_color}; margin-left: 8px; "
-                            f"padding: 1px 6px; vertical-align: 0.1rem; "
-                            f'border-radius: 3px;">'
-                            f'<code style="background-color: transparent; '
-                            f'color: {label_color}; font-size: 0.7rem;">'
-                            f"{label_text}</code></span>"
-                        )
-
-                new_heading = display_text + badge_html
-                # Replace h3 content and add code font style
-                content[i] = line.replace(h3_content + "</h3>", new_heading + "</h3>")
-                # Add code font styling to the h3 tag
-                content[i] = re.sub(
-                    r"<h3([^>]*?)(?<!style=)>",
-                    f'<h3\\1 style="{_MONO_FONT}">',
-                    content[i],
-                    count=1,
-                )
-    else:
-        # Even without object_types, style member h3 headings in code font
-        for i, line in enumerate(content):
-            anchor_match = re.search(r'<h3[^>]*data-anchor-id="[^"]+"[^>]*>(.*?)</h3>', line)
-            if anchor_match:
-                content[i] = re.sub(
-                    r"<h3([^>]*?)(?<!style=)>",
-                    f'<h3\\1 style="{_MONO_FONT}">',
-                    content[i],
-                    count=1,
-                )
-
-    # Inject property badges into the Attributes table
-    # Attributes table cells: <td><a href="#pkg.Class.attr">attr_name</a></td>
-    if object_types:
-        property_badge_info = _TYPE_BADGE_STYLES.get("property")
-        if property_badge_info:
-            p_label, p_color, p_bg = property_badge_info
-            p_badge = (
-                f'<span style="font-size: 0.65rem; border-style: solid; '
-                f"border-width: 1px; border-color: {p_color}; "
-                f"background-color: {p_bg}; margin-left: 6px; "
-                f"padding: 0px 4px; vertical-align: 0.05rem; "
-                f'border-radius: 3px;">'
-                f'<code style="background-color: transparent; '
-                f'color: {p_color}; font-size: 0.65rem;">'
-                f"{p_label}</code></span>"
-            )
+    if not _USE_QRENDERER:
+        if object_types:
+            _MEMBER_BADGE_TYPES = {"method", "classmethod", "staticmethod", "property"}
             for i, line in enumerate(content):
-                td_match = re.search(r'<td><a href="#([^"]+)">([^<]+)</a></td>', line)
-                if td_match:
-                    anchor_ref = td_match.group(1)
-                    link_text = td_match.group(2)
-                    # Check if this attribute is a property
+                anchor_match = re.search(r'<h3[^>]*data-anchor-id="([^"]+)"[^>]*>(.*?)</h3>', line)
+                if anchor_match:
+                    anchor_id = anchor_match.group(1)
+                    h3_content = anchor_match.group(2)
+
+                    # Try to find a matching object_types key
+                    # The anchor_id is like "pkg.Class.method"; object_types keys are "Class.method"
+                    member_type = None
                     for key, val in object_types.items():
-                        if (
-                            anchor_ref.endswith(f".{key}") or anchor_ref == key
-                        ) and val == "property":
-                            new_link = f"{link_text}</a>{p_badge}</td>"
-                            content[i] = line.replace(f"{link_text}</a></td>", new_link)
+                        if anchor_id.endswith(f".{key}") or anchor_id == key:
+                            member_type = val
                             break
+
+                    # Build the new heading content: code font + parens + badge
+                    display_text = h3_content
+                    # Add () for callable members
+                    if member_type and member_type in _CALLABLE_MEMBER_TYPES:
+                        _plain_member = re.sub(r"<[^>]+>", "", display_text).strip()
+                        if not _plain_member.endswith("()"):
+                            display_text += "()"
+
+                    badge_html = ""
+                    if member_type and member_type in _MEMBER_BADGE_TYPES:
+                        badge_info = _TYPE_BADGE_STYLES.get(member_type)
+                        if badge_info:
+                            label_text, label_color, bg_color = badge_info
+                            badge_html = (
+                                f'<span style="font-size: 0.7rem; border-style: solid; '
+                                f"border-width: 1px; border-color: {label_color}; "
+                                f"background-color: {bg_color}; margin-left: 8px; "
+                                f"padding: 1px 6px; vertical-align: 0.1rem; "
+                                f'border-radius: 3px;">'
+                                f'<code style="background-color: transparent; '
+                                f'color: {label_color}; font-size: 0.7rem;">'
+                                f"{label_text}</code></span>"
+                            )
+
+                    new_heading = display_text + badge_html
+                    # Replace h3 content and add code font style
+                    content[i] = line.replace(h3_content + "</h3>", new_heading + "</h3>")
+                    # Add code font styling to the h3 tag
+                    content[i] = re.sub(
+                        r"<h3([^>]*?)(?<!style=)>",
+                        f'<h3\\1 style="{_MONO_FONT}">',
+                        content[i],
+                        count=1,
+                    )
+        else:
+            # Even without object_types, style member h3 headings in code font
+            for i, line in enumerate(content):
+                anchor_match = re.search(r'<h3[^>]*data-anchor-id="[^"]+"[^>]*>(.*?)</h3>', line)
+                if anchor_match:
+                    content[i] = re.sub(
+                        r"<h3([^>]*?)(?<!style=)>",
+                        f'<h3\\1 style="{_MONO_FONT}">',
+                        content[i],
+                        count=1,
+                    )
+
+        # Inject property badges into the Attributes table
+        # Attributes table cells: <td><a href="#pkg.Class.attr">attr_name</a></td>
+        if object_types:
+            property_badge_info = _TYPE_BADGE_STYLES.get("property")
+            if property_badge_info:
+                p_label, p_color, p_bg = property_badge_info
+                p_badge = (
+                    f'<span style="font-size: 0.65rem; border-style: solid; '
+                    f"border-width: 1px; border-color: {p_color}; "
+                    f"background-color: {p_bg}; margin-left: 6px; "
+                    f"padding: 0px 4px; vertical-align: 0.05rem; "
+                    f'border-radius: 3px;">'
+                    f'<code style="background-color: transparent; '
+                    f'color: {p_color}; font-size: 0.65rem;">'
+                    f"{p_label}</code></span>"
+                )
+                for i, line in enumerate(content):
+                    td_match = re.search(r'<td><a href="#([^"]+)">([^<]+)</a></td>', line)
+                    if td_match:
+                        anchor_ref = td_match.group(1)
+                        link_text = td_match.group(2)
+                        # Check if this attribute is a property
+                        for key, val in object_types.items():
+                            if (
+                                anchor_ref.endswith(f".{key}") or anchor_ref == key
+                            ) and val == "property":
+                                new_link = f"{link_text}</a>{p_badge}</td>"
+                                content[i] = line.replace(f"{link_text}</a></td>", new_link)
+                                break
 
     # Add separator lines between class details and individual members,
     # and between individual member sections.
@@ -2078,26 +2093,29 @@ if os.path.exists(index_file):
     content = re.sub(table_pattern, convert_table_to_dl, content, flags=re.DOTALL)
 
     # Add () only to functions and methods in <a> tags within <dt> elements
-    def add_parens_to_functions(match):
-        full_tag = match.group(0)
-        link_text = match.group(1)
+    # NOTE: Skipped when qrenderer is active (handled natively by the renderer)
+    if not _USE_QRENDERER:
 
-        # Use object_types metadata when available
-        obj_type = object_types.get(link_text)
-        if obj_type:
-            if obj_type in ("function", "method"):
+        def add_parens_to_functions(match):
+            full_tag = match.group(0)
+            link_text = match.group(1)
+
+            # Use object_types metadata when available
+            obj_type = object_types.get(link_text)
+            if obj_type:
+                if obj_type in ("function", "method"):
+                    return full_tag.replace(f">{link_text}</a>", f">{link_text}()</a>")
+                return full_tag
+
+            # Fallback heuristic (only when metadata is unavailable)
+            if "." in link_text or (link_text and not link_text[0].isupper()):
                 return full_tag.replace(f">{link_text}</a>", f">{link_text}()</a>")
+
             return full_tag
 
-        # Fallback heuristic (only when metadata is unavailable)
-        if "." in link_text or (link_text and not link_text[0].isupper()):
-            return full_tag.replace(f">{link_text}</a>", f">{link_text}()</a>")
-
-        return full_tag
-
-    # Find all <a> tags within <dt> elements and apply the function
-    dt_link_pattern = r"<dt><a[^>]*>([^<]+)</a></dt>"
-    content = re.sub(dt_link_pattern, add_parens_to_functions, content)
+        # Find all <a> tags within <dt> elements and apply the function
+        dt_link_pattern = r"<dt><a[^>]*>([^<]+)</a></dt>"
+        content = re.sub(dt_link_pattern, add_parens_to_functions, content)
 
     # Remove redundant "API Reference" top-level nav item
     # Find the nav structure and flatten it by removing the top-level wrapper
