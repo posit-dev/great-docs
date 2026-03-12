@@ -28,7 +28,7 @@ SPEC = {
             "enabled": True,
             "branch": "develop",
         },
-        "dark_mode": True,
+        "dark_mode_toggle": True,
         "authors": [
             {
                 "name": "Alpha Author",

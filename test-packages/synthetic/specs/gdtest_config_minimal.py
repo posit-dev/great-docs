@@ -24,7 +24,7 @@ SPEC = {
         "source": {
             "enabled": False,
         },
-        "dark_mode": False,
+        "dark_mode_toggle": False,
     },
     "files": {
         "gdtest_config_minimal/__init__.py": '''\
