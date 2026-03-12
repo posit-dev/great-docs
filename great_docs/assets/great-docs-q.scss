@@ -509,6 +509,19 @@ dt a.doc-method-name::after {
     }
   }
 
+  // Quarto callouts (versionadded, versionchanged, etc.)
+  .callout {
+    color: var(--bs-body-color) !important;
+
+    .callout-title-container {
+      color: var(--bs-body-color) !important;
+    }
+
+    .callout-body p {
+      color: var(--bs-body-color) !important;
+    }
+  }
+
   // Blog listing metadata and titles
   .quarto-post {
     .listing-date,

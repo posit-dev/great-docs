@@ -1984,6 +1984,23 @@ body.quarto-dark .card-header {
 body.quarto-dark .callout {
     background-color: var(--gd-bg-secondary);
     border-color: var(--gd-border-color);
+    color: var(--gd-text-primary);
+}
+
+body.quarto-dark .callout .callout-header {
+    background-color: var(--gd-bg-secondary);
+}
+
+body.quarto-dark .callout .callout-icon::before {
+    filter: invert(1);
+}
+
+body.quarto-dark .callout .callout-title-container {
+    color: var(--gd-text-primary);
+}
+
+body.quarto-dark .callout .callout-body p {
+    color: var(--gd-text-primary);
 }
 
 body.quarto-dark .callout-note {

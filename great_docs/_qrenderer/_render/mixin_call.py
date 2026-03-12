@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from functools import cached_property
 from typing import TYPE_CHECKING, TypeAlias, cast
 
@@ -7,6 +8,7 @@ import griffe as gf
 
 from great_docs._renderer.pandoc.blocks import (
     BlockContent,
+    Blocks,
     CodeBlock,
     DefinitionItem,
     DefinitionList,
@@ -69,6 +71,12 @@ class __RenderDocCallMixin(RenderDoc):
         e.g. Parameters, Other Parameters, Returns, Yields, Receives,
              Warns, Attributes
         """
+        _RST_DIRECTIVE_RE = re.compile(r"^\.\.\s+\w+::")
+
+        def _is_rst_directive_item(item: DocstringDefinitionType) -> bool:
+            """Check if a definition item is actually a misinterpreted RST directive."""
+            ann = getattr(item, "annotation", None)
+            return bool(ann and isinstance(ann, str) and _RST_DIRECTIVE_RE.match(ann.strip()))
 
         def render_section_item(el: DocstringDefinitionType) -> DefinitionItem:
             """
@@ -91,11 +99,31 @@ class __RenderDocCallMixin(RenderDoc):
             desc = _convert_rst_text(el.description) if el.description else ""
             return Code(str(term)).html, desc
 
-        items = [render_section_item(item) for item in el.value]
-        return Div(
-            DefinitionList(items),
-            Attr(classes=["doc-definition-items"]),
-        )
+        normal_items: list[DefinitionItem] = []
+        directive_parts: list[str] = []
+
+        for item in el.value:
+            if _is_rst_directive_item(item):
+                # Reconstruct the RST directive text and convert it
+                ann = item.annotation.strip()
+                desc = getattr(item, "description", "") or ""
+                if desc:
+                    lines = desc.splitlines()
+                    directive_text = ann + "\n" + "\n".join("    " + ln for ln in lines)
+                else:
+                    directive_text = ann
+                directive_parts.append(_convert_rst_text(directive_text))
+            else:
+                normal_items.append(render_section_item(item))
+
+        parts: list[BlockContent] = []
+        if normal_items:
+            parts.append(Div(DefinitionList(normal_items), Attr(classes=["doc-definition-items"])))
+        parts.extend(directive_parts)
+
+        if len(parts) == 1:
+            return parts[0]
+        return Blocks(parts) if parts else None
 
     @cached_property
     def parameters(self) -> gf.Parameters:
