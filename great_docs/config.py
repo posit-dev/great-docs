@@ -20,6 +20,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # API discovery settings
     "exclude": [],
     # GitHub integration
+    "repo": None,  # GitHub repository URL override (e.g., "https://github.com/owner/repo")
     "github_style": "widget",  # "widget" (shows stars) or "icon"
     # Source link configuration
     "source": {
@@ -223,6 +224,11 @@ class Config:
     def exclude(self) -> list[str]:
         """Get the list of items to exclude."""
         return self.get("exclude", [])
+
+    @property
+    def repo(self) -> str | None:
+        """Get the GitHub repository URL override."""
+        return self.get("repo")
 
     @property
     def github_style(self) -> str:

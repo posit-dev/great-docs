@@ -1097,7 +1097,10 @@ class GreatDocs:
 
     def _get_github_repo_info(self) -> tuple[str | None, str | None, str | None]:
         """
-        Extract GitHub repository information from pyproject.toml.
+        Extract GitHub repository information.
+
+        Checks `repo` in great-docs.yml first (as an override), then falls
+        back to `[project.urls]` in pyproject.toml.
 
         Returns
         -------
@@ -1105,23 +1108,26 @@ class GreatDocs:
             A tuple of (owner, repo_name, base_url) or (None, None, None) if not found.
         """
         metadata = self._get_package_metadata()
-        urls = metadata.get("urls", {})
 
-        # Look for repository URL in various common key names
-        repo_url = None
-        for key in [
-            "Repository",
-            "repository",
-            "Source",
-            "source",
-            "GitHub",
-            "github",
-            "Homepage",
-            "homepage",
-        ]:
-            if key in urls:
-                repo_url = urls[key]
-                break
+        # Check great-docs.yml `repo:` override first
+        repo_url = self._config.repo
+
+        # Fall back to pyproject.toml [project.urls]
+        if not repo_url:
+            urls = metadata.get("urls", {})
+            for key in [
+                "Repository",
+                "repository",
+                "Source",
+                "source",
+                "GitHub",
+                "github",
+                "Homepage",
+                "homepage",
+            ]:
+                if key in urls:
+                    repo_url = urls[key]
+                    break
 
         if not repo_url or "github.com" not in repo_url:
             return None, None, None
