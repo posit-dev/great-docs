@@ -483,6 +483,258 @@ version = "0.1.0"
         assert base_url is None
 
 
+def test_get_github_repo_info_string_license():
+    """Test GitHub repo info when license is PEP 639 string format."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text("""
+[project]
+name = "test-package"
+version = "0.1.0"
+license = "MIT"
+
+[project.urls]
+Repository = "https://github.com/testowner/testrepo"
+""")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        owner, repo, base_url = docs._get_github_repo_info()
+
+        assert owner == "testowner"
+        assert repo == "testrepo"
+        assert base_url == "https://github.com/testowner/testrepo"
+
+
+def test_get_github_repo_info_yml_override():
+    """Test that repo in great-docs.yml overrides pyproject.toml URLs."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # pyproject.toml with one repo URL
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text("""
+[project]
+name = "test-package"
+version = "0.1.0"
+
+[project.urls]
+Repository = "https://github.com/original/repo"
+""")
+
+        # great-docs.yml overrides with a different repo
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("repo: https://github.com/override/other-repo\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        owner, repo, base_url = docs._get_github_repo_info()
+
+        assert owner == "override"
+        assert repo == "other-repo"
+        assert base_url == "https://github.com/override/other-repo"
+
+
+def test_get_github_repo_info_yml_no_pyproject():
+    """Test that repo in great-docs.yml works without pyproject.toml URLs."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # pyproject.toml with no URLs at all
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text("""
+[project]
+name = "test-package"
+version = "0.1.0"
+""")
+
+        # great-docs.yml provides the repo
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("repo: https://github.com/myorg/myrepo\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        owner, repo, base_url = docs._get_github_repo_info()
+
+        assert owner == "myorg"
+        assert repo == "myrepo"
+        assert base_url == "https://github.com/myorg/myrepo"
+
+
+def test_get_github_repo_info_url_key_fallback():
+    """Test that alternative URL key names are resolved in priority order."""
+    # Each key name the code checks, in priority order
+    key_names = [
+        "Repository",
+        "repository",
+        "Source",
+        "source",
+        "GitHub",
+        "github",
+        "Homepage",
+        "homepage",
+    ]
+    for key in key_names:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            pyproject = Path(tmp_dir) / "pyproject.toml"
+            pyproject.write_text(f"""
+[project]
+name = "test-package"
+version = "0.1.0"
+
+[project.urls]
+{key} = "https://github.com/found-via/{key}"
+""")
+
+            docs = GreatDocs(project_path=tmp_dir)
+            owner, repo, base_url = docs._get_github_repo_info()
+
+            assert owner == "found-via", f"Failed for URL key '{key}'"
+            assert repo == key, f"Failed for URL key '{key}'"
+            assert base_url == f"https://github.com/found-via/{key}"
+
+
+def test_get_github_repo_info_url_key_priority():
+    """Test that 'Repository' takes priority over 'Homepage'."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text("""
+[project]
+name = "test-package"
+version = "0.1.0"
+
+[project.urls]
+Homepage = "https://github.com/fallback/homepage-repo"
+Repository = "https://github.com/primary/repo-repo"
+""")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        owner, repo, base_url = docs._get_github_repo_info()
+
+        assert owner == "primary"
+        assert repo == "repo-repo"
+
+
+def test_get_github_repo_info_non_github_url():
+    """Test that non-GitHub URLs return None."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text("""
+[project]
+name = "test-package"
+version = "0.1.0"
+
+[project.urls]
+Repository = "https://gitlab.com/owner/repo"
+""")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        owner, repo, base_url = docs._get_github_repo_info()
+
+        assert owner is None
+        assert repo is None
+        assert base_url is None
+
+
+def test_get_github_repo_info_dot_git_suffix():
+    """Test that .git suffix is stripped from repo name."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text("""
+[project]
+name = "test-package"
+version = "0.1.0"
+
+[project.urls]
+Repository = "https://github.com/owner/repo.git"
+""")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        owner, repo, base_url = docs._get_github_repo_info()
+
+        assert owner == "owner"
+        assert repo == "repo"
+        assert base_url == "https://github.com/owner/repo"
+
+
+def test_get_github_repo_info_ssh_url():
+    """Test that git SSH URLs are parsed correctly."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text("""
+[project]
+name = "test-package"
+version = "0.1.0"
+
+[project.urls]
+Repository = "git@github.com:owner/repo.git"
+""")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        owner, repo, base_url = docs._get_github_repo_info()
+
+        assert owner == "owner"
+        assert repo == "repo"
+        assert base_url == "https://github.com/owner/repo"
+
+
+def test_get_github_repo_info_license_dict_text():
+    """Test that dict-style license with 'text' key doesn't break URL extraction."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text("""
+[project]
+name = "test-package"
+version = "0.1.0"
+license = {text = "Apache-2.0"}
+
+[project.urls]
+Repository = "https://github.com/owner/repo"
+""")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        owner, repo, base_url = docs._get_github_repo_info()
+
+        assert owner == "owner"
+        assert repo == "repo"
+        assert base_url == "https://github.com/owner/repo"
+
+
+def test_get_github_repo_info_license_dict_file():
+    """Test that dict-style license with 'file' key doesn't break URL extraction."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text("""
+[project]
+name = "test-package"
+version = "0.1.0"
+license = {file = "LICENSE"}
+
+[project.urls]
+Repository = "https://github.com/owner/repo"
+""")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        owner, repo, base_url = docs._get_github_repo_info()
+
+        assert owner == "owner"
+        assert repo == "repo"
+
+
+def test_get_github_repo_info_yml_non_github():
+    """Test that non-GitHub repo in great-docs.yml returns None."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text("""
+[project]
+name = "test-package"
+version = "0.1.0"
+""")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("repo: https://gitlab.com/myorg/myrepo\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        owner, repo, base_url = docs._get_github_repo_info()
+
+        assert owner is None
+        assert repo is None
+        assert base_url is None
+
+
 def test_get_source_location():
     """Test source location detection for classes and methods."""
     docs = GreatDocs()
