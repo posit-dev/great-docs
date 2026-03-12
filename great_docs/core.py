@@ -50,7 +50,8 @@ class GreatDocs:
         # Set environment variables needed by the qrenderer (only when active)
         if self._config.use_qrenderer:
             _, _, url = self._get_github_repo_info()
-            os.environ["GITHUB_REPO_URL"] = str(url)
+            if url:
+                os.environ["GITHUB_REPO_URL"] = str(url)
             os.environ["GIT_REF"] = self._detect_git_ref()
 
     def _prepare_build_directory(self) -> None:

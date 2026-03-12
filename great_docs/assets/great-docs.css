@@ -450,7 +450,7 @@ div.sidebar-item-container {
 
 /* API/CLI reference sidebar items: monospace font for code-style names */
 .gd-ref-sidebar #quarto-sidebar .sidebar-item-text {
-    font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 /* Keep section headers (categories) in their original sans-serif uppercase style */
@@ -1733,6 +1733,11 @@ body.quarto-dark .sourceCode span.in {      /* Information */
 body.quarto-dark dt code {
     color: var(--gd-text-primary);
     background-color: var(--gd-code-bg);
+}
+
+/* Override Quarto syntax highlighting 'code span { color: #003B4F }' for dt spans */
+body.quarto-dark dt code span {
+    color: var(--gd-text-primary);
 }
 
 body.quarto-dark .parameter-name {

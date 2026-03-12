@@ -1333,7 +1333,14 @@ def extract_seealso_from_doc_section(html_content):
         body = m.group(1)
         # Remove the heading tags
         body = re.sub(r"<h[1-6][^>]*>.*?</h[1-6]>", "", body, flags=re.DOTALL)
-        # Strip HTML tags to get plain text
+
+        # Q renderer: names live in href attributes like href="`~Name`"
+        interlink_names = re.findall(r'href="`~([\w.]+)`"', body)
+        if interlink_names:
+            items.extend(interlink_names)
+            continue
+
+        # Classic renderer: names appear as plain text
         plain = re.sub(r"<[^>]+>", "", body).strip()
         if not plain:
             continue
@@ -1396,7 +1403,7 @@ def generate_seealso_html(seealso_items):
         # Generate link to the reference page
         # Item could be "Graph.add_edge" or just "add_edge"
         html_filename = f"{item}.html"
-        links.append(f'<a href="{html_filename}">{item}</a>')
+        links.append(f'<a href="{html_filename}" style="text-decoration: underline;">{item}</a>')
 
     links_html = ", ".join(links)
 
@@ -1662,7 +1669,7 @@ for html_file in html_files:
     content = [
         line.replace(
             '<h1 class="title">',
-            "<h1 class=\"title\" style=\"font-family: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;\">",
+            "<h1 class=\"title\" style=\"font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;\">",
         )
         for line in content
     ]
@@ -1685,7 +1692,7 @@ for html_file in html_files:
             else:
                 line = line.replace(
                     "<h1>",
-                    "<h1 style=\"font-family: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;\">",
+                    "<h1 style=\"font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;\">",
                 )
         new_content.append(line)
     content = new_content
@@ -1861,7 +1868,7 @@ for html_file in html_files:
     # We look up the member type in object_types to add classmethod/staticmethod/property badges.
     # Also style member headings in code font and append () for callable members.
     # NOTE: Skipped when qrenderer is active (badges handled natively via SCSS)
-    _MONO_FONT = "font-family: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.1rem;"
+    _MONO_FONT = "font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.1rem;"
     _CALLABLE_MEMBER_TYPES = {"method", "classmethod", "staticmethod", "function"}
     if not _USE_QRENDERER:
         if object_types:

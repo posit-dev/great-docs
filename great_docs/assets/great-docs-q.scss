@@ -8,8 +8,6 @@
 
 /*-- scss:mixins --*/
 $headings-font-weight: 300 !default;
-$table-striped-bg: mix($primary, #FDFDFD, 2%);
-$table-striped-order: even;
 
 /*-- scss:rules --*/
 $label-class-color: mix($primary, $indigo-500, 20%);
@@ -49,7 +47,6 @@ header p {
 
 table {
    @extend .table-bordered;
-   @extend .table-striped;
 }
 
 .table > tbody {
@@ -94,8 +91,26 @@ table {
 
 /*------------------------------------- API Page --------------------------------------*/
 
+// Remove h2 underlines on API reference pages (Quarto/Bootstrap adds border-bottom
+// to all h2 elements; we suppress it for doc section headings and group headings)
+h2.doc-parameters,
+h2.doc-returns,
+h2.doc-attributes,
+h2.doc-functions,
+h2.doc-methods,
+h2.doc-classes,
+h2.doc-group {
+  font-size: 22px;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
 // docstring object-name
-header span.doc-object-name {
+header span.doc-object-name,
+h1 span.doc-object-name,
+h2 span.doc-object-name,
+h3 span.doc-object-name,
+h4 span.doc-object-name {
   font-family: $font-family-monospace;
   font-size: 1.25rem;
 }
@@ -138,6 +153,7 @@ header span.doc-object-name {
 
 .doc-signature div.sourceCode {
   margin-top: 0.15rem;
+  border-radius: 0 !important;
 }
 
 .doc-signature > div:first-child {
@@ -165,6 +181,62 @@ header span.doc-object-name {
 
 .doc-text:has(+section) {
   margin-bottom: 2rem;
+}
+
+// Warnings section — styled as a warning alert (matches RST .. warning:: styling)
+section:has(> h2.doc-warnings, > h3.doc-warnings) {
+  border-left: 4px solid #D97706;
+  background-color: #FFFBEB;
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  color: #1f2937;
+
+  > :is(h2, h3) {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin-top: 0;
+    margin-bottom: 0.25rem;
+
+    &::before {
+      content: "\26A0\FE0F ";
+    }
+  }
+
+  > p {
+    margin-bottom: 0;
+    color: #1f2937;
+  }
+}
+
+// Notes section — styled as an info callout (matches RST .. note:: styling)
+section:has(> h2.doc-notes, > h3.doc-notes) {
+  border-left: 4px solid #3B82F6;
+  background-color: #EFF6FF;
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  color: #1f2937;
+
+  > :is(h2, h3) {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin-top: 0;
+    margin-bottom: 0.25rem;
+
+    &::before {
+      content: "\2139\FE0F ";
+    }
+  }
+
+  > p {
+    margin-bottom: 0;
+    color: #1f2937;
+  }
 }
 
 // docstring sections with definition-items
@@ -201,19 +273,17 @@ header span.doc-object-name {
 .doc-signature > p > code {
    display: block;
    font-weight: normal;
-   color: var(--quarto-hl-ot-color);
 }
 
 .doc-text dt code {
    @extend .p-1;
    font-weight: normal;
-   color: var(--quarto-hl-ot-color);
-   background-color: $signature-background-color;
 }
 
 #{$docstring-sections} dt code a,
 .doc-signature > p > code a {
-   color: $primary;
+   color: inherit;
+   text-decoration: none;
 }
 
 // docstring spacing and indentation
@@ -233,11 +303,23 @@ h2#{$docstring-sections} {
   font-size: 1.295rem;
 }
 
+// right sidebar ("On this page")
+#toc-title {
+  font-weight: 600 !important;
+  font-size: 15px;
+  color: dimgray;
+  text-transform: uppercase;
+}
+
 // sidebar
 .sidebar nav li > a > code {
    color: $code-color;
    background-color: $gray-100;
    padding: 0.075rem 0.075rem;
+}
+
+.gd-ref-sidebar #quarto-sidebar .sidebar-item-text {
+  font-family: $font-family-monospace;
 }
 
 #{$doc-object-names}::before {
@@ -255,6 +337,7 @@ h2#{$docstring-sections} {
 // docstring object labels
 $all_labels: (
   class,
+  dataclass,
   namedtuple,
   typeddict,
   protocol,
@@ -264,12 +347,13 @@ $all_labels: (
   classmethod,
   staticmethod,
   function,
+  async,
   exception,
   property,
   constant,
   typealias
 );
-$class-like-labels: (class, namedtuple, typeddict, protocol, abc, enum);
+$class-like-labels: (class, dataclass, namedtuple, typeddict, protocol, abc, enum);
 $method-like-labels: (method, classmethod, staticmethod);
 
 .content span.doc-label::after {
@@ -311,7 +395,8 @@ $method-like-labels: (method, classmethod, staticmethod);
   }
 }
 
-.content span.doc-label-function::after {
+.content span.doc-label-function::after,
+.content span.doc-label-async::after {
   color: $label-function-color;
   border-color: $label-function-color;
   background-color: tint-color($label-function-color, 95%);
@@ -339,6 +424,102 @@ $method-like-labels: (method, classmethod, staticmethod);
 span.doc-method-name::after,
 dt a.doc-method-name::after {
   content: "()";
+}
+
+// Dark mode overrides
+// Uses both selectors to match Bootstrap 5 (data-bs-theme) and Quarto (body class)
+[data-bs-theme="dark"] {
+  // Parameter/return/raises dt code blocks: use light text on dark background
+  // The generic 'dt code span' rule is critical: Quarto's syntax highlighting CSS
+  // sets 'code span { color: #003B4F }' which overrides inherited colors on all spans
+  #{$docstring-sections} dt code {
+    color: #e2e8f0 !important;
+    background-color: #2d3748 !important;
+  }
+
+  #{$docstring-sections} dt code span {
+    color: #e2e8f0 !important;
+  }
+
+  #{$docstring-sections} dt code .doc-parameter-name {
+    color: #f7fafc !important;
+  }
+
+  #{$docstring-sections} dt code .doc-parameter-annotation,
+  #{$docstring-sections} dt code .doc-parameter-annotation-sep,
+  #{$docstring-sections} dt code .doc-parameter-default,
+  #{$docstring-sections} dt code .doc-parameter-default-sep {
+    color: #cbd5e0 !important;
+  }
+
+  // Signature block
+  .doc-signature div.sourceCode {
+    background-color: #2d3748 !important;
+  }
+
+  .doc-signature code {
+    color: #e2e8f0 !important;
+  }
+
+  .doc-signature code span {
+    color: #e2e8f0 !important;
+  }
+
+  // Attribute signature (uses <p><code> rather than div.sourceCode)
+  .doc-signature.doc-attribute {
+    code {
+      background-color: #2d3748 !important;
+      color: #e2e8f0 !important;
+    }
+
+    .doc-parameter-name,
+    .doc-parameter-annotation-sep,
+    .doc-parameter-annotation {
+      color: white !important;
+    }
+  }
+
+  // Warning callout
+  section:has(> h2.doc-warnings, > h3.doc-warnings) {
+    background-color: #422006 !important;
+    border-color: #d97706 !important;
+    color: #fef3c7 !important;
+
+    > :is(h2, h3) {
+      color: #fbbf24 !important;
+    }
+
+    > p {
+      color: #fef3c7 !important;
+    }
+  }
+
+  // Notes callout
+  section:has(> h2.doc-notes, > h3.doc-notes) {
+    background-color: #1e3a5f !important;
+    border-color: #3b82f6 !important;
+    color: #dbeafe !important;
+
+    > :is(h2, h3) {
+      color: #93c5fd !important;
+    }
+
+    > p {
+      color: #dbeafe !important;
+    }
+  }
+
+  // Blog listing metadata and titles
+  .quarto-post {
+    .listing-date,
+    .listing-author {
+      color: var(--bs-body-color);
+    }
+
+    .listing-title a {
+      color: var(--bs-body-color);
+    }
+  }
 }
 
 /*-- scss:functions --*/

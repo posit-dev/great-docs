@@ -118,9 +118,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # list[str | dict]: list of inline text strings or {"text": ...} / {"file": ...} entries
     "include_in_header": [],
     # Renderer style for API reference pages
-    # "classic" (default): current markdown renderer + full post-render processing
-    # "q": new structured qrenderer with semantic CSS (from _qrenderer)
-    "renderer": "classic",
+    # "classic": legacy markdown renderer + full post-render processing
+    # "q" (default): structured qrenderer with semantic CSS (from _qrenderer)
+    "renderer": "q",
 }
 
 
@@ -321,11 +321,11 @@ class Config:
 
     @property
     def renderer(self) -> str:
-        """Get the renderer style: 'classic' (default) or 'q'."""
-        val = self.get("renderer", "classic")
+        """Get the renderer style: 'q' (default) or 'classic'."""
+        val = self.get("renderer", "q")
         if val not in ("classic", "q"):
-            print(f"Warning: Unknown renderer '{val}', falling back to 'classic'")
-            return "classic"
+            print(f"Warning: Unknown renderer '{val}', falling back to 'q'")
+            return "q"
         return val
 
     @property
