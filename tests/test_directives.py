@@ -21,7 +21,7 @@ class TestExtractDirectives:
         x : int
         """
         directives = extract_directives(docstring)
-        assert directives.seealso == ["func_a", "func_b", "ClassC"]
+        assert directives.seealso == [("func_a", ""), ("func_b", ""), ("ClassC", "")]
 
     def test_extract_nodoc(self):
         """Test extracting %nodoc directive."""
@@ -56,7 +56,7 @@ class TestExtractDirectives:
             Target columns.
         """
         directives = extract_directives(docstring)
-        assert directives.seealso == ["func_1", "func_2"]
+        assert directives.seealso == [("func_1", ""), ("func_2", "")]
         assert directives.nodoc is False
 
     def test_extract_from_none(self):
@@ -93,7 +93,7 @@ class TestExtractDirectives:
             %seealso func_a, func_b
         """
         directives = extract_directives(docstring)
-        assert directives.seealso == ["func_a", "func_b"]
+        assert directives.seealso == [("func_a", ""), ("func_b", "")]
 
 
 class TestStripDirectives:
@@ -224,7 +224,7 @@ class TestDocDirectives:
 
     def test_bool_true_with_seealso(self):
         """Test that DocDirectives with seealso is truthy."""
-        directives = DocDirectives(seealso=["func_a"])
+        directives = DocDirectives(seealso=[("func_a", "")])
         assert directives
 
     def test_bool_true_with_nodoc(self):
@@ -260,7 +260,7 @@ class TestIntegration:
 
         # Extract directives
         directives = extract_directives(original)
-        assert directives.seealso == ["func_1", "func_2"]
+        assert directives.seealso == [("func_1", ""), ("func_2", "")]
 
         # Strip directives
         cleaned = strip_directives(original)
@@ -268,3 +268,56 @@ class TestIntegration:
         assert "Validate column values" in cleaned
         assert "Parameters" in cleaned
         assert "Returns" in cleaned
+
+
+class TestSeeAlsoDescriptions:
+    """Tests for %seealso with descriptions."""
+
+    def test_seealso_with_descriptions(self):
+        """Test %seealso with name : description syntax."""
+        docstring = """
+        Base class for stores.
+
+        %seealso DuckDBStore : Local storage, ChromaDBStore : ChromaDB storage
+        """
+        directives = extract_directives(docstring)
+        assert directives.seealso == [
+            ("DuckDBStore", "Local storage"),
+            ("ChromaDBStore", "ChromaDB storage"),
+        ]
+
+    def test_seealso_mixed_descriptions(self):
+        """Test %seealso with mix of described and undescribed items."""
+        docstring = """
+        Short description.
+
+        %seealso func_a : Does something, func_b
+        """
+        directives = extract_directives(docstring)
+        assert directives.seealso == [
+            ("func_a", "Does something"),
+            ("func_b", ""),
+        ]
+
+    def test_seealso_single_with_description(self):
+        """Test %seealso with a single described item."""
+        docstring = """
+        Short description.
+
+        %seealso validate : Validate input data
+        """
+        directives = extract_directives(docstring)
+        assert directives.seealso == [("validate", "Validate input data")]
+
+    def test_seealso_qualified_names_with_descriptions(self):
+        """Test %seealso with qualified names and descriptions."""
+        docstring = """
+        Short description.
+
+        %seealso pkg.ClassA : First class, pkg.ClassB : Second class
+        """
+        directives = extract_directives(docstring)
+        assert directives.seealso == [
+            ("pkg.ClassA", "First class"),
+            ("pkg.ClassB", "Second class"),
+        ]

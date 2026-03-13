@@ -5910,3 +5910,205 @@ def test_R4_attribution_off_not_in_footer():
     assert "Test&nbsp;Author" in footer_center, (
         "Footer should still contain author name even with attribution disabled"
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: %seealso with descriptions
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_DED_seealso_desc_pages_exist():
+    """gdtest_seealso_desc: all exports have reference pages."""
+    pkg = "gdtest_seealso_desc"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ref = _ref_dir(pkg)
+    for name in ("load", "save", "validate", "transform"):
+        assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
+
+
+@requires_bs4
+def test_DED_seealso_desc_links_render():
+    """gdtest_seealso_desc: See Also sections have correct link targets."""
+    pkg = "gdtest_seealso_desc"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    expected = _get_expected(pkg)
+    seealso_map = expected.get("seealso", {})
+
+    ref = _ref_dir(pkg)
+    for func_name, targets in seealso_map.items():
+        page = ref / f"{func_name}.html"
+        if not page.exists():
+            continue
+
+        soup = _load_html(page)
+        html_text = soup.get_text().lower()
+
+        assert "see also" in html_text, f"{func_name}.html: no See Also section"
+        for target in targets:
+            assert target.lower() in html_text, (
+                f"{func_name}.html: See Also target {target!r} not found"
+            )
+
+
+@requires_bs4
+def test_DED_seealso_desc_descriptions_render():
+    """gdtest_seealso_desc: descriptions from %seealso appear in output."""
+    pkg = "gdtest_seealso_desc"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    expected = _get_expected(pkg)
+    desc_map = expected.get("seealso_descriptions", {})
+
+    ref = _ref_dir(pkg)
+    for func_name, target_descs in desc_map.items():
+        page = ref / f"{func_name}.html"
+        if not page.exists():
+            continue
+
+        soup = _load_html(page)
+        html_text = soup.get_text()
+
+        for target, desc in target_descs.items():
+            assert desc in html_text, (
+                f"{func_name}.html: description {desc!r} for {target!r} not found"
+            )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: NumPy-style See Also with descriptions
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_DED_numpy_seealso_desc_pages_exist():
+    """gdtest_numpy_seealso_desc: all exports have reference pages."""
+    pkg = "gdtest_numpy_seealso_desc"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ref = _ref_dir(pkg)
+    for name in ("connect", "disconnect", "send", "receive"):
+        assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
+
+
+@requires_bs4
+def test_DED_numpy_seealso_desc_links_render():
+    """gdtest_numpy_seealso_desc: See Also sections have correct targets."""
+    pkg = "gdtest_numpy_seealso_desc"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    expected = _get_expected(pkg)
+    seealso_map = expected.get("seealso", {})
+
+    ref = _ref_dir(pkg)
+    for func_name, targets in seealso_map.items():
+        page = ref / f"{func_name}.html"
+        if not page.exists():
+            continue
+
+        soup = _load_html(page)
+        html_text = soup.get_text().lower()
+
+        assert "see also" in html_text, f"{func_name}.html: no See Also section"
+        for target in targets:
+            assert target.lower() in html_text, (
+                f"{func_name}.html: See Also target {target!r} not found"
+            )
+
+
+@requires_bs4
+def test_DED_numpy_seealso_desc_descriptions_render():
+    """gdtest_numpy_seealso_desc: descriptions from See Also survive post-render."""
+    pkg = "gdtest_numpy_seealso_desc"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    expected = _get_expected(pkg)
+    desc_map = expected.get("seealso_descriptions", {})
+
+    ref = _ref_dir(pkg)
+    for func_name, target_descs in desc_map.items():
+        page = ref / f"{func_name}.html"
+        if not page.exists():
+            continue
+
+        soup = _load_html(page)
+        html_text = soup.get_text()
+
+        for target, desc in target_descs.items():
+            assert desc in html_text, (
+                f"{func_name}.html: description {desc!r} for {target!r} not found"
+            )
+
+
+# ── gdtest_interlinks_prose tests ─────────────────────────────────────────────
+
+
+def test_DED_interlinks_prose_pages_exist():
+    """gdtest_interlinks_prose: all exports have reference pages."""
+    pkg = "gdtest_interlinks_prose"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ref = _ref_dir(pkg)
+    for name in ("BaseStore", "DuckDBStore", "ChromaDBStore", "query"):
+        assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
+
+
+@requires_bs4
+def test_DED_interlinks_prose_links_resolved():
+    """gdtest_interlinks_prose: interlinks in prose are resolved to <a> tags."""
+    pkg = "gdtest_interlinks_prose"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    expected = _get_expected(pkg)
+    prose_map = expected.get("interlinks_in_prose", {})
+
+    ref = _ref_dir(pkg)
+    for obj_name, targets in prose_map.items():
+        page = ref / f"{obj_name}.html"
+        if not page.exists():
+            continue
+
+        soup = _load_html(page)
+        links = soup.find_all("a")
+        link_texts = [a.get_text(strip=True) for a in links]
+
+        for target in targets:
+            assert target in link_texts, (
+                f"{obj_name}.html: interlink to {target!r} not rendered as link"
+            )
+
+
+@requires_bs4
+def test_DED_interlinks_prose_hrefs_valid():
+    """gdtest_interlinks_prose: interlink hrefs point to valid reference pages."""
+    pkg = "gdtest_interlinks_prose"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    expected = _get_expected(pkg)
+    prose_map = expected.get("interlinks_in_prose", {})
+
+    ref = _ref_dir(pkg)
+    for obj_name, targets in prose_map.items():
+        page = ref / f"{obj_name}.html"
+        if not page.exists():
+            continue
+
+        soup = _load_html(page)
+        for target in targets:
+            link = soup.find("a", string=target)
+            assert link is not None, f"{obj_name}.html: no <a> tag with text {target!r}"
+            href = link.get("href", "")
+            assert target in href or f"{target}.html" in href, (
+                f"{obj_name}.html: href {href!r} doesn't reference {target!r}"
+            )

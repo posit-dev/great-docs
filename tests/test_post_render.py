@@ -99,6 +99,65 @@ def _get_functions():
 ) = _get_functions()
 
 
+def _get_seealso_functions():
+    """Extract See Also and interlinks functions from post-render.py."""
+    import re as _re
+
+    source = _SCRIPT.read_text()
+
+    ns = {
+        "re": _re,
+        "__builtins__": __builtins__,
+        # Provide empty inventory for resolve_interlinks
+        "_interlinks_inventory": {},
+    }
+
+    funcs_to_extract = [
+        "extract_seealso_from_html",
+        "extract_seealso_from_doc_section",
+        "generate_seealso_html",
+        "_resolve_interlink_name",
+        "resolve_interlinks",
+    ]
+
+    for func_name in funcs_to_extract:
+        start = source.find(f"def {func_name}(")
+        if start == -1:
+            raise RuntimeError(f"Could not find {func_name} in {_SCRIPT}")
+
+        rest = source[start:]
+        lines = rest.split("\n")
+        func_lines = [lines[0]]
+        for line in lines[1:]:
+            if (
+                line
+                and not line[0].isspace()
+                and (line.startswith("def ") or line.startswith("class "))
+            ):
+                break
+            func_lines.append(line)
+
+        func_source = "\n".join(func_lines)
+        exec(func_source, ns)
+
+    return (
+        ns["extract_seealso_from_html"],
+        ns["extract_seealso_from_doc_section"],
+        ns["generate_seealso_html"],
+        ns["_resolve_interlink_name"],
+        ns["resolve_interlinks"],
+    )
+
+
+(
+    extract_seealso_from_html,
+    extract_seealso_from_doc_section,
+    generate_seealso_html,
+    _resolve_interlink_name,
+    resolve_interlinks,
+) = _get_seealso_functions()
+
+
 # ── translate_sphinx_roles ──────────────────────────────────────────────────
 
 
@@ -483,3 +542,130 @@ class TestFixPlainDoctestCodeBlocks:
         assert 'class="sourceCode python' in result
         # The original plain block should be gone
         assert "<pre><code>" not in result
+
+
+# ── extract_seealso_from_html ───────────────────────────────────────────────
+
+
+class TestExtractSeeAlsoFromHtml:
+    """Tests for extracting %seealso items from rendered HTML."""
+
+    def test_basic_seealso(self):
+        html = "<p>%seealso func_a, func_b</p>"
+        result = extract_seealso_from_html(html)
+        assert result == [("func_a", ""), ("func_b", "")]
+
+    def test_seealso_with_descriptions(self):
+        html = "<p>%seealso DuckDBStore : Local storage, ChromaDBStore : ChromaDB</p>"
+        result = extract_seealso_from_html(html)
+        assert result == [
+            ("DuckDBStore", "Local storage"),
+            ("ChromaDBStore", "ChromaDB"),
+        ]
+
+    def test_mixed_descriptions(self):
+        html = "<p>%seealso func_a : Does stuff, func_b</p>"
+        result = extract_seealso_from_html(html)
+        assert result == [("func_a", "Does stuff"), ("func_b", "")]
+
+    def test_no_seealso(self):
+        html = "<p>Just a normal paragraph.</p>"
+        result = extract_seealso_from_html(html)
+        assert result == []
+
+
+# ── extract_seealso_from_doc_section ────────────────────────────────────────
+
+
+class TestExtractSeeAlsoFromDocSection:
+    """Tests for extracting See Also from rendered doc-section blocks."""
+
+    def test_classic_with_descriptions(self):
+        html = (
+            '<section id="see-also" class="level1 doc-section">'
+            "<h1>See Also</h1>"
+            "<p>transform : Transform data before analysis.</p>"
+            "</section>"
+        )
+        result = extract_seealso_from_doc_section(html)
+        assert result == [("transform", "Transform data before analysis.")]
+
+    def test_classic_without_descriptions(self):
+        html = (
+            '<section id="see-also" class="level1 doc-section">'
+            "<h1>See Also</h1>"
+            "<p>func_a, func_b</p>"
+            "</section>"
+        )
+        result = extract_seealso_from_doc_section(html)
+        assert result == [("func_a", ""), ("func_b", "")]
+
+    def test_interlink_names(self):
+        html = (
+            '<section id="see-also" class="level1 doc-section">'
+            "<h1>See Also</h1>"
+            '<dt><a href="`~MyClass`">MyClass</a></dt><dd>A class.</dd>'
+            "</section>"
+        )
+        result = extract_seealso_from_doc_section(html)
+        assert result == [("MyClass", "A class.")]
+
+    def test_interlink_without_dd(self):
+        html = (
+            '<section id="see-also" class="level1 doc-section">'
+            "<h1>See Also</h1>"
+            '<a href="`~MyClass`">MyClass</a>'
+            "</section>"
+        )
+        result = extract_seealso_from_doc_section(html)
+        assert result == [("MyClass", "")]
+
+    def test_no_section(self):
+        html = "<p>No see also here.</p>"
+        result = extract_seealso_from_doc_section(html)
+        assert result == []
+
+
+# ── generate_seealso_html ───────────────────────────────────────────────────
+
+
+class TestGenerateSeeAlsoHtml:
+    """Tests for generating the See Also HTML block."""
+
+    def test_empty_items(self):
+        result = generate_seealso_html([])
+        assert result == ""
+
+    def test_names_only(self):
+        result = generate_seealso_html([("func_a", ""), ("func_b", "")])
+        assert "func_a" in result
+        assert "func_b" in result
+        assert "See Also" in result
+        # No descriptions → comma-separated links
+        assert "<ul" not in result
+
+    def test_with_descriptions(self):
+        result = generate_seealso_html(
+            [
+                ("DuckDBStore", "Local storage"),
+                ("ChromaDBStore", "ChromaDB storage"),
+            ]
+        )
+        assert "DuckDBStore" in result
+        assert "Local storage" in result
+        assert "ChromaDBStore" in result
+        assert "ChromaDB storage" in result
+        # Descriptions present → list layout
+        assert "<ul" in result
+
+    def test_mixed_descriptions(self):
+        result = generate_seealso_html(
+            [
+                ("func_a", "Does stuff"),
+                ("func_b", ""),
+            ]
+        )
+        assert "func_a" in result
+        assert "Does stuff" in result
+        assert "func_b" in result
+        assert "<ul" in result
