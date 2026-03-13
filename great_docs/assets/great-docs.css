@@ -936,6 +936,24 @@ body.quarto-light .navbar .gd-navbar-icon:hover {
 
 /* Mobile responsive adjustments */
 @media (max-width: 991.98px) {
+    /* Remove large side margins to align nav titles with page content */
+    #quarto-header > nav > div {
+        margin-left: 0%;
+        margin-right: 0%;
+    }
+
+    .container, .container-fluid, .container-xxl, .container-xl,
+    .container-lg, .container-md, .container-sm {
+        padding-right: calc(var(--bs-gutter-x) * .15);
+        padding-left: calc(var(--bs-gutter-x) * .15);
+    }
+
+    .navbar-expand-lg .navbar-nav .nav-link {
+        padding-left: 0.4rem;
+        padding-right: 0.6rem;
+        margin-left: -0.2rem;
+    }
+
     /* Keep widget container in a row on mobile */
     #gd-navbar-widgets {
         gap: 4px;
