@@ -114,6 +114,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # str: preset name (applies to all pages)
     # dict: {"preset": str, "pages": "all"|"homepage"}
     "content_style": None,
+    # Attribution text in the footer ("Site created with Great Docs")
+    # True (default): show attribution
+    # False: hide attribution
+    "attribution": True,
     # Custom HTML to include in the <head> of every page
     # str: inline HTML text (e.g., a <script> or <link> tag)
     # list[str | dict]: list of inline text strings or {"text": ...} / {"file": ...} entries
@@ -683,6 +687,11 @@ class Config:
                     result.append(item)
             return result
         return []
+
+    @property
+    def attribution(self) -> bool:
+        """Whether to show Great Docs attribution in the footer."""
+        return bool(self.get("attribution", True))
 
     @property
     def navbar_style(self) -> str | None:

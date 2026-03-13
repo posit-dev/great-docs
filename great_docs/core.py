@@ -7,6 +7,7 @@ from pathlib import Path
 
 import yaml
 
+from . import __version__
 from .config import Config
 
 
@@ -8429,6 +8430,23 @@ toc: false
                     else:
                         funder_label = f"<strong>{funder_display}</strong>"
                     config["website"]["page-footer"] = {"center": f"Supported by {funder_label}."}
+
+        # Append Great Docs attribution to footer if enabled
+        if self._config.attribution:
+            # Extract major.minor from version (e.g., "0.1.0" -> "0.1")
+            version_parts = __version__.split(".")
+            short_version = ".".join(version_parts[:2]) if len(version_parts) >= 2 else __version__
+            attribution = f"Site created with <strong>Great&nbsp;Docs</strong> (v{short_version})"
+
+            if "page-footer" in config["website"]:
+                existing = config["website"]["page-footer"].get("center", "")
+                if "Great&nbsp;Docs" not in existing:
+                    if existing:
+                        config["website"]["page-footer"]["center"] = f"{existing}<br>{attribution}"
+                    else:
+                        config["website"]["page-footer"]["center"] = attribution
+            else:
+                config["website"]["page-footer"] = {"center": attribution}
 
         # Add "Supported by Posit" badge if funding name contains "Posit" as a word
         funding = metadata.get("funding")
