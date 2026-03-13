@@ -79,13 +79,13 @@ Creates a GitHub Actions workflow for automatic deployment.
 
 The User Guide covers:
 
-- [Installation](https://rich-iannone.github.io/great-docs/user-guide/01-installation.html)
-- [Quick Start](https://rich-iannone.github.io/great-docs/user-guide/02-quickstart.html)
-- [Configuration](https://rich-iannone.github.io/great-docs/user-guide/03-configuration.html)
-- [API Documentation](https://rich-iannone.github.io/great-docs/user-guide/04-api-documentation.html)
-- [CLI Documentation](https://rich-iannone.github.io/great-docs/user-guide/05-cli-documentation.html)
-- [User Guides](https://rich-iannone.github.io/great-docs/user-guide/06-user-guides.html)
-- [Deployment](https://rich-iannone.github.io/great-docs/user-guide/07-deployment.html)
+- [Installation](https://rich-iannone.github.io/great-docs/user-guide/installation.html)
+- [Quick Start](https://rich-iannone.github.io/great-docs/user-guide/quickstart.html)
+- [Configuration](https://rich-iannone.github.io/great-docs/user-guide/configuration.html)
+- [API Documentation](https://rich-iannone.github.io/great-docs/user-guide/api-documentation.html)
+- [CLI Documentation](https://rich-iannone.github.io/great-docs/user-guide/cli-documentation.html)
+- [User Guides](https://rich-iannone.github.io/great-docs/user-guide/user-guides.html)
+- [Deployment](https://rich-iannone.github.io/great-docs/user-guide/deployment.html)
 
 ## License
 
