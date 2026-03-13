@@ -177,6 +177,115 @@ def resolve_interlinks(html_content):
     return html_content
 
 
+def autolink_code_references(html_content):
+    """Auto-convert inline code matching API names into clickable links.
+
+    Scans ``<code>`` tags (outside ``<pre>`` blocks) for text that matches
+    an entry in the objects.json inventory. Matching code is wrapped in an
+    ``<a>`` link to the corresponding reference page.
+
+    Supported patterns inside inline code:
+
+    - ``Name`` or ``Name()`` — exact/suffix match, display as-is
+    - ``pkg.Name`` or ``pkg.Name()`` — qualified match, display as-is
+    - ``~~pkg.Name`` or ``~~pkg.Name()`` — shortened display (``Name``)
+    - ``~~.pkg.Name`` or ``~~.pkg.Name()`` — dot-prefixed short (``·Name``)
+
+    Code with the ``gd-no-link`` class is never autolinked.
+    Code inside ``<pre>`` blocks (fenced code) is never autolinked.
+    Code containing spaces, operators, or arguments is never autolinked.
+    """
+    if not _interlinks_inventory:
+        return html_content
+
+    # Step 1: protect <pre>...</pre> blocks by replacing them with placeholders
+    pre_blocks = []
+
+    def _save_pre(m):
+        pre_blocks.append(m.group(0))
+        return f"\x00PRE{len(pre_blocks) - 1}\x00"
+
+    html_content = re.sub(r"<pre[\s>].*?</pre>", _save_pre, html_content, flags=re.DOTALL)
+
+    # Step 2: match <code> tags that might be autolink candidates
+    # Pattern: <code> text </code> where text is a valid identifier path,
+    # optionally prefixed with ~~ or ~~. and optionally suffixed with ()
+    def _autolink_code(m):
+        full_tag = m.group(0)
+        class_attr = m.group(1) or ""
+        text = m.group(2)
+
+        # Skip if gd-no-link class is present
+        if "gd-no-link" in class_attr:
+            return full_tag
+
+        # Skip if already inside an <a> tag (check preceding context)
+        # This is handled by the negative lookbehind in the regex
+
+        # Parse the code text for autolink patterns
+        code_match = re.match(
+            r"^(~~\.?)?(\w[\w.]*?)(\(\))?$",
+            text,
+        )
+        if not code_match:
+            return full_tag
+
+        prefix = code_match.group(1) or ""  # "", "~~", or "~~."
+        name = code_match.group(2)
+        parens = code_match.group(3) or ""  # "" or "()"
+
+        # Try to resolve the name
+        result = _resolve_interlink_name(name)
+        if result is None:
+            # If unresolved but has ~~ prefix, strip it for display
+            if prefix:
+                if prefix == "~~.":
+                    display = f".{name.rsplit('.', 1)[-1]}{parens}"
+                else:
+                    display = f"{name.rsplit('.', 1)[-1]}{parens}"
+                return f"<code{class_attr}>{display}</code>"
+            return full_tag
+
+        uri, short_name = result
+        if uri.startswith("reference/"):
+            uri = uri[len("reference/") :]
+
+        # Determine display text based on prefix
+        if prefix == "~~.":
+            display = f".{short_name}{parens}"
+        elif prefix == "~~":
+            display = f"{short_name}{parens}"
+        else:
+            display = f"{name}{parens}"
+
+        return f'<a href="{uri}"><code>{display}</code></a>'
+
+    # Match <code> tags. We check if they're inside <a> tags during replacement.
+    # Captures: (1) optional class attribute, (2) inner text
+    def _autolink_code_with_context(m):
+        # Skip if this <code> is inside an <a> tag
+        start = m.start()
+        preceding = html_content[max(0, start - 200) : start]
+        # Check if there's an unclosed <a> tag before this <code>
+        last_a_open = preceding.rfind("<a ")
+        last_a_close = preceding.rfind("</a>")
+        if last_a_open > last_a_close:
+            return m.group(0)
+        return _autolink_code(m)
+
+    html_content = re.sub(
+        r"<code(\s[^>]*)?>([^<]+)</code>",
+        _autolink_code_with_context,
+        html_content,
+    )
+
+    # Step 3: restore <pre> blocks
+    for i, block in enumerate(pre_blocks):
+        html_content = html_content.replace(f"\x00PRE{i}\x00", block)
+
+    return html_content
+
+
 # Pygments class to Quarto class mapping
 # Quarto uses different class names than Pygments default
 PYGMENTS_TO_QUARTO_CLASS = {
@@ -1885,6 +1994,9 @@ for html_file in html_files:
 
     # Resolve interlinks (`~Name` references) throughout the page
     content_str = resolve_interlinks(content_str)
+
+    # Auto-convert inline code matching API names into clickable links
+    content_str = autolink_code_references(content_str)
 
     # Inject unified "See Also" section at the bottom
     if seealso_items:
