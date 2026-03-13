@@ -95,17 +95,19 @@
                     <span class="gh-badge gh-prs-count" style="display: none;"></span>
                 </a>
                 <div class="gh-dropdown-divider"></div>
-                <a href="${repoUrl}/stargazers" class="gh-dropdown-item" role="menuitem" target="_blank" rel="noopener">
+                <a href="${repoUrl}" class="gh-dropdown-item" role="menuitem" target="_blank" rel="noopener">
                     <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
                         <path d="M8 .25a.75.75 0 01.673.418l1.882 3.815 4.21.612a.75.75 0 01.416 1.279l-3.046 2.97.719 4.192a.75.75 0 01-1.088.791L8 12.347l-3.766 1.98a.75.75 0 01-1.088-.79l.72-4.194L.818 6.374a.75.75 0 01.416-1.28l4.21-.611L7.327.668A.75.75 0 018 .25z"/>
                     </svg>
-                    Stargazers
+                    Add a Star
+                    <span class="gh-badge gh-stars-total" style="display: none;"></span>
                 </a>
-                <a href="${repoUrl}/network/members" class="gh-dropdown-item" role="menuitem" target="_blank" rel="noopener">
+                <a href="${repoUrl}/fork" class="gh-dropdown-item" role="menuitem" target="_blank" rel="noopener">
                     <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
                         <path d="M5 3.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm0 2.122a2.25 2.25 0 10-1.5 0v.878A2.25 2.25 0 005.75 8.5h1.5v2.128a2.251 2.251 0 101.5 0V8.5h1.5a2.25 2.25 0 002.25-2.25v-.878a2.25 2.25 0 10-1.5 0v.878a.75.75 0 01-.75.75h-4.5A.75.75 0 015 6.25v-.878zm3.75 7.378a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm3-8.75a.75.75 0 100-1.5.75.75 0 000 1.5z"/>
                     </svg>
-                    Forks
+                    Create a Fork
+                    <span class="gh-badge gh-forks-total" style="display: none;"></span>
                 </a>
             </div>
         `;
@@ -186,6 +188,8 @@
         const forksEl = document.querySelector('.gh-count[data-stat="forks"]');
         const issuesBadge = document.querySelector('.gh-issues-count');
         const prsBadge = document.querySelector('.gh-prs-count');
+        const starsTotalBadge = document.querySelector('.gh-stars-total');
+        const forksTotalBadge = document.querySelector('.gh-forks-total');
 
         if (starsEl) starsEl.textContent = formatCount(stats.stars);
         if (forksEl) forksEl.textContent = formatCount(stats.forks);
@@ -198,6 +202,16 @@
         if (prsBadge && stats.prs !== undefined) {
             prsBadge.textContent = formatCount(stats.prs);
             prsBadge.style.display = 'inline-flex';
+        }
+
+        if (starsTotalBadge && stats.stars !== undefined && stats.stars !== '?') {
+            starsTotalBadge.textContent = formatCount(stats.stars);
+            starsTotalBadge.style.display = 'inline-flex';
+        }
+
+        if (forksTotalBadge && stats.forks !== undefined && stats.forks !== '?') {
+            forksTotalBadge.textContent = formatCount(stats.forks);
+            forksTotalBadge.style.display = 'inline-flex';
         }
     }
 
