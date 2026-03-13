@@ -363,13 +363,16 @@ Great Docs recognizes this format, preserves the descriptions, and merges it wit
 
 ### Interlinks in Prose
 
-You can create inline links to other API items anywhere in your docstring text using the interlinks syntax:
+You can create inline links to other API items anywhere in your docstring text using the interlinks syntax. There are several forms:
 
-````markdown
-[](`~package_name.ClassName`)
-````
+| Style | Syntax | Displays as |
+| --- | --- | --- |
+| **Shortened** | `` [](`~mypackage.MyClass`) `` | `MyClass` |
+| **Full qualified** | `` [](`mypackage.MyClass`) `` | `mypackage.MyClass` |
+| **Custom text** | `` [see this class](`mypackage.MyClass`) `` | `see this class` |
+| **Custom + tilde** | `` [see this class](`~mypackage.MyClass`) `` | `see this class` |
 
-The `~` prefix tells Great Docs to display only the short name (e.g., `ClassName` instead of the fully qualified `package_name.ClassName`).
+The `~` prefix tells Great Docs to display only the short name when no custom text is provided. When you supply custom link text in the brackets, it's always used as-is regardless of the `~` prefix.
 
 This is particularly useful for class hierarchies and overview docstrings:
 
@@ -381,19 +384,14 @@ class BaseStore:
 
     - [](`~mypackage.DuckDBStore`): local storage with embedded search.
     - [](`~mypackage.ChromaDBStore`): vector storage using ChromaDB.
-    """
-    ...
 
-class DuckDBStore(BaseStore):
-    """Local storage backed by DuckDB.
-
-    Inherits from [](`~mypackage.BaseStore`).
-    Use [](`~mypackage.query`) to search the store after loading data.
+    See [](`mypackage.BaseStore`) for the full API, or
+    [the DuckDB guide](`~mypackage.DuckDBStore`) for a walkthrough.
     """
     ...
 ```
 
-In the rendered documentation, each `[](`~...`)` reference becomes a clickable link pointing to the target's reference page, with the short name displayed as the link text.
+In the rendered documentation, each interlinks reference becomes a clickable link pointing to the target's reference page.
 
 Interlinks work in any part of a docstring: the summary line, extended description, parameter descriptions, notes, or any other section.
 
