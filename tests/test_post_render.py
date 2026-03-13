@@ -118,6 +118,7 @@ def _get_seealso_functions():
         "generate_seealso_html",
         "_resolve_interlink_name",
         "resolve_interlinks",
+        "autolink_code_references",
     ]
 
     for func_name in funcs_to_extract:
@@ -146,6 +147,7 @@ def _get_seealso_functions():
         ns["generate_seealso_html"],
         ns["_resolve_interlink_name"],
         ns["resolve_interlinks"],
+        ns["autolink_code_references"],
     )
 
 
@@ -155,6 +157,7 @@ def _get_seealso_functions():
     generate_seealso_html,
     _resolve_interlink_name,
     resolve_interlinks,
+    autolink_code_references,
 ) = _get_seealso_functions()
 
 
@@ -669,3 +672,124 @@ class TestGenerateSeeAlsoHtml:
         assert "Does stuff" in result
         assert "func_b" in result
         assert "<ul" in result
+
+
+# ── autolink_code_references ────────────────────────────────────────────────
+
+
+def _make_autolink(inventory):
+    """Create an autolink function bound to a given inventory."""
+    import re as _re
+
+    source = _SCRIPT.read_text()
+    ns = {
+        "re": _re,
+        "__builtins__": __builtins__,
+        "_interlinks_inventory": inventory,
+    }
+    for func_name in ("_resolve_interlink_name", "autolink_code_references"):
+        start = source.find(f"def {func_name}(")
+        rest = source[start:]
+        lines = rest.split("\n")
+        func_lines = [lines[0]]
+        for line in lines[1:]:
+            if (
+                line
+                and not line[0].isspace()
+                and (line.startswith("def ") or line.startswith("class "))
+            ):
+                break
+            func_lines.append(line)
+        exec("\n".join(func_lines), ns)
+    return ns["autolink_code_references"]
+
+
+class TestAutolinkCodeReferences:
+    """Tests for autolink_code_references."""
+
+    INVENTORY = {
+        "mypackage.MyClass": {"uri": "reference/MyClass.html#mypackage.MyClass", "dispname": "-"},
+        "mypackage.my_func": {"uri": "reference/my_func.html#mypackage.my_func", "dispname": "-"},
+        "mypackage.utils.helper": {
+            "uri": "reference/helper.html#mypackage.utils.helper",
+            "dispname": "-",
+        },
+    }
+
+    def _autolink(self, html):
+        fn = _make_autolink(self.INVENTORY)
+        return fn(html)
+
+    def test_simple_name_match(self):
+        result = self._autolink("<p><code>MyClass</code></p>")
+        assert '<a href="MyClass.html#mypackage.MyClass"><code>MyClass</code></a>' in result
+
+    def test_qualified_name_match(self):
+        result = self._autolink("<p><code>mypackage.MyClass</code></p>")
+        assert (
+            '<a href="MyClass.html#mypackage.MyClass"><code>mypackage.MyClass</code></a>' in result
+        )
+
+    def test_name_with_parens(self):
+        result = self._autolink("<p><code>my_func()</code></p>")
+        assert '<a href="my_func.html#mypackage.my_func"><code>my_func()</code></a>' in result
+
+    def test_tilde_shortening(self):
+        result = self._autolink("<p><code>~~mypackage.MyClass</code></p>")
+        assert '<a href="MyClass.html#mypackage.MyClass"><code>MyClass</code></a>' in result
+
+    def test_tilde_shortening_with_parens(self):
+        result = self._autolink("<p><code>~~mypackage.my_func()</code></p>")
+        assert '<a href="my_func.html#mypackage.my_func"><code>my_func()</code></a>' in result
+
+    def test_tilde_dot_shortening(self):
+        result = self._autolink("<p><code>~~.mypackage.MyClass</code></p>")
+        assert '<a href="MyClass.html#mypackage.MyClass"><code>.MyClass</code></a>' in result
+
+    def test_tilde_dot_shortening_with_parens(self):
+        result = self._autolink("<p><code>~~.mypackage.my_func()</code></p>")
+        assert '<a href="my_func.html#mypackage.my_func"><code>.my_func()</code></a>' in result
+
+    def test_no_match_left_alone(self):
+        result = self._autolink("<p><code>unknown_thing</code></p>")
+        assert result == "<p><code>unknown_thing</code></p>"
+
+    def test_code_with_args_not_linked(self):
+        result = self._autolink("<p><code>my_func(x=1)</code></p>")
+        assert "<a" not in result
+
+    def test_code_with_spaces_not_linked(self):
+        result = self._autolink("<p><code>a + b</code></p>")
+        assert "<a" not in result
+
+    def test_code_with_operator_not_linked(self):
+        result = self._autolink("<p><code>-MyClass</code></p>")
+        assert "<a" not in result
+
+    def test_gd_no_link_class_skipped(self):
+        result = self._autolink('<p><code class="gd-no-link">MyClass</code></p>')
+        assert "<a" not in result
+
+    def test_code_in_pre_not_linked(self):
+        result = self._autolink("<pre><code>MyClass</code></pre>")
+        assert "<a" not in result
+
+    def test_already_inside_link_not_doubled(self):
+        result = self._autolink('<a href="foo.html"><code>MyClass</code></a>')
+        # Should not wrap in another <a>
+        assert result.count("<a ") == 1
+
+    def test_unresolved_tilde_strips_prefix(self):
+        result = self._autolink("<p><code>~~unknown.module.Thing</code></p>")
+        assert "<a" not in result
+        assert "<code>Thing</code>" in result
+
+    def test_unresolved_tilde_dot_strips_prefix(self):
+        result = self._autolink("<p><code>~~.unknown.module.Thing()</code></p>")
+        assert "<a" not in result
+        assert "<code>.Thing()</code>" in result
+
+    def test_empty_inventory(self):
+        fn = _make_autolink({})
+        html = "<p><code>MyClass</code></p>"
+        assert fn(html) == html
