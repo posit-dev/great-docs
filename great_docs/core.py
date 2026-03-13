@@ -8432,25 +8432,36 @@ toc: false
 
         # Append Great Docs attribution to footer if enabled
         if self._config.attribution:
-            # Get the short commit hash of the installed great-docs package
+            # Get the short commit hash of the great-docs source repo (only when
+            # running from a development checkout, not a pip-installed copy)
             import subprocess
 
             gd_version_label = ""
             try:
                 gd_source_dir = Path(__file__).resolve().parent.parent
-                result = subprocess.run(
-                    ["git", "rev-parse", "--short", "HEAD"],
+                # Verify this is actually the great-docs repo, not the user's project
+                remote_result = subprocess.run(
+                    ["git", "config", "--get", "remote.origin.url"],
                     cwd=gd_source_dir,
                     capture_output=True,
                     text=True,
                     timeout=5,
                 )
-                if result.returncode == 0:
-                    short_hash = result.stdout.strip()
-                    gd_version_label = (
-                        f' (<a href="https://github.com/rich-iannone/great-docs/'
-                        f'commit/{short_hash}">{short_hash}</a>)'
+                remote_url = remote_result.stdout.strip() if remote_result.returncode == 0 else ""
+                if "great-docs" in remote_url:
+                    result = subprocess.run(
+                        ["git", "rev-parse", "--short", "HEAD"],
+                        cwd=gd_source_dir,
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
                     )
+                    if result.returncode == 0:
+                        short_hash = result.stdout.strip()
+                        gd_version_label = (
+                            f' (<a href="https://github.com/rich-iannone/great-docs/'
+                            f'commit/{short_hash}">{short_hash}</a>)'
+                        )
             except Exception:
                 pass
 
