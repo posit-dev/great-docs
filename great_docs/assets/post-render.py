@@ -129,20 +129,27 @@ def _resolve_interlink_name(name):
 def resolve_interlinks(html_content):
     """Resolve interlink references in rendered HTML.
 
-    Quarto renders ``[](`~pkg.Name`)`` as ``<a href="`~pkg.Name`">...</a>``.
-    This function finds those unresolved links and replaces them with proper
-    hrefs pointing to the correct reference page, using the objects.json
-    inventory.
+    Quarto renders interlink syntax as ``<a>`` tags with backtick-wrapped hrefs:
+
+    - ``[](`~pkg.Name`)``  → shortened display (``Name``)
+    - ``[](`pkg.Name`)``   → full qualified display (``pkg.Name``)
+    - ``[custom text](`pkg.Name`)`` → custom display text preserved
+    - ``[custom text](`~pkg.Name`)`` → custom display text preserved
+
+    This function resolves those links against the objects.json inventory.
     """
     if not _interlinks_inventory:
         return html_content
 
-    # Single-pass: match the entire <a> tag that contains a backtick-wrapped
-    # interlink target in its href. Captures: (1) the qualified name,
-    # (2) everything between > and </a> (the link text, possibly empty).
+    # Single-pass: match <a> tags with backtick-wrapped interlink hrefs.
+    # The href may or may not have a ~ prefix. Captures:
+    #   (1) optional ~ prefix
+    #   (2) the qualified name
+    #   (3) everything between > and </a> (link text, possibly empty)
     def _replace_full_interlink(m):
-        name = m.group(1)
-        link_text = m.group(2)
+        tilde = m.group(1)
+        name = m.group(2)
+        link_text = m.group(3)
         result = _resolve_interlink_name(name)
         if result is None:
             return m.group(0)
@@ -152,15 +159,17 @@ def resolve_interlinks(html_content):
         # to get a sibling-relative path.
         if uri.startswith("reference/"):
             uri = uri[len("reference/") :]
-        # If link text is empty or still the backtick-wrapped form,
-        # use the resolved short name
+        # Determine display text:
+        # 1. Custom text provided by user → keep it
+        # 2. ~ prefix (shortened) → use short name
+        # 3. No ~ prefix (default) → use full qualified name
         text = link_text.strip()
-        if not text or re.match(r"^`~[\w.]+`$", text):
-            text = short_name
+        if not text or re.match(r"^`~?[\w.]+`$", text):
+            text = short_name if tilde else name
         return f'<a href="{uri}">{text}</a>'
 
     html_content = re.sub(
-        r'<a href="`~([\w.]+)`">(.*?)</a>',
+        r'<a href="`(~?)([\w.]+)`">(.*?)</a>',
         _replace_full_interlink,
         html_content,
     )
