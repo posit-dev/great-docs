@@ -300,6 +300,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_numpy_seealso_desc",  # 147
     # 148: Interlinks in prose
     "gdtest_interlinks_prose",  # 148
+    # 149: Autolink inline code
+    "gdtest_autolink",  # 149
 ]
 
 
@@ -457,6 +459,7 @@ DIMENSIONS: dict[str, dict[str, str]] = {
     "L22": {"axis": "docstring", "label": "See Also section"},
     "L25": {"axis": "docstring", "label": "See Also with descriptions"},
     "L26": {"axis": "docstring", "label": "Interlinks in prose"},
+    "L27": {"axis": "docstring", "label": "Autolink inline code"},
     "L23": {"axis": "docstring", "label": "Math in docstrings"},
     "L24": {"axis": "docstring", "label": "Tables in docstrings"},
     # User guide axes
@@ -1688,6 +1691,11 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "Three classes and a function using [](`~pkg.Name`) interlinks syntax "
         "directly in docstring prose text. Tests that the post-render resolver "
         "converts these references into proper hyperlinks to reference pages."
+    ),
+    "gdtest_autolink": (
+        "Three classes and a function using inline code (`Name`, `Name()`, "
+        "`~~pkg.Name`, `~~.pkg.Name`) that gets auto-converted into clickable "
+        "links to reference pages by the post-render autolink pass."
     ),
 }
 
