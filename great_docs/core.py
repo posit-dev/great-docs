@@ -66,6 +66,10 @@ class GreatDocs:
         """
         print(f"Preparing build directory: {self.project_path.relative_to(self.project_root)}/")
 
+        # Clean any existing build directory to avoid stale artifacts
+        if self.project_path.exists():
+            shutil.rmtree(self.project_path)
+
         # Create the great-docs directory
         self.project_path.mkdir(parents=True, exist_ok=True)
 
