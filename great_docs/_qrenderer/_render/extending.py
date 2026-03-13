@@ -31,13 +31,9 @@ def extend_base_class(cls: type[RenderBase]):
 
     See Also
     --------
-    great_docs.renderer.Renderer : The bridge between these renderers and
-        quartodoc's main renderer.
-
     great_docs.renderer.RenderDocClass, great_docs.renderer.RenderDocFunction,
         great_docs.renderer.RenderDocAttribute,
-        great_docs.renderer.RenderDocModule : Classes
-        you are most likely to extend.
+        great_docs.renderer.RenderDocModule : Classes you are most likely to extend.
     """
     # Attributes that should not be copied when extending a base class
     exclude = {"__module__", "__dict__", "__weakref__", "__doc__"}

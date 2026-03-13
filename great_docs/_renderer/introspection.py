@@ -222,9 +222,8 @@ def dynamic_alias(path: str, target: "str | None" = None, loader=None) -> dc.Obj
     path:
         Full path to the object. E.g. `my_package.get_object`.
     target:
-        Optional path to ultimate Alias target. By default, this is inferred
-        using the __module__ attribute of the imported object.
-
+        Optional path to ultimate Alias target. By default, this is inferred using the __module__
+        attribute of the imported object.
     """
     import importlib
 

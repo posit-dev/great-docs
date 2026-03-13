@@ -21,9 +21,6 @@ if TYPE_CHECKING:
     from ..._renderer.layout import Page
     from .doc import RenderDoc
 
-# NOTE: While quartodoc has Page.summary attribute, at the moment it is not used
-# so self.page.summary is None, always.
-
 
 class __RenderAPIPage(RenderPageMixin, RenderBase):
     """
@@ -71,10 +68,12 @@ class __RenderAPIPage(RenderPageMixin, RenderBase):
         # Derive the title of the page from the first (top-level) object
         obj = self.render_objs[0]
         title = obj._title  # pyright: ignore[reportPrivateUsage]
-        return Meta({
-            "title": f"{title}",
-            "body-classes": "doc-api-page",
-        })
+        return Meta(
+            {
+                "title": f"{title}",
+                "body-classes": "doc-api-page",
+            }
+        )
 
     def render_body(self) -> BlockContent:
         """

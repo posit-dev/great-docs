@@ -93,7 +93,7 @@ class isDoc:
 
 def griffe_to_doc(obj: gf.Object | gf.Alias, *, deep: bool = True) -> DocType:
     """
-    Convert griffe object to a quartodoc documentable type
+    Convert griffe object to a documentable type
 
     The function recursively includes all members.
     """

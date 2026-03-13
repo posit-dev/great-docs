@@ -12,13 +12,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class Renderer(_Renderer):
-    """
-    Render strings to markdown
-
-    This class provides a scafolding around quartodocs base
-    renderer and it helps connect the rendering done by this
-    package to the official quartodoc renderer API.
-    """
+    """Render strings to markdown"""
 
     header_level: int = 1
     show_signature: bool = True
