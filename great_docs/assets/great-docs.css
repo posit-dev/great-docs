@@ -974,6 +974,18 @@ body.quarto-light .navbar .gd-navbar-icon:hover {
     }
 }
 
+/* Reduce content grid side gutters at mobile */
+@media (max-width: 767.98px) {
+    body .page-columns {
+        grid-template-columns:
+            [screen-start] 0.5em
+            [screen-start-inset page-start page-start-inset body-start-outset body-start body-content-start]
+            minmax(0px, 1fr)
+            [body-content-end body-end body-end-outset page-end-inset page-end screen-end-inset]
+            0.5em [screen-end] !important;
+    }
+}
+
 @media (max-width: 768px) {
     .gh-stats {
         display: none;
