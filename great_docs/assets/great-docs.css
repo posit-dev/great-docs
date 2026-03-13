@@ -959,8 +959,7 @@ body.quarto-light .navbar .gd-navbar-icon:hover {
     }
 
     .gh-dropdown {
-        right: auto;
-        left: 0;
+        right: 0;
         min-width: 160px;
     }
 }
