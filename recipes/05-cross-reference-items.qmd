@@ -67,13 +67,16 @@ class Validator:
 
 ## Interlinks in Prose
 
-Create inline links to other API items anywhere in a docstring using the interlinks syntax:
+Create inline links to other API items anywhere in a docstring using the interlinks syntax. There are several forms:
 
-````markdown
-[](`~package_name.ClassName`)
-````
+| Style | Syntax | Displays as |
+| --- | --- | --- |
+| **Shortened** | `` [](`~mypackage.MyClass`) `` | `MyClass` |
+| **Full qualified** | `` [](`mypackage.MyClass`) `` | `mypackage.MyClass` |
+| **Custom text** | `` [see this class](`mypackage.MyClass`) `` | `see this class` |
+| **Custom + tilde** | `` [see this class](`~mypackage.MyClass`) `` | `see this class` |
 
-The `~` prefix displays only the short name. This is great for class hierarchies and overview docstrings:
+The `~` prefix displays only the short name when no custom text is provided. Custom link text always takes priority.
 
 ```python
 class BaseStore:
@@ -83,6 +86,9 @@ class BaseStore:
 
     - [](`~mypackage.DuckDBStore`): local storage with embedded search.
     - [](`~mypackage.ChromaDBStore`): vector storage using ChromaDB.
+
+    See [](`mypackage.BaseStore`) for the full API, or
+    [the DuckDB guide](`~mypackage.DuckDBStore`) for a walkthrough.
     """
     ...
 ```
