@@ -2750,6 +2750,7 @@ html[data-bs-theme="dark"] a.gd-view-md-btn:hover {
     font-family: var(--bs-body-font-family, system-ui, -apple-system, sans-serif);
     line-height: 1.5;
     letter-spacing: 0.01em;
+    text-wrap: balance;
 }
 .gd-announcement-banner a {
     font-weight: 600;
