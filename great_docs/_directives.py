@@ -12,12 +12,13 @@ class DocDirectives:
     Attributes
     ----------
     seealso
-        List of related items to cross-reference.
+        List of `(name, description)` tuples for cross-referencing. The description is an empty
+        string when not provided.
     nodoc
         If `True`, exclude this item from documentation.
     """
 
-    seealso: list[str] = field(default_factory=list)
+    seealso: list[tuple[str, str]] = field(default_factory=list)
     nodoc: bool = False
 
     def __bool__(self) -> bool:
@@ -65,17 +66,27 @@ def extract_directives(docstring: str | None) -> DocDirectives:
     ... '''
     >>> directives = extract_directives(doc)
     >>> directives.seealso
-    ['func_a', 'func_b']
+    [('func_a', ''), ('func_b', '')]
     """
     directives = DocDirectives()
 
     if not docstring:
         return directives
 
-    # Extract %seealso (comma-separated list)
+    # Extract %seealso (comma-separated list, each entry may have ": description")
     if match := DIRECTIVE_PATTERNS["seealso"].search(docstring):
-        items = [item.strip() for item in match.group(1).split(",")]
-        directives.seealso = [item for item in items if item]
+        items: list[tuple[str, str]] = []
+        for entry in match.group(1).split(","):
+            entry = entry.strip()
+            if not entry:
+                continue
+            # Split on first " : " or ": " to get name and optional description
+            parts = re.split(r"\s*:\s*", entry, maxsplit=1)
+            name = parts[0].strip()
+            desc = parts[1].strip() if len(parts) > 1 else ""
+            if name:
+                items.append((name, desc))
+        directives.seealso = items
 
     # Extract %nodoc
     if DIRECTIVE_PATTERNS["nodoc"].search(docstring):

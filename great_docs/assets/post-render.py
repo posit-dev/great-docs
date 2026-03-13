@@ -69,6 +69,24 @@ if os.path.exists(_gd_options_path):
     with open(_gd_options_path, "r") as f:
         _gd_options = json.load(f)
 
+# Load objects.json inventory for resolving interlinks
+# Maps qualified names -> {uri, dispname} for cross-reference resolution
+_interlinks_inventory: dict[str, dict[str, str]] = {}
+_objects_json_path = "objects.json"
+if os.path.exists(_objects_json_path):
+    with open(_objects_json_path, "r") as f:
+        _inv_data = json.load(f)
+    for item in _inv_data.get("items", []):
+        name = item.get("name", "")
+        if name:
+            _interlinks_inventory[name] = {
+                "uri": item.get("uri", ""),
+                "dispname": item.get("dispname", "-"),
+            }
+    print(f"Loaded {len(_interlinks_inventory)} interlinks inventory entries")
+else:
+    print("No objects.json found, interlinks resolution disabled")
+
 
 def get_source_link_html(item_name):
     """Generate HTML for a source link given an item name."""
@@ -76,6 +94,78 @@ def get_source_link_html(item_name):
         url = source_links[item_name]["url"]
         return f'<a href="{url}" class="source-link" target="_blank" rel="noopener">SOURCE</a>'
     return ""
+
+
+def _resolve_interlink_name(name):
+    """Resolve a qualified name to its inventory entry.
+
+    Tries exact match first, then looks for suffix matches (e.g.,
+    ``DuckDBStore`` matches ``raghilda.store.DuckDBStore``).
+
+    Returns (uri, short_name) or None if not found.
+    """
+    # Exact match
+    if name in _interlinks_inventory:
+        entry = _interlinks_inventory[name]
+        short = name.rsplit(".", 1)[-1]
+        return entry["uri"], short
+
+    # Suffix match: find the shortest qualified name that ends with the given name
+    candidates = []
+    for full_name, entry in _interlinks_inventory.items():
+        if full_name == name or full_name.endswith(f".{name}"):
+            candidates.append((full_name, entry))
+
+    if candidates:
+        # Prefer shortest match (most specific)
+        candidates.sort(key=lambda x: len(x[0]))
+        full_name, entry = candidates[0]
+        short = name.rsplit(".", 1)[-1]
+        return entry["uri"], short
+
+    return None
+
+
+def resolve_interlinks(html_content):
+    """Resolve interlink references in rendered HTML.
+
+    Quarto renders ``[](`~pkg.Name`)`` as ``<a href="`~pkg.Name`">...</a>``.
+    This function finds those unresolved links and replaces them with proper
+    hrefs pointing to the correct reference page, using the objects.json
+    inventory.
+    """
+    if not _interlinks_inventory:
+        return html_content
+
+    # Single-pass: match the entire <a> tag that contains a backtick-wrapped
+    # interlink target in its href. Captures: (1) the qualified name,
+    # (2) everything between > and </a> (the link text, possibly empty).
+    def _replace_full_interlink(m):
+        name = m.group(1)
+        link_text = m.group(2)
+        result = _resolve_interlink_name(name)
+        if result is None:
+            return m.group(0)
+        uri, short_name = result
+        # URIs from objects.json are root-relative (e.g. "reference/Name.html#...")
+        # but reference pages live inside reference/, so strip the prefix
+        # to get a sibling-relative path.
+        if uri.startswith("reference/"):
+            uri = uri[len("reference/") :]
+        # If link text is empty or still the backtick-wrapped form,
+        # use the resolved short name
+        text = link_text.strip()
+        if not text or re.match(r"^`~[\w.]+`$", text):
+            text = short_name
+        return f'<a href="{uri}">{text}</a>'
+
+    html_content = re.sub(
+        r'<a href="`~([\w.]+)`">(.*?)</a>',
+        _replace_full_interlink,
+        html_content,
+    )
+
+    return html_content
 
 
 # Pygments class to Quarto class mapping
@@ -1273,7 +1363,8 @@ def extract_seealso_from_html(html_content):
     """
     Extract %seealso values from HTML content before stripping.
 
-    Returns a list of referenced item names, or empty list if none found.
+    Returns a list of ``(name, description)`` tuples.  The description is an
+    empty string when no ``: description`` suffix was provided.
     """
     # Match %seealso in <p> tags (most common after markdown rendering)
     # This handles both standalone %seealso and when it follows other directives
@@ -1294,10 +1385,20 @@ def extract_seealso_from_html(html_content):
         match = standalone_pattern.search(html_content)
 
     if match:
-        # Parse comma-separated list
+        # Parse comma-separated list, each entry may have ": description"
         items_str = match.group(1).strip()
-        items = [item.strip() for item in items_str.split(",")]
-        return [item for item in items if item]
+        items = []
+        for entry in items_str.split(","):
+            entry = entry.strip()
+            if not entry:
+                continue
+            # Split on first " : " or ": " to separate name from description
+            parts = re.split(r"\s*:\s*", entry, maxsplit=1)
+            name = parts[0].strip()
+            desc = parts[1].strip() if len(parts) > 1 else ""
+            if name:
+                items.append((name, desc))
+        return items
 
     return []
 
@@ -1313,8 +1414,7 @@ def extract_seealso_from_doc_section(html_content):
         <p>transform : Transform data before analysis.</p>
         </section>
 
-    This function parses those sections and returns a list of referenced
-    item names (e.g., ``["transform"]``).
+    Returns a list of ``(name, description)`` tuples.
     """
     # Match <section id="see-also" ...> ... </section> blocks
     section_pat = re.compile(
@@ -1330,9 +1430,22 @@ def extract_seealso_from_doc_section(html_content):
         body = re.sub(r"<h[1-6][^>]*>.*?</h[1-6]>", "", body, flags=re.DOTALL)
 
         # Q renderer: names live in href attributes like href="`~Name`"
+        # Also look for description text in <dd> or after the link
         interlink_names = re.findall(r'href="`~([\w.]+)`"', body)
         if interlink_names:
-            items.extend(interlink_names)
+            # Try to extract descriptions from definition list structure
+            # Pattern: <dt>...<a href="`~Name`">...</a>...</dt><dd>description</dd>
+            dt_dd_pairs = re.findall(
+                r'<dt[^>]*>.*?href="`~([\w.]+)`".*?</dt>\s*<dd[^>]*>(.*?)</dd>',
+                body,
+                re.DOTALL,
+            )
+            if dt_dd_pairs:
+                for name, desc_html in dt_dd_pairs:
+                    desc = re.sub(r"<[^>]+>", "", desc_html).strip()
+                    items.append((name, desc))
+            else:
+                items.extend((name, "") for name in interlink_names)
             continue
 
         # Classic renderer: names appear as plain text
@@ -1351,14 +1464,16 @@ def extract_seealso_from_doc_section(html_content):
                 part = part.strip()
                 if not part:
                     continue
-                # Extract the name before any " : " or ":" separator
+                # Extract the name and description
                 # e.g., "transform : Transform data before analysis."
                 # e.g., "``validate``: Validate a schema before processing."
                 # Strip backticks first
                 part = part.replace("``", "").replace("`", "")
-                name_match = re.match(r"^([\w.]+)(?:\s*:\s*.*)?$", part)
+                name_match = re.match(r"^([\w.]+)(?:\s*:\s*(.*))?$", part)
                 if name_match:
-                    items.append(name_match.group(1))
+                    name = name_match.group(1)
+                    desc = (name_match.group(2) or "").strip()
+                    items.append((name, desc))
     return items
 
 
@@ -1389,23 +1504,39 @@ def remove_seealso_doc_section(html_content):
 def generate_seealso_html(seealso_items):
     """
     Generate HTML for a "See Also" section with links to other reference pages.
+
+    Each item is a ``(name, description)`` tuple.  When description is non-empty
+    it is rendered after the link.
     """
     if not seealso_items:
         return ""
 
     links = []
     for item in seealso_items:
+        if isinstance(item, tuple):
+            name, desc = item
+        else:
+            name, desc = item, ""
         # Generate link to the reference page
         # Item could be "Graph.add_edge" or just "add_edge"
-        html_filename = f"{item}.html"
-        links.append(f'<a href="{html_filename}" style="text-decoration: underline;">{item}</a>')
+        html_filename = f"{name}.html"
+        link = f'<a href="{html_filename}" style="text-decoration: underline;">{name}</a>'
+        if desc:
+            link = f"{link}: {desc}"
+        links.append(link)
 
-    links_html = ", ".join(links)
+    # Use a list layout when any item has a description, otherwise comma-separated
+    has_descriptions = any((item[1] if isinstance(item, tuple) else "") for item in seealso_items)
+    if has_descriptions:
+        items_html = "\n".join(f'<li style="margin-bottom: 0.25rem;">{link}</li>' for link in links)
+        body = f'<ul style="list-style: none; padding-left: 0; margin: 0;">{items_html}</ul>'
+    else:
+        body = f'<p style="margin: 0;">{", ".join(links)}</p>'
 
     return f"""
 <div class="see-also" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #dee2e6;">
 <h3 style="font-size: 0.9rem; font-weight: 600; color: #6c757d; margin-bottom: 0.5rem;">See Also</h3>
-<p style="margin: 0;">{links_html}</p>
+{body}
 </div>
 """
 
@@ -1736,12 +1867,15 @@ for html_file in html_files:
     doc_section_seealso = extract_seealso_from_doc_section(content_str)
     if doc_section_seealso:
         content_str = remove_seealso_doc_section(content_str)
-        # Merge with %seealso items (deduplicate, preserving order)
-        seen = set(seealso_items)
-        for item in doc_section_seealso:
-            if item not in seen:
-                seealso_items.append(item)
-                seen.add(item)
+        # Merge with %seealso items (deduplicate by name, preserving order)
+        seen = {name for name, _ in seealso_items}
+        for name, desc in doc_section_seealso:
+            if name not in seen:
+                seealso_items.append((name, desc))
+                seen.add(name)
+
+    # Resolve interlinks (`~Name` references) throughout the page
+    content_str = resolve_interlinks(content_str)
 
     # Inject unified "See Also" section at the bottom
     if seealso_items:
