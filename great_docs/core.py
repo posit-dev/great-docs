@@ -7,7 +7,6 @@ from pathlib import Path
 
 import yaml
 
-from . import __version__
 from .config import Config
 
 
@@ -8433,10 +8432,29 @@ toc: false
 
         # Append Great Docs attribution to footer if enabled
         if self._config.attribution:
-            # Extract major.minor from version (e.g., "0.1.0" -> "0.1")
-            version_parts = __version__.split(".")
-            short_version = ".".join(version_parts[:2]) if len(version_parts) >= 2 else __version__
-            attribution = f"Site created with <strong>Great&nbsp;Docs</strong> (v{short_version})"
+            # Get the short commit hash of the installed great-docs package
+            import subprocess
+
+            gd_version_label = ""
+            try:
+                gd_source_dir = Path(__file__).resolve().parent.parent
+                result = subprocess.run(
+                    ["git", "rev-parse", "--short", "HEAD"],
+                    cwd=gd_source_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if result.returncode == 0:
+                    short_hash = result.stdout.strip()
+                    gd_version_label = (
+                        f' (<a href="https://github.com/rich-iannone/great-docs/'
+                        f'commit/{short_hash}">{short_hash}</a>)'
+                    )
+            except Exception:
+                pass
+
+            attribution = f"Site created with <strong>Great&nbsp;Docs</strong>{gd_version_label}."
 
             if "page-footer" in config["website"]:
                 existing = config["website"]["page-footer"].get("center", "")
