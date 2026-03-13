@@ -5872,3 +5872,41 @@ def test_DED_google_seealso_ref():
     ref = _ref_dir(pkg)
     for name in ("encode", "decode", "compress", "decompress"):
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: Attribution (footer "Site created with Great Docs" text)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def test_R4_attribution_on_in_footer():
+    """Attribution enabled (default): _quarto.yml footer should contain Great Docs text."""
+    pkg = "gdtest_attribution_on"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    cfg = _load_quarto_yml(pkg)
+    footer = cfg.get("website", {}).get("page-footer", {})
+    footer_center = footer.get("center", "")
+    assert "Great&nbsp;Docs" in footer_center, "Footer should contain 'Great Docs' attribution text"
+    assert "Site created with" in footer_center, "Footer should contain 'Site created with' prefix"
+    # Should also still have the author
+    assert "Test&nbsp;Author" in footer_center, "Footer should still contain author name"
+
+
+def test_R4_attribution_off_not_in_footer():
+    """Attribution disabled: _quarto.yml footer should NOT contain Great Docs text."""
+    pkg = "gdtest_attribution_off"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    cfg = _load_quarto_yml(pkg)
+    footer = cfg.get("website", {}).get("page-footer", {})
+    footer_center = footer.get("center", "")
+    assert "Great" not in footer_center and "great" not in footer_center.lower(), (
+        "Footer should NOT contain Great Docs attribution when attribution: false"
+    )
+    # Should still have the author
+    assert "Test&nbsp;Author" in footer_center, (
+        "Footer should still contain author name even with attribution disabled"
+    )

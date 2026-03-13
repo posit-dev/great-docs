@@ -1012,6 +1012,17 @@ def test_config_defaults():
         assert config.markdown_pages_widget is True
         assert config.reference == []
         assert config.authors == []
+        assert config.attribution is True
+
+
+def test_config_attribution_disabled():
+    """Test that attribution can be disabled via config."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        config_file = Path(tmp_dir) / "great-docs.yml"
+        config_file.write_text("attribution: false\n")
+
+        config = Config(Path(tmp_dir))
+        assert config.attribution is False
 
 
 def test_config_load_yaml():
