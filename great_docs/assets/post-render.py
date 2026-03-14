@@ -269,7 +269,7 @@ def autolink_code_references(html_content):
         else:
             display = f"{name}{parens}"
 
-        return f'<a href="{uri}" class="gdls-link"><code>{display}</code></a>'
+        return f'<a href="{uri}" class="gdls-link gdls-code">{display}</a>'
 
     # Match <code> tags. We check if they're inside <a> tags during replacement.
     # Captures: (1) optional class attribute, (2) inner text
