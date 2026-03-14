@@ -143,7 +143,7 @@ SPEC = {
             # BaseStore: shortened links (~)
             "BaseStore": ["DuckDBStore", "ChromaDBStore"],
             # DuckDBStore: shortened links (~)
-            "DuckDBStore": ["BaseStore", "query"],
+            "DuckDBStore": ["BaseStore", "query()"],
             # ChromaDBStore: full qualified (no ~) + custom text with ~
             "ChromaDBStore": [
                 "gdtest_interlinks_prose.BaseStore",  # [](`pkg.Name`) → full name
