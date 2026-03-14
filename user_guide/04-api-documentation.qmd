@@ -279,8 +279,6 @@ will automatically expand to document `parser.parse`, `parser.parser`, `parser.P
 
 This is particularly useful for packages like `dateutil` that organize their API into topical submodules rather than exporting everything from the top-level `__init__.py`.
 
-## Cross-Referencing
-
 ## Great Docs Linking System (GDLS)
 
 Great Docs provides a linking system that automatically creates clickable navigation between your API reference pages. GDLS operates at three levels:
