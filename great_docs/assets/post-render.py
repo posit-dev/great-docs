@@ -82,6 +82,7 @@ if os.path.exists(_objects_json_path):
             _interlinks_inventory[name] = {
                 "uri": item.get("uri", ""),
                 "dispname": item.get("dispname", "-"),
+                "role": item.get("role", ""),
             }
     print(f"Loaded {len(_interlinks_inventory)} interlinks inventory entries")
 else:
@@ -96,19 +97,23 @@ def get_source_link_html(item_name):
     return ""
 
 
+# Roles that represent callable objects and should display with trailing "()"
+_CALLABLE_ROLES = {"function", "method"}
+
+
 def _resolve_interlink_name(name):
     """Resolve a qualified name to its inventory entry.
 
     Tries exact match first, then looks for suffix matches (e.g.,
     ``DuckDBStore`` matches ``raghilda.store.DuckDBStore``).
 
-    Returns (uri, short_name) or None if not found.
+    Returns (uri, short_name, role) or None if not found.
     """
     # Exact match
     if name in _interlinks_inventory:
         entry = _interlinks_inventory[name]
         short = name.rsplit(".", 1)[-1]
-        return entry["uri"], short
+        return entry["uri"], short, entry.get("role", "")
 
     # Suffix match: find the shortest qualified name that ends with the given name
     candidates = []
@@ -121,7 +126,7 @@ def _resolve_interlink_name(name):
         candidates.sort(key=lambda x: len(x[0]))
         full_name, entry = candidates[0]
         short = name.rsplit(".", 1)[-1]
-        return entry["uri"], short
+        return entry["uri"], short, entry.get("role", "")
 
     return None
 
@@ -153,7 +158,7 @@ def resolve_interlinks(html_content):
         result = _resolve_interlink_name(name)
         if result is None:
             return m.group(0)
-        uri, short_name = result
+        uri, short_name, role = result
         # URIs from objects.json are root-relative (e.g. "reference/Name.html#...")
         # but reference pages live inside reference/, so strip the prefix
         # to get a sibling-relative path.
@@ -166,7 +171,13 @@ def resolve_interlinks(html_content):
         text = link_text.strip()
         if not text or re.match(r"^`~?[\w.]+`$", text):
             text = short_name if tilde else name
-        return f'<a href="{uri}">{text}</a>'
+            # Append () for callable objects (functions, methods)
+            if role in _CALLABLE_ROLES:
+                text += "()"
+            css = "gdls-link gdls-code"
+        else:
+            css = "gdls-link"
+        return f'<a href="{uri}" class="{css}">{text}</a>'
 
     html_content = re.sub(
         r'<a href="`(~?)([\w.]+)`">(.*?)</a>',
@@ -246,7 +257,7 @@ def autolink_code_references(html_content):
                 return f"<code{class_attr}>{display}</code>"
             return full_tag
 
-        uri, short_name = result
+        uri, short_name, _role = result
         if uri.startswith("reference/"):
             uri = uri[len("reference/") :]
 
@@ -258,7 +269,7 @@ def autolink_code_references(html_content):
         else:
             display = f"{name}{parens}"
 
-        return f'<a href="{uri}"><code>{display}</code></a>'
+        return f'<a href="{uri}" class="gdls-link"><code>{display}</code></a>'
 
     # Match <code> tags. We check if they're inside <a> tags during replacement.
     # Captures: (1) optional class attribute, (2) inner text
@@ -1638,7 +1649,12 @@ def generate_seealso_html(seealso_items):
         # Generate link to the reference page
         # Item could be "Graph.add_edge" or just "add_edge"
         html_filename = f"{name}.html"
-        link = f'<a href="{html_filename}" style="text-decoration: underline;">{name}</a>'
+        # Append () for callable objects (functions, methods)
+        display = name
+        sa_result = _resolve_interlink_name(name)
+        if sa_result and sa_result[2] in _CALLABLE_ROLES:
+            display += "()"
+        link = f'<a href="{html_filename}" class="gdls-link gdls-code">{display}</a>'
         if desc:
             link = f"{link}: {desc}"
         links.append(link)

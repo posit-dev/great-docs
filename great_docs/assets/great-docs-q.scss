@@ -30,6 +30,16 @@ a {
    text-decoration: none;
 }
 
+a.gdls-link {
+   text-decoration: underline;
+   text-underline-offset: 0.25em;
+   text-decoration-thickness: 0.125em;
+}
+
+a.gdls-code {
+   font-family: $font-family-monospace;
+   font-size: 0.875em;
+}
 
 // Set headings boldness back to the bootstrap default.
 // quarto changes it for h1, h2, h3!
