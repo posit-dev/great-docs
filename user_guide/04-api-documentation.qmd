@@ -287,7 +287,7 @@ Great Docs provides a linking system that automatically creates clickable naviga
 2. **Inline interlinks** — Markdown link syntax to reference other API items anywhere in prose
 3. **Code autolinks** — inline code like `` `MyClass` `` is automatically linked when it matches a documented symbol
 
-All three mechanisms resolve against the same `objects.json` inventory that Great Docs generates during the build.
+All three mechanisms resolve against the same `objects.json` inventory that Great Docs generates during the build. To preview which symbols are available before building, run `great-docs scan`.
 
 ### The `%seealso` Directive
 
