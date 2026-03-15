@@ -7032,3 +7032,1044 @@ class TestPositBadgeInjection:
             header = config.get("format", {}).get("html", {}).get("include-in-header", [])
             badge_count = sum(1 for item in header if "supported-by-posit" in str(item))
             assert badge_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _update_project_gitignore (core.py lines ~302-328)
+# ---------------------------------------------------------------------------
+
+
+def test_update_gitignore_force_creates_new():
+    """_update_project_gitignore with force creates .gitignore when it doesn't exist."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._update_project_gitignore(force=True)
+
+        gitignore = Path(tmp_dir) / ".gitignore"
+        assert gitignore.exists()
+        content = gitignore.read_text()
+        assert "great-docs/" in content
+
+
+def test_update_gitignore_force_appends_to_existing():
+    """_update_project_gitignore with force appends to existing .gitignore."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        gitignore = Path(tmp_dir) / ".gitignore"
+        gitignore.write_text("__pycache__/\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._update_project_gitignore(force=True)
+
+        content = gitignore.read_text()
+        assert "__pycache__/" in content
+        assert "great-docs/" in content
+
+
+def test_update_gitignore_skip_when_already_present():
+    """_update_project_gitignore does nothing if entry already exists."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        gitignore = Path(tmp_dir) / ".gitignore"
+        gitignore.write_text("great-docs/\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._update_project_gitignore(force=True)
+
+        # Should not duplicate
+        content = gitignore.read_text()
+        assert content.count("great-docs/") == 1
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _detect_package_name (core.py lines ~352-379)
+# ---------------------------------------------------------------------------
+
+
+def test_detect_package_name_from_setup_cfg():
+    """_detect_package_name reads name from setup.cfg when no pyproject.toml."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        setup_cfg = Path(tmp_dir) / "setup.cfg"
+        setup_cfg.write_text("[metadata]\nname = my-cfg-package\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._detect_package_name() == "my-cfg-package"
+
+
+def test_detect_package_name_from_setup_py():
+    """_detect_package_name reads name from setup.py when no pyproject.toml or setup.cfg."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        setup_py = Path(tmp_dir) / "setup.py"
+        setup_py.write_text('from setuptools import setup\nsetup(name="my-setup-package")\n')
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._detect_package_name() == "my-setup-package"
+
+
+def test_detect_package_name_returns_none():
+    """_detect_package_name returns None when no package metadata found."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._detect_package_name() is None
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _detect_logo (core.py lines ~467-468)
+# ---------------------------------------------------------------------------
+
+
+def test_detect_logo_finds_svg():
+    """_detect_logo finds logo.svg in project root."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+        (Path(tmp_dir) / "logo.svg").write_text("<svg/>")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._detect_logo()
+
+        assert result is not None
+        assert result["light"] == "logo.svg"
+
+
+def test_detect_logo_finds_png_in_assets():
+    """_detect_logo finds logo.png in assets/ directory."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+        assets = Path(tmp_dir) / "assets"
+        assets.mkdir()
+        (assets / "logo.png").write_bytes(b"\x89PNG")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._detect_logo()
+
+        assert result is not None
+        assert result["light"] == "assets/logo.png"
+
+
+def test_detect_logo_returns_none():
+    """_detect_logo returns None when no logo file is found."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._detect_logo() is None
+
+
+def test_detect_logo_light_dark_pair():
+    """_detect_logo finds light/dark logo pair."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+        (Path(tmp_dir) / "logo.svg").write_text("<svg/>")
+        (Path(tmp_dir) / "logo-dark.svg").write_text("<svg dark/>")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._detect_logo()
+
+        assert result is not None
+        assert result["light"] == "logo.svg"
+        assert result["dark"] == "logo-dark.svg"
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _detect_hero_logo (core.py lines ~507-529)
+# ---------------------------------------------------------------------------
+
+
+def test_detect_hero_logo_finds_svg():
+    """_detect_hero_logo finds logo-hero.svg."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+        (Path(tmp_dir) / "logo-hero.svg").write_text("<svg hero/>")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._detect_hero_logo()
+
+        assert result is not None
+        assert result["light"] == "logo-hero.svg"
+
+
+def test_detect_hero_logo_light_dark_pair():
+    """_detect_hero_logo finds light/dark hero pair."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+        (Path(tmp_dir) / "logo-hero-light.svg").write_text("<svg light/>")
+        (Path(tmp_dir) / "logo-hero-dark.svg").write_text("<svg dark/>")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._detect_hero_logo()
+
+        assert result is not None
+        assert result["light"] == "logo-hero-light.svg"
+        assert result["dark"] == "logo-hero-dark.svg"
+
+
+def test_detect_hero_logo_returns_none():
+    """_detect_hero_logo returns None when no hero logo exists."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._detect_hero_logo() is None
+
+
+def test_detect_hero_logo_in_assets():
+    """_detect_hero_logo finds hero logo in assets/ directory."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+        assets = Path(tmp_dir) / "assets"
+        assets.mkdir()
+        (assets / "logo-hero.png").write_bytes(b"\x89PNG")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._detect_hero_logo()
+
+        assert result is not None
+        assert result["light"] == "assets/logo-hero.png"
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _normalize_package_name (core.py line 670)
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_package_name():
+    """_normalize_package_name replaces hyphens with underscores."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._normalize_package_name("my-cool-package") == "my_cool_package"
+        assert docs._normalize_package_name("already_underscored") == "already_underscored"
+        assert docs._normalize_package_name("simple") == "simple"
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _detect_module_name (core.py lines ~692-768)
+# ---------------------------------------------------------------------------
+
+
+def test_detect_module_name_from_config():
+    """_detect_module_name uses explicit module setting from config."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+        (Path(tmp_dir) / "great-docs.yml").write_text("module: my_custom_module\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._detect_module_name() == "my_custom_module"
+
+
+def test_detect_module_name_from_pyi_stub():
+    """_detect_module_name finds module from .pyi stub file."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+        (Path(tmp_dir) / "my_module.pyi").write_text("def foo() -> int: ...\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._detect_module_name() == "my_module"
+
+
+def test_detect_module_name_from_maturin():
+    """_detect_module_name reads module-name from [tool.maturin]."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "pkg"\n[tool.maturin]\nmodule-name = "rust_mod"\n'
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._detect_module_name() == "rust_mod"
+
+
+def test_detect_module_name_from_setuptools_packages():
+    """_detect_module_name reads from [tool.setuptools] packages list."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "pkg"\n[tool.setuptools]\npackages = ["my_lib"]\n'
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._detect_module_name() == "my_lib"
+
+
+def test_detect_module_name_from_hatch_packages():
+    """_detect_module_name reads from [tool.hatch.build.targets.wheel]."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "pkg"\n'
+            "[tool.hatch.build.targets.wheel]\n"
+            'packages = ["src/hatch_pkg"]\n'
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._detect_module_name() == "hatch_pkg"
+
+
+def test_detect_module_name_falls_back_to_init():
+    """_detect_module_name falls back to _find_package_init when no config found."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "my-pkg"\n')
+        pkg = Path(tmp_dir) / "my_pkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("__version__ = '1.0'\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._detect_module_name() == "my_pkg"
+
+
+def test_detect_module_name_returns_none():
+    """_detect_module_name returns None when nothing is found."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "mystery"\n')
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._detect_module_name() is None
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _is_compiled_extension (core.py lines ~779-793)
+# ---------------------------------------------------------------------------
+
+
+def test_is_compiled_extension_cargo():
+    """_is_compiled_extension returns True when Cargo.toml exists."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+        (Path(tmp_dir) / "Cargo.toml").write_text("[package]\nname = 'mypkg'\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._is_compiled_extension() is True
+
+
+def test_is_compiled_extension_pyi_without_py():
+    """_is_compiled_extension returns True for .pyi without matching .py."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+        (Path(tmp_dir) / "myext.pyi").write_text("def foo() -> int: ...\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._is_compiled_extension() is True
+
+
+def test_is_compiled_extension_false():
+    """_is_compiled_extension returns False for a normal Python package."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._is_compiled_extension() is False
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _get_cli_entry_point_name (core.py lines ~2124-2150)
+# ---------------------------------------------------------------------------
+
+
+def test_get_cli_entry_point_name():
+    """_get_cli_entry_point_name reads first entry point from pyproject.toml."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "pkg"\n[project.scripts]\nmycli = "pkg.cli:main"\n'
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._get_cli_entry_point_name("pkg") == "mycli"
+
+
+def test_get_cli_entry_point_name_gui_scripts():
+    """_get_cli_entry_point_name falls back to gui-scripts."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "pkg"\n[project.gui-scripts]\nmyapp = "pkg.gui:main"\n'
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._get_cli_entry_point_name("pkg") == "myapp"
+
+
+def test_get_cli_entry_point_name_no_scripts():
+    """_get_cli_entry_point_name returns None when no scripts defined."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._get_cli_entry_point_name("pkg") is None
+
+
+def test_get_cli_entry_point_name_no_pyproject():
+    """_get_cli_entry_point_name returns None when pyproject.toml missing."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._get_cli_entry_point_name("pkg") is None
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _add_frontmatter_option (core.py lines ~2861-2871)
+# ---------------------------------------------------------------------------
+
+
+def test_add_frontmatter_option_new_key():
+    """_add_frontmatter_option adds a new key to existing frontmatter."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = "---\ntitle: Hello\n---\n\n# Body\n"
+        result = docs._add_frontmatter_option(content, "toc", False)
+        assert "toc: false" in result
+        assert "title: Hello" in result
+
+
+def test_add_frontmatter_option_update_existing():
+    """_add_frontmatter_option updates an existing key."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = "---\ntitle: Old Title\n---\n\n# Body\n"
+        result = docs._add_frontmatter_option(content, "title", "New Title")
+        assert '"New Title"' in result
+        assert "Old Title" not in result
+
+
+def test_add_frontmatter_option_no_frontmatter():
+    """_add_frontmatter_option creates frontmatter when none exists."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = "# No frontmatter here\n"
+        result = docs._add_frontmatter_option(content, "title", "Added")
+        assert result.startswith("---\n")
+        assert '"Added"' in result
+        assert "# No frontmatter here" in result
+
+
+def test_add_frontmatter_option_bool_true():
+    """_add_frontmatter_option handles boolean True values."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = "---\ntitle: Test\n---\nBody"
+        result = docs._add_frontmatter_option(content, "toc", True)
+        assert "toc: true" in result
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _update_navbar_github_link (core.py lines ~1063-1100)
+# ---------------------------------------------------------------------------
+
+
+def test_update_navbar_github_link_widget_style():
+    """_update_navbar_github_link creates a widget entry."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        config = {"website": {"navbar": {"right": []}}}
+        docs._update_navbar_github_link(
+            config, "owner", "repo", "https://github.com/owner/repo", "widget"
+        )
+        right = config["website"]["navbar"]["right"]
+        assert len(right) == 1
+        assert "github-widget" in right[0]["text"]
+
+
+def test_update_navbar_github_link_icon_style():
+    """_update_navbar_github_link creates an icon entry."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        config = {"website": {"navbar": {"right": []}}}
+        docs._update_navbar_github_link(
+            config, "owner", "repo", "https://github.com/owner/repo", "icon"
+        )
+        right = config["website"]["navbar"]["right"]
+        assert len(right) == 1
+        assert right[0]["icon"] == "github"
+
+
+def test_update_navbar_github_link_replaces_existing():
+    """_update_navbar_github_link replaces an existing GitHub icon entry."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        config = {
+            "website": {
+                "navbar": {
+                    "right": [
+                        {"icon": "github", "href": "https://github.com/old/old"},
+                        {"icon": "twitter", "href": "https://twitter.com"},
+                    ]
+                }
+            }
+        }
+        docs._update_navbar_github_link(
+            config, "new_owner", "new_repo", "https://github.com/new_owner/new_repo", "widget"
+        )
+        right = config["website"]["navbar"]["right"]
+        assert len(right) == 2
+        assert "github-widget" in right[0]["text"]
+        assert right[1]["icon"] == "twitter"
+
+
+def test_update_navbar_github_link_no_url():
+    """_update_navbar_github_link does nothing if repo_url is None."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        config = {"website": {"navbar": {"right": []}}}
+        docs._update_navbar_github_link(config, None, None, None, "icon")
+        assert config["website"]["navbar"]["right"] == []
+
+
+def test_update_navbar_github_link_creates_right_section():
+    """_update_navbar_github_link creates 'right' list if missing."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        config = {"website": {"navbar": {}}}
+        docs._update_navbar_github_link(
+            config, "owner", "repo", "https://github.com/owner/repo", "icon"
+        )
+        assert "right" in config["website"]["navbar"]
+        assert len(config["website"]["navbar"]["right"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _find_index_source_file (core.py lines ~6537-6560)
+# ---------------------------------------------------------------------------
+
+
+def test_find_index_source_file_readme():
+    """_find_index_source_file finds README.md."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname="p"\n')
+        (Path(tmp_dir) / "README.md").write_text("# Hello\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        source, warnings = docs._find_index_source_file()
+
+        assert source is not None
+        assert source.name == "README.md"
+
+
+def test_find_index_source_file_index_qmd_priority():
+    """_find_index_source_file prefers index.qmd over README.md."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname="p"\n')
+        (Path(tmp_dir) / "index.qmd").write_text("---\ntitle: Main\n---\n")
+        (Path(tmp_dir) / "README.md").write_text("# Hello\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        source, warnings = docs._find_index_source_file()
+
+        assert source is not None
+        assert source.name == "index.qmd"
+        assert len(warnings) == 1  # warns about multiple candidates
+
+
+def test_find_index_source_file_none():
+    """_find_index_source_file returns None when no source file exists."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname="p"\n')
+
+        docs = GreatDocs(project_path=tmp_dir)
+        source, warnings = docs._find_index_source_file()
+
+        assert source is None
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _format_preserved_extras_yaml (core.py lines ~5964-6004)
+# ---------------------------------------------------------------------------
+
+
+def test_format_preserved_extras_yaml_with_values():
+    """_format_preserved_extras_yaml generates active YAML when values set."""
+    dn, site, funding = GreatDocs._format_preserved_extras_yaml(
+        display_name="My Package",
+        site={"theme": "flatly", "toc": True},
+        funding={"name": "ACME Corp", "roles": ["funder"], "homepage": "https://acme.com"},
+    )
+    assert 'display_name: "My Package"' in dn
+    assert "site:" in site
+    assert "theme: flatly" in site
+    assert "toc: true" in site
+    assert 'name: "ACME Corp"' in funding
+    assert "- funder" in funding
+    assert "homepage: https://acme.com" in funding
+
+
+def test_format_preserved_extras_yaml_defaults():
+    """_format_preserved_extras_yaml generates commented templates when no values."""
+    dn, site, funding = GreatDocs._format_preserved_extras_yaml()
+    assert dn == ""
+    assert "# site:" in site
+    assert "# funding:" in funding
+
+
+def test_format_preserved_extras_yaml_funding_with_ror():
+    """_format_preserved_extras_yaml includes ROR when provided."""
+    _, _, funding = GreatDocs._format_preserved_extras_yaml(
+        funding={"name": "Posit", "ror": "https://ror.org/123"}
+    )
+    assert "ror: https://ror.org/123" in funding
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _format_cli_yaml (core.py lines ~6039-6049)
+# ---------------------------------------------------------------------------
+
+
+def test_format_cli_yaml_enabled():
+    """_format_cli_yaml generates active YAML when CLI is enabled."""
+    result = GreatDocs._format_cli_yaml({"enabled": True, "module": "pkg.cli", "name": "mycli"})
+    assert "cli:" in result
+    assert "enabled: true" in result
+    assert "module: pkg.cli" in result
+    assert "name: mycli" in result
+
+
+def test_format_cli_yaml_disabled():
+    """_format_cli_yaml generates commented template when disabled."""
+    result = GreatDocs._format_cli_yaml(None)
+    assert "# cli:" in result
+    assert "#   enabled: true" in result
+
+
+def test_format_cli_yaml_enabled_minimal():
+    """_format_cli_yaml with only enabled flag set."""
+    result = GreatDocs._format_cli_yaml({"enabled": True})
+    assert "cli:" in result
+    assert "enabled: true" in result
+    assert "module:" not in result
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _get_package_metadata (core.py lines ~931-991)
+# ---------------------------------------------------------------------------
+
+
+def test_get_package_metadata_from_setup_cfg():
+    """_get_package_metadata reads metadata from setup.cfg fallback."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "setup.cfg").write_text(
+            "[metadata]\n"
+            "name = my-package\n"
+            "description = A test package\n"
+            "license = MIT\n"
+            "author = Test Author\n"
+            "author_email = test@example.com\n"
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        metadata = docs._get_package_metadata()
+
+        assert metadata["description"] == "A test package"
+        assert metadata["license"] == "MIT"
+        assert len(metadata["authors"]) == 1
+        assert metadata["authors"][0]["name"] == "Test Author"
+
+
+def test_get_package_metadata_setup_cfg_urls():
+    """_get_package_metadata reads URLs from setup.cfg."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "setup.cfg").write_text(
+            "[metadata]\n"
+            "name = my-package\n"
+            "description = A test\n"
+            "url = https://github.com/me/pkg\n"
+            "project_urls =\n"
+            "    Documentation = https://docs.example.com\n"
+            "    Bug Tracker = https://github.com/me/pkg/issues\n"
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        metadata = docs._get_package_metadata()
+
+        assert "Repository" in metadata["urls"]
+        assert "Documentation" in metadata["urls"]
+
+
+def test_get_package_metadata_setup_cfg_maintainer():
+    """_get_package_metadata reads maintainer from setup.cfg."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "setup.cfg").write_text(
+            "[metadata]\n"
+            "name = my-package\n"
+            "description = Desc\n"
+            "maintainer = Maintainer Person\n"
+            "maintainer_email = maint@example.com\n"
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        metadata = docs._get_package_metadata()
+
+        assert len(metadata["maintainers"]) == 1
+        assert metadata["maintainers"][0]["name"] == "Maintainer Person"
+
+
+def test_get_package_metadata_setup_cfg_python_requires():
+    """_get_package_metadata reads python_requires from setup.cfg."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "setup.cfg").write_text(
+            "[metadata]\nname = my-package\ndescription = D\n\n[options]\npython_requires = >=3.8\n"
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        metadata = docs._get_package_metadata()
+
+        assert metadata["requires_python"] == ">=3.8"
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _find_package_init third-pass auto-discovery (core.py lines ~3660-3696)
+# ---------------------------------------------------------------------------
+
+
+def test_find_package_init_auto_discovers():
+    """_find_package_init auto-discovers packages with non-matching names."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "completely-different"\n')
+
+        # Create a package with a different name than the project
+        pkg = Path(tmp_dir) / "actual_pkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("x = 1\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._find_package_init("completely-different")
+
+        assert result is not None
+        assert result.parent.name == "actual_pkg"
+
+
+def test_find_package_init_skips_excluded_dirs():
+    """_find_package_init skips tests/, docs/, .venv/ etc during auto-discovery."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text('[project]\nname = "nonexistent"\n')
+
+        # These should be skipped
+        for d in ["tests", "docs", ".venv", "__pycache__"]:
+            skipped = Path(tmp_dir) / d
+            skipped.mkdir()
+            (skipped / "__init__.py").write_text("")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._find_package_init("nonexistent")
+
+        assert result is None
+
+
+def test_find_package_init_hatch_packages():
+    """_find_package_init uses [tool.hatch.build.targets.wheel.packages]."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "mypkg"\n'
+            "[tool.hatch.build.targets.wheel]\n"
+            'packages = ["src/hatch_mod"]\n'
+        )
+
+        src = Path(tmp_dir) / "src" / "hatch_mod"
+        src.mkdir(parents=True)
+        (src / "__init__.py").write_text("__all__ = ['x']\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._find_package_init("mypkg")
+
+        assert result is not None
+        assert result.parent.name == "hatch_mod"
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _sub_classify_class static method (core.py lines ~4435-4504)
+# ---------------------------------------------------------------------------
+
+
+def test_sub_classify_class_dataclass():
+    """_sub_classify_class identifies dataclasses."""
+
+    class FakeObj:
+        labels = {"dataclass"}
+        bases = []
+        decorators = []
+
+    assert GreatDocs._sub_classify_class(FakeObj()) == "dataclass"
+
+
+def test_sub_classify_class_enum():
+    """_sub_classify_class identifies enums."""
+
+    class FakeObj:
+        labels = set()
+
+        class FakeBase:
+            def __str__(self):
+                return "enum.IntEnum"
+
+        bases = [FakeBase()]
+        decorators = []
+
+    assert GreatDocs._sub_classify_class(FakeObj()) == "enum"
+
+
+def test_sub_classify_class_exception():
+    """_sub_classify_class identifies exceptions."""
+
+    class FakeObj:
+        labels = set()
+
+        class FakeBase:
+            def __str__(self):
+                return "Exception"
+
+        bases = [FakeBase()]
+        decorators = []
+
+    assert GreatDocs._sub_classify_class(FakeObj()) == "exception"
+
+
+def test_sub_classify_class_namedtuple():
+    """_sub_classify_class identifies NamedTuples."""
+
+    class FakeObj:
+        labels = set()
+
+        class FakeBase:
+            def __str__(self):
+                return "NamedTuple"
+
+        bases = [FakeBase()]
+        decorators = []
+
+    assert GreatDocs._sub_classify_class(FakeObj()) == "namedtuple"
+
+
+def test_sub_classify_class_typeddict():
+    """_sub_classify_class identifies TypedDicts."""
+
+    class FakeObj:
+        labels = set()
+
+        class FakeBase:
+            def __str__(self):
+                return "TypedDict"
+
+        bases = [FakeBase()]
+        decorators = []
+
+    assert GreatDocs._sub_classify_class(FakeObj()) == "typeddict"
+
+
+def test_sub_classify_class_protocol():
+    """_sub_classify_class identifies Protocols."""
+
+    class FakeObj:
+        labels = set()
+
+        class FakeBase:
+            def __str__(self):
+                return "Protocol"
+
+        bases = [FakeBase()]
+        decorators = []
+
+    assert GreatDocs._sub_classify_class(FakeObj()) == "protocol"
+
+
+def test_sub_classify_class_abc():
+    """_sub_classify_class identifies ABCs."""
+
+    class FakeObj:
+        labels = set()
+
+        class FakeBase:
+            def __str__(self):
+                return "ABC"
+
+        bases = [FakeBase()]
+        decorators = []
+
+    assert GreatDocs._sub_classify_class(FakeObj()) == "abc"
+
+
+def test_sub_classify_class_abc_from_decorator():
+    """_sub_classify_class identifies ABCs from abstractmethod decorator."""
+
+    class FakeDecorator:
+        def __init__(self):
+            self.value = "abstractmethod"
+
+    class FakeObj:
+        labels = set()
+        bases = []
+        decorators = [FakeDecorator()]
+
+    assert GreatDocs._sub_classify_class(FakeObj()) == "abc"
+
+
+def test_sub_classify_class_plain():
+    """_sub_classify_class returns 'class' for regular classes."""
+
+    class FakeObj:
+        labels = set()
+        bases = []
+        decorators = []
+
+    assert GreatDocs._sub_classify_class(FakeObj()) == "class"
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _sub_classify_function static method (core.py lines ~4494-4504)
+# ---------------------------------------------------------------------------
+
+
+def test_sub_classify_function_async():
+    """_sub_classify_function identifies async functions."""
+
+    class FakeObj:
+        labels = {"async"}
+
+    assert GreatDocs._sub_classify_function(FakeObj()) == "async"
+
+
+def test_sub_classify_function_classmethod():
+    """_sub_classify_function identifies classmethods."""
+
+    class FakeObj:
+        labels = {"classmethod"}
+
+    assert GreatDocs._sub_classify_function(FakeObj()) == "classmethod"
+
+
+def test_sub_classify_function_staticmethod():
+    """_sub_classify_function identifies staticmethods."""
+
+    class FakeObj:
+        labels = {"staticmethod"}
+
+    assert GreatDocs._sub_classify_function(FakeObj()) == "staticmethod"
+
+
+def test_sub_classify_function_property():
+    """_sub_classify_function identifies properties."""
+
+    class FakeObj:
+        labels = {"property"}
+
+    assert GreatDocs._sub_classify_function(FakeObj()) == "property"
+
+
+def test_sub_classify_function_plain():
+    """_sub_classify_function returns 'function' for regular functions."""
+
+    class FakeObj:
+        labels = set()
+
+    assert GreatDocs._sub_classify_function(FakeObj()) == "function"
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _sub_classify_attribute static method (core.py lines ~4527-4544)
+# ---------------------------------------------------------------------------
+
+
+def test_sub_classify_attribute_type_alias():
+    """_sub_classify_attribute identifies type aliases via kind."""
+
+    class FakeKind:
+        value = "type alias"
+
+    class FakeObj:
+        labels = set()
+        kind = FakeKind()
+        annotation = None
+
+    assert GreatDocs._sub_classify_attribute(FakeObj()) == "type_alias"
+
+
+def test_sub_classify_attribute_typevar():
+    """_sub_classify_attribute identifies TypeVar annotations."""
+
+    class FakeObj:
+        labels = set()
+        kind = None
+        annotation = "TypeVar"
+
+    assert GreatDocs._sub_classify_attribute(FakeObj()) == "typevar"
+
+
+def test_sub_classify_attribute_paramspec():
+    """_sub_classify_attribute identifies ParamSpec annotations."""
+
+    class FakeObj:
+        labels = set()
+        kind = None
+        annotation = "ParamSpec"
+
+    assert GreatDocs._sub_classify_attribute(FakeObj()) == "typevar"
+
+
+def test_sub_classify_attribute_constant():
+    """_sub_classify_attribute returns 'constant' for regular attributes."""
+
+    class FakeObj:
+        labels = set()
+        kind = None
+        annotation = None
+
+    assert GreatDocs._sub_classify_attribute(FakeObj()) == "constant"
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _extract_constant_metadata static method (core.py lines ~4577-4583)
+# ---------------------------------------------------------------------------
+
+
+def test_extract_constant_metadata_value_and_annotation():
+    """_extract_constant_metadata captures both value and annotation."""
+
+    class FakeObj:
+        value = "42"
+        annotation = "int"
+
+    categories = {"constant_metadata": {}}
+    GreatDocs._extract_constant_metadata(FakeObj(), "MY_CONST", categories)
+
+    assert "MY_CONST" in categories["constant_metadata"]
+    assert categories["constant_metadata"]["MY_CONST"]["value"] == "42"
+    assert categories["constant_metadata"]["MY_CONST"]["annotation"] == "int"
+
+
+def test_extract_constant_metadata_no_value():
+    """_extract_constant_metadata skips when value is None."""
+
+    class FakeObj:
+        value = None
+        annotation = "str"
+
+    categories = {"constant_metadata": {}}
+    GreatDocs._extract_constant_metadata(FakeObj(), "X", categories)
+
+    assert "X" in categories["constant_metadata"]
+    assert "value" not in categories["constant_metadata"]["X"]
+    assert categories["constant_metadata"]["X"]["annotation"] == "str"
+
+
+def test_extract_constant_metadata_long_value():
+    """_extract_constant_metadata skips values longer than 200 chars."""
+
+    class FakeObj:
+        value = "x" * 201
+        annotation = None
+
+    categories = {"constant_metadata": {}}
+    GreatDocs._extract_constant_metadata(FakeObj(), "BIG", categories)
+
+    assert "BIG" not in categories["constant_metadata"]
+
+
+# ---------------------------------------------------------------------------
+# Coverage: _count_cli_sidebar_items static method (core.py line ~2350)
+# ---------------------------------------------------------------------------
+
+
+def test_count_cli_sidebar_items_flat():
+    """_count_cli_sidebar_items counts simple string entries."""
+    assert GreatDocs._count_cli_sidebar_items(["a.qmd", "b.qmd", "c.qmd"]) == 3
+
+
+def test_count_cli_sidebar_items_nested():
+    """_count_cli_sidebar_items counts nested section contents."""
+    items = [
+        "top.qmd",
+        {"section": "Group", "contents": ["a.qmd", "b.qmd"]},
+    ]
+    assert GreatDocs._count_cli_sidebar_items(items) == 3
+
+
+def test_count_cli_sidebar_items_empty():
+    """_count_cli_sidebar_items returns 0 for empty list."""
+    assert GreatDocs._count_cli_sidebar_items([]) == 0
