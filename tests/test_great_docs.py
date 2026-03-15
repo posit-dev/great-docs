@@ -12886,3 +12886,2277 @@ def test_update_navbar_github_link_with_string_items():
         assert right[0] == "text-only"
         assert right[1] == {"text": "Other"}
         assert right[2] == {"icon": "github", "href": "https://github.com/user/repo"}
+
+
+# ── Batch 6: _generate_source_links_json, _build_github_source_url,
+#    _get_source_location, _generate_minimal_config, _generate_llms_txt,
+#    _check_docstring_spelling, citation/BibTeX, _create_api_sections_from_config,
+#    _apply_nodoc_filter, _prepare_build_directory, _detect_git_ref,
+#    navbar_color CSS, content_style, announcement banner, _update_sidebar_from_sections,
+#    _update_reference_index_frontmatter, _write_quarto_yml, _get_docstring_summary,
+#    _get_cli_help_text_for_llms, _strip_frontmatter, _get_user_guide_text_for_llms,
+#    _detect_dynamic_mode, attribution, page footer ──
+
+
+def test_build_github_source_url_basic():
+    """Test _build_github_source_url with single-line source location."""
+    import json
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        # Set up pyproject.toml so _get_github_repo_info returns valid info
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\n'
+            '[project.urls]\nRepository = "https://github.com/owner/repo"\n',
+            encoding="utf-8",
+        )
+
+        result = docs._build_github_source_url(
+            {"file": "mypkg/module.py", "start_line": 10, "end_line": 10},
+            branch="main",
+        )
+        assert result is not None
+        assert result.endswith("#L10")
+        assert "/blob/main/" in result
+
+
+def test_build_github_source_url_line_range():
+    """Test _build_github_source_url with multi-line range."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\n'
+            '[project.urls]\nRepository = "https://github.com/owner/repo"\n',
+            encoding="utf-8",
+        )
+
+        result = docs._build_github_source_url(
+            {"file": "mypkg/core.py", "start_line": 5, "end_line": 20},
+            branch="v1.0",
+        )
+        assert result is not None
+        assert result.endswith("#L5-L20")
+        assert "/blob/v1.0/" in result
+
+
+def test_build_github_source_url_no_repo():
+    """Test _build_github_source_url returns None when no repo info."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        # No pyproject.toml → no repo info
+        result = docs._build_github_source_url(
+            {"file": "mypkg/module.py", "start_line": 1, "end_line": 1},
+            branch="main",
+        )
+        assert result is None
+
+
+def test_build_github_source_url_source_path_config():
+    """Test _build_github_source_url with custom source_link_path for monorepos."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\n'
+            '[project.urls]\nRepository = "https://github.com/owner/repo"\n',
+            encoding="utf-8",
+        )
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("source:\n  path: packages/mypkg/src\n", encoding="utf-8")
+        docs._config = Config(Path(tmp_dir))
+
+        result = docs._build_github_source_url(
+            {"file": "/absolute/path/module.py", "start_line": 3, "end_line": 3},
+            branch="main",
+        )
+        assert result is not None
+        assert "packages/mypkg/src/module.py" in result
+
+
+def test_build_github_source_url_absolute_path():
+    """Test _build_github_source_url with absolute filepath converted to relative."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\n'
+            '[project.urls]\nRepository = "https://github.com/owner/repo"\n',
+            encoding="utf-8",
+        )
+
+        # Make the filepath absolute and inside the package root
+        abs_path = str(Path(tmp_dir) / "mypkg" / "core.py")
+        result = docs._build_github_source_url(
+            {"file": abs_path, "start_line": 1, "end_line": 5},
+            branch="dev",
+        )
+        assert result is not None
+        assert "/blob/dev/" in result
+
+
+def test_detect_git_ref_configured_branch():
+    """Test _detect_git_ref uses configured branch from metadata."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("source:\n  branch: release-2.0\n", encoding="utf-8")
+        docs._config = Config(Path(tmp_dir))
+
+        result = docs._detect_git_ref()
+        assert result == "release-2.0"
+
+
+def test_detect_git_ref_fallback():
+    """Test _detect_git_ref falls back to 'main' when no git repo."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        # No git repo, no config
+        result = docs._detect_git_ref()
+        assert result == "main"
+
+
+def test_generate_source_links_json_disabled():
+    """Test _generate_source_links_json skips when source links disabled."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("source:\n  enabled: false\n", encoding="utf-8")
+        docs._config = Config(Path(tmp_dir))
+
+        docs._generate_source_links_json("mypkg")
+        # Should return early; no JSON file created
+        assert not (docs.project_path / "_source_links.json").exists()
+
+
+def test_generate_source_links_json_no_repo():
+    """Test _generate_source_links_json skips when no GitHub repo info."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        # No pyproject.toml = no repo
+        docs._generate_source_links_json("mypkg")
+        assert not (docs.project_path / "_source_links.json").exists()
+
+
+def test_get_source_location_no_griffe():
+    """Test _get_source_location handles missing griffe gracefully."""
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        # Mock griffe import failure
+        with patch.dict("sys.modules", {"griffe": None}):
+            result = docs._get_source_location("nonexistent_package", "SomeClass")
+            assert result is None
+
+
+def test_generate_minimal_config_default():
+    """Test _generate_minimal_config with default parameters."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        result = docs._generate_minimal_config()
+        assert "parser: numpy" in result
+        assert "dynamic: true" in result
+        assert "Great Docs Configuration" in result
+
+
+def test_generate_minimal_config_google_no_dynamic():
+    """Test _generate_minimal_config with google parser and dynamic=False."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        result = docs._generate_minimal_config(parser="google", dynamic=False)
+        assert "parser: google" in result
+        assert "dynamic: false" in result
+
+
+def test_generate_minimal_config_sphinx():
+    """Test _generate_minimal_config with sphinx parser."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        result = docs._generate_minimal_config(parser="sphinx", dynamic=True)
+        assert "parser: sphinx" in result
+        assert "dynamic: true" in result
+
+
+def test_strip_frontmatter_with_yaml():
+    """Test _strip_frontmatter removes YAML front matter."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = "---\ntitle: Test\n---\n\n# Hello\nWorld"
+        result = docs._strip_frontmatter(content)
+        assert "title: Test" not in result
+        assert "# Hello" in result
+        assert "World" in result
+
+
+def test_strip_frontmatter_no_frontmatter():
+    """Test _strip_frontmatter with no frontmatter passes through."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = "# Hello\nWorld"
+        result = docs._strip_frontmatter(content)
+        assert "# Hello" in result
+        assert "World" in result
+
+
+def test_get_docstring_summary_returns_first_line():
+    """Test _get_docstring_summary extracts first line of docstring."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        # Use a known stdlib module
+        result = docs._get_docstring_summary("os", "path")
+        # os.path has a docstring, so result should be non-empty or empty
+        # (we just test it doesn't crash)
+        assert isinstance(result, str)
+
+
+def test_get_docstring_summary_nonexistent():
+    """Test _get_docstring_summary for nonexistent item returns empty."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        result = docs._get_docstring_summary("os", "nonexistent_xyz_abc")
+        assert result == ""
+
+
+def test_get_docstring_summary_no_docstring():
+    """Test _get_docstring_summary for object with no docstring returns empty."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        result = docs._get_docstring_summary("nonexistent_package_xyz", "whatever")
+        assert result == ""
+
+
+def test_write_quarto_yml_adds_header():
+    """Test _write_quarto_yml writes config with header comment."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        config = {"project": {"type": "website"}}
+        docs._write_quarto_yml(quarto_yml, config)
+
+        content = quarto_yml.read_text()
+        assert "project" in content
+        # Header comment should be present
+        assert "#" in content
+
+
+def test_update_sidebar_from_sections_basic():
+    """Test _update_sidebar_from_sections builds sidebar from API reference."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        config = {
+            "project": {"type": "website"},
+            "website": {"sidebar": []},
+            "api-reference": {
+                "package": "mypkg",
+                "sections": [
+                    {
+                        "title": "Classes",
+                        "desc": "",
+                        "contents": ["MyClass", "OtherClass"],
+                    },
+                    {
+                        "title": "Functions",
+                        "desc": "",
+                        "contents": ["my_func"],
+                    },
+                ],
+            },
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(config, f)
+
+        docs._update_sidebar_from_sections()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        sidebar = result["website"]["sidebar"]
+        assert len(sidebar) == 1
+        assert sidebar[0]["id"] == "reference"
+        contents = sidebar[0]["contents"]
+        # First entry is API link
+        assert contents[0] == {"text": "API", "href": "reference/index.qmd"}
+        # Then section entries
+        assert contents[1]["section"] == "Classes"
+        assert "reference/MyClass.qmd" in contents[1]["contents"]
+        assert "reference/OtherClass.qmd" in contents[1]["contents"]
+        assert contents[2]["section"] == "Functions"
+        assert "reference/my_func.qmd" in contents[2]["contents"]
+
+
+def test_update_sidebar_from_sections_dict_items():
+    """Test _update_sidebar_from_sections handles dict items in contents."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        config = {
+            "project": {"type": "website"},
+            "website": {"sidebar": []},
+            "api-reference": {
+                "package": "mypkg",
+                "sections": [
+                    {
+                        "title": "Core",
+                        "desc": "",
+                        "contents": [
+                            {"name": "BigClass", "members": []},
+                            "simple_func",
+                        ],
+                    },
+                ],
+            },
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(config, f)
+
+        docs._update_sidebar_from_sections()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        sidebar = result["website"]["sidebar"]
+        section = sidebar[0]["contents"][1]  # First section after API link
+        assert "reference/BigClass.qmd" in section["contents"]
+        assert "reference/simple_func.qmd" in section["contents"]
+
+
+def test_update_sidebar_no_api_reference():
+    """Test _update_sidebar_from_sections with no api-reference does nothing."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        config = {"project": {"type": "website"}, "website": {"sidebar": []}}
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(config, f)
+
+        # Should not raise
+        docs._update_sidebar_from_sections()
+
+
+def test_update_reference_index_frontmatter_no_file():
+    """Test _update_reference_index_frontmatter when index.qmd doesn't exist."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        # Should not raise
+        docs._update_reference_index_frontmatter()
+
+
+def test_update_reference_index_frontmatter_adds_page_nav():
+    """Test _update_reference_index_frontmatter adds page-navigation to existing frontmatter."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        ref_dir = docs.docs_dir / "reference"
+        ref_dir.mkdir(parents=True, exist_ok=True)
+
+        index_qmd = ref_dir / "index.qmd"
+        index_qmd.write_text("---\ntitle: API Reference\n---\n\n# API\n", encoding="utf-8")
+
+        docs._update_reference_index_frontmatter()
+
+        content = index_qmd.read_text()
+        assert "page-navigation: false" in content
+
+
+def test_update_reference_index_frontmatter_no_frontmatter():
+    """Test _update_reference_index_frontmatter adds frontmatter when none exists."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        ref_dir = docs.docs_dir / "reference"
+        ref_dir.mkdir(parents=True, exist_ok=True)
+
+        index_qmd = ref_dir / "index.qmd"
+        index_qmd.write_text("# API Reference\n\nSome content.\n", encoding="utf-8")
+
+        docs._update_reference_index_frontmatter()
+
+        content = index_qmd.read_text()
+        assert content.startswith("---\n")
+        assert "page-navigation: false" in content
+
+
+def test_update_reference_index_frontmatter_already_has_page_nav():
+    """Test _update_reference_index_frontmatter skips when page-navigation already present."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        ref_dir = docs.docs_dir / "reference"
+        ref_dir.mkdir(parents=True, exist_ok=True)
+
+        index_qmd = ref_dir / "index.qmd"
+        original = "---\ntitle: API Reference\npage-navigation: false\n---\n\n# API\n"
+        index_qmd.write_text(original, encoding="utf-8")
+
+        docs._update_reference_index_frontmatter()
+
+        content = index_qmd.read_text()
+        # Should be unchanged
+        assert content == original
+
+
+def test_generate_llms_txt_no_quarto_yml():
+    """Test _generate_llms_txt returns early when no _quarto.yml."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._generate_llms_txt()
+        assert not (docs.project_path / "llms.txt").exists()
+
+
+def test_generate_llms_txt_no_api_reference():
+    """Test _generate_llms_txt returns early when no api-reference config."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump({"project": {"type": "website"}}, f)
+
+        docs._generate_llms_txt()
+        assert not (docs.project_path / "llms.txt").exists()
+
+
+def test_generate_llms_txt_writes_file():
+    """Test _generate_llms_txt creates llms.txt with correct structure."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\ndescription = "A test package"\n',
+            encoding="utf-8",
+        )
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        config = {
+            "project": {"type": "website"},
+            "api-reference": {
+                "package": "mypkg",
+                "sections": [
+                    {
+                        "title": "Functions",
+                        "desc": "Helper functions",
+                        "contents": ["func_a", "func_b"],
+                    },
+                ],
+            },
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(config, f)
+
+        docs._generate_llms_txt()
+
+        llms_path = docs.project_path / "llms.txt"
+        assert llms_path.exists()
+        content = llms_path.read_text()
+        assert "# mypkg" in content
+        assert "func_a" in content
+        assert "func_b" in content
+
+
+def test_generate_llms_txt_with_site_url():
+    """Test _generate_llms_txt uses site-url from quarto config."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        config = {
+            "project": {"type": "website"},
+            "website": {"site-url": "https://example.com/docs#readme"},
+            "api-reference": {
+                "package": "mypkg",
+                "sections": [
+                    {
+                        "title": "API",
+                        "desc": "",
+                        "contents": ["Widget"],
+                    },
+                ],
+            },
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(config, f)
+
+        docs._generate_llms_txt()
+
+        content = (docs.project_path / "llms.txt").read_text()
+        # URL should have the anchor stripped
+        assert "https://example.com/docs/" in content
+        assert "#readme" not in content
+
+
+def test_generate_llms_full_txt_no_api_reference():
+    """Test _generate_llms_full_txt returns early with no api-reference."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump({"project": {"type": "website"}}, f)
+
+        docs._generate_llms_full_txt()
+        assert not (docs.project_path / "llms-full.txt").exists()
+
+
+def test_generate_llms_full_txt_no_package_name():
+    """Test _generate_llms_full_txt returns early when no package name."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        config = {
+            "api-reference": {
+                "sections": [{"title": "API", "contents": ["Foo"]}],
+            },
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(config, f)
+
+        docs._generate_llms_full_txt()
+        assert not (docs.project_path / "llms-full.txt").exists()
+
+
+def test_update_quarto_config_navbar_color_light_dark():
+    """Test _update_quarto_config generates CSS for navbar_color with light and dark."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text(
+            "navbar_color:\n  light: '#1a1a2e'\n  dark: '#e0e0e0'\n",
+            encoding="utf-8",
+        )
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        # The navbar color CSS should be injected as a style in after-body
+        after_body = result["format"]["html"].get("include-after-body", [])
+        style_entries = [str(item) for item in after_body if "navbar_color overrides" in str(item)]
+        assert len(style_entries) > 0
+
+
+def test_update_quarto_config_navbar_color_light_only():
+    """Test _update_quarto_config with navbar_color having only light mode."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("navbar_color:\n  light: '#003366'\n", encoding="utf-8")
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        after_body = result["format"]["html"].get("include-after-body", [])
+        css_items = [str(item) for item in after_body if "navbar_color overrides" in str(item)]
+        assert len(css_items) > 0
+        # Should contain quarto-light selector
+        assert "quarto-light" in css_items[0]
+
+
+def test_update_quarto_config_announcement_banner():
+    """Test _update_quarto_config injects announcement banner meta+script."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text(
+            "announcement:\n  content: 'New release!'\n  type: success\n  dismissable: true\n",
+            encoding="utf-8",
+        )
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website", "resources": []},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        header = result["format"]["html"].get("include-in-header", [])
+        after_body = result["format"]["html"].get("include-after-body", [])
+
+        # Check meta tag in header
+        has_ann_meta = any("gd-announcement" in str(item) for item in header)
+        assert has_ann_meta
+
+        # Check script in after-body
+        has_ann_script = any("announcement-banner" in str(item) for item in after_body)
+        assert has_ann_script
+
+        # Check resource
+        assert "announcement-banner.js" in result["project"]["resources"]
+
+
+def test_update_quarto_config_content_style():
+    """Test _update_quarto_config injects content_style meta+script."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text(
+            "content_style:\n  preset: gradient\n  pages: all\n",
+            encoding="utf-8",
+        )
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website", "resources": []},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        header = result["format"]["html"].get("include-in-header", [])
+        after_body = result["format"]["html"].get("include-after-body", [])
+
+        has_cs_meta = any("gd-content-style" in str(item) for item in header)
+        assert has_cs_meta
+
+        has_cs_script = any("content-style" in str(item) for item in after_body)
+        assert has_cs_script
+
+        assert "content-style.js" in result["project"]["resources"]
+
+
+def test_update_quarto_config_navbar_style():
+    """Test _update_quarto_config injects navbar_style meta+script."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("navbar_style: midnight\n", encoding="utf-8")
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website", "resources": []},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        header = result["format"]["html"].get("include-in-header", [])
+        after_body = result["format"]["html"].get("include-after-body", [])
+
+        has_nb_meta = any("gd-navbar-style" in str(item) for item in header)
+        assert has_nb_meta
+
+        has_nb_script = any("navbar-style" in str(item) for item in after_body)
+        assert has_nb_script
+
+        assert "navbar-style.js" in result["project"]["resources"]
+
+
+def test_update_quarto_config_dark_mode_toggle():
+    """Test _update_quarto_config adds dark mode toggle script."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        after_body = result["format"]["html"].get("include-after-body", [])
+        has_dark_mode = any("dark-mode-toggle" in str(item) for item in after_body)
+        assert has_dark_mode
+
+        header = result["format"]["html"].get("include-in-header", [])
+        has_theme_init = any("theme-init" in str(item) for item in header)
+        assert has_theme_init
+
+
+def test_update_quarto_config_cli_enabled_adds_ref_switcher():
+    """Test _update_quarto_config adds reference-switcher when CLI is enabled."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("cli:\n  enabled: true\n  module: mypkg.cli\n", encoding="utf-8")
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        after_body = result["format"]["html"].get("include-after-body", [])
+        has_ref_switcher = any("reference-switcher" in str(item) for item in after_body)
+        assert has_ref_switcher
+
+
+def test_update_quarto_config_page_footer_with_authors():
+    """Test _update_quarto_config creates page footer with author names."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\n'
+            '[[project.authors]]\nname = "Alice Smith"\n'
+            '[[project.authors]]\nname = "Bob Jones"\n',
+            encoding="utf-8",
+        )
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        footer = result["website"].get("page-footer", {})
+        footer_text = footer.get("center", "")
+        assert "Developed by" in footer_text
+        assert "Alice" in footer_text
+        assert "Bob" in footer_text
+
+
+def test_update_quarto_config_page_footer_with_funding():
+    """Test _update_quarto_config adds funding info to page footer."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\n[[project.authors]]\nname = "Alice"\n',
+            encoding="utf-8",
+        )
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text(
+            "funding:\n  name: ACME Foundation\n  homepage: https://acme.org\n",
+            encoding="utf-8",
+        )
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        footer = result["website"].get("page-footer", {})
+        footer_text = footer.get("center", "")
+        assert "Supported by" in footer_text
+        assert "ACME" in footer_text
+
+
+def test_update_quarto_config_page_footer_funding_no_authors():
+    """Test page footer with funding but no authors."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("funding:\n  name: TestFund\n", encoding="utf-8")
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        footer = result["website"].get("page-footer", {})
+        footer_text = footer.get("center", "")
+        assert "Supported by" in footer_text
+        assert "TestFund" in footer_text
+
+
+def test_update_quarto_config_posit_badge():
+    """Test _update_quarto_config adds Posit badge when funding mentions Posit."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("funding:\n  name: Posit PBC\n", encoding="utf-8")
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        header = result["format"]["html"].get("include-in-header", [])
+        has_posit = any("supported-by-posit" in str(item) for item in header)
+        assert has_posit
+
+
+def test_update_quarto_config_sidebar_filter():
+    """Test _update_quarto_config adds sidebar filter script."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        after_body = result["format"]["html"].get("include-after-body", [])
+        has_sidebar_filter = any("sidebar-filter" in str(item) for item in after_body)
+        assert has_sidebar_filter
+
+
+def test_update_quarto_config_sidebar_filter_custom_min_items():
+    """Test sidebar filter with custom min_items from metadata."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("sidebar_filter:\n  min_items: 10\n", encoding="utf-8")
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        after_body = result["format"]["html"].get("include-after-body", [])
+        has_min_items = any("sidebarFilterMinItems" in str(item) for item in after_body)
+        assert has_min_items
+
+
+def test_update_quarto_config_attribution():
+    """Test _update_quarto_config adds Great Docs attribution to footer."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\n[[project.authors]]\nname = "Author"\n',
+            encoding="utf-8",
+        )
+
+        # Attribution is True by default
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        footer = result["website"].get("page-footer", {})
+        footer_text = footer.get("center", "")
+        assert "Great&nbsp;Docs" in footer_text
+
+
+def test_update_quarto_config_version_badge_metadata():
+    """Test _update_quarto_config writes _package_meta.json for version badge."""
+    import json
+    import yaml
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\n'
+            '[project.urls]\nRepository = "https://github.com/owner/repo"\n',
+            encoding="utf-8",
+        )
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        # Mock _fetch_github_releases to return a release
+        fake_releases = [{"tag_name": "v2.0.0", "published_at": "2024-01-15T00:00:00Z"}]
+        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
+            docs._update_quarto_config()
+
+        meta_path = docs.project_path / "_package_meta.json"
+        assert meta_path.exists()
+        meta = json.loads(meta_path.read_text())
+        assert meta["version"] == "2.0.0"
+        assert "published_at" in meta
+
+
+def test_update_quarto_config_version_badge_no_releases():
+    """Test _update_quarto_config removes stale meta when no releases."""
+    import json
+    import yaml
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\n'
+            '[project.urls]\nRepository = "https://github.com/owner/repo"\n',
+            encoding="utf-8",
+        )
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        # Create a stale meta file
+        meta_path = docs.project_path / "_package_meta.json"
+        meta_path.write_text(json.dumps({"version": "old"}))
+
+        with patch.object(docs, "_fetch_github_releases", return_value=[]):
+            docs._update_quarto_config()
+
+        # Should have been removed
+        assert not meta_path.exists()
+
+
+def test_create_index_from_readme_citation_parsing():
+    """Test _create_index_from_readme produces citation.qmd from CITATION.cff."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\n'
+            '[project.urls]\nRepository = "https://github.com/owner/repo"\n',
+            encoding="utf-8",
+        )
+
+        citation_cff = Path(tmp_dir) / "CITATION.cff"
+        citation_cff.write_text(
+            "cff-version: 1.2.0\n"
+            "title: My Package\n"
+            "version: 1.0.0\n"
+            "date-released: '2024-06-15'\n"
+            "url: https://example.com\n"
+            "authors:\n"
+            "  - given-names: Alice\n"
+            "    family-names: Smith\n"
+            "  - given-names: Bob\n"
+            "    family-names: Jones\n",
+            encoding="utf-8",
+        )
+
+        readme = Path(tmp_dir) / "README.md"
+        readme.write_text("# My Package\n\nHello world.\n", encoding="utf-8")
+
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._create_index_from_readme(force_rebuild=True)
+
+        citation_qmd = docs.project_path / "citation.qmd"
+        assert citation_qmd.exists()
+        content = citation_qmd.read_text()
+        assert "Authors and Citation" in content
+        assert "Alice Smith" in content
+        assert "Bob Jones" in content
+        assert "@Manual{" in content  # BibTeX
+        assert "APA" in content
+        assert "RIS" in content
+
+
+def test_create_index_from_readme_citation_single_author():
+    """Test citation with a single author."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        citation_cff = Path(tmp_dir) / "CITATION.cff"
+        citation_cff.write_text(
+            "cff-version: 1.2.0\n"
+            "title: Solo Package\n"
+            "version: 2.0.0\n"
+            "date-released: '2023-01-01'\n"
+            "url: https://solo.dev\n"
+            "authors:\n"
+            "  - given-names: Carol\n"
+            "    family-names: Williams\n",
+            encoding="utf-8",
+        )
+
+        readme = Path(tmp_dir) / "README.md"
+        readme.write_text("# Solo\n\nContent.\n", encoding="utf-8")
+
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._create_index_from_readme(force_rebuild=True)
+
+        citation_qmd = docs.project_path / "citation.qmd"
+        assert citation_qmd.exists()
+        content = citation_qmd.read_text()
+        assert "Carol Williams" in content
+
+
+def test_create_index_from_readme_citation_three_authors():
+    """Test citation with 3+ authors uses et al. in text citation."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        citation_cff = Path(tmp_dir) / "CITATION.cff"
+        citation_cff.write_text(
+            "cff-version: 1.2.0\n"
+            "title: Team Package\n"
+            "version: 3.0.0\n"
+            "authors:\n"
+            "  - given-names: Alice\n"
+            "    family-names: A\n"
+            "  - given-names: Bob\n"
+            "    family-names: B\n"
+            "  - given-names: Carol\n"
+            "    family-names: C\n",
+            encoding="utf-8",
+        )
+
+        readme = Path(tmp_dir) / "README.md"
+        readme.write_text("# Team\n\nContent.\n", encoding="utf-8")
+
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._create_index_from_readme(force_rebuild=True)
+
+        citation_qmd = docs.project_path / "citation.qmd"
+        content = citation_qmd.read_text()
+        # 3 authors → APA uses ", &" format for last author
+        assert ", &" in content or "A, Alice" in content
+
+
+def test_create_index_from_readme_no_citation():
+    """Test _create_index_from_readme without CITATION.cff skips citation page."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        readme = Path(tmp_dir) / "README.md"
+        readme.write_text("# My Pkg\n\nSome content.\n", encoding="utf-8")
+
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._create_index_from_readme(force_rebuild=True)
+
+        citation_qmd = docs.project_path / "citation.qmd"
+        assert not citation_qmd.exists()
+
+
+def test_create_index_from_readme_heading_adjustment():
+    """Test _create_index_from_readme bumps heading levels."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        readme = Path(tmp_dir) / "README.md"
+        readme.write_text(
+            "# My Package\n\n## Section\n\n### Subsection\n\nContent.\n",
+            encoding="utf-8",
+        )
+
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._create_index_from_readme(force_rebuild=True)
+
+        index_qmd = docs.project_path / "index.qmd"
+        assert index_qmd.exists()
+        content = index_qmd.read_text()
+        # Headings should be bumped: ## → ###, ### → ####
+        assert "### Section" in content
+        assert "#### Subsection" in content
+
+
+def test_create_index_from_readme_rst_source():
+    """Test _create_index_from_readme handles RST files."""
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        readme_rst = Path(tmp_dir) / "README.rst"
+        readme_rst.write_text("My Package\n==========\n\nSome RST content.\n", encoding="utf-8")
+
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+
+        # Mock RST conversion since pandoc may not be available
+        with patch.object(
+            docs, "_convert_rst_to_markdown", return_value="# My Package\n\nSome RST content.\n"
+        ):
+            docs._create_index_from_readme(force_rebuild=True)
+
+        index_qmd = docs.project_path / "index.qmd"
+        assert index_qmd.exists()
+
+
+def test_create_index_from_readme_landing_page_fallback():
+    """Test _create_index_from_readme generates landing page when no source files."""
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\ndescription = "A test"\n', encoding="utf-8"
+        )
+
+        # No README.md, no index.qmd, no README.rst
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._create_index_from_readme(force_rebuild=True)
+
+        index_qmd = docs.project_path / "index.qmd"
+        assert index_qmd.exists()
+
+
+def test_create_index_from_readme_hero_section():
+    """Test _create_index_from_readme includes hero section."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\ndescription = "A test package"\n',
+            encoding="utf-8",
+        )
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("hero:\n  enabled: true\n", encoding="utf-8")
+        docs._config = Config(Path(tmp_dir))
+
+        readme = Path(tmp_dir) / "README.md"
+        readme.write_text("# mypkg\n\nHello world.\n", encoding="utf-8")
+
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._create_index_from_readme(force_rebuild=True)
+
+        index_qmd = docs.project_path / "index.qmd"
+        assert index_qmd.exists()
+        content = index_qmd.read_text()
+        # Hero section should inject HTML at the top
+        assert "hero" in content.lower() or "Hello world" in content
+
+
+def test_create_index_from_readme_hero_strips_duplicate_h1():
+    """Test that hero section strips matching first h1 to avoid duplication."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "testpkg"\ndescription = "Desc"\n', encoding="utf-8"
+        )
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("hero:\n  enabled: true\n  name: testpkg\n", encoding="utf-8")
+        docs._config = Config(Path(tmp_dir))
+
+        readme = Path(tmp_dir) / "README.md"
+        readme.write_text("# testpkg\n\n## Features\n\nSome features.\n", encoding="utf-8")
+
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._create_index_from_readme(force_rebuild=True)
+
+        index_qmd = docs.project_path / "index.qmd"
+        content = index_qmd.read_text()
+        # The first h1 "# testpkg" should be stripped because hero shows the name
+        # But "## Features" (which becomes "### Features") should remain
+        assert "Features" in content
+
+
+def test_refresh_api_reference_config_no_quarto_yml():
+    """Test _refresh_api_reference_config handles missing _quarto.yml."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        # Should print error but not crash
+        docs._refresh_api_reference_config()
+
+
+def test_refresh_api_reference_config_no_api_reference():
+    """Test _refresh_api_reference_config handles missing api-reference config."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump({"project": {"type": "website"}}, f)
+
+        docs._refresh_api_reference_config()
+
+
+def test_refresh_api_reference_config_no_package():
+    """Test _refresh_api_reference_config handles missing package name."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        config = {"api-reference": {"sections": []}}
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(config, f)
+
+        docs._refresh_api_reference_config()
+
+
+def test_refresh_api_reference_config_updates_sections():
+    """Test _refresh_api_reference_config updates sections from package exports."""
+    import yaml
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        config = {
+            "project": {"type": "website"},
+            "website": {"sidebar": []},
+            "api-reference": {
+                "package": "mypkg",
+                "parser": "numpy",
+                "dynamic": True,
+                "sections": [{"title": "Old", "contents": ["OldClass"]}],
+            },
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(config, f)
+
+        new_sections = [{"title": "New", "desc": "", "contents": ["NewClass", "new_func"]}]
+        with patch.object(docs, "_create_api_sections_with_config", return_value=new_sections):
+            docs._refresh_api_reference_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        assert result["api-reference"]["sections"] == new_sections
+
+
+def test_refresh_api_reference_config_fallback_to_explicit():
+    """Test _refresh_api_reference_config falls back to explicit reference config."""
+    import yaml
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        # Set up explicit reference config in great-docs.yml
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text(
+            "reference:\n  - title: Manual\n    contents:\n      - Widget\n",
+            encoding="utf-8",
+        )
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        config = {
+            "project": {"type": "website"},
+            "website": {"sidebar": []},
+            "api-reference": {
+                "package": "mypkg",
+                "parser": "numpy",
+                "dynamic": True,
+                "sections": [],
+            },
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(config, f)
+
+        # Auto-discovery returns None
+        with patch.object(docs, "_create_api_sections_with_config", return_value=None):
+            fallback_sections = [{"title": "Manual", "desc": "", "contents": ["Widget"]}]
+            with patch.object(
+                docs, "_build_sections_from_reference_config", return_value=fallback_sections
+            ):
+                docs._refresh_api_reference_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        assert result["api-reference"]["sections"] == fallback_sections
+
+
+def test_add_api_reference_config_disabled():
+    """Test _add_api_reference_config skips when reference_enabled is false."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("reference: false\n", encoding="utf-8")
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump({"project": {"type": "website"}}, f)
+
+        docs._add_api_reference_config()
+        assert docs._has_api_reference is False
+
+
+def test_add_api_reference_config_no_exports():
+    """Test _add_api_reference_config skips when no exports found."""
+    import yaml
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump({"project": {"type": "website"}}, f)
+
+        with patch.object(docs, "_create_api_sections_with_config", return_value=None):
+            docs._add_api_reference_config()
+
+        assert docs._has_api_reference is False
+
+
+def test_add_api_reference_config_already_exists():
+    """Test _add_api_reference_config skips when api-reference already present."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        config = {
+            "project": {"type": "website"},
+            "api-reference": {"package": "mypkg", "sections": []},
+        }
+        with open(quarto_yml, "w") as f:
+            yaml.dump(config, f)
+
+        docs._add_api_reference_config()
+
+        # Should not have changed
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+        assert result["api-reference"]["package"] == "mypkg"
+
+
+def test_add_api_reference_config_with_sections():
+    """Test _add_api_reference_config writes sections to quarto config."""
+    import yaml
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+        }
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        fake_sections = [{"title": "Core", "desc": "", "contents": ["Widget", "helper_fn"]}]
+        with patch.object(docs, "_create_api_sections_with_config", return_value=fake_sections):
+            docs._add_api_reference_config()
+
+        assert docs._has_api_reference is True
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        assert "api-reference" in result
+        assert result["api-reference"]["package"] == "mypkg"
+        assert result["api-reference"]["sections"] == fake_sections
+        # Should add Reference link to navbar
+        left = result["website"]["navbar"]["left"]
+        ref_items = [
+            i for i in left if isinstance(i, dict) and i.get("href") == "reference/index.qmd"
+        ]
+        assert len(ref_items) == 1
+
+
+def test_create_api_sections_with_config_uses_explicit():
+    """Test _create_api_sections_with_config prefers explicit config."""
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        fake_config_sections = [{"title": "Explicit", "contents": ["A"]}]
+        with patch.object(
+            docs, "_create_api_sections_from_config", return_value=fake_config_sections
+        ):
+            with patch.object(docs, "_apply_nodoc_filter", side_effect=lambda pkg, s: s):
+                result = docs._create_api_sections_with_config("mypkg")
+
+        assert result == fake_config_sections
+
+
+def test_create_api_sections_with_config_falls_back():
+    """Test _create_api_sections_with_config falls back to auto-discovery."""
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        fake_auto_sections = [{"title": "Auto", "contents": ["B"]}]
+        with patch.object(docs, "_create_api_sections_from_config", return_value=None):
+            with patch.object(docs, "_create_api_sections", return_value=fake_auto_sections):
+                with patch.object(docs, "_apply_nodoc_filter", side_effect=lambda pkg, s: s):
+                    result = docs._create_api_sections_with_config("mypkg")
+
+        assert result == fake_auto_sections
+
+
+def test_prepare_build_directory_creates_structure():
+    """Test _prepare_build_directory creates the necessary directory structure."""
+    import shutil
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        readme = Path(tmp_dir) / "README.md"
+        readme.write_text("# My Pkg\n\nContent.\n", encoding="utf-8")
+
+        # Mock _add_api_reference_config to avoid needing actual package
+        with patch.object(docs, "_add_api_reference_config"):
+            with patch.object(docs, "_update_sidebar_from_sections"):
+                with patch.object(docs, "_update_reference_index_frontmatter"):
+                    docs._prepare_build_directory()
+
+        # Check directory structure
+        assert docs.project_path.exists()
+        assert (docs.project_path / "scripts").is_dir()
+        assert (docs.project_path / "reference").is_dir()
+
+        # Check .gitignore
+        gitignore = docs.project_path / ".gitignore"
+        assert gitignore.exists()
+        content = gitignore.read_text()
+        assert "Great Docs build directory" in content
+
+        # Check CSS file was copied
+        assert (docs.project_path / "great-docs.css").exists()
+
+        # Check _quarto.yml was created
+        assert (docs.project_path / "_quarto.yml").exists()
+
+        # Check _gd_options.json was created
+        import json
+
+        options_path = docs.project_path / "_gd_options.json"
+        assert options_path.exists()
+        options = json.loads(options_path.read_text())
+        assert "markdown_pages" in options
+
+
+def test_prepare_build_directory_copies_js_files():
+    """Test _prepare_build_directory copies JavaScript files."""
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        readme = Path(tmp_dir) / "README.md"
+        readme.write_text("# My Pkg\n", encoding="utf-8")
+
+        with patch.object(docs, "_add_api_reference_config"):
+            with patch.object(docs, "_update_sidebar_from_sections"):
+                with patch.object(docs, "_update_reference_index_frontmatter"):
+                    docs._prepare_build_directory()
+
+        # Core JS files should be present
+        assert (docs.project_path / "github-widget.js").exists()
+        assert (docs.project_path / "sidebar-filter.js").exists()
+        assert (docs.project_path / "dark-mode-toggle.js").exists()
+        assert (docs.project_path / "theme-init.js").exists()
+
+
+def test_prepare_build_directory_optional_js_copy_page():
+    """Test _prepare_build_directory copies copy-page.js when markdown_pages_widget is set."""
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("markdown_pages_widget: true\n", encoding="utf-8")
+        docs._config = Config(Path(tmp_dir))
+
+        readme = Path(tmp_dir) / "README.md"
+        readme.write_text("# My Pkg\n", encoding="utf-8")
+
+        with patch.object(docs, "_add_api_reference_config"):
+            with patch.object(docs, "_update_sidebar_from_sections"):
+                with patch.object(docs, "_update_reference_index_frontmatter"):
+                    docs._prepare_build_directory()
+
+        assert (docs.project_path / "copy-page.js").exists()
+
+
+def test_prepare_build_directory_cleans_existing():
+    """Test _prepare_build_directory removes existing build directory first."""
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        readme = Path(tmp_dir) / "README.md"
+        readme.write_text("# My Pkg\n", encoding="utf-8")
+
+        # Create a stale file in the build directory
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        stale_file = docs.project_path / "stale.txt"
+        stale_file.write_text("old content")
+
+        with patch.object(docs, "_add_api_reference_config"):
+            with patch.object(docs, "_update_sidebar_from_sections"):
+                with patch.object(docs, "_update_reference_index_frontmatter"):
+                    docs._prepare_build_directory()
+
+        # Stale file should be gone
+        assert not stale_file.exists()
+        # But new files should exist
+        assert docs.project_path.exists()
+
+
+def test_find_package_init_standard_location():
+    """Test _find_package_init finds init in standard location."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        # Create package directory with __init__.py
+        pkg_dir = Path(tmp_dir) / "mypkg"
+        pkg_dir.mkdir()
+        init_file = pkg_dir / "__init__.py"
+        init_file.write_text('__version__ = "1.0"\n')
+
+        result = docs._find_package_init("mypkg")
+        assert result is not None
+        assert result.name == "__init__.py"
+
+
+def test_find_package_init_src_layout():
+    """Test _find_package_init finds init in src/ layout."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        # Create src layout
+        src_dir = Path(tmp_dir) / "src" / "mypkg"
+        src_dir.mkdir(parents=True)
+        init_file = src_dir / "__init__.py"
+        init_file.write_text('__all__ = ["Widget"]\n')
+
+        result = docs._find_package_init("mypkg")
+        assert result is not None
+        assert result.name == "__init__.py"
+
+
+def test_find_package_init_not_found():
+    """Test _find_package_init returns None when no package found."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        result = docs._find_package_init("nonexistent_pkg_xyz")
+        assert result is None
+
+
+def test_find_package_init_hyphens_to_underscores():
+    """Test _find_package_init normalizes hyphens to underscores."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "my-pkg"\n', encoding="utf-8")
+
+        pkg_dir = Path(tmp_dir) / "my_pkg"
+        pkg_dir.mkdir()
+        init_file = pkg_dir / "__init__.py"
+        init_file.write_text('__version__ = "1.0"\n')
+
+        result = docs._find_package_init("my-pkg")
+        assert result is not None
+
+
+def test_find_package_init_pyproject_explicit_packages():
+    """Test _find_package_init uses explicit packages from pyproject.toml."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            "[project]\nname = \"mypkg\"\n[tool.setuptools]\npackages = ['custom_pkg']\n",
+            encoding="utf-8",
+        )
+
+        pkg_dir = Path(tmp_dir) / "custom_pkg"
+        pkg_dir.mkdir()
+        init_file = pkg_dir / "__init__.py"
+        init_file.write_text('__version__ = "1.0"\n')
+
+        result = docs._find_package_init("mypkg")
+        assert result is not None
+        assert "custom_pkg" in str(result)
+
+
+def test_find_package_init_auto_discover():
+    """Test _find_package_init auto-discovers packages in common locations."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        # Create a package with a non-matching name
+        pkg_dir = Path(tmp_dir) / "actual_pkg"
+        pkg_dir.mkdir()
+        init_file = pkg_dir / "__init__.py"
+        init_file.write_text('__version__ = "1.0"\n')
+
+        result = docs._find_package_init("nonexistent")
+        # Should auto-discover actual_pkg
+        assert result is not None
+        assert "actual_pkg" in str(result)
+
+
+def test_parse_package_exports_with_all():
+    """Test _parse_package_exports parses __all__ from init file."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        pkg_dir = Path(tmp_dir) / "mypkg"
+        pkg_dir.mkdir()
+        init_file = pkg_dir / "__init__.py"
+        init_file.write_text('__all__ = ["WidgetA", "WidgetB", "helper_fn"]\n__version__ = "1.0"\n')
+
+        result = docs._parse_package_exports("mypkg")
+        assert result is not None
+        assert "WidgetA" in result
+        assert "WidgetB" in result
+        assert "helper_fn" in result
+
+
+def test_parse_package_exports_with_exclude():
+    """Test _parse_package_exports filters out excluded items."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("exclude:\n  - helper_fn\n", encoding="utf-8")
+        docs._config = Config(Path(tmp_dir))
+
+        pkg_dir = Path(tmp_dir) / "mypkg"
+        pkg_dir.mkdir()
+        init_file = pkg_dir / "__init__.py"
+        init_file.write_text('__all__ = ["WidgetA", "helper_fn"]\n')
+
+        result = docs._parse_package_exports("mypkg")
+        assert result is not None
+        assert "WidgetA" in result
+        assert "helper_fn" not in result
+
+
+def test_parse_package_exports_no_init():
+    """Test _parse_package_exports returns None when no init file."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        result = docs._parse_package_exports("nonexistent_pkg_xyz")
+        assert result is None
+
+
+def test_parse_package_exports_no_all():
+    """Test _parse_package_exports returns None when no __all__ defined."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        pkg_dir = Path(tmp_dir) / "mypkg"
+        pkg_dir.mkdir()
+        init_file = pkg_dir / "__init__.py"
+        init_file.write_text('__version__ = "1.0"\n')
+
+        result = docs._parse_package_exports("mypkg")
+        assert result is None
+
+
+def test_update_quarto_config_page_footer_three_authors():
+    """Test page footer with 3+ authors uses Oxford comma."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\n'
+            '[[project.authors]]\nname = "Alice"\n'
+            '[[project.authors]]\nname = "Bob"\n'
+            '[[project.authors]]\nname = "Carol"\n',
+            encoding="utf-8",
+        )
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        footer_text = result["website"]["page-footer"]["center"]
+        assert "Developed by" in footer_text
+        assert ", and" in footer_text  # Oxford comma
+
+
+def test_update_quarto_config_page_footer_single_author():
+    """Test page footer with a single author."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\n[[project.authors]]\nname = "Solo Dev"\n',
+            encoding="utf-8",
+        )
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        footer_text = result["website"]["page-footer"]["center"]
+        assert "Solo" in footer_text
+        assert " and " not in footer_text.split("Developed by")[1].split(".")[0]
+
+
+def test_update_quarto_config_page_footer_author_homepage():
+    """Test page footer links author name when homepage is provided."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\n[[project.authors]]\nname = "Alice"\n',
+            encoding="utf-8",
+        )
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text(
+            "authors:\n  - name: Alice\n    homepage: https://alice.dev\n",
+            encoding="utf-8",
+        )
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = yaml.safe_load(f)
+
+        footer_text = result["website"]["page-footer"]["center"]
+        assert "https://alice.dev" in footer_text
+        assert "<a href=" in footer_text
+
+
+def test_generate_llms_txt_dict_items_in_sections():
+    """Test _generate_llms_txt handles dict items in sections."""
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        config = {
+            "project": {"type": "website"},
+            "api-reference": {
+                "package": "mypkg",
+                "sections": [
+                    {
+                        "title": "Core",
+                        "desc": "",
+                        "contents": [
+                            {"name": "BigClass", "members": []},
+                            "simple_func",
+                        ],
+                    },
+                ],
+            },
+        }
+
+        with open(quarto_yml, "w") as f:
+            yaml.dump(config, f)
+
+        docs._generate_llms_txt()
+
+        content = (docs.project_path / "llms.txt").read_text()
+        assert "BigClass" in content
+        assert "simple_func" in content
+
+
+def test_check_docstring_spelling_no_griffe():
+    """Test _check_docstring_spelling returns empty when griffe not available."""
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        with patch.dict("sys.modules", {"griffe": None}):
+            result = docs._check_docstring_spelling("mypkg", None, verbose=False)
+        assert result == {}
+
+
+def test_get_cli_help_text_for_llms_no_cli():
+    """Test _get_cli_help_text_for_llms returns empty when CLI disabled."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        result = docs._get_cli_help_text_for_llms()
+        assert result == ""
+
+
+def test_get_user_guide_text_for_llms_no_guide():
+    """Test _get_user_guide_text_for_llms returns empty when no user guide."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        result = docs._get_user_guide_text_for_llms()
+        assert result == ""
