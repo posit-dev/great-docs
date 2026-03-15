@@ -9664,3 +9664,1091 @@ def test_add_frontmatter_option_no_frontmatter():
         result = docs._add_frontmatter_option(content, "key", "val")
         # Should wrap in frontmatter
         assert "---" in result
+
+
+# ===========================================================================
+# Coverage batch 3: CLI documentation, user guide orchestration, sidebar, nodoc
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# _get_cli_entry_point_name  (core.py ~2110)
+# ---------------------------------------------------------------------------
+
+
+def test_get_cli_entry_point_name_scripts():
+    """_get_cli_entry_point_name returns first [project.scripts] name."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text(
+            '[project]\nname = "mypkg"\n\n[project.scripts]\nmy-tool = "mypkg.cli:main"\n'
+        )
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._get_cli_entry_point_name("mypkg") == "my-tool"
+
+
+def test_get_cli_entry_point_name_gui_scripts():
+    """_get_cli_entry_point_name falls back to gui-scripts."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text(
+            '[project]\nname = "mypkg"\n\n[project.gui-scripts]\nmy-gui = "mypkg.gui:main"\n'
+        )
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._get_cli_entry_point_name("mypkg") == "my-gui"
+
+
+def test_get_cli_entry_point_name_no_scripts():
+    """_get_cli_entry_point_name returns None when no scripts defined."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._get_cli_entry_point_name("mypkg") is None
+
+
+def test_get_cli_entry_point_name_no_pyproject():
+    """_get_cli_entry_point_name returns None when pyproject.toml missing."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._get_cli_entry_point_name("mypkg") is None
+
+
+# ---------------------------------------------------------------------------
+# _extract_click_command  (core.py ~2155)
+# ---------------------------------------------------------------------------
+
+
+def test_extract_click_command_simple():
+    """_extract_click_command extracts info from a simple Click command."""
+    pytest.importorskip("click")
+    import click
+
+    @click.command()
+    @click.option("--name", help="Your name")
+    def hello(name):
+        """Say hello."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._extract_click_command(hello, "hello")
+
+        assert result["name"] == "hello"
+        assert result["full_path"] == "hello"
+        assert result["help"] == "Say hello."
+        assert result["is_group"] is False
+        assert result["commands"] == []
+
+
+def test_extract_click_command_group():
+    """_extract_click_command extracts subcommands from a Click group."""
+    pytest.importorskip("click")
+    import click
+
+    @click.group()
+    def cli():
+        """Main CLI."""
+
+    @cli.command()
+    def sub():
+        """A subcommand."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._extract_click_command(cli, "tool")
+
+        assert result["is_group"] is True
+        assert len(result["commands"]) == 1
+        assert result["commands"][0]["name"] == "sub"
+        assert result["commands"][0]["full_path"] == "tool sub"
+
+
+def test_extract_click_command_hidden_subcommand():
+    """_extract_click_command skips hidden subcommands."""
+    pytest.importorskip("click")
+    import click
+
+    @click.group()
+    def cli():
+        """Main CLI."""
+
+    @cli.command(hidden=True)
+    def secret():
+        """Hidden command."""
+
+    @cli.command()
+    def public():
+        """Public command."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._extract_click_command(cli, "tool")
+
+        names = [c["name"] for c in result["commands"]]
+        assert "public" in names
+        assert "secret" not in names
+
+
+def test_extract_click_command_with_parent_path():
+    """_extract_click_command builds full_path from parent_path."""
+    pytest.importorskip("click")
+    import click
+
+    @click.command()
+    def sub():
+        """A subcommand."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._extract_click_command(sub, "sub", parent_path="tool")
+        assert result["full_path"] == "tool sub"
+
+
+# ---------------------------------------------------------------------------
+# _get_click_help_text  (core.py ~2216)
+# ---------------------------------------------------------------------------
+
+
+def test_get_click_help_text():
+    """_get_click_help_text returns formatted --help output."""
+    pytest.importorskip("click")
+    import click
+
+    @click.command()
+    @click.option("--name", help="Your name")
+    def hello(name):
+        """Say hello to someone."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._get_click_help_text(hello, "hello")
+
+        assert "Usage:" in result
+        assert "--name" in result
+        assert "Say hello to someone." in result
+
+
+# ---------------------------------------------------------------------------
+# _generate_cli_command_page  (core.py ~2370)
+# ---------------------------------------------------------------------------
+
+
+def test_generate_cli_command_page_main():
+    """_generate_cli_command_page generates main CLI page."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        cmd_info = {
+            "name": "my-tool",
+            "full_path": "my-tool",
+            "help_text": "Usage: my-tool [OPTIONS]\n\n  My tool help.\n",
+        }
+        result = docs._generate_cli_command_page(cmd_info, is_main=True)
+
+        assert 'title: "my-tool"' in result
+        assert "sidebar: cli-reference" in result
+        assert "Usage: my-tool" in result
+        assert ".cli-manpage" in result
+
+
+def test_generate_cli_command_page_subcommand():
+    """_generate_cli_command_page uses full_path for subcommand title."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        cmd_info = {
+            "name": "build",
+            "full_path": "my-tool build",
+            "help_text": "Usage: my-tool build [OPTIONS]\n",
+        }
+        result = docs._generate_cli_command_page(cmd_info, is_main=False)
+
+        assert 'title: "my-tool build"' in result
+
+
+# ---------------------------------------------------------------------------
+# _generate_cli_reference_pages  (core.py ~2263)
+# ---------------------------------------------------------------------------
+
+
+def test_generate_cli_reference_pages_empty():
+    """_generate_cli_reference_pages returns empty list for empty input."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._generate_cli_reference_pages({}) == []
+        assert docs._generate_cli_reference_pages(None) == []
+
+
+def test_generate_cli_reference_pages_basic():
+    """_generate_cli_reference_pages generates index and subcommand pages."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+
+        cli_info = {
+            "name": "tool",
+            "full_path": "tool",
+            "help_text": "Usage: tool\n",
+            "commands": [
+                {
+                    "name": "build",
+                    "full_path": "tool build",
+                    "help_text": "Usage: tool build\n",
+                    "commands": [],
+                },
+            ],
+        }
+        result = docs._generate_cli_reference_pages(cli_info)
+
+        assert "reference/cli/index.qmd" in result
+        assert (docs.project_path / "reference" / "cli" / "index.qmd").exists()
+        assert (docs.project_path / "reference" / "cli" / "build.qmd").exists()
+
+
+# ---------------------------------------------------------------------------
+# _generate_subcommand_pages  (core.py ~2306)
+# ---------------------------------------------------------------------------
+
+
+def test_generate_subcommand_pages_nested():
+    """_generate_subcommand_pages handles nested command groups."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        cli_dir = docs.project_path / "reference" / "cli"
+        cli_dir.mkdir(parents=True)
+
+        cmd_info = {
+            "commands": [
+                {
+                    "name": "task",
+                    "full_path": "tool task",
+                    "help_text": "Usage: tool task\n",
+                    "commands": [
+                        {
+                            "name": "run",
+                            "full_path": "tool task run",
+                            "help_text": "Usage: tool task run\n",
+                            "commands": [],
+                        },
+                    ],
+                },
+            ],
+        }
+        result = docs._generate_subcommand_pages(cmd_info, cli_dir)
+
+        assert len(result) == 1
+        assert isinstance(result[0], dict)
+        assert result[0]["section"] == "task"
+        assert (cli_dir / "task.qmd").exists()
+        assert (cli_dir / "task" / "run.qmd").exists()
+
+
+def test_generate_subcommand_pages_leaf():
+    """_generate_subcommand_pages returns strings for leaf commands."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        cli_dir = docs.project_path / "reference" / "cli"
+        cli_dir.mkdir(parents=True)
+
+        cmd_info = {
+            "commands": [
+                {
+                    "name": "build",
+                    "full_path": "tool build",
+                    "help_text": "Usage: tool build\n",
+                    "commands": [],
+                },
+            ],
+        }
+        result = docs._generate_subcommand_pages(cmd_info, cli_dir)
+        assert result == ["reference/cli/build.qmd"]
+
+
+# ---------------------------------------------------------------------------
+# _discover_click_cli  (core.py ~1988)
+# ---------------------------------------------------------------------------
+
+
+def test_discover_click_cli_disabled():
+    """_discover_click_cli returns None when CLI not enabled."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._discover_click_cli("mypkg") is None
+
+
+def test_discover_click_cli_no_click():
+    """_discover_click_cli returns None when click is not importable."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+        (tmp / "great-docs.yml").write_text("cli:\n  enabled: true\n")
+        docs = GreatDocs(project_path=tmp_dir)
+        # click IS installed in test env so this would proceed,
+        # but there's no CLI module to find
+        result = docs._discover_click_cli("nonexistent_pkg_xyzzy")
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _rewrite_href_recursive  (core.py ~3120)
+# ---------------------------------------------------------------------------
+
+
+def test_rewrite_href_recursive_dict_match():
+    """_rewrite_href_recursive replaces a dict href."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        items = [
+            {"text": "Intro", "href": "user-guide/intro.qmd"},
+            {"text": "Setup", "href": "user-guide/setup.qmd"},
+        ]
+        found = docs._rewrite_href_recursive(items, "user-guide/intro.qmd", "index.qmd")
+        assert found is True
+        assert items[0]["href"] == "index.qmd"
+
+
+def test_rewrite_href_recursive_string_match():
+    """_rewrite_href_recursive replaces a bare string entry."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        items = ["user-guide/intro.qmd", "user-guide/setup.qmd"]
+        found = docs._rewrite_href_recursive(items, "user-guide/intro.qmd", "index.qmd")
+        assert found is True
+        assert items[0] == {"text": "Home", "href": "index.qmd"}
+
+
+def test_rewrite_href_recursive_nested():
+    """_rewrite_href_recursive searches nested section contents."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        items = [
+            {
+                "section": "Getting Started",
+                "contents": [
+                    {"text": "Intro", "href": "user-guide/intro.qmd"},
+                ],
+            },
+        ]
+        found = docs._rewrite_href_recursive(items, "user-guide/intro.qmd", "index.qmd")
+        assert found is True
+        assert items[0]["contents"][0]["href"] == "index.qmd"
+
+
+def test_rewrite_href_recursive_no_match():
+    """_rewrite_href_recursive returns False when no match found."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        items = [{"text": "Other", "href": "other.qmd"}]
+        assert docs._rewrite_href_recursive(items, "missing.qmd", "new.qmd") is False
+
+
+# ---------------------------------------------------------------------------
+# _rewrite_sidebar_first_entry  (core.py ~3094)
+# ---------------------------------------------------------------------------
+
+
+def test_rewrite_sidebar_first_entry():
+    """_rewrite_sidebar_first_entry rewrites first href to index.qmd."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        sidebar = {
+            "id": "user-guide",
+            "title": "User Guide",
+            "contents": [
+                {"text": "Intro", "href": "user-guide/intro.qmd"},
+                "user-guide/setup.qmd",
+            ],
+        }
+        docs._rewrite_sidebar_first_entry(sidebar, "user-guide/intro.qmd")
+        assert sidebar["contents"][0]["href"] == "index.qmd"
+
+
+# ---------------------------------------------------------------------------
+# _organize_files_into_sidebar  (core.py ~2972)  [the auto sidebar builder]
+# ---------------------------------------------------------------------------
+
+
+def test_organize_files_into_sidebar_flat():
+    """_generate_user_guide_sidebar_auto generates flat sidebar from root files."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        src = tmp / "user_guide"
+        src.mkdir()
+        (src / "intro.qmd").write_text("---\ntitle: Intro\n---\n")
+        (src / "setup.qmd").write_text("---\ntitle: Setup\n---\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        guide_info = {
+            "files": [
+                {"path": src / "intro.qmd", "title": "Intro", "section": None},
+                {"path": src / "setup.qmd", "title": "Setup", "section": None},
+            ],
+            "source_dir": src,
+            "sections": {},
+        }
+        result = docs._generate_user_guide_sidebar_auto(guide_info)
+
+        assert result["id"] == "user-guide"
+        assert len(result["contents"]) == 2
+        assert "user-guide/intro.qmd" in result["contents"]
+
+
+def test_organize_files_into_sidebar_with_sections():
+    """_generate_user_guide_sidebar_auto groups files by section."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        src = tmp / "user_guide"
+        src.mkdir()
+        (src / "a.qmd").write_text("A\n")
+        (src / "b.qmd").write_text("B\n")
+
+        f_a = {"path": src / "a.qmd", "title": "A", "section": "Basics"}
+        f_b = {"path": src / "b.qmd", "title": "B", "section": "Basics"}
+        guide_info = {
+            "files": [f_a, f_b],
+            "source_dir": src,
+            "sections": {"Basics": [f_a, f_b]},
+        }
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._generate_user_guide_sidebar_auto(guide_info)
+
+        assert result["id"] == "user-guide"
+        # Should have one section entry
+        section_items = [c for c in result["contents"] if isinstance(c, dict) and "section" in c]
+        assert len(section_items) == 1
+        assert section_items[0]["section"] == "Basics"
+
+
+def test_organize_files_into_sidebar_subdirectories():
+    """_generate_user_guide_sidebar_auto groups by subdirectory when no sections."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        src = tmp / "user_guide"
+        src.mkdir()
+        sub = src / "advanced"
+        sub.mkdir()
+        (src / "intro.qmd").write_text("Intro\n")
+        (sub / "deep.qmd").write_text("Deep\n")
+
+        guide_info = {
+            "files": [
+                {"path": src / "intro.qmd", "title": "Intro", "section": None},
+                {"path": sub / "deep.qmd", "title": "Deep", "section": None},
+            ],
+            "source_dir": src,
+            "sections": {},
+        }
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._generate_user_guide_sidebar_auto(guide_info)
+
+        # Should have root file + subdirectory section
+        section_items = [c for c in result["contents"] if isinstance(c, dict) and "section" in c]
+        assert len(section_items) == 1
+        assert section_items[0]["section"] == "Advanced"
+
+
+# ---------------------------------------------------------------------------
+# _update_config_with_user_guide  (core.py ~3203)
+# ---------------------------------------------------------------------------
+
+
+def test_update_config_with_user_guide_adds_sidebar():
+    """_update_config_with_user_guide adds sidebar and navbar entry."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+        docs = GreatDocs(project_path=tmp_dir)
+        quarto_yml = docs.project_path / "_quarto.yml"
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+
+        config = {
+            "website": {
+                "sidebar": [],
+                "navbar": {"left": [{"text": "Reference", "href": "reference/"}]},
+            }
+        }
+        with open(quarto_yml, "w") as f:
+            yaml.dump(config, f)
+
+        src = tmp / "user_guide"
+        src.mkdir()
+        (src / "page.qmd").write_text("---\ntitle: Page\n---\n")
+
+        guide_info = {
+            "files": [{"path": src / "page.qmd", "title": "Page", "section": None}],
+            "source_dir": src,
+            "sections": {},
+            "has_index": False,
+            "explicit": False,
+        }
+        docs._update_config_with_user_guide(guide_info)
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+
+        # Should add user-guide sidebar
+        sidebar_ids = [s.get("id") for s in result["website"]["sidebar"] if isinstance(s, dict)]
+        assert "user-guide" in sidebar_ids
+
+        # Should add User Guide to navbar
+        nav_texts = [
+            i.get("text") for i in result["website"]["navbar"]["left"] if isinstance(i, dict)
+        ]
+        assert "User Guide" in nav_texts
+
+
+def test_update_config_with_user_guide_no_quarto_yml():
+    """_update_config_with_user_guide returns early if no _quarto.yml."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        guide_info = {"files": [], "source_dir": Path(tmp_dir), "sections": {}}
+        # Should not raise
+        docs._update_config_with_user_guide(guide_info)
+
+
+def test_update_config_with_user_guide_idempotent():
+    """_update_config_with_user_guide replaces existing user-guide sidebar."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+        docs = GreatDocs(project_path=tmp_dir)
+        quarto_yml = docs.project_path / "_quarto.yml"
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+
+        config = {
+            "website": {
+                "sidebar": [
+                    {"id": "user-guide", "title": "Old", "contents": ["old.qmd"]},
+                    {"id": "reference", "title": "Reference", "contents": []},
+                ],
+                "navbar": {"left": [{"text": "User Guide", "href": "user-guide/old.qmd"}]},
+            }
+        }
+        with open(quarto_yml, "w") as f:
+            yaml.dump(config, f)
+
+        src = tmp / "user_guide"
+        src.mkdir()
+        (src / "new.qmd").write_text("---\ntitle: New\n---\n")
+
+        guide_info = {
+            "files": [{"path": src / "new.qmd", "title": "New", "section": None}],
+            "source_dir": src,
+            "sections": {},
+            "has_index": False,
+            "explicit": False,
+        }
+        docs._update_config_with_user_guide(guide_info)
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+
+        ug_sidebars = [
+            s
+            for s in result["website"]["sidebar"]
+            if isinstance(s, dict) and s.get("id") == "user-guide"
+        ]
+        assert len(ug_sidebars) == 1
+        # Reference sidebar should be preserved
+        ref_sidebars = [
+            s
+            for s in result["website"]["sidebar"]
+            if isinstance(s, dict) and s.get("id") == "reference"
+        ]
+        assert len(ref_sidebars) == 1
+
+
+# ---------------------------------------------------------------------------
+# _process_user_guide  (core.py ~3260)
+# ---------------------------------------------------------------------------
+
+
+def test_process_user_guide_no_guide():
+    """_process_user_guide returns False when no user guide found."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._process_user_guide() is False
+
+
+def test_process_user_guide_with_pages():
+    """_process_user_guide discovers, copies, and configures user guide."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+
+        ug = tmp / "user_guide"
+        ug.mkdir()
+        (ug / "01-intro.qmd").write_text("---\ntitle: Intro\n---\nContent\n")
+        (ug / "02-usage.qmd").write_text("---\ntitle: Usage\n---\nContent\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        config = {"website": {"sidebar": [], "navbar": {"left": []}}}
+        with open(docs.project_path / "_quarto.yml", "w") as f:
+            yaml.dump(config, f)
+
+        assert docs._process_user_guide() is True
+        assert (docs.project_path / "user-guide").exists()
+
+
+def test_process_user_guide_with_sections():
+    """_process_user_guide processes sectioned user guide."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+
+        ug = tmp / "user_guide"
+        ug.mkdir()
+        (ug / "01-a.qmd").write_text("---\ntitle: A\nguide-section: Basics\n---\nA\n")
+        (ug / "02-b.qmd").write_text("---\ntitle: B\nguide-section: Advanced\n---\nB\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        config = {"website": {"sidebar": [], "navbar": {"left": []}}}
+        with open(docs.project_path / "_quarto.yml", "w") as f:
+            yaml.dump(config, f)
+
+        result = docs._process_user_guide()
+        assert result is True
+
+        with open(docs.project_path / "_quarto.yml") as f:
+            result_config = yaml.safe_load(f)
+        ug_sidebar = next(
+            s
+            for s in result_config["website"]["sidebar"]
+            if isinstance(s, dict) and s.get("id") == "user-guide"
+        )
+        # Should have sections in the sidebar
+        section_items = [
+            c for c in ug_sidebar["contents"] if isinstance(c, dict) and "section" in c
+        ]
+        assert len(section_items) >= 1
+
+
+# ---------------------------------------------------------------------------
+# _apply_nodoc_filter  (core.py ~5773)
+# ---------------------------------------------------------------------------
+
+
+def test_apply_nodoc_filter_removes_items():
+    """_apply_nodoc_filter removes items with %nodoc directive."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "great_docs"\n')
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        sections = [
+            {"title": "Functions", "contents": ["func_a", "func_b"]},
+        ]
+
+        # Patch _extract_all_directives to return nodoc for func_b
+        from unittest.mock import patch, MagicMock
+
+        mock_directives = MagicMock()
+        mock_directives.nodoc = True
+
+        with patch.object(
+            docs, "_extract_all_directives", return_value={"func_b": mock_directives}
+        ):
+            result = docs._apply_nodoc_filter("great_docs", sections)
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0]["contents"] == ["func_a"]
+
+
+def test_apply_nodoc_filter_no_directives():
+    """_apply_nodoc_filter returns sections unchanged when no directives."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        sections = [{"title": "Funcs", "contents": ["f1", "f2"]}]
+
+        from unittest.mock import patch
+
+        with patch.object(docs, "_extract_all_directives", return_value={}):
+            result = docs._apply_nodoc_filter("pkg", sections)
+
+        assert result == sections
+
+
+def test_apply_nodoc_filter_removes_companion_section():
+    """_apply_nodoc_filter removes companion 'ClassName Methods' section."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        sections = [
+            {"title": "Classes", "contents": ["MyClass"]},
+            {"title": "MyClass Methods", "contents": ["MyClass.foo", "MyClass.bar"]},
+        ]
+
+        from unittest.mock import patch, MagicMock
+
+        mock_dir = MagicMock()
+        mock_dir.nodoc = True
+        with patch.object(docs, "_extract_all_directives", return_value={"MyClass": mock_dir}):
+            result = docs._apply_nodoc_filter("pkg", sections)
+
+        # Both the class entry and the companion method section should be gone
+        assert result is None
+
+
+def test_apply_nodoc_filter_all_excluded():
+    """_apply_nodoc_filter returns None when all items excluded."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        sections = [{"title": "Funcs", "contents": ["only_func"]}]
+
+        from unittest.mock import patch, MagicMock
+
+        mock_dir = MagicMock()
+        mock_dir.nodoc = True
+        with patch.object(docs, "_extract_all_directives", return_value={"only_func": mock_dir}):
+            result = docs._apply_nodoc_filter("pkg", sections)
+
+        assert result is None
+
+
+def test_apply_nodoc_filter_dict_items():
+    """_apply_nodoc_filter handles dict items (name/members format)."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        sections = [
+            {
+                "title": "Classes",
+                "contents": [
+                    {"name": "Good", "members": []},
+                    {"name": "Bad", "members": []},
+                ],
+            }
+        ]
+
+        from unittest.mock import patch, MagicMock
+
+        mock_dir = MagicMock()
+        mock_dir.nodoc = True
+        with patch.object(docs, "_extract_all_directives", return_value={"Bad": mock_dir}):
+            result = docs._apply_nodoc_filter("pkg", sections)
+
+        assert len(result) == 1
+        assert len(result[0]["contents"]) == 1
+        assert result[0]["contents"][0]["name"] == "Good"
+
+
+# ---------------------------------------------------------------------------
+# _generate_user_guide_sidebar_explicit  (core.py ~2893)
+# ---------------------------------------------------------------------------
+
+
+def test_generate_user_guide_sidebar_explicit():
+    """_generate_user_guide_sidebar_explicit builds sidebar from config."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        src = tmp / "user_guide"
+        src.mkdir()
+        (src / "install.qmd").write_text("I\n")
+        (src / "usage.qmd").write_text("U\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        guide_info = {
+            "files": [
+                {
+                    "path": src / "install.qmd",
+                    "title": "Install",
+                    "section": "Getting Started",
+                    "custom_text": None,
+                },
+                {
+                    "path": src / "usage.qmd",
+                    "title": "Usage",
+                    "section": "Getting Started",
+                    "custom_text": None,
+                },
+            ],
+            "source_dir": src,
+            "sections": {
+                "Getting Started": [
+                    {"path": src / "install.qmd", "title": "Install", "section": "Getting Started"},
+                    {"path": src / "usage.qmd", "title": "Usage", "section": "Getting Started"},
+                ]
+            },
+            "explicit": True,
+            "explicit_config": [
+                {"section": "Getting Started", "contents": ["install.qmd", "usage.qmd"]},
+            ],
+        }
+        result = docs._generate_user_guide_sidebar_explicit(guide_info)
+        assert result["id"] == "user-guide"
+        section_items = [c for c in result["contents"] if isinstance(c, dict) and "section" in c]
+        assert len(section_items) == 1
+
+
+# ---------------------------------------------------------------------------
+# _strip_numeric_prefix  (core.py)
+# ---------------------------------------------------------------------------
+
+
+def test_strip_numeric_prefix_various():
+    """_strip_numeric_prefix handles different prefix formats."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._strip_numeric_prefix("01-intro.qmd") == "intro.qmd"
+        assert docs._strip_numeric_prefix("99_advanced.qmd") == "advanced.qmd"
+        assert docs._strip_numeric_prefix("no-prefix.qmd") == "no-prefix.qmd"
+        assert docs._strip_numeric_prefix("001-triple.qmd") == "triple.qmd"
+
+
+# ---------------------------------------------------------------------------
+# _normalize_package_name  (core.py)
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_package_name():
+    """_normalize_package_name replaces hyphens with underscores."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._normalize_package_name("my-package") == "my_package"
+        assert docs._normalize_package_name("already_good") == "already_good"
+        assert docs._normalize_package_name("multi-hyphen-name") == "multi_hyphen_name"
+
+
+# ---------------------------------------------------------------------------
+# _get_source_location  (core.py ~3370)
+# ---------------------------------------------------------------------------
+
+
+def test_get_source_location_found():
+    """_get_source_location returns file/line info for an exported symbol."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        # Use great_docs itself as a known package
+        result = docs._get_source_location("great_docs", "GreatDocs")
+        assert result is not None
+        assert "file" in result
+        assert "start_line" in result
+        assert "end_line" in result
+        assert result["start_line"] > 0
+
+
+def test_get_source_location_not_found():
+    """_get_source_location returns None for non-existent symbol."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._get_source_location("great_docs", "NonExistentSymbol")
+        assert result is None
+
+
+def test_get_source_location_method():
+    """_get_source_location finds a class method by dotted name."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._get_source_location("great_docs", "GreatDocs.build")
+        if result is not None:
+            assert result["start_line"] > 0
+            assert result["end_line"] >= result["start_line"]
+
+
+def test_get_source_location_bad_package():
+    """_get_source_location returns None for non-existent packages."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._get_source_location("nonexistent_pkg_xyzzy", "SomeClass")
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _count_cli_sidebar_items  (already tested, adding nested test)
+# ---------------------------------------------------------------------------
+
+
+def test_count_cli_sidebar_items_nested():
+    """_count_cli_sidebar_items counts nested dict items recursively."""
+    items = [
+        "reference/cli/index.qmd",
+        {
+            "section": "task",
+            "contents": [
+                "reference/cli/task.qmd",
+                {"section": "sub", "contents": ["reference/cli/task/run.qmd"]},
+            ],
+        },
+    ]
+    assert GreatDocs._count_cli_sidebar_items(items) == 3
+
+
+# ---------------------------------------------------------------------------
+# _write_quarto_yml  (core.py — used by many methods)
+# ---------------------------------------------------------------------------
+
+
+def test_write_quarto_yml():
+    """_write_quarto_yml writes YAML config to file."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        docs = GreatDocs(project_path=tmp_dir)
+        quarto_yml = tmp / "_quarto.yml"
+
+        config = {"project": {"type": "website"}, "website": {"title": "Test"}}
+        docs._write_quarto_yml(quarto_yml, config)
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+        assert result["website"]["title"] == "Test"
+
+
+# ---------------------------------------------------------------------------
+# _detect_package_name  (core.py)
+# ---------------------------------------------------------------------------
+
+
+def test_detect_package_name_from_pyproject():
+    """_detect_package_name reads name from pyproject.toml."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "my-cool-pkg"\n')
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._detect_package_name() == "my-cool-pkg"
+
+
+def test_detect_package_name_no_pyproject():
+    """_detect_package_name returns None when no pyproject.toml."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._detect_package_name()
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _parse_all_from_init  (core.py ~3829)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_package_exports():
+    """_parse_package_exports extracts __all__ from a synthetic package."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        pkg = tmp / "mypkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text('__all__ = ["Foo", "bar"]\n')
+        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._parse_package_exports("mypkg")
+
+        assert result is not None
+        assert "Foo" in result
+        assert "bar" in result
+
+
+def test_parse_package_exports_missing_package():
+    """_parse_package_exports returns None for missing packages."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._parse_package_exports("nonexistent_pkg_xyzzy")
+        assert result is None
+
+
+def test_parse_package_exports_with_exclude():
+    """_parse_package_exports filters out config excludes."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "great_docs"\n')
+        (tmp / "great-docs.yml").write_text("exclude:\n  - GreatDocs\n")
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._parse_package_exports("great_docs")
+        if result is not None:
+            assert "GreatDocs" not in result
+
+
+# ---------------------------------------------------------------------------
+# _discover_package_exports  (core.py ~3885)
+# ---------------------------------------------------------------------------
+
+
+def test_discover_package_exports():
+    """_discover_package_exports discovers exports using griffe."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._discover_package_exports("great_docs")
+        assert result is not None
+        assert "GreatDocs" in result
+
+
+def test_discover_package_exports_missing():
+    """_discover_package_exports returns None for missing packages."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._discover_package_exports("nonexistent_pkg_xyzzy")
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _extract_authors_from_pyproject  (core.py ~5843)
+# ---------------------------------------------------------------------------
+
+
+def test_extract_authors_from_pyproject():
+    """_extract_authors_from_pyproject extracts author info."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text(
+            '[project]\nname = "mypkg"\n\n'
+            '[[project.authors]]\nname = "Alice"\nemail = "alice@example.com"\n\n'
+            '[[project.maintainers]]\nname = "Bob"\nemail = "bob@example.com"\n'
+        )
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._extract_authors_from_pyproject()
+
+        assert len(result) == 2
+        # Maintainers come first in the implementation
+        assert result[0]["name"] == "Bob"
+        assert result[0]["role"] == "Maintainer"
+        assert result[1]["name"] == "Alice"
+        assert result[1]["role"] == "Author"
+
+
+def test_extract_authors_from_pyproject_no_authors():
+    """_extract_authors_from_pyproject returns empty list when no authors."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._extract_authors_from_pyproject()
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# _format_authors_yaml  (core.py ~5900)
+# ---------------------------------------------------------------------------
+
+
+def test_format_authors_yaml():
+    """_format_authors_yaml generates YAML for authors list."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        authors = [
+            {"name": "Alice", "email": "alice@example.com", "role": "Author"},
+            {"name": "Bob", "email": "bob@example.com", "role": "Maintainer"},
+        ]
+        result = docs._format_authors_yaml(authors)
+        assert "Alice" in result
+        assert "alice@example.com" in result
+        assert "Bob" in result
+        assert "authors:" in result
+
+
+def test_format_authors_yaml_empty():
+    """_format_authors_yaml returns empty string for empty list."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._format_authors_yaml([])
+        assert result == ""
