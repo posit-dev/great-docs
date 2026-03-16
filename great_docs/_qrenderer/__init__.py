@@ -17,8 +17,7 @@ from ._render.mixin_members import RenderDocMembersMixin
 from ._render.reference_page import RenderReferencePage
 from ._render.reference_section import RenderReferenceSection
 from ._renderer import Renderer
-from .blueprint import blueprint, strip_package_name
-from .collect import collect
+from .blueprint import blueprint, collect, strip_package_name
 
 # Re-exports from consolidated _renderer module
 from .introspection import Builder, get_object

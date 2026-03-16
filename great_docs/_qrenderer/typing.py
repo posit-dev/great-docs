@@ -22,12 +22,10 @@ from .layout import (
     DocFunction,
     DocModule,
     Layout,
-    Link,
     MemberPage,
     Page,
     Section,
 )
-from .pandoc.blocks import InlineContent
 
 DisplayNameFormat: TypeAlias = Literal["doc", "full", "name", "short", "relative", "canonical"]
 DocObjectKind: TypeAlias = Literal[
@@ -43,28 +41,8 @@ DocObjectKind: TypeAlias = Literal[
     "type alias",
 ]
 
-DocstringDefinitionType: TypeAlias = (
-    gf.DocstringParameter
-    | gf.DocstringAttribute
-    | gf.DocstringReturn
-    | gf.DocstringYield
-    | gf.DocstringReceive
-    | gf.DocstringRaise
-    | gf.DocstringWarn
-)
-
 Documentable: TypeAlias = (
-    # _Docable, Doc
-    DocClass
-    | DocFunction
-    | DocAttribute
-    | DocModule
-    # _Docable
-    | Link
-    # Structual
-    | Page
-    | Section
-    | Layout
+    DocClass | DocFunction | DocAttribute | DocModule | Page | Section | Layout
 )
 
 RenderObjType: TypeAlias = (
@@ -80,10 +58,6 @@ RenderObjType: TypeAlias = (
 
 AnyDocstringSection: TypeAlias = gf.DocstringSection | DCDocstringSection
 
-Annotation: TypeAlias = str | gf.Expr
-
 DocType: TypeAlias = DocClass | DocFunction | DocAttribute | DocModule
 
-DocMemberType: TypeAlias = MemberPage | Doc | Link
-
-SummaryItem: TypeAlias = tuple[InlineContent, InlineContent]
+DocMemberType: TypeAlias = MemberPage | Doc

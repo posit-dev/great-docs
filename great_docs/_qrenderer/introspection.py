@@ -21,9 +21,21 @@ from ._griffe import (
 from ._griffe import dataclasses as dc
 from ._md_renderer import Renderer
 from .inventory import convert_inventory, create_inventory
-from .parsers import get_parser_defaults
 
 _log = logging.getLogger(__name__)
+
+
+# Parser defaults ==============================================================
+
+DEFAULT_OPTIONS = {
+    "numpy": {
+        "allow_section_blank_line": True,
+    }
+}
+
+
+def get_parser_defaults(name: str):
+    return DEFAULT_OPTIONS.get(name, {})
 
 
 # Docstring loading / parsing =================================================
@@ -499,7 +511,7 @@ class Builder:
         """Build index page, inventory, and individual doc pages."""
 
         from .blueprint import blueprint as _blueprint
-        from .collect import collect as _collect
+        from .blueprint import collect as _collect
 
         if self.source_dir:
             import sys

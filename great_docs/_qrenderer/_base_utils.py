@@ -2,10 +2,20 @@ from __future__ import annotations
 
 import dataclasses
 from contextvars import ContextVar
-from typing import Union
+from dataclasses import dataclass
+from typing import Any, Optional, Union
 
-from ._node import Node
 from .layout import _Base as LayoutBase
+
+# Node -------------------------------------------------------------------------
+
+
+@dataclass
+class Node:
+    level: int = -1
+    value: Any = None
+    parent: Optional[Node] = None
+
 
 # Transformer -----------------------------------------------------------------
 
