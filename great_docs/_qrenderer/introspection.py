@@ -11,14 +11,14 @@ from typing import Any
 import yaml
 
 from . import layout
-from ._griffe_compat import (
+from ._griffe import (
     GriffeLoader,
     LinesCollection,
     ModulesCollection,
     Parser,
     parse,
 )
-from ._griffe_compat import dataclasses as dc
+from ._griffe import dataclasses as dc
 from ._md_renderer import Renderer
 from .inventory import convert_inventory, create_inventory
 from .parsers import get_parser_defaults

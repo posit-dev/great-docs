@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Type
 
-from ._griffe_compat import AliasResolutionError
-from ._griffe_compat import dataclasses as dc
-from ._griffe_compat import docstrings as ds
+from ._griffe import AliasResolutionError
+from ._griffe import dataclasses as dc
+from ._griffe import docstrings as ds
 from .layout import _Base as LayoutBase
 
 

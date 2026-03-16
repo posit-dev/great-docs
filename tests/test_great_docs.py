@@ -5447,7 +5447,7 @@ class TestRendererDataclassAttributes:
         """Parameter descriptions are extracted from parsed docstring sections."""
         from unittest.mock import MagicMock
 
-        from great_docs._qrenderer._griffe_compat import docstrings as ds
+        from great_docs._qrenderer._griffe import docstrings as ds
         from great_docs._qrenderer._md_renderer import _get_param_descriptions
 
         param1 = MagicMock(spec=ds.DocstringParameter)
@@ -6006,7 +6006,7 @@ class TestRendererSignatureMultiline:
         """Signatures exceeding 80 chars wrap to multi-line."""
         from unittest.mock import MagicMock
 
-        from great_docs._qrenderer._griffe_compat import dataclasses as dc
+        from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
@@ -6139,7 +6139,7 @@ class TestRendererNonCallableCleanup:
         """Enum class signature has no parentheses."""
         from unittest.mock import MagicMock
 
-        from great_docs._qrenderer._griffe_compat import dataclasses as dc
+        from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
@@ -6162,7 +6162,7 @@ class TestRendererNonCallableCleanup:
         """TypedDict class signature has no parentheses."""
         from unittest.mock import MagicMock
 
-        from great_docs._qrenderer._griffe_compat import dataclasses as dc
+        from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
@@ -6185,7 +6185,7 @@ class TestRendererNonCallableCleanup:
         """Normal classes retain ``()`` in their signature."""
         from unittest.mock import MagicMock
 
-        from great_docs._qrenderer._griffe_compat import dataclasses as dc
+        from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
@@ -6213,8 +6213,8 @@ class TestRendererSectionSeparators:
         from unittest.mock import MagicMock, patch
 
         from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe_compat import dataclasses as dc
-        from great_docs._qrenderer._griffe_compat import docstrings as ds
+        from great_docs._qrenderer._griffe import dataclasses as dc
+        from great_docs._qrenderer._griffe import docstrings as ds
         from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()

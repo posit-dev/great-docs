@@ -15,9 +15,9 @@ from ._ast import (
     ExampleCode,
     ExampleText,
 )
-from ._griffe_compat import dataclasses as dc
-from ._griffe_compat import docstrings as ds
-from ._griffe_compat import expressions as expr
+from ._griffe import dataclasses as dc
+from ._griffe import docstrings as ds
+from ._griffe import expressions as expr
 from .pandoc.blocks import DefinitionList
 from .pandoc.inlines import Attr, Code, Inlines, Span, Strong
 

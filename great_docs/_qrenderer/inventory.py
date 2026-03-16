@@ -4,7 +4,7 @@ import json
 from typing import Callable
 
 from . import layout
-from ._griffe_compat import dataclasses as dc
+from ._griffe import dataclasses as dc
 
 
 def convert_inventory(inv: "dict | object", out_name=None):

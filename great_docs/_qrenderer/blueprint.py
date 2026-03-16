@@ -8,15 +8,15 @@ from textwrap import indent
 import yaml
 
 from ._base_utils import PydanticTransformer, WorkaroundKeyError, ctx_node
-from ._griffe_compat import (
+from ._griffe import (
     AliasResolutionError,
     GriffeLoader,
     LinesCollection,
     ModulesCollection,
     Parser,
 )
-from ._griffe_compat import dataclasses as dc
-from ._griffe_compat import docstrings as ds
+from ._griffe import dataclasses as dc
+from ._griffe import docstrings as ds
 from .layout import (
     MISSING,
     Auto,

@@ -2,6 +2,39 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from griffe import (  # noqa: F401
+    DocstringAdmonition,
+    DocstringAttribute,
+    DocstringClass,
+    DocstringDeprecated,
+    DocstringElement,
+    DocstringFunction,
+    DocstringModule,
+    DocstringNamedElement,
+    DocstringParameter,
+    DocstringRaise,
+    DocstringReceive,
+    DocstringReturn,
+    DocstringSection,
+    DocstringSectionAdmonition,
+    DocstringSectionAttributes,
+    DocstringSectionClasses,
+    DocstringSectionDeprecated,
+    DocstringSectionExamples,
+    DocstringSectionFunctions,
+    DocstringSectionModules,
+    DocstringSectionOtherParameters,
+    DocstringSectionParameters,
+    DocstringSectionRaises,
+    DocstringSectionReceives,
+    DocstringSectionReturns,
+    DocstringSectionText,
+    DocstringSectionWarns,
+    DocstringSectionYields,
+    DocstringWarn,
+    DocstringYield,
+)
+
 from .enumerations import DCDocstringSectionKind
 
 if TYPE_CHECKING:
