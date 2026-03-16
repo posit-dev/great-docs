@@ -14747,8 +14747,8 @@ def test_prepare_build_directory_creates_structure():
 
         assert "Great Docs build directory" in content
 
-        # Check CSS file was copied
-        assert (docs.project_path / "great-docs.css").exists()
+        # Check SCSS theme file was copied
+        assert (docs.project_path / "great-docs-q.scss").exists()
 
         # Check _quarto.yml was created
         assert (docs.project_path / "_quarto.yml").exists()
@@ -18530,7 +18530,7 @@ def test_prepare_build_directory():
         build_dir = Path(tmp_dir) / "great-docs"
         assert build_dir.exists()
         assert (build_dir / "_quarto.yml").exists()
-        assert (build_dir / "great-docs.css").exists()
+        assert (build_dir / "great-docs-q.scss").exists()
         assert (build_dir / "scripts" / "post-render.py").exists()
 
 
@@ -18555,8 +18555,8 @@ def test_update_quarto_config_creates_structure():
 
         result = _yaml.safe_load(quarto_yml.read_text(encoding="utf-8"))
         assert "post-render" in result.get("project", {})
-        assert "css" in result.get("format", {}).get("html", {})
-        assert "great-docs.css" in result["format"]["html"]["css"]
+        theme = result.get("format", {}).get("html", {}).get("theme", [])
+        assert "great-docs-q.scss" in theme
 
 
 def test_update_quarto_config_no_existing_file():

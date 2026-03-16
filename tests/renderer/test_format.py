@@ -55,7 +55,9 @@ class TestCSSAnnotationHeight:
     def css_source(self):
         from pathlib import Path
 
-        css_path = Path(__file__).resolve().parents[2] / "great_docs" / "assets" / "great-docs.css"
+        css_path = (
+            Path(__file__).resolve().parents[2] / "great_docs" / "assets" / "great-docs-q.scss"
+        )
         return css_path.read_text()
 
     def test_dt_uses_min_height(self, css_source):

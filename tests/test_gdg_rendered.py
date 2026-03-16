@@ -65,6 +65,22 @@ def _site_dir(pkg_name: str) -> Path:
     return _RENDERED_DIR / pkg_name / "great-docs" / "_site"
 
 
+def _deployed_css(pkg_name: str) -> str:
+    """Return concatenated CSS from all deployed stylesheets.
+
+    Searches standalone great-docs.css (legacy) and all compiled theme CSS
+    in site_libs/bootstrap/.
+    """
+    site = _site_dir(pkg_name)
+    parts: list[str] = []
+    standalone = site / "great-docs.css"
+    if standalone.exists():
+        parts.append(standalone.read_text(encoding="utf-8"))
+    for css_file in sorted(site.glob("site_libs/bootstrap/*.css")):
+        parts.append(css_file.read_text(encoding="utf-8"))
+    return "\n".join(parts)
+
+
 def _ref_dir(pkg_name: str) -> Path:
     """Return the reference/ subdirectory inside _site/."""
     return _site_dir(pkg_name) / "reference"
@@ -4153,9 +4169,8 @@ def test_R5_gradient_css_has_preset_class(pkg, preset):
     """The deployed CSS contains the .gd-gradient-<preset> class."""
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
-    css_file = _site_dir(pkg) / "great-docs.css"
-    assert css_file.exists(), "great-docs.css missing"
-    css = css_file.read_text(encoding="utf-8")
+    css = _deployed_css(pkg)
+    assert css, "No CSS files found in _site"
     assert f".gd-gradient-{preset}" in css
 
 
@@ -4164,8 +4179,7 @@ def test_R5_gradient_css_has_animation(pkg, preset):
     """The deployed CSS contains the gd-gradient-shift keyframes."""
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
-    css_file = _site_dir(pkg) / "great-docs.css"
-    css = css_file.read_text(encoding="utf-8")
+    css = _deployed_css(pkg)
     assert "gd-gradient-shift" in css
 
 
@@ -4174,8 +4188,7 @@ def test_R5_gradient_css_has_dark_variant(pkg, preset):
     """The CSS has a dark-mode override for each gradient preset."""
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
-    css_file = _site_dir(pkg) / "great-docs.css"
-    css = css_file.read_text(encoding="utf-8")
+    css = _deployed_css(pkg)
     assert f'[data-bs-theme="dark"] .gd-gradient-{preset}' in css
 
 

@@ -4,9 +4,9 @@ project:
 
 format:
   html:
-    theme: flatly
-    css:
-      - great-docs.css
+    theme:
+      - flatly
+      - great-docs-q.scss
     toc: true
     grid:
       sidebar-width: 270px

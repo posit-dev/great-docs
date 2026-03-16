@@ -85,18 +85,14 @@ class GreatDocs:
         post_render_dst = scripts_dir / "post-render.py"
         shutil.copy2(post_render_src, post_render_dst)
 
-        # Copy CSS file
-        css_src = self.assets_path / "great-docs.css"
-        css_dst = self.project_path / "great-docs.css"
-        shutil.copy2(css_src, css_dst)
-
         # Copy qrenderer assets
         renderer_src = self.assets_path / "_renderer.py"
         if renderer_src.exists():
             shutil.copy2(renderer_src, self.project_path / "_renderer.py")
+
+        # Copy SCSS theme file (contains all site styling)
         scss_src = self.assets_path / "great-docs-q.scss"
-        if scss_src.exists():
-            shutil.copy2(scss_src, self.project_path / "great-docs-q.scss")
+        shutil.copy2(scss_src, self.project_path / "great-docs-q.scss")
 
         # Copy JavaScript files
         js_files = [
@@ -7912,7 +7908,7 @@ toc: false
             print("Warning: _quarto.yml not found. Creating minimal configuration...")
             config = {
                 "project": {"type": "website", "post-render": "scripts/post-render.py"},
-                "format": {"html": {"theme": "flatly", "css": ["great-docs.css"]}},
+                "format": {"html": {"theme": "flatly"}},
             }
         else:
             # Load existing configuration
@@ -7955,15 +7951,6 @@ toc: false
         if assets_dir.exists() and assets_dir.is_dir():
             if "assets/**" not in config["project"]["resources"]:
                 config["project"]["resources"].append("assets/**")
-
-        # Add CSS file
-        if "css" not in config["format"]["html"]:
-            config["format"]["html"]["css"] = []
-        elif isinstance(config["format"]["html"]["css"], str):
-            config["format"]["html"]["css"] = [config["format"]["html"]["css"]]
-
-        if "great-docs.css" not in config["format"]["html"]["css"]:
-            config["format"]["html"]["css"].append("great-docs.css")
 
         # Apply site settings from great-docs.yml (forwarded to format.html)
         site_settings = self._config.site
@@ -9755,12 +9742,13 @@ toc: false
         -------
         dict
             A dictionary containing:
-            - `total`: Total number of unique links checked
-            - `ok`: List of links that returned 2xx status
-            - `redirects`: List of dicts with `url`, `status`, `location` for 3xx responses
-            - `broken`: List of dicts with `url`, `status`, `error` for 4xx/5xx or errors
-            - `skipped`: List of URLs that were skipped (matched ignore patterns)
-            - `by_file`: Dict mapping file paths to lists of links found in each file
+
+            - `total`: total number of unique links checked
+            - `ok`: list of links that returned 2xx status
+            - `redirects`: list of dicts with `url`, `status`, `location` for 3xx responses
+            - `broken`: list of dicts with `url`, `status`, `error` for 4xx/5xx or errors
+            - `skipped`: list of URLs that were skipped (matched ignore patterns)
+            - `by_file`: dict mapping file paths to lists of links found in each file
 
         Examples
         --------
@@ -10052,24 +10040,22 @@ toc: false
         """
         Check spelling in documentation files and optionally docstrings.
 
-        This method scans documentation files (`.qmd`, `.md`) for spelling errors
-        using a dictionary-based approach. It intelligently skips code blocks,
-        inline code, URLs, and common technical terms.
+        This method scans documentation files (`.qmd`, `.md`) for spelling errors using a
+        dictionary-based approach. It intelligently skips code blocks, inline code, URLs, and common
+        technical terms.
 
         Parameters
         ----------
         include_docs
-            If `True`, scan documentation files (`.qmd`, `.md`) for spelling errors.
-            Default is `True`.
+            If `True`, scan documentation files (`.qmd`, `.md`) for spelling errors. Default is
+            `True`.
         include_docstrings
-            If `True`, also scan Python docstrings in the package.
-            Default is `False`.
+            If `True`, also scan Python docstrings in the package. Default is `False`.
         custom_dictionary
-            List of additional words to consider correct (e.g., project-specific
-            terms, library names). Default is `None`.
+            List of additional words to consider correct (e.g., project-specific terms, library
+            names). Default is `None`.
         language
-            Language for spell checking. Currently supports "en" (English).
-            Default is `"en"`.
+            Language for spell checking. Currently supports "en" (English). Default is `"en"`.
         verbose
             If `True`, print detailed progress information. Default is `False`.
 
@@ -10077,10 +10063,11 @@ toc: false
         -------
         dict
             A dictionary containing:
-            - `total_words`: Total number of words checked
-            - `misspelled`: List of dicts with `word`, `suggestions`, `files`, `contexts`
-            - `by_file`: Dict mapping file paths to misspelled words in each file
-            - `skipped_files`: List of files that couldn't be read
+
+            - `total_words`: total number of words checked
+            - `misspelled`: list of dicts with `word`, `suggestions`, `files`, `contexts`
+            - `by_file`: dict mapping file paths to misspelled words in each file
+            - `skipped_files`: list of files that couldn't be read
 
         Examples
         --------

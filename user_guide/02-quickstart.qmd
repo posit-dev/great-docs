@@ -109,7 +109,7 @@ your-project/
 ├── great-docs/              # Build directory (gitignored, ephemeral)
 │   ├── _quarto.yml          # Generated Quarto config
 │   ├── index.qmd            # Landing page (from README.md)
-│   ├── great-docs.css       # Styling
+│   ├── great-docs-q.scss    # Styling
 │   ├── github-widget.js     # GitHub stars widget
 │   ├── sidebar-filter.js    # API search filter
 │   ├── llms.txt             # LLM-friendly docs index

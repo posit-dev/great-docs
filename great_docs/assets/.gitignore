@@ -8,7 +8,7 @@ objects.json
 
 # Great-docs generated files (copied from great_docs/assets/ or generated from project root)
 _source_links.json
-great-docs.css
+great-docs-q.scss
 github-widget.js
 sidebar-filter.js
 reference-switcher.js
