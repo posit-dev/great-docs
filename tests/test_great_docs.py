@@ -5283,7 +5283,7 @@ class TestRendererRstCodeBlocks:
     """RST :: code blocks are converted to fenced code blocks at render time."""
 
     def test_rst_code_block_to_fenced(self):
-        from great_docs._qrenderer._md_renderer import _convert_rst_text
+        from great_docs._qrenderer._rst_converters import _convert_rst_text
 
         text = "For example::\n\n    x = 1\n    y = 2\n"
         result = _convert_rst_text(text)
@@ -5294,7 +5294,7 @@ class TestRendererRstCodeBlocks:
 
     def test_rst_directive_converted_to_callout(self):
         """RST directives like .. note:: are converted to Quarto callouts."""
-        from great_docs._qrenderer._md_renderer import _convert_rst_text
+        from great_docs._qrenderer._rst_converters import _convert_rst_text
 
         text = ".. note::\n\n    Important info\n"
         result = _convert_rst_text(text)
@@ -5305,7 +5305,7 @@ class TestRendererRstCodeBlocks:
 
     def test_math_directive_to_dollar_signs(self):
         """.. math:: -> $$...$$ display math."""
-        from great_docs._qrenderer._md_renderer import _convert_rst_text
+        from great_docs._qrenderer._rst_converters import _convert_rst_text
 
         text = "The formula:\n\n.. math::\n\n    a^2 + b^2 = c^2\n"
         result = _convert_rst_text(text)
@@ -5316,7 +5316,7 @@ class TestRendererRstCodeBlocks:
 
     def test_inline_math_converted(self):
         """:math:`x^2` -> $x^2$"""
-        from great_docs._qrenderer._md_renderer import _convert_rst_text
+        from great_docs._qrenderer._rst_converters import _convert_rst_text
 
         text = "The value :math:`x^2` is computed."
         result = _convert_rst_text(text)
@@ -5329,7 +5329,7 @@ class TestRendererRstTables:
     """RST tables are converted to Markdown pipe tables at render time."""
 
     def test_simple_table_converted(self):
-        from great_docs._qrenderer._md_renderer import _convert_rst_text
+        from great_docs._qrenderer._rst_converters import _convert_rst_text
 
         text = (
             "========  =========\n"
@@ -5347,7 +5347,7 @@ class TestRendererRstTables:
         assert "========" not in result
 
     def test_grid_table_converted(self):
-        from great_docs._qrenderer._md_renderer import _convert_rst_text
+        from great_docs._qrenderer._rst_converters import _convert_rst_text
 
         text = (
             "+--------+-------+\n"
@@ -5485,37 +5485,37 @@ class TestRendererSphinxRoles:
     """Sphinx cross-reference roles -> Markdown code spans."""
 
     def test_func_role(self):
-        from great_docs._qrenderer._md_renderer import _convert_sphinx_roles
+        from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
 
         assert _convert_sphinx_roles(":func:`get_object`") == "`get_object()`"
 
     def test_class_role(self):
-        from great_docs._qrenderer._md_renderer import _convert_sphinx_roles
+        from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
 
         assert _convert_sphinx_roles(":class:`MyClass`") == "`MyClass`"
 
     def test_exc_role(self):
-        from great_docs._qrenderer._md_renderer import _convert_sphinx_roles
+        from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
 
         assert _convert_sphinx_roles(":exc:`ValueError`") == "`ValueError`"
 
     def test_py_prefix_role(self):
-        from great_docs._qrenderer._md_renderer import _convert_sphinx_roles
+        from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
 
         assert _convert_sphinx_roles(":py:func:`bar`") == "`bar()`"
 
     def test_meth_role_appends_parens(self):
-        from great_docs._qrenderer._md_renderer import _convert_sphinx_roles
+        from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
 
         assert _convert_sphinx_roles(":meth:`run`") == "`run()`"
 
     def test_attr_role_no_parens(self):
-        from great_docs._qrenderer._md_renderer import _convert_sphinx_roles
+        from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
 
         assert _convert_sphinx_roles(":attr:`name`") == "`name`"
 
     def test_multiple_roles_in_text(self):
-        from great_docs._qrenderer._md_renderer import _convert_sphinx_roles
+        from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
 
         text = "Use :func:`foo` and :class:`Bar` together."
         result = _convert_sphinx_roles(text)
@@ -5523,7 +5523,7 @@ class TestRendererSphinxRoles:
         assert result == "Use `foo()` and `Bar` together."
 
     def test_func_already_has_parens(self):
-        from great_docs._qrenderer._md_renderer import _convert_sphinx_roles
+        from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
 
         assert _convert_sphinx_roles(":func:`foo()`") == "`foo()`"
 
@@ -5532,7 +5532,7 @@ class TestRendererRstDirectives:
     """RST admonition / version directives -> Quarto callout blocks."""
 
     def test_inline_note(self):
-        from great_docs._qrenderer._md_renderer import _convert_rst_directives
+        from great_docs._qrenderer._rst_converters import _convert_rst_directives
 
         result = _convert_rst_directives(".. note:: Something important.")
 
@@ -5541,7 +5541,7 @@ class TestRendererRstDirectives:
         assert ":::" in result
 
     def test_inline_warning(self):
-        from great_docs._qrenderer._md_renderer import _convert_rst_directives
+        from great_docs._qrenderer._rst_converters import _convert_rst_directives
 
         result = _convert_rst_directives(".. warning:: Be careful.")
 
@@ -5549,7 +5549,7 @@ class TestRendererRstDirectives:
         assert "Be careful." in result
 
     def test_inline_versionadded(self):
-        from great_docs._qrenderer._md_renderer import _convert_rst_directives
+        from great_docs._qrenderer._rst_converters import _convert_rst_directives
 
         result = _convert_rst_directives(".. versionadded:: 2.8.1")
 
@@ -5558,7 +5558,7 @@ class TestRendererRstDirectives:
         assert "2.8.1" in result
 
     def test_inline_deprecated(self):
-        from great_docs._qrenderer._md_renderer import _convert_rst_directives
+        from great_docs._qrenderer._rst_converters import _convert_rst_directives
 
         result = _convert_rst_directives(".. deprecated:: 2.6 Use X instead.")
 
@@ -5567,7 +5567,7 @@ class TestRendererRstDirectives:
         assert "2.6" in result
 
     def test_block_note(self):
-        from great_docs._qrenderer._md_renderer import _convert_rst_directives
+        from great_docs._qrenderer._rst_converters import _convert_rst_directives
 
         text = ".. note::\n\n    This is the note body.\n"
         result = _convert_rst_directives(text)
@@ -5576,7 +5576,7 @@ class TestRendererRstDirectives:
         assert "This is the note body." in result
 
     def test_block_tip(self):
-        from great_docs._qrenderer._md_renderer import _convert_rst_directives
+        from great_docs._qrenderer._rst_converters import _convert_rst_directives
 
         text = ".. tip::\n\n    Helpful advice.\n"
         result = _convert_rst_directives(text)
@@ -5585,14 +5585,14 @@ class TestRendererRstDirectives:
         assert "Helpful advice." in result
 
     def test_danger_maps_to_important(self):
-        from great_docs._qrenderer._md_renderer import _convert_rst_directives
+        from great_docs._qrenderer._rst_converters import _convert_rst_directives
 
         result = _convert_rst_directives(".. danger:: Critical issue.")
 
         assert ".callout-important" in result
 
     def test_bare_directive(self):
-        from great_docs._qrenderer._md_renderer import _convert_rst_directives
+        from great_docs._qrenderer._rst_converters import _convert_rst_directives
 
         result = _convert_rst_directives(".. note::")
 
@@ -5600,7 +5600,7 @@ class TestRendererRstDirectives:
         assert ":::" in result
 
     def test_versionchanged_with_block_body(self):
-        from great_docs._qrenderer._md_renderer import _convert_rst_directives
+        from great_docs._qrenderer._rst_converters import _convert_rst_directives
 
         text = ".. versionchanged:: 3.0\n\n    New behaviour.\n"
         result = _convert_rst_directives(text)
@@ -5613,7 +5613,7 @@ class TestRendererBoldSectionHeaders:
     """``**Examples**::`` -> proper QMD section headings."""
 
     def test_examples_header(self):
-        from great_docs._qrenderer._md_renderer import _convert_bold_section_headers
+        from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
 
         result = _convert_bold_section_headers("**Examples**::", 2)
 
@@ -5621,7 +5621,7 @@ class TestRendererBoldSectionHeaders:
         assert ".doc-section-examples" in result
 
     def test_notes_header(self):
-        from great_docs._qrenderer._md_renderer import _convert_bold_section_headers
+        from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
 
         result = _convert_bold_section_headers("**Notes**::", 3)
 
@@ -5629,14 +5629,14 @@ class TestRendererBoldSectionHeaders:
         assert ".doc-section-notes" in result
 
     def test_see_also_header(self):
-        from great_docs._qrenderer._md_renderer import _convert_bold_section_headers
+        from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
 
         result = _convert_bold_section_headers("**See Also**::", 2)
 
         assert ".doc-section-see-also" in result
 
     def test_non_matching_text_unchanged(self):
-        from great_docs._qrenderer._md_renderer import _convert_bold_section_headers
+        from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
 
         text = "This is **bold** text."
 
@@ -5647,7 +5647,7 @@ class TestRendererSphinxFields:
     """Sphinx-style ``:param:`` / ``:returns:`` / ``:raises:`` fields -> sections."""
 
     def test_param_and_type(self):
-        from great_docs._qrenderer._md_renderer import _convert_sphinx_fields
+        from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
 
         text = ":param x: The x value.\n:type x: int"
         result = _convert_sphinx_fields(text, 2)
@@ -5658,7 +5658,7 @@ class TestRendererSphinxFields:
         assert "The x value." in result
 
     def test_returns_and_rtype(self):
-        from great_docs._qrenderer._md_renderer import _convert_sphinx_fields
+        from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
 
         text = ":returns: The result.\n:rtype: str"
         result = _convert_sphinx_fields(text, 2)
@@ -5668,7 +5668,7 @@ class TestRendererSphinxFields:
         assert "The result." in result
 
     def test_raises(self):
-        from great_docs._qrenderer._md_renderer import _convert_sphinx_fields
+        from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
 
         text = ":raises ValueError: If bad input."
         result = _convert_sphinx_fields(text, 2)
@@ -5678,7 +5678,7 @@ class TestRendererSphinxFields:
         assert "If bad input." in result
 
     def test_combined_fields(self):
-        from great_docs._qrenderer._md_renderer import _convert_sphinx_fields
+        from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
 
         text = (
             "Description text.\n\n"
@@ -5696,7 +5696,7 @@ class TestRendererSphinxFields:
         assert "## Raises" in result
 
     def test_no_fields_unchanged(self):
-        from great_docs._qrenderer._md_renderer import _convert_sphinx_fields
+        from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
 
         text = "Just normal text."
 
@@ -5707,7 +5707,7 @@ class TestRendererGoogleSections:
     """Google-style ``Args:`` / ``Returns:`` / ``Raises:`` sections -> QMD."""
 
     def test_args_section(self):
-        from great_docs._qrenderer._md_renderer import _convert_google_sections
+        from great_docs._qrenderer._rst_converters import _convert_google_sections
 
         text = "Args:\n    x: The x value.\n    y: The y value."
         result = _convert_google_sections(text, 2)
@@ -5717,7 +5717,7 @@ class TestRendererGoogleSections:
         assert "y" in result
 
     def test_returns_section(self):
-        from great_docs._qrenderer._md_renderer import _convert_google_sections
+        from great_docs._qrenderer._rst_converters import _convert_google_sections
 
         text = "Returns:\n    A dict of results."
         result = _convert_google_sections(text, 2)
@@ -5726,7 +5726,7 @@ class TestRendererGoogleSections:
         assert "A dict of results." in result
 
     def test_raises_section(self):
-        from great_docs._qrenderer._md_renderer import _convert_google_sections
+        from great_docs._qrenderer._rst_converters import _convert_google_sections
 
         text = "Raises:\n    ValueError: If bad input.\n    TypeError: If wrong type."
         result = _convert_google_sections(text, 2)
@@ -5736,7 +5736,7 @@ class TestRendererGoogleSections:
         assert "TypeError" in result
 
     def test_note_section(self):
-        from great_docs._qrenderer._md_renderer import _convert_google_sections
+        from great_docs._qrenderer._rst_converters import _convert_google_sections
 
         text = "Note:\n    This is important."
         result = _convert_google_sections(text, 2)
@@ -5745,7 +5745,7 @@ class TestRendererGoogleSections:
         assert ".doc-section-notes" in result
 
     def test_example_section(self):
-        from great_docs._qrenderer._md_renderer import _convert_google_sections
+        from great_docs._qrenderer._rst_converters import _convert_google_sections
 
         text = "Examples:\n    >>> foo()\n    42"
         result = _convert_google_sections(text, 3)
@@ -5754,7 +5754,7 @@ class TestRendererGoogleSections:
         assert ".doc-section-examples" in result
 
     def test_combined_sections(self):
-        from great_docs._qrenderer._md_renderer import _convert_google_sections
+        from great_docs._qrenderer._rst_converters import _convert_google_sections
 
         text = (
             "Description.\n\n"
@@ -5770,7 +5770,7 @@ class TestRendererGoogleSections:
         assert "## Raises" in result
 
     def test_no_sections_unchanged(self):
-        from great_docs._qrenderer._md_renderer import _convert_google_sections
+        from great_docs._qrenderer._rst_converters import _convert_google_sections
 
         text = "Just normal text."
 
@@ -5781,7 +5781,7 @@ class TestRendererDoctestFencing:
     """Unfenced ``>>>`` doctest blocks -> fenced ```python code blocks."""
 
     def test_single_doctest_line(self):
-        from great_docs._qrenderer._md_renderer import _fence_doctest_blocks
+        from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
 
         text = ">>> print('hello')"
         result = _fence_doctest_blocks(text)
@@ -5791,7 +5791,7 @@ class TestRendererDoctestFencing:
         assert result.endswith("```")
 
     def test_multi_line_doctest(self):
-        from great_docs._qrenderer._md_renderer import _fence_doctest_blocks
+        from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
 
         text = ">>> x = 1\n>>> y = 2\n>>> x + y"
         result = _fence_doctest_blocks(text)
@@ -5800,7 +5800,7 @@ class TestRendererDoctestFencing:
         assert result.count("```") == 2
 
     def test_doctest_with_continuation(self):
-        from great_docs._qrenderer._md_renderer import _fence_doctest_blocks
+        from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
 
         text = ">>> for i in range(3):\n...     print(i)"
         result = _fence_doctest_blocks(text)
@@ -5809,7 +5809,7 @@ class TestRendererDoctestFencing:
         assert "... " in result
 
     def test_interspersed_text(self):
-        from great_docs._qrenderer._md_renderer import _fence_doctest_blocks
+        from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
 
         text = "First example:\n\n>>> x = 1\n\nSecond example:\n\n>>> y = 2"
         result = _fence_doctest_blocks(text)
@@ -5817,14 +5817,14 @@ class TestRendererDoctestFencing:
         assert result.count("```python") == 2
 
     def test_no_doctest_unchanged(self):
-        from great_docs._qrenderer._md_renderer import _fence_doctest_blocks
+        from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
 
         text = "Just some normal text."
 
         assert _fence_doctest_blocks(text) == text
 
     def test_bare_prompt(self):
-        from great_docs._qrenderer._md_renderer import _fence_doctest_blocks
+        from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
 
         text = ">>>"
         result = _fence_doctest_blocks(text)
@@ -5833,7 +5833,7 @@ class TestRendererDoctestFencing:
 
     def test_in_render_section_text(self):
         """Doctest fencing is applied in _render_section_text."""
-        from great_docs._qrenderer._md_renderer import _convert_rst_text, _fence_doctest_blocks
+        from great_docs._qrenderer._rst_converters import _convert_rst_text, _fence_doctest_blocks
 
         text = "Example usage:\n\n>>> foo(42)\n>>> bar()"
         result = _fence_doctest_blocks(_convert_rst_text(text))
@@ -6287,7 +6287,7 @@ class TestRendererRstCitations:
 
     def test_simple_citations(self):
         """Basic ``.. [1]`` markers become numbered list items."""
-        from great_docs._qrenderer._md_renderer import _convert_rst_citations
+        from great_docs._qrenderer._rst_converters import _convert_rst_citations
 
         text = ".. [1] Author (2023). Title.\n.. [2] Another ref."
         result = _convert_rst_citations(text)
@@ -6298,7 +6298,7 @@ class TestRendererRstCitations:
 
     def test_citation_with_url(self):
         """Bare URLs in citation bodies get auto-linked."""
-        from great_docs._qrenderer._md_renderer import _convert_rst_citations
+        from great_docs._qrenderer._rst_converters import _convert_rst_citations
 
         text = ".. [1] See https://example.com for details."
         result = _convert_rst_citations(text)
@@ -6308,7 +6308,7 @@ class TestRendererRstCitations:
 
     def test_no_citations_unchanged(self):
         """Text without citation markers passes through unchanged."""
-        from great_docs._qrenderer._md_renderer import _convert_rst_citations
+        from great_docs._qrenderer._rst_converters import _convert_rst_citations
 
         text = "Regular paragraph text.\nNo citations here."
         result = _convert_rst_citations(text)
@@ -6317,7 +6317,7 @@ class TestRendererRstCitations:
 
     def test_citations_in_convert_rst_text(self):
         """Citations are converted as part of the full RST -> Markdown pipeline."""
-        from great_docs._qrenderer._md_renderer import _convert_rst_text
+        from great_docs._qrenderer._rst_converters import _convert_rst_text
 
         text = "References\n\n.. [1] First ref.\n.. [2] Second ref."
         result = _convert_rst_text(text)
@@ -6327,7 +6327,7 @@ class TestRendererRstCitations:
 
     def test_multi_line_citation(self):
         """Multi-line citations are joined."""
-        from great_docs._qrenderer._md_renderer import _convert_rst_citations
+        from great_docs._qrenderer._rst_converters import _convert_rst_citations
 
         text = ".. [1] Author (2023).\n    Title of the work."
         result = _convert_rst_citations(text)
@@ -6340,7 +6340,7 @@ class TestRendererRstMathDisplay:
 
     def test_math_directive_to_display_math(self):
         """``.. math::`` block becomes ``$$`` display math."""
-        from great_docs._qrenderer._md_renderer import _convert_rst_text
+        from great_docs._qrenderer._rst_converters import _convert_rst_text
 
         text = "Some text.\n\n.. math::\n\n    E = mc^2\n"
         result = _convert_rst_text(text)
@@ -6351,7 +6351,7 @@ class TestRendererRstMathDisplay:
 
     def test_inline_math_converted(self):
         """Inline ``:math:`` roles become ``$...$``."""
-        from great_docs._qrenderer._md_renderer import _convert_rst_text
+        from great_docs._qrenderer._rst_converters import _convert_rst_text
 
         text = "The formula :math:`x^2` is simple."
         result = _convert_rst_text(text)

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, cast
 
 from tabulate import tabulate
 
-from .._utils import griffe_to_doc, isDoc
+from .._type_checks import griffe_to_doc, isDoc
 from ..layout import Doc, DocClass, MemberPage
 from ..pandoc.blocks import (
     Block,

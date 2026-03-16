@@ -8,7 +8,6 @@ from textwrap import indent
 import yaml
 
 from . import layout
-from ._base_utils import PydanticTransformer, WorkaroundKeyError, ctx_node
 from ._griffe import (
     AliasResolutionError,
     GriffeLoader,
@@ -18,6 +17,7 @@ from ._griffe import (
 )
 from ._griffe import dataclasses as dc
 from ._griffe import docstrings as ds
+from ._transformers import PydanticTransformer, WorkaroundKeyError, ctx_node
 from .introspection import get_parser_defaults
 from .layout import (
     MISSING,

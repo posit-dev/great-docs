@@ -11,7 +11,7 @@ from ._render import (
     RenderDocClass,
     get_render_type,
 )
-from ._utils import griffe_to_doc, is_protocol, is_typealias, is_typevar
+from ._type_checks import griffe_to_doc, is_protocol, is_typealias, is_typevar
 from .introspection import Builder, get_object
 from .pandoc.blocks import (
     Block,

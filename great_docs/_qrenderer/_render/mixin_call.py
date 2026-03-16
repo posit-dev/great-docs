@@ -11,7 +11,7 @@ from .._griffe.docstrings import (
     DCDocstringSectionInitParameters,
     DCDocstringSectionParameterAttributes,
 )
-from .._md_renderer import _convert_rst_text
+from .._rst_converters import _convert_rst_text
 from ..pandoc.blocks import (
     BlockContent,
     Blocks,

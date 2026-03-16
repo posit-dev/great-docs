@@ -21,8 +21,8 @@ from .._format import (
     render_formatted_expr,
     repr_obj,
 )
-from .._md_renderer import _convert_rst_text
-from .._utils import package_info
+from .._rst_converters import _convert_rst_text
+from .._type_checks import package_info
 from ..pandoc.blocks import (
     Block,
     BlockContent,
