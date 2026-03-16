@@ -5,7 +5,7 @@ description: "Override default styles or add your own design touches to the rend
 
 # Add Custom CSS
 
-Great Docs ships a default SCSS theme file (`great-docs-q.scss`) that works well out of the box. You can extend or override it with your own styles.
+Great Docs ships a default SCSS theme file (`great-docs.scss`) that works well out of the box. You can extend or override it with your own styles.
 
 ## Where to Put Custom CSS
 

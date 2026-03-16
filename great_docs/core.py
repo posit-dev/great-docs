@@ -91,8 +91,8 @@ class GreatDocs:
             shutil.copy2(renderer_src, self.project_path / "_renderer.py")
 
         # Copy SCSS theme file (contains all site styling)
-        scss_src = self.assets_path / "great-docs-q.scss"
-        shutil.copy2(scss_src, self.project_path / "great-docs-q.scss")
+        scss_src = self.assets_path / "great-docs.scss"
+        shutil.copy2(scss_src, self.project_path / "great-docs.scss")
 
         # Copy JavaScript files
         js_files = [
@@ -7959,10 +7959,10 @@ toc: false
         config["format"]["html"]["toc-depth"] = site_settings.get("toc-depth", 2)
         config["format"]["html"]["toc-title"] = site_settings.get("toc-title", "On this page")
 
-        if "great-docs-q.scss" not in config["format"]["html"]["theme"]:
+        if "great-docs.scss" not in config["format"]["html"]["theme"]:
             if isinstance(config["format"]["html"]["theme"], str):
                 config["format"]["html"]["theme"] = [config["format"]["html"]["theme"]]
-            config["format"]["html"]["theme"].append("great-docs-q.scss")
+            config["format"]["html"]["theme"].append("great-docs.scss")
 
         if "shift-heading-level-by" not in config["format"]["html"]:
             config["format"]["html"]["shift-heading-level-by"] = -1

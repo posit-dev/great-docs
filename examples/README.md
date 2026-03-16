@@ -13,7 +13,7 @@ great-docs init
 This will automatically:
 
 - Copy the post-render script to `scripts/post-render.py`
-- Copy the SCSS theme file to `great-docs-q.scss`
+- Copy the SCSS theme file to `great-docs.scss`
 - Update your `_quarto.yml` configuration
 
 ## Method 2: Manual Configuration
@@ -29,7 +29,7 @@ format:
   html:
     theme:
       - flatly # Works well with great-docs
-      - great-docs-q.scss
+      - great-docs.scss
     toc: true
     grid:
       sidebar-width: 270px
@@ -59,6 +59,6 @@ docs.install()
 
 You can customize by:
 
-1. Editing the copied `great-docs-q.scss` file
+1. Editing the copied `great-docs.scss` file
 2. Modifying the `scripts/post-render.py` script
 3. Adding additional CSS files to your `_quarto.yml`

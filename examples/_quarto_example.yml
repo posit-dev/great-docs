@@ -6,7 +6,7 @@ format:
   html:
     theme:
       - flatly
-      - great-docs-q.scss
+      - great-docs.scss
     toc: true
     grid:
       sidebar-width: 270px
