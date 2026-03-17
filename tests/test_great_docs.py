@@ -8614,6 +8614,1035 @@ class TestRenderSectionAdmonitionGeneric:
 
 
 # ============================================================================
+# Blueprint Tests
+# ============================================================================
+
+from great_docs._qrenderer.blueprint import (
+    CollectTransformer,
+    BlueprintTransformer,
+    _PagePackageStripper,
+    _auto_package,
+    _is_external_alias,
+    _to_simple_dict,
+    _non_default_entries,
+    _resolve_alias,
+    collect,
+    blueprint as blueprint_func,
+    strip_package_name,
+)
+from great_docs._qrenderer._transformers import WorkaroundKeyError, ctx_node, Node
+from great_docs._qrenderer.layout import (
+    Auto,
+    AutoOptions,
+    ChoicesChildren,
+    Doc,
+    DocFunction,
+    DocClass,
+    DocAttribute,
+    DocModule,
+    Item,
+    Layout,
+    Link,
+    MemberPage,
+    Page,
+    Section,
+    SummaryDetails,
+    MISSING,
+    _Base,
+)
+from great_docs._qrenderer._griffe import dataclasses as gdc
+from great_docs._qrenderer._griffe import docstrings as gds
+from great_docs._qrenderer._griffe import AliasResolutionError
+from unittest.mock import MagicMock, PropertyMock
+
+
+def _bp_make_trans(objects=None):
+    """Helper: create a BlueprintTransformer backed by a dict of objects."""
+    objects = objects or {}
+
+    def get_object(path, **kwargs):
+        if path in objects:
+            return objects[path]
+        raise KeyError(path)
+
+    return BlueprintTransformer(get_object=get_object)
+
+
+# -- _to_simple_dict ----------------------------------------------------------
+
+
+def test_to_simple_dict_base_dataclass():
+    page = Page(path="foo")
+    result = _to_simple_dict(page)
+    assert isinstance(result, dict)
+    assert result["path"] == "foo"
+
+
+def test_to_simple_dict_nested_dataclass():
+    doc = DocFunction(name="func1", obj=None)
+    page = Page(path="p", contents=[doc])
+    result = _to_simple_dict(page)
+    assert isinstance(result, dict)
+    assert isinstance(result["contents"], list)
+    assert isinstance(result["contents"][0], dict)
+    assert result["contents"][0]["name"] == "func1"
+
+
+def test_to_simple_dict_list():
+    result = _to_simple_dict([Page(path="a"), Page(path="b")])
+    assert isinstance(result, list)
+    assert len(result) == 2
+    assert result[0]["path"] == "a"
+
+
+def test_to_simple_dict_tuple():
+    result = _to_simple_dict((Page(path="x"),))
+    assert isinstance(result, list)
+    assert result[0]["path"] == "x"
+
+
+def test_to_simple_dict_enum():
+    result = _to_simple_dict(ChoicesChildren.embedded)
+    assert result == "embedded"
+
+
+def test_to_simple_dict_primitive():
+    assert _to_simple_dict("hello") == "hello"
+    assert _to_simple_dict(42) == 42
+    assert _to_simple_dict(None) is None
+
+
+def test_to_simple_dict_summary_details():
+    sd = SummaryDetails(name="n", desc="d")
+    result = _to_simple_dict(sd)
+    assert result == {"name": "n", "desc": "d"}
+
+
+# -- _non_default_entries -----------------------------------------------------
+
+
+def test_non_default_entries_auto_no_fields():
+    auto = Auto()
+    result = _non_default_entries(auto)
+    assert result == {}
+
+
+def test_non_default_entries_auto_options_specified():
+    opts = AutoOptions(signature_name="full", include_private=True)
+    result = _non_default_entries(opts)
+    assert result == {"signature_name": "full", "include_private": True}
+
+
+def test_non_default_entries_auto_options_empty():
+    opts = AutoOptions()
+    result = _non_default_entries(opts)
+    assert result == {}
+
+
+# -- _resolve_alias -----------------------------------------------------------
+
+
+def test_resolve_alias_non_alias_passthrough():
+    func = gdc.Function("myfunc")
+    result = _resolve_alias(func, lambda p: None)
+    assert result is func
+
+
+def test_resolve_alias_resolves_target():
+    mod = gdc.Module("pkg")
+    func = gdc.Function("f")
+    mod.set_member("f", func)
+    alias = gdc.Alias("f_alias", target=func, parent=mod)
+    result = _resolve_alias(alias, lambda p: None)
+    assert result is func
+
+
+def test_resolve_alias_error_fallback():
+    sentinel = gdc.Function("resolved_func")
+
+    def get_object(path):
+        return sentinel
+
+    mock_alias = MagicMock(spec=gdc.Alias)
+    mock_alias.is_alias = True
+
+    inner_alias = MagicMock()
+    inner_alias.target_path = "some.path"
+
+    type(mock_alias).target = PropertyMock(side_effect=AliasResolutionError(inner_alias))
+
+    result = _resolve_alias(mock_alias, get_object)
+    assert result is sentinel
+
+
+# -- _is_external_alias -------------------------------------------------------
+
+
+def test_is_external_alias_non_alias_returns_false():
+    func = gdc.Function("myfunc")
+    mod = gdc.Module("pkg")
+    assert _is_external_alias(func, mod) is False
+
+
+def test_is_external_alias_internal():
+    target = MagicMock()
+    target.is_alias = False
+
+    mock_alias = MagicMock(spec=[])
+    mock_alias.is_alias = True
+    mock_alias.target_path = "mypkg.internal_func"
+    mock_alias.modules_collection = {"mypkg.internal_func": target}
+    mock_alias.__class__ = gdc.Alias
+
+    mod = gdc.Module("mypkg")
+    assert _is_external_alias(mock_alias, mod) is False
+
+
+def test_is_external_alias_external_target():
+    mock_alias = MagicMock(spec=[])
+    mock_alias.is_alias = True
+    mock_alias.target_path = "other_pkg.func"
+    mock_alias.__class__ = gdc.Alias
+
+    mod = gdc.Module("mypkg")
+    assert _is_external_alias(mock_alias, mod) is True
+
+
+def test_is_external_alias_key_error_returns_true():
+    mock_alias = MagicMock(spec=[])
+    mock_alias.is_alias = True
+    mock_alias.target_path = "mypkg.submod.missing"
+    mock_alias.__class__ = gdc.Alias
+    mock_mc = MagicMock()
+    mock_mc.__getitem__ = MagicMock(side_effect=KeyError("missing"))
+    mock_alias.modules_collection = mock_mc
+
+    mod = gdc.Module("mypkg")
+    assert _is_external_alias(mock_alias, mod) is True
+
+
+def test_is_external_alias_cyclic_raises():
+    mock_alias = MagicMock(spec=[])
+    mock_alias.is_alias = True
+    mock_alias.target_path = "mypkg.something"
+    mock_alias.__class__ = gdc.Alias
+    mock_alias.modules_collection = {"mypkg.something": mock_alias}
+
+    mod = gdc.Module("mypkg")
+    with pytest.raises(Exception, match="Cyclic Alias"):
+        _is_external_alias(mock_alias, mod)
+
+
+# -- _auto_package ------------------------------------------------------------
+
+
+def test_auto_package_module_with_all():
+    mod = gdc.Module("mypkg")
+    func = gdc.Function("public_func")
+    mod.set_member("public_func", func)
+    all_attr = gdc.Attribute("__all__")
+    mod.set_member("__all__", all_attr)
+    mod.exports = {"public_func"}
+
+    sections = _auto_package(mod)
+    assert len(sections) == 1
+    assert sections[0].title == "mypkg"
+    names = [c.name for c in sections[0].contents]
+    assert "public_func" in names
+
+
+def test_auto_package_without_all_warns(capsys):
+    mod = gdc.Module("mypkg")
+    func = gdc.Function("public_func")
+    mod.set_member("public_func", func)
+
+    sections = _auto_package(mod)
+    captured = capsys.readouterr()
+    assert "WARNING" in captured.out
+    assert "does not define an __all__" in captured.out
+    assert len(sections) == 1
+    names = [c.name for c in sections[0].contents]
+    assert "public_func" in names
+
+
+def test_auto_package_filters_dunder_members():
+    mod = gdc.Module("mypkg")
+    func = gdc.Function("__init__")
+    mod.set_member("__init__", func)
+    pub = gdc.Function("pub")
+    mod.set_member("pub", pub)
+
+    sections = _auto_package(mod)
+    names = [c.name for c in sections[0].contents]
+    assert "__init__" not in names
+    assert "pub" in names
+
+
+def test_auto_package_filters_submodules():
+    mod = gdc.Module("mypkg")
+    submod = gdc.Module("sub")
+    mod.set_member("sub", submod)
+    func = gdc.Function("pub")
+    mod.set_member("pub", func)
+
+    sections = _auto_package(mod)
+    names = [c.name for c in sections[0].contents]
+    assert "sub" not in names
+    assert "pub" in names
+
+
+def test_auto_package_with_docstring():
+    mod = gdc.Module("mypkg")
+    mod.docstring = gdc.Docstring("Summary text here.", parent=mod)
+    func = gdc.Function("pub")
+    mod.set_member("pub", func)
+
+    sections = _auto_package(mod)
+    assert sections[0].desc == "Summary text here."
+
+
+def test_auto_package_without_docstring():
+    mod = gdc.Module("mypkg")
+    func = gdc.Function("pub")
+    mod.set_member("pub", func)
+
+    sections = _auto_package(mod)
+    assert sections[0].desc == ""
+
+
+def test_auto_package_docstring_non_text_first():
+    mod = gdc.Module("mypkg")
+    mod.docstring = gdc.Docstring("Parameters\n----------\nx : int\n    A param.", parent=mod)
+    parsed = mod.docstring.parsed
+    if parsed and isinstance(parsed[0], gds.DocstringSectionText):
+        mock_docstring = MagicMock()
+        mock_docstring.parsed = [gds.DocstringSectionParameters(value=[])]
+        mod.docstring = mock_docstring
+
+    func = gdc.Function("pub")
+    mod.set_member("pub", func)
+
+    sections = _auto_package(mod)
+    assert sections[0].desc == ""
+
+
+def test_auto_package_filters_external_aliases():
+    mod = gdc.Module("mypkg")
+
+    mock_alias = MagicMock(spec=[])
+    mock_alias.is_alias = True
+    mock_alias.target_path = "other_pkg.ext_f"
+    mock_alias.__class__ = gdc.Alias
+    mock_alias.is_module = False
+    mock_alias.is_exported = True
+    mod.set_member("ext_f", mock_alias)
+
+    pub = gdc.Function("pub")
+    mod.set_member("pub", pub)
+
+    sections = _auto_package(mod)
+    names = [c.name for c in sections[0].contents]
+    assert "ext_f" not in names
+    assert "pub" in names
+
+
+def test_auto_package_unexported_filtered():
+    mod = gdc.Module("mypkg")
+    f1 = gdc.Function("exported_func")
+    mod.set_member("exported_func", f1)
+    f2 = gdc.Function("not_exported")
+    mod.set_member("not_exported", f2)
+    all_attr = gdc.Attribute("__all__")
+    mod.set_member("__all__", all_attr)
+    mod.exports = {"exported_func"}
+
+    sections = _auto_package(mod)
+    names = [c.name for c in sections[0].contents]
+    assert "exported_func" in names
+    assert "not_exported" not in names
+
+
+# -- CollectTransformer -------------------------------------------------------
+
+
+def test_collect_single_doc():
+    mod = gdc.Module("pkg")
+    func_obj = gdc.Function("myfunc")
+    mod.set_member("myfunc", func_obj)
+    doc = DocFunction(name="myfunc", obj=func_obj, anchor="pkg.myfunc")
+    page = Page(path="reference", contents=[doc])
+
+    pages, items = collect(page, base_dir="api")
+    assert len(pages) == 1
+    assert pages[0].path == "reference"
+    assert len(items) >= 1
+    assert items[0].name == "pkg.myfunc"
+    assert items[0].uri == "api/reference.html#pkg.myfunc"
+
+
+def test_collect_with_canonical_path_diff():
+    func_obj = MagicMock()
+    func_obj.path = "pkg.submod.func"
+    func_obj.canonical_path = "pkg.func"
+
+    doc = DocFunction(name="func", obj=func_obj, anchor="pkg.func")
+    page = Page(path="reference", contents=[doc])
+
+    pages, items = collect(page, base_dir="api")
+    assert len(items) == 2
+    assert items[0].name == "pkg.submod.func"
+    assert items[1].name == "pkg.func"
+    assert items[1].dispname == "pkg.submod.func"
+
+
+def test_collect_nested_section():
+    mod = gdc.Module("pkg")
+    func_obj = gdc.Function("myfunc")
+    mod.set_member("myfunc", func_obj)
+    doc = DocFunction(name="myfunc", obj=func_obj, anchor="pkg.myfunc")
+    page = Page(path="ref", contents=[doc])
+    section = Section(title="API", contents=[page])
+
+    pages, items = collect(section, base_dir="api")
+    assert len(pages) == 1
+    assert len(items) >= 1
+
+
+def test_find_page_node_no_page():
+    trans = CollectTransformer(base_dir="api")
+    with pytest.raises(ValueError, match="No page detected"):
+        root_node = Node(level=0, value=None, parent=None)
+        token = ctx_node.set(root_node)
+        try:
+            trans.find_page_node()
+        finally:
+            ctx_node.reset(token)
+
+
+# -- BlueprintTransformer helpers ---------------------------------------------
+
+
+def test_bp_append_member_path_no_colon():
+    result = BlueprintTransformer._append_member_path("pkg.mod", "MyClass")
+    assert result == "pkg.mod:MyClass"
+
+
+def test_bp_append_member_path_with_colon():
+    result = BlueprintTransformer._append_member_path("pkg.mod:MyClass", "method")
+    assert result == "pkg.mod:MyClass.method"
+
+
+def test_bp_clean_member_path_with_colon():
+    result = BlueprintTransformer._clean_member_path("pkg.mod", "pkg.mod:MyClass.method")
+    assert result == "pkg.mod.MyClass.method"
+
+
+def test_bp_clean_member_path_no_colon():
+    result = BlueprintTransformer._clean_member_path("pkg.mod", "simple")
+    assert result == "simple"
+
+
+def test_bp_get_object_fixed_success():
+    obj = gdc.Function("myfunc")
+
+    def get_object(path, **kwargs):
+        return obj
+
+    trans = BlueprintTransformer(get_object=get_object)
+    result = trans.get_object_fixed("pkg.myfunc")
+    assert result is obj
+
+
+def test_bp_get_object_fixed_key_error():
+    def get_object(path, **kwargs):
+        raise KeyError("pkg.missing")
+
+    trans = BlueprintTransformer(get_object=get_object)
+    with pytest.raises(WorkaroundKeyError, match="Cannot find an object named"):
+        trans.get_object_fixed("pkg.missing")
+
+
+# -- BlueprintTransformer.visit -----------------------------------------------
+
+
+def test_bp_visit_sets_package():
+    trans = _bp_make_trans()
+    assert trans.crnt_package is None
+
+    func = gdc.Function("myfunc")
+    trans2 = _bp_make_trans({"myfunc": func})
+    result = trans2.visit(Auto(name="myfunc"))
+    assert isinstance(result, DocFunction)
+
+
+def test_bp_visit_restores_package():
+    func = gdc.Function("f")
+    trans = _bp_make_trans({"pkg:f": func})
+    trans.crnt_package = "pkg"
+
+    trans.visit(Auto(name="f"))
+    assert trans.crnt_package == "pkg"
+
+
+def test_bp_visit_sets_options():
+    func = gdc.Function("f")
+    trans = _bp_make_trans({"f": func})
+
+    opts = AutoOptions(include_private=True)
+    Section(title="Test", options=opts, contents=[Auto(name="f")])
+    assert trans.options is None
+
+
+# -- BlueprintTransformer._enter_auto ----------------------------------------
+
+
+def test_bp_enter_auto_basic_function():
+    func = gdc.Function("myfunc")
+    trans = _bp_make_trans({"myfunc": func})
+    result = trans.visit(Auto(name="myfunc"))
+    assert isinstance(result, DocFunction)
+    assert result.obj is func
+
+
+def test_bp_enter_auto_basic_class():
+    cls = gdc.Class("MyClass")
+    trans = _bp_make_trans({"MyClass": cls})
+    result = trans.visit(Auto(name="MyClass"))
+    assert isinstance(result, DocClass)
+    assert result.obj is cls
+
+
+def test_bp_enter_auto_basic_attribute():
+    attr = gdc.Attribute("myattr")
+    trans = _bp_make_trans({"myattr": attr})
+    result = trans.visit(Auto(name="myattr"))
+    assert isinstance(result, DocAttribute)
+    assert result.obj is attr
+
+
+def test_bp_enter_auto_with_package():
+    func = gdc.Function("f")
+    trans = _bp_make_trans({"pkg:f": func})
+    trans.crnt_package = "pkg"
+    result = trans.visit(Auto(name="f"))
+    assert isinstance(result, DocFunction)
+    assert result.obj is func
+
+
+def test_bp_enter_auto_colon_in_pkg():
+    func = gdc.Function("method")
+    trans = _bp_make_trans({"pkg.mod:Class.method": func})
+    trans.crnt_package = "pkg.mod:Class"
+    result = trans.visit(Auto(name="method"))
+    assert isinstance(result, DocFunction)
+
+
+def test_bp_enter_auto_colon_in_name():
+    func = gdc.Function("method")
+    trans = _bp_make_trans({"pkg.mod:method": func})
+    trans.crnt_package = "pkg"
+    result = trans.visit(Auto(name="mod:method"))
+    assert isinstance(result, DocFunction)
+
+
+def test_bp_enter_auto_children_separate():
+    cls = gdc.Class("MyClass")
+    method = gdc.Function("my_method")
+    method.docstring = gdc.Docstring("A method.", parent=method)
+    cls.set_member("my_method", method)
+
+    trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
+    result = trans.visit(Auto(name="MyClass", children=ChoicesChildren.separate))
+    assert isinstance(result, DocClass)
+    assert len(result.members) == 1
+    assert isinstance(result.members[0], MemberPage)
+
+
+def test_bp_enter_auto_children_embedded():
+    cls = gdc.Class("MyClass")
+    method = gdc.Function("my_method")
+    method.docstring = gdc.Docstring("A method.", parent=method)
+    cls.set_member("my_method", method)
+
+    trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
+    result = trans.visit(Auto(name="MyClass", children=ChoicesChildren.embedded))
+    assert isinstance(result, DocClass)
+    assert len(result.members) == 1
+    assert isinstance(result.members[0], DocFunction)
+
+
+def test_bp_enter_auto_children_flat():
+    cls = gdc.Class("MyClass")
+    method = gdc.Function("my_method")
+    method.docstring = gdc.Docstring("A method.", parent=method)
+    cls.set_member("my_method", method)
+
+    trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
+    result = trans.visit(Auto(name="MyClass", children=ChoicesChildren.flat))
+    assert isinstance(result, DocClass)
+    assert result.flat is True
+    assert len(result.members) == 1
+
+
+def test_bp_enter_auto_children_linked():
+    cls = gdc.Class("MyClass")
+    method = gdc.Function("my_method")
+    method.docstring = gdc.Docstring("A method.", parent=method)
+    cls.set_member("my_method", method)
+
+    trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
+    result = trans.visit(Auto(name="MyClass", children=ChoicesChildren.linked))
+    assert isinstance(result, DocClass)
+    assert len(result.members) == 1
+    assert isinstance(result.members[0], Link)
+
+
+def test_bp_enter_auto_unsupported_children():
+    cls = gdc.Class("MyClass")
+    method = gdc.Function("my_method")
+    method.docstring = gdc.Docstring("A method.", parent=method)
+    cls.set_member("my_method", method)
+
+    trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
+    auto = Auto(name="MyClass")
+    auto.children = "bad_value"
+    with pytest.raises(ValueError, match="Unsupported value of children"):
+        trans.visit(auto)
+
+
+def test_bp_enter_auto_dynamic_from_auto():
+    func = gdc.Function("f")
+    captured = {}
+
+    def get_object(path, **kwargs):
+        captured.update(kwargs)
+        return func
+
+    trans = BlueprintTransformer(get_object=get_object)
+    trans.visit(Auto(name="f", dynamic=True))
+    assert captured.get("dynamic") is True
+
+
+def test_bp_enter_auto_dynamic_from_transformer():
+    func = gdc.Function("f")
+    captured = {}
+
+    def get_object(path, **kwargs):
+        captured.update(kwargs)
+        return func
+
+    trans = BlueprintTransformer(get_object=get_object)
+    trans.dynamic = True
+    trans.visit(Auto(name="f"))
+    assert captured.get("dynamic") is True
+
+
+def test_bp_enter_auto_options_merge():
+    func = gdc.Function("f")
+    trans = _bp_make_trans({"f": func})
+    trans.options = AutoOptions(signature_name="full")
+
+    result = trans.visit(Auto(name="f"))
+    assert isinstance(result, DocFunction)
+    assert result.signature_name == "full"
+
+
+def test_bp_enter_auto_member_options():
+    cls = gdc.Class("MyClass")
+    method = gdc.Function("m")
+    method.docstring = gdc.Docstring("A method.", parent=method)
+    cls.set_member("m", method)
+
+    member_opts = AutoOptions(signature_name="short")
+    trans = _bp_make_trans({"MyClass": cls, "MyClass:m": method})
+    result = trans.visit(
+        Auto(name="MyClass", member_options=member_opts, children=ChoicesChildren.embedded)
+    )
+    assert isinstance(result, DocClass)
+    assert len(result.members) == 1
+
+
+def test_bp_enter_auto_module_members_skipped():
+    mod = gdc.Module("pkg")
+    submod = gdc.Module("sub")
+    submod.docstring = gdc.Docstring("Submodule.", parent=submod)
+    mod.set_member("sub", submod)
+    func = gdc.Function("f")
+    func.docstring = gdc.Docstring("A func.", parent=func)
+    mod.set_member("f", func)
+
+    trans = _bp_make_trans({"pkg": mod, "pkg:f": func, "pkg:sub": submod})
+    result = trans.visit(Auto(name="pkg"))
+    assert isinstance(result, DocModule)
+    member_names = [m.name if hasattr(m, "name") else str(m) for m in result.members]
+    assert not any("sub" in n for n in member_names)
+
+
+# -- BlueprintTransformer._fetch_members -------------------------------------
+
+
+def test_fetch_members_explicit():
+    trans = _bp_make_trans()
+    auto = Auto(name="X", members=["a", "b"])
+    obj = gdc.Class("X")
+    assert trans._fetch_members(auto, obj) == ["a", "b"]
+
+
+def test_fetch_members_filter_private():
+    cls = gdc.Class("X")
+    pub = gdc.Function("pub")
+    pub.docstring = gdc.Docstring("doc", parent=pub)
+    cls.set_member("pub", pub)
+    priv = gdc.Function("_priv")
+    priv.docstring = gdc.Docstring("doc", parent=priv)
+    cls.set_member("_priv", priv)
+
+    trans = _bp_make_trans()
+    result = trans._fetch_members(Auto(name="X", include_private=False), cls)
+    assert "pub" in result
+    assert "_priv" not in result
+
+
+def test_fetch_members_include_private():
+    cls = gdc.Class("X")
+    priv = gdc.Function("_priv")
+    priv.docstring = gdc.Docstring("doc", parent=priv)
+    cls.set_member("_priv", priv)
+
+    trans = _bp_make_trans()
+    result = trans._fetch_members(Auto(name="X", include_private=True), cls)
+    assert "_priv" in result
+
+
+def test_fetch_members_dunder_with_docstring_kept():
+    cls = gdc.Class("X")
+    enter = gdc.Function("__enter__")
+    enter.docstring = gdc.Docstring("Enter.", parent=enter)
+    cls.set_member("__enter__", enter)
+
+    trans = _bp_make_trans()
+    result = trans._fetch_members(Auto(name="X", include_private=False), cls)
+    assert "__enter__" in result
+
+
+def test_fetch_members_dunder_without_docstring_filtered():
+    cls = gdc.Class("X")
+    init = gdc.Function("__init__")
+    cls.set_member("__init__", init)
+
+    trans = _bp_make_trans()
+    result = trans._fetch_members(Auto(name="X", include_private=False), cls)
+    assert "__init__" not in result
+
+
+def test_fetch_members_filter_empty():
+    cls = gdc.Class("X")
+    nodoc = gdc.Function("nodoc")
+    cls.set_member("nodoc", nodoc)
+    withdoc = gdc.Function("withdoc")
+    withdoc.docstring = gdc.Docstring("Has doc.", parent=withdoc)
+    cls.set_member("withdoc", withdoc)
+
+    trans = _bp_make_trans()
+    result = trans._fetch_members(Auto(name="X", include_empty=False), cls)
+    assert "withdoc" in result
+    assert "nodoc" not in result
+
+
+def test_fetch_members_include_empty():
+    cls = gdc.Class("X")
+    nodoc = gdc.Function("nodoc")
+    cls.set_member("nodoc", nodoc)
+
+    trans = _bp_make_trans()
+    result = trans._fetch_members(Auto(name="X", include_empty=True), cls)
+    assert "nodoc" in result
+
+
+def test_fetch_members_filter_attributes():
+    cls = gdc.Class("X")
+    attr = gdc.Attribute("myattr")
+    attr.docstring = gdc.Docstring("doc", parent=attr)
+    cls.set_member("myattr", attr)
+    func = gdc.Function("myfunc")
+    func.docstring = gdc.Docstring("doc", parent=func)
+    cls.set_member("myfunc", func)
+
+    trans = _bp_make_trans()
+    result = trans._fetch_members(Auto(name="X", include_attributes=False), cls)
+    assert "myfunc" in result
+    assert "myattr" not in result
+
+
+def test_fetch_members_filter_classes():
+    mod = gdc.Module("pkg")
+    inner_cls = gdc.Class("Inner")
+    inner_cls.docstring = gdc.Docstring("doc", parent=inner_cls)
+    mod.set_member("Inner", inner_cls)
+    func = gdc.Function("f")
+    func.docstring = gdc.Docstring("doc", parent=func)
+    mod.set_member("f", func)
+
+    trans = _bp_make_trans()
+    result = trans._fetch_members(Auto(name="pkg", include_classes=False), mod)
+    assert "f" in result
+    assert "Inner" not in result
+
+
+def test_fetch_members_filter_functions():
+    mod = gdc.Module("pkg")
+    func = gdc.Function("f")
+    func.docstring = gdc.Docstring("doc", parent=func)
+    mod.set_member("f", func)
+    cls = gdc.Class("C")
+    cls.docstring = gdc.Docstring("doc", parent=cls)
+    mod.set_member("C", cls)
+
+    trans = _bp_make_trans()
+    result = trans._fetch_members(Auto(name="pkg", include_functions=False), mod)
+    assert "C" in result
+    assert "f" not in result
+
+
+def test_fetch_members_exclude():
+    cls = gdc.Class("X")
+    f1 = gdc.Function("f1")
+    f1.docstring = gdc.Docstring("doc", parent=f1)
+    cls.set_member("f1", f1)
+    f2 = gdc.Function("f2")
+    f2.docstring = gdc.Docstring("doc", parent=f2)
+    cls.set_member("f2", f2)
+
+    trans = _bp_make_trans()
+    result = trans._fetch_members(Auto(name="X", exclude=["f1"]), cls)
+    assert "f2" in result
+    assert "f1" not in result
+
+
+def test_fetch_members_include_raises():
+    trans = _bp_make_trans()
+    with pytest.raises(NotImplementedError, match="include argument"):
+        trans._fetch_members(Auto(name="X", include="pattern"), gdc.Class("X"))
+
+
+def test_fetch_members_order_alphabetical():
+    cls = gdc.Class("X")
+    for name in ["zebra", "apple", "mango"]:
+        f = gdc.Function(name)
+        f.docstring = gdc.Docstring("doc", parent=f)
+        cls.set_member(name, f)
+
+    trans = _bp_make_trans()
+    result = trans._fetch_members(Auto(name="X", member_order="alphabetical"), cls)
+    assert result == sorted(result)
+
+
+def test_fetch_members_order_source():
+    cls = gdc.Class("X")
+    for name in ["zebra", "apple", "mango"]:
+        f = gdc.Function(name)
+        f.docstring = gdc.Docstring("doc", parent=f)
+        cls.set_member(name, f)
+
+    trans = _bp_make_trans()
+    result = trans._fetch_members(Auto(name="X", member_order="source"), cls)
+    assert result == ["zebra", "apple", "mango"]
+
+
+def test_fetch_members_order_invalid():
+    trans = _bp_make_trans()
+    with pytest.raises(ValueError, match="Unsupported value of member_order"):
+        trans._fetch_members(Auto(name="X", member_order="random"), gdc.Class("X"))
+
+
+def test_fetch_members_module_exports_filter():
+    mod = gdc.Module("pkg")
+    f1 = gdc.Function("exported_f")
+    f1.docstring = gdc.Docstring("doc", parent=f1)
+    f1.labels.add("exported")
+    mod.set_member("exported_f", f1)
+    f2 = gdc.Function("internal_f")
+    f2.docstring = gdc.Docstring("doc", parent=f2)
+    mod.set_member("internal_f", f2)
+    mod.exports = {"exported_f"}
+
+    trans = _bp_make_trans()
+    result = trans._fetch_members(Auto(name="pkg"), mod)
+    assert "exported_f" in result
+    assert "internal_f" not in result
+
+
+def test_fetch_members_filter_imports():
+    mod = gdc.Module("pkg")
+    func = gdc.Function("local_f")
+    func.docstring = gdc.Docstring("doc", parent=func)
+    mod.set_member("local_f", func)
+
+    other_mod = gdc.Module("other")
+    ext_f = gdc.Function("ext_f")
+    ext_f.docstring = gdc.Docstring("doc", parent=ext_f)
+    other_mod.set_member("ext_f", ext_f)
+    alias = gdc.Alias("ext_f", target=ext_f, parent=mod)
+    mod.set_member("ext_f", alias)
+
+    trans = _bp_make_trans()
+    result = trans._fetch_members(Auto(name="pkg", include_imports=False), mod)
+    assert "local_f" in result
+    assert "ext_f" not in result
+
+
+def test_fetch_members_include_imports():
+    mod = gdc.Module("pkg")
+    func = gdc.Function("local_f")
+    func.docstring = gdc.Docstring("doc", parent=func)
+    mod.set_member("local_f", func)
+
+    other_mod = gdc.Module("other")
+    ext_f = gdc.Function("ext_f")
+    ext_f.docstring = gdc.Docstring("doc", parent=ext_f)
+    other_mod.set_member("ext_f", ext_f)
+    alias = gdc.Alias("ext_f", target=ext_f, parent=mod)
+    mod.set_member("ext_f", alias)
+
+    trans = _bp_make_trans()
+    result = trans._fetch_members(Auto(name="pkg", include_imports=True), mod)
+    assert "local_f" in result
+    assert "ext_f" in result
+
+
+# -- BlueprintTransformer._enter_layout ---------------------------------------
+
+
+def test_bp_layout_with_sections():
+    func = gdc.Function("f")
+    trans = _bp_make_trans({"pkg:f": func})
+
+    layout_el = Layout(package="pkg", sections=[Section(title="API", contents=[Auto(name="f")])])
+    result = trans.visit(layout_el)
+    assert isinstance(result, Layout)
+    assert len(result.sections) == 1
+
+
+def test_bp_layout_auto_generate(capsys):
+    mod = gdc.Module("pkg")
+    func = gdc.Function("f")
+    func.docstring = gdc.Docstring("A func.", parent=func)
+    mod.set_member("f", func)
+    mod.exports = {"f"}
+    func.labels.add("exported")
+
+    trans = _bp_make_trans({"pkg": mod, "pkg:f": func})
+    layout_el = Layout(package="pkg", sections=[])
+    result = trans.visit(layout_el)
+
+    captured = capsys.readouterr()
+    assert "Autogenerating contents" in captured.out
+    assert isinstance(result, Layout)
+
+
+# -- BlueprintTransformer._exit_section ----------------------------------------
+
+
+def test_bp_exit_section_wraps_non_page():
+    func = gdc.Function("f")
+    trans = _bp_make_trans({"pkg:f": func})
+
+    layout_el = Layout(package="pkg", sections=[Section(title="API", contents=[Auto(name="f")])])
+    result = trans.visit(layout_el)
+    section = result.sections[0]
+    for content in section.contents:
+        assert isinstance(content, Page)
+
+
+# -- _PagePackageStripper -----------------------------------------------------
+
+
+def test_page_stripper_strips_prefix():
+    page = Page(path="mypkg.submod.func")
+    result = _PagePackageStripper("mypkg").visit(page)
+    assert result.path == "submod.func"
+
+
+def test_page_stripper_no_strip_different():
+    page = Page(path="other.submod.func")
+    result = _PagePackageStripper("mypkg").visit(page)
+    assert result.path == "other.submod.func"
+
+
+def test_page_stripper_no_strip_single_part():
+    page = Page(path="mypkg")
+    result = _PagePackageStripper("mypkg").visit(page)
+    assert result.path == "mypkg"
+
+
+def test_page_stripper_nested_pages():
+    doc = DocFunction(name="f", obj=gdc.Function("f"))
+    page = Page(path="mypkg.mod.func", contents=[doc])
+    section = Section(title="T", contents=[page])
+    result = _PagePackageStripper("mypkg").visit(section)
+    assert result.contents[0].path == "mod.func"
+
+
+# -- strip_package_name -------------------------------------------------------
+
+
+def test_strip_package_name_basic():
+    doc = DocFunction(name="f", obj=gdc.Function("f"))
+    page = Page(path="pkg.mod.func", contents=[doc])
+    result = strip_package_name(page, "pkg")
+    assert result.path == "mod.func"
+
+
+def test_strip_package_name_no_match():
+    doc = DocFunction(name="f", obj=gdc.Function("f"))
+    page = Page(path="other.func", contents=[doc])
+    result = strip_package_name(page, "pkg")
+    assert result.path == "other.func"
+
+
+# -- blueprint (entry point) --------------------------------------------------
+
+
+def test_blueprint_entry_basic():
+    func = gdc.Function("myfunc")
+
+    def get_object(path, **kwargs):
+        return func
+
+    trans = BlueprintTransformer(get_object=get_object)
+    result = trans.visit(Auto(name="myfunc"))
+    assert isinstance(result, DocFunction)
+
+
+def test_blueprint_entry_with_package():
+    func = gdc.Function("f")
+
+    def get_object(path, **kwargs):
+        if path == "mypkg:f":
+            return func
+        raise KeyError(path)
+
+    trans = BlueprintTransformer(get_object=get_object)
+    trans.crnt_package = "mypkg"
+    result = trans.visit(Auto(name="f"))
+    assert isinstance(result, DocFunction)
+
+
+def test_blueprint_entry_with_dynamic():
+    func = gdc.Function("f")
+    captured = {}
+
+    def get_object(path, **kwargs):
+        captured.update(kwargs)
+        return func
+
+    trans = BlueprintTransformer(get_object=get_object)
+    trans.dynamic = True
+    trans.visit(Auto(name="f"))
+    assert captured.get("dynamic") is True
+
+
+# ============================================================================
 # Favicon Tests
 # ============================================================================
 
