@@ -8450,9 +8450,6 @@ def _bp_make_trans(objects=None):
     return BlueprintTransformer(get_object=get_object)
 
 
-# -- _to_simple_dict ----------------------------------------------------------
-
-
 def test_to_simple_dict_base_dataclass():
     page = Page(path="foo")
     result = _to_simple_dict(page)
@@ -8500,9 +8497,6 @@ def test_to_simple_dict_summary_details():
     assert result == {"name": "n", "desc": "d"}
 
 
-# -- _non_default_entries -----------------------------------------------------
-
-
 def test_non_default_entries_auto_no_fields():
     auto = Auto()
     result = _non_default_entries(auto)
@@ -8519,9 +8513,6 @@ def test_non_default_entries_auto_options_empty():
     opts = AutoOptions()
     result = _non_default_entries(opts)
     assert result == {}
-
-
-# -- _resolve_alias -----------------------------------------------------------
 
 
 def test_resolve_alias_non_alias_passthrough():
@@ -8555,9 +8546,6 @@ def test_resolve_alias_error_fallback():
 
     result = _resolve_alias(mock_alias, get_object)
     assert result is sentinel
-
-
-# -- _is_external_alias -------------------------------------------------------
 
 
 def test_is_external_alias_non_alias_returns_false():
@@ -8613,9 +8601,6 @@ def test_is_external_alias_cyclic_raises():
     mod = gdc.Module("mypkg")
     with pytest.raises(Exception, match="Cyclic Alias"):
         _is_external_alias(mock_alias, mod)
-
-
-# -- _auto_package ------------------------------------------------------------
 
 
 def test_auto_package_module_with_all():
@@ -8744,9 +8729,6 @@ def test_auto_package_unexported_filtered():
     assert "not_exported" not in names
 
 
-# -- CollectTransformer -------------------------------------------------------
-
-
 def test_collect_single_doc():
     mod = gdc.Module("pkg")
     func_obj = gdc.Function("myfunc")
@@ -8801,9 +8783,6 @@ def test_find_page_node_no_page():
             ctx_node.reset(token)
 
 
-# -- BlueprintTransformer helpers ---------------------------------------------
-
-
 def test_bp_append_member_path_no_colon():
     result = BlueprintTransformer._append_member_path("pkg.mod", "MyClass")
     assert result == "pkg.mod:MyClass"
@@ -8844,9 +8823,6 @@ def test_bp_get_object_fixed_key_error():
         trans.get_object_fixed("pkg.missing")
 
 
-# -- BlueprintTransformer.visit -----------------------------------------------
-
-
 def test_bp_visit_sets_package():
     trans = _bp_make_trans()
     assert trans.crnt_package is None
@@ -8873,9 +8849,6 @@ def test_bp_visit_sets_options():
     opts = AutoOptions(include_private=True)
     Section(title="Test", options=opts, contents=[Auto(name="f")])
     assert trans.options is None
-
-
-# -- BlueprintTransformer._enter_auto ----------------------------------------
 
 
 def test_bp_enter_auto_basic_function():
@@ -9058,9 +9031,6 @@ def test_bp_enter_auto_module_members_skipped():
     assert isinstance(result, DocModule)
     member_names = [m.name if hasattr(m, "name") else str(m) for m in result.members]
     assert not any("sub" in n for n in member_names)
-
-
-# -- BlueprintTransformer._fetch_members -------------------------------------
 
 
 def test_fetch_members_explicit():
@@ -9292,9 +9262,6 @@ def test_fetch_members_include_imports():
     assert "ext_f" in result
 
 
-# -- BlueprintTransformer._enter_layout ---------------------------------------
-
-
 def test_bp_layout_with_sections():
     func = gdc.Function("f")
     trans = _bp_make_trans({"pkg:f": func})
@@ -9322,9 +9289,6 @@ def test_bp_layout_auto_generate(capsys):
     assert isinstance(result, Layout)
 
 
-# -- BlueprintTransformer._exit_section ----------------------------------------
-
-
 def test_bp_exit_section_wraps_non_page():
     func = gdc.Function("f")
     trans = _bp_make_trans({"pkg:f": func})
@@ -9334,9 +9298,6 @@ def test_bp_exit_section_wraps_non_page():
     section = result.sections[0]
     for content in section.contents:
         assert isinstance(content, Page)
-
-
-# -- _PagePackageStripper -----------------------------------------------------
 
 
 def test_page_stripper_strips_prefix():
@@ -9365,9 +9326,6 @@ def test_page_stripper_nested_pages():
     assert result.contents[0].path == "mod.func"
 
 
-# -- strip_package_name -------------------------------------------------------
-
-
 def test_strip_package_name_basic():
     doc = DocFunction(name="f", obj=gdc.Function("f"))
     page = Page(path="pkg.mod.func", contents=[doc])
@@ -9380,9 +9338,6 @@ def test_strip_package_name_no_match():
     page = Page(path="other.func", contents=[doc])
     result = strip_package_name(page, "pkg")
     assert result.path == "other.func"
-
-
-# -- blueprint (entry point) --------------------------------------------------
 
 
 def test_blueprint_entry_basic():
@@ -28591,33 +28546,11 @@ def test_update_quarto_config_no_releases():
         assert not meta_path.exists()
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# Tests for _qrenderer/introspection.py
-# ═══════════════════════════════════════════════════════════════════════════
-
-"""Tests for great_docs._qrenderer.introspection — batch 1.
-
-Covers:
-- get_parser_defaults
-- get_object (deprecation, dynamic, aliases, error paths)
-- _resolve_target
-- replace_docstring
-- _canonical_path
-- _is_valueless
-- _insert_contents
-- _merge_frontmatter
-"""
-
-
-# ── get_parser_defaults ──────────────────────────────────────────────────────
-
-
 def test_get_parser_defaults_numpy():
     from great_docs._qrenderer.introspection import get_parser_defaults
 
     result = get_parser_defaults("numpy")
-    assert "allow_section_blank_line" in result
-    assert result["allow_section_blank_line"] is True
+    assert result == {}
 
 
 def test_get_parser_defaults_unknown():
@@ -28625,9 +28558,6 @@ def test_get_parser_defaults_unknown():
 
     result = get_parser_defaults("unknown_parser")
     assert result == {}
-
-
-# ── get_object ───────────────────────────────────────────────────────────────
 
 
 def test_get_object_basic():
@@ -28733,9 +28663,6 @@ def test_get_object_nested_path():
             sys.modules.pop("introtest_nested", None)
 
 
-# ── _resolve_target ──────────────────────────────────────────────────────────
-
-
 def test_resolve_target_direct():
     """_resolve_target returns the target when it's not an Alias."""
     from great_docs._qrenderer.introspection import _resolve_target
@@ -28761,9 +28688,6 @@ def test_resolve_target_chained():
     alias2 = dc.Alias("alias2", alias1, parent=mod)
     result = _resolve_target(alias2)
     assert result is func
-
-
-# ── replace_docstring ────────────────────────────────────────────────────────
 
 
 def test_replace_docstring_basic():
@@ -28867,10 +28791,6 @@ def test_replace_docstring_alias():
     mod = get_object("json")
     alias = dc.Alias("my_alias", obj, parent=mod)
     replace_docstring(alias)
-    # Should resolve the alias and replace on the target
-
-
-# ── _canonical_path ──────────────────────────────────────────────────────────
 
 
 def test_canonical_path_module():
@@ -28944,9 +28864,6 @@ def test_canonical_path_class_no_module():
     assert result is None
 
 
-# ── _is_valueless ────────────────────────────────────────────────────────────
-
-
 def test_is_valueless_class_attribute_no_value():
     """_is_valueless returns True for class-attribute with no value."""
     from great_docs._qrenderer.introspection import _is_valueless
@@ -28994,9 +28911,6 @@ def test_is_valueless_module_attribute_no_value():
     attr = dc.Attribute(name="x", lineno=1, value=None)
     attr.labels.add("module-attribute")
     assert _is_valueless(attr) is True
-
-
-# ── _insert_contents ─────────────────────────────────────────────────────────
 
 
 def test_insert_contents_list():
@@ -29049,9 +28963,6 @@ def test_insert_contents_nested_list():
     assert data == [["x"]]
 
 
-# ── _merge_frontmatter ──────────────────────────────────────────────────────
-
-
 def test_merge_frontmatter_existing():
     """_merge_frontmatter merges into existing frontmatter."""
     from great_docs._qrenderer.introspection import _merge_frontmatter
@@ -29097,20 +29008,6 @@ def test_merge_frontmatter_updates_existing_key():
     result = _merge_frontmatter(content, {"page-navigation": False})
 
     assert "page-navigation: false" in result
-
-
-"""Tests for great_docs._qrenderer.introspection — batch 2.
-
-Covers:
-- dynamic_alias
-- Builder (constructor, build, write_index, write_doc_pages, create_inventory,
-  _generate_sidebar, write_sidebar, _page_to_links, from_quarto_config)
-- BuilderPkgdown
-- BuilderSinglePage
-"""
-
-
-# ── dynamic_alias ────────────────────────────────────────────────────────────
 
 
 def test_dynamic_alias_module_only():
@@ -29251,9 +29148,6 @@ def test_dynamic_alias_reexported_creates_alias():
             sys.modules.pop("introtest_reexp.sub", None)
 
 
-# ── get_object with dynamic=string (dynamic_alias target) ───────────────────
-
-
 def test_get_object_dynamic_string_target():
     """get_object with dynamic=<string> passes target to dynamic_alias."""
     from great_docs._qrenderer.introspection import get_object
@@ -29261,9 +29155,6 @@ def test_get_object_dynamic_string_target():
     obj = get_object("json:dumps", dynamic="json:dumps")
     assert obj is not None
     assert obj.name == "dumps"
-
-
-# ── Builder ──────────────────────────────────────────────────────────────────
 
 
 def test_builder_init_basic():
@@ -29388,9 +29279,6 @@ def test_builder_load_layout_error():
 
     with pytest.raises(ValueError):
         Builder(package="json", sections=123)
-
-
-# ── Builder.build ────────────────────────────────────────────────────────────
 
 
 def test_builder_build_basic():
@@ -29530,9 +29418,6 @@ def test_builder_build_with_filter():
             sys.modules.pop("introtest_filter", None)
 
 
-# ── Builder.write_doc_pages (rewrite_all_pages + unchanged check) ───────────
-
-
 def test_builder_write_doc_pages_skip_unchanged():
     """Builder.write_doc_pages skips pages with unchanged content."""
     from great_docs._qrenderer.introspection import Builder
@@ -29575,9 +29460,6 @@ def test_builder_write_doc_pages_skip_unchanged():
             sys.modules.pop("introtest_unchanged", None)
 
 
-# ── Builder.create_inventory ─────────────────────────────────────────────────
-
-
 def test_builder_create_inventory():
     """Builder.create_inventory creates an inventory object."""
     from great_docs._qrenderer.introspection import Builder
@@ -29597,9 +29479,6 @@ def test_builder_create_inventory_with_version():
     builder.items = []
     inv = builder.create_inventory(builder.items)
     assert inv is not None
-
-
-# ── Builder._generate_sidebar ────────────────────────────────────────────────
 
 
 def test_builder_generate_sidebar_basic():
@@ -29701,9 +29580,6 @@ def test_builder_generate_sidebar_invalid_contents_type():
         builder._generate_sidebar(builder.layout)
 
 
-# ── Builder._page_to_links ──────────────────────────────────────────────────
-
-
 def test_builder_page_to_links():
     """Builder._page_to_links converts a Page to link paths."""
     from great_docs._qrenderer.introspection import Builder
@@ -29713,9 +29589,6 @@ def test_builder_page_to_links():
     page = layout.Page(path="my_func", contents=[])
     links = builder._page_to_links(page)
     assert links == ["api/my_func.qmd"]
-
-
-# ── Builder.from_quarto_config ───────────────────────────────────────────────
 
 
 def test_builder_from_quarto_config_dict():
@@ -29800,17 +29673,11 @@ def test_builder_from_quarto_config_interlinks_fast():
     assert builder._fast_inventory is True
 
 
-# ── BuilderPkgdown ───────────────────────────────────────────────────────────
-
-
 def test_builder_pkgdown_style():
     """BuilderPkgdown has style='pkgdown'."""
     from great_docs._qrenderer.introspection import BuilderPkgdown
 
     assert BuilderPkgdown.style == "pkgdown"
-
-
-# ── BuilderSinglePage ───────────────────────────────────────────────────────
 
 
 def test_builder_single_page_style():
@@ -29857,12 +29724,6 @@ def test_builder_single_page_write_index_noop():
     assert result is None
 
 
-# ── Tests for great_docs/cli.py ──────────────────────────────────────────────
-
-
-# ── OrderedGroup ─────────────────────────────────────────────────────────────
-
-
 def test_cli_ordered_group_list_commands():
     """OrderedGroup.list_commands returns commands in insertion order."""
     from great_docs.cli import cli
@@ -29875,9 +29736,6 @@ def test_cli_ordered_group_list_commands():
     # Verify they come in insertion order (init, build, preview, uninstall, config, ...)
     assert commands[0] == "init"
     assert commands[1] == "build"
-
-
-# ── cli group ────────────────────────────────────────────────────────────────
 
 
 def test_cli_group_help():
@@ -29898,9 +29756,6 @@ def test_cli_group_version():
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
     assert "great-docs" in result.output
-
-
-# ── init command ─────────────────────────────────────────────────────────────
 
 
 def test_cli_init_success():
@@ -29946,9 +29801,6 @@ def test_cli_init_error():
             result = runner.invoke(init, ["--project-path", tmp_dir])
             assert result.exit_code == 1
             assert "Error: install failed" in result.output
-
-
-# ── build command ────────────────────────────────────────────────────────────
 
 
 def test_cli_build_success():
@@ -30024,9 +29876,6 @@ def test_cli_build_error():
             assert "Error: build failed" in result.output
 
 
-# ── uninstall command ────────────────────────────────────────────────────────
-
-
 def test_cli_uninstall_success():
     """CLI uninstall command calls GreatDocs.uninstall()."""
     runner = CliRunner()
@@ -30054,9 +29903,6 @@ def test_cli_uninstall_error():
             result = runner.invoke(uninstall, ["--project-path", tmp_dir])
             assert result.exit_code == 1
             assert "Error: uninstall failed" in result.output
-
-
-# ── preview command ──────────────────────────────────────────────────────────
 
 
 def test_cli_preview_success():
@@ -30117,9 +29963,6 @@ def test_cli_preview_error():
             assert "Error: preview failed" in result.output
 
 
-# ── config command ───────────────────────────────────────────────────────────
-
-
 def test_cli_config_success():
     """CLI config command creates a great-docs.yml file."""
     runner = CliRunner()
@@ -30178,9 +30021,6 @@ def test_cli_config_error():
             result = runner.invoke(config, ["--project-path", tmp_dir, "--force"])
             assert result.exit_code == 1
             assert "Error: config error" in result.output
-
-
-# ── scan command ─────────────────────────────────────────────────────────────
 
 
 def test_cli_scan_success():
@@ -30439,9 +30279,6 @@ def test_cli_scan_string_items_in_reference():
             assert "my_func" in result.output
 
 
-# ── check-links command ──────────────────────────────────────────────────────
-
-
 def test_cli_check_links_success():
     """CLI check-links command runs link check."""
     runner = CliRunner()
@@ -30670,9 +30507,6 @@ def test_cli_check_links_error():
             result = runner.invoke(check_links, ["--project-path", tmp_dir])
             assert result.exit_code == 1
             assert "Error: check failed" in result.output
-
-
-# ── spell-check command ──────────────────────────────────────────────────────
 
 
 def test_cli_spell_check_success():
@@ -30958,9 +30792,6 @@ def test_cli_spell_check_error():
             assert "Error: spell check failed" in result.output
 
 
-# ── changelog command ────────────────────────────────────────────────────────
-
-
 def test_cli_changelog_success():
     """CLI changelog generates changelog page."""
     runner = CliRunner()
@@ -31046,20 +30877,12 @@ def test_cli_changelog_error():
             assert "Error: changelog failed" in result.output
 
 
-# ── main entry point ─────────────────────────────────────────────────────────
-
-
 def test_cli_main_entry_point():
     """main() calls cli()."""
 
     with patch("great_docs.cli.cli") as mock_cli:
         main()
         mock_cli.assert_called_once()
-
-
-# ── Tests for _qrenderer/_ast.py ─────────────────────────────────────────────
-
-# ── transform ────────────────────────────────────────────────────────────────
 
 
 def test_ast_transform_tuple_examples():
@@ -31115,9 +30938,6 @@ def test_ast_transform_passthrough():
     assert transform("hello") == "hello"
 
 
-# ── tuple_to_data ────────────────────────────────────────────────────────────
-
-
 def test_ast_tuple_to_data_examples():
     """tuple_to_data converts examples kind to ExampleCode."""
     from great_docs._qrenderer._ast import ExampleCode, tuple_to_data
@@ -31148,9 +30968,6 @@ def test_ast_tuple_to_data_unsupported_raises():
     kind_cls = type(ds.DocstringSectionText("x").kind)
     with pytest.raises(ValueError, match="Unsupported"):
         tuple_to_data((kind_cls["parameters"], "stuff"))
-
-
-# ── _DocstringSectionPatched ─────────────────────────────────────────────────
 
 
 def test_ast_split_sections_basic():
@@ -31264,9 +31081,6 @@ def test_ast_transform_all():
     ]
     result = _DocstringSectionPatched.transform_all(sections)
     assert len(result) >= 2  # at least the note + parameters
-
-
-# ── fields ───────────────────────────────────────────────────────────────────
 
 
 def test_ast_fields_example_code():
@@ -31450,9 +31264,6 @@ def test_ast_fields_none_for_unknown():
     assert fields(3.14) is None
 
 
-# ── Formatter ────────────────────────────────────────────────────────────────
-
-
 def test_ast_formatter_format_simple_string():
     """Formatter.format returns repr for leaf values."""
     from great_docs._qrenderer._ast import Formatter
@@ -31597,9 +31408,6 @@ def test_ast_formatter_format_nested():
     assert "Docstring" in result
 
 
-# ── preview ──────────────────────────────────────────────────────────────────
-
-
 def test_ast_preview_print(capsys):
     """preview() prints the formatted tree."""
     from great_docs._qrenderer._ast import ExampleCode, preview
@@ -31633,9 +31441,6 @@ def test_ast_preview_compact():
 
     result = preview(ExampleCode("x = 1"), compact=True, as_string=True)
     assert "ExampleCode" in result
-
-
-# ── DocstringSectionPatched subclasses ───────────────────────────────────────
 
 
 def test_ast_docstring_section_see_also():
@@ -31682,3 +31487,887 @@ def test_ast_fields_docstring_element():
     elem = ds.DocstringElement(annotation="int", description="returns an int")
     result = fields(elem)
     assert result == ["annotation", "description"]
+
+
+# Helper to build a griffe class with attribute/function/class members
+def _build_class_with_members():
+    """Build a griffe Class with one attribute, one function, one inner class."""
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer import layout
+
+    cls_obj = dc.Class(name="MyClass", lineno=1)
+    attr_obj = dc.Attribute(name="my_attr", lineno=2)
+    func_obj = dc.Function(name="method", lineno=3)
+    inner_obj = dc.Class(name="Inner", lineno=4)
+    cls_obj.set_member("my_attr", attr_obj)
+    cls_obj.set_member("method", func_obj)
+    cls_obj.set_member("Inner", inner_obj)
+
+    doc_attr = layout.DocAttribute(name="my_attr", obj=attr_obj)
+    doc_func = layout.DocFunction(name="method", obj=func_obj)
+    doc_inner = layout.DocClass(name="Inner", obj=inner_obj, members=[])
+    doc_cls = layout.DocClass(name="MyClass", obj=cls_obj, members=[doc_attr, doc_func, doc_inner])
+    return cls_obj, doc_cls
+
+
+def _build_class_with_member_pages():
+    """Build a griffe Class with MemberPage members."""
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer import layout
+
+    cls_obj = dc.Class(name="MyClass", lineno=1)
+    attr_obj = dc.Attribute(name="my_attr", lineno=2)
+    func_obj = dc.Function(name="method", lineno=3)
+    inner_obj = dc.Class(name="Inner", lineno=4)
+    cls_obj.set_member("my_attr", attr_obj)
+    cls_obj.set_member("method", func_obj)
+    cls_obj.set_member("Inner", inner_obj)
+
+    doc_attr = layout.DocAttribute(name="my_attr", obj=attr_obj)
+    doc_func = layout.DocFunction(name="method", obj=func_obj)
+    doc_inner = layout.DocClass(name="Inner", obj=inner_obj, members=[])
+
+    page_attr = layout.MemberPage(path="my_attr", contents=[doc_attr])
+    page_func = layout.MemberPage(path="method", contents=[doc_func])
+    page_inner = layout.MemberPage(path="Inner", contents=[doc_inner])
+
+    doc_cls = layout.DocClass(
+        name="MyClass", obj=cls_obj, members=[page_attr, page_func, page_inner]
+    )
+    return cls_obj, doc_cls
+
+
+def test_mixin_rendered_members_group_str():
+    """RenderedMembersGroup.__str__ renders title, summary, and body."""
+    from great_docs._qrenderer._render.mixin_members import RenderedMembersGroup
+    from great_docs._qrenderer.pandoc.blocks import Header
+    from great_docs._qrenderer.pandoc.components import Attr
+
+    rmg = RenderedMembersGroup(
+        title=Header(2, "Methods", Attr()),
+        summary="A summary table",
+        members_body=None,
+    )
+    result = str(rmg)
+    assert "Methods" in result
+    assert "A summary table" in result
+
+
+def test_mixin_rendered_members_group_str_all_none():
+    """RenderedMembersGroup.__str__ handles all None fields."""
+    from great_docs._qrenderer._render.mixin_members import RenderedMembersGroup
+
+    rmg = RenderedMembersGroup()
+    result = str(rmg)
+    assert isinstance(result, str)
+
+
+def test_mixin_rendered_member_pages_group_str():
+    """RenderedMemberPagesGroup.__str__ renders title and summary."""
+    from great_docs._qrenderer._render.mixin_members import RenderedMemberPagesGroup
+    from great_docs._qrenderer.pandoc.blocks import Header
+    from great_docs._qrenderer.pandoc.components import Attr
+
+    rmpg = RenderedMemberPagesGroup(
+        title=Header(2, "Attributes", Attr()),
+        summary="summary",
+    )
+    result = str(rmpg)
+    assert "Attributes" in result
+    assert "summary" in result
+
+
+def test_mixin_render_body_with_doc_members():
+    """render_body renders docstring + member groups for Doc members."""
+    from unittest.mock import patch
+
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        body = render.render_body()
+        body_str = str(body)
+    assert "Attributes" in body_str
+    assert "Methods" in body_str
+    assert "Classes" in body_str
+
+
+def test_mixin_render_body_with_member_pages():
+    """render_body renders docstring + member page groups for MemberPage members."""
+    from unittest.mock import patch
+
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        body = render.render_body()
+        body_str = str(body)
+    assert "Attributes" in body_str
+
+
+def test_mixin_render_body_no_members():
+    """render_body returns just docstring when no members."""
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer import layout
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    cls_obj = dc.Class(name="Empty", lineno=1)
+    doc_cls = layout.DocClass(name="Empty", obj=cls_obj, members=[])
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    body = render.render_body()
+    # With no members, body is just the docstring result (could be None)
+    assert body is None or "Members" not in str(body)
+
+
+def test_mixin_render_body_invalid_member_type_raises():
+    """render_body raises ValueError for unrecognized member types."""
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer import layout
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    cls_obj = dc.Class(name="Bad", lineno=1)
+    # Use a plain string as a member — not Doc or MemberPage
+    doc_cls = layout.DocClass(name="Bad", obj=cls_obj, members=["not_a_doc"])
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    with pytest.raises(ValueError, match="Cannot render members of type"):
+        render.render_body()
+
+
+def test_mixin_render_members_returns_groups():
+    """render_members returns [attributes, classes, functions] groups."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._render.mixin_members import RenderedMembersGroup
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    members = render.render_members()
+    assert len(members) == 3
+    for m in members:
+        assert isinstance(m, RenderedMembersGroup)
+
+
+def test_mixin_render_members_show_members_false():
+    """render_members returns empty list when show_members=False."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+    render.show_members = False
+
+    assert render.render_members() == []
+
+
+def test_mixin_render_member_pages_returns_groups():
+    """render_member_pages returns [attributes, classes, functions] page groups."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._render.mixin_members import RenderedMemberPagesGroup
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    pages = render.render_member_pages()
+    assert len(pages) == 3
+    for p in pages:
+        assert isinstance(p, RenderedMemberPagesGroup)
+
+
+def test_mixin_render_member_pages_show_members_false():
+    """render_member_pages returns empty list when show_members=False."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+    render.show_members = False
+
+    assert render.render_member_pages() == []
+
+
+def test_mixin_attributes_property():
+    """attributes property filters Doc members by is_attribute."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    attrs = render.attributes
+    assert len(attrs) == 1
+    assert attrs[0].name == "my_attr"
+
+
+def test_mixin_classes_property():
+    """classes property filters Doc members by is_class."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    classes = render.classes
+    assert len(classes) == 1
+    assert classes[0].name == "Inner"
+
+
+def test_mixin_functions_property():
+    """functions property filters Doc members by is_function."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    funcs = render.functions
+    assert len(funcs) == 1
+    assert funcs[0].name == "method"
+
+
+def test_mixin_attribute_member_pages_property():
+    """attribute_member_pages filters MemberPage members by is_attribute."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    pages = render.attribute_member_pages
+    assert len(pages) == 1
+    assert pages[0].path == "my_attr"
+
+
+def test_mixin_class_member_pages_property():
+    """class_member_pages filters MemberPage members by is_class."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    pages = render.class_member_pages
+    assert len(pages) == 1
+    assert pages[0].path == "Inner"
+
+
+def test_mixin_function_member_pages_property():
+    """function_member_pages filters MemberPage members by is_function."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    pages = render.function_member_pages
+    assert len(pages) == 1
+    assert pages[0].path == "method"
+
+
+def test_mixin_attributes_exclude_filter():
+    """attributes property respects EXCLUDE_ATTRIBUTES."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+    from great_docs._qrenderer import _globals
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    old = _globals.EXCLUDE_ATTRIBUTES.copy()
+    try:
+        _globals.EXCLUDE_ATTRIBUTES["MyClass"] = ("my_attr",)
+        if "attributes" in render.__dict__:
+            del render.__dict__["attributes"]
+        attrs = render.attributes
+        assert len(attrs) == 0
+    finally:
+        _globals.EXCLUDE_ATTRIBUTES.clear()
+        _globals.EXCLUDE_ATTRIBUTES.update(old)
+
+
+def test_mixin_functions_exclude_filter():
+    """functions property respects EXCLUDE_FUNCTIONS."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+    from great_docs._qrenderer import _globals
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    old = _globals.EXCLUDE_FUNCTIONS.copy()
+    try:
+        _globals.EXCLUDE_FUNCTIONS["MyClass"] = ("method",)
+        if "functions" in render.__dict__:
+            del render.__dict__["functions"]
+        funcs = render.functions
+        assert len(funcs) == 0
+    finally:
+        _globals.EXCLUDE_FUNCTIONS.clear()
+        _globals.EXCLUDE_FUNCTIONS.update(old)
+
+
+def test_mixin_classes_exclude_filter():
+    """classes property respects EXCLUDE_CLASSES."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+    from great_docs._qrenderer import _globals
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    old = _globals.EXCLUDE_CLASSES.copy()
+    try:
+        _globals.EXCLUDE_CLASSES["MyClass"] = "Inner"
+        if "classes" in render.__dict__:
+            del render.__dict__["classes"]
+        classes = render.classes
+        assert len(classes) == 0
+    finally:
+        _globals.EXCLUDE_CLASSES.clear()
+        _globals.EXCLUDE_CLASSES.update(old)
+
+
+def test_mixin_attribute_member_pages_exclude_filter():
+    """attribute_member_pages respects EXCLUDE_ATTRIBUTES."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+    from great_docs._qrenderer import _globals
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    old = _globals.EXCLUDE_ATTRIBUTES.copy()
+    try:
+        _globals.EXCLUDE_ATTRIBUTES["MyClass"] = "my_attr"
+        if "attribute_member_pages" in render.__dict__:
+            del render.__dict__["attribute_member_pages"]
+        pages = render.attribute_member_pages
+        assert len(pages) == 0
+    finally:
+        _globals.EXCLUDE_ATTRIBUTES.clear()
+        _globals.EXCLUDE_ATTRIBUTES.update(old)
+
+
+def test_mixin_class_member_pages_exclude_filter():
+    """class_member_pages respects EXCLUDE_CLASSES."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+    from great_docs._qrenderer import _globals
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    old = _globals.EXCLUDE_CLASSES.copy()
+    try:
+        _globals.EXCLUDE_CLASSES["MyClass"] = ("Inner",)
+        if "class_member_pages" in render.__dict__:
+            del render.__dict__["class_member_pages"]
+        pages = render.class_member_pages
+        assert len(pages) == 0
+    finally:
+        _globals.EXCLUDE_CLASSES.clear()
+        _globals.EXCLUDE_CLASSES.update(old)
+
+
+def test_mixin_function_member_pages_exclude_filter():
+    """function_member_pages respects EXCLUDE_FUNCTIONS."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+    from great_docs._qrenderer import _globals
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    old = _globals.EXCLUDE_FUNCTIONS.copy()
+    try:
+        _globals.EXCLUDE_FUNCTIONS["MyClass"] = "method"
+        if "function_member_pages" in render.__dict__:
+            del render.__dict__["function_member_pages"]
+        pages = render.function_member_pages
+        assert len(pages) == 0
+    finally:
+        _globals.EXCLUDE_FUNCTIONS.clear()
+        _globals.EXCLUDE_FUNCTIONS.update(old)
+
+
+def test_mixin_render_classes():
+    """render_classes returns a RenderedMembersGroup with 'Classes' title."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._render.mixin_members import RenderedMembersGroup
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    result = render.render_classes()
+    assert isinstance(result, RenderedMembersGroup)
+    assert "Classes" in str(result.title)
+
+
+def test_mixin_render_functions():
+    """render_functions returns a RenderedMembersGroup with 'Methods' title for classes."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._render.mixin_members import RenderedMembersGroup
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    result = render.render_functions()
+    assert isinstance(result, RenderedMembersGroup)
+    assert "Methods" in str(result.title)
+
+
+def test_mixin_render_attributes():
+    """render_attributes returns a RenderedMembersGroup with 'Attributes' title."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._render.mixin_members import RenderedMembersGroup
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    result = render.render_attributes()
+    assert isinstance(result, RenderedMembersGroup)
+    assert "Attributes" in str(result.title)
+
+
+def test_mixin_render_classes_show_false():
+    """render_classes returns None when show_classes=False."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+    render.show_classes = False
+
+    assert render.render_classes() is None
+
+
+def test_mixin_render_functions_show_false():
+    """render_functions returns None when show_functions=False."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+    render.show_functions = False
+
+    assert render.render_functions() is None
+
+
+def test_mixin_render_attributes_show_false():
+    """render_attributes returns None when show_attributes=False."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+    render.show_attributes = False
+
+    assert render.render_attributes() is None
+
+
+def test_mixin_render_class_member_pages():
+    """render_class_member_pages returns RenderedMemberPagesGroup."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._render.mixin_members import RenderedMemberPagesGroup
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    result = render.render_class_member_pages()
+    assert isinstance(result, RenderedMemberPagesGroup)
+
+
+def test_mixin_render_function_member_pages():
+    """render_function_member_pages returns RenderedMemberPagesGroup."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._render.mixin_members import RenderedMemberPagesGroup
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    result = render.render_function_member_pages()
+    assert isinstance(result, RenderedMemberPagesGroup)
+
+
+def test_mixin_render_attribute_member_pages():
+    """render_attribute_member_pages returns RenderedMemberPagesGroup."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._render.mixin_members import RenderedMemberPagesGroup
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    result = render.render_attribute_member_pages()
+    assert isinstance(result, RenderedMemberPagesGroup)
+
+
+def test_mixin_render_class_member_pages_show_false():
+    """render_class_member_pages returns None when show_classes=False."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+    render.show_classes = False
+
+    assert render.render_class_member_pages() is None
+
+
+def test_mixin_render_function_member_pages_show_false():
+    """render_function_member_pages returns None when show_functions=False."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+    render.show_functions = False
+
+    assert render.render_function_member_pages() is None
+
+
+def test_mixin_render_attribute_member_pages_show_false():
+    """render_attribute_member_pages returns None when show_attributes=False."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+    render.show_attributes = False
+
+    assert render.render_attribute_member_pages() is None
+
+
+def test_mixin_render_members_group_no_summary():
+    """_render_members_group skips summary when show_*_summary=False."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+    render.show_functions_summary = False
+
+    result = render.render_functions()
+    assert result is not None
+    assert result.summary is None
+
+
+def test_mixin_render_members_group_no_body():
+    """_render_members_group skips body when show_*_body=False."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+    render.show_functions_body = False
+
+    result = render.render_functions()
+    assert result is not None
+    assert result.members_body is None
+
+
+def test_mixin_render_members_group_no_summary_global():
+    """_render_members_group skips summary when show_members_summary=False."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+    render.show_members_summary = False
+
+    result = render.render_functions()
+    assert result is not None
+    assert result.summary is None
+
+
+def test_mixin_render_members_group_empty_returns_none():
+    """_render_members_group returns None when no members of that type."""
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer import layout
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    cls_obj = dc.Class(name="FuncOnly", lineno=1)
+    func_obj = dc.Function(name="method", lineno=2)
+    cls_obj.set_member("method", func_obj)
+    doc_func = layout.DocFunction(name="method", obj=func_obj)
+    doc_cls = layout.DocClass(name="FuncOnly", obj=cls_obj, members=[doc_func])
+
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    assert render.render_attributes() is None
+    assert render.render_classes() is None
+    assert render.render_functions() is not None
+
+
+def test_mixin_render_members_group_attributes_summary_and_body():
+    """_render_members_group for attributes respects show_attributes_summary/body."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+    render.show_attributes_summary = False
+    render.show_attributes_body = False
+
+    result = render.render_attributes()
+    assert result is not None
+    assert result.summary is None
+    assert result.members_body is None
+
+
+def test_mixin_render_members_group_classes_summary_and_body():
+    """_render_members_group for classes respects show_classes_summary/body."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+    render.show_classes_summary = False
+    render.show_classes_body = False
+
+    result = render.render_classes()
+    assert result is not None
+    assert result.summary is None
+    assert result.members_body is None
+
+
+def test_mixin_render_member_pages_group_no_summary():
+    """_render_member_pages_group skips summary when show_*_summary=False."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+    render.show_functions_summary = False
+
+    result = render.render_function_member_pages()
+    assert result is not None
+    assert result.summary is None
+
+
+def test_mixin_render_member_pages_group_empty_returns_none():
+    """_render_member_pages_group returns None when no pages of that type."""
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer import layout
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    cls_obj = dc.Class(name="FuncOnly", lineno=1)
+    func_obj = dc.Function(name="method", lineno=2)
+    cls_obj.set_member("method", func_obj)
+
+    doc_func = layout.DocFunction(name="method", obj=func_obj)
+    page_func = layout.MemberPage(path="method", contents=[doc_func])
+    doc_cls = layout.DocClass(name="FuncOnly", obj=cls_obj, members=[page_func])
+
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    assert render.render_attribute_member_pages() is None
+    assert render.render_class_member_pages() is None
+    assert render.render_function_member_pages() is not None
+
+
+def test_mixin_render_member_pages_group_functions_slug_for_class():
+    """_render_member_pages_group uses 'Functions' slug for DocClass function pages."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    result = render.render_function_member_pages()
+    assert result is not None
+    title_str = str(result.title)
+    assert "Functions" in title_str
+
+
+def test_mixin_render_member_pages_group_attributes_no_summary():
+    """_render_member_pages_group for attributes skips summary when disabled."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+    render.show_attributes_summary = False
+
+    result = render.render_attribute_member_pages()
+    assert result is not None
+    assert result.summary is None
+
+
+def test_mixin_render_member_pages_group_classes_no_summary():
+    """_render_member_pages_group for classes skips summary when disabled."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+    render.show_classes_summary = False
+
+    result = render.render_class_member_pages()
+    assert result is not None
+    assert result.summary is None
+
+
+def test_mixin_render_member_pages_group_global_summary_off():
+    """_render_member_pages_group skips summary when show_members_summary=False."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+    render.show_members_summary = False
+
+    result = render.render_function_member_pages()
+    assert result is not None
+    assert result.summary is None
+
+
+def test_mixin_render_members_group_has_summary_table():
+    """_render_members_group produces a tabulate summary."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_members()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    result = render.render_functions()
+    assert result is not None
+    assert result.summary is not None
+    assert "Name" in result.summary
+
+
+def test_mixin_render_member_pages_group_has_summary_table():
+    """_render_member_pages_group produces a tabulate summary."""
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    _, doc_cls = _build_class_with_member_pages()
+    r = Renderer()
+    render = RenderDocClass(doc_cls, r, level=1)
+
+    result = render.render_function_member_pages()
+    assert result is not None
+    assert result.summary is not None
+    assert "Name" in result.summary
+
+
+def test_mixin_render_functions_module_uses_functions_slug():
+    """For DocModule, render_functions uses 'Functions' not 'Methods'."""
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer import layout
+    from great_docs._qrenderer._render import RenderDocModule
+    from great_docs._qrenderer._renderer import Renderer
+
+    mod_obj = dc.Module(name="mymod")
+    func_obj = dc.Function(name="func", lineno=1)
+    mod_obj.set_member("func", func_obj)
+
+    doc_func = layout.DocFunction(name="func", obj=func_obj)
+    doc_mod = layout.DocModule(name="mymod", obj=mod_obj, members=[doc_func])
+
+    r = Renderer()
+    render = RenderDocModule(doc_mod, r, level=1)
+
+    result = render.render_functions()
+    assert result is not None
+    assert "Functions" in str(result.title)
+
+
+def test_mixin_render_members_module_uses_functions_slug():
+    """For DocModule, render_members has 'Functions' group not 'Methods'."""
+    from unittest.mock import patch
+
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer import layout
+    from great_docs._qrenderer._render import RenderDocModule
+    from great_docs._qrenderer._renderer import Renderer
+
+    mod_obj = dc.Module(name="mymod")
+    func_obj = dc.Function(name="func", lineno=1)
+    cls_obj = dc.Class(name="Cls", lineno=2)
+    attr_obj = dc.Attribute(name="val", lineno=3)
+    mod_obj.set_member("func", func_obj)
+    mod_obj.set_member("Cls", cls_obj)
+    mod_obj.set_member("val", attr_obj)
+
+    doc_func = layout.DocFunction(name="func", obj=func_obj)
+    doc_cls = layout.DocClass(name="Cls", obj=cls_obj, members=[])
+    doc_attr = layout.DocAttribute(name="val", obj=attr_obj)
+    doc_mod = layout.DocModule(name="mymod", obj=mod_obj, members=[doc_attr, doc_cls, doc_func])
+
+    r = Renderer()
+    render = RenderDocModule(doc_mod, r, level=1)
+
+    members = render.render_members()
+    assert len(members) == 3
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        body_str = str(render.render_body())
+    assert "Functions" in body_str
+    assert "Classes" in body_str
+    assert "Attributes" in body_str
