@@ -31055,3 +31055,630 @@ def test_cli_main_entry_point():
     with patch("great_docs.cli.cli") as mock_cli:
         main()
         mock_cli.assert_called_once()
+
+
+# ── Tests for _qrenderer/_ast.py ─────────────────────────────────────────────
+
+# ── transform ────────────────────────────────────────────────────────────────
+
+
+def test_ast_transform_tuple_examples():
+    """transform() converts an examples tuple to ExampleCode."""
+    from great_docs._qrenderer._ast import ExampleCode, transform
+    from great_docs._qrenderer._griffe import docstrings as ds
+
+    kind_cls = type(ds.DocstringSectionText("x").kind)
+    result = transform((kind_cls["examples"], "print(1)"))
+    assert isinstance(result, ExampleCode)
+    assert result.value == "print(1)"
+
+
+def test_ast_transform_tuple_text():
+    """transform() converts a text tuple to ExampleText."""
+    from great_docs._qrenderer._ast import ExampleText, transform
+    from great_docs._qrenderer._griffe import docstrings as ds
+
+    kind_cls = type(ds.DocstringSectionText("x").kind)
+    result = transform((kind_cls["text"], "some description"))
+    assert isinstance(result, ExampleText)
+    assert result.value == "some description"
+
+
+def test_ast_transform_tuple_unsupported_passthrough():
+    """transform() returns unsupported tuple type unchanged when ValueError is raised."""
+    from great_docs._qrenderer._ast import transform
+    from great_docs._qrenderer._griffe import docstrings as ds
+
+    kind_cls = type(ds.DocstringSectionText("x").kind)
+    # 'parameters' kind is not handled by tuple_to_data, so ValueError → passthrough
+    result = transform((kind_cls["parameters"], "stuff"))
+    assert isinstance(result, tuple)
+    assert result == (kind_cls["parameters"], "stuff")
+
+
+def test_ast_transform_docstring_section_list():
+    """transform() processes a list of DocstringSection objects."""
+    from great_docs._qrenderer._ast import transform
+    from great_docs._qrenderer._griffe import docstrings as ds
+
+    sections = [ds.DocstringSectionText("Hello world")]
+    result = transform(sections)
+    assert isinstance(result, list)
+    assert len(result) >= 1
+
+
+def test_ast_transform_passthrough():
+    """transform() returns non-tuple, non-section-list unchanged."""
+    from great_docs._qrenderer._ast import transform
+
+    assert transform(42) == 42
+    assert transform("hello") == "hello"
+
+
+# ── tuple_to_data ────────────────────────────────────────────────────────────
+
+
+def test_ast_tuple_to_data_examples():
+    """tuple_to_data converts examples kind to ExampleCode."""
+    from great_docs._qrenderer._ast import ExampleCode, tuple_to_data
+    from great_docs._qrenderer._griffe import docstrings as ds
+
+    kind_cls = type(ds.DocstringSectionText("x").kind)
+    result = tuple_to_data((kind_cls["examples"], "x = 1"))
+    assert isinstance(result, ExampleCode)
+    assert result.value == "x = 1"
+
+
+def test_ast_tuple_to_data_text():
+    """tuple_to_data converts text kind to ExampleText."""
+    from great_docs._qrenderer._ast import ExampleText, tuple_to_data
+    from great_docs._qrenderer._griffe import docstrings as ds
+
+    kind_cls = type(ds.DocstringSectionText("x").kind)
+    result = tuple_to_data((kind_cls["text"], "description"))
+    assert isinstance(result, ExampleText)
+    assert result.value == "description"
+
+
+def test_ast_tuple_to_data_unsupported_raises():
+    """tuple_to_data raises ValueError for unsupported kinds."""
+    from great_docs._qrenderer._ast import tuple_to_data
+    from great_docs._qrenderer._griffe import docstrings as ds
+
+    kind_cls = type(ds.DocstringSectionText("x").kind)
+    with pytest.raises(ValueError, match="Unsupported"):
+        tuple_to_data((kind_cls["parameters"], "stuff"))
+
+
+# ── _DocstringSectionPatched ─────────────────────────────────────────────────
+
+
+def test_ast_split_sections_basic():
+    """split_sections parses numpydoc-style section headers."""
+    from great_docs._qrenderer._ast import _DocstringSectionPatched
+
+    text = "Preamble text\n\nSee Also\n--------\nSome reference\n\nNotes\n-----\nSome notes\n"
+    result = _DocstringSectionPatched.split_sections(text)
+    assert len(result) == 3
+    assert result[0][0] == ""  # preamble has no title
+    assert "Preamble" in result[0][1]
+    assert result[1][0] == "See Also"
+    assert "Some reference" in result[1][1]
+    assert result[2][0] == "Notes"
+    assert "Some notes" in result[2][1]
+
+
+def test_ast_split_sections_no_preamble():
+    """split_sections works when text starts with a section header."""
+    from great_docs._qrenderer._ast import _DocstringSectionPatched
+
+    text = "Notes\n-----\nThis is a note.\n"
+    result = _DocstringSectionPatched.split_sections(text)
+    assert len(result) == 1
+    assert result[0][0] == "Notes"
+
+
+def test_ast_split_sections_empty():
+    """split_sections returns empty list for text without sections."""
+    from great_docs._qrenderer._ast import _DocstringSectionPatched
+
+    result = _DocstringSectionPatched.split_sections("No sections here.")
+    assert result == []
+
+
+def test_ast_transform_docstring_section_text():
+    """transform() converts DocstringSectionText with known subsections."""
+    from great_docs._qrenderer._ast import (
+        DocstringSectionNotes,
+        DocstringSectionSeeAlso,
+        _DocstringSectionPatched,
+    )
+    from great_docs._qrenderer._griffe import docstrings as ds
+
+    text_section = ds.DocstringSectionText(
+        "See Also\n--------\nother_func\n\nNotes\n-----\nImportant note.\n"
+    )
+    result = _DocstringSectionPatched.transform(text_section)
+    assert len(result) == 2
+    assert isinstance(result[0], DocstringSectionSeeAlso)
+    assert isinstance(result[1], DocstringSectionNotes)
+
+
+def test_ast_transform_docstring_section_text_plain():
+    """transform() returns plain DocstringSectionText when no subsections found."""
+    from great_docs._qrenderer._ast import _DocstringSectionPatched
+    from great_docs._qrenderer._griffe import docstrings as ds
+
+    text_section = ds.DocstringSectionText("Just a plain paragraph.")
+    result = _DocstringSectionPatched.transform(text_section)
+    assert len(result) == 1
+    assert isinstance(result[0], ds.DocstringSectionText)
+
+
+def test_ast_transform_docstring_section_admonition_known():
+    """transform() converts DocstringSectionAdmonition with known title."""
+    from great_docs._qrenderer._ast import (
+        DocstringSectionWarnings,
+        _DocstringSectionPatched,
+    )
+    from great_docs._qrenderer._griffe import docstrings as ds
+
+    adm_section = ds.DocstringSectionAdmonition(
+        kind="warning", text="Be careful!", title="Warnings"
+    )
+    result = _DocstringSectionPatched.transform(adm_section)
+    assert len(result) == 1
+    assert isinstance(result[0], DocstringSectionWarnings)
+    assert result[0].value == "Be careful!"
+
+
+def test_ast_transform_docstring_section_admonition_unknown():
+    """transform() returns unknown DocstringSectionAdmonition unchanged."""
+    from great_docs._qrenderer._ast import _DocstringSectionPatched
+    from great_docs._qrenderer._griffe import docstrings as ds
+
+    adm_section = ds.DocstringSectionAdmonition(kind="custom", text="stuff", title="Custom Section")
+    result = _DocstringSectionPatched.transform(adm_section)
+    assert len(result) == 1
+    assert result[0] is adm_section  # returned as-is
+
+
+def test_ast_transform_docstring_section_passthrough():
+    """transform() returns non-text, non-admonition sections unchanged."""
+    from great_docs._qrenderer._ast import _DocstringSectionPatched
+    from great_docs._qrenderer._griffe import docstrings as ds
+
+    params_section = ds.DocstringSectionParameters([])
+    result = _DocstringSectionPatched.transform(params_section)
+    assert result == [params_section]
+
+
+def test_ast_transform_all():
+    """transform_all() processes list of mixed sections."""
+    from great_docs._qrenderer._ast import _DocstringSectionPatched
+    from great_docs._qrenderer._griffe import docstrings as ds
+
+    sections = [
+        ds.DocstringSectionText("Notes\n-----\nA note.\n"),
+        ds.DocstringSectionParameters([]),
+    ]
+    result = _DocstringSectionPatched.transform_all(sections)
+    assert len(result) >= 2  # at least the note + parameters
+
+
+# ── fields ───────────────────────────────────────────────────────────────────
+
+
+def test_ast_fields_example_code():
+    """fields() returns dataclass field names for ExampleCode."""
+    from great_docs._qrenderer._ast import ExampleCode, fields
+
+    ec = ExampleCode("print(1)")
+    result = fields(ec)
+    assert result == ["value"]
+
+
+def test_ast_fields_example_text():
+    """fields() returns dataclass field names for ExampleText."""
+    from great_docs._qrenderer._ast import ExampleText, fields
+
+    et = ExampleText("description")
+    result = fields(et)
+    assert result == ["value"]
+
+
+def test_ast_fields_function():
+    """fields() returns expected fields for dc.Function."""
+    from great_docs._qrenderer._ast import fields
+    from great_docs._qrenderer._griffe import dataclasses as dc
+
+    func = dc.Function(name="my_func", lineno=1)
+    result = fields(func)
+    assert result == ["name", "annotation", "parameters", "docstring"]
+
+
+def test_ast_fields_attribute():
+    """fields() returns expected fields for dc.Attribute."""
+    from great_docs._qrenderer._ast import fields
+    from great_docs._qrenderer._griffe import dataclasses as dc
+
+    attr = dc.Attribute(name="x", lineno=1)
+    result = fields(attr)
+    assert result == ["name", "annotation"]
+
+
+def test_ast_fields_docstring():
+    """fields() returns expected fields for dc.Docstring."""
+    from great_docs._qrenderer._ast import fields
+    from great_docs._qrenderer._griffe import dataclasses as dc
+
+    ds_obj = dc.Docstring("Hello", parser="numpy")
+    result = fields(ds_obj)
+    assert result == ["parser", "parsed"]
+
+
+def test_ast_fields_parameter():
+    """fields() returns expected fields for dc.Parameter."""
+    from great_docs._qrenderer._ast import fields
+    from great_docs._qrenderer._griffe import dataclasses as dc
+
+    param = dc.Parameter(name="x")
+    result = fields(param)
+    assert result == ["annotation", "kind", "name", "default"]
+
+
+def test_ast_fields_docstring_parameter():
+    """fields() returns expected fields for ds.DocstringParameter."""
+    from great_docs._qrenderer._ast import fields
+    from great_docs._qrenderer._griffe import docstrings as ds
+
+    dp = ds.DocstringParameter(name="x", description="a number", annotation="int")
+    result = fields(dp)
+    assert result == ["annotation", "default", "description", "name", "value"]
+
+
+def test_ast_fields_docstring_named_element():
+    """fields() returns expected fields for ds.DocstringNamedElement."""
+    from great_docs._qrenderer._ast import fields
+    from great_docs._qrenderer._griffe import docstrings as ds
+
+    ne = ds.DocstringNamedElement(name="x", description="desc")
+    result = fields(ne)
+    assert result == ["name", "annotation", "description"]
+
+
+def test_ast_fields_docstring_section():
+    """fields() returns expected fields for ds.DocstringSection."""
+    from great_docs._qrenderer._ast import fields
+    from great_docs._qrenderer._griffe import docstrings as ds
+
+    sec = ds.DocstringSectionText("hello")
+    result = fields(sec)
+    assert result == ["kind", "title", "value"]
+
+
+def test_ast_fields_alias():
+    """fields() follows alias target for dc.Alias."""
+    from great_docs._qrenderer._ast import fields
+    from great_docs._qrenderer._griffe import dataclasses as dc
+
+    mod = dc.Module(name="testmod")
+    func = dc.Function(name="f", lineno=1)
+    mod.set_member("f", func)
+    alias = dc.Alias("f", func, parent=mod)
+    result = fields(alias)
+    # Should match fields of the target (Function)
+    assert result == ["name", "annotation", "parameters", "docstring"]
+
+
+def test_ast_fields_alias_unresolvable():
+    """fields() warns and returns fallback for unresolvable alias."""
+    import warnings
+
+    from griffe import ModulesCollection
+
+    from great_docs._qrenderer._ast import fields
+    from great_docs._qrenderer._griffe import dataclasses as dc
+
+    mc = ModulesCollection()
+    mod = dc.Module(name="testmod")
+    mc["testmod"] = mod
+
+    alias = dc.Alias("missing_target", "nonexistent.module.func", parent=mod)
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        result = fields(alias)
+    assert result == ["name", "target_path"]
+    assert len(w) >= 1
+    assert "Could not resolve" in str(w[0].message)
+
+
+def test_ast_fields_object():
+    """fields() returns discovered attributes for dc.Object (Module)."""
+    from great_docs._qrenderer._ast import fields
+    from great_docs._qrenderer._griffe import dataclasses as dc
+
+    mod = dc.Module(name="mymod")
+    result = fields(mod)
+    assert "name" in result
+    assert "members" in result
+    assert "docstring" in result
+
+
+def test_ast_fields_layout_base():
+    """fields() returns non-default fields for a LayoutBase subclass."""
+    from great_docs._qrenderer._ast import fields
+    from great_docs._qrenderer.layout import Auto
+
+    auto = Auto(name="my_func")
+    result = fields(auto)
+    assert "name" in result
+
+
+def test_ast_fields_dict():
+    """fields() returns dict keys."""
+    from great_docs._qrenderer._ast import fields
+
+    result = fields({"a": 1, "b": 2})
+    assert result == ["a", "b"]
+
+
+def test_ast_fields_list():
+    """fields() returns list indices."""
+    from great_docs._qrenderer._ast import fields
+
+    result = fields([10, 20, 30])
+    assert result == [0, 1, 2]
+
+
+def test_ast_fields_parameters():
+    """fields() returns indices for dc.Parameters."""
+    from great_docs._qrenderer._ast import fields
+    from great_docs._qrenderer._griffe import dataclasses as dc
+
+    params = dc.Parameters(dc.Parameter(name="a"), dc.Parameter(name="b"))
+    result = fields(params)
+    assert result == [0, 1]
+
+
+def test_ast_fields_none_for_unknown():
+    """fields() returns None for unrecognized types."""
+    from great_docs._qrenderer._ast import fields
+
+    assert fields(42) is None
+    assert fields("hello") is None
+    assert fields(3.14) is None
+
+
+# ── Formatter ────────────────────────────────────────────────────────────────
+
+
+def test_ast_formatter_format_simple_string():
+    """Formatter.format returns repr for leaf values."""
+    from great_docs._qrenderer._ast import Formatter
+
+    f = Formatter()
+    result = f.format("hello")
+    assert result == "'hello'"
+
+
+def test_ast_formatter_format_long_string_truncated():
+    """Formatter.format truncates long strings."""
+    from great_docs._qrenderer._ast import Formatter
+
+    f = Formatter(string_max_length=10)
+    result = f.format("a" * 100)
+    assert len(result) <= 20  # truncated
+    assert result.endswith(" ...")
+
+
+def test_ast_formatter_format_example_code():
+    """Formatter.format renders ExampleCode as a tree node."""
+    from great_docs._qrenderer._ast import ExampleCode, Formatter
+
+    f = Formatter()
+    ec = ExampleCode("x = 1")
+    result = f.format(ec)
+    assert "ExampleCode" in result
+    assert "value" in result
+    assert "x = 1" in result
+
+
+def test_ast_formatter_format_max_depth():
+    """Formatter.format stops recursing at max_depth."""
+    from great_docs._qrenderer._ast import ExampleCode, Formatter
+
+    f = Formatter(max_depth=0)
+    ec = ExampleCode("x = 1")
+    result = f.format(ec)
+    assert "ExampleCode" in result
+    assert " ..." in result
+    assert "value" not in result
+
+
+def test_ast_formatter_format_compact():
+    """Formatter.format works in compact mode."""
+    from great_docs._qrenderer._ast import ExampleCode, Formatter
+
+    f = Formatter(compact=True)
+    ec = ExampleCode("x = 1")
+    result = f.format(ec)
+    assert "ExampleCode" in result
+    assert "value" in result
+
+
+def test_ast_formatter_get_field_dict():
+    """Formatter.get_field retrieves dict values."""
+    from great_docs._qrenderer._ast import Formatter
+
+    f = Formatter()
+    assert f.get_field({"a": 1}, "a") == 1
+
+
+def test_ast_formatter_get_field_list():
+    """Formatter.get_field retrieves list values by index."""
+    from great_docs._qrenderer._ast import Formatter
+
+    f = Formatter()
+    assert f.get_field([10, 20, 30], 1) == 20
+
+
+def test_ast_formatter_get_field_object():
+    """Formatter.get_field retrieves object attributes."""
+    from great_docs._qrenderer._ast import ExampleCode, Formatter
+
+    f = Formatter()
+    ec = ExampleCode("x = 1")
+    assert f.get_field(ec, "value") == "x = 1"
+
+
+def test_ast_formatter_fmt_pipe_middle():
+    """Formatter.fmt_pipe formats middle entries with pipe prefix."""
+    from great_docs._qrenderer._ast import Formatter
+
+    f = Formatter()
+    result = f.fmt_pipe("name = 'hello'", is_final=False)
+    assert f.icon_pipe in result
+
+
+def test_ast_formatter_fmt_pipe_final():
+    """Formatter.fmt_pipe formats final entries with endpipe."""
+    from great_docs._qrenderer._ast import Formatter
+
+    f = Formatter()
+    result = f.fmt_pipe("name = 'hello'", is_final=True)
+    assert f.icon_endpipe in result
+
+
+def test_ast_formatter_fmt_pipe_with_pad():
+    """Formatter.fmt_pipe applies padding."""
+    from great_docs._qrenderer._ast import Formatter
+
+    f = Formatter()
+    result = f.fmt_pipe("value = 1", is_final=True, pad=5)
+    assert "     " in result
+
+
+def test_ast_formatter_format_griffe_function():
+    """Formatter.format renders a griffe Function as a tree."""
+    from great_docs._qrenderer._ast import Formatter
+    from great_docs._qrenderer._griffe import dataclasses as dc
+
+    f = Formatter()
+    func = dc.Function(name="my_func", lineno=1)
+    result = f.format(func)
+    assert "Function" in result
+    assert "my_func" in result
+
+
+def test_ast_formatter_format_dict():
+    """Formatter.format renders a dict as a tree."""
+    from great_docs._qrenderer._ast import Formatter
+
+    f = Formatter()
+    result = f.format({"key1": "val1", "key2": "val2"})
+    assert "dict" in result
+    assert "key1" in result
+
+
+def test_ast_formatter_format_nested():
+    """Formatter.format handles nested structures."""
+    from great_docs._qrenderer._ast import Formatter
+    from great_docs._qrenderer._griffe import dataclasses as dc
+
+    f = Formatter()
+    func = dc.Function(
+        name="my_func",
+        lineno=1,
+        docstring=dc.Docstring("A docstring", parser="numpy"),
+    )
+    result = f.format(func)
+    assert "Function" in result
+    assert "Docstring" in result
+
+
+# ── preview ──────────────────────────────────────────────────────────────────
+
+
+def test_ast_preview_print(capsys):
+    """preview() prints the formatted tree."""
+    from great_docs._qrenderer._ast import ExampleCode, preview
+
+    preview(ExampleCode("x = 1"))
+    captured = capsys.readouterr()
+    assert "ExampleCode" in captured.out
+
+
+def test_ast_preview_as_string():
+    """preview(as_string=True) returns the tree as a string."""
+    from great_docs._qrenderer._ast import ExampleCode, preview
+
+    result = preview(ExampleCode("x = 1"), as_string=True)
+    assert isinstance(result, str)
+    assert "ExampleCode" in result
+
+
+def test_ast_preview_max_depth():
+    """preview() respects max_depth parameter."""
+    from great_docs._qrenderer._ast import ExampleCode, preview
+
+    result = preview(ExampleCode("x = 1"), max_depth=0, as_string=True)
+    assert "ExampleCode" in result
+    assert " ..." in result
+
+
+def test_ast_preview_compact():
+    """preview() respects compact parameter."""
+    from great_docs._qrenderer._ast import ExampleCode, preview
+
+    result = preview(ExampleCode("x = 1"), compact=True, as_string=True)
+    assert "ExampleCode" in result
+
+
+# ── DocstringSectionPatched subclasses ───────────────────────────────────────
+
+
+def test_ast_docstring_section_see_also():
+    """DocstringSectionSeeAlso has correct kind."""
+    from great_docs._qrenderer._ast import (
+        DocstringSectionKindPatched,
+        DocstringSectionSeeAlso,
+    )
+
+    sec = DocstringSectionSeeAlso("content", "See Also")
+    assert sec.kind == DocstringSectionKindPatched.see_also
+    assert sec.value == "content"
+
+
+def test_ast_docstring_section_notes():
+    """DocstringSectionNotes has correct kind."""
+    from great_docs._qrenderer._ast import (
+        DocstringSectionKindPatched,
+        DocstringSectionNotes,
+    )
+
+    sec = DocstringSectionNotes("content", "Notes")
+    assert sec.kind == DocstringSectionKindPatched.notes
+
+
+def test_ast_docstring_section_warnings():
+    """DocstringSectionWarnings has correct kind."""
+    from great_docs._qrenderer._ast import (
+        DocstringSectionKindPatched,
+        DocstringSectionWarnings,
+    )
+
+    sec = DocstringSectionWarnings("content", "Warnings")
+    assert sec.kind == DocstringSectionKindPatched.warnings
+
+
+def test_ast_fields_docstring_element():
+    """fields() returns expected fields for ds.DocstringElement."""
+    from great_docs._qrenderer._ast import fields
+    from great_docs._qrenderer._griffe import docstrings as ds
+
+    # DocstringElement is the base; DocstringReturn is a subclass not matching
+    # DocstringNamedElement or DocstringParameter
+    elem = ds.DocstringElement(annotation="int", description="returns an int")
+    result = fields(elem)
+    assert result == ["annotation", "description"]
