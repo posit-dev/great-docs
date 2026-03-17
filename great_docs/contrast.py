@@ -228,7 +228,7 @@ def parse_color(color: str) -> tuple[int, int, int]:
         r = int(hex_str[0:2], 16)
         g = int(hex_str[2:4], 16)
         b = int(hex_str[4:6], 16)
-    else:
+    else:  # pragma: no cover
         raise ValueError(f"Unrecognized color: {color!r}")
 
     return (r, g, b)

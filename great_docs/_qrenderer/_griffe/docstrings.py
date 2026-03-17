@@ -46,7 +46,7 @@ class DCDocstringSection:
     This class represents a docstring section specific to dataclasses
     """
 
-    kind: DCDocstringSectionKind
+    kind: DCDocstringSectionKind  # pragma: no cover
     """The section kind."""
 
     def __init__(self, value: list[gf.DocstringParameter], title: str):

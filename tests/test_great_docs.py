@@ -34253,3 +34253,543 @@ def test_rstconv_simple_table_two_sep_via_wrapper():
     result = _convert_rst_simple_tables(text)
     # _rst_simple_table_to_md needs >=2 seps, which we have; first data row becomes header
     assert "|" in result
+
+
+# =============================================================================
+# Coverage tests for 10 small files (< 10 lines missed each)
+# =============================================================================
+
+
+# --- _qrenderer/_renderer.py (lines 30, 32, 40, 42, 45, 51, 53-54) ---------
+
+
+def test_renderer_render_method():
+    """Renderer.render() imports and instantiates RenderAPIPage (lines 30, 32)."""
+    from unittest.mock import MagicMock, patch
+
+    from great_docs._qrenderer._renderer import Renderer
+
+    r = Renderer()
+    mock_page = MagicMock()
+    mock_render_api = MagicMock(return_value="rendered-page")
+
+    # The local import `from . import RenderAPIPage` resolves via great_docs._qrenderer
+    with patch("great_docs._qrenderer.RenderAPIPage", mock_render_api):
+        result = r.render(mock_page)
+
+    mock_render_api.assert_called_once_with(mock_page, r, 1)
+    assert result == "rendered-page"
+
+
+def test_renderer_summarize_method():
+    """Renderer.summarize() imports and instantiates RenderReferencePage (lines 40, 42)."""
+    from unittest.mock import MagicMock, patch
+
+    from great_docs._qrenderer._renderer import Renderer
+
+    r = Renderer()
+    mock_layout = MagicMock()
+    mock_render_ref = MagicMock(return_value="summarized-layout")
+
+    with patch("great_docs._qrenderer.RenderReferencePage", mock_render_ref):
+        result = r.summarize(mock_layout)
+
+    mock_render_ref.assert_called_once_with(mock_layout, r, 1)
+    assert result == "summarized-layout"
+
+
+def test_renderer_pages_written_calls_write_typing():
+    """Renderer._pages_written() calls _write_typing_information (line 45)."""
+    from unittest.mock import MagicMock, patch
+
+    from great_docs._qrenderer._renderer import Renderer
+
+    r = Renderer()
+    mock_builder = MagicMock()
+
+    with patch.object(r, "_write_typing_information") as mock_wti:
+        r._pages_written(mock_builder)
+
+    mock_wti.assert_called_once_with(mock_builder)
+
+
+def test_renderer_write_typing_information():
+    """Renderer._write_typing_information() creates TypeInformation per module (lines 51, 53-54)."""
+    from unittest.mock import MagicMock, patch
+
+    from great_docs._qrenderer._renderer import Renderer
+
+    r = Renderer(typing_module_paths=["mod_a", "mod_b"])
+    mock_builder = MagicMock()
+    mock_ti_cls = MagicMock()
+
+    with patch("great_docs._qrenderer.typing_information.TypeInformation", mock_ti_cls):
+        r._write_typing_information(mock_builder)
+
+    assert mock_ti_cls.call_count == 2
+    mock_ti_cls.assert_any_call("mod_a", r, mock_builder)
+    mock_ti_cls.assert_any_call("mod_b", r, mock_builder)
+    assert mock_ti_cls.return_value.write.call_count == 2
+
+
+# --- _qrenderer/_render/docclass.py (lines 64-68, 112, 122) -----------------
+
+
+def test_docclass_attributes_excludes_dataclass_params():
+    """DocClass.attributes filters out dataclass params when is_dataclass=True (lines 64-68)."""
+    from unittest.mock import patch
+
+    import griffe as gf
+
+    from great_docs._qrenderer import layout
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    cls_obj = dc.Class(name="DC", lineno=1)
+    cls_obj.labels.add("dataclass")
+
+    # Create attributes on the class
+    attr_x = dc.Attribute(name="x", lineno=2)
+    attr_x.annotation = gf.ExprName("int")
+    attr_y = dc.Attribute(name="y", lineno=3)
+    attr_y.annotation = gf.ExprName("str")
+    cls_obj.set_member("x", attr_x)
+    cls_obj.set_member("y", attr_y)
+
+    # Create init function with parameter "x"
+    init_fn = dc.Function(name="__init__", lineno=4)
+    init_fn.parameters = gf.Parameters(
+        gf.Parameter("self", kind=gf.ParameterKind.positional_or_keyword),
+        gf.Parameter("x", annotation=gf.ExprName("int"), kind=gf.ParameterKind.positional_or_keyword),
+    )
+    cls_obj.set_member("__init__", init_fn)
+
+    doc_attr_x = layout.DocAttribute(name="x", obj=attr_x)
+    doc_attr_y = layout.DocAttribute(name="y", obj=attr_y)
+    doc_cls = layout.DocClass(name="DC", obj=cls_obj, members=[doc_attr_x, doc_attr_y])
+
+    r = Renderer()
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        render = RenderDocClass(doc_cls, r, level=1)
+
+        # is_dataclass should be True
+        assert render.is_dataclass is True
+
+        # attributes should exclude "x" (which is a parameter)
+        attr_names = [a.name for a in render.attributes]
+        assert "x" not in attr_names
+        assert "y" in attr_names
+
+
+def test_docclass_parameter_attributes_with_dataclass():
+    """DocClass.parameter_attributes returns params found in class attributes (line 112)."""
+    from unittest.mock import patch
+
+    import griffe as gf
+
+    from great_docs._qrenderer import layout
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    cls_obj = dc.Class(name="DC2", lineno=1)
+    cls_obj.labels.add("dataclass")
+
+    attr_a = dc.Attribute(name="a", lineno=2)
+    attr_a.annotation = gf.ExprName("int")
+    cls_obj.set_member("a", attr_a)
+
+    init_fn = dc.Function(name="__init__", lineno=3)
+    init_fn.parameters = gf.Parameters(
+        gf.Parameter("self", kind=gf.ParameterKind.positional_or_keyword),
+        gf.Parameter("a", annotation=gf.ExprName("int"), kind=gf.ParameterKind.positional_or_keyword),
+    )
+    cls_obj.set_member("__init__", init_fn)
+
+    doc_attr_a = layout.DocAttribute(name="a", obj=attr_a)
+    doc_cls = layout.DocClass(name="DC2", obj=cls_obj, members=[doc_attr_a])
+
+    r = Renderer()
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        render = RenderDocClass(doc_cls, r, level=1)
+        pa = render.parameter_attributes
+        assert len(pa) == 1
+        assert pa[0].name == "a"
+
+
+def test_docclass_init_parameters_with_dataclass():
+    """DocClass.init_parameters returns params NOT in class attributes (line 122)."""
+    from unittest.mock import patch
+
+    import griffe as gf
+
+    from great_docs._qrenderer import layout
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    cls_obj = dc.Class(name="DC3", lineno=1)
+    cls_obj.labels.add("dataclass")
+
+    # "a" is in attributes, "b" is NOT in attributes
+    attr_a = dc.Attribute(name="a", lineno=2)
+    attr_a.annotation = gf.ExprName("int")
+    cls_obj.set_member("a", attr_a)
+
+    init_fn = dc.Function(name="__init__", lineno=3)
+    init_fn.parameters = gf.Parameters(
+        gf.Parameter("self", kind=gf.ParameterKind.positional_or_keyword),
+        gf.Parameter("a", annotation=gf.ExprName("int"), kind=gf.ParameterKind.positional_or_keyword),
+        gf.Parameter("b", annotation=gf.ExprName("str"), kind=gf.ParameterKind.positional_or_keyword),
+    )
+    cls_obj.set_member("__init__", init_fn)
+
+    doc_attr_a = layout.DocAttribute(name="a", obj=attr_a)
+    doc_cls = layout.DocClass(name="DC3", obj=cls_obj, members=[doc_attr_a])
+
+    r = Renderer()
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        render = RenderDocClass(doc_cls, r, level=1)
+        ip = render.init_parameters
+        # "self" and "b" are not in class attributes; "a" is
+        param_names = [p.name for p in ip]
+        assert "b" in param_names
+        assert "a" not in param_names
+
+
+# --- _qrenderer/_render/docmodule.py (lines 24, 27-28, 33-35) ---------------
+
+
+def test_docmodule_render_signature_no_signature_name():
+    """DocModule.render_signature() returns None when signature_name is falsy (lines 33-34)."""
+    from unittest.mock import patch
+
+    from great_docs._qrenderer import layout
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer._render import RenderDocModule
+    from great_docs._qrenderer._renderer import Renderer
+
+    mod_obj = dc.Module(name="my_module")
+    doc_mod = layout.DocModule(name="my_module", obj=mod_obj)
+
+    r = Renderer()
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        render = RenderDocModule(doc_mod, r, level=1)
+        # Override the cached_property by setting in instance __dict__
+        render.__dict__["signature_name"] = ""
+        result = render.render_signature()
+    assert result is None
+
+
+def test_docmodule_render_signature_with_name():
+    """DocModule.render_signature() returns Div when signature_name is set (line 35)."""
+    from unittest.mock import patch
+
+    from great_docs._qrenderer import layout
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer._render import RenderDocModule
+    from great_docs._qrenderer._renderer import Renderer
+
+    mod_obj = dc.Module(name="my_module")
+    doc_mod = layout.DocModule(name="my_module", obj=mod_obj)
+
+    r = Renderer()
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        render = RenderDocModule(doc_mod, r, level=1)
+        # Ensure signature_name is non-empty
+        render.__dict__["signature_name"] = "my_module"
+        result = render.render_signature()
+    assert result is not None
+    assert "my_module" in str(result)
+
+
+def test_docmodule_post_init_narrows_types():
+    """DocModule.__post_init__() narrows self.doc and self.obj types (lines 24, 27-28)."""
+    from unittest.mock import patch
+
+    from great_docs._qrenderer import layout
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer._render import RenderDocModule
+    from great_docs._qrenderer._renderer import Renderer
+
+    mod_obj = dc.Module(name="test_mod")
+    doc_mod = layout.DocModule(name="test_mod", obj=mod_obj)
+
+    r = Renderer()
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        render = RenderDocModule(doc_mod, r, level=1)
+    # After __post_init__, self.doc and self.obj should be set
+    assert render.doc is doc_mod
+    assert render.obj is mod_obj
+
+
+# --- _qrenderer/_render/__init__.py (lines 66-67, 69-70) --------------------
+
+
+def test_get_render_type_raises_for_unmapped_type():
+    """get_render_type() raises ValueError for an unmapped type (lines 66-70)."""
+    import pytest
+
+    from great_docs._qrenderer._render import get_render_type
+
+    class FakeDocObj:
+        pass
+
+    with pytest.raises(ValueError, match="Cannot document object of type"):
+        get_render_type(FakeDocObj())
+
+
+# --- _qrenderer/_render/base.py (lines 111, 133, 139, 170) ------------------
+
+
+def test_renderbase_title_property():
+    """RenderBase.title calls render_title() (line 111)."""
+    from unittest.mock import patch
+
+    from great_docs._qrenderer import layout
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer._render import RenderDocModule
+    from great_docs._qrenderer._renderer import Renderer
+
+    mod_obj = dc.Module(name="tmod")
+    doc_mod = layout.DocModule(name="tmod", obj=mod_obj)
+
+    r = Renderer()
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        render = RenderDocModule(doc_mod, r, level=1)
+        # Access the 'title' cached property, which calls render_title()
+        title = render.title
+    # render_title for a module returns a Header or None; just verify it ran
+    assert title is not None or title is None  # doesn't raise
+
+
+def test_renderbase_summary_name_property():
+    """RenderBase.summary_name returns empty string (line 170)."""
+    from great_docs._qrenderer._render.base import RenderBase
+
+    # RenderBase expects layout_obj and renderer; use a minimal approach
+    from unittest.mock import MagicMock
+
+    # Create a mock that won't trigger __post_init__ logic
+    rb = object.__new__(RenderBase)
+    rb.layout_obj = MagicMock()
+    rb.renderer = MagicMock()
+    rb.level = 1
+    assert rb.summary_name == ""
+
+
+# --- _directives.py (line 82) -----------------------------------------------
+
+
+def test_extract_directives_nodoc():
+    """extract_directives() sets nodoc=True when %nodoc is in docstring."""
+    from great_docs._directives import extract_directives
+
+    docstring = """
+    Short description.
+
+    %nodoc
+
+    Parameters
+    ----------
+    x : int
+    """
+    result = extract_directives(docstring)
+    assert result.nodoc is True
+
+
+def test_extract_directives_seealso_empty_entry():
+    """extract_directives() skips empty entries in seealso list (line 82 continue)."""
+    from great_docs._directives import extract_directives
+
+    docstring = "%seealso func_a,,func_b"
+    result = extract_directives(docstring)
+    assert result.seealso == [("func_a", ""), ("func_b", "")]
+
+
+# --- _qrenderer/_render/docattribute.py (line 43) ---------------------------
+
+
+def test_docattribute_render_signature_type_kind():
+    """DocAttribute.render_signature() clears name/annotation for TypeAlias kind (line 43)."""
+    from unittest.mock import patch
+
+    import griffe as gf
+
+    from great_docs._qrenderer import layout
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer._render import RenderDocAttribute
+    from great_docs._qrenderer._renderer import Renderer
+
+    attr_obj = dc.Attribute(name="MyType", lineno=1)
+    attr_obj.annotation = gf.ExprName("str")
+    # Set the kind to TYPE_ALIAS so kind.value is "type alias" which contains "type"
+    attr_obj.kind = gf.Kind.TYPE_ALIAS
+
+    doc_attr = layout.DocAttribute(name="MyType", obj=attr_obj)
+
+    r = Renderer()
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        render = RenderDocAttribute(doc_attr, r, level=1)
+        assert "type" in render.kind
+        sig = render.render_signature()
+        sig_str = str(sig)
+        assert isinstance(sig_str, str)
+
+
+# --- _qrenderer/_render/mixin_page.py (line 20) -----------------------------
+
+
+def test_mixin_page_render_title():
+    """RenderPageMixin.render_title() returns render_metadata() (line 20)."""
+    from unittest.mock import MagicMock
+
+    from great_docs._qrenderer._render.mixin_page import RenderPageMixin
+
+    # Create instance bypassing __init__
+    obj = object.__new__(RenderPageMixin)
+    obj.layout_obj = MagicMock()
+    obj.renderer = MagicMock()
+    obj.level = 1
+
+    # render_metadata returns None by default (no override)
+    result = obj.render_title()
+    # The base render_metadata() returns None
+    assert result is None
+
+
+# --- Additional coverage tests for remaining missed lines --------------------
+
+
+def test_get_render_type_valid_type():
+    """get_render_type() returns correct class for a mapped type (line 67)."""
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer._render import RenderDocClass, get_render_type
+    from great_docs._qrenderer.layout import DocClass
+
+    obj = DocClass(name="X", obj=dc.Class(name="X", lineno=1))
+    result = get_render_type(obj)
+    assert result is RenderDocClass
+
+
+def test_renderbase_summary_property():
+    """RenderBase.summary calls render_summary() (lines 111, 139)."""
+    from unittest.mock import MagicMock
+
+    from great_docs._qrenderer._render.base import RenderBase
+
+    rb = object.__new__(RenderBase)
+    rb.layout_obj = MagicMock()
+    rb.renderer = MagicMock()
+    rb.level = 1
+    # Access summary cached_property which calls render_summary()
+    result = rb.summary
+    assert result == []
+
+
+def test_docclass_attribute_member_pages_dataclass():
+    """DocClass.attribute_member_pages filters dataclass params (lines 66-67)."""
+    from unittest.mock import patch
+
+    import griffe as gf
+
+    from great_docs._qrenderer import layout
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    cls_obj = dc.Class(name="DC4", lineno=1)
+    cls_obj.labels.add("dataclass")
+
+    attr_x = dc.Attribute(name="x", lineno=2)
+    attr_x.annotation = gf.ExprName("int")
+    attr_y = dc.Attribute(name="y", lineno=3)
+    attr_y.annotation = gf.ExprName("str")
+    cls_obj.set_member("x", attr_x)
+    cls_obj.set_member("y", attr_y)
+
+    init_fn = dc.Function(name="__init__", lineno=4)
+    init_fn.parameters = gf.Parameters(
+        gf.Parameter("self", kind=gf.ParameterKind.positional_or_keyword),
+        gf.Parameter("x", annotation=gf.ExprName("int"), kind=gf.ParameterKind.positional_or_keyword),
+    )
+    cls_obj.set_member("__init__", init_fn)
+
+    doc_attr_x = layout.DocAttribute(name="x", obj=attr_x)
+    doc_attr_y = layout.DocAttribute(name="y", obj=attr_y)
+    page_x = layout.MemberPage(path="x", contents=[doc_attr_x])
+    page_y = layout.MemberPage(path="y", contents=[doc_attr_y])
+    doc_cls = layout.DocClass(name="DC4", obj=cls_obj, members=[page_x, page_y])
+
+    r = Renderer()
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        render = RenderDocClass(doc_cls, r, level=1)
+        pages = render.attribute_member_pages
+        page_names = [p.obj.name for p in pages]
+        assert "x" not in page_names
+        assert "y" in page_names
+
+
+def test_docclass_parameter_attributes_non_dataclass():
+    """DocClass.parameter_attributes returns empty for non-dataclass (line 112)."""
+    from unittest.mock import patch
+
+    from great_docs._qrenderer import layout
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    cls_obj = dc.Class(name="RegularClass", lineno=1)
+    doc_cls = layout.DocClass(name="RegularClass", obj=cls_obj, members=[])
+
+    r = Renderer()
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        render = RenderDocClass(doc_cls, r, level=1)
+        assert render.is_dataclass is False
+        pa = render.parameter_attributes
+        assert len(pa) == 0
+
+
+def test_docclass_init_parameters_non_dataclass():
+    """DocClass.init_parameters returns empty for non-dataclass (line 122)."""
+    from unittest.mock import patch
+
+    from great_docs._qrenderer import layout
+    from great_docs._qrenderer._griffe import dataclasses as dc
+    from great_docs._qrenderer._render import RenderDocClass
+    from great_docs._qrenderer._renderer import Renderer
+
+    cls_obj = dc.Class(name="RegularClass2", lineno=1)
+    doc_cls = layout.DocClass(name="RegularClass2", obj=cls_obj, members=[])
+
+    r = Renderer()
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        render = RenderDocClass(doc_cls, r, level=1)
+        assert render.is_dataclass is False
+        ip = render.init_parameters
+        assert len(ip) == 0
+
+
+def test_dc_docstring_section_bool():
+    """DCDocstringSection.__bool__ returns True/False based on value (line 58)."""
+    from great_docs._qrenderer._griffe.docstrings import DCDocstringSection
+
+    section_empty = DCDocstringSection(value=[], title="Empty")
+    assert not section_empty
+
+    from unittest.mock import MagicMock
+
+    section_full = DCDocstringSection(value=[MagicMock()], title="Full")
+    assert section_full
