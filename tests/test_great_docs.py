@@ -6420,6 +6420,1147 @@ class TestRendererIsNonCallableClass:
 
 
 # ============================================================================
+# MdRenderer Coverage Tests
+# ============================================================================
+
+
+class TestEnsureBlankBeforeLists:
+    """_ensure_blank_before_lists inserts blank lines before list items."""
+
+    def test_inserts_blank_before_list_after_prose(self):
+        from great_docs._qrenderer._md_renderer import _ensure_blank_before_lists
+
+        text = "Some text\n- item one\n- item two"
+        result = _ensure_blank_before_lists(text)
+        assert result == "Some text\n\n- item one\n- item two"
+
+    def test_no_insert_when_already_blank(self):
+        from great_docs._qrenderer._md_renderer import _ensure_blank_before_lists
+
+        text = "Some text\n\n- item one"
+        result = _ensure_blank_before_lists(text)
+        assert result == text
+
+    def test_numbered_list(self):
+        from great_docs._qrenderer._md_renderer import _ensure_blank_before_lists
+
+        text = "Paragraph\n1. First\n2. Second"
+        result = _ensure_blank_before_lists(text)
+        assert result == "Paragraph\n\n1. First\n2. Second"
+
+    def test_list_at_start(self):
+        from great_docs._qrenderer._md_renderer import _ensure_blank_before_lists
+
+        text = "- first item\n- second"
+        result = _ensure_blank_before_lists(text)
+        # No blank inserted at very start
+        assert result == text
+
+    def test_star_list(self):
+        from great_docs._qrenderer._md_renderer import _ensure_blank_before_lists
+
+        text = "Hello\n* bullet"
+        result = _ensure_blank_before_lists(text)
+        assert result == "Hello\n\n* bullet"
+
+
+class TestConvertRstLinkToMd:
+    """convert_rst_link_to_md wraps RST cross-references in []()."""
+
+    def test_basic_rst_link(self):
+        from great_docs._qrenderer._md_renderer import convert_rst_link_to_md
+
+        rst = ":func:`some_func`"
+        result = convert_rst_link_to_md(rst)
+        assert "[](" in result
+
+    def test_no_rst_link_unchanged(self):
+        from great_docs._qrenderer._md_renderer import convert_rst_link_to_md
+
+        text = "Just plain text."
+        result = convert_rst_link_to_md(text)
+        assert result == text
+
+
+class TestSimpleTable:
+    """_simple_table produces a markdown table."""
+
+    def test_basic_table(self):
+        from great_docs._qrenderer._md_renderer import _simple_table
+
+        result = _simple_table([("a", "b"), ("c", "d")], ["H1", "H2"])
+        assert "| H1 | H2 |" in result
+        assert "| --- | --- |" in result
+        assert "| a | b |" in result
+        assert "| c | d |" in result
+
+
+class TestHasAttrSection:
+    """_has_attr_section checks whether a docstring has an Attributes section."""
+
+    def test_none_docstring(self):
+        from great_docs._qrenderer._md_renderer import _has_attr_section
+
+        assert _has_attr_section(None) is False
+
+    def test_with_attributes(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import _has_attr_section
+
+        docstring = MagicMock()
+        docstring.parsed = [ds.DocstringSectionAttributes(value=[])]
+        assert _has_attr_section(docstring) is True
+
+    def test_without_attributes(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import _has_attr_section
+
+        docstring = MagicMock()
+        docstring.parsed = [ds.DocstringSectionText(value="Hello")]
+        assert _has_attr_section(docstring) is False
+
+
+class TestSanitizeTitle:
+    """_sanitize_title strips non-alphanumeric characters."""
+
+    def test_basic(self):
+        from great_docs._qrenderer._md_renderer import _sanitize_title
+
+        assert _sanitize_title("See Also") == "See-Also"
+
+    def test_special_chars(self):
+        from great_docs._qrenderer._md_renderer import _sanitize_title
+
+        assert _sanitize_title("Hello World!") == "Hello-World"
+
+
+class TestGetParamDescriptions:
+    """_get_param_descriptions extracts descriptions from docstring."""
+
+    def test_no_docstring(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer._md_renderer import _get_param_descriptions
+
+        obj = MagicMock()
+        obj.docstring = None
+        assert _get_param_descriptions(obj) == {}
+
+    def test_with_parameters_section(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import _get_param_descriptions
+
+        param = MagicMock()
+        param.name = "x"
+        param.description = "The x value"
+
+        obj = MagicMock()
+        obj.docstring.parsed = [ds.DocstringSectionParameters(value=[param])]
+        result = _get_param_descriptions(obj)
+        assert result == {"x": "The x value"}
+
+
+class TestParamRowToDefinitionList:
+    """ParamRow.to_definition_list builds a pandoc definition-list item."""
+
+    def test_basic(self):
+        from great_docs._qrenderer._md_renderer import ParamRow
+
+        row = ParamRow(name="x", description="An integer", annotation="int", default="0")
+        term, desc = row.to_definition_list()
+        assert "x" in term
+        assert "int" in term
+        assert "0" in term
+        assert "An integer" in desc
+
+    def test_no_name(self):
+        from great_docs._qrenderer._md_renderer import ParamRow
+
+        row = ParamRow(name=None, description="A return value", annotation="str")
+        term, desc = row.to_definition_list()
+        assert "str" in term
+        assert "A return value" in desc
+
+    def test_no_default(self):
+        from great_docs._qrenderer._md_renderer import ParamRow
+
+        row = ParamRow(name="y", description="Desc", annotation="float")
+        term, desc = row.to_definition_list()
+        assert "y" in term
+        assert "float" in term
+        assert "Desc" in desc
+
+    def test_no_annotation(self):
+        from great_docs._qrenderer._md_renderer import ParamRow
+
+        row = ParamRow(name="z", description="Desc")
+        term, desc = row.to_definition_list()
+        assert "z" in term
+
+
+class TestParamRowToTuple:
+    """ParamRow.to_tuple returns tuples for different table styles."""
+
+    def test_parameters_with_default(self):
+        from great_docs._qrenderer._md_renderer import ParamRow
+        from great_docs._qrenderer._rst_converters import escape
+
+        row = ParamRow(name="x", description="Desc", annotation="int", default="0")
+        result = row.to_tuple("parameters")
+        assert result == ("x", "int", "Desc", escape("0"))
+
+    def test_parameters_no_default(self):
+        from great_docs._qrenderer._md_renderer import ParamRow
+
+        row = ParamRow(name="x", description="Desc", annotation="int")
+        result = row.to_tuple("parameters")
+        assert result[3] == "_required_"
+
+    def test_attributes(self):
+        from great_docs._qrenderer._md_renderer import ParamRow
+
+        row = ParamRow(name="x", description="Desc", annotation="int")
+        result = row.to_tuple("attributes")
+        assert result == ("x", "int", "Desc")
+
+    def test_returns(self):
+        from great_docs._qrenderer._md_renderer import ParamRow
+
+        row = ParamRow(name="x", description="Desc", annotation="int")
+        result = row.to_tuple("returns")
+        assert result == ("x", "int", "Desc")
+
+    def test_unsupported_style(self):
+        import pytest
+
+        from great_docs._qrenderer._md_renderer import ParamRow
+
+        row = ParamRow(name="x", description="Desc")
+        with pytest.raises(NotImplementedError, match="Unsupported table style"):
+            row.to_tuple("unknown")
+
+
+class TestRendererFromConfig:
+    """Renderer.from_config creates renderers from different config types."""
+
+    def test_string_config(self):
+        from great_docs._qrenderer._md_renderer import MdRenderer, Renderer
+
+        result = Renderer.from_config("markdown")
+        assert isinstance(result, MdRenderer)
+
+    def test_dict_config(self):
+        from great_docs._qrenderer._md_renderer import MdRenderer, Renderer
+
+        result = Renderer.from_config({"style": "markdown", "header_level": 2})
+        assert isinstance(result, MdRenderer)
+        assert result.header_level == 2
+
+    def test_renderer_passthrough(self):
+        from great_docs._qrenderer._md_renderer import MdRenderer, Renderer
+
+        r = MdRenderer()
+        result = Renderer.from_config(r)
+        assert result is r
+
+    def test_invalid_type(self):
+        import pytest
+
+        from great_docs._qrenderer._md_renderer import Renderer
+
+        with pytest.raises(TypeError):
+            Renderer.from_config(42)
+
+
+class TestMdRendererFetchObjectDispname:
+    """MdRenderer._fetch_object_dispname handles different display_name modes."""
+
+    def test_name_mode(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer(display_name="name")
+        obj = MagicMock()
+        obj.name = "MyClass"
+        obj.path = "pkg.mod.MyClass"
+        assert renderer._fetch_object_dispname(obj) == "MyClass"
+
+    def test_full_mode(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer(display_name="full")
+        obj = MagicMock()
+        obj.path = "pkg.mod.MyClass"
+        assert renderer._fetch_object_dispname(obj) == "pkg.mod.MyClass"
+
+    def test_canonical_mode(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer(display_name="canonical")
+        obj = MagicMock()
+        obj.canonical_path = "pkg.MyClass"
+        assert renderer._fetch_object_dispname(obj) == "pkg.MyClass"
+
+    def test_invalid_mode(self):
+        from unittest.mock import MagicMock
+
+        import pytest
+
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer(display_name="bogus")
+        obj = MagicMock()
+        with pytest.raises(ValueError, match="Unsupported display_name"):
+            renderer._fetch_object_dispname(obj)
+
+
+class TestMdRendererRenderAnnotation:
+    """MdRenderer.render_annotation handles different annotation types."""
+
+    def test_none(self):
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        assert renderer.render_annotation(None) == ""
+
+    def test_string(self):
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        result = renderer.render_annotation("int")
+        assert "int" in result
+
+    def test_expr_name_no_interlinks(self):
+        from great_docs._qrenderer._griffe import expressions as expr
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer(render_interlinks=False)
+        el = expr.ExprName("MyType")
+        result = renderer.render_annotation(el)
+        assert "MyType" in result
+        assert "[" not in result
+
+    def test_expr_name_with_interlinks(self):
+        from great_docs._qrenderer._griffe import expressions as expr
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer(render_interlinks=True)
+        el = expr.ExprName("MyType")
+        result = renderer.render_annotation(el)
+        assert "[" in result
+        assert "`" in result
+
+    def test_fallback(self):
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        result = renderer.render_annotation(42)
+        assert "42" in result
+
+
+class TestMdRendererRenderTable:
+    """MdRenderer._render_table supports both table and description-list styles."""
+
+    def test_description_list_style(self):
+        from great_docs._qrenderer._md_renderer import MdRenderer, ParamRow
+
+        renderer = MdRenderer(table_style="description-list")
+        rows = [ParamRow(name="x", description="Desc", annotation="int", default="0")]
+        result = renderer._render_table(
+            rows, ["Name", "Type", "Description", "Default"], "parameters"
+        )
+        # DefinitionList renders differently from a table
+        assert "|" not in result or "x" in result
+
+    def test_default_table_style(self):
+        from great_docs._qrenderer._md_renderer import MdRenderer, ParamRow
+
+        renderer = MdRenderer(table_style="table")
+        rows = [ParamRow(name="x", description="Desc", annotation="int", default="0")]
+        result = renderer._render_table(
+            rows, ["Name", "Type", "Description", "Default"], "parameters"
+        )
+        assert "| x | int |" in result
+
+
+class TestMdRendererRenderParameters:
+    """MdRenderer._render_parameters handles kw_only and pos_only."""
+
+    def test_keyword_only_separator(self):
+        from great_docs._qrenderer._griffe import dataclasses as dc
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        params = dc.Parameters(
+            dc.Parameter("a", kind=dc.ParameterKind.positional_or_keyword),
+            dc.Parameter("b", kind=dc.ParameterKind.keyword_only),
+        )
+        result = renderer._render_parameters(params)
+        assert "*" in result
+
+    def test_positional_only_separator(self):
+        from great_docs._qrenderer._griffe import dataclasses as dc
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        params = dc.Parameters(
+            dc.Parameter("a", kind=dc.ParameterKind.positional_only),
+            dc.Parameter("b", kind=dc.ParameterKind.positional_or_keyword),
+        )
+        result = renderer._render_parameters(params)
+        assert "/" in result
+
+    def test_var_positional_suppresses_star(self):
+        from great_docs._qrenderer._griffe import dataclasses as dc
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        params = dc.Parameters(
+            dc.Parameter("args", kind=dc.ParameterKind.var_positional),
+            dc.Parameter("b", kind=dc.ParameterKind.keyword_only),
+        )
+        result = renderer._render_parameters(params)
+        # No bare "*" separator when *args already present
+        assert "*" not in result  # bare * separator should not appear
+
+
+class TestMdRendererRenderDispatch:
+    """MdRenderer.render dispatches correctly for various types."""
+
+    def test_render_string(self):
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        assert renderer.render("hello") == "hello"
+
+    def test_render_warnings_section(self):
+        from great_docs._qrenderer._ast import DocstringSectionWarnings
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        el = DocstringSectionWarnings(value="Be careful!")
+        result = renderer.render(el)
+        assert "Be careful" in result
+
+    def test_render_see_also_section(self):
+        from great_docs._qrenderer._ast import DocstringSectionSeeAlso
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        el = DocstringSectionSeeAlso(value="other_func")
+        result = renderer.render(el)
+        assert "other_func" in result
+
+    def test_render_notes_section(self):
+        from great_docs._qrenderer._ast import DocstringSectionNotes
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        el = DocstringSectionNotes(value="Important note.")
+        result = renderer.render(el)
+        assert "Important note" in result
+
+    def test_render_example_code(self):
+        from great_docs._qrenderer._ast import ExampleCode
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        el = ExampleCode(value="x = 1")
+        result = renderer.render(el)
+        assert "```python" in result
+        assert "x = 1" in result
+
+    def test_render_example_text(self):
+        from great_docs._qrenderer._ast import ExampleText
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        el = ExampleText(value="Some text")
+        result = renderer.render(el)
+        assert "Some text" in result
+
+    def test_render_admonition_notes(self):
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        el = ds.DocstringSectionAdmonition(kind="admonition", text="Note content", title="Notes")
+        result = renderer.render(el)
+        assert "Note content" in result
+
+    def test_render_admonition_see_also(self):
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        el = ds.DocstringSectionAdmonition(
+            kind="admonition",
+            text=":func:`other_func`",
+            title="See Also",
+        )
+        result = renderer.render(el)
+        assert "other_func" in result
+
+    def test_render_returns_section(self):
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        ret = ds.DocstringReturn(name="result", annotation="int", description="The count")
+        el = ds.DocstringSectionReturns(value=[ret])
+        result = renderer.render(el)
+        assert "result" in result
+        assert "The count" in result
+
+    def test_render_raises_section(self):
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        exc = ds.DocstringRaise(annotation="ValueError", description="If invalid")
+        el = ds.DocstringSectionRaises(value=[exc])
+        result = renderer.render(el)
+        assert "ValueError" in result
+        assert "If invalid" in result
+
+    def test_render_unsupported_raises(self):
+        import pytest
+
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        el = ds.DocstringDeprecated(description="old")
+        with pytest.raises(NotImplementedError):
+            renderer.render(el)
+
+
+class TestMdRendererRenderPage:
+    """MdRenderer._render_page handles pages with and without summaries."""
+
+    def test_page_with_summary(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer import layout
+        from great_docs._qrenderer._griffe import dataclasses as dc
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        obj = MagicMock(spec=dc.Function)
+        obj.__class__ = dc.Function
+        obj.name = "func"
+        obj.path = "pkg.func"
+        obj.is_class = False
+        obj.is_function = True
+        obj.is_attribute = False
+        obj.kind.value = "function"
+        obj.labels = set()
+        obj.parent = None
+        obj.parameters = dc.Parameters()
+        obj.docstring = MagicMock(spec=dc.Docstring)
+        obj.docstring.parsed = [ds.DocstringSectionText(value="A func.")]
+
+        doc = layout.DocFunction(
+            name="func",
+            obj=obj,
+            anchor="pkg.func",
+            signature_name="relative",
+        )
+
+        summary = layout.SummaryDetails(name="My Page", desc="Page description")
+        page = layout.Page(path="test", summary=summary, contents=[doc])
+        result = renderer._render_page(page)
+        assert "My Page" in result
+        assert "Page description" in result
+
+    def test_page_without_summary(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer import layout
+        from great_docs._qrenderer._griffe import dataclasses as dc
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        obj = MagicMock(spec=dc.Function)
+        obj.__class__ = dc.Function
+        obj.name = "func"
+        obj.path = "pkg.func"
+        obj.is_class = False
+        obj.is_function = True
+        obj.is_attribute = False
+        obj.kind.value = "function"
+        obj.labels = set()
+        obj.parent = None
+        obj.parameters = dc.Parameters()
+        obj.docstring = MagicMock(spec=dc.Docstring)
+        obj.docstring.parsed = [ds.DocstringSectionText(value="A func.")]
+
+        doc = layout.DocFunction(
+            name="func",
+            obj=obj,
+            anchor="pkg.func",
+            signature_name="relative",
+        )
+
+        page = layout.Page(path="test", contents=[doc])
+        result = renderer._render_page(page)
+        assert "func" in result
+
+
+class TestMdRendererRenderSection:
+    """MdRenderer._render_section produces titled sections."""
+
+    def test_section_with_title(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer import layout
+        from great_docs._qrenderer._griffe import dataclasses as dc
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        obj = MagicMock(spec=dc.Function)
+        obj.__class__ = dc.Function
+        obj.name = "func"
+        obj.path = "pkg.func"
+        obj.is_class = False
+        obj.is_function = True
+        obj.is_attribute = False
+        obj.kind.value = "function"
+        obj.labels = set()
+        obj.parent = None
+        obj.parameters = dc.Parameters()
+        obj.docstring = MagicMock(spec=dc.Docstring)
+        obj.docstring.parsed = [ds.DocstringSectionText(value="Doc text")]
+
+        doc = layout.DocFunction(
+            name="func",
+            obj=obj,
+            anchor="pkg.func",
+            signature_name="relative",
+        )
+
+        section = layout.Section(title="Functions", desc="All functions", contents=[doc])
+        result = renderer._render_section(section)
+        assert "# Functions" in result
+        assert "All functions" in result
+
+
+class TestMdRendererSummarizeLayout:
+    """MdRenderer.summarize renders summary rows for layout elements."""
+
+    def test_summarize_layout(self):
+        from great_docs._qrenderer import layout
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        section = layout.Section(title="API", desc="API docs", contents=[])
+        lo = layout.Layout(sections=[section])
+        result = renderer.summarize(lo)
+        assert "API" in result
+
+    def test_summarize_section_with_subtitle(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer import layout
+        from great_docs._qrenderer._griffe import dataclasses as dc
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        obj = MagicMock(spec=dc.Function)
+        obj.__class__ = dc.Function
+        obj.name = "f"
+        obj.path = "pkg.f"
+        obj.is_function = True
+        obj.is_class = False
+        obj.is_attribute = False
+        obj.kind.value = "function"
+        obj.labels = set()
+        obj.parent = None
+        obj.parameters = dc.Parameters()
+        obj.docstring = MagicMock(spec=dc.Docstring)
+        obj.docstring.parsed = [ds.DocstringSectionText(value="Hello")]
+
+        doc = layout.DocFunction(
+            name="f",
+            obj=obj,
+            anchor="pkg.f",
+            signature_name="relative",
+        )
+
+        section = layout.Section(title=None, subtitle="Sub", desc=None, contents=[doc])
+        result = renderer.summarize(section)
+        assert "### Sub" in result
+
+    def test_summarize_section_empty(self):
+        from great_docs._qrenderer import layout
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        section = layout.Section(title="Empty", desc=None, contents=[])
+        result = renderer.summarize(section)
+        assert "Empty" in result
+
+    def test_summarize_member_page(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer import layout
+        from great_docs._qrenderer._griffe import dataclasses as dc
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        obj = MagicMock(spec=dc.Function)
+        obj.__class__ = dc.Function
+        obj.name = "func"
+        obj.path = "pkg.func"
+        obj.is_function = True
+        obj.is_class = False
+        obj.is_attribute = False
+        obj.kind.value = "function"
+        obj.labels = set()
+        obj.parent = None
+        obj.parameters = dc.Parameters()
+        obj.docstring = MagicMock(spec=dc.Docstring)
+        obj.docstring.parsed = [ds.DocstringSectionText(value="Summary text.")]
+
+        doc = layout.DocFunction(
+            name="func",
+            obj=obj,
+            anchor="pkg.func",
+            signature_name="relative",
+        )
+
+        mp = layout.MemberPage(path="member", contents=[doc])
+        result = renderer.summarize(mp)
+        assert "func" in result
+
+    def test_summarize_page_with_summary(self):
+        from great_docs._qrenderer import layout
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        summary = layout.SummaryDetails(name="Page", desc="Page desc")
+        page = layout.Page(path="test", summary=summary, contents=[])
+        result = renderer.summarize(page)
+        assert "Page" in result
+        assert "Page desc" in result
+
+    def test_summarize_page_flatten(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer import layout
+        from great_docs._qrenderer._griffe import dataclasses as dc
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        obj = MagicMock(spec=dc.Function)
+        obj.__class__ = dc.Function
+        obj.name = "func1"
+        obj.path = "pkg.func1"
+        obj.is_function = True
+        obj.is_class = False
+        obj.is_attribute = False
+        obj.kind.value = "function"
+        obj.labels = set()
+        obj.parent = None
+        obj.parameters = dc.Parameters()
+        obj.docstring = MagicMock(spec=dc.Docstring)
+        obj.docstring.parsed = [ds.DocstringSectionText(value="Doc1.")]
+
+        obj2 = MagicMock(spec=dc.Function)
+        obj2.__class__ = dc.Function
+        obj2.name = "func2"
+        obj2.path = "pkg.func2"
+        obj2.is_function = True
+        obj2.is_class = False
+        obj2.is_attribute = False
+        obj2.kind.value = "function"
+        obj2.labels = set()
+        obj2.parent = None
+        obj2.parameters = dc.Parameters()
+        obj2.docstring = MagicMock(spec=dc.Docstring)
+        obj2.docstring.parsed = [ds.DocstringSectionText(value="Doc2.")]
+
+        doc1 = layout.DocFunction(
+            name="func1", obj=obj, anchor="pkg.func1", signature_name="relative"
+        )
+        doc2 = layout.DocFunction(
+            name="func2", obj=obj2, anchor="pkg.func2", signature_name="relative"
+        )
+
+        page = layout.Page(path="test", flatten=True, contents=[doc1, doc2])
+        result = renderer.summarize(page)
+        assert "func1" in result
+        assert "func2" in result
+
+    def test_summarize_link(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer import layout
+        from great_docs._qrenderer._griffe import dataclasses as dc
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        obj = MagicMock(spec=dc.Function)
+        obj.__class__ = dc.Function
+        obj.name = "func"
+        obj.path = "pkg.func"
+        obj.docstring = MagicMock(spec=dc.Docstring)
+        obj.docstring.parsed = [ds.DocstringSectionText(value="Link desc.")]
+
+        link = layout.Link(name="pkg.func", obj=obj)
+        result = renderer.summarize(link)
+        assert "pkg.func" in result
+
+    def test_summarize_doc_with_path(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer import layout
+        from great_docs._qrenderer._griffe import dataclasses as dc
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        obj = MagicMock(spec=dc.Function)
+        obj.__class__ = dc.Function
+        obj.name = "func"
+        obj.path = "pkg.func"
+        obj.is_function = True
+        obj.is_class = False
+        obj.is_attribute = False
+        obj.kind.value = "function"
+        obj.labels = set()
+        obj.parent = None
+        obj.docstring = MagicMock(spec=dc.Docstring)
+        obj.docstring.parsed = [ds.DocstringSectionText(value="A function.")]
+
+        doc = layout.DocFunction(
+            name="func",
+            obj=obj,
+            anchor="pkg.func",
+            signature_name="relative",
+        )
+
+        result = renderer.summarize(doc, "reference/pkg")
+        assert "reference/pkg.qmd#pkg.func" in result
+
+    def test_summarize_doc_no_path(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer import layout
+        from great_docs._qrenderer._griffe import dataclasses as dc
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        obj = MagicMock(spec=dc.Function)
+        obj.__class__ = dc.Function
+        obj.name = "func"
+        obj.path = "pkg.func"
+        obj.is_function = True
+        obj.is_class = False
+        obj.is_attribute = False
+        obj.kind.value = "function"
+        obj.labels = set()
+        obj.parent = None
+        obj.docstring = MagicMock(spec=dc.Docstring)
+        obj.docstring.parsed = [ds.DocstringSectionText(value="A function.")]
+
+        doc = layout.DocFunction(
+            name="func",
+            obj=obj,
+            anchor="pkg.func",
+            signature_name="relative",
+        )
+
+        result = renderer.summarize(doc)
+        assert "#pkg.func" in result
+
+    def test_summarize_object_no_docstring(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer._griffe import dataclasses as dc
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+
+        obj = MagicMock(spec=dc.Function)
+        obj.__class__ = dc.Function
+        obj.docstring = None
+        result = renderer.summarize(obj)
+        assert result == ""
+
+
+class TestMdRendererRenderDocFuncAttr:
+    """MdRenderer._render_doc_func_attr renders function/attribute docs."""
+
+    def test_render_with_signature(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer import layout
+        from great_docs._qrenderer._griffe import dataclasses as dc
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer(show_signature=True)
+
+        obj = MagicMock(spec=dc.Function)
+        obj.__class__ = dc.Function
+        obj.name = "myfunc"
+        obj.path = "pkg.myfunc"
+        obj.is_class = False
+        obj.is_function = True
+        obj.is_attribute = False
+        obj.kind.value = "function"
+        obj.labels = set()
+        obj.parent = None
+        obj.parameters = dc.Parameters()
+        obj.docstring = MagicMock(spec=dc.Docstring)
+        obj.docstring.parsed = [ds.DocstringSectionText(value="My function.")]
+
+        doc = layout.DocFunction(
+            name="myfunc",
+            obj=obj,
+            anchor="pkg.myfunc",
+            signature_name="relative",
+        )
+
+        result = renderer._render_doc_func_attr(doc)
+        assert "myfunc" in result
+        assert "```python" in result
+
+    def test_render_without_signature(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer import layout
+        from great_docs._qrenderer._griffe import dataclasses as dc
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer(show_signature=False)
+
+        obj = MagicMock(spec=dc.Function)
+        obj.__class__ = dc.Function
+        obj.name = "myfunc"
+        obj.path = "pkg.myfunc"
+        obj.is_class = False
+        obj.is_function = True
+        obj.is_attribute = False
+        obj.kind.value = "function"
+        obj.labels = set()
+        obj.parent = None
+        obj.parameters = dc.Parameters()
+        obj.docstring = MagicMock(spec=dc.Docstring)
+        obj.docstring.parsed = [ds.DocstringSectionText(value="My function.")]
+
+        doc = layout.DocFunction(
+            name="myfunc",
+            obj=obj,
+            anchor="pkg.myfunc",
+            signature_name="relative",
+        )
+
+        result = renderer._render_doc_func_attr(doc)
+        assert "myfunc" in result
+        assert "```python" not in result
+
+
+class TestMdRendererRenderObject:
+    """MdRenderer._render_object handles objects with/without docstrings."""
+
+    def test_no_docstring(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer._griffe import dataclasses as dc
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        obj = MagicMock(spec=dc.Function)
+        obj.docstring = None
+        assert renderer._render_object(obj) == ""
+
+
+class TestMdRendererRenderDocstringParameter:
+    """MdRenderer._render_docstring_parameter returns a ParamRow."""
+
+    def test_basic_param(self):
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer, ParamRow
+
+        renderer = MdRenderer()
+        p = ds.DocstringParameter(name="x", annotation="int", description="The x", value="0")
+        result = renderer._render_docstring_parameter(p)
+        assert isinstance(result, ParamRow)
+        assert result.name == "x"
+        assert result.default == "0"
+
+
+class TestMdRendererRenderDocstringReturn:
+    """MdRenderer._render_docstring_return returns a ParamRow."""
+
+    def test_basic_return(self):
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer, ParamRow
+
+        renderer = MdRenderer()
+        r = ds.DocstringReturn(name="result", annotation="int", description="A count")
+        result = renderer._render_docstring_return(r)
+        assert isinstance(result, ParamRow)
+        assert result.name == "result"
+
+
+class TestMdRendererRenderDocstringRaise:
+    """MdRenderer._render_docstring_raise returns a ParamRow with name=None."""
+
+    def test_basic_raise(self):
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer, ParamRow
+
+        renderer = MdRenderer()
+        r = ds.DocstringRaise(annotation="ValueError", description="If bad")
+        result = renderer._render_docstring_raise(r)
+        assert isinstance(result, ParamRow)
+        assert result.name is None
+
+
+class TestMdRendererRenderSectionExamples:
+    """MdRenderer._render_section_examples handles Examples sections."""
+
+    def test_example_section(self):
+        from griffe import DocstringSectionKind
+
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        examples = ds.DocstringSectionExamples(
+            value=[
+                (DocstringSectionKind.text, "Some text"),
+                (DocstringSectionKind.examples, ">>> x = 1"),
+            ]
+        )
+        result = renderer._render_section_examples(examples)
+        assert "x = 1" in result
+
+
+class TestGetDataclassFieldNames:
+    """_get_dataclass_field_names handles various cases."""
+
+    def test_invalid_path(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer._md_renderer import _get_dataclass_field_names
+
+        obj = MagicMock()
+        obj.canonical_path = "singlename"
+        result = _get_dataclass_field_names(obj)
+        assert result is None
+
+    def test_non_importable(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer._md_renderer import _get_dataclass_field_names
+
+        obj = MagicMock()
+        obj.canonical_path = "nonexistent.module.Class"
+        result = _get_dataclass_field_names(obj)
+        assert result is None
+
+
+class TestIsGriffeDataclass:
+    """_is_griffe_dataclass checks for 'dataclass' label."""
+
+    def test_true(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer._md_renderer import _is_griffe_dataclass
+
+        obj = MagicMock()
+        obj.labels = {"dataclass"}
+        assert _is_griffe_dataclass(obj) is True
+
+    def test_false(self):
+        from unittest.mock import MagicMock
+
+        from great_docs._qrenderer._md_renderer import _is_griffe_dataclass
+
+        obj = MagicMock()
+        obj.labels = set()
+        assert _is_griffe_dataclass(obj) is False
+
+    def test_exception(self):
+        from unittest.mock import MagicMock, PropertyMock
+
+        from great_docs._qrenderer._md_renderer import _is_griffe_dataclass
+
+        obj = MagicMock()
+        type(obj).labels = PropertyMock(side_effect=Exception("fail"))
+        assert _is_griffe_dataclass(obj) is False
+
+
+class TestMdRendererRenderHeaderDocstringSection:
+    """MdRenderer.render_header for DocstringSection elements."""
+
+    def test_section_header_with_title(self):
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer(header_level=2)
+        section = ds.DocstringSectionParameters(value=[])
+        section.title = "Parameters"
+        result = renderer.render_header(section)
+        assert "## Parameters" in result
+        assert ".doc-section" in result
+
+    def test_section_header_no_title_uses_kind(self):
+        from great_docs._qrenderer._griffe import docstrings as ds
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer(header_level=3)
+        section = ds.DocstringSectionText(value="")
+        section.title = None
+        result = renderer.render_header(section)
+        assert "### Text" in result
+
+    def test_unsupported_type_raises(self):
+        import pytest
+
+        from great_docs._qrenderer._md_renderer import MdRenderer
+
+        renderer = MdRenderer()
+        with pytest.raises(NotImplementedError):
+            renderer.render_header("not a valid type")
+
+
+# ============================================================================
 # Favicon Tests
 # ============================================================================
 
