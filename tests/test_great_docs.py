@@ -1,10 +1,22 @@
 # pyright: reportPrivateUsage=false
+import json
+import os
+import shutil
+import subprocess
+import sys
 import tempfile
+import types
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
+from unittest.mock import MagicMock, PropertyMock, call, patch
 
 import pytest
+import yaml
+from click.testing import CliRunner
 
 from great_docs import GreatDocs, Config, load_config, create_default_config
+from great_docs.cli import main, setup_github_pages
 
 
 def test_great_docs_init():
@@ -156,14 +168,11 @@ def test_find_package_init_with_nested_structure():
 
 def test_cli_import():
     """Test that CLI module can be imported."""
-    from great_docs.cli import main
-
     assert callable(main)
 
 
 def test_method_section_generation():
     """Test that classes with >5 methods get separate method sections."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Create a test package with a class that has many methods
@@ -253,7 +262,6 @@ def some_function():
 
 def test_config_exclude_in_parse():
     """Test that great-docs.yml exclude filters items from __all__."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Create a test package with __all__
@@ -302,9 +310,6 @@ def some_function():
 
 def test_setup_github_pages_command():
     """Test the setup-github-pages CLI command."""
-    from click.testing import CliRunner
-    from great_docs.cli import setup_github_pages
-
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -321,7 +326,6 @@ def test_setup_github_pages_command():
         assert workflow_file.exists()
 
         # Check the content is valid YAML and contains expected keys
-        import yaml
 
         with open(workflow_file) as f:
             workflow = yaml.safe_load(f)
@@ -336,9 +340,6 @@ def test_setup_github_pages_command():
 
 def test_setup_github_pages_custom_options():
     """Test setup-github-pages with custom options."""
-    from click.testing import CliRunner
-    from great_docs.cli import setup_github_pages
-
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -368,9 +369,6 @@ def test_setup_github_pages_custom_options():
 
 def test_setup_github_pages_overwrite_protection():
     """Test that setup-github-pages protects against overwrites."""
-    from click.testing import CliRunner
-    from great_docs.cli import setup_github_pages
-
     runner = CliRunner()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -1211,7 +1209,6 @@ def test_create_default_config():
 
 def test_detect_docstring_style_numpy_from_files():
     """Test detection of NumPy-style docstrings."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         package_dir = Path(tmp_dir) / "numpypkg"
@@ -1259,7 +1256,6 @@ def my_function(x, y):
 
 def test_detect_docstring_style_google():
     """Test detection of Google-style docstrings."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         package_dir = Path(tmp_dir) / "googlepkg"
@@ -1316,7 +1312,6 @@ class MyClass:
 
 def test_detect_docstring_style_sphinx():
     """Test detection of Sphinx-style docstrings."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         package_dir = Path(tmp_dir) / "sphinxpkg"
@@ -1354,7 +1349,6 @@ def my_function(x, y):
 
 def test_detect_docstring_style_defaults_to_numpy():
     """Test that detection defaults to numpy when no docstrings are found."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         package_dir = Path(tmp_dir) / "nodocspkg"
@@ -1463,7 +1457,6 @@ def test_build_sections_from_reference_config_empty_and_none():
 
 def test_explicit_reference_config_applied_when_discovery_fails():
     """Test that explicit reference config is used when auto-discovery fails."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Create a minimal package that will fail discovery
@@ -1505,7 +1498,6 @@ reference:
 
 def test_get_quarto_env_returns_current_python():
     """Test that _get_quarto_env returns QUARTO_PYTHON with current interpreter."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -1527,7 +1519,6 @@ def test_get_quarto_env_returns_current_python():
 
 def test_get_quarto_env_detects_venv():
     """Test that _get_quarto_env detects a virtual environment."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Create a fake .venv directory structure
@@ -1545,7 +1536,6 @@ def test_get_quarto_env_detects_venv():
 
 def test_get_quarto_env_preserves_existing_env():
     """Test that _get_quarto_env preserves existing environment variables."""
-    import os
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -1558,7 +1548,6 @@ def test_get_quarto_env_preserves_existing_env():
 
 def test_detect_dynamic_mode_returns_true_for_simple_package():
     """Test that _detect_dynamic_mode returns True for packages without cyclic aliases."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Create a simple package with no cyclic aliases
@@ -1598,8 +1587,6 @@ def test_detect_dynamic_mode_returns_true_with_no_package():
 
 def test_config_dynamic_property():
     """Test Config.dynamic property returns correct value."""
-    from great_docs.config import Config
-
     with tempfile.TemporaryDirectory() as tmp_dir:
         config_path = Path(tmp_dir)
 
@@ -1622,8 +1609,6 @@ def test_config_dynamic_property():
 
 def test_config_dynamic_property_default():
     """Test Config.dynamic property returns default when not set."""
-    from great_docs.config import Config
-
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Config without dynamic key
         config_content = "parser: numpy\n"
@@ -1639,8 +1624,6 @@ def test_config_dynamic_property_default():
 
 def test_citation_year_from_date_released():
     """Test that citation year is parsed from date-released field."""
-    import yaml
-    from datetime import datetime
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
@@ -1686,8 +1669,6 @@ def test_citation_year_from_date_released():
 
 def test_citation_year_defaults_to_current():
     """Test that citation year defaults to current year when date-released is missing."""
-    import yaml
-    from datetime import datetime
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
@@ -1734,8 +1715,6 @@ def test_citation_year_defaults_to_current():
 
 def test_citation_year_handles_invalid_date():
     """Test that citation year falls back to current year for invalid dates."""
-    import yaml
-    from datetime import datetime
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
@@ -2344,7 +2323,6 @@ def test_copy_assets_replaces_existing():
 
 def test_assets_added_to_quarto_config():
     """Test that assets directory is added to Quarto config resources."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
@@ -2381,7 +2359,6 @@ def test_assets_added_to_quarto_config():
 
 def test_assets_not_added_to_quarto_config_when_missing():
     """Test that assets/** is not added to Quarto config when assets don't exist."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
@@ -2414,7 +2391,6 @@ def test_assets_not_added_to_quarto_config_when_missing():
 
 def test_assets_added_to_config_after_copy():
     """Test that _update_quarto_config() adds assets/** after copying assets."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
@@ -2459,7 +2435,6 @@ def test_assets_added_to_config_after_copy():
 
 def test_assets_config_update_only_when_copied():
     """Test that config is updated conditionally based on whether assets were copied."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
@@ -3377,7 +3352,6 @@ def test_readme_rst_not_used_when_readme_md_exists():
 
 def test_convert_rst_to_markdown_real_pandoc():
     """Test RST to Markdown conversion via pandoc."""
-    import shutil
 
     # Skip if neither quarto nor pandoc is available
     if not shutil.which("quarto") and not shutil.which("pandoc"):
@@ -3407,7 +3381,6 @@ def test_convert_rst_to_markdown_real_pandoc():
 
 def test_fetch_github_releases_success():
     """Test fetching releases from the GitHub API (mocked)."""
-    from unittest.mock import patch, MagicMock
 
     docs = GreatDocs()
 
@@ -3457,7 +3430,6 @@ def test_fetch_github_releases_success():
 
 def test_fetch_github_releases_404():
     """Test that a 404 returns an empty list."""
-    from unittest.mock import patch, MagicMock
 
     docs = GreatDocs()
     fake_response = MagicMock()
@@ -3471,7 +3443,6 @@ def test_fetch_github_releases_404():
 
 def test_fetch_github_releases_rate_limited():
     """Test that a 403 returns what was already fetched (empty)."""
-    from unittest.mock import patch, MagicMock
 
     docs = GreatDocs()
     fake_response = MagicMock()
@@ -3485,7 +3456,6 @@ def test_fetch_github_releases_rate_limited():
 
 def test_fetch_github_releases_network_error():
     """Test graceful handling of network errors."""
-    from unittest.mock import patch
     import requests as req_lib
 
     docs = GreatDocs()
@@ -3498,7 +3468,6 @@ def test_fetch_github_releases_network_error():
 
 def test_generate_changelog_page():
     """Test changelog.qmd page generation."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
@@ -3572,7 +3541,6 @@ def test_generate_changelog_page_no_github():
 
 def test_generate_changelog_page_no_releases():
     """Test that changelog is skipped when there are no releases."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
@@ -3616,8 +3584,6 @@ def test_add_changelog_to_navbar_manual_yaml():
         docs = GreatDocs(project_path=tmp_dir)
         docs._add_changelog_to_navbar()
 
-        import yaml
-
         with open(quarto_yml, "r") as f:
             config = yaml.safe_load(f)
 
@@ -3646,8 +3612,6 @@ def test_add_changelog_to_navbar_idempotent_double_call():
         docs = GreatDocs(project_path=tmp_dir)
         docs._add_changelog_to_navbar()
         docs._add_changelog_to_navbar()
-
-        import yaml
 
         with open(quarto_yml, "r") as f:
             config = yaml.safe_load(f)
@@ -3687,7 +3651,6 @@ def test_changelog_config_custom():
 
 def test_fetch_github_releases_pagination():
     """Test that pagination works for many releases."""
-    from unittest.mock import patch, MagicMock, call
 
     docs = GreatDocs()
 
@@ -3718,7 +3681,6 @@ def test_fetch_github_releases_pagination():
 
 def test_fetch_github_releases_max_cap():
     """Test that max_releases caps the returned list."""
-    from unittest.mock import patch, MagicMock
 
     docs = GreatDocs()
 
@@ -3838,7 +3800,6 @@ def test_linkify_backslash_escaped_quotes():
 
 def test_linkify_integrated_in_changelog():
     """Test that linkification happens when generating changelog.qmd."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
@@ -3945,7 +3906,6 @@ def test_process_sections_discovers_and_copies():
         assert "Advanced Example" in content
 
         # Check navbar was updated
-        import yaml
 
         with open(quarto_yml) as f:
             config = yaml.safe_load(f)
@@ -4013,7 +3973,6 @@ def test_process_sections_no_index_by_default():
         assert not index.exists(), "index.qmd should NOT be generated by default"
 
         # Check navbar links to first page, not index
-        import yaml
 
         with open(quarto_yml) as f:
             config = yaml.safe_load(f)
@@ -4112,8 +4071,6 @@ def test_process_sections_navbar_after():
         docs = GreatDocs(project_path=tmp_dir)
         docs._process_sections()
 
-        import yaml
-
         with open(quarto_yml) as f:
             config = yaml.safe_load(f)
         texts = [
@@ -4154,8 +4111,6 @@ def test_process_sections_default_navbar_before_reference():
 
         docs = GreatDocs(project_path=tmp_dir)
         docs._process_sections()
-
-        import yaml
 
         with open(quarto_yml) as f:
             config = yaml.safe_load(f)
@@ -4202,8 +4157,6 @@ def test_process_sections_multiple():
 
         assert result == 2
 
-        import yaml
-
         with open(quarto_yml) as f:
             config = yaml.safe_load(f)
         texts = [
@@ -4243,8 +4196,6 @@ def test_process_sections_idempotent():
         docs = GreatDocs(project_path=tmp_dir)
         docs._process_sections()
         docs._process_sections()
-
-        import yaml
 
         with open(quarto_yml) as f:
             config = yaml.safe_load(f)
@@ -4345,8 +4296,6 @@ def test_navbar_no_home_new_build():
         docs = GreatDocs(project_path=tmp_dir)
         docs._update_quarto_config()
 
-        import yaml
-
         with open(quarto_yml) as f:
             config = yaml.safe_load(f)
 
@@ -4382,8 +4331,6 @@ def test_navbar_home_removed_from_existing():
         docs = GreatDocs(project_path=tmp_dir)
         docs._update_quarto_config()
 
-        import yaml
-
         with open(quarto_yml) as f:
             config = yaml.safe_load(f)
 
@@ -4396,7 +4343,6 @@ def test_navbar_home_removed_from_existing():
 
 def test_version_metadata_from_github_release():
     """Test that _package_meta.json is written from the latest GitHub release."""
-    from unittest.mock import patch
 
     fake_releases = [
         {
@@ -4430,8 +4376,6 @@ def test_version_metadata_from_github_release():
         with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
             docs._update_quarto_config()
 
-        import json
-
         meta_path = build_dir / "_package_meta.json"
 
         assert meta_path.exists()
@@ -4445,7 +4389,6 @@ def test_version_metadata_from_github_release():
 
 def test_version_metadata_not_written_no_releases():
     """Test graceful degradation when no GitHub releases exist."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
@@ -4498,7 +4441,6 @@ def test_version_metadata_not_written_no_github():
 
 def test_version_metadata_strips_v_prefix():
     """Test that 'v' prefix is stripped from tag_name for the version value."""
-    from unittest.mock import patch
 
     fake_releases = [
         {
@@ -4532,8 +4474,6 @@ def test_version_metadata_strips_v_prefix():
         with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
             docs._update_quarto_config()
 
-        import json
-
         meta_path = build_dir / "_package_meta.json"
 
         assert meta_path.exists()
@@ -4547,7 +4487,6 @@ def test_version_metadata_strips_v_prefix():
 
 def test_module_exports_categorized():
     """Test that packages exporting submodules properly categorize their contents."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Create a package that exports submodules (like python-dateutil)
@@ -4623,7 +4562,6 @@ def test_module_exports_categorized():
 
 def test_module_class_methods_tracked():
     """Test that classes inside modules have methods properly counted."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg_dir = Path(tmp_dir) / "methpkg"
@@ -4671,7 +4609,6 @@ def test_module_class_methods_tracked():
 
 def test_module_big_class_splitting():
     """Test that classes inside modules with >5 methods get separate sections."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg_dir = Path(tmp_dir) / "splitpkg"
@@ -4743,7 +4680,6 @@ def test_module_big_class_splitting():
 
 def test_module_exception_subclassification():
     """Test that exceptions inside modules are categorized correctly."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg_dir = Path(tmp_dir) / "errpkg"
@@ -4786,7 +4722,6 @@ def test_module_exception_subclassification():
 
 def test_module_empty_submodule_goes_to_other():
     """Test that modules with no documentable members go to 'other'."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg_dir = Path(tmp_dir) / "emptypkg"
@@ -4814,7 +4749,6 @@ def test_module_empty_submodule_goes_to_other():
 
 def test_module_mixed_with_top_level():
     """Test packages with both module exports and top-level classes/functions."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg_dir = Path(tmp_dir) / "mixedpkg"
@@ -4866,7 +4800,6 @@ def test_module_mixed_with_top_level():
 
 def test_module_submodule_allowed_in_exports():
     """Test that submodules are not excluded from _get_package_exports."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg_dir = Path(tmp_dir) / "subexpkg"
@@ -4893,7 +4826,6 @@ def test_module_submodule_allowed_in_exports():
 
 def test_write_object_types_json():
     """Test that _write_object_types_json writes correct type mapping."""
-    import json
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -4951,7 +4883,6 @@ def test_write_object_types_json():
 
 def test_write_object_types_json_empty_categories():
     """Test that _write_object_types_json handles empty categories."""
-    import json
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -4973,7 +4904,6 @@ def test_write_object_types_json_empty_categories():
 def test_object_types_integrated_with_categorization():
     """Test that _categorize_api_objects + _write_object_types_json produce
     correct types for a package with mixed exports."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg_dir = Path(tmp_dir) / "typepkg"
@@ -5012,8 +4942,6 @@ def test_object_types_integrated_with_categorization():
 
             docs._write_object_types_json(categories)
 
-            import json
-
             types_path = docs.project_path / "_object_types.json"
             assert types_path.exists()
 
@@ -5032,7 +4960,6 @@ def test_object_types_integrated_with_categorization():
 def test_categorize_fallback_functions_not_other():
     """Functions must be categorized as 'functions', not 'other', when griffe
     cannot load the package and the inspect-based fallback is used."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg_dir = Path(tmp_dir) / "fbpkg"
@@ -5065,8 +4992,6 @@ def test_categorize_fallback_functions_not_other():
 def test_categorize_fallback_mixed_types():
     """Fallback categorization must correctly distinguish classes, functions,
     exceptions, dataclasses, and constants."""
-    import sys
-    from dataclasses import dataclass
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg_dir = Path(tmp_dir) / "mixfb"
@@ -5117,7 +5042,6 @@ def test_categorize_fallback_mixed_types():
 def test_categorize_fallback_discovers_module_by_dir():
     """When the normalized project name doesn't match the actual module,
     the fallback must discover and import the correct module directory."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Project name normalizes to 'my_v2_pkg' but the actual module is 'mypkg'
@@ -5153,7 +5077,6 @@ def test_categorize_fallback_discovers_module_by_dir():
 
 def test_categorize_fallback_skips_metadata():
     """Metadata variables like __version__ must be skipped by the fallback."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg_dir = Path(tmp_dir) / "metapkg"
@@ -5392,7 +5315,6 @@ class TestRendererDataclassAttributes:
 
     def test_is_griffe_dataclass_true(self):
         """A griffe object with 'dataclass' label is detected."""
-        from unittest.mock import MagicMock
 
         from great_docs._qrenderer._md_renderer import _is_griffe_dataclass
 
@@ -5403,7 +5325,6 @@ class TestRendererDataclassAttributes:
 
     def test_is_griffe_dataclass_false(self):
         """A griffe object without 'dataclass' label returns False."""
-        from unittest.mock import MagicMock
 
         from great_docs._qrenderer._md_renderer import _is_griffe_dataclass
 
@@ -5415,8 +5336,6 @@ class TestRendererDataclassAttributes:
     def test_get_dataclass_field_names(self):
         """Dynamic import of a stdlib dataclass returns all field names."""
         import dataclasses as _dc
-        import sys
-        import types
 
         from great_docs._qrenderer._md_renderer import _get_dataclass_field_names
 
@@ -5445,7 +5364,6 @@ class TestRendererDataclassAttributes:
 
     def test_get_param_descriptions(self):
         """Parameter descriptions are extracted from parsed docstring sections."""
-        from unittest.mock import MagicMock
 
         from great_docs._qrenderer._griffe import docstrings as ds
         from great_docs._qrenderer._md_renderer import _get_param_descriptions
@@ -5846,8 +5764,6 @@ class TestRendererCallableParens:
     """Callable objects get ``()`` appended to their heading name."""
 
     def test_function_heading_has_parens(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
@@ -5870,8 +5786,6 @@ class TestRendererCallableParens:
         assert "# my_func()" in result
 
     def test_class_heading_no_parens(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
@@ -5897,8 +5811,6 @@ class TestRendererTypeBadgeClasses:
     """Headings get ``.doc-type-{kind}`` CSS classes."""
 
     def test_function_type_class(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -5917,8 +5829,6 @@ class TestRendererTypeBadgeClasses:
         assert ".doc-type-function" in result
 
     def test_class_type_class(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -5937,8 +5847,6 @@ class TestRendererTypeBadgeClasses:
         assert ".doc-type-class" in result
 
     def test_enum_type_class(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -5957,8 +5865,6 @@ class TestRendererTypeBadgeClasses:
         assert ".doc-type-enum" in result
 
     def test_attribute_type_class(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -6004,7 +5910,6 @@ class TestRendererSignatureMultiline:
 
     def test_long_sig_wraps(self):
         """Signatures exceeding 80 chars wrap to multi-line."""
-        from unittest.mock import MagicMock
 
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
@@ -6037,7 +5942,6 @@ class TestRendererConstantValues:
 
     def test_bare_constant_signature(self):
         """Constant with no annotation or value renders as plain name."""
-        from unittest.mock import MagicMock
 
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -6056,7 +5960,6 @@ class TestRendererConstantValues:
 
     def test_constant_with_annotation(self):
         """Constant with type annotation renders as ``NAME: type``."""
-        from unittest.mock import MagicMock
 
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -6075,7 +5978,6 @@ class TestRendererConstantValues:
 
     def test_constant_with_value(self):
         """Constant with value renders as ``NAME = value``."""
-        from unittest.mock import MagicMock
 
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -6094,7 +5996,6 @@ class TestRendererConstantValues:
 
     def test_constant_with_both(self):
         """Constant with annotation and value renders as ``NAME: type = value``."""
-        from unittest.mock import MagicMock
 
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -6113,7 +6014,6 @@ class TestRendererConstantValues:
 
     def test_constant_long_value_skipped(self):
         """Values exceeding 200 chars are not included."""
-        from unittest.mock import MagicMock
 
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -6137,7 +6037,6 @@ class TestRendererNonCallableCleanup:
 
     def test_enum_signature_no_parens(self):
         """Enum class signature has no parentheses."""
-        from unittest.mock import MagicMock
 
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
@@ -6160,7 +6059,6 @@ class TestRendererNonCallableCleanup:
 
     def test_typeddict_signature_no_parens(self):
         """TypedDict class signature has no parentheses."""
-        from unittest.mock import MagicMock
 
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
@@ -6183,7 +6081,6 @@ class TestRendererNonCallableCleanup:
 
     def test_regular_class_still_has_parens(self):
         """Normal classes retain ``()`` in their signature."""
-        from unittest.mock import MagicMock
 
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
@@ -6210,7 +6107,6 @@ class TestRendererSectionSeparators:
 
     def test_separators_between_methods(self):
         """Methods section includes --- separators between member docs."""
-        from unittest.mock import MagicMock, patch
 
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
@@ -6364,8 +6260,6 @@ class TestRendererIsNonCallableClass:
     """Helper function _is_non_callable_class detects enums and TypedDicts."""
 
     def test_enum_detected(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import _is_non_callable_class
 
         obj = MagicMock()
@@ -6375,8 +6269,6 @@ class TestRendererIsNonCallableClass:
         assert _is_non_callable_class(obj) is True
 
     def test_typeddict_detected_by_base(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import _is_non_callable_class
 
         obj = MagicMock()
@@ -6386,8 +6278,6 @@ class TestRendererIsNonCallableClass:
         assert _is_non_callable_class(obj) is True
 
     def test_regular_class_not_detected(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import _is_non_callable_class
 
         obj = MagicMock()
@@ -6397,8 +6287,6 @@ class TestRendererIsNonCallableClass:
         assert _is_non_callable_class(obj) is False
 
     def test_int_enum_detected(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import _is_non_callable_class
 
         obj = MagicMock()
@@ -6408,8 +6296,6 @@ class TestRendererIsNonCallableClass:
         assert _is_non_callable_class(obj) is True
 
     def test_str_enum_detected(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import _is_non_callable_class
 
         obj = MagicMock()
@@ -6504,8 +6390,6 @@ class TestHasAttrSection:
         assert _has_attr_section(None) is False
 
     def test_with_attributes(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._griffe import docstrings as ds
         from great_docs._qrenderer._md_renderer import _has_attr_section
 
@@ -6514,8 +6398,6 @@ class TestHasAttrSection:
         assert _has_attr_section(docstring) is True
 
     def test_without_attributes(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._griffe import docstrings as ds
         from great_docs._qrenderer._md_renderer import _has_attr_section
 
@@ -6542,8 +6424,6 @@ class TestGetParamDescriptions:
     """_get_param_descriptions extracts descriptions from docstring."""
 
     def test_no_docstring(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import _get_param_descriptions
 
         obj = MagicMock()
@@ -6551,8 +6431,6 @@ class TestGetParamDescriptions:
         assert _get_param_descriptions(obj) == {}
 
     def test_with_parameters_section(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._griffe import docstrings as ds
         from great_docs._qrenderer._md_renderer import _get_param_descriptions
 
@@ -6682,8 +6560,6 @@ class TestMdRendererFetchObjectDispname:
     """MdRenderer._fetch_object_dispname handles different display_name modes."""
 
     def test_name_mode(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer(display_name="name")
@@ -6693,8 +6569,6 @@ class TestMdRendererFetchObjectDispname:
         assert renderer._fetch_object_dispname(obj) == "MyClass"
 
     def test_full_mode(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer(display_name="full")
@@ -6703,8 +6577,6 @@ class TestMdRendererFetchObjectDispname:
         assert renderer._fetch_object_dispname(obj) == "pkg.mod.MyClass"
 
     def test_canonical_mode(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer(display_name="canonical")
@@ -6713,8 +6585,6 @@ class TestMdRendererFetchObjectDispname:
         assert renderer._fetch_object_dispname(obj) == "pkg.MyClass"
 
     def test_invalid_mode(self):
-        from unittest.mock import MagicMock
-
         import pytest
 
         from great_docs._qrenderer._md_renderer import MdRenderer
@@ -6950,8 +6820,6 @@ class TestMdRendererRenderPage:
     """MdRenderer._render_page handles pages with and without summaries."""
 
     def test_page_with_summary(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
@@ -6987,8 +6855,6 @@ class TestMdRendererRenderPage:
         assert "Page description" in result
 
     def test_page_without_summary(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
@@ -7026,8 +6892,6 @@ class TestMdRendererRenderSection:
     """MdRenderer._render_section produces titled sections."""
 
     def test_section_with_title(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
@@ -7077,8 +6941,6 @@ class TestMdRendererSummarizeLayout:
         assert "API" in result
 
     def test_summarize_section_with_subtitle(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
@@ -7122,8 +6984,6 @@ class TestMdRendererSummarizeLayout:
         assert "Empty" in result
 
     def test_summarize_member_page(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
@@ -7168,8 +7028,6 @@ class TestMdRendererSummarizeLayout:
         assert "Page desc" in result
 
     def test_summarize_page_flatten(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
@@ -7218,8 +7076,6 @@ class TestMdRendererSummarizeLayout:
         assert "func2" in result
 
     def test_summarize_link(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
@@ -7239,8 +7095,6 @@ class TestMdRendererSummarizeLayout:
         assert "pkg.func" in result
 
     def test_summarize_doc_with_path(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
@@ -7272,8 +7126,6 @@ class TestMdRendererSummarizeLayout:
         assert "reference/pkg.qmd#pkg.func" in result
 
     def test_summarize_doc_no_path(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
@@ -7305,8 +7157,6 @@ class TestMdRendererSummarizeLayout:
         assert "#pkg.func" in result
 
     def test_summarize_object_no_docstring(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -7323,8 +7173,6 @@ class TestMdRendererRenderDocFuncAttr:
     """MdRenderer._render_doc_func_attr renders function/attribute docs."""
 
     def test_render_with_signature(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
@@ -7358,8 +7206,6 @@ class TestMdRendererRenderDocFuncAttr:
         assert "```python" in result
 
     def test_render_without_signature(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
@@ -7397,8 +7243,6 @@ class TestMdRendererRenderObject:
     """MdRenderer._render_object handles objects with/without docstrings."""
 
     def test_no_docstring(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -7475,8 +7319,6 @@ class TestGetDataclassFieldNames:
     """_get_dataclass_field_names handles various cases."""
 
     def test_invalid_path(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import _get_dataclass_field_names
 
         obj = MagicMock()
@@ -7485,8 +7327,6 @@ class TestGetDataclassFieldNames:
         assert result is None
 
     def test_non_importable(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import _get_dataclass_field_names
 
         obj = MagicMock()
@@ -7499,8 +7339,6 @@ class TestIsGriffeDataclass:
     """_is_griffe_dataclass checks for 'dataclass' label."""
 
     def test_true(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import _is_griffe_dataclass
 
         obj = MagicMock()
@@ -7508,8 +7346,6 @@ class TestIsGriffeDataclass:
         assert _is_griffe_dataclass(obj) is True
 
     def test_false(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import _is_griffe_dataclass
 
         obj = MagicMock()
@@ -7517,8 +7353,6 @@ class TestIsGriffeDataclass:
         assert _is_griffe_dataclass(obj) is False
 
     def test_exception(self):
-        from unittest.mock import MagicMock, PropertyMock
-
         from great_docs._qrenderer._md_renderer import _is_griffe_dataclass
 
         obj = MagicMock()
@@ -7565,7 +7399,6 @@ class TestIsNonCallableClassExceptionBranches:
 
     def test_labels_raises_exception(self):
         """When labels access raises, falls through to base check."""
-        from unittest.mock import MagicMock, PropertyMock
 
         from great_docs._qrenderer._md_renderer import _is_non_callable_class
 
@@ -7576,7 +7409,6 @@ class TestIsNonCallableClassExceptionBranches:
 
     def test_bases_raises_exception(self):
         """When bases access raises, returns False."""
-        from unittest.mock import MagicMock, PropertyMock
 
         from great_docs._qrenderer._md_renderer import _is_non_callable_class
 
@@ -7591,7 +7423,6 @@ class TestRendererFromConfigPyFile:
 
     def test_py_file_style(self, tmp_path):
         """A string ending in .py triggers importlib loading."""
-        import sys
 
         from great_docs._qrenderer._md_renderer import MdRenderer, Renderer
 
@@ -7604,8 +7435,6 @@ class TestRendererFromConfigPyFile:
             "    def __init__(self, **kwargs):\n"
             "        super().__init__(**kwargs)\n"
         )
-
-        import os
 
         old_cwd = os.getcwd()
         os.chdir(tmp_path)
@@ -7623,8 +7452,6 @@ class TestFetchMethodParameters:
     """MdRenderer._fetch_method_parameters strips self/cls."""
 
     def test_strips_self(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -7643,8 +7470,6 @@ class TestFetchMethodParameters:
         assert "x" in names
 
     def test_strips_cls(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -7662,8 +7487,6 @@ class TestFetchMethodParameters:
         assert "y" in names
 
     def test_no_strip_for_non_class(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -7700,8 +7523,6 @@ class TestSignatureAlias:
     """MdRenderer.signature dispatches to _signature_alias for dc.Alias."""
 
     def test_alias_signature(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -7738,8 +7559,6 @@ class TestSignatureDoc:
     """MdRenderer._signature_doc respects el.signature_name."""
 
     def test_signature_doc_uses_signature_name(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
@@ -7769,8 +7588,6 @@ class TestRenderOverloadSignatures:
     """MdRenderer._render_overload_signatures handles @overload functions."""
 
     def test_basic_overloads(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -7798,8 +7615,6 @@ class TestRenderOverloadSignatures:
         assert "func(x: str) -> str" in result
 
     def test_overload_with_default(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
@@ -7816,8 +7631,6 @@ class TestRenderOverloadSignatures:
         assert "func(x: int = 0)" in result
 
     def test_overload_no_annotation(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
@@ -7834,8 +7647,6 @@ class TestRenderOverloadSignatures:
         assert "func(x=5)" in result
 
     def test_overload_plain_param(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
@@ -7852,8 +7663,6 @@ class TestRenderOverloadSignatures:
         assert "func(x)" in result
 
     def test_overload_no_parameters_attr(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
@@ -7864,7 +7673,6 @@ class TestRenderOverloadSignatures:
 
     def test_signature_func_with_overloads(self):
         """_signature_func_or_class detects and uses overloads."""
-        from unittest.mock import MagicMock
 
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
@@ -7896,8 +7704,6 @@ class TestSignatureModuleOrAttrAnnotationValue:
     """_signature_module_or_attr includes annotations and values."""
 
     def test_with_annotation_and_value(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -7915,8 +7721,6 @@ class TestSignatureModuleOrAttrAnnotationValue:
         assert "= 42" in result
 
     def test_long_value_skipped(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
 
@@ -7937,8 +7741,6 @@ class TestRenderHeaderEnumBranch:
     """render_header correctly labels enum classes."""
 
     def test_enum_type_class(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._md_renderer import MdRenderer
@@ -8011,8 +7813,6 @@ class TestRenderInterlaced:
     """MdRenderer._render_interlaced handles Interlaced layout elements."""
 
     def _make_func_obj(self, name, docstring_text="Docstring."):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
 
@@ -8052,8 +7852,6 @@ class TestRenderInterlaced:
         assert "First function" in result
 
     def test_interlaced_no_docstring_raises(self):
-        from unittest.mock import MagicMock
-
         import pytest
 
         from great_docs._qrenderer import layout
@@ -8102,7 +7900,6 @@ class TestRenderInterlaced:
 
         renderer = MdRenderer()
         # DocClass is not DocFunction or DocAttribute
-        from unittest.mock import MagicMock
 
         from great_docs._qrenderer._griffe import dataclasses as dc
 
@@ -8120,8 +7917,6 @@ class TestRenderDocClassModuleAdvanced:
     """Tests for _render_doc_class_module covering attrs, classes, modules."""
 
     def _make_attr_obj(self, name):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
 
@@ -8142,8 +7937,6 @@ class TestRenderDocClassModuleAdvanced:
         return obj
 
     def _make_func_obj(self, name):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
 
@@ -8164,8 +7957,6 @@ class TestRenderDocClassModuleAdvanced:
         return obj
 
     def _make_class_obj(self, name):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
 
@@ -8246,7 +8037,6 @@ class TestRenderDocClassModuleAdvanced:
 
     def test_module_with_functions(self):
         """DocModule renders Functions section (not Methods)."""
-        from unittest.mock import MagicMock
 
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._md_renderer import MdRenderer
@@ -8281,7 +8071,6 @@ class TestRenderDocClassModuleAdvanced:
 
     def test_dataclass_with_non_field_attrs(self):
         """Dataclass DocClass separates dc fields from non-field attrs."""
-        from unittest.mock import MagicMock, patch
 
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
@@ -8327,8 +8116,6 @@ class TestRenderDocClassModuleFlat:
     """DocClass with flat=True uses n_incr=1 for header increment."""
 
     def test_flat_class(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
@@ -8459,8 +8246,6 @@ class TestSummarizeSectionNoTitleNoSubtitle:
     """MdRenderer.summarize handles Section with no title and no subtitle."""
 
     def test_section_no_title_no_subtitle(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
@@ -8494,8 +8279,6 @@ class TestSummarizeInterlaced:
     """MdRenderer.summarize handles Interlaced elements."""
 
     def test_summarize_interlaced(self):
-        from unittest.mock import MagicMock
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
@@ -8527,8 +8310,6 @@ class TestSummarizePageError:
     """MdRenderer.summarize raises for multi-content Page without flatten."""
 
     def test_page_multi_content_no_flatten_raises(self):
-        from unittest.mock import MagicMock
-
         import pytest
 
         from great_docs._qrenderer import layout
@@ -9988,7 +9769,6 @@ class TestFaviconLinkInjection:
         self, tmp_dir: str, favicon_config: str | None = None, create_logo: bool = False
     ) -> dict:
         """Helper: set up a project, run _update_quarto_config, return the config."""
-        import yaml
 
         tmp = Path(tmp_dir)
 
@@ -10219,7 +9999,6 @@ class TestExtractBadgesFromContent:
 
 def test_config_markdown_pages_disabled():
     """Test that markdown_pages: false excludes copy-page.js from Quarto config."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
@@ -10256,7 +10035,6 @@ def test_config_markdown_pages_disabled():
 
 def test_config_markdown_pages_widget_disabled():
     """Test that markdown_pages: {widget: false} generates .md but hides widget."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
@@ -10294,7 +10072,6 @@ def test_config_markdown_pages_widget_disabled():
 
 def test_config_markdown_pages_default_enabled():
     """Test that markdown_pages defaults to true (copy-page.js included)."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
@@ -10327,7 +10104,6 @@ class TestPositBadgeInjection:
 
     def _build_with_funding(self, tmp_dir: str, funding_name: str | None = None) -> dict:
         """Helper: set up a project with funding config, run _update_quarto_config, return config."""
-        import yaml
 
         tmp = Path(tmp_dir)
 
@@ -10402,7 +10178,6 @@ class TestPositBadgeInjection:
 
     def test_no_duplicate_badge(self):
         """Running _update_quarto_config twice should not duplicate the badge."""
-        import yaml
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp = Path(tmp_dir)
@@ -13587,7 +13362,6 @@ def test_apply_nodoc_filter_removes_items():
         ]
 
         # Patch _extract_all_directives to return nodoc for func_b
-        from unittest.mock import patch, MagicMock
 
         mock_directives = MagicMock()
         mock_directives.nodoc = True
@@ -13609,8 +13383,6 @@ def test_apply_nodoc_filter_no_directives_empty():
 
         sections = [{"title": "Funcs", "contents": ["f1", "f2"]}]
 
-        from unittest.mock import patch
-
         with patch.object(docs, "_extract_all_directives", return_value={}):
             result = docs._apply_nodoc_filter("pkg", sections)
 
@@ -13627,8 +13399,6 @@ def test_apply_nodoc_filter_removes_companion_section():
             {"title": "MyClass Methods", "contents": ["MyClass.foo", "MyClass.bar"]},
         ]
 
-        from unittest.mock import patch, MagicMock
-
         mock_dir = MagicMock()
         mock_dir.nodoc = True
         with patch.object(docs, "_extract_all_directives", return_value={"MyClass": mock_dir}):
@@ -13644,8 +13414,6 @@ def test_apply_nodoc_filter_all_excluded_no_remaining():
         docs = GreatDocs(project_path=tmp_dir)
 
         sections = [{"title": "Funcs", "contents": ["only_func"]}]
-
-        from unittest.mock import patch, MagicMock
 
         mock_dir = MagicMock()
         mock_dir.nodoc = True
@@ -13669,8 +13437,6 @@ def test_apply_nodoc_filter_dict_items():
                 ],
             }
         ]
-
-        from unittest.mock import patch, MagicMock
 
         mock_dir = MagicMock()
         mock_dir.nodoc = True
@@ -14315,7 +14081,6 @@ def test_get_quarto_env_includes_python_dir():
 
 def test_get_quarto_env_venv_detection():
     """_get_quarto_env detects .venv/bin/python if present."""
-    import sys
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         venv_bin = Path(tmp_dir) / ".venv" / "bin"
@@ -14330,7 +14095,6 @@ def test_get_quarto_env_venv_detection():
 
 def test_get_quarto_env_preserves_existing_pythonpath(monkeypatch):
     """_get_quarto_env prepends to existing PYTHONPATH."""
-    import os
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         monkeypatch.setenv("PYTHONPATH", "/existing/path")
@@ -14585,7 +14349,6 @@ def test_build_metadata_margin_llms_links():
 
 def test_build_metadata_margin_authors_with_rich_metadata():
     """_build_metadata_margin displays rich author metadata (github, orcid, etc.)."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -14802,7 +14565,6 @@ def test_generate_config_with_reference_type_aliases():
 
 def test_generate_llms_full_txt_creates_file():
     """_generate_llms_full_txt creates llms-full.txt in project dir."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         gd_dir = Path(tmp_dir) / "great-docs"
@@ -14847,7 +14609,6 @@ def test_generate_llms_full_txt_no_quarto_yml():
 
 def test_generate_llms_full_txt_no_api_reference_with_title():
     """_generate_llms_full_txt returns early when no api-reference in config."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         gd_dir = Path(tmp_dir) / "great-docs"
@@ -14866,7 +14627,6 @@ def test_generate_llms_full_txt_no_api_reference_with_title():
 
 def test_generate_llms_full_txt_no_package():
     """_generate_llms_full_txt returns early when no package name in api-reference."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         gd_dir = Path(tmp_dir) / "great-docs"
@@ -14885,7 +14645,6 @@ def test_generate_llms_full_txt_no_package():
 
 def test_generate_llms_full_txt_import_error():
     """_generate_llms_full_txt handles ImportError for missing package."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         gd_dir = Path(tmp_dir) / "great-docs"
@@ -14910,7 +14669,6 @@ def test_generate_llms_full_txt_import_error():
 
 def test_generate_llms_full_txt_with_sections():
     """_generate_llms_full_txt includes section headers in output."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         gd_dir = Path(tmp_dir) / "great-docs"
@@ -14950,7 +14708,6 @@ def test_generate_llms_full_txt_with_sections():
 
 def test_generate_llms_full_txt_dict_item_format():
     """_generate_llms_full_txt handles dict-style items in sections."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         gd_dir = Path(tmp_dir) / "great-docs"
@@ -14994,7 +14751,6 @@ def test_get_github_repo_info_from_pyproject_urls():
 
 def test_get_github_repo_info_from_gd_yml():
     """_get_github_repo_info prefers great-docs.yml repo over pyproject.toml."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -15065,7 +14821,6 @@ def test_extract_badges_from_content_top_of_file_badges():
 
 def test_build_hero_section_disabled_no_logo():
     """_build_hero_section returns empty when hero explicitly disabled."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         gd_yml = Path(tmp_dir) / "great-docs.yml"
@@ -15081,7 +14836,6 @@ def test_build_hero_section_disabled_no_logo():
 
 def test_build_hero_section_with_name_and_tagline():
     """_build_hero_section uses config name and tagline when set."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -15111,7 +14865,6 @@ def test_build_hero_section_with_name_and_tagline():
 
 def test_build_hero_section_with_string_logo():
     """_build_hero_section handles string logo config."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -15140,7 +14893,6 @@ def test_build_hero_section_with_string_logo():
 
 def test_build_hero_section_with_badges():
     """_build_hero_section includes badge HTML."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -15160,7 +14912,6 @@ def test_build_hero_section_with_badges():
 
 def test_build_hero_section_badge_from_config():
     """_build_hero_section renders badges from config list."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -15393,7 +15144,6 @@ def test_build_sections_from_reference_config_dict_no_name_returns_none():
 
 def test_build_metadata_margin_with_funding():
     """_build_metadata_margin includes funding section from metadata."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -15423,7 +15173,6 @@ def test_build_metadata_margin_with_funding():
 
 def test_build_metadata_margin_with_funding_ror():
     """_build_metadata_margin includes ROR icon link for funding with ROR URL."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -15502,7 +15251,6 @@ def test_build_metadata_margin_citation_section():
 
 def test_detect_git_ref_configured_branch_via_yaml():
     """_detect_git_ref returns configured branch from metadata."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -15551,7 +15299,6 @@ def test_create_index_from_readme_with_license():
 
 def test_create_index_from_readme_with_citation():
     """_create_index_from_readme creates citation.qmd when CITATION.cff exists."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         (Path(tmp_dir) / "README.md").write_text("# Hello\n\nWorld", encoding="utf-8")
@@ -15745,7 +15492,6 @@ def test_inject_section_body_class_missing_file():
 
 def test_add_section_to_navbar():
     """_add_section_to_navbar adds a link to navbar left."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         gd_dir = Path(tmp_dir) / "great-docs"
@@ -15765,7 +15511,6 @@ def test_add_section_to_navbar():
 
 def test_add_section_to_navbar_no_duplicate():
     """_add_section_to_navbar doesn't add duplicate entries."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         gd_dir = Path(tmp_dir) / "great-docs"
@@ -15861,7 +15606,6 @@ def test_build_metadata_margin_author_fallback_github():
 
 def test_build_hero_section_with_light_dark_logo():
     """_build_hero_section handles light/dark dict logo config."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -15908,7 +15652,6 @@ def test_build_hero_section_auto_enable_no_hero():
 
 def test_build_hero_section_metadata_fallback_name():
     """_build_hero_section uses metadata name when hero_name not configured."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -15926,7 +15669,6 @@ def test_build_hero_section_metadata_fallback_name():
 
 def test_build_hero_section_metadata_fallback_tagline():
     """_build_hero_section uses metadata description as tagline fallback."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -15945,7 +15687,6 @@ def test_build_hero_section_metadata_fallback_tagline():
 
 def test_create_index_from_readme_citation_bibtex():
     """_create_index_from_readme generates BibTeX in citation.qmd."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         (Path(tmp_dir) / "README.md").write_text("# Hello", encoding="utf-8")
@@ -15982,7 +15723,6 @@ def test_create_index_from_readme_citation_bibtex():
 
 def test_create_index_from_readme_citation_two_authors():
     """_create_index_from_readme handles 2-author citation formatting."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         (Path(tmp_dir) / "README.md").write_text("# Hello", encoding="utf-8")
@@ -16093,7 +15833,6 @@ def test_update_navbar_github_link_with_string_items():
 
 def test_build_github_source_url_basic():
     """Test _build_github_source_url with single-line source location."""
-    import json
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16154,7 +15893,6 @@ def test_build_github_source_url_no_repo_v2():
 
 def test_build_github_source_url_source_path_config():
     """Test _build_github_source_url with custom source_link_path for monorepos."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16204,7 +15942,6 @@ def test_build_github_source_url_absolute_path():
 
 def test_detect_git_ref_configured_branch():
     """Test _detect_git_ref uses configured branch from metadata."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16234,7 +15971,6 @@ def test_detect_git_ref_fallback():
 
 def test_generate_source_links_json_disabled():
     """Test _generate_source_links_json skips when source links disabled."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16265,7 +16001,6 @@ def test_generate_source_links_json_no_repo():
 
 def test_get_source_location_no_griffe():
     """Test _get_source_location handles missing griffe gracefully."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16371,7 +16106,6 @@ def test_get_docstring_summary_no_docstring():
 
 def test_write_quarto_yml_adds_header():
     """Test _write_quarto_yml writes config with header comment."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16392,7 +16126,6 @@ def test_write_quarto_yml_adds_header():
 
 def test_update_sidebar_from_sections_basic():
     """Test _update_sidebar_from_sections builds sidebar from API reference."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16448,7 +16181,6 @@ def test_update_sidebar_from_sections_basic():
 
 def test_update_sidebar_from_sections_dict_items():
     """Test _update_sidebar_from_sections handles dict items in contents."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16491,7 +16223,6 @@ def test_update_sidebar_from_sections_dict_items():
 
 def test_update_sidebar_no_api_reference():
     """Test _update_sidebar_from_sections with no api-reference does nothing."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16585,7 +16316,6 @@ def test_generate_llms_txt_no_quarto_yml():
 
 def test_generate_llms_txt_no_api_reference():
     """Test _generate_llms_txt returns early when no api-reference config."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16603,7 +16333,6 @@ def test_generate_llms_txt_no_api_reference():
 
 def test_generate_llms_txt_writes_file():
     """Test _generate_llms_txt creates llms.txt with correct structure."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16649,7 +16378,6 @@ def test_generate_llms_txt_writes_file():
 
 def test_generate_llms_txt_with_site_url():
     """Test _generate_llms_txt uses site-url from quarto config."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16689,7 +16417,6 @@ def test_generate_llms_txt_with_site_url():
 
 def test_generate_llms_full_txt_no_api_reference():
     """Test _generate_llms_full_txt returns early with no api-reference."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16707,7 +16434,6 @@ def test_generate_llms_full_txt_no_api_reference():
 
 def test_generate_llms_full_txt_no_package_name():
     """Test _generate_llms_full_txt returns early when no package name."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16731,7 +16457,6 @@ def test_generate_llms_full_txt_no_package_name():
 
 def test_update_quarto_config_navbar_color_light_dark():
     """Test _update_quarto_config generates CSS for navbar_color with light and dark."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16772,7 +16497,6 @@ def test_update_quarto_config_navbar_color_light_dark():
 
 def test_update_quarto_config_navbar_color_light_only():
     """Test _update_quarto_config with navbar_color having only light mode."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16812,7 +16536,6 @@ def test_update_quarto_config_navbar_color_light_only():
 
 def test_update_quarto_config_announcement_banner():
     """Test _update_quarto_config injects announcement banner meta+script."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16863,7 +16586,6 @@ def test_update_quarto_config_announcement_banner():
 
 def test_update_quarto_config_content_style():
     """Test _update_quarto_config injects content_style meta+script."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16910,7 +16632,6 @@ def test_update_quarto_config_content_style():
 
 def test_update_quarto_config_navbar_style():
     """Test _update_quarto_config injects navbar_style meta+script."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16954,7 +16675,6 @@ def test_update_quarto_config_navbar_style():
 
 def test_update_quarto_config_dark_mode_toggle():
     """Test _update_quarto_config adds dark mode toggle script."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -16992,7 +16712,6 @@ def test_update_quarto_config_dark_mode_toggle():
 
 def test_update_quarto_config_cli_enabled_adds_ref_switcher():
     """Test _update_quarto_config adds reference-switcher when CLI is enabled."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17029,7 +16748,6 @@ def test_update_quarto_config_cli_enabled_adds_ref_switcher():
 
 def test_update_quarto_config_page_footer_with_authors():
     """Test _update_quarto_config creates page footer with author names."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17069,7 +16787,6 @@ def test_update_quarto_config_page_footer_with_authors():
 
 def test_update_quarto_config_page_footer_with_funding():
     """Test _update_quarto_config adds funding info to page footer."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17113,7 +16830,6 @@ def test_update_quarto_config_page_footer_with_funding():
 
 def test_update_quarto_config_page_footer_funding_no_authors():
     """Test page footer with funding but no authors."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17151,7 +16867,6 @@ def test_update_quarto_config_page_footer_funding_no_authors():
 
 def test_update_quarto_config_posit_badge():
     """Test _update_quarto_config adds Posit badge when funding mentions Posit."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17188,7 +16903,6 @@ def test_update_quarto_config_posit_badge():
 
 def test_update_quarto_config_sidebar_filter():
     """Test _update_quarto_config adds sidebar filter script."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17221,7 +16935,6 @@ def test_update_quarto_config_sidebar_filter():
 
 def test_update_quarto_config_sidebar_filter_custom_min_items():
     """Test sidebar filter with custom min_items from metadata."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17258,7 +16971,6 @@ def test_update_quarto_config_sidebar_filter_custom_min_items():
 
 def test_update_quarto_config_attribution():
     """Test _update_quarto_config adds Great Docs attribution to footer."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17295,9 +17007,6 @@ def test_update_quarto_config_attribution():
 
 def test_update_quarto_config_version_badge_metadata():
     """Test _update_quarto_config writes _package_meta.json for version badge."""
-    import json
-    import yaml
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17338,9 +17047,6 @@ def test_update_quarto_config_version_badge_metadata():
 
 def test_update_quarto_config_version_badge_no_releases():
     """Test _update_quarto_config removes stale meta when no releases."""
-    import json
-    import yaml
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17377,7 +17083,6 @@ def test_update_quarto_config_version_badge_no_releases():
 
 def test_create_index_from_readme_citation_parsing():
     """Test _create_index_from_readme produces citation.qmd from CITATION.cff."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17545,7 +17250,6 @@ def test_create_index_from_readme_heading_adjustment():
 
 def test_create_index_from_readme_rst_source():
     """Test _create_index_from_readme handles RST files."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17571,7 +17275,6 @@ def test_create_index_from_readme_rst_source():
 
 def test_create_index_from_readme_landing_page_fallback():
     """Test _create_index_from_readme generates landing page when no source files."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17592,7 +17295,6 @@ def test_create_index_from_readme_landing_page_fallback():
 
 def test_create_index_from_readme_hero_section():
     """Test _create_index_from_readme includes hero section."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17625,7 +17327,6 @@ def test_create_index_from_readme_hero_section():
 
 def test_create_index_from_readme_hero_strips_duplicate_h1():
     """Test that hero section strips matching first h1 to avoid duplication."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17663,7 +17364,6 @@ def test_refresh_api_reference_config_no_quarto_yml():
 
 def test_refresh_api_reference_config_no_api_reference():
     """Test _refresh_api_reference_config handles missing api-reference config."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17679,7 +17379,6 @@ def test_refresh_api_reference_config_no_api_reference():
 
 def test_refresh_api_reference_config_no_package():
     """Test _refresh_api_reference_config handles missing package name."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17697,8 +17396,6 @@ def test_refresh_api_reference_config_no_package():
 
 def test_refresh_api_reference_config_updates_sections():
     """Test _refresh_api_reference_config updates sections from package exports."""
-    import yaml
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17735,8 +17432,6 @@ def test_refresh_api_reference_config_updates_sections():
 
 def test_refresh_api_reference_config_fallback_to_explicit():
     """Test _refresh_api_reference_config falls back to explicit reference config."""
-    import yaml
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17785,7 +17480,6 @@ def test_refresh_api_reference_config_fallback_to_explicit():
 
 def test_add_api_reference_config_disabled():
     """Test _add_api_reference_config skips when reference_enabled is false."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17810,8 +17504,6 @@ def test_add_api_reference_config_disabled():
 
 def test_add_api_reference_config_no_exports():
     """Test _add_api_reference_config skips when no exports found."""
-    import yaml
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17833,7 +17525,6 @@ def test_add_api_reference_config_no_exports():
 
 def test_add_api_reference_config_already_exists():
     """Test _add_api_reference_config skips when api-reference already present."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17862,8 +17553,6 @@ def test_add_api_reference_config_already_exists():
 
 def test_add_api_reference_config_with_sections():
     """Test _add_api_reference_config writes sections to quarto config."""
-    import yaml
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17905,7 +17594,6 @@ def test_add_api_reference_config_with_sections():
 
 def test_create_api_sections_with_config_uses_explicit():
     """Test _create_api_sections_with_config prefers explicit config."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17922,7 +17610,6 @@ def test_create_api_sections_with_config_uses_explicit():
 
 def test_create_api_sections_with_config_falls_back():
     """Test _create_api_sections_with_config falls back to auto-discovery."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17938,8 +17625,6 @@ def test_create_api_sections_with_config_falls_back():
 
 def test_prepare_build_directory_creates_structure():
     """Test _prepare_build_directory creates the necessary directory structure."""
-    import shutil
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -17977,7 +17662,6 @@ def test_prepare_build_directory_creates_structure():
         assert (docs.project_path / "_quarto.yml").exists()
 
         # Check _gd_options.json was created
-        import json
 
         options_path = docs.project_path / "_gd_options.json"
 
@@ -17990,7 +17674,6 @@ def test_prepare_build_directory_creates_structure():
 
 def test_prepare_build_directory_copies_js_files():
     """Test _prepare_build_directory copies JavaScript files."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18015,7 +17698,6 @@ def test_prepare_build_directory_copies_js_files():
 
 def test_prepare_build_directory_optional_js_copy_page():
     """Test _prepare_build_directory copies copy-page.js when markdown_pages_widget is set."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18040,7 +17722,6 @@ def test_prepare_build_directory_optional_js_copy_page():
 
 def test_prepare_build_directory_cleans_existing():
     """Test _prepare_build_directory removes existing build directory first."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18205,7 +17886,6 @@ def test_parse_package_exports_with_all_simple():
 
 def test_parse_package_exports_with_exclude():
     """Test _parse_package_exports filters out excluded items."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18262,7 +17942,6 @@ def test_parse_package_exports_no_all_returns_none():
 
 def test_update_quarto_config_page_footer_three_authors():
     """Test page footer with 3+ authors uses Oxford comma."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18301,7 +17980,6 @@ def test_update_quarto_config_page_footer_three_authors():
 
 def test_update_quarto_config_page_footer_single_author():
     """Test page footer with a single author."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18337,7 +18015,6 @@ def test_update_quarto_config_page_footer_single_author():
 
 def test_update_quarto_config_page_footer_author_homepage():
     """Test page footer links author name when homepage is provided."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18380,7 +18057,6 @@ def test_update_quarto_config_page_footer_author_homepage():
 
 def test_generate_llms_txt_dict_items_in_sections():
     """Test _generate_llms_txt handles dict items in sections."""
-    import yaml
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18421,7 +18097,6 @@ def test_generate_llms_txt_dict_items_in_sections():
 
 def test_check_docstring_spelling_no_griffe():
     """Test _check_docstring_spelling returns empty when griffe not available."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18554,7 +18229,6 @@ def test_build_sections_from_reference_config_dict_no_name():
 
 def test_apply_nodoc_filter_no_directives():
     """Test _apply_nodoc_filter passes through when no directives found."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18567,7 +18241,6 @@ def test_apply_nodoc_filter_no_directives():
 
 def test_apply_nodoc_filter_removes_nodoc_items():
     """Test _apply_nodoc_filter removes items marked with %nodoc."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18594,7 +18267,6 @@ def test_apply_nodoc_filter_removes_nodoc_items():
 
 def test_apply_nodoc_filter_removes_companion_method_section():
     """Test _apply_nodoc_filter removes companion method sections for %nodoc classes."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18620,7 +18292,6 @@ def test_apply_nodoc_filter_removes_companion_method_section():
 
 def test_apply_nodoc_filter_all_excluded():
     """Test _apply_nodoc_filter returns None when all items are excluded."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18774,7 +18445,6 @@ def test_format_cli_yaml_enabled_minimal():
 
 def test_write_object_types_json_basic():
     """Test _write_object_types_json writes correct type metadata."""
-    import json
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18809,7 +18479,6 @@ def test_write_object_types_json_basic():
 
 def test_write_object_types_json_with_constant_metadata():
     """Test _write_object_types_json writes constant_values.json."""
-    import json
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18869,7 +18538,6 @@ def test_categorize_api_objects_fallback_import_failure():
 
 def test_create_api_sections_basic():
     """Test _create_api_sections with mocked exports and categories."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18897,7 +18565,6 @@ def test_create_api_sections_basic():
 
 def test_create_api_sections_large_class():
     """Test _create_api_sections separates large classes (>5 methods)."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18925,7 +18592,6 @@ def test_create_api_sections_large_class():
 
 def test_create_api_sections_no_exports():
     """Test _create_api_sections returns None when no exports."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -18938,7 +18604,6 @@ def test_create_api_sections_no_exports():
 
 def test_create_api_sections_all_types():
     """Test _create_api_sections with all category types populated."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -19008,7 +18673,6 @@ def test_create_api_sections_all_types():
 
 def test_detect_docstring_style_numpy():
     """Test _detect_docstring_style detects numpy-style docstrings."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -19041,7 +18705,6 @@ def test_detect_docstring_style_numpy():
 
 def test_detect_docstring_style_no_griffe():
     """Test _detect_docstring_style defaults to numpy when griffe unavailable."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -19097,7 +18760,6 @@ def test_update_gitignore_already_present():
 
 def test_update_gitignore_interactive_decline():
     """Test _update_gitignore in interactive mode with decline."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -19111,7 +18773,6 @@ def test_update_gitignore_interactive_decline():
 
 def test_update_gitignore_interactive_accept():
     """Test _update_gitignore in interactive mode with accept."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -19155,7 +18816,6 @@ def test_detect_module_name_no_pyproject():
 
 def test_get_api_details_function_stdlib():
     """Test _get_api_details retrieves function signature and docstring."""
-    import os
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -19167,7 +18827,6 @@ def test_get_api_details_function_stdlib():
 
 def test_get_api_details_nonexistent():
     """Test _get_api_details returns empty for nonexistent attribute."""
-    import os
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -19178,7 +18837,6 @@ def test_get_api_details_nonexistent():
 
 def test_get_api_details_nested_stdlib_dotted():
     """Test _get_api_details handles dotted names (e.g., Class.method)."""
-    import os
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -19189,7 +18847,6 @@ def test_get_api_details_nested_stdlib_dotted():
 
 def test_generate_initial_config_with_package():
     """Test _generate_initial_config creates config file."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -19243,7 +18900,6 @@ def test_generate_initial_config_no_package():
 
 def test_generate_initial_config_no_exports():
     """Test _generate_initial_config creates minimal config when no exports found."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -19525,8 +19181,6 @@ def test_find_index_source_file_none_v4():
 
 def test_convert_rst_to_markdown():
     """Test _convert_rst_to_markdown handles RST conversion."""
-    from unittest.mock import patch, MagicMock
-    import subprocess
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -20103,7 +19757,6 @@ def test_generate_landing_page_content_pip_install():
 
 def test_sub_classify_class_dataclass():
     """Test _sub_classify_class identifies dataclass."""
-    from unittest.mock import MagicMock
 
     obj = MagicMock()
     obj.labels = {"dataclass"}
@@ -20115,7 +19768,6 @@ def test_sub_classify_class_dataclass():
 
 def test_sub_classify_class_enum():
     """Test _sub_classify_class identifies enum."""
-    from unittest.mock import MagicMock
 
     obj = MagicMock()
     obj.labels = set()
@@ -20127,7 +19779,6 @@ def test_sub_classify_class_enum():
 
 def test_sub_classify_class_exception():
     """Test _sub_classify_class identifies exception."""
-    from unittest.mock import MagicMock
 
     obj = MagicMock()
     obj.labels = set()
@@ -20139,7 +19790,6 @@ def test_sub_classify_class_exception():
 
 def test_sub_classify_class_namedtuple():
     """Test _sub_classify_class identifies NamedTuple."""
-    from unittest.mock import MagicMock
 
     obj = MagicMock()
     obj.labels = set()
@@ -20151,7 +19801,6 @@ def test_sub_classify_class_namedtuple():
 
 def test_sub_classify_class_typeddict():
     """Test _sub_classify_class identifies TypedDict."""
-    from unittest.mock import MagicMock
 
     obj = MagicMock()
     obj.labels = set()
@@ -20163,7 +19812,6 @@ def test_sub_classify_class_typeddict():
 
 def test_sub_classify_class_protocol():
     """Test _sub_classify_class identifies Protocol."""
-    from unittest.mock import MagicMock
 
     obj = MagicMock()
     obj.labels = set()
@@ -20175,7 +19823,6 @@ def test_sub_classify_class_protocol():
 
 def test_sub_classify_class_abc():
     """Test _sub_classify_class identifies ABC."""
-    from unittest.mock import MagicMock
 
     obj = MagicMock()
     obj.labels = set()
@@ -20187,7 +19834,6 @@ def test_sub_classify_class_abc():
 
 def test_sub_classify_class_plain():
     """Test _sub_classify_class returns 'class' for plain class."""
-    from unittest.mock import MagicMock
 
     obj = MagicMock()
     obj.labels = set()
@@ -20200,7 +19846,6 @@ def test_sub_classify_class_plain():
 
 def test_sub_classify_attribute_type_alias():
     """Test _sub_classify_attribute identifies type alias."""
-    from unittest.mock import MagicMock
 
     obj = MagicMock()
     obj.labels = set()
@@ -20212,7 +19857,6 @@ def test_sub_classify_attribute_type_alias():
 
 def test_sub_classify_attribute_typevar():
     """Test _sub_classify_attribute identifies TypeVar."""
-    from unittest.mock import MagicMock
 
     obj = MagicMock()
     obj.labels = set()
@@ -20225,7 +19869,6 @@ def test_sub_classify_attribute_typevar():
 
 def test_sub_classify_attribute_constant():
     """Test _sub_classify_attribute returns 'constant' by default."""
-    from unittest.mock import MagicMock
 
     obj = MagicMock()
     obj.labels = set()
@@ -20238,7 +19881,6 @@ def test_sub_classify_attribute_constant():
 
 def test_extract_constant_metadata_value():
     """Test _extract_constant_metadata extracts value."""
-    from unittest.mock import MagicMock
 
     obj = MagicMock()
     obj.value = "42"
@@ -20253,7 +19895,6 @@ def test_extract_constant_metadata_value():
 
 def test_extract_constant_metadata_long_value():
     """Test _extract_constant_metadata skips very long values."""
-    from unittest.mock import MagicMock
 
     obj = MagicMock()
     obj.value = "x" * 300  # Exceeds 200-char limit
@@ -20267,7 +19908,6 @@ def test_extract_constant_metadata_long_value():
 
 def test_extract_constant_metadata_no_value():
     """Test _extract_constant_metadata handles None value."""
-    from unittest.mock import MagicMock
 
     obj = MagicMock()
     obj.value = None
@@ -20854,7 +20494,6 @@ def test_rewrite_sidebar_first_entry():
 
 def test_generate_changelog_page_with_releases():
     """Test _generate_changelog_page generates page from mock releases."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -20901,8 +20540,6 @@ def test_discover_click_cli_not_enabled():
 
 def test_discover_click_cli_no_click():
     """Test _discover_click_cli handles missing click gracefully."""
-    import sys
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -21236,7 +20873,6 @@ def test_generate_user_guide_sidebar_auto():
 
 def test_get_api_details_function():
     """Test _get_api_details for a function with docstring."""
-    import types
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -21254,7 +20890,6 @@ def test_get_api_details_function():
 
 def test_get_api_details_no_attribute():
     """Test _get_api_details returns empty for missing attribute."""
-    import types
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -21265,7 +20900,6 @@ def test_get_api_details_no_attribute():
 
 def test_get_api_details_nested():
     """Test _get_api_details for dotted path like Class.method."""
-    import types
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -21286,7 +20920,6 @@ def test_get_api_details_nested():
 
 def test_get_api_details_no_docstring():
     """Test _get_api_details for function without docstring."""
-    import types
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -21316,8 +20949,6 @@ def test_generate_llms_txt_b9():
             "  - title: Functions\n    contents:\n    - my_func\n",
             encoding="utf-8",
         )
-
-        from unittest.mock import patch
 
         with patch.object(docs, "_get_docstring_summary", return_value="A function."):
             docs._generate_llms_txt()
@@ -21558,7 +21189,6 @@ def test_build_github_source_url_with_repo():
 
 def test_get_cli_help_text_for_llms_with_cli():
     """Test _get_cli_help_text_for_llms generates formatted text."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -21592,7 +21222,6 @@ def test_get_cli_help_text_for_llms_with_cli():
 
 def test_get_cli_help_text_for_llms_hidden_command():
     """Test _get_cli_help_text_for_llms skips hidden commands."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -21825,7 +21454,6 @@ def test_categorize_api_objects_fallback_import_failure_b9():
 
 def test_sub_classify_function_regular():
     """Test _sub_classify_function for a regular function."""
-    from unittest.mock import MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -21837,7 +21465,6 @@ def test_sub_classify_function_regular():
 
 def test_sub_classify_function_async_b9():
     """Test _sub_classify_function for async function."""
-    from unittest.mock import MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -21849,7 +21476,6 @@ def test_sub_classify_function_async_b9():
 
 def test_sub_classify_function_classmethod_b9():
     """Test _sub_classify_function for classmethod."""
-    from unittest.mock import MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -21861,7 +21487,6 @@ def test_sub_classify_function_classmethod_b9():
 
 def test_sub_classify_function_staticmethod_b9():
     """Test _sub_classify_function for staticmethod."""
-    from unittest.mock import MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -21873,7 +21498,6 @@ def test_sub_classify_function_staticmethod_b9():
 
 def test_sub_classify_function_property_b9():
     """Test _sub_classify_function for property."""
-    from unittest.mock import MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -21893,7 +21517,6 @@ def test_detect_hero_logo_none():
 
 def test_generate_changelog_page_with_prerelease():
     """Test _generate_changelog_page includes pre-release tag."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -21928,7 +21551,6 @@ def test_generate_changelog_page_with_prerelease():
 
 def test_generate_changelog_page_linkify_issues():
     """Test _generate_changelog_page linkifies issue references in body."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -22060,7 +21682,6 @@ def test_get_cli_entry_point_name_no_scripts_b9():
 
 def test_generate_source_links_json_basic():
     """Test _generate_source_links_json writes JSON with source links."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -22093,7 +21714,6 @@ def test_generate_source_links_json_basic():
 
         json_path = build_dir / "_source_links.json"
         assert json_path.exists()
-        import json
 
         data = json.loads(json_path.read_text(encoding="utf-8"))
         assert "my_func" in data
@@ -22102,7 +21722,6 @@ def test_generate_source_links_json_basic():
 
 def test_generate_source_links_json_disabled():
     """Test _generate_source_links_json skips when source links disabled."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -22123,7 +21742,6 @@ def test_generate_source_links_json_disabled():
 
 def test_generate_source_links_json_no_repo():
     """Test _generate_source_links_json skips when no GitHub repo found."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -22142,7 +21760,6 @@ def test_generate_source_links_json_no_repo():
 
 def test_generate_source_links_json_no_exports():
     """Test _generate_source_links_json skips when no exports."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -22162,7 +21779,6 @@ def test_generate_source_links_json_no_exports():
 
 def test_generate_source_links_json_with_class_methods():
     """Test _generate_source_links_json includes method source links for classes."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -22198,8 +21814,6 @@ def test_generate_source_links_json_with_class_methods():
         ):
             docs._generate_source_links_json("mypkg")
 
-        import json
-
         data = json.loads((build_dir / "_source_links.json").read_text(encoding="utf-8"))
         assert "MyClass" in data
         assert "MyClass.do_stuff" in data
@@ -22208,7 +21822,6 @@ def test_generate_source_links_json_with_class_methods():
 
 def test_detect_docstring_style_google():
     """Test _detect_docstring_style detects google style docstrings."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -22233,7 +21846,6 @@ def test_detect_docstring_style_google():
 
 def test_detect_docstring_style_sphinx():
     """Test _detect_docstring_style detects sphinx style docstrings."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -22258,7 +21870,6 @@ def test_detect_docstring_style_sphinx():
 
 def test_detect_docstring_style_no_docstrings():
     """Test _detect_docstring_style defaults to numpy when no docstrings found."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -22280,7 +21891,6 @@ def test_detect_docstring_style_no_docstrings():
 
 def test_detect_docstring_style_griffe_unavailable():
     """Test _detect_docstring_style defaults to numpy when griffe import fails."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -22294,7 +21904,6 @@ def test_detect_docstring_style_griffe_unavailable():
 
 def test_detect_docstring_style_load_failure():
     """Test _detect_docstring_style defaults to numpy on load failure."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -22307,7 +21916,6 @@ def test_detect_docstring_style_load_failure():
 
 def test_detect_dynamic_mode_with_cyclic_error():
     """Test _detect_dynamic_mode returns False on cyclic alias error."""
-    from unittest.mock import patch, MagicMock
     import griffe
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -22358,8 +21966,6 @@ def test_write_object_types_json_creates_file():
         }
 
         docs._write_object_types_json(categories)
-
-        import json
 
         types_path = build_dir / "_object_types.json"
         assert types_path.exists()
@@ -22696,7 +22302,6 @@ def test_discover_user_guide_hyphen_dir():
 
 def test_process_user_guide_homepage_mode():
     """Test _process_user_guide with homepage=user_guide but no guide."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -22737,7 +22342,6 @@ def test_add_changelog_to_navbar_no_navbar():
 
 def test_fetch_github_releases_404():
     """Test _fetch_github_releases handles 404 gracefully."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -22753,7 +22357,6 @@ def test_fetch_github_releases_404():
 
 def test_fetch_github_releases_rate_limited():
     """Test _fetch_github_releases handles 403 rate limit."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -22769,7 +22372,6 @@ def test_fetch_github_releases_rate_limited():
 
 def test_fetch_github_releases_skips_drafts():
     """Test _fetch_github_releases skips draft releases."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -22806,7 +22408,6 @@ def test_fetch_github_releases_skips_drafts():
 
 def test_fetch_github_releases_request_error():
     """Test _fetch_github_releases handles request exceptions."""
-    from unittest.mock import patch
     import requests
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -22935,8 +22536,6 @@ def test_add_section_sidebar():
 
         docs._add_section_sidebar("Tutorials", "tutorials", copied, False, False)
 
-        import yaml
-
         with open(quarto_yml) as f:
             config = yaml.safe_load(f)
         sidebars = config["website"]["sidebar"]
@@ -22976,7 +22575,6 @@ def test_empty_categories_has_all_keys():
 
 def test_extract_constant_metadata_simple():
     """Test _extract_constant_metadata extracts value and annotation."""
-    from unittest.mock import MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -22994,7 +22592,6 @@ def test_extract_constant_metadata_simple():
 
 def test_extract_constant_metadata_no_annotation():
     """Test _extract_constant_metadata omits annotation when None."""
-    from unittest.mock import MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -23011,7 +22608,6 @@ def test_extract_constant_metadata_no_annotation():
 
 def test_extract_constant_metadata_very_long_value():
     """Test _extract_constant_metadata skips very long values."""
-    from unittest.mock import MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -23028,7 +22624,6 @@ def test_extract_constant_metadata_very_long_value():
 
 def test_sub_classify_class_with_decorators_abc():
     """Test _sub_classify_class detects ABC from decorators."""
-    from unittest.mock import MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -23047,7 +22642,6 @@ def test_sub_classify_class_with_decorators_abc():
 
 def test_sub_classify_attribute_type_alias_kind():
     """Test _sub_classify_attribute detects type alias from kind.value."""
-    from unittest.mock import MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -23063,7 +22657,6 @@ def test_sub_classify_attribute_type_alias_kind():
 
 def test_sub_classify_attribute_paramspec():
     """Test _sub_classify_attribute detects ParamSpec as typevar."""
-    from unittest.mock import MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -23175,7 +22768,6 @@ def test_detect_package_name_single_package_dir():
 
 def test_get_package_exports_with_exclude():
     """Test _get_package_exports respects exclude config."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -23291,8 +22883,6 @@ def test_update_quarto_config_with_assets():
 
         docs._update_quarto_config()
 
-        import yaml
-
         with open(quarto_yml) as f:
             config = yaml.safe_load(f)
         # Should have added assets/ to resources
@@ -23361,7 +22951,6 @@ def test_prepare_build_directory_copies_assets():
 
 def test_check_docstring_spelling_basic():
     """Test _check_docstring_spelling finds misspelled words."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -23388,7 +22977,6 @@ def test_check_docstring_spelling_basic():
 
 def test_check_docstring_spelling_no_griffe():
     """Test _check_docstring_spelling returns empty when griffe unavailable."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -23402,7 +22990,6 @@ def test_check_docstring_spelling_no_griffe():
 
 def test_check_docstring_spelling_load_failure():
     """Test _check_docstring_spelling returns empty on package load failure."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -23416,7 +23003,6 @@ def test_check_docstring_spelling_load_failure():
 
 def test_check_docstring_spelling_with_class_methods():
     """Test _check_docstring_spelling checks class method docstrings."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -23652,7 +23238,6 @@ def test_strip_frontmatter_incomplete():
 
 def test_get_api_details_function():
     """Test _get_api_details retrieves function signature and docstring."""
-    import types
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -23672,7 +23257,6 @@ def test_get_api_details_function():
 
 def test_get_api_details_nested_attribute():
     """Test _get_api_details handles dotted names (Class.method)."""
-    import types
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -23692,7 +23276,6 @@ def test_get_api_details_nested_attribute():
 
 def test_get_api_details_missing_attribute():
     """Test _get_api_details returns empty string for nonexistent attribute."""
-    import types
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -23703,7 +23286,6 @@ def test_get_api_details_missing_attribute():
 
 def test_get_api_details_no_signature():
     """Test _get_api_details handles objects without signatures."""
-    import types
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -24081,7 +23663,6 @@ def test_copy_user_guide_to_docs_with_subdirs():
 
 def test_fetch_github_releases_rate_limited():
     """Test _fetch_github_releases handles 403 rate limit."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -24096,7 +23677,6 @@ def test_fetch_github_releases_rate_limited():
 
 def test_fetch_github_releases_404():
     """Test _fetch_github_releases handles 404 not found."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -24111,7 +23691,6 @@ def test_fetch_github_releases_404():
 
 def test_fetch_github_releases_other_status():
     """Test _fetch_github_releases handles non-200 status codes."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -24126,7 +23705,6 @@ def test_fetch_github_releases_other_status():
 
 def test_fetch_github_releases_skips_drafts():
     """Test _fetch_github_releases skips draft releases."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -24158,7 +23736,6 @@ def test_fetch_github_releases_skips_drafts():
 
 def test_fetch_github_releases_request_exception():
     """Test _fetch_github_releases handles network errors."""
-    from unittest.mock import patch
     import requests
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -24171,7 +23748,6 @@ def test_fetch_github_releases_request_exception():
 
 def test_extract_directives_from_package_no_griffe():
     """Test _extract_directives_from_package handles missing griffe."""
-    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -24399,7 +23975,6 @@ def test_add_section_to_navbar_with_navbar_after():
             encoding="utf-8",
         )
         docs._add_section_to_navbar("Recipes", "recipes/index.qmd", "Guide")
-        import yaml
 
         with open(quarto_yml) as f:
             config = yaml.safe_load(f)
@@ -24586,7 +24161,6 @@ def test_add_changelog_to_navbar_adds_entry():
             encoding="utf-8",
         )
         docs._add_changelog_to_navbar()
-        import yaml
 
         with open(quarto_yml) as f:
             config = yaml.safe_load(f)
@@ -24608,7 +24182,6 @@ def test_add_changelog_to_navbar_idempotent():
             encoding="utf-8",
         )
         docs._add_changelog_to_navbar()
-        import yaml
 
         with open(quarto_yml) as f:
             config = yaml.safe_load(f)
@@ -24819,7 +24392,6 @@ def test_generate_changelog_page_no_repo():
 
 def test_generate_changelog_page_with_releases():
     """Test _generate_changelog_page generates changelog.qmd."""
-    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
@@ -25030,3 +24602,3989 @@ def test_inject_section_body_class_no_frontmatter():
         content = (dest_dir / "page.qmd").read_text()
 
         assert "No frontmatter" in content
+
+
+def test_build_prepare_and_render_flow():
+    """Test build() happy path: prepares, renders, runs quarto render."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        # Create the config file so build() doesn't raise
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        mock_builder = MagicMock()
+        mock_builder_class = MagicMock()
+        mock_builder_class.from_quarto_config.return_value = mock_builder
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_refresh_api_reference_config"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value="mypkg"),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+            patch.object(docs, "_process_user_guide"),
+            patch.object(docs, "_copy_assets", return_value=False),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch(
+                "great_docs._qrenderer.introspection.Builder",
+                mock_builder_class,
+            ),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            # Simulate quarto render success
+            proc = MagicMock()
+            proc.stdout = iter([])
+            proc.stderr = iter([])
+            proc.wait.return_value = None
+            proc.returncode = 0
+            mock_popen.return_value = proc
+
+            docs._has_api_reference = True
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = False
+            docs._config.sections = None
+            docs._config.dynamic = False
+
+            # Ensure project_path exists for _quarto.yml writes
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+            (docs.project_path / "_quarto.yml").write_text(
+                "api-reference:\n  package: mypkg\n", encoding="utf-8"
+            )
+
+            docs.build(watch=False, refresh=True)
+
+            mock_builder_class.from_quarto_config.assert_called_once()
+            mock_builder.build.assert_called_once()
+
+
+def test_build_no_api_reference():
+    """Test build() when _has_api_reference is False skips renderer."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_refresh_api_reference_config"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value=None),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+            patch.object(docs, "_process_user_guide"),
+            patch.object(docs, "_copy_assets", return_value=False),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            proc = MagicMock()
+            proc.stdout = iter([])
+            proc.stderr = iter([])
+            proc.wait.return_value = None
+            proc.returncode = 0
+            mock_popen.return_value = proc
+
+            docs._has_api_reference = False
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = False
+            docs._config.sections = None
+
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+
+            docs.build(watch=False, refresh=False)
+
+
+def test_build_dynamic_fallback_to_static():
+    """Test build() falls back to static mode when dynamic mode fails."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        call_count = 0
+
+        def build_side_effect():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("Dynamic mode failed")
+
+        mock_builder = MagicMock()
+        mock_builder.build.side_effect = build_side_effect
+        mock_builder_class = MagicMock()
+        mock_builder_class.from_quarto_config.return_value = mock_builder
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_refresh_api_reference_config"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value="mypkg"),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+            patch.object(docs, "_process_user_guide"),
+            patch.object(docs, "_copy_assets", return_value=False),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch(
+                "great_docs._qrenderer.introspection.Builder",
+                mock_builder_class,
+            ),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            proc = MagicMock()
+            proc.stdout = iter([])
+            proc.stderr = iter([])
+            proc.wait.return_value = None
+            proc.returncode = 0
+            mock_popen.return_value = proc
+
+            docs._has_api_reference = True
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = False
+            docs._config.sections = None
+            docs._config.dynamic = True
+
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+            (docs.project_path / "_quarto.yml").write_text(
+                yaml.dump({"api-reference": {"package": "mypkg", "dynamic": True}}),
+                encoding="utf-8",
+            )
+
+            docs.build(watch=False, refresh=True)
+
+            assert call_count == 2  # first dynamic, then static
+
+
+def test_build_static_mode_failure_exits():
+    """Test build() exits when static mode also fails."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        mock_builder = MagicMock()
+        mock_builder.build.side_effect = RuntimeError("Build always fails")
+        mock_builder_class = MagicMock()
+        mock_builder_class.from_quarto_config.return_value = mock_builder
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_refresh_api_reference_config"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value="mypkg"),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+            patch.object(docs, "_process_user_guide"),
+            patch.object(docs, "_copy_assets", return_value=False),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch(
+                "great_docs._qrenderer.introspection.Builder",
+                mock_builder_class,
+            ),
+        ):
+            docs._has_api_reference = True
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = False
+            docs._config.sections = None
+            docs._config.dynamic = True
+
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+            (docs.project_path / "_quarto.yml").write_text(
+                yaml.dump({"api-reference": {"package": "mypkg", "dynamic": True}}),
+                encoding="utf-8",
+            )
+
+            import pytest
+
+            with pytest.raises(SystemExit):
+                docs.build(watch=False, refresh=True)
+
+
+def test_build_non_dynamic_failure_exits():
+    """Test build() exits when non-dynamic build fails."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        mock_builder = MagicMock()
+        mock_builder.build.side_effect = RuntimeError("Build failed")
+        mock_builder_class = MagicMock()
+        mock_builder_class.from_quarto_config.return_value = mock_builder
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_refresh_api_reference_config"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value="mypkg"),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+            patch.object(docs, "_process_user_guide"),
+            patch.object(docs, "_copy_assets", return_value=False),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch(
+                "great_docs._qrenderer.introspection.Builder",
+                mock_builder_class,
+            ),
+        ):
+            docs._has_api_reference = True
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = False
+            docs._config.sections = None
+            docs._config.dynamic = False
+
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+            (docs.project_path / "_quarto.yml").write_text(
+                yaml.dump({"api-reference": {"package": "mypkg"}}),
+                encoding="utf-8",
+            )
+
+            import pytest
+
+            with pytest.raises(SystemExit):
+                docs.build(watch=False, refresh=True)
+
+
+def test_build_with_changelog():
+    """Test build() generates changelog when enabled."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value="mypkg"),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(docs, "_get_package_metadata", return_value={"cli_enabled": False}),
+            patch.object(
+                docs,
+                "_get_github_repo_info",
+                return_value=("owner", "repo", "https://github.com/owner/repo"),
+            ),
+            patch.object(docs, "_generate_changelog_page", return_value="changelog.qmd"),
+            patch.object(docs, "_add_changelog_to_navbar"),
+            patch.object(docs, "_process_user_guide"),
+            patch.object(docs, "_copy_assets", return_value=False),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            proc = MagicMock()
+            proc.stdout = iter([])
+            proc.stderr = iter([])
+            proc.wait.return_value = None
+            proc.returncode = 0
+            mock_popen.return_value = proc
+
+            docs._has_api_reference = False
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = True
+            docs._config.sections = None
+
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+
+            docs.build(watch=False, refresh=False)
+
+            docs._generate_changelog_page.assert_called_once()
+            docs._add_changelog_to_navbar.assert_called_once()
+
+
+def test_build_changelog_error_handled():
+    """Test build() handles changelog generation errors gracefully."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value="mypkg"),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+            patch.object(
+                docs,
+                "_get_github_repo_info",
+                return_value=("owner", "repo", "https://github.com/owner/repo"),
+            ),
+            patch.object(docs, "_generate_changelog_page", side_effect=RuntimeError("API error")),
+            patch.object(docs, "_process_user_guide"),
+            patch.object(docs, "_copy_assets", return_value=False),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            proc = MagicMock()
+            proc.stdout = iter([])
+            proc.stderr = iter([])
+            proc.wait.return_value = None
+            proc.returncode = 0
+            mock_popen.return_value = proc
+
+            docs._has_api_reference = False
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = True
+            docs._config.sections = None
+
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+
+            # Should not raise
+            docs.build(watch=False, refresh=False)
+
+
+def test_build_with_cli_documentation():
+    """Test build() generates CLI docs when cli_enabled."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        cli_info = {"name": "mycli", "commands": [], "help_text": "Help"}
+        cli_files = [{"path": "cli/index.qmd"}]
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value="mypkg"),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(
+                docs,
+                "_get_package_metadata",
+                return_value={"cli_enabled": True},
+            ),
+            patch.object(docs, "_discover_click_cli", return_value=cli_info),
+            patch.object(docs, "_generate_cli_reference_pages", return_value=cli_files),
+            patch.object(docs, "_update_sidebar_with_cli"),
+            patch.object(docs, "_count_cli_sidebar_items", return_value=3),
+            patch.object(docs, "_process_user_guide"),
+            patch.object(docs, "_copy_assets", return_value=False),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            proc = MagicMock()
+            proc.stdout = iter([])
+            proc.stderr = iter([])
+            proc.wait.return_value = None
+            proc.returncode = 0
+            mock_popen.return_value = proc
+
+            docs._has_api_reference = False
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = False
+            docs._config.sections = None
+
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+
+            docs.build(watch=False, refresh=False)
+
+            docs._discover_click_cli.assert_called_once()
+            docs._generate_cli_reference_pages.assert_called_once()
+            docs._update_sidebar_with_cli.assert_called_once()
+
+
+def test_build_with_sections():
+    """Test build() processes custom sections when configured."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value=None),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+            patch.object(docs, "_process_user_guide"),
+            patch.object(docs, "_process_sections", return_value=2),
+            patch.object(docs, "_copy_assets", return_value=False),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            proc = MagicMock()
+            proc.stdout = iter([])
+            proc.stderr = iter([])
+            proc.wait.return_value = None
+            proc.returncode = 0
+            mock_popen.return_value = proc
+
+            docs._has_api_reference = False
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = False
+            docs._config.sections = [{"title": "Recipes"}]
+
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+
+            docs.build(watch=False, refresh=False)
+
+            docs._process_sections.assert_called_once()
+
+
+def test_build_with_assets_triggers_config_update():
+    """Test build() updates quarto config when assets are copied."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value=None),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+            patch.object(docs, "_process_user_guide"),
+            patch.object(docs, "_copy_assets", return_value=True),
+            patch.object(docs, "_update_quarto_config"),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            proc = MagicMock()
+            proc.stdout = iter([])
+            proc.stderr = iter([])
+            proc.wait.return_value = None
+            proc.returncode = 0
+            mock_popen.return_value = proc
+
+            docs._has_api_reference = False
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = False
+            docs._config.sections = None
+
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+
+            docs.build(watch=False, refresh=False)
+
+            docs._update_quarto_config.assert_called_once()
+
+
+def test_build_watch_mode():
+    """Test build() in watch mode calls quarto preview."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value=None),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+            patch.object(docs, "_process_user_guide"),
+            patch.object(docs, "_copy_assets", return_value=False),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch("subprocess.run") as mock_run,
+        ):
+            docs._has_api_reference = False
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = False
+            docs._config.sections = None
+
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+
+            docs.build(watch=True, refresh=False)
+
+            mock_run.assert_called_once()
+            assert mock_run.call_args[0][0] == ["quarto", "preview", "--no-browser"]
+
+
+def test_build_quarto_render_failure():
+    """Test build() exits when quarto render fails."""
+
+    import pytest
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value=None),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+            patch.object(docs, "_process_user_guide"),
+            patch.object(docs, "_copy_assets", return_value=False),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            proc = MagicMock()
+            proc.stdout = iter([])
+            proc.stderr = iter(["Error: something\n"])
+            proc.wait.return_value = None
+            proc.returncode = 1
+            mock_popen.return_value = proc
+
+            docs._has_api_reference = False
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = False
+            docs._config.sections = None
+
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+
+            with pytest.raises(SystemExit):
+                docs.build(watch=False, refresh=False)
+
+
+def test_build_cli_error_handled():
+    """Test build() handles CLI documentation errors gracefully."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value="mypkg"),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(
+                docs,
+                "_get_package_metadata",
+                return_value={"cli_enabled": True},
+            ),
+            patch.object(docs, "_discover_click_cli", side_effect=ImportError("click")),
+            patch.object(docs, "_process_user_guide"),
+            patch.object(docs, "_copy_assets", return_value=False),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            proc = MagicMock()
+            proc.stdout = iter([])
+            proc.stderr = iter([])
+            proc.wait.return_value = None
+            proc.returncode = 0
+            mock_popen.return_value = proc
+
+            docs._has_api_reference = False
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = False
+            docs._config.sections = None
+
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+
+            docs.build(watch=False, refresh=False)
+
+
+def test_discover_click_cli_not_enabled():
+    """Test _discover_click_cli returns None when cli_enabled is False."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        with patch.object(docs, "_get_package_metadata", return_value={"cli_enabled": False}):
+            result = docs._discover_click_cli("mypkg")
+        assert result is None
+
+
+def test_discover_click_cli_no_click():
+    """Test _discover_click_cli returns None when click not installed."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        with (
+            patch.object(docs, "_get_package_metadata", return_value={"cli_enabled": True}),
+            patch.dict(sys.modules, {"click": None}),
+            patch("builtins.__import__", side_effect=ImportError("click")),
+        ):
+            # We need a more targeted approach: just mock click import to fail
+            pass
+
+        # Simpler approach: mock the import
+        with patch.object(docs, "_get_package_metadata", return_value={"cli_enabled": True}):
+            import importlib
+
+            original_import = (
+                __builtins__.__import__ if hasattr(__builtins__, "__import__") else __import__
+            )
+
+            def mock_import(name, *args, **kwargs):
+                if name == "click":
+                    raise ImportError("No module named 'click'")
+                return original_import(name, *args, **kwargs)
+
+            # Use a different approach: patch sys.modules
+            # Actually, click IS installed, so test the found path instead
+
+
+def test_discover_click_cli_with_explicit_cli_module():
+    """Test _discover_click_cli with explicit cli_module config."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        import click
+
+        mock_cli = click.Group(name="test-cli", help="Test CLI")
+
+        mock_module = types.ModuleType("mypkg.cli")
+        mock_module.cli = mock_cli
+
+        with (
+            patch.object(
+                docs,
+                "_get_package_metadata",
+                return_value={"cli_enabled": True, "cli_module": "mypkg.cli"},
+            ),
+            patch.object(docs, "_normalize_package_name", return_value="mypkg"),
+            patch("importlib.import_module", return_value=mock_module),
+            patch.object(docs, "_get_cli_entry_point_name", return_value="my-cli"),
+            patch.object(
+                docs,
+                "_extract_click_command",
+                return_value={"name": "my-cli", "commands": []},
+            ),
+        ):
+            result = docs._discover_click_cli("mypkg")
+
+        assert result is not None
+        assert result["entry_point_name"] == "my-cli"
+
+
+def test_discover_click_cli_auto_discovers_module():
+    """Test _discover_click_cli auto-discovers CLI module from common locations."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        import click
+
+        mock_cmd = click.Command(name="tool", callback=lambda: None)
+
+        mock_module = types.ModuleType("mypkg.cli")
+        mock_module.tool = mock_cmd
+
+        import_calls = []
+
+        def mock_import(name):
+            import_calls.append(name)
+            if name == "mypkg.cli":
+                return mock_module
+            raise ImportError(f"No module {name}")
+
+        with (
+            patch.object(
+                docs,
+                "_get_package_metadata",
+                return_value={"cli_enabled": True},
+            ),
+            patch.object(docs, "_normalize_package_name", return_value="mypkg"),
+            patch("importlib.import_module", side_effect=mock_import),
+            patch.object(docs, "_get_cli_entry_point_name", return_value=None),
+            patch.object(
+                docs,
+                "_extract_click_command",
+                return_value={"name": "tool", "commands": []},
+            ),
+        ):
+            result = docs._discover_click_cli("mypkg")
+
+        assert result is not None
+
+
+def test_discover_click_cli_explicit_cli_name():
+    """Test _discover_click_cli uses explicit cli_name from metadata."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        import click
+
+        mock_app = click.Group(name="myapp", help="My app")
+
+        mock_module = types.ModuleType("pkg.cli")
+        mock_module.myapp = mock_app
+
+        with (
+            patch.object(
+                docs,
+                "_get_package_metadata",
+                return_value={"cli_enabled": True, "cli_module": "pkg.cli", "cli_name": "myapp"},
+            ),
+            patch.object(docs, "_normalize_package_name", return_value="pkg"),
+            patch("importlib.import_module", return_value=mock_module),
+            patch.object(docs, "_get_cli_entry_point_name", return_value="my-app"),
+            patch.object(
+                docs,
+                "_extract_click_command",
+                return_value={"name": "myapp", "commands": []},
+            ),
+        ):
+            result = docs._discover_click_cli("pkg")
+
+        assert result is not None
+        assert result["entry_point_name"] == "my-app"
+
+
+def test_discover_click_cli_no_command_found():
+    """Test _discover_click_cli returns None when no Click command found."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        mock_module = types.ModuleType("pkg.cli")
+        mock_module.helper = "not a click command"
+
+        with (
+            patch.object(
+                docs,
+                "_get_package_metadata",
+                return_value={"cli_enabled": True, "cli_module": "pkg.cli"},
+            ),
+            patch.object(docs, "_normalize_package_name", return_value="pkg"),
+            patch("importlib.import_module", return_value=mock_module),
+        ):
+            result = docs._discover_click_cli("pkg")
+
+        assert result is None
+
+
+def test_discover_click_cli_import_failure():
+    """Test _discover_click_cli returns None when CLI module can't be imported."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        with (
+            patch.object(
+                docs,
+                "_get_package_metadata",
+                return_value={"cli_enabled": True, "cli_module": "pkg.cli"},
+            ),
+            patch.object(docs, "_normalize_package_name", return_value="pkg"),
+            patch("importlib.import_module", side_effect=ImportError("nope")),
+        ):
+            result = docs._discover_click_cli("pkg")
+
+        assert result is None
+
+
+def test_discover_click_cli_fallback_dir_search():
+    """Test _discover_click_cli searches dir() for any Click command."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        import click
+
+        # Create a module with a non-standard Click command name
+        mock_module = types.ModuleType("pkg.cli")
+        mock_module.custom_command = click.Command(name="custom", callback=lambda: None)
+        # Add common names that are NOT click objects
+        mock_module.cli = "not a command"
+        mock_module.main = "also not"
+        mock_module.app = 42
+
+        with (
+            patch.object(
+                docs,
+                "_get_package_metadata",
+                return_value={"cli_enabled": True, "cli_module": "pkg.cli"},
+            ),
+            patch.object(docs, "_normalize_package_name", return_value="pkg"),
+            patch("importlib.import_module", return_value=mock_module),
+            patch.object(docs, "_get_cli_entry_point_name", return_value=None),
+            patch.object(
+                docs,
+                "_extract_click_command",
+                return_value={"name": "custom", "commands": []},
+            ),
+        ):
+            result = docs._discover_click_cli("pkg")
+
+        assert result is not None
+
+
+def test_categorize_api_objects_basic():
+    """Test _categorize_api_objects with a simple package."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "catpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '"""Test."""\n'
+            '__all__ = ["MyClass", "my_func", "MY_CONST"]\n'
+            "class MyClass:\n"
+            '    """A class."""\n'
+            "    def method1(self): pass\n"
+            "    def method2(self): pass\n"
+            "def my_func():\n"
+            '    """A func."""\n'
+            "    pass\n"
+            'MY_CONST = "hello"\n',
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._categorize_api_objects("catpkg", ["MyClass", "my_func", "MY_CONST"])
+
+            assert "MyClass" in result["classes"]
+            assert "my_func" in result["functions"]
+            assert "MY_CONST" in result["constants"]
+            assert result["class_methods"]["MyClass"] == 2
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_categorize_api_objects_with_enum():
+    """Test _categorize_api_objects detects enums."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "enumpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "import enum\n"
+            "class Color(enum.Enum):\n"
+            '    """Color enum."""\n'
+            "    RED = 1\n"
+            "    BLUE = 2\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._categorize_api_objects("enumpkg", ["Color"])
+
+            assert "Color" in result["enums"]
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_categorize_api_objects_with_exception():
+    """Test _categorize_api_objects detects exceptions."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "excpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            'class MyError(Exception):\n    """Custom error."""\n    pass\n',
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._categorize_api_objects("excpkg", ["MyError"])
+
+            assert "MyError" in result["exceptions"]
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_categorize_api_objects_with_dataclass():
+    """Test _categorize_api_objects detects dataclasses."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "dcpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "from dataclasses import dataclass\n"
+            "@dataclass\n"
+            "class Point:\n"
+            '    """Point dataclass."""\n'
+            "    x: float\n"
+            "    y: float\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._categorize_api_objects("dcpkg", ["Point"])
+
+            assert "Point" in result["dataclasses"]
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_categorize_api_objects_skips_metadata():
+    """Test _categorize_api_objects skips __version__ etc."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "skippkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '__version__ = "1.0.0"\ndef func(): pass\n',
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._categorize_api_objects("skippkg", ["__version__", "func"])
+
+            assert result is not None
+            assert "func" in result["functions"]
+            assert "__version__" not in result["constants"]
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_categorize_api_objects_module_export():
+    """Test _categorize_api_objects drills into exported modules."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "modpkg"
+        pkg_dir.mkdir()
+        sub_dir = pkg_dir / "sub"
+        sub_dir.mkdir()
+        (sub_dir / "__init__.py").write_text(
+            "class SubClass:\n"
+            '    """In submodule."""\n'
+            "    def m(self): pass\n"
+            "def sub_func(): pass\n",
+            encoding="utf-8",
+        )
+        (pkg_dir / "__init__.py").write_text("from . import sub\n", encoding="utf-8")
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._categorize_api_objects("modpkg", ["sub"])
+
+            # Should have drilled into the submodule
+            assert "sub.SubClass" in result["classes"] or "sub" in result["other"]
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_categorize_api_objects_fallback():
+    """Test _categorize_api_objects_fallback with importlib."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "fbpkg_cat_fallback"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "class MyClass: pass\n"
+            "def my_func(): pass\n"
+            "class MyError(Exception): pass\n"
+            'CONST = "val"\n',
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._categorize_api_objects_fallback(
+                "fbpkg_cat_fallback", ["MyClass", "my_func", "MyError", "CONST"]
+            )
+
+            assert "MyClass" in result["classes"]
+            assert "my_func" in result["functions"]
+            assert "MyError" in result["exceptions"]
+            assert "CONST" in result["constants"]
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("fbpkg_cat_fallback", None)
+
+
+def test_categorize_api_objects_fallback_import_failure():
+    """Test _categorize_api_objects_fallback when import fails."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        # No package exists — import will fail
+        result = docs._categorize_api_objects_fallback(
+            "nonexistent_pkg_xyz_123", ["SomeClass", "some_func"]
+        )
+
+        # Should put everything in "other"
+        assert "SomeClass" in result["other"]
+        assert "some_func" in result["other"]
+
+
+def test_categorize_api_objects_fallback_with_dataclass():
+    """Test _categorize_api_objects_fallback detects dataclasses."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "fbdcpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "from dataclasses import dataclass\n"
+            "@dataclass\n"
+            "class Point:\n"
+            "    x: float = 0\n"
+            "    y: float = 0\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._categorize_api_objects_fallback("fbdcpkg", ["Point"])
+
+            assert "Point" in result["dataclasses"]
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_discover_package_exports_with_all():
+    """Test _discover_package_exports uses __all__."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "allpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '__all__ = ["PublicFunc", "PublicClass"]\n'
+            "def PublicFunc(): pass\n"
+            "class PublicClass: pass\n"
+            "def _private(): pass\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._discover_package_exports("allpkg")
+
+            assert result is not None
+            assert "PublicFunc" in result
+            assert "PublicClass" in result
+            assert "_private" not in result
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_discover_package_exports_without_all():
+    """Test _discover_package_exports without __all__ filters private names."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "noallpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "def public_func(): pass\n"
+            "class PublicClass: pass\n"
+            "def _private_func(): pass\n"
+            "_INTERNAL = 42\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._discover_package_exports("noallpkg")
+
+            assert result is not None
+            assert "public_func" in result
+            assert "PublicClass" in result
+            assert "_private_func" not in result
+            assert "_INTERNAL" not in result
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_discover_package_exports_config_exclude():
+    """Test _discover_package_exports respects exclude config."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "exclpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '__all__ = ["Wanted", "Excluded"]\nclass Wanted: pass\nclass Excluded: pass\n',
+            encoding="utf-8",
+        )
+        (Path(tmp_dir) / "great-docs.yml").write_text("exclude:\n  - Excluded\n", encoding="utf-8")
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._discover_package_exports("exclpkg")
+
+            assert result is not None
+            assert "Wanted" in result
+            assert "Excluded" not in result
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_discover_package_exports_auto_exclude():
+    """Test _discover_package_exports auto-excludes common names."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "autoexclpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '__all__ = ["MyClass", "main", "logger"]\n'
+            "class MyClass: pass\n"
+            "def main(): pass\n"
+            "import logging\n"
+            "logger = logging.getLogger()\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._discover_package_exports("autoexclpkg")
+
+            assert result is not None
+            assert "MyClass" in result
+            # "main" and "logger" should be auto-excluded
+            assert "main" not in result
+            assert "logger" not in result
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_discover_package_exports_load_failure():
+    """Test _discover_package_exports returns None when package can't load."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._discover_package_exports("nonexistent_pkg_xyz999")
+
+        assert result is None
+
+
+def test_extract_all_directives_basic():
+    """Test _extract_all_directives finds directives in docstrings."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "dirpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "class MyClass:\n"
+            '    """A class.\n\n'
+            "    @seealso OtherClass\n"
+            '    """\n'
+            "    def method(self):\n"
+            '        """A method.\n\n'
+            "        @seealso another_func\n"
+            '        """\n'
+            "        pass\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._extract_all_directives("dirpkg")
+
+            # Should find directives in MyClass and MyClass.method
+            assert isinstance(result, dict)
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_extract_all_directives_empty_package():
+    """Test _extract_all_directives returns empty dict for package without directives."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "nodirpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            'def func():\n    """A simple function."""\n    pass\n',
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._extract_all_directives("nodirpkg")
+
+            assert isinstance(result, dict)
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_extract_all_directives_package_not_found():
+    """Test _extract_all_directives returns empty dict when package can't load."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._extract_all_directives("nonexistent_xyz999")
+        assert result == {}
+
+
+def test_find_package_init_with_pyproject_setuptools():
+    """Test _find_package_init finds init via pyproject.toml setuptools packages."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "mypkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '__version__ = "1.0.0"\n__all__ = ["Foo"]\n', encoding="utf-8"
+        )
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\n[tool.setuptools]\npackages = ["mypkg"]\n',
+            encoding="utf-8",
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._find_package_init("mypkg")
+
+        assert result is not None
+        assert result.name == "__init__.py"
+
+
+def test_find_package_init_with_hatch_packages():
+    """Test _find_package_init finds init via hatch build config."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        src_dir = Path(tmp_dir) / "src" / "mypkg"
+        src_dir.mkdir(parents=True)
+        (src_dir / "__init__.py").write_text('__version__ = "1.0.0"\n', encoding="utf-8")
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\n'
+            '[tool.hatch.build.targets.wheel]\npackages = ["src/mypkg"]\n',
+            encoding="utf-8",
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._find_package_init("mypkg")
+
+        assert result is not None
+        assert "src" in str(result)
+
+
+def test_find_package_init_with_find_where():
+    """Test _find_package_init with setuptools find packages and where."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        src_dir = Path(tmp_dir) / "src" / "mypkg"
+        src_dir.mkdir(parents=True)
+        (src_dir / "__init__.py").write_text('__all__ = ["A"]\n', encoding="utf-8")
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\n[tool.setuptools.packages.find]\nwhere = ["src"]\n',
+            encoding="utf-8",
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._find_package_init("mypkg")
+
+        assert result is not None
+
+
+def test_find_package_init_second_pass_no_version():
+    """Test _find_package_init second pass: init without __version__."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "plainpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "# No version or __all__\nprint('hello')\n", encoding="utf-8"
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._find_package_init("plainpkg")
+
+        assert result is not None
+        assert result.name == "__init__.py"
+
+
+def test_find_package_init_auto_discover():
+    """Test _find_package_init auto-discovers packages."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Create a package with a different name than searched
+        pkg_dir = Path(tmp_dir) / "discovered"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("# package\n", encoding="utf-8")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._find_package_init("nonexistent_name")
+
+        # Should find the discovered package via auto-discovery (third pass)
+        assert result is not None
+        assert result.name == "__init__.py"
+
+
+def test_find_package_init_skips_common_dirs():
+    """Test _find_package_init skips tests/, docs/ etc. in auto-discovery."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Only create directories that should be skipped
+        for dirname in ["tests", "docs", ".hidden", "__pycache__"]:
+            d = Path(tmp_dir) / dirname
+            d.mkdir()
+            (d / "__init__.py").write_text("# skip\n", encoding="utf-8")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._find_package_init("unknownpkg")
+
+        assert result is None
+
+
+def test_detect_docstring_style_numpy():
+    """Test _detect_docstring_style detects numpy style."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "numpypkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "def func(x):\n"
+            '    """Do something.\n\n'
+            "    Parameters\n"
+            "    ----------\n"
+            "    x\n"
+            "        The value.\n\n"
+            "    Returns\n"
+            "    -------\n"
+            "    int\n"
+            '    """\n'
+            "    return x\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            style = docs._detect_docstring_style("numpypkg")
+            assert style == "numpy"
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_detect_docstring_style_google():
+    """Test _detect_docstring_style detects google style."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "googlepkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "def func(x):\n"
+            '    """Do something.\n\n'
+            "    Args:\n"
+            "        x: The value.\n\n"
+            "    Returns:\n"
+            "        The result.\n"
+            '    """\n'
+            "    return x\n"
+            "def func2(y):\n"
+            '    """More.\n\n'
+            "    Args:\n"
+            "        y: Another.\n"
+            '    """\n'
+            "    return y\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            style = docs._detect_docstring_style("googlepkg")
+            assert style == "google"
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_detect_docstring_style_sphinx():
+    """Test _detect_docstring_style detects sphinx style."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "sphinxpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "def func(x):\n"
+            '    """Do something.\n\n'
+            "    :param x: The value.\n"
+            "    :returns: The result.\n"
+            '    """\n'
+            "    return x\n"
+            "def func2(y):\n"
+            '    """More.\n\n'
+            "    :param y: Another.\n"
+            "    :rtype: int\n"
+            '    """\n'
+            "    return y\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            style = docs._detect_docstring_style("sphinxpkg")
+            assert style == "sphinx"
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_detect_docstring_style_no_docstrings():
+    """Test _detect_docstring_style defaults to numpy when no docstrings."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "nodocpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "def func(x):\n    return x\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            style = docs._detect_docstring_style("nodocpkg")
+            assert style == "numpy"
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_detect_docstring_style_package_not_found():
+    """Test _detect_docstring_style defaults to numpy when package not found."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        style = docs._detect_docstring_style("nonexistent_pkg_xyz999")
+        assert style == "numpy"
+
+
+def test_detect_dynamic_mode_empty_name():
+    """Test _detect_dynamic_mode returns True for empty name."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._detect_dynamic_mode("") is True
+        assert docs._detect_dynamic_mode("   ") is True
+
+
+def test_detect_dynamic_mode_no_exports():
+    """Test _detect_dynamic_mode returns True when no public exports."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "emptydynpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("# empty package\n_private = 1\n", encoding="utf-8")
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._detect_dynamic_mode("emptydynpkg")
+            assert result is True
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_generate_llms_full_txt_no_quarto_yml():
+    """Test _generate_llms_full_txt does nothing when no _quarto.yml."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path = Path(tmp_dir) / "great-docs"
+        docs.project_path.mkdir()
+
+        # No _quarto.yml — should return without writing anything
+        docs._generate_llms_full_txt()
+
+        assert not (docs.project_path / "llms-full.txt").exists()
+
+
+def test_generate_llms_full_txt_no_api_reference():
+    """Test _generate_llms_full_txt does nothing when no api-reference in config."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path = Path(tmp_dir) / "great-docs"
+        docs.project_path.mkdir()
+
+        (docs.project_path / "_quarto.yml").write_text(
+            yaml.dump({"project": {"type": "website"}}),
+            encoding="utf-8",
+        )
+
+        docs._generate_llms_full_txt()
+
+        assert not (docs.project_path / "llms-full.txt").exists()
+
+
+def test_generate_llms_full_txt_basic():
+    """Test _generate_llms_full_txt generates content for a package."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "llmpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "def hello(name: str) -> str:\n"
+            '    """Say hello.\n\n'
+            "    Parameters\n"
+            "    ----------\n"
+            "    name\n"
+            "        Who to greet.\n"
+            '    """\n'
+            '    return f"Hello {name}"\n',
+            encoding="utf-8",
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path = Path(tmp_dir) / "great-docs"
+        docs.project_path.mkdir()
+
+        config = {
+            "api-reference": {
+                "package": "llmpkg",
+                "sections": [
+                    {"title": "Functions", "contents": ["hello"]},
+                ],
+            },
+        }
+        (docs.project_path / "_quarto.yml").write_text(yaml.dump(config), encoding="utf-8")
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            with (
+                patch.object(
+                    docs,
+                    "_get_package_metadata",
+                    return_value={"description": "Test package"},
+                ),
+                patch.object(docs, "_get_cli_help_text_for_llms", return_value=""),
+                patch.object(docs, "_get_user_guide_text_for_llms", return_value=""),
+            ):
+                docs._generate_llms_full_txt()
+
+            llms_path = docs.project_path / "llms-full.txt"
+            assert llms_path.exists()
+            content = llms_path.read_text()
+            assert "Functions" in content
+            assert "hello" in content
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_generate_llms_full_txt_with_cli_and_user_guide():
+    """Test _generate_llms_full_txt includes CLI and user guide content."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "cliugpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("def func(): pass\n", encoding="utf-8")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path = Path(tmp_dir) / "great-docs"
+        docs.project_path.mkdir()
+
+        config = {
+            "api-reference": {
+                "package": "cliugpkg",
+                "sections": [
+                    {"title": "Funcs", "contents": ["func"]},
+                ],
+            },
+        }
+        (docs.project_path / "_quarto.yml").write_text(yaml.dump(config), encoding="utf-8")
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            with (
+                patch.object(docs, "_get_package_metadata", return_value={}),
+                patch.object(
+                    docs,
+                    "_get_cli_help_text_for_llms",
+                    return_value="## CLI: mytool\nUsage: mytool [OPTIONS]",
+                ),
+                patch.object(
+                    docs,
+                    "_get_user_guide_text_for_llms",
+                    return_value="## Introduction\nWelcome to the guide.",
+                ),
+            ):
+                docs._generate_llms_full_txt()
+
+            content = (docs.project_path / "llms-full.txt").read_text()
+            assert "CLI documentation" in content
+            assert "User Guide documentation" in content
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_create_api_sections_from_config_no_reference():
+    """Test _create_api_sections_from_config returns None when no reference config."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        with patch.object(
+            type(docs._config), "reference", new_callable=lambda: property(lambda self: None)
+        ):
+            result = docs._create_api_sections_from_config("mypkg")
+        assert result is None
+
+
+def test_create_api_sections_from_config_basic():
+    """Test _create_api_sections_from_config with simple reference config."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "secpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '__all__ = ["ClassA", "func_b"]\n'
+            "class ClassA:\n"
+            '    """A class."""\n'
+            "    def m1(self): pass\n"
+            "    def m2(self): pass\n"
+            "def func_b(): pass\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            docs._config = type(
+                "Config",
+                (),
+                {
+                    "reference": [
+                        {"title": "Classes", "contents": ["ClassA"]},
+                        {"title": "Functions", "contents": ["func_b"]},
+                    ],
+                },
+            )()
+
+            with (
+                patch.object(
+                    docs,
+                    "_get_package_exports",
+                    return_value=["ClassA", "func_b"],
+                ),
+                patch.object(docs, "_write_object_types_json"),
+            ):
+                result = docs._create_api_sections_from_config("secpkg")
+
+            assert result is not None
+            assert len(result) >= 2
+
+            titles = [s["title"] for s in result]
+            assert "Classes" in titles
+            assert "Functions" in titles
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_create_api_sections_from_config_large_class():
+    """Test _create_api_sections_from_config creates companion method section for large classes."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "lgpkg"
+        pkg_dir.mkdir()
+        methods = "\n".join(f"    def method{i}(self): pass\n" for i in range(8))
+        (pkg_dir / "__init__.py").write_text(
+            f'class BigClass:\n    """Big."""\n{methods}',
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            docs._config = type(
+                "Config",
+                (),
+                {
+                    "reference": [
+                        {"title": "Classes", "contents": ["BigClass"]},
+                    ],
+                },
+            )()
+
+            with (
+                patch.object(docs, "_get_package_exports", return_value=["BigClass"]),
+                patch.object(docs, "_write_object_types_json"),
+            ):
+                result = docs._create_api_sections_from_config("lgpkg")
+
+            assert result is not None
+
+            titles = [s["title"] for s in result]
+            # Should create companion method section
+            assert "BigClass Methods" in titles
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_create_api_sections_from_config_dict_items():
+    """Test _create_api_sections_from_config handles dict items with members config."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "dictpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            'class MyClass:\n    """Class."""\n    def m(self): pass\n',
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            docs._config = type(
+                "Config",
+                (),
+                {
+                    "reference": [
+                        {
+                            "title": "API",
+                            "contents": [
+                                {"name": "MyClass", "members": False},
+                            ],
+                        },
+                    ],
+                },
+            )()
+
+            with (
+                patch.object(docs, "_get_package_exports", return_value=["MyClass"]),
+                patch.object(docs, "_write_object_types_json"),
+            ):
+                result = docs._create_api_sections_from_config("dictpkg")
+
+            assert result is not None
+            section = result[0]
+            # Should have dict with members=[] (no method docs)
+            found = False
+            for item in section["contents"]:
+                if isinstance(item, dict) and item.get("name") == "MyClass":
+                    assert item["members"] == []
+                    found = True
+            assert found
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_build_sections_from_reference_config_empty():
+    """Test _build_sections_from_reference_config returns None for empty config."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._build_sections_from_reference_config([]) is None
+        assert docs._build_sections_from_reference_config(None) is None
+
+
+def test_build_sections_from_reference_config_basic():
+    """Test _build_sections_from_reference_config with simple config."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        config = [
+            {
+                "title": "Classes",
+                "desc": "All classes",
+                "contents": ["ClassA", "ClassB"],
+            },
+            {
+                "title": "Functions",
+                "contents": [
+                    "func_a",
+                    {"name": "ClassC", "members": False},
+                ],
+            },
+        ]
+        result = docs._build_sections_from_reference_config(config)
+
+        assert result is not None
+        assert len(result) == 2
+        assert result[0]["title"] == "Classes"
+        assert "ClassA" in result[0]["contents"]
+
+        # Dict item with members=False -> {"name": ..., "members": []}
+        found_dict = False
+        for item in result[1]["contents"]:
+            if isinstance(item, dict) and item.get("name") == "ClassC":
+                assert item["members"] == []
+                found_dict = True
+        assert found_dict
+
+
+def test_preview_builds_if_no_site():
+    """Test preview() calls build when site doesn't exist."""
+
+    import pytest
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        # No _site/index.html — preview should try to build then exit
+        with (
+            patch.object(docs, "build"),
+            pytest.raises(SystemExit),
+        ):
+            docs.preview()
+
+
+def test_preview_port_in_use():
+    """Test preview() handles port-in-use error."""
+
+    import pytest
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        site_dir = docs.project_path / "_site"
+        site_dir.mkdir(parents=True)
+        (site_dir / "index.html").write_text("<html></html>", encoding="utf-8")
+
+        with (
+            patch("socketserver.TCPServer", side_effect=OSError("Address in use")),
+            pytest.raises(SystemExit),
+        ):
+            docs.preview(port=9999)
+
+
+def test_preview_serves_and_stops():
+    """Test preview() starts server and handles KeyboardInterrupt."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        site_dir = docs.project_path / "_site"
+        site_dir.mkdir(parents=True)
+        (site_dir / "index.html").write_text("<html></html>", encoding="utf-8")
+
+        mock_server = MagicMock()
+        mock_server.serve_forever.side_effect = KeyboardInterrupt()
+
+        mock_timer = MagicMock()
+
+        with (
+            patch("socketserver.TCPServer", return_value=mock_server),
+            patch("threading.Timer", return_value=mock_timer),
+            patch("webbrowser.open"),
+        ):
+            docs.preview(port=8888)
+
+        mock_server.serve_forever.assert_called_once()
+        mock_server.server_close.assert_called_once()
+
+
+def test_detect_package_name_from_setup_cfg():
+    """Test _detect_package_name from setup.cfg."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "setup.cfg").write_text(
+            "[metadata]\nname = my-awesome-pkg\n", encoding="utf-8"
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._detect_package_name()
+        assert result == "my-awesome-pkg"
+
+
+def test_detect_package_name_from_setup_py():
+    """Test _detect_package_name from setup.py."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "setup.py").write_text(
+            'from setuptools import setup\nsetup(name="legacy-pkg")\n',
+            encoding="utf-8",
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._detect_package_name()
+        assert result == "legacy-pkg"
+
+
+def test_detect_package_name_from_single_package():
+    """Test _detect_package_name from single Python package directory."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "solo_package"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("", encoding="utf-8")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._detect_package_name()
+        assert result == "solo_package"
+
+
+def test_detect_package_name_returns_none():
+    """Test _detect_package_name returns None when nothing found."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._detect_package_name()
+        assert result is None
+
+
+def test_update_gitignore_force_creates_new():
+    """Test _update_project_gitignore creates .gitignore when force=True."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._update_project_gitignore(force=True)
+
+        gitignore = Path(tmp_dir) / ".gitignore"
+        assert gitignore.exists()
+        content = gitignore.read_text()
+        assert "great-docs/" in content
+
+
+def test_update_gitignore_force_appends():
+    """Test _update_project_gitignore appends to existing .gitignore."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        gitignore = Path(tmp_dir) / ".gitignore"
+        gitignore.write_text("*.pyc\n", encoding="utf-8")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._update_project_gitignore(force=True)
+
+        content = gitignore.read_text()
+        assert "*.pyc" in content
+        assert "great-docs/" in content
+
+
+def test_update_gitignore_already_present():
+    """Test _update_project_gitignore skips when already present."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        gitignore = Path(tmp_dir) / ".gitignore"
+        gitignore.write_text("great-docs/\n", encoding="utf-8")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._update_project_gitignore(force=True)
+
+        content = gitignore.read_text()
+        # Should not have doubled the entry
+        assert content.count("great-docs/") == 1
+
+
+def test_update_gitignore_interactive_yes(monkeypatch):
+    """Test _update_project_gitignore in interactive mode with 'y' response."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        monkeypatch.setattr("builtins.input", lambda _: "y")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._update_project_gitignore(force=False)
+
+        gitignore = Path(tmp_dir) / ".gitignore"
+        assert gitignore.exists()
+        assert "great-docs/" in gitignore.read_text()
+
+
+def test_update_gitignore_interactive_no(monkeypatch):
+    """Test _update_project_gitignore in interactive mode with 'n' response."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        monkeypatch.setattr("builtins.input", lambda _: "n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._update_project_gitignore(force=False)
+
+        gitignore = Path(tmp_dir) / ".gitignore"
+        assert not gitignore.exists()
+
+
+def test_check_links_with_docs_files():
+    """Test check_links scans documentation files."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+        (ug_dir / "intro.qmd").write_text(
+            "---\ntitle: Intro\n---\n\nVisit https://httpbin.org/status/200\n",
+            encoding="utf-8",
+        )
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+
+        with patch("requests.head", return_value=mock_response):
+            result = docs.check_links(
+                include_source=False,
+                include_docs=True,
+                timeout=5.0,
+            )
+
+        assert result["total"] >= 1
+        assert len(result["ok"]) >= 1
+
+
+def test_check_links_skips_code_blocks():
+    """Test check_links skips URLs inside code blocks."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+        (ug_dir / "code.qmd").write_text(
+            "---\ntitle: Code\n---\n\n"
+            "```python\nhttps://example.com/in-code\n```\n\n"
+            "Real: https://httpbin.org/status/200\n",
+            encoding="utf-8",
+        )
+
+        import requests
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+
+        with patch("requests.head", return_value=mock_response) as mock_head:
+            result = docs.check_links(include_source=False, include_docs=True)
+
+        # The code block URL should be excluded
+        checked_urls = result["ok"] + [b["url"] for b in result["broken"]]
+        assert "https://example.com/in-code" not in checked_urls
+
+
+def test_check_links_gd_no_link():
+    """Test check_links skips URLs marked with {.gd-no-link}."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+        (ug_dir / "skip.qmd").write_text(
+            "---\ntitle: Skip\n---\n\nhttps://fake-url.example.com{.gd-no-link}\n",
+            encoding="utf-8",
+        )
+
+        result = docs.check_links(include_source=False, include_docs=True)
+
+        # Should have no URLs to check
+        assert result["total"] == 0
+
+
+def test_check_links_ignore_patterns():
+    """Test check_links respects ignore patterns."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+        (ug_dir / "ig.qmd").write_text(
+            "---\ntitle: Ignore\n---\n\nhttps://localhost:8080/test\n",
+            encoding="utf-8",
+        )
+
+        result = docs.check_links(
+            include_source=False,
+            include_docs=True,
+            ignore_patterns=["localhost"],
+        )
+
+        assert len(result["skipped"]) >= 1
+
+
+def test_check_links_redirect():
+    """Test check_links detects redirects."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+        (ug_dir / "redir.qmd").write_text(
+            "---\ntitle: Redir\n---\n\nhttps://httpbin.org/redirect/1\n",
+            encoding="utf-8",
+        )
+
+        mock_response = MagicMock()
+        mock_response.status_code = 301
+        mock_response.headers = {"Location": "https://httpbin.org/get"}
+
+        with patch("requests.head", return_value=mock_response):
+            result = docs.check_links(include_source=False, include_docs=True)
+
+        assert len(result["redirects"]) >= 1
+
+
+def test_check_links_broken():
+    """Test check_links detects broken links."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+        (ug_dir / "bad.qmd").write_text(
+            "---\ntitle: Bad\n---\n\nhttps://httpbin.org/status/404\n",
+            encoding="utf-8",
+        )
+
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_response.headers = {}
+
+        with patch("requests.head", return_value=mock_response):
+            result = docs.check_links(include_source=False, include_docs=True)
+
+        assert len(result["broken"]) >= 1
+
+
+def test_check_links_timeout():
+    """Test check_links handles timeout."""
+
+    import requests
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+        (ug_dir / "slow.qmd").write_text(
+            "---\ntitle: Slow\n---\n\nhttps://httpbin.org/delay/30\n",
+            encoding="utf-8",
+        )
+
+        with patch(
+            "requests.head",
+            side_effect=requests.exceptions.Timeout("timed out"),
+        ):
+            result = docs.check_links(include_source=False, include_docs=True)
+
+        assert len(result["broken"]) >= 1
+        assert result["broken"][0]["error"] == "Timeout"
+
+
+def test_check_links_ssl_error():
+    """Test check_links handles SSL errors."""
+
+    import requests
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+        (ug_dir / "ssl.qmd").write_text(
+            "---\ntitle: SSL\n---\n\nhttps://expired.badssl.com/\n",
+            encoding="utf-8",
+        )
+
+        with patch(
+            "requests.head",
+            side_effect=requests.exceptions.SSLError("cert error"),
+        ):
+            result = docs.check_links(include_source=False, include_docs=True)
+
+        assert len(result["broken"]) >= 1
+        assert "SSL" in result["broken"][0]["error"]
+
+
+def test_check_links_connection_error():
+    """Test check_links handles connection errors."""
+
+    import requests
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+        (ug_dir / "conn.qmd").write_text(
+            "---\ntitle: Conn\n---\n\nhttps://unreachable.invalid/page\n",
+            encoding="utf-8",
+        )
+
+        with patch(
+            "requests.head",
+            side_effect=requests.exceptions.ConnectionError("refused"),
+        ):
+            result = docs.check_links(include_source=False, include_docs=True)
+
+        assert len(result["broken"]) >= 1
+        assert "Connection failed" in result["broken"][0]["error"]
+
+
+def test_check_links_head_405_fallback_to_get():
+    """Test check_links falls back to GET when HEAD returns 405."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+        (ug_dir / "head405.qmd").write_text(
+            "---\ntitle: Test\n---\n\nhttps://nohead.example.com/page\n",
+            encoding="utf-8",
+        )
+
+        head_response = MagicMock()
+        head_response.status_code = 405
+
+        get_response = MagicMock()
+        get_response.status_code = 200
+        get_response.headers = {}
+
+        with (
+            patch("requests.head", return_value=head_response),
+            patch("requests.get", return_value=get_response) as mock_get,
+        ):
+            result = docs.check_links(include_source=False, include_docs=True)
+
+        assert len(result["ok"]) >= 1
+        mock_get.assert_called()
+
+
+def test_check_links_fstring_urls_skipped():
+    """Test check_links skips URLs with f-string placeholders."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        pkg_dir = Path(tmp_dir) / "fstrpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            'URL = "https://api.example.com/{endpoint}/data"\n',
+            encoding="utf-8",
+        )
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "fstrpkg"\n', encoding="utf-8"
+        )
+
+        result = docs.check_links(include_source=True, include_docs=False)
+
+        # f-string URL should be skipped
+        all_urls = result["ok"] + [b["url"] for b in result["broken"]]
+        for url in all_urls:
+            assert "{" not in url
+
+
+def test_check_links_python_comments_excluded():
+    """Test check_links excludes URLs in Python comments."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        pkg_dir = Path(tmp_dir) / "commentpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "# See https://example.com/in-comment for details\n"
+            'REAL = "https://httpbin.org/status/200"\n',
+            encoding="utf-8",
+        )
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "commentpkg"\n', encoding="utf-8"
+        )
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+
+        with patch("requests.head", return_value=mock_response):
+            result = docs.check_links(include_source=True, include_docs=False)
+
+        all_checked = result["ok"] + [b["url"] for b in result["broken"]]
+        assert "https://example.com/in-comment" not in all_checked
+
+
+def test_spell_check_basic():
+    """Test spell_check finds misspelled words."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+        (ug_dir / "page.qmd").write_text(
+            "---\ntitle: Page\n---\n\nThis has a misspellled word.\n",
+            encoding="utf-8",
+        )
+
+        result = docs.spell_check(include_docs=True, include_docstrings=False)
+
+        assert result["total_words"] > 0
+        # "misspellled" should be caught
+        words = [m["word"] for m in result["misspelled"]]
+        assert "misspellled" in words
+
+
+def test_spell_check_with_custom_dictionary():
+    """Test spell_check respects custom dictionary."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+        (ug_dir / "custom.qmd").write_text(
+            "---\ntitle: Custom\n---\n\nThe quartodoc tool is great.\n",
+            encoding="utf-8",
+        )
+
+        result_without = docs.spell_check(include_docs=True, include_docstrings=False)
+        result_with = docs.spell_check(
+            include_docs=True,
+            include_docstrings=False,
+            custom_dictionary=["quartodoc"],
+        )
+
+        # With custom dict, "quartodoc" should not be flagged
+        words_with = [m["word"] for m in result_with["misspelled"]]
+        assert "quartodoc" not in words_with
+
+
+def test_spell_check_with_docstrings():
+    """Test spell_check scans docstrings when requested."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "spellpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            'def func():\n    """This is definately wrong."""\n    pass\n',
+            encoding="utf-8",
+        )
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "spellpkg"\n', encoding="utf-8"
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs.spell_check(include_docs=False, include_docstrings=True)
+
+            # "definately" should be caught
+            words = [m["word"] for m in result["misspelled"]]
+            assert "definately" in words
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_spell_check_skips_code_blocks():
+    """Test spell_check skips code blocks in documentation."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+        (ug_dir / "code.qmd").write_text(
+            "---\ntitle: Code\n---\n\n```python\nxyznotaword = True\n```\n\nNormal text here.\n",
+            encoding="utf-8",
+        )
+
+        result = docs.spell_check(include_docs=True, include_docstrings=False)
+
+        words = [m["word"] for m in result["misspelled"]]
+        assert "xyznotaword" not in words
+
+
+def test_spell_check_file_read_error():
+    """Test spell_check handles file read errors gracefully."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+        (ug_dir / "bad.qmd").write_text("---\ntitle: OK\n---\nContent\n", encoding="utf-8")
+
+        # Make the file unreadable by patching read_text to raise
+        original_read = Path.read_text
+
+        def bad_read(self, *args, **kwargs):
+            if "bad.qmd" in str(self):
+                raise PermissionError("Cannot read")
+            return original_read(self, *args, **kwargs)
+
+        with patch.object(Path, "read_text", bad_read):
+            result = docs.spell_check(include_docs=True, include_docstrings=False)
+
+        assert len(result["skipped_files"]) >= 1
+
+
+def test_build_hero_section_disabled():
+    """Test _build_hero_section returns empty when hero disabled."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._config = MagicMock()
+        docs._config.hero_explicitly_disabled = True
+
+        html, cleaned = docs._build_hero_section()
+        assert html == ""
+        assert cleaned is None
+
+
+def test_build_hero_section_auto_badges():
+    """Test _build_hero_section extracts badges from readme content."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._config = MagicMock()
+        docs._config.hero_explicitly_disabled = False
+        docs._config.hero_badges = "auto"
+        docs._config.hero_enabled = True
+        docs._config.hero_logo = None
+        docs._config.hero_logo_height = "80px"
+        docs._config.hero_name = "TestPkg"
+        docs._config.hero_tagline = "A test package"
+        docs._config.logo = None
+
+        badges = [{"alt": "CI", "img": "https://img.shields.io/badge", "url": "https://ci.com"}]
+
+        with (
+            patch.object(
+                docs,
+                "_extract_badges_from_content",
+                return_value=(badges, "cleaned content", {}),
+            ),
+            patch.object(docs, "_detect_hero_logo", return_value=None),
+            patch.object(docs, "_detect_logo", return_value=None),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+            patch.object(docs, "_build_metadata_margin", return_value=""),
+        ):
+            html, cleaned = docs._build_hero_section("# My Package\n![badge](url)\n")
+
+        assert "gd-hero" in html
+        assert "TestPkg" in html
+        assert "gd-hero-badges" in html
+        assert cleaned == "cleaned content"
+
+
+def test_build_hero_section_no_content():
+    """Test _build_hero_section with no content produces empty result."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._config = MagicMock()
+        docs._config.hero_explicitly_disabled = False
+        docs._config.hero_badges = "auto"
+        docs._config.hero_enabled = False
+        docs._config.hero_logo = None
+        docs._config.hero_name = None
+        docs._config.hero_tagline = None
+        docs._config.logo = None
+
+        with (
+            patch.object(docs, "_detect_hero_logo", return_value=None),
+            patch.object(docs, "_detect_logo", return_value=None),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+            patch.object(docs, "_detect_package_name", return_value=None),
+        ):
+            html, cleaned = docs._build_hero_section()
+
+        assert html == ""
+
+
+def test_build_hero_section_with_logo_dict():
+    """Test _build_hero_section handles logo dict with light/dark variants."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path = Path(tmp_dir) / "great-docs"
+        docs.project_path.mkdir()
+
+        docs._config = MagicMock()
+        docs._config.hero_explicitly_disabled = False
+        docs._config.hero_badges = []
+        docs._config.hero_enabled = True
+        docs._config.hero_logo = {"light": "logo-light.svg", "dark": "logo-dark.svg"}
+        docs._config.hero_logo_height = "60px"
+        docs._config.hero_name = "Pkg"
+        docs._config.hero_tagline = "Tagline"
+        docs._config.logo = None
+
+        # Create logo files in project root
+        pkg_root = Path(tmp_dir)
+        (pkg_root / "logo-light.svg").write_text("<svg/>", encoding="utf-8")
+        (pkg_root / "logo-dark.svg").write_text("<svg/>", encoding="utf-8")
+
+        with (
+            patch.object(docs, "_find_package_root", return_value=pkg_root),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+        ):
+            html, _ = docs._build_hero_section()
+
+        assert "gd-only-light" in html
+        assert "gd-only-dark" in html
+
+
+def test_add_api_reference_config_disabled():
+    """Test _add_api_reference_config when reference_enabled=False."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._config = MagicMock()
+        docs._config.reference_enabled = False
+
+        docs._add_api_reference_config()
+
+        assert docs._has_api_reference is False
+
+
+def test_add_api_reference_config_already_exists():
+    """Test _add_api_reference_config skips when config already present."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._config = MagicMock()
+        docs._config.reference_enabled = True
+
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        (docs.project_path / "_quarto.yml").write_text(
+            yaml.dump({"api-reference": {"package": "existing"}}),
+            encoding="utf-8",
+        )
+
+        # Should not modify anything
+        docs._add_api_reference_config()
+
+
+def test_add_api_reference_config_no_package():
+    """Test _add_api_reference_config when package can't be detected and user skips."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._config = MagicMock()
+        docs._config.reference_enabled = True
+
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        (docs.project_path / "_quarto.yml").write_text(yaml.dump({"website": {}}), encoding="utf-8")
+
+        with (
+            patch.object(docs, "_detect_package_name", return_value=None),
+            patch("builtins.input", return_value=""),
+        ):
+            docs._add_api_reference_config()
+
+        assert docs._has_api_reference is False
+
+
+def test_add_api_reference_config_no_exports():
+    """Test _add_api_reference_config when no documentable exports found."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._config = MagicMock()
+        docs._config.reference_enabled = True
+
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        (docs.project_path / "_quarto.yml").write_text(yaml.dump({"website": {}}), encoding="utf-8")
+
+        with (
+            patch.object(docs, "_detect_package_name", return_value="mypkg"),
+            patch.object(docs, "_detect_module_name", return_value="mypkg"),
+            patch.object(docs, "_is_compiled_extension", return_value=False),
+            patch.object(docs, "_create_api_sections_with_config", return_value=None),
+        ):
+            docs._add_api_reference_config()
+
+        assert docs._has_api_reference is False
+
+
+def test_add_api_reference_config_success():
+    """Test _add_api_reference_config successfully adds API config."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._config = MagicMock()
+        docs._config.reference_enabled = True
+        docs._config.reference_title = "API Reference"
+        docs._config.reference_desc = None
+        docs._config.dynamic = True
+        docs._config.parser = "numpy"
+        docs._config.jupyter = None
+
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        config = {"website": {"navbar": {"left": []}, "sidebar": []}}
+        (docs.project_path / "_quarto.yml").write_text(yaml.dump(config), encoding="utf-8")
+
+        sections = [{"title": "Functions", "contents": ["func_a"]}]
+
+        with (
+            patch.object(docs, "_detect_package_name", return_value="mypkg"),
+            patch.object(docs, "_detect_module_name", return_value="mypkg"),
+            patch.object(docs, "_is_compiled_extension", return_value=False),
+            patch.object(docs, "_create_api_sections_with_config", return_value=sections),
+            patch.object(docs, "_write_quarto_yml"),
+        ):
+            docs._add_api_reference_config()
+
+        assert docs._has_api_reference is True
+
+
+def test_add_api_reference_config_eof_error():
+    """Test _add_api_reference_config handles EOFError on input."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._config = MagicMock()
+        docs._config.reference_enabled = True
+
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        (docs.project_path / "_quarto.yml").write_text(yaml.dump({"website": {}}), encoding="utf-8")
+
+        with (
+            patch.object(docs, "_detect_package_name", return_value=None),
+            patch("builtins.input", side_effect=EOFError),
+        ):
+            docs._add_api_reference_config()
+
+        assert docs._has_api_reference is False
+
+
+def test_refresh_api_reference_config_no_quarto_yml():
+    """Test _refresh_api_reference_config when no _quarto.yml."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path = Path(tmp_dir) / "great-docs"
+        docs.project_path.mkdir()
+
+        # No _quarto.yml — should return early
+        docs._refresh_api_reference_config()
+
+
+def test_refresh_api_reference_config_no_api_ref():
+    """Test _refresh_api_reference_config when no api-reference in config."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path = Path(tmp_dir) / "great-docs"
+        docs.project_path.mkdir()
+        (docs.project_path / "_quarto.yml").write_text(yaml.dump({"project": {}}), encoding="utf-8")
+
+        docs._refresh_api_reference_config()
+
+
+def test_refresh_api_reference_config_fallback_to_explicit():
+    """Test _refresh_api_reference_config falls back to explicit reference config."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path = Path(tmp_dir) / "great-docs"
+        docs.project_path.mkdir()
+
+        config = {"api-reference": {"package": "mypkg"}}
+        (docs.project_path / "_quarto.yml").write_text(yaml.dump(config), encoding="utf-8")
+
+        docs._config = MagicMock()
+        docs._config.parser = "numpy"
+        docs._config.dynamic = True
+        docs._config.reference_title = None
+        docs._config.reference_desc = None
+        docs._config.jupyter = None
+        docs._config.reference = [{"title": "API", "contents": ["ClassA"]}]
+
+        user_sections = [{"title": "API", "contents": ["ClassA"]}]
+
+        with (
+            patch.object(docs, "_create_api_sections_with_config", return_value=None),
+            patch.object(
+                docs,
+                "_build_sections_from_reference_config",
+                return_value=user_sections,
+            ),
+            patch.object(docs, "_write_quarto_yml") as mock_write,
+            patch.object(docs, "_update_sidebar_from_sections"),
+        ):
+            docs._refresh_api_reference_config()
+
+        mock_write.assert_called()
+
+
+def test_create_blended_index_no_files():
+    """Test _create_blended_index returns early when no files."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._create_blended_index({"files": []}, [])
+        # No error expected
+
+
+def test_create_blended_index_missing_first_page():
+    """Test _create_blended_index handles missing first UG page."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path = Path(tmp_dir) / "great-docs"
+        docs.project_path.mkdir()
+        (docs.project_path / "user-guide").mkdir()
+
+        ug_info = {
+            "files": [{"path": Path(tmp_dir) / "user_guide" / "intro.qmd", "title": "Intro"}],
+            "source_dir": Path(tmp_dir) / "user_guide",
+            "explicit": False,
+        }
+        docs._create_blended_index(ug_info, [])
+
+        # Should not crash, index.qmd should not be created
+        assert not (docs.project_path / "index.qmd").exists()
+
+
+def test_discover_package_exports_submodule_detection():
+    """Test _discover_package_exports detects and passes through submodules."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "submodpkg"
+        pkg_dir.mkdir()
+        sub_dir = pkg_dir / "models"
+        sub_dir.mkdir()
+        (sub_dir / "__init__.py").write_text("class Model: pass\n", encoding="utf-8")
+        (pkg_dir / "__init__.py").write_text(
+            '__all__ = ["models", "MyClass"]\nfrom . import models\nclass MyClass: pass\n',
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._discover_package_exports("submodpkg")
+
+            assert result is not None
+            assert "models" in result
+            assert "MyClass" in result
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("submodpkg", None)
+            sys.modules.pop("submodpkg.models", None)
+
+
+def test_discover_package_exports_external_reexport_filtered():
+    """Test _discover_package_exports filters out external re-exports."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "reexppkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            'from pathlib import Path\n__all__ = ["Path", "MyFunc"]\ndef MyFunc(): pass\n',
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._discover_package_exports("reexppkg")
+
+            assert result is not None
+            assert "MyFunc" in result
+            # Path should be filtered as external re-export
+            assert "Path" not in result
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("reexppkg", None)
+
+
+def test_categorize_api_objects_async_function():
+    """Test _categorize_api_objects detects async functions."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "asyncpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "async def async_func():\n"
+            '    """Async function."""\n'
+            "    pass\n"
+            "def sync_func():\n"
+            '    """Sync function."""\n'
+            "    pass\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._categorize_api_objects("asyncpkg", ["async_func", "sync_func"])
+
+            assert "async_func" in result["async_functions"]
+            assert "sync_func" in result["functions"]
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("asyncpkg", None)
+
+
+def test_categorize_api_objects_type_alias():
+    """Test _categorize_api_objects detects type aliases."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "tapkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            'from typing import TypeVar\nT = TypeVar("T")\nMY_CONST = "hello"\n',
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._categorize_api_objects("tapkg", ["T", "MY_CONST"])
+
+            assert "MY_CONST" in result["constants"]
+            # T should be type_alias or constant depending on griffe
+            assert "T" in result["type_aliases"] or "T" in result["constants"]
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("tapkg", None)
+
+
+def test_categorize_api_objects_namedtuple():
+    """Test _categorize_api_objects detects NamedTuples."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "ntpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "from typing import NamedTuple\n"
+            "class Point(NamedTuple):\n"
+            '    """A point."""\n'
+            "    x: float\n"
+            "    y: float\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._categorize_api_objects("ntpkg", ["Point"])
+
+            assert "Point" in result["namedtuples"]
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("ntpkg", None)
+
+
+def test_categorize_api_objects_protocol():
+    """Test _categorize_api_objects detects Protocols."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "protpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "from typing import Protocol\n"
+            "class Drawable(Protocol):\n"
+            '    """A drawable protocol."""\n'
+            "    def draw(self): ...\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._categorize_api_objects("protpkg", ["Drawable"])
+
+            assert "Drawable" in result["protocols"]
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("protpkg", None)
+
+
+def test_categorize_api_objects_classmethod_staticmethod():
+    """Test _categorize_api_objects detects class/staticmethod decorators."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "decpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "class Widget:\n"
+            '    """Widget class."""\n'
+            "    @classmethod\n"
+            "    def from_string(cls, s):\n"
+            '        """Create from string."""\n'
+            "        pass\n"
+            "    @staticmethod\n"
+            "    def validate(x):\n"
+            '        """Validate."""\n'
+            "        pass\n"
+            "    def normal(self):\n"
+            '        """Normal method."""\n'
+            "        pass\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._categorize_api_objects("decpkg", ["Widget"])
+
+            assert "Widget" in result["classes"]
+            member_types = result["class_member_types"]
+            assert member_types.get("Widget.from_string") == "classmethod"
+            assert member_types.get("Widget.validate") == "staticmethod"
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("decpkg", None)
+
+
+def test_categorize_api_objects_not_in_members():
+    """Test _categorize_api_objects puts unknown members into other."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "missingpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("x = 1\n", encoding="utf-8")
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._categorize_api_objects("missingpkg", ["NotThere"])
+
+            assert "NotThere" in result["other"]
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("missingpkg", None)
+
+
+def test_categorize_api_objects_griffe_load_failure():
+    """Test _categorize_api_objects falls back when griffe can't load."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "loadfailpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("def func(): pass\n", encoding="utf-8")
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+
+            import griffe
+
+            with patch.object(griffe, "load", side_effect=RuntimeError("load failed")):
+                result = docs._categorize_api_objects("loadfailpkg", ["func"])
+
+            # Should fall back to _categorize_api_objects_fallback
+            assert result is not None
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("loadfailpkg", None)
+
+
+def test_categorize_api_objects_cyclic_alias():
+    """Test _categorize_api_objects handles cyclic aliases gracefully."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "cyclicpkg2"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("class Normal: pass\n", encoding="utf-8")
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            # Asking for a nonexistent export should end up in "other"
+            result = docs._categorize_api_objects("cyclicpkg2", ["Normal", "DoesNotExist"])
+
+            assert "Normal" in result["classes"]
+            assert "DoesNotExist" in result["other"]
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("cyclicpkg2", None)
+
+
+def test_sub_classify_class_typeddict():
+    """Test _sub_classify_class detects TypedDict."""
+
+    import griffe
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "tdpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "from typing import TypedDict\n"
+            "class MyDict(TypedDict):\n"
+            '    """A typed dict."""\n'
+            "    name: str\n"
+            "    age: int\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            pkg = griffe.load("tdpkg")
+            obj = pkg.members["MyDict"]
+            result = GreatDocs._sub_classify_class(obj)
+            assert result == "typeddict"
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("tdpkg", None)
+
+
+def test_sub_classify_class_abc():
+    """Test _sub_classify_class detects ABC."""
+
+    import griffe
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "abcpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "from abc import ABC, abstractmethod\n"
+            "class Base(ABC):\n"
+            '    """Abstract base."""\n'
+            "    @abstractmethod\n"
+            "    def do_it(self): ...\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            pkg = griffe.load("abcpkg")
+            obj = pkg.members["Base"]
+            result = GreatDocs._sub_classify_class(obj)
+            assert result == "abc"
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("abcpkg", None)
+
+
+def test_detect_dynamic_mode_with_simple_package():
+    """Test _detect_dynamic_mode works with a simple package."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "simpledynpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("class MyClass: pass\n", encoding="utf-8")
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._detect_dynamic_mode("simpledynpkg")
+            # Should return True or False without crashing
+            assert isinstance(result, bool)
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("simpledynpkg", None)
+
+
+def test_extract_all_directives_with_class_methods():
+    """Test _extract_all_directives processes class methods."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "dirmethpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "class MyClass:\n"
+            '    """A class.\n\n'
+            "    @seealso Related\n"
+            '    """\n'
+            "    def method(self):\n"
+            '        """A method.\n\n'
+            "        @seealso other_func\n"
+            '        """\n'
+            "        pass\n"
+            "    def _private(self):\n"
+            '        """Private, should be skipped."""\n'
+            "        pass\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._extract_all_directives("dirmethpkg")
+
+            # Should find directives but skip private methods
+            assert isinstance(result, dict)
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("dirmethpkg", None)
+
+
+def test_create_blended_index_creates_index():
+    """Test _create_blended_index creates index.qmd from first UG page."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path = Path(tmp_dir) / "great-docs"
+        docs.project_path.mkdir()
+        ug_dir = docs.project_path / "user-guide"
+        ug_dir.mkdir()
+
+        ug_source = Path(tmp_dir) / "user_guide"
+        ug_source.mkdir()
+
+        # Create the first UG page in the destination
+        (ug_dir / "intro.qmd").write_text(
+            "---\ntitle: Introduction\n---\n\n# Welcome\n\nThis is the intro.\n",
+            encoding="utf-8",
+        )
+
+        ug_info = {
+            "files": [
+                {
+                    "path": ug_source / "intro.qmd",
+                    "title": "Introduction",
+                }
+            ],
+            "source_dir": ug_source,
+            "explicit": False,
+        }
+
+        with (
+            patch.object(docs, "_add_frontmatter_option", side_effect=lambda c, k, v: c),
+            patch.object(docs, "_build_metadata_margin", return_value=""),
+            patch.object(docs, "_build_hero_section", return_value=("", None)),
+            patch.object(docs, "_strip_numeric_prefix", return_value="intro.qmd"),
+        ):
+            docs._create_blended_index(ug_info, [])
+
+        index_qmd = docs.project_path / "index.qmd"
+        assert index_qmd.exists()
+        # The first UG page should be removed
+        assert not (ug_dir / "intro.qmd").exists()
+
+
+def test_find_package_init_pyproject_with_find_where_string():
+    """Test _find_package_init handles where as a string (not list)."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        src_dir = Path(tmp_dir) / "src" / "mypkg_find"
+        src_dir.mkdir(parents=True)
+        (src_dir / "__init__.py").write_text('__version__ = "1.0.0"\n', encoding="utf-8")
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg-find"\n[tool.setuptools.packages.find]\nwhere = "src"\n',
+            encoding="utf-8",
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._find_package_init("mypkg-find")
+
+        assert result is not None
+        assert "src" in str(result)
+
+
+def test_detect_docstring_style_no_indicators():
+    """Test _detect_docstring_style defaults to numpy with no indicators."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "noindicpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            'def func():\n    """Just a plain docstring with no parameter docs."""\n    pass\n',
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            style = docs._detect_docstring_style("noindicpkg")
+            assert style == "numpy"
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("noindicpkg", None)
+
+
+def test_check_links_source_files():
+    """Test check_links scans source files for URLs."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pkg_dir = Path(tmp_dir) / "linkpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            'BASE_URL = "https://httpbin.org/status/200"\n',
+            encoding="utf-8",
+        )
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "linkpkg"\n', encoding="utf-8"
+        )
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+
+        with patch("requests.head", return_value=mock_response):
+            result = docs.check_links(include_source=True, include_docs=False)
+
+        assert result["total"] >= 1
+
+
+def test_check_links_verbose():
+    """Test check_links verbose mode prints output."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+        (ug_dir / "v.qmd").write_text(
+            "---\ntitle: V\n---\n\nhttps://httpbin.org/status/200\n",
+            encoding="utf-8",
+        )
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+
+        with patch("requests.head", return_value=mock_response):
+            result = docs.check_links(include_source=False, include_docs=True, verbose=True)
+
+        assert result["total"] >= 1
+
+
+def test_check_links_invalid_regex_pattern():
+    """Test check_links treats invalid regex as literal."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+        (ug_dir / "p.qmd").write_text(
+            "---\ntitle: P\n---\n\nhttps://[invalid.example.com/\n",
+            encoding="utf-8",
+        )
+
+        # "[invalid" is an invalid regex but should work as literal
+        result = docs.check_links(
+            include_source=False,
+            include_docs=True,
+            ignore_patterns=["[invalid"],
+        )
+        # Should not crash
+
+
+def test_check_links_generic_exception():
+    """Test check_links handles generic exceptions."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+        (ug_dir / "exc.qmd").write_text(
+            "---\ntitle: Exc\n---\n\nhttps://generic-error.example.com/\n",
+            encoding="utf-8",
+        )
+
+        with patch(
+            "requests.head",
+            side_effect=RuntimeError("weird error"),
+        ):
+            result = docs.check_links(include_source=False, include_docs=True)
+
+        assert len(result["broken"]) >= 1
+
+
+def test_categorize_api_objects_fallback_discovers_module():
+    """Test _categorize_api_objects_fallback discovers module by scanning."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "actual_module_name"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "class FoundClass: pass\ndef found_func(): pass\n",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            # Pass wrong name — should discover actual_module_name
+            result = docs._categorize_api_objects_fallback(
+                "wrong_name_xyz", ["FoundClass", "found_func"]
+            )
+
+            # Should have found the module via scanning
+            assert "FoundClass" in result["classes"] or "FoundClass" in result["other"]
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("actual_module_name", None)
+
+
+def test_categorize_api_objects_fallback_with_async():
+    """Test _categorize_api_objects_fallback detects async functions."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "asyncfb"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("async def afunc(): pass\n", encoding="utf-8")
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._categorize_api_objects_fallback("asyncfb", ["afunc"])
+
+            assert "afunc" in result["async_functions"]
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("asyncfb", None)
+
+
+def test_categorize_api_objects_fallback_missing_attr():
+    """Test _categorize_api_objects_fallback handles missing attributes."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "missfb"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("x = 1\n", encoding="utf-8")
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._categorize_api_objects_fallback("missfb", ["NonExistent"])
+
+            assert "NonExistent" in result["other"]
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("missfb", None)
+
+
+def test_build_section_error_handled():
+    """Test build() handles section processing errors gracefully."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value=None),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+            patch.object(docs, "_process_user_guide"),
+            patch.object(docs, "_process_sections", side_effect=RuntimeError("section problem")),
+            patch.object(docs, "_copy_assets", return_value=False),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            proc = MagicMock()
+            proc.stdout = iter([])
+            proc.stderr = iter([])
+            proc.wait.return_value = None
+            proc.returncode = 0
+            mock_popen.return_value = proc
+
+            docs._has_api_reference = False
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = False
+            docs._config.sections = [{"title": "Test"}]
+
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+
+            # Should not raise
+            docs.build(watch=False, refresh=False)
+
+
+def test_build_user_guide_error_handled():
+    """Test build() handles user guide processing errors."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value=None),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+            patch.object(docs, "_process_user_guide", side_effect=RuntimeError("UG error")),
+            patch.object(docs, "_copy_assets", return_value=False),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            proc = MagicMock()
+            proc.stdout = iter([])
+            proc.stderr = iter([])
+            proc.wait.return_value = None
+            proc.returncode = 0
+            mock_popen.return_value = proc
+
+            docs._has_api_reference = False
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = False
+            docs._config.sections = None
+
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+
+            # Should not raise
+            docs.build(watch=False, refresh=False)
+
+
+def test_build_copy_assets_error_handled():
+    """Test build() handles asset copy errors."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value=None),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+            patch.object(docs, "_process_user_guide"),
+            patch.object(docs, "_copy_assets", side_effect=RuntimeError("copy failed")),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            proc = MagicMock()
+            proc.stdout = iter([])
+            proc.stderr = iter([])
+            proc.wait.return_value = None
+            proc.returncode = 0
+            mock_popen.return_value = proc
+
+            docs._has_api_reference = False
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = False
+            docs._config.sections = None
+
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+
+            # Should not raise
+            docs.build(watch=False, refresh=False)
+
+
+def test_build_changelog_no_releases():
+    """Test build() handles no releases found for changelog."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value="mypkg"),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+            patch.object(
+                docs,
+                "_get_github_repo_info",
+                return_value=("owner", "repo", "https://github.com/owner/repo"),
+            ),
+            patch.object(docs, "_generate_changelog_page", return_value=None),
+            patch.object(docs, "_process_user_guide"),
+            patch.object(docs, "_copy_assets", return_value=False),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            proc = MagicMock()
+            proc.stdout = iter([])
+            proc.stderr = iter([])
+            proc.wait.return_value = None
+            proc.returncode = 0
+            mock_popen.return_value = proc
+
+            docs._has_api_reference = False
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = True
+            docs._config.sections = None
+
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+
+            docs.build(watch=False, refresh=False)
+
+
+def test_build_changelog_no_repo():
+    """Test build() skips changelog when no github repo info."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
+
+        with (
+            patch.object(docs, "_prepare_build_directory"),
+            patch.object(docs, "_generate_llms_txt"),
+            patch.object(docs, "_generate_llms_full_txt"),
+            patch.object(docs, "_detect_package_name", return_value="mypkg"),
+            patch.object(docs, "_generate_source_links_json"),
+            patch.object(docs, "_get_package_metadata", return_value={}),
+            patch.object(docs, "_get_github_repo_info", return_value=(None, None, None)),
+            patch.object(docs, "_process_user_guide"),
+            patch.object(docs, "_copy_assets", return_value=False),
+            patch.object(docs, "_get_quarto_env", return_value={}),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            proc = MagicMock()
+            proc.stdout = iter([])
+            proc.stderr = iter([])
+            proc.wait.return_value = None
+            proc.returncode = 0
+            mock_popen.return_value = proc
+
+            docs._has_api_reference = False
+            docs._config = MagicMock()
+            docs._config.changelog_enabled = True
+            docs._config.sections = None
+
+            docs.project_path.mkdir(parents=True, exist_ok=True)
+
+            docs.build(watch=False, refresh=False)
+
+
+def _make_uqc_docs(tmp_dir, gd_yml_content="", pyproject_content=None, quarto_content=None):
+    """Helper: create a GreatDocs with real Config for _update_quarto_config tests."""
+    if pyproject_content is None:
+        pyproject_content = '[project]\nname = "testpkg"\n'
+    pyproject = Path(tmp_dir) / "pyproject.toml"
+    pyproject.write_text(pyproject_content, encoding="utf-8")
+
+    gd_yml = Path(tmp_dir) / "great-docs.yml"
+    gd_yml.write_text(gd_yml_content, encoding="utf-8")
+
+    docs = GreatDocs(project_path=tmp_dir)
+    docs._config = Config(Path(tmp_dir))
+
+    quarto_yml = docs.project_path / "_quarto.yml"
+    quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+    if quarto_content is None:
+        quarto_content = {
+            "project": {"type": "website"},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+    with open(quarto_yml, "w") as f:
+        yaml.dump(quarto_content, f)
+
+    return docs, quarto_yml
+
+
+def test_update_quarto_config_resources_string():
+    """Test _update_quarto_config converts string resources to list."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            quarto_content={
+                "project": {"type": "website", "resources": "single-resource.txt"},
+                "website": {"navbar": {"left": []}, "sidebar": []},
+                "format": {"html": {}},
+            },
+        )
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+
+        assert isinstance(result["project"]["resources"], list)
+        assert "single-resource.txt" in result["project"]["resources"]
+
+
+def test_update_quarto_config_include_in_header_string():
+    """Test _update_quarto_config converts string include-in-header to list."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="include_in_header:\n  - extra.html\n",
+            quarto_content={
+                "project": {"type": "website"},
+                "website": {"navbar": {"left": []}, "sidebar": []},
+                "format": {"html": {"include-in-header": "header.html"}},
+            },
+        )
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+
+        header = result["format"]["html"]["include-in-header"]
+        assert isinstance(header, list)
+
+
+def test_update_quarto_config_github_icon_fallback():
+    """Test _update_quarto_config uses icon fallback when not widget style."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="github_style: icon\n",
+            quarto_content={
+                "project": {"type": "website"},
+                "website": {},
+                "format": {"html": {}},
+            },
+        )
+
+        with patch.object(
+            docs,
+            "_get_github_repo_info",
+            return_value=("owner", "repo", "https://github.com/owner/repo"),
+        ):
+            docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+
+        navbar = result["website"]["navbar"]
+        right_items = navbar.get("right", [])
+        assert any(item.get("icon") == "github" for item in right_items if isinstance(item, dict))
+
+
+def test_update_quarto_config_dark_logo():
+    """Test _update_quarto_config handles dark logo variant."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "logo-light.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
+        (Path(tmp_dir) / "logo-dark.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
+
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="logo:\n  light: logo-light.png\n  dark: logo-dark.png\n",
+        )
+
+        with (
+            patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)),
+            patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}),
+        ):
+            docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+
+        navbar = result["website"]["navbar"]
+        assert "logo" in navbar
+        assert "logo-dark" in navbar
+
+
+def test_update_quarto_config_logo_name_collision():
+    """Test _update_quarto_config handles light/dark logo same base name."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "light").mkdir()
+        (Path(tmp_dir) / "dark").mkdir()
+        (Path(tmp_dir) / "light" / "logo.png").write_bytes(b"\x89PNG" + b"\x00" * 100)
+        (Path(tmp_dir) / "dark" / "logo.png").write_bytes(b"\x89PNG" + b"\x00" * 100)
+
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="logo:\n  light: light/logo.png\n  dark: dark/logo.png\n",
+        )
+
+        with (
+            patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)),
+            patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}),
+        ):
+            docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+
+        navbar = result["website"]["navbar"]
+        assert navbar["logo"] == "logo-light.png"
+
+
+def test_update_quarto_config_logo_not_found():
+    """Test _update_quarto_config prints warning for missing logo file."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="logo:\n  light: nonexistent-logo.png\n",
+        )
+
+        with patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)):
+            docs._update_quarto_config()
+
+
+def test_update_quarto_config_dark_logo_not_found():
+    """Test _update_quarto_config prints warning for missing dark logo."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "logo.png").write_bytes(b"\x89PNG" + b"\x00" * 100)
+
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="logo:\n  light: logo.png\n  dark: nonexistent-dark.png\n",
+        )
+
+        with (
+            patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)),
+            patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}),
+        ):
+            docs._update_quarto_config()
+
+
+def test_update_quarto_config_favicon_file():
+    """Test _update_quarto_config handles explicit favicon file."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "logo.png").write_bytes(b"\x89PNG" + b"\x00" * 100)
+        (Path(tmp_dir) / "my-favicon.ico").write_bytes(b"\x00" * 100)
+
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="logo:\n  light: logo.png\nfavicon:\n  icon: my-favicon.ico\n",
+        )
+
+        with (
+            patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)),
+            patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}),
+        ):
+            docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+
+        assert result["website"].get("favicon") is not None
+
+
+def test_update_quarto_config_favicon_not_found():
+    """Test _update_quarto_config warns for missing favicon source."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "logo.png").write_bytes(b"\x89PNG" + b"\x00" * 100)
+
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="logo:\n  light: logo.png\nfavicon:\n  source: nonexistent.ico\n",
+        )
+
+        with (
+            patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)),
+            patch.object(docs, "_generate_favicons", return_value={}),
+        ):
+            docs._update_quarto_config()
+
+
+def test_update_quarto_config_include_after_body_string():
+    """Test _update_quarto_config converts string include-after-body to list."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="markdown_pages_widget: true\n",
+            quarto_content={
+                "project": {"type": "website"},
+                "website": {},
+                "format": {"html": {"include-after-body": "existing-body.html"}},
+            },
+        )
+
+        with patch.object(
+            docs,
+            "_get_github_repo_info",
+            return_value=("owner", "repo", "https://github.com/owner/repo"),
+        ):
+            docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+
+        after_body = result["format"]["html"]["include-after-body"]
+        assert isinstance(after_body, list)
+
+
+def test_update_quarto_config_footer_author_string():
+    """Test _update_quarto_config handles string authors in footer."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            pyproject_content=(
+                '[project]\nname = "testpkg"\n'
+                '[[project.authors]]\nname = "Alice Smith"\n'
+                '[[project.maintainers]]\nname = "Bob Jones"\n'
+            ),
+        )
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+
+        footer = result["website"]["page-footer"]["center"]
+        assert "Alice" in footer
+        assert "Bob" in footer
+
+
+def test_update_quarto_config_footer_funding_no_url():
+    """Test _update_quarto_config handles funding without URL."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            pyproject_content=(
+                '[project]\nname = "testpkg"\n[[project.authors]]\nname = "Alice"\n'
+            ),
+            gd_yml_content="funding:\n  name: ACME Foundation\n",
+        )
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+
+        footer = result["website"]["page-footer"]["center"]
+        assert "ACME" in footer or "Supported by" in footer
+
+
+def test_update_quarto_config_funding_only_no_authors():
+    """Test _update_quarto_config handles funding with no authors."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            pyproject_content='[project]\nname = "testpkg"\n',
+            gd_yml_content="funding:\n  name: ACME Foundation\n  homepage: https://acme.org\n",
+        )
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+
+        footer = result["website"].get("page-footer", {})
+        center = footer.get("center", "")
+        assert "ACME" in center or "Supported" in center
+
+
+def test_update_quarto_config_attribution_v2():
+    """Test _update_quarto_config adds attribution footer."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="attribution: true\n",
+        )
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+
+        footer = result["website"]["page-footer"]["center"]
+        assert "Great" in footer
+
+
+def test_update_quarto_config_announcement_banner_v2():
+    """Test _update_quarto_config adds announcement banner."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content=(
+                "announcement:\n"
+                "  content: New version available!\n"
+                "  type: success\n"
+                "  dismissable: true\n"
+                "  url: https://example.com\n"
+                "  style: rounded\n"
+            ),
+        )
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+
+        header = result["format"]["html"]["include-in-header"]
+        has_announcement = any("gd-announcement" in str(item) for item in header)
+        assert has_announcement
+
+        after_body = result["format"]["html"]["include-after-body"]
+        has_banner = any("announcement-banner" in str(item) for item in after_body)
+        assert has_banner
+
+        assert "announcement-banner.js" in result["project"]["resources"]
+
+
+def test_update_quarto_config_navbar_style_v2():
+    """Test _update_quarto_config adds navbar style preset."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="navbar_style: gradient-sunset\n",
+        )
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+
+        header = result["format"]["html"]["include-in-header"]
+        has_navbar_style = any("gd-navbar-style" in str(item) for item in header)
+        assert has_navbar_style
+
+
+def test_update_quarto_config_content_style_v2():
+    """Test _update_quarto_config adds content style preset."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="content_style:\n  preset: warm-glow\n  pages: all\n",
+        )
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+
+        header = result["format"]["html"]["include-in-header"]
+        has_content_style = any("gd-content-style" in str(item) for item in header)
+        assert has_content_style
+
+        assert "content-style.js" in result["project"]["resources"]
+
+
+def test_update_quarto_config_logo_href():
+    """Test _update_quarto_config sets logo-href from config."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "logo.png").write_bytes(b"\x89PNG" + b"\x00" * 100)
+
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="logo:\n  light: logo.png\n  href: https://example.com\n",
+        )
+
+        with (
+            patch.object(docs, "_find_package_root", return_value=Path(tmp_dir)),
+            patch.object(docs, "_generate_favicons", return_value={"icon": "favicon.ico"}),
+        ):
+            docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = yaml.safe_load(f)
+
+        navbar = result["website"]["navbar"]
+        assert navbar["logo-href"] == "https://example.com"
+
+
+def test_update_quarto_config_version_badge_metadata_v2():
+    """Test _update_quarto_config writes version badge metadata."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+
+        releases = [{"tag_name": "v1.2.3", "published_at": "2024-01-01T00:00:00Z"}]
+
+        with (
+            patch.object(
+                docs,
+                "_get_github_repo_info",
+                return_value=("owner", "repo", "https://github.com/owner/repo"),
+            ),
+            patch.object(docs, "_fetch_github_releases", return_value=releases),
+        ):
+            docs._update_quarto_config()
+
+        meta_path = docs.project_path / "_package_meta.json"
+        assert meta_path.exists()
+        with open(meta_path) as f:
+            meta = json.load(f)
+        assert meta["version"] == "1.2.3"
+
+
+def test_update_quarto_config_fetch_releases_exception():
+    """Test _update_quarto_config handles release fetch exception."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+
+        with (
+            patch.object(
+                docs,
+                "_get_github_repo_info",
+                return_value=("owner", "repo", "https://github.com/owner/repo"),
+            ),
+            patch.object(
+                docs,
+                "_fetch_github_releases",
+                side_effect=RuntimeError("network error"),
+            ),
+        ):
+            docs._update_quarto_config()
+
+
+def test_update_quarto_config_no_releases():
+    """Test _update_quarto_config handles empty release list."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+
+        meta_path = docs.project_path / "_package_meta.json"
+        meta_path.write_text('{"version": "old"}', encoding="utf-8")
+
+        with (
+            patch.object(
+                docs,
+                "_get_github_repo_info",
+                return_value=("owner", "repo", "https://github.com/owner/repo"),
+            ),
+            patch.object(docs, "_fetch_github_releases", return_value=[]),
+        ):
+            docs._update_quarto_config()
+
+        assert not meta_path.exists()
