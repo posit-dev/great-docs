@@ -32883,3 +32883,1373 @@ def test_blocks_str_items_single_block():
     result = blockcontent_to_str_items(CodeBlock("code"), "ordered")
     assert "1." in result
     assert "```" in result
+
+
+def test_rstconv_escape():
+    """escape() wraps value in backticks."""
+    from great_docs._qrenderer._rst_converters import escape
+
+    assert escape("foo") == "`foo`"
+    assert escape("int | str") == "`int | str`"
+
+
+def test_rstconv_sanitize_defaults():
+    """sanitize() replaces newlines and escapes pipes/brackets by default."""
+    from great_docs._qrenderer._rst_converters import sanitize
+
+    assert sanitize("a\nb") == "a b"
+    assert sanitize("a|b") == "a\\|b"
+    assert sanitize("[link]") == "\\[link\\]"
+
+
+def test_rstconv_sanitize_preserve_newlines():
+    """sanitize() with preserve_newlines keeps newlines."""
+    from great_docs._qrenderer._rst_converters import sanitize
+
+    assert sanitize("a\nb", preserve_newlines=True) == "a\nb"
+
+
+def test_rstconv_sanitize_escape_quotes():
+    """sanitize() with escape_quotes escapes single/double quotes."""
+    from great_docs._qrenderer._rst_converters import sanitize
+
+    result = sanitize('it\'s a "test"', escape_quotes=True)
+    assert "\\'" in result
+    assert '\\"' in result
+
+
+def test_rstconv_sanitize_allow_markdown():
+    """sanitize() with allow_markdown preserves brackets."""
+    from great_docs._qrenderer._rst_converters import sanitize
+
+    assert sanitize("[link](url)", allow_markdown=True) == "[link](url)"
+
+
+def test_rstconv_convert_rst_text_code_block():
+    """_convert_rst_text converts RST :: code blocks to fenced blocks."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_text
+
+    text = "Example::\n\n    x = 1\n    y = 2\n"
+    result = _convert_rst_text(text)
+    assert "```python" in result
+    assert "x = 1" in result
+
+
+def test_rstconv_convert_rst_text_math_directive():
+    """_convert_rst_text converts .. math:: to $$...$$ display math."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_text
+
+    text = ".. math::\n\n    E = mc^2\n"
+    result = _convert_rst_text(text)
+    assert "$$" in result
+    assert "E = mc^2" in result
+
+
+def test_rstconv_convert_rst_text_math_empty_body():
+    """_convert_rst_text handles .. math:: with empty indented body."""
+    from great_docs._qrenderer._rst_converters import _replace_rst_code_block, _RST_CODE_BLOCK_RE
+
+    # Construct text that hits the empty-lines branch of math
+    text = ".. math::\n\n    \n"
+    m = _RST_CODE_BLOCK_RE.search(text)
+    if m:
+        result = _replace_rst_code_block(m)
+        assert "$$" in result
+
+
+def test_rstconv_rst_directive_preserved():
+    """Known RST directives like .. note:: are left untouched by code block conversion."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_text
+
+    text = ".. note::\n\n    This is a note.\n"
+    result = _convert_rst_text(text)
+    # The note directive should be converted by _convert_rst_directives, not code block handler
+    assert "```python" not in result
+
+
+def test_rstconv_code_block_no_prefix():
+    """RST :: code block with no prefix text (bare ::)."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_text
+
+    text = "::\n\n    code_here\n"
+    result = _convert_rst_text(text)
+    assert "```python" in result
+    assert "code_here" in result
+
+
+def test_rstconv_code_block_with_prefix():
+    """RST :: code block with prefix text gets prefix: before fenced block."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_text
+
+    text = "For example::\n\n    x = 1\n"
+    result = _convert_rst_text(text)
+    assert "```python" in result
+    assert "For example:" in result
+
+
+def test_rstconv_inline_math():
+    """_convert_rst_text converts :math:`...` to $...$."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_text
+
+    text = "The value is :math:`x^2 + y^2`."
+    result = _convert_rst_text(text)
+    assert "$x^2 + y^2$" in result
+
+
+def test_rstconv_quarto_cell_to_fenced():
+    """_convert_rst_text converts ```{python} to ```python."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_text
+
+    text = "```{python}\nprint('hi')\n```"
+    result = _convert_rst_text(text)
+    assert "```python" in result
+    assert "```{python}" not in result
+
+
+def test_rstconv_smart_dedent_no_indent():
+    """_smart_dedent returns text unchanged when first line has no indent."""
+    from great_docs._qrenderer._rst_converters import _smart_dedent
+
+    text = "no indent\n  some indent\n"
+    assert _smart_dedent(text) == text
+
+
+def test_rstconv_smart_dedent_with_indent():
+    """_smart_dedent strips common indent from all lines."""
+    from great_docs._qrenderer._rst_converters import _smart_dedent
+
+    text = "    line1\n    line2\n      line3\n"
+    result = _smart_dedent(text)
+    assert result == "line1\nline2\n  line3\n"
+
+
+def test_rstconv_smart_dedent_blank_lines():
+    """_smart_dedent preserves blank lines."""
+    from great_docs._qrenderer._rst_converters import _smart_dedent
+
+    text = "    line1\n\n    line2\n"
+    result = _smart_dedent(text)
+    assert result == "line1\n\nline2\n"
+
+
+def test_rstconv_smart_dedent_less_indent():
+    """_smart_dedent tolerates lines with less indent than margin."""
+    from great_docs._qrenderer._rst_converters import _smart_dedent
+
+    text = "    line1\n  line2\n    line3\n"
+    result = _smart_dedent(text)
+    # margin=4 from first line, line2 only has 2 spaces -> strips 2
+    assert "line1" in result
+    assert "line2" in result
+
+
+def test_rstconv_smart_dedent_all_blank():
+    """_smart_dedent handles text with only blank lines."""
+    from great_docs._qrenderer._rst_converters import _smart_dedent
+
+    text = "\n\n\n"
+    result = _smart_dedent(text)
+    assert result == text
+
+
+def test_rstconv_citations_basic():
+    """_convert_rst_citations converts .. [N] markers to numbered list."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_citations
+
+    text = ".. [1] Author (Year). Title.\n.. [2] https://example.com\n"
+    result = _convert_rst_citations(text)
+    assert "1. Author (Year). Title." in result
+    assert "2. <https://example.com>" in result
+
+
+def test_rstconv_citations_no_citations():
+    """_convert_rst_citations returns text unchanged when no citations present."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_citations
+
+    text = "Regular paragraph text."
+    assert _convert_rst_citations(text) == text
+
+
+def test_rstconv_citations_continuation_lines():
+    """_convert_rst_citations handles continuation lines."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_citations
+
+    text = ".. [1] Author (Year).\n   Continuation of citation.\n"
+    result = _convert_rst_citations(text)
+    assert "1. Author (Year). Continuation of citation." in result
+
+
+def test_rstconv_simple_table_basic():
+    """_convert_rst_simple_tables converts basic 2-separator table."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_simple_tables
+
+    text = "======  ======\nName    Value\n======  ======\nfoo     1\nbar     2\n======  ======\n"
+    result = _convert_rst_simple_tables(text)
+    assert "| Name" in result
+    assert "| ---" in result
+    assert "| foo" in result
+    assert "| bar" in result
+
+
+def test_rstconv_simple_table_three_separators():
+    """_convert_rst_simple_tables handles 3-separator table (header + body)."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_simple_tables
+
+    text = "======  ======\nName    Value\n======  ======\nfoo     1\nbar     2\n======  ======\n"
+    result = _convert_rst_simple_tables(text)
+    assert "| Name" in result
+    assert "| foo" in result
+
+
+def test_rstconv_simple_table_no_header_rows():
+    """_rst_simple_table_to_md returns None when no header rows exist."""
+    from great_docs._qrenderer._rst_converters import _rst_simple_table_to_md
+
+    # Only one separator line -> returns None
+    result = _rst_simple_table_to_md(["======  ======"])
+    assert result is None
+
+
+def test_rstconv_simple_table_to_md_two_sep():
+    """_rst_simple_table_to_md with 2 separators uses first data row as header."""
+    from great_docs._qrenderer._rst_converters import _rst_simple_table_to_md
+
+    table_lines = [
+        "======  ======",
+        "Name    Value",
+        "foo     1",
+        "======  ======",
+    ]
+    result = _rst_simple_table_to_md(table_lines)
+    assert result is not None
+    assert "| Name" in result
+    assert "| foo" in result
+
+
+def test_rstconv_simple_table_to_md_three_sep():
+    """_rst_simple_table_to_md with 3 separators separates header from body."""
+    from great_docs._qrenderer._rst_converters import _rst_simple_table_to_md
+
+    table_lines = [
+        "=====  =====",
+        "Col1   Col2",
+        "=====  =====",
+        "a      b",
+        "c      d",
+        "=====  =====",
+    ]
+    result = _rst_simple_table_to_md(table_lines)
+    assert result is not None
+    assert "| Col1" in result
+    assert "| a" in result
+    assert "| c" in result
+
+
+def test_rstconv_simple_table_padding():
+    """_rst_simple_table_to_md pads rows with fewer cells than columns."""
+    from great_docs._qrenderer._rst_converters import _rst_simple_table_to_md
+
+    table_lines = [
+        "=====  =====  =====",
+        "A      B      C",
+        "=====  =====  =====",
+        "x",  # short row
+        "=====  =====  =====",
+    ]
+    result = _rst_simple_table_to_md(table_lines)
+    assert result is not None
+    assert "| A | B | C |" in result
+
+
+def test_rstconv_simple_table_no_col_spans():
+    """_rst_simple_table_to_md returns None when separator has no column spans."""
+    from great_docs._qrenderer._rst_converters import _rst_simple_table_to_md
+
+    # A single block of === with no spaces -> no col_spans
+    table_lines = [
+        "==========",
+        "header",
+        "==========",
+    ]
+    result = _rst_simple_table_to_md(table_lines)
+    assert result is None
+
+
+def test_rstconv_simple_table_in_context():
+    """_convert_rst_simple_tables converts a table surrounded by text."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_simple_tables
+
+    text = (
+        "Before text.\n=====  =====\nA      B\n=====  =====\n1      2\n=====  =====\nAfter text.\n"
+    )
+    result = _convert_rst_simple_tables(text)
+    assert "Before text." in result
+    assert "After text." in result
+    assert "| A" in result
+
+
+def test_rstconv_simple_table_conversion_fails():
+    """_convert_rst_simple_tables falls back when table conversion returns None."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_simple_tables
+
+    # A separator-like line that looks like a table start but isn't valid
+    text = "=====  =====\n"
+    result = _convert_rst_simple_tables(text)
+    assert "=====" in result
+
+
+def test_rstconv_grid_table_basic():
+    """_convert_rst_grid_tables converts a basic grid table."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_grid_tables
+
+    text = "+------+------+\n| Name | Val  |\n+======+======+\n| foo  | 1    |\n+------+------+\n"
+    result = _convert_rst_grid_tables(text)
+    assert "| Name | Val |" in result
+    assert "| ---" in result
+    assert "| foo | 1 |" in result
+
+
+def test_rstconv_grid_table_no_header_sep():
+    """_rst_grid_table_to_md without header separator uses first row as header."""
+    from great_docs._qrenderer._rst_converters import _rst_grid_table_to_md
+
+    table_lines = [
+        "+------+------+",
+        "| A    | B    |",
+        "+------+------+",
+        "| 1    | 2    |",
+        "+------+------+",
+    ]
+    result = _rst_grid_table_to_md(table_lines)
+    assert result is not None
+    assert "| A | B |" in result
+    assert "| 1 | 2 |" in result
+
+
+def test_rstconv_grid_table_to_md_too_few_positions():
+    """_rst_grid_table_to_md returns None when < 2 column positions."""
+    from great_docs._qrenderer._rst_converters import _rst_grid_table_to_md
+
+    result = _rst_grid_table_to_md(["+"])
+    assert result is None
+
+
+def test_rstconv_grid_table_header_sep_no_header_rows():
+    """_rst_grid_table_to_md with header sep but no header rows returns None."""
+    from great_docs._qrenderer._rst_converters import _rst_grid_table_to_md
+
+    table_lines = [
+        "+------+------+",
+        "+======+======+",
+        "| 1    | 2    |",
+        "+------+------+",
+    ]
+    result = _rst_grid_table_to_md(table_lines)
+    assert result is None
+
+
+def test_rstconv_grid_table_no_body_rows():
+    """_rst_grid_table_to_md without header sep and empty rows returns None."""
+    from great_docs._qrenderer._rst_converters import _rst_grid_table_to_md
+
+    table_lines = [
+        "+------+------+",
+        "+------+------+",
+    ]
+    result = _rst_grid_table_to_md(table_lines)
+    assert result is None
+
+
+def test_rstconv_grid_table_padding():
+    """_rst_grid_table_to_md pads rows with fewer cells."""
+    from great_docs._qrenderer._rst_converters import _rst_grid_table_to_md
+
+    table_lines = [
+        "+---+---+---+",
+        "| A | B | C |",
+        "+===+===+===+",
+        "| 1 |",  # short row
+        "+---+---+---+",
+    ]
+    result = _rst_grid_table_to_md(table_lines)
+    assert result is not None
+    assert "| A | B | C |" in result
+
+
+def test_rstconv_grid_table_in_context():
+    """_convert_rst_grid_tables handles tables surrounded by text."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_grid_tables
+
+    text = (
+        "Before.\n"
+        "+------+------+\n"
+        "| A    | B    |\n"
+        "+======+======+\n"
+        "| 1    | 2    |\n"
+        "+------+------+\n"
+        "After.\n"
+    )
+    result = _convert_rst_grid_tables(text)
+    assert "Before." in result
+    assert "After." in result
+    assert "| A | B |" in result
+
+
+def test_rstconv_grid_table_conversion_fails():
+    """_convert_rst_grid_tables falls back when conversion returns None."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_grid_tables
+
+    text = "+---+---+\n+---+---+\n"
+    result = _convert_rst_grid_tables(text)
+    assert "+---+" in result
+
+
+def test_rstconv_sphinx_role_func():
+    """Sphinx :func: role adds ()."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
+
+    assert _convert_sphinx_roles(":func:`get_object`") == "`get_object()`"
+
+
+def test_rstconv_sphinx_role_func_already_parens():
+    """Sphinx :func: role with existing () doesn't double them."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
+
+    assert _convert_sphinx_roles(":func:`get_object()`") == "`get_object()`"
+
+
+def test_rstconv_sphinx_role_meth():
+    """Sphinx :meth: role adds ()."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
+
+    assert _convert_sphinx_roles(":meth:`process`") == "`process()`"
+
+
+def test_rstconv_sphinx_role_class():
+    """Sphinx :class: role produces code span without ()."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
+
+    assert _convert_sphinx_roles(":class:`MyClass`") == "`MyClass`"
+
+
+def test_rstconv_sphinx_role_exc():
+    """Sphinx :exc: role."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
+
+    assert _convert_sphinx_roles(":exc:`ValueError`") == "`ValueError`"
+
+
+def test_rstconv_sphinx_role_py_prefix():
+    """Sphinx :py:class: prefix is handled."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
+
+    assert _convert_sphinx_roles(":py:class:`int`") == "`int`"
+
+
+def test_rstconv_sphinx_role_attr():
+    """Sphinx :attr: role."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
+
+    assert _convert_sphinx_roles(":attr:`name`") == "`name`"
+
+
+def test_rstconv_sphinx_role_data():
+    """Sphinx :data: role."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
+
+    assert _convert_sphinx_roles(":data:`MY_CONST`") == "`MY_CONST`"
+
+
+def test_rstconv_sphinx_role_multiple():
+    """Multiple Sphinx roles in same text are all converted."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
+
+    text = "Use :func:`foo` or :class:`Bar`."
+    result = _convert_sphinx_roles(text)
+    assert "`foo()`" in result
+    assert "`Bar`" in result
+
+
+def test_rstconv_directive_note_block():
+    """Block-form .. note:: converted to callout-note."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_directives
+
+    text = ".. note::\n\n    This is important.\n"
+    result = _convert_rst_directives(text)
+    assert ".callout-note" in result
+    assert "This is important." in result
+
+
+def test_rstconv_directive_warning_block():
+    """Block-form .. warning:: converted to callout-warning."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_directives
+
+    text = ".. warning::\n\n    Be careful.\n"
+    result = _convert_rst_directives(text)
+    assert ".callout-warning" in result
+
+
+def test_rstconv_directive_tip_block():
+    """Block-form .. tip:: converted to callout-tip."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_directives
+
+    text = ".. tip::\n\n    A useful tip.\n"
+    result = _convert_rst_directives(text)
+    assert ".callout-tip" in result
+
+
+def test_rstconv_directive_hint_block():
+    """.. hint:: maps to callout-tip."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_directives
+
+    text = ".. hint::\n\n    A hint.\n"
+    result = _convert_rst_directives(text)
+    assert ".callout-tip" in result
+
+
+def test_rstconv_directive_danger_block():
+    """.. danger:: maps to callout-important."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_directives
+
+    text = ".. danger::\n\n    Dangerous.\n"
+    result = _convert_rst_directives(text)
+    assert ".callout-important" in result
+
+
+def test_rstconv_directive_important_block():
+    """.. important:: maps to callout-important."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_directives
+
+    text = ".. important::\n\n    Very important.\n"
+    result = _convert_rst_directives(text)
+    assert ".callout-important" in result
+
+
+def test_rstconv_directive_caution_block():
+    """.. caution:: maps to callout-caution."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_directives
+
+    text = ".. caution::\n\n    Exercise caution.\n"
+    result = _convert_rst_directives(text)
+    assert ".callout-caution" in result
+
+
+def test_rstconv_directive_inline_form():
+    """Inline-form ``.. note:: text`` on a single line."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_directives
+
+    text = ".. note:: This is a quick note."
+    result = _convert_rst_directives(text)
+    assert ".callout-note" in result
+    assert "This is a quick note." in result
+
+
+def test_rstconv_directive_bare():
+    """Bare directive ``.. note::`` with no body."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_directives
+
+    text = ".. note::"
+    result = _convert_rst_directives(text)
+    assert ".callout-note" in result
+
+
+def test_rstconv_directive_versionadded():
+    """.. versionadded:: produces callout-note with version title."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_directives
+
+    text = ".. versionadded:: 2.0"
+    result = _convert_rst_directives(text)
+    assert ".callout-note" in result
+    assert "Added in version 2.0" in result
+
+
+def test_rstconv_directive_versionchanged():
+    """.. versionchanged:: produces callout-note."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_directives
+
+    text = ".. versionchanged:: 3.1"
+    result = _convert_rst_directives(text)
+    assert ".callout-note" in result
+    assert "Changed in version 3.1" in result
+
+
+def test_rstconv_directive_deprecated():
+    """.. deprecated:: produces callout-warning."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_directives
+
+    text = ".. deprecated:: 1.5"
+    result = _convert_rst_directives(text)
+    assert ".callout-warning" in result
+    assert "Deprecated since version 1.5" in result
+
+
+def test_rstconv_directive_versionadded_block():
+    """Block-form .. versionadded:: with body text."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_directives
+
+    text = ".. versionadded:: 2.0\n\n    Use the new API.\n"
+    result = _convert_rst_directives(text)
+    assert "Added in version 2.0" in result
+    assert "Use the new API." in result
+
+
+def test_rstconv_directive_deprecated_with_description():
+    """.. deprecated:: with inline version and block description."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_directives
+
+    text = ".. deprecated:: 1.0\n\n    Use new_func() instead.\n"
+    result = _convert_rst_directives(text)
+    assert "Deprecated since version 1.0" in result
+    assert "Use new_func() instead." in result
+
+
+def test_rstconv_directive_to_callout_version_no_version():
+    """_rst_directive_to_callout handles version directive with no version string."""
+    from great_docs._qrenderer._rst_converters import _rst_directive_to_callout
+
+    result = _rst_directive_to_callout("versionadded", "")
+    assert "Added in version" in result
+    assert ".callout-note" in result
+
+
+def test_rstconv_directive_to_callout_note_empty():
+    """_rst_directive_to_callout for note with empty body."""
+    from great_docs._qrenderer._rst_converters import _rst_directive_to_callout
+
+    result = _rst_directive_to_callout("note", "")
+    assert ".callout-note" in result
+    assert ":::" in result
+
+
+def test_rstconv_directive_to_callout_note_with_content():
+    """_rst_directive_to_callout for note with content."""
+    from great_docs._qrenderer._rst_converters import _rst_directive_to_callout
+
+    result = _rst_directive_to_callout("note", "Some text", "inline part")
+    assert ".callout-note" in result
+    assert "inline part" in result or "Some text" in result
+
+
+def test_rstconv_directive_inline_with_inline_arg():
+    """Block directive with inline text plus block body."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_directives
+
+    text = ".. note:: Important\n\n    Details here.\n"
+    result = _convert_rst_directives(text)
+    assert ".callout-note" in result
+
+
+def test_rstconv_bold_section_examples():
+    """**Examples**:: is converted to QMD section heading."""
+    from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
+
+    text = "**Examples**::"
+    result = _convert_bold_section_headers(text, 2)
+    assert "## Examples {.doc-section .doc-section-examples}" in result
+
+
+def test_rstconv_bold_section_notes():
+    """**Notes**:: is converted."""
+    from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
+
+    text = "**Notes**::"
+    result = _convert_bold_section_headers(text, 3)
+    assert "### Notes {.doc-section .doc-section-notes}" in result
+
+
+def test_rstconv_bold_section_references():
+    """**References**:: is converted."""
+    from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
+
+    text = "**References**::"
+    result = _convert_bold_section_headers(text, 2)
+    assert "## References {.doc-section .doc-section-references}" in result
+
+
+def test_rstconv_bold_section_see_also():
+    """**See Also**:: is converted."""
+    from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
+
+    text = "**See Also**::"
+    result = _convert_bold_section_headers(text, 2)
+    assert "## See Also {.doc-section .doc-section-see-also}" in result
+
+
+def test_rstconv_bold_section_warnings():
+    """**Warnings**:: is converted."""
+    from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
+
+    text = "**Warnings**::"
+    result = _convert_bold_section_headers(text, 2)
+    assert "## Warnings {.doc-section .doc-section-warnings}" in result
+
+
+def test_rstconv_bold_section_no_match():
+    """Text without bold section headers is unchanged."""
+    from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
+
+    text = "Regular text without bold sections."
+    assert _convert_bold_section_headers(text, 2) == text
+
+
+def test_rstconv_sphinx_fields_param():
+    """:param: fields produce a Parameters table."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
+
+    text = ":param x: The x value.\n:param y: The y value.\n"
+    result = _convert_sphinx_fields(text, 2)
+    assert "## Parameters" in result
+    assert "| x |" in result
+    assert "| y |" in result
+
+
+def test_rstconv_sphinx_fields_param_with_type():
+    """:param: + :type: fields populate Type column."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
+
+    text = ":param x: The x value.\n:type x: int\n"
+    result = _convert_sphinx_fields(text, 2)
+    assert "## Parameters" in result
+    assert "int" in result
+
+
+def test_rstconv_sphinx_fields_returns():
+    """:returns: field produces a Returns table."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
+
+    text = ":returns: The computed result.\n"
+    result = _convert_sphinx_fields(text, 2)
+    assert "## Returns" in result
+    assert "The computed result." in result
+
+
+def test_rstconv_sphinx_fields_return_singular():
+    """:return: (singular) field produces a Returns table."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
+
+    text = ":return: A value.\n"
+    result = _convert_sphinx_fields(text, 2)
+    assert "## Returns" in result
+
+
+def test_rstconv_sphinx_fields_rtype():
+    """:rtype: field populates the return type."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
+
+    text = ":returns: Result.\n:rtype: int\n"
+    result = _convert_sphinx_fields(text, 2)
+    assert "## Returns" in result
+    assert "int" in result
+
+
+def test_rstconv_sphinx_fields_rtype_no_returns():
+    """:rtype: without preceding :returns: creates a returns entry."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
+
+    text = ":rtype: str\n"
+    result = _convert_sphinx_fields(text, 3)
+    assert "### Returns" in result
+    assert "str" in result
+
+
+def test_rstconv_sphinx_fields_raises():
+    """:raises: field produces a Raises table."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
+
+    text = ":raises ValueError: If input is invalid.\n"
+    result = _convert_sphinx_fields(text, 2)
+    assert "## Raises" in result
+    assert "ValueError" in result
+    assert "If input is invalid." in result
+
+
+def test_rstconv_sphinx_fields_raise_singular():
+    """:raise: (singular) field produces a Raises table."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
+
+    text = ":raise TypeError: Wrong type.\n"
+    result = _convert_sphinx_fields(text, 2)
+    assert "## Raises" in result
+    assert "TypeError" in result
+
+
+def test_rstconv_sphinx_fields_combined():
+    """Multiple Sphinx field types produce all sections."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
+
+    text = (
+        "Description.\n\n"
+        ":param x: Input.\n"
+        ":type x: int\n"
+        ":returns: Output.\n"
+        ":rtype: str\n"
+        ":raises ValueError: Bad input.\n"
+    )
+    result = _convert_sphinx_fields(text, 2)
+    assert "## Parameters" in result
+    assert "## Returns" in result
+    assert "## Raises" in result
+    assert "Description." in result
+
+
+def test_rstconv_sphinx_fields_no_fields():
+    """Text without Sphinx fields is returned unchanged."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
+
+    text = "Just a plain text paragraph."
+    assert _convert_sphinx_fields(text, 2) == text
+
+
+def test_rstconv_sphinx_fields_before_text():
+    """Text before fields is preserved."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
+
+    text = "This function does things.\n\n:param x: Value.\n"
+    result = _convert_sphinx_fields(text, 2)
+    assert "This function does things." in result
+    assert "## Parameters" in result
+
+
+def test_rstconv_google_args_section():
+    """Google-style Args: section produces a Parameters table."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "Args:\n    x: The x value.\n    y: The y value.\n"
+    result = _convert_google_sections(text, 2)
+    assert "## Parameters" in result
+    assert "| x |" in result
+    assert "| y |" in result
+
+
+def test_rstconv_google_parameters_section():
+    """Google-style Parameters: section."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "Parameters:\n    name: A name.\n"
+    result = _convert_google_sections(text, 2)
+    assert "## Parameters" in result
+    assert "| name |" in result
+
+
+def test_rstconv_google_returns_section():
+    """Google-style Returns: section."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "Returns:\n    The result value.\n"
+    result = _convert_google_sections(text, 2)
+    assert "## Returns" in result
+    assert "The result value." in result
+
+
+def test_rstconv_google_raises_section():
+    """Google-style Raises: section produces a Raises table."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "Raises:\n    ValueError: If input is bad.\n    TypeError: Wrong type.\n"
+    result = _convert_google_sections(text, 2)
+    assert "## Raises" in result
+    assert "ValueError" in result
+    assert "TypeError" in result
+
+
+def test_rstconv_google_raises_no_entries():
+    """Google-style Raises: with unparsable body falls back to raw text."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "Raises:\n    some random text without proper format\n"
+    result = _convert_google_sections(text, 2)
+    assert "some random text" in result
+
+
+def test_rstconv_google_examples_section():
+    """Google-style Examples: section produces a prose section."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "Examples:\n    >>> import foo\n    >>> foo.bar()\n"
+    result = _convert_google_sections(text, 2)
+    assert "## Examples" in result
+    assert ".doc-section-examples" in result
+
+
+def test_rstconv_google_notes_section():
+    """Google-style Notes: section."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "Notes:\n    This is a note.\n"
+    result = _convert_google_sections(text, 3)
+    assert "### Notes" in result
+    assert ".doc-section-notes" in result
+
+
+def test_rstconv_google_warning_section():
+    """Google-style Warning: section."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "Warning:\n    Be careful.\n"
+    result = _convert_google_sections(text, 2)
+    assert "## Warning" in result
+    assert ".doc-section-warnings" in result
+
+
+def test_rstconv_google_see_also_section():
+    """Google-style See Also: section."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "See Also:\n    other_func\n"
+    result = _convert_google_sections(text, 2)
+    assert "## See Also" in result
+    assert ".doc-section-see-also" in result
+
+
+def test_rstconv_google_no_sections():
+    """Text without Google-style sections is unchanged."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "Plain text."
+    assert _convert_google_sections(text, 2) == text
+
+
+def test_rstconv_google_args_no_entries():
+    """Google-style Args: with no parsable entries falls back to raw text."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "Args:\n    just some plain text without entries\n"
+    result = _convert_google_sections(text, 2)
+    assert "just some plain text" in result
+
+
+def test_rstconv_google_before_text():
+    """Text before Google sections is preserved."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "This function does stuff.\n\nArgs:\n    x: Value.\n"
+    result = _convert_google_sections(text, 2)
+    assert "This function does stuff." in result
+    assert "## Parameters" in result
+
+
+def test_rstconv_google_multiple_sections():
+    """Multiple Google-style sections produce all sections."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = (
+        "Description.\n\n"
+        "Args:\n    x: Input.\n\n"
+        "Returns:\n    Result.\n\n"
+        "Raises:\n    ValueError: Bad.\n"
+    )
+    result = _convert_google_sections(text, 2)
+    assert "## Parameters" in result
+    assert "## Returns" in result
+    assert "## Raises" in result
+
+
+def test_rstconv_google_inline_section():
+    """Google-style section with inline text on same line."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "Returns: The result.\n"
+    result = _convert_google_sections(text, 2)
+    assert "## Returns" in result
+    assert "The result." in result
+
+
+def test_rstconv_google_args_continuation_lines():
+    """Google-style Args entries with continuation lines."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "Args:\n    x: The first\n        value.\n    y: Second.\n"
+    result = _convert_google_sections(text, 2)
+    assert "## Parameters" in result
+
+
+def test_rstconv_google_raises_continuation():
+    """Google-style Raises entries with continuation lines."""
+    from great_docs._qrenderer._rst_converters import _parse_google_raises
+
+    body = "ValueError: If x is\n    negative.\nTypeError: Wrong type.\n"
+    entries = _parse_google_raises(body)
+    assert len(entries) == 2
+    assert "negative" in entries[0][1]
+
+
+def test_rstconv_parse_google_entries_basic():
+    """_parse_google_entries parses name: desc pairs."""
+    from great_docs._qrenderer._rst_converters import _parse_google_entries
+
+    body = "x: The x value.\ny: The y value.\n"
+    entries = _parse_google_entries(body)
+    assert len(entries) == 2
+    assert entries[0] == ("x", "The x value.")
+    assert entries[1] == ("y", "The y value.")
+
+
+def test_rstconv_parse_google_entries_with_type():
+    """_parse_google_entries handles name (type): desc format."""
+    from great_docs._qrenderer._rst_converters import _parse_google_entries
+
+    body = "x (int): The x value.\n"
+    entries = _parse_google_entries(body)
+    assert len(entries) == 1
+    assert entries[0][0] == "x"
+
+
+def test_rstconv_parse_google_entries_continuation():
+    """_parse_google_entries handles continuation lines."""
+    from great_docs._qrenderer._rst_converters import _parse_google_entries
+
+    body = "x: The first\n    value.\ny: Second.\n"
+    entries = _parse_google_entries(body)
+    assert len(entries) == 2
+    assert "first" in entries[0][1]
+    assert "value" in entries[0][1]
+
+
+def test_rstconv_parse_google_entries_empty():
+    """_parse_google_entries with empty body returns empty list."""
+    from great_docs._qrenderer._rst_converters import _parse_google_entries
+
+    assert _parse_google_entries("") == []
+    assert _parse_google_entries("\n\n") == []
+
+
+def test_rstconv_parse_google_raises_basic():
+    """_parse_google_raises parses ExcType: desc pairs."""
+    from great_docs._qrenderer._rst_converters import _parse_google_raises
+
+    body = "ValueError: If x is negative.\nTypeError: Wrong type.\n"
+    entries = _parse_google_raises(body)
+    assert len(entries) == 2
+    assert entries[0] == ("ValueError", "If x is negative.")
+
+
+def test_rstconv_parse_google_raises_empty():
+    """_parse_google_raises with empty body returns empty list."""
+    from great_docs._qrenderer._rst_converters import _parse_google_raises
+
+    assert _parse_google_raises("") == []
+
+
+def test_rstconv_fence_doctest_basic():
+    """_fence_doctest_blocks wraps >>> lines in fenced blocks."""
+    from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
+
+    text = ">>> import os\n>>> os.getcwd()\n"
+    result = _fence_doctest_blocks(text)
+    assert "```python" in result
+    assert ">>> import os" in result
+    assert result.count("```") == 2  # open + close
+
+
+def test_rstconv_fence_doctest_with_continuation():
+    """_fence_doctest_blocks handles ... continuation lines."""
+    from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
+
+    text = ">>> for i in range(3):\n...     print(i)\n"
+    result = _fence_doctest_blocks(text)
+    assert "```python" in result
+    assert "... " in result
+
+
+def test_rstconv_fence_doctest_mixed_with_text():
+    """_fence_doctest_blocks preserves non-doctest lines."""
+    from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
+
+    text = "Some text.\n>>> x = 1\nMore text.\n>>> y = 2\n"
+    result = _fence_doctest_blocks(text)
+    assert "Some text." in result
+    assert "More text." in result
+    assert result.count("```python") == 2
+    assert result.count("```") == 4  # 2 open + 2 close
+
+
+def test_rstconv_fence_doctest_no_doctest():
+    """_fence_doctest_blocks returns text unchanged without doctest lines."""
+    from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
+
+    text = "Regular text.\nNo doctest here.\n"
+    result = _fence_doctest_blocks(text)
+    assert "```" not in result
+    assert result == text
+
+
+def test_rstconv_fence_doctest_bare_prompt():
+    """_fence_doctest_blocks handles bare >>> without trailing space."""
+    from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
+
+    text = ">>>\n"
+    result = _fence_doctest_blocks(text)
+    assert "```python" in result
+
+
+def test_rstconv_convert_rst_text_all_transforms():
+    """_convert_rst_text applies all transforms in sequence."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_text
+
+    text = "Use :func:`foo` to call.\n\nExample::\n\n    x = 1\n\nInline math :math:`E = mc^2`.\n"
+    result = _convert_rst_text(text)
+    assert "`foo()`" in result
+    assert "```python" in result
+    assert "$E = mc^2$" in result
+
+
+def test_rstconv_convert_rst_text_simple_table():
+    """_convert_rst_text handles RST simple tables."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_text
+
+    text = "=====  =====\nA      B\n=====  =====\n1      2\n=====  =====\n"
+    result = _convert_rst_text(text)
+    assert "| A" in result
+
+
+def test_rstconv_convert_rst_text_grid_table():
+    """_convert_rst_text converts RST grid tables."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_text
+
+    text = "+------+------+\n| A    | B    |\n+======+======+\n| 1    | 2    |\n+------+------+\n"
+    result = _convert_rst_text(text)
+    assert "| A | B |" in result
+
+
+def test_rstconv_convert_rst_text_citations():
+    """_convert_rst_text converts RST citations."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_text
+
+    text = ".. [1] Author. Title.\n"
+    result = _convert_rst_text(text)
+    assert "1. Author. Title." in result
+
+
+def test_rstconv_grid_table_non_table_line_breaks():
+    """Grid table collection stops on non-table lines."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_grid_tables
+
+    text = (
+        "+------+------+\n"
+        "| A    | B    |\n"
+        "+======+======+\n"
+        "| 1    | 2    |\n"
+        "+------+------+\n"
+        "Not a table line.\n"
+    )
+    result = _convert_rst_grid_tables(text)
+    assert "| A | B |" in result
+    assert "Not a table line." in result
+
+
+def test_rstconv_simple_table_peek_logic():
+    """Simple table handles the peek-ahead logic for mid-table separators."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_simple_tables
+
+    # Two separators with data that has content in the second column position
+    text = "======  ======\nHead1   Head2\n======  ======\ndata1   data2\n======  ======\n"
+    result = _convert_rst_simple_tables(text)
+    assert "| Head1" in result or "| data1" in result
+
+
+def test_rstconv_simple_table_peek_pass():
+    """Simple table mid-separator peek passes through when next line has 2nd-col content."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_simple_tables
+
+    # This triggers the `pass` branch at line 253: a mid-table separator where
+    # the next line has non-space content at the second_col_start position.
+    # Structure: sep, header, sep (mid-table), data (with 2nd-col content), sep
+    text = "=====  =====\nCol1   Col2\n=====  =====\nval1   val2\n=====  =====\n"
+    result = _convert_rst_simple_tables(text)
+    assert "|" in result
+
+
+def test_rstconv_simple_table_3sep_no_header():
+    """_rst_simple_table_to_md returns None if 3 seps but no header rows."""
+    from great_docs._qrenderer._rst_converters import _rst_simple_table_to_md
+
+    # 3 separators with nothing between first and second
+    table_lines = [
+        "=====  =====",
+        "=====  =====",
+        "data   val",
+        "=====  =====",
+    ]
+    result = _rst_simple_table_to_md(table_lines)
+    # first_sep=0, second_sep=1, range(1,1) is empty -> no header_rows -> None
+    assert result is None
+
+
+def test_rstconv_simple_table_header_short_padding():
+    """Simple table pads header row when shorter than total columns."""
+    from great_docs._qrenderer._rst_converters import _rst_simple_table_to_md
+
+    table_lines = [
+        "===  ===  ===",
+        "A    B",
+        "===  ===  ===",
+        "1    2    3",
+        "===  ===  ===",
+    ]
+    result = _rst_simple_table_to_md(table_lines)
+    assert result is not None
+    assert "| ---" in result
+
+
+def test_rstconv_simple_table_data_row_short_padding():
+    """Simple table pads data rows shorter than columns."""
+    from great_docs._qrenderer._rst_converters import _rst_simple_table_to_md
+
+    table_lines = [
+        "===  ===  ===",
+        "A    B    C",
+        "===  ===  ===",
+        "1",
+        "===  ===  ===",
+    ]
+    result = _rst_simple_table_to_md(table_lines)
+    assert result is not None
+    assert result.count("|") > 4
+
+
+def test_rstconv_grid_table_header_short_padding():
+    """Grid table pads header when shorter than column count."""
+    from great_docs._qrenderer._rst_converters import _rst_grid_table_to_md
+
+    # Grid table with 3 columns but header row that's short
+    table_lines = [
+        "+---+---+---+",
+        "| A |",
+        "+===+===+===+",
+        "| 1 | 2 | 3 |",
+        "+---+---+---+",
+    ]
+    result = _rst_grid_table_to_md(table_lines)
+    assert result is not None
+    assert "| ---" in result
+
+
+def test_rstconv_grid_table_body_row_short_padding():
+    """Grid table pads body rows shorter than column count."""
+    from great_docs._qrenderer._rst_converters import _rst_grid_table_to_md
+
+    table_lines = [
+        "+---+---+---+",
+        "| A | B | C |",
+        "+===+===+===+",
+        "| 1 |",
+        "+---+---+---+",
+    ]
+    result = _rst_grid_table_to_md(table_lines)
+    assert result is not None
+    assert "| A | B | C |" in result
+
+
+def test_rstconv_directive_block_empty_body():
+    """Block directive with empty body lines hits else branch."""
+    from great_docs._qrenderer._rst_converters import _rst_directive_to_callout
+
+    result = _rst_directive_to_callout("warning", "")
+    assert ".callout-warning" in result
+    assert ":::" in result
+
+
+def test_rstconv_sphinx_fields_no_matching():
+    """Sphinx fields regex matches but produces no params/returns/raises."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
+
+    # Text that has :param-like patterns but doesn't match SPHINX_FIELD_RE
+    text = "Something :parameter note: not a field."
+    result = _convert_sphinx_fields(text, 2)
+    assert result == text
+
+
+def test_rstconv_sphinx_fields_rtype_appends_to_returns():
+    """:rtype: adds type to most recent :returns: entry."""
+    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
+
+    text = ":returns: The result.\n:rtype: list\n"
+    result = _convert_sphinx_fields(text, 2)
+    assert "list" in result
+    assert "## Returns" in result
+
+
+def test_rstconv_google_entries_continuation():
+    """_parse_google_entries appends continuation lines to previous entry."""
+    from great_docs._qrenderer._rst_converters import _parse_google_entries
+
+    body = "x: First line\n    continuation line\ny: Second.\n"
+    entries = _parse_google_entries(body)
+    assert len(entries) == 2
+    assert "continuation" in entries[0][1]
+
+
+def test_rstconv_google_section_body_dedent():
+    """Google section body lines are properly dedented."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "Args:\n    x: First.\n    y: Second.\n"
+    result = _convert_google_sections(text, 2)
+    assert "## Parameters" in result
+    assert "| x |" in result
+    assert "| y |" in result
+
+
+def test_rstconv_google_section_with_blank_body_lines():
+    """Google section with blank lines in the body."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "Notes:\n    First paragraph.\n\n    Second paragraph.\n"
+    result = _convert_google_sections(text, 2)
+    assert "## Notes" in result
+    assert "First paragraph." in result
+
+
+def test_rstconv_google_section_tab_indent():
+    """Google section body with tab-indented lines."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "Returns:\n\tThe result.\n"
+    result = _convert_google_sections(text, 2)
+    assert "## Returns" in result
+    assert "The result." in result
+
+
+def test_rstconv_google_section_non_indented_break():
+    """Google section body collection stops at non-indented lines."""
+    from great_docs._qrenderer._rst_converters import _convert_google_sections
+
+    text = "Notes:\n    A note.\nNot indented.\n"
+    result = _convert_google_sections(text, 2)
+    assert "## Notes" in result
+    assert "A note." in result
+
+
+def test_rstconv_parse_google_raises_blank_lines():
+    """_parse_google_raises skips blank lines in the body."""
+    from great_docs._qrenderer._rst_converters import _parse_google_raises
+
+    body = "ValueError: Bad input.\n\nTypeError: Wrong type.\n"
+    entries = _parse_google_raises(body)
+    assert len(entries) == 2
+    assert entries[0][0] == "ValueError"
+    assert entries[1][0] == "TypeError"
+
+
+def test_rstconv_simple_table_peek_pass_branch():
+    """Trigger the peek `pass` branch in simple table parsing (lines 253-254)."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_simple_tables
+
+    # The pass branch triggers when the middle separator is followed by a line
+    # that: is non-empty, is not a separator, is longer than second_col_start,
+    # and has a non-space char at second_col_start.
+    # This makes the parser continue collecting rather than breaking.
+    text = "=====  =====\nHdr1   Hdr2\n=====  =====\nval1   val2\nmore   data\n=====  =====\n"
+    result = _convert_rst_simple_tables(text)
+    assert "| Hdr1" in result or "|" in result
+
+
+def test_rstconv_simple_table_two_sep_via_wrapper():
+    """_convert_rst_simple_tables with 2-separator table hits the else/break branch."""
+    from great_docs._qrenderer._rst_converters import _convert_rst_simple_tables
+
+    # Only 2 separators: the else branch (j += 1; break) fires at the 2nd sep
+    text = "=====  =====\nA      B\n=====  =====\n"
+    result = _convert_rst_simple_tables(text)
+    # _rst_simple_table_to_md needs >=2 seps, which we have; first data row becomes header
+    assert "|" in result
