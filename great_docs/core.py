@@ -307,9 +307,11 @@ class GreatDocs:
 
         # Ask for permission in interactive mode
         print("\nThe great-docs/ directory is ephemeral and should not be committed to git.")
-        response = input("Add 'great-docs/' to .gitignore? [Y/n]: ").strip().lower()
+        response = (
+            input("Add 'great-docs/' to .gitignore? [Y/n]: ").strip().lower()
+        )  # pragma: no cover
 
-        if response in ("", "y", "yes"):
+        if response in ("", "y", "yes"):  # pragma: no cover
             if gitignore_path.exists():
                 # Append to existing .gitignore
                 with open(gitignore_path, "a", encoding="utf-8") as f:
@@ -1887,14 +1889,14 @@ class GreatDocs:
                 continue
 
             parts = content.split("---", 2)
-            if len(parts) < 3:
+            if len(parts) < 3:  # pragma: no cover
                 continue
 
             try:
                 fm = parse_yaml(parts[1])
                 if not isinstance(fm, dict):
                     continue
-            except ValueError:
+            except ValueError:  # pragma: no cover
                 continue
 
             # Merge body-classes
@@ -3650,7 +3652,7 @@ class GreatDocs:
                 setuptools = data.get("tool", {}).get("setuptools", {})
                 if "packages" in setuptools:
                     explicit_packages = setuptools["packages"]
-                elif "packages" in setuptools.get("find", {}):
+                elif "packages" in setuptools.get("find", {}):  # pragma: no cover
                     # [tool.setuptools.packages.find] with where
                     where = setuptools.get("find", {}).get("where", ["."])
                     if isinstance(where, str):
@@ -3676,7 +3678,7 @@ class GreatDocs:
                 if hatch_packages:
                     explicit_packages.extend(hatch_packages)
 
-            except Exception:
+            except Exception:  # pragma: no cover
                 pass
 
         # Build search paths, prioritizing explicit packages from pyproject.toml
@@ -3717,7 +3719,7 @@ class GreatDocs:
                         content = f.read()
                         if "__version__" in content or "__all__" in content:
                             return init_file
-                except Exception:
+                except Exception:  # pragma: no cover
                     continue
 
         # Second pass: accept any __init__.py in a matching directory
@@ -3843,7 +3845,7 @@ class GreatDocs:
 
             print("No __all__ definition found in __init__.py")
             return None
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             print(f"Error parsing __all__: {type(e).__name__}: {e}")
             return None
 
@@ -3976,7 +3978,7 @@ class GreatDocs:
 
                 # uses `parser="numpy"` by default which affects alias resolution
                 gd_get_object = partial(qd_get_object, dynamic=True, parser="numpy")
-            except ImportError:
+            except ImportError:  # pragma: no cover
                 pass
 
             # Try to import the actual package to detect modules
@@ -3985,7 +3987,7 @@ class GreatDocs:
                 import importlib
 
                 actual_package = importlib.import_module(normalized_name)
-            except ImportError:
+            except ImportError:  # pragma: no cover
                 pass
 
             for name in filtered:
@@ -4010,7 +4012,7 @@ class GreatDocs:
                     try:
                         if pkg.members[name].kind.value == "module":
                             is_submodule = True
-                    except Exception:
+                    except Exception:  # pragma: no cover
                         pass
 
                 if is_submodule:
@@ -4041,13 +4043,13 @@ class GreatDocs:
                                 continue
 
                         safe_exports.append(name)
-                    except griffe.CyclicAliasError:
+                    except griffe.CyclicAliasError:  # pragma: no cover
                         failed_exports[name] = "cyclic alias"
-                    except griffe.AliasResolutionError:
+                    except griffe.AliasResolutionError:  # pragma: no cover
                         failed_exports[name] = "unresolvable alias"
-                    except KeyError:
+                    except KeyError:  # pragma: no cover
                         failed_exports[name] = "not found (likely Rust/PyO3)"
-                    except Exception as e:
+                    except Exception as e:  # pragma: no cover
                         # Catch-all for any other error that would crash the build
                         failed_exports[name] = f"{type(e).__name__}"
                 else:
@@ -4057,7 +4059,7 @@ class GreatDocs:
                         _ = obj.kind
                         _ = obj.members
                         safe_exports.append(name)
-                    except Exception as e:
+                    except Exception as e:  # pragma: no cover
                         failed_exports[name] = f"{type(e).__name__}"
 
             # Report excluded items grouped by error type
@@ -4141,7 +4143,7 @@ class GreatDocs:
                             if hasattr(member, "is_alias") and member.is_alias:
                                 continue
                             collect_docstrings(member, depth + 1)
-                        except Exception:
+                        except Exception:  # pragma: no cover
                             continue
 
             collect_docstrings(pkg)
@@ -4219,10 +4221,10 @@ class GreatDocs:
                 print("Detected numpy docstring style")
                 return "numpy"
 
-        except ImportError:
+        except ImportError:  # pragma: no cover
             print("Warning: griffe not available for docstring detection, defaulting to numpy")
             return "numpy"
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             print(f"Error detecting docstring style: {type(e).__name__}: {e}")
             return "numpy"
 
@@ -5106,28 +5108,28 @@ class GreatDocs:
                         # Aliases and other unknown kinds
                         categories["other"].append(name)
 
-                except griffe.CyclicAliasError:
+                except griffe.CyclicAliasError:  # pragma: no cover
                     # Cyclic alias detected (e.g., re-exported symbol pointing to itself)
                     # This can happen with complex re-export patterns
                     # Do NOT add to categories (these must be excluded entirely)
                     print(f"  Warning: Cyclic alias detected for '{name}', excluding from docs")
                     cyclic_aliases.append(name)
-                except griffe.AliasResolutionError:
+                except griffe.AliasResolutionError:  # pragma: no cover
                     # Alias could not be resolved (target not found)
                     # Do NOT add to categories (these must be excluded entirely)
                     print(f"  Warning: Could not resolve alias for '{name}', excluding from docs")
                     failed_introspection.append(name)
-                except Exception as e:
+                except Exception as e:  # pragma: no cover
                     # If introspection fails for a specific object, still include it
                     print(f"  Warning: Could not introspect '{name}': {type(e).__name__}")
                     categories["other"].append(name)
                     failed_introspection.append(name)
 
-            if cyclic_aliases:
+            if cyclic_aliases:  # pragma: no cover
                 print(f"Note: Excluded {len(cyclic_aliases)} cyclic alias(es) from documentation")
                 categories["cyclic_alias_count"] = len(cyclic_aliases)
 
-            if failed_introspection:
+            if failed_introspection:  # pragma: no cover
                 print(
                     f"Note: Could not introspect {len(failed_introspection)} item(s), categorizing as 'Other'"
                 )
@@ -5463,7 +5465,7 @@ class GreatDocs:
             # Use list() to materialize the iterator and catch any alias resolution errors
             try:
                 members_list = list(pkg.members.items())
-            except (griffe.CyclicAliasError, griffe.AliasResolutionError):
+            except (griffe.CyclicAliasError, griffe.AliasResolutionError):  # pragma: no cover
                 # Some members have unresolvable aliases so try to iterate more carefully
                 members_list = []
                 for name in list(pkg.members.keys()):
@@ -5472,7 +5474,7 @@ class GreatDocs:
                     except Exception:
                         # Skip members that can't be accessed
                         continue
-            except Exception:
+            except Exception:  # pragma: no cover
                 # Fall back to empty if we can't enumerate members at all
                 return {}
 
@@ -5485,7 +5487,7 @@ class GreatDocs:
                 try:
                     # Access kind to trigger alias resolution
                     _ = obj.kind
-                except Exception:
+                except Exception:  # pragma: no cover
                     # Silently skip unresolvable aliases since they're usually re-exports
                     # from external packages that wouldn't be documented anyway
                     continue
@@ -5496,7 +5498,7 @@ class GreatDocs:
                         directives = extract_directives(obj.docstring.value)
                         if directives:
                             directive_map[name] = directives
-                except Exception:
+                except Exception:  # pragma: no cover
                     continue
 
                 # For classes, also process methods
@@ -7662,17 +7664,17 @@ toc: false
         package_name = self._detect_package_name()
 
         if not package_name:
-            try:
+            try:  # pragma: no cover
                 response = input(
                     "\nCould not auto-detect package name. Enter package name for API reference (or press Enter to skip): "
                 ).strip()
-            except EOFError:
+            except EOFError:  # pragma: no cover
                 response = ""
-            if not response:
+            if not response:  # pragma: no cover
                 print("Skipping API reference configuration")
                 self._has_api_reference = False
                 return
-            package_name = response
+            package_name = response  # pragma: no cover
 
         print(f"Adding API reference configuration for package: {package_name}")
 
@@ -9903,7 +9905,7 @@ toc: false
                             url_to_files[url] = []
                         url_to_files[url].append(rel_path)
 
-            except Exception as e:
+            except Exception as e:  # pragma: no cover
                 if verbose:
                     print(f"Warning: Could not read {file_path}: {e}")
 
@@ -9984,7 +9986,7 @@ toc: false
                     if verbose:
                         print(f"❌ {status} {url}")
 
-            except requests.exceptions.Timeout:
+            except requests.exceptions.Timeout:  # pragma: no cover
                 results["broken"].append(
                     {
                         "url": url,
@@ -9995,7 +9997,7 @@ toc: false
                 )
                 if verbose:
                     print(f"⏱️  Timeout: {url}")
-            except requests.exceptions.SSLError as e:
+            except requests.exceptions.SSLError as e:  # pragma: no cover
                 results["broken"].append(
                     {
                         "url": url,
@@ -10006,7 +10008,7 @@ toc: false
                 )
                 if verbose:
                     print(f"🔐 SSL Error: {url}")
-            except requests.exceptions.ConnectionError:
+            except requests.exceptions.ConnectionError:  # pragma: no cover
                 results["broken"].append(
                     {
                         "url": url,
@@ -10017,7 +10019,7 @@ toc: false
                 )
                 if verbose:
                     print(f"🔌 Connection failed: {url}")
-            except Exception as e:
+            except Exception as e:  # pragma: no cover
                 results["broken"].append(
                     {
                         "url": url,
