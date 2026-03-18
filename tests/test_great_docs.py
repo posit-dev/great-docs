@@ -19,6 +19,7 @@ from click.testing import CliRunner
 
 from great_docs import GreatDocs, Config, load_config, create_default_config
 from great_docs.cli import main, setup_github_pages
+from great_docs._qrenderer._md_renderer import _escape_dunders, MdRenderer
 
 
 def test_great_docs_init():
@@ -3357,8 +3358,6 @@ def test_convert_rst_to_markdown_real_pandoc():
 
     # Skip if neither quarto nor pandoc is available
     if not shutil.which("quarto") and not shutil.which("pandoc"):
-        import pytest
-
         pytest.skip("quarto/pandoc not available")
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -5175,31 +5174,23 @@ class TestRendererDunderEscaping:
 
     def test_dunder_name_escaped_in_heading(self):
         """__repr__ in heading becomes \\_\\_repr\\_\\_ to avoid Pandoc bold."""
-        from great_docs._qrenderer._md_renderer import _escape_dunders
-
         assert _escape_dunders("__repr__") == "\\_\\_repr\\_\\_"
 
     def test_regular_name_unchanged(self):
-        from great_docs._qrenderer._md_renderer import _escape_dunders
-
         assert _escape_dunders("process") == "process"
 
     def test_dotted_dunder_escaped(self):
         """Collection.__repr__ -> Collection.\\_\\_repr\\_\\_"""
-        from great_docs._qrenderer._md_renderer import _escape_dunders
 
         result = _escape_dunders("Collection.__repr__")
+
         assert result == "Collection.\\_\\_repr\\_\\_"
 
     def test_multiple_dunders_escaped(self):
-        from great_docs._qrenderer._md_renderer import _escape_dunders
-
         result = _escape_dunders("__init__ and __del__")
         assert result == "\\_\\_init\\_\\_ and \\_\\_del\\_\\_"
 
     def test_single_underscore_not_escaped(self):
-        from great_docs._qrenderer._md_renderer import _escape_dunders
-
         assert _escape_dunders("_private") == "_private"
 
 
@@ -5292,8 +5283,6 @@ class TestRendererOverloadSignatures:
     """Overloaded functions render all @overload signatures."""
 
     def test_render_overload_signatures(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
         # Create a simple set of "overload" lines
         sig_lines = ["process(data: str) -> bytes", "process(data: bytes) -> str"]
@@ -5303,8 +5292,6 @@ class TestRendererOverloadSignatures:
 
     def test_overload_empty_falls_back(self):
         """Empty overloads list produces a basic signature."""
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
         result = renderer._render_overload_signatures("func", [])
 
@@ -5765,8 +5752,6 @@ class TestRendererCallableParens:
     """Callable objects get ``()`` appended to their heading name."""
 
     def test_function_heading_has_parens(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
 
         doc = MagicMock(spec=["name", "obj", "__class__"])
@@ -5787,8 +5772,6 @@ class TestRendererCallableParens:
         assert "# my_func()" in result
 
     def test_class_heading_no_parens(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
 
         doc = MagicMock(spec=["name", "obj", "__class__"])
@@ -5813,7 +5796,6 @@ class TestRendererTypeBadgeClasses:
 
     def test_function_type_class(self):
         from great_docs._qrenderer import layout
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -5831,7 +5813,6 @@ class TestRendererTypeBadgeClasses:
 
     def test_class_type_class(self):
         from great_docs._qrenderer import layout
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -5849,7 +5830,6 @@ class TestRendererTypeBadgeClasses:
 
     def test_enum_type_class(self):
         from great_docs._qrenderer import layout
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -5867,7 +5847,6 @@ class TestRendererTypeBadgeClasses:
 
     def test_attribute_type_class(self):
         from great_docs._qrenderer import layout
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -5889,8 +5868,6 @@ class TestRendererSignatureMultiline:
     """Signatures with many arguments auto-wrap to multi-line."""
 
     def test_short_sig_stays_single_line(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
         result = renderer._signature_func_or_class(
             type(
@@ -5913,7 +5890,6 @@ class TestRendererSignatureMultiline:
         """Signatures exceeding 80 chars wrap to multi-line."""
 
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -5943,9 +5919,6 @@ class TestRendererConstantValues:
 
     def test_bare_constant_signature(self):
         """Constant with no annotation or value renders as plain name."""
-
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
         el = MagicMock()
         el.name = "MY_CONST"
@@ -5961,9 +5934,6 @@ class TestRendererConstantValues:
 
     def test_constant_with_annotation(self):
         """Constant with type annotation renders as ``NAME: type``."""
-
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
         el = MagicMock()
         el.name = "TIMEOUT"
@@ -5979,9 +5949,6 @@ class TestRendererConstantValues:
 
     def test_constant_with_value(self):
         """Constant with value renders as ``NAME = value``."""
-
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
         el = MagicMock()
         el.name = "MAX_RETRIES"
@@ -5997,9 +5964,6 @@ class TestRendererConstantValues:
 
     def test_constant_with_both(self):
         """Constant with annotation and value renders as ``NAME: type = value``."""
-
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
         el = MagicMock()
         el.name = "DEFAULT_PORT"
@@ -6015,9 +5979,6 @@ class TestRendererConstantValues:
 
     def test_constant_long_value_skipped(self):
         """Values exceeding 200 chars are not included."""
-
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
         el = MagicMock()
         el.name = "BIG"
@@ -6040,7 +6001,6 @@ class TestRendererNonCallableCleanup:
         """Enum class signature has no parentheses."""
 
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -6062,7 +6022,6 @@ class TestRendererNonCallableCleanup:
         """TypedDict class signature has no parentheses."""
 
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -6084,7 +6043,6 @@ class TestRendererNonCallableCleanup:
         """Normal classes retain ``()`` in their signature."""
 
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -6112,7 +6070,6 @@ class TestRendererSectionSeparators:
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         renderer.display_name = "name"
@@ -6516,8 +6473,6 @@ class TestParamRowToTuple:
         assert result == ("x", "int", "Desc")
 
     def test_unsupported_style(self):
-        import pytest
-
         from great_docs._qrenderer._md_renderer import ParamRow
 
         row = ParamRow(name="x", description="Desc")
@@ -6529,28 +6484,26 @@ class TestRendererFromConfig:
     """Renderer.from_config creates renderers from different config types."""
 
     def test_string_config(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer, Renderer
+        from great_docs._qrenderer._md_renderer import Renderer
 
         result = Renderer.from_config("markdown")
         assert isinstance(result, MdRenderer)
 
     def test_dict_config(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer, Renderer
+        from great_docs._qrenderer._md_renderer import Renderer
 
         result = Renderer.from_config({"style": "markdown", "header_level": 2})
         assert isinstance(result, MdRenderer)
         assert result.header_level == 2
 
     def test_renderer_passthrough(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer, Renderer
+        from great_docs._qrenderer._md_renderer import Renderer
 
         r = MdRenderer()
         result = Renderer.from_config(r)
         assert result is r
 
     def test_invalid_type(self):
-        import pytest
-
         from great_docs._qrenderer._md_renderer import Renderer
 
         with pytest.raises(TypeError):
@@ -6561,8 +6514,6 @@ class TestMdRendererFetchObjectDispname:
     """MdRenderer._fetch_object_dispname handles different display_name modes."""
 
     def test_name_mode(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer(display_name="name")
         obj = MagicMock()
         obj.name = "MyClass"
@@ -6570,26 +6521,18 @@ class TestMdRendererFetchObjectDispname:
         assert renderer._fetch_object_dispname(obj) == "MyClass"
 
     def test_full_mode(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer(display_name="full")
         obj = MagicMock()
         obj.path = "pkg.mod.MyClass"
         assert renderer._fetch_object_dispname(obj) == "pkg.mod.MyClass"
 
     def test_canonical_mode(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer(display_name="canonical")
         obj = MagicMock()
         obj.canonical_path = "pkg.MyClass"
         assert renderer._fetch_object_dispname(obj) == "pkg.MyClass"
 
     def test_invalid_mode(self):
-        import pytest
-
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer(display_name="bogus")
         obj = MagicMock()
         with pytest.raises(ValueError, match="Unsupported display_name"):
@@ -6600,21 +6543,16 @@ class TestMdRendererRenderAnnotation:
     """MdRenderer.render_annotation handles different annotation types."""
 
     def test_none(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
         assert renderer.render_annotation(None) == ""
 
     def test_string(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
         result = renderer.render_annotation("int")
         assert "int" in result
 
     def test_expr_name_no_interlinks(self):
         from great_docs._qrenderer._griffe import expressions as expr
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer(render_interlinks=False)
         el = expr.ExprName("MyType")
@@ -6624,7 +6562,6 @@ class TestMdRendererRenderAnnotation:
 
     def test_expr_name_with_interlinks(self):
         from great_docs._qrenderer._griffe import expressions as expr
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer(render_interlinks=True)
         el = expr.ExprName("MyType")
@@ -6633,8 +6570,6 @@ class TestMdRendererRenderAnnotation:
         assert "`" in result
 
     def test_fallback(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
         result = renderer.render_annotation(42)
         assert "42" in result
@@ -6644,7 +6579,7 @@ class TestMdRendererRenderTable:
     """MdRenderer._render_table supports both table and description-list styles."""
 
     def test_description_list_style(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer, ParamRow
+        from great_docs._qrenderer._md_renderer import ParamRow
 
         renderer = MdRenderer(table_style="description-list")
         rows = [ParamRow(name="x", description="Desc", annotation="int", default="0")]
@@ -6655,7 +6590,7 @@ class TestMdRendererRenderTable:
         assert "|" not in result or "x" in result
 
     def test_default_table_style(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer, ParamRow
+        from great_docs._qrenderer._md_renderer import ParamRow
 
         renderer = MdRenderer(table_style="table")
         rows = [ParamRow(name="x", description="Desc", annotation="int", default="0")]
@@ -6670,7 +6605,6 @@ class TestMdRendererRenderParameters:
 
     def test_keyword_only_separator(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         params = dc.Parameters(
@@ -6682,7 +6616,6 @@ class TestMdRendererRenderParameters:
 
     def test_positional_only_separator(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         params = dc.Parameters(
@@ -6694,7 +6627,6 @@ class TestMdRendererRenderParameters:
 
     def test_var_positional_suppresses_star(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         params = dc.Parameters(
@@ -6710,14 +6642,11 @@ class TestMdRendererRenderDispatch:
     """MdRenderer.render dispatches correctly for various types."""
 
     def test_render_string(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
         assert renderer.render("hello") == "hello"
 
     def test_render_warnings_section(self):
         from great_docs._qrenderer._ast import DocstringSectionWarnings
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         el = DocstringSectionWarnings(value="Be careful!")
@@ -6726,7 +6655,6 @@ class TestMdRendererRenderDispatch:
 
     def test_render_see_also_section(self):
         from great_docs._qrenderer._ast import DocstringSectionSeeAlso
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         el = DocstringSectionSeeAlso(value="other_func")
@@ -6735,7 +6663,6 @@ class TestMdRendererRenderDispatch:
 
     def test_render_notes_section(self):
         from great_docs._qrenderer._ast import DocstringSectionNotes
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         el = DocstringSectionNotes(value="Important note.")
@@ -6744,7 +6671,6 @@ class TestMdRendererRenderDispatch:
 
     def test_render_example_code(self):
         from great_docs._qrenderer._ast import ExampleCode
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         el = ExampleCode(value="x = 1")
@@ -6754,7 +6680,6 @@ class TestMdRendererRenderDispatch:
 
     def test_render_example_text(self):
         from great_docs._qrenderer._ast import ExampleText
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         el = ExampleText(value="Some text")
@@ -6763,7 +6688,6 @@ class TestMdRendererRenderDispatch:
 
     def test_render_admonition_notes(self):
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         el = ds.DocstringSectionAdmonition(kind="admonition", text="Note content", title="Notes")
@@ -6772,7 +6696,6 @@ class TestMdRendererRenderDispatch:
 
     def test_render_admonition_see_also(self):
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         el = ds.DocstringSectionAdmonition(
@@ -6785,31 +6708,28 @@ class TestMdRendererRenderDispatch:
 
     def test_render_returns_section(self):
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         ret = ds.DocstringReturn(name="result", annotation="int", description="The count")
         el = ds.DocstringSectionReturns(value=[ret])
         result = renderer.render(el)
+
         assert "result" in result
         assert "The count" in result
 
     def test_render_raises_section(self):
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         exc = ds.DocstringRaise(annotation="ValueError", description="If invalid")
         el = ds.DocstringSectionRaises(value=[exc])
         result = renderer.render(el)
+
         assert "ValueError" in result
         assert "If invalid" in result
 
     def test_render_unsupported_raises(self):
-        import pytest
-
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         el = ds.DocstringDeprecated(description="old")
@@ -6824,7 +6744,6 @@ class TestMdRendererRenderPage:
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -6859,7 +6778,6 @@ class TestMdRendererRenderPage:
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -6896,7 +6814,6 @@ class TestMdRendererRenderSection:
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -6932,7 +6849,6 @@ class TestMdRendererSummarizeLayout:
 
     def test_summarize_layout(self):
         from great_docs._qrenderer import layout
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -6945,7 +6861,6 @@ class TestMdRendererSummarizeLayout:
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -6976,7 +6891,6 @@ class TestMdRendererSummarizeLayout:
 
     def test_summarize_section_empty(self):
         from great_docs._qrenderer import layout
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -6988,7 +6902,6 @@ class TestMdRendererSummarizeLayout:
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -7019,12 +6932,12 @@ class TestMdRendererSummarizeLayout:
 
     def test_summarize_page_with_summary(self):
         from great_docs._qrenderer import layout
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         summary = layout.SummaryDetails(name="Page", desc="Page desc")
         page = layout.Page(path="test", summary=summary, contents=[])
         result = renderer.summarize(page)
+
         assert "Page" in result
         assert "Page desc" in result
 
@@ -7032,7 +6945,6 @@ class TestMdRendererSummarizeLayout:
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -7080,7 +6992,6 @@ class TestMdRendererSummarizeLayout:
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -7093,13 +7004,13 @@ class TestMdRendererSummarizeLayout:
 
         link = layout.Link(name="pkg.func", obj=obj)
         result = renderer.summarize(link)
+
         assert "pkg.func" in result
 
     def test_summarize_doc_with_path(self):
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -7124,13 +7035,13 @@ class TestMdRendererSummarizeLayout:
         )
 
         result = renderer.summarize(doc, "reference/pkg")
+
         assert "reference/pkg.qmd#pkg.func" in result
 
     def test_summarize_doc_no_path(self):
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -7155,11 +7066,11 @@ class TestMdRendererSummarizeLayout:
         )
 
         result = renderer.summarize(doc)
+
         assert "#pkg.func" in result
 
     def test_summarize_object_no_docstring(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -7167,6 +7078,7 @@ class TestMdRendererSummarizeLayout:
         obj.__class__ = dc.Function
         obj.docstring = None
         result = renderer.summarize(obj)
+
         assert result == ""
 
 
@@ -7177,7 +7089,6 @@ class TestMdRendererRenderDocFuncAttr:
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer(show_signature=True)
 
@@ -7203,6 +7114,7 @@ class TestMdRendererRenderDocFuncAttr:
         )
 
         result = renderer._render_doc_func_attr(doc)
+
         assert "myfunc" in result
         assert "```python" in result
 
@@ -7210,7 +7122,6 @@ class TestMdRendererRenderDocFuncAttr:
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer(show_signature=False)
 
@@ -7245,11 +7156,11 @@ class TestMdRendererRenderObject:
 
     def test_no_docstring(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         obj = MagicMock(spec=dc.Function)
         obj.docstring = None
+
         assert renderer._render_object(obj) == ""
 
 
@@ -7258,11 +7169,12 @@ class TestMdRendererRenderDocstringParameter:
 
     def test_basic_param(self):
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer, ParamRow
+        from great_docs._qrenderer._md_renderer import ParamRow
 
         renderer = MdRenderer()
         p = ds.DocstringParameter(name="x", annotation="int", description="The x", value="0")
         result = renderer._render_docstring_parameter(p)
+
         assert isinstance(result, ParamRow)
         assert result.name == "x"
         assert result.default == "0"
@@ -7273,7 +7185,7 @@ class TestMdRendererRenderDocstringReturn:
 
     def test_basic_return(self):
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer, ParamRow
+        from great_docs._qrenderer._md_renderer import ParamRow
 
         renderer = MdRenderer()
         r = ds.DocstringReturn(name="result", annotation="int", description="A count")
@@ -7287,7 +7199,7 @@ class TestMdRendererRenderDocstringRaise:
 
     def test_basic_raise(self):
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer, ParamRow
+        from great_docs._qrenderer._md_renderer import ParamRow
 
         renderer = MdRenderer()
         r = ds.DocstringRaise(annotation="ValueError", description="If bad")
@@ -7303,7 +7215,6 @@ class TestMdRendererRenderSectionExamples:
         from griffe import DocstringSectionKind
 
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         examples = ds.DocstringSectionExamples(
@@ -7366,30 +7277,26 @@ class TestMdRendererRenderHeaderDocstringSection:
 
     def test_section_header_with_title(self):
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer(header_level=2)
         section = ds.DocstringSectionParameters(value=[])
         section.title = "Parameters"
         result = renderer.render_header(section)
+
         assert "## Parameters" in result
         assert ".doc-section" in result
 
     def test_section_header_no_title_uses_kind(self):
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer(header_level=3)
         section = ds.DocstringSectionText(value="")
         section.title = None
         result = renderer.render_header(section)
+
         assert "### Text" in result
 
     def test_unsupported_type_raises(self):
-        import pytest
-
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
         with pytest.raises(NotImplementedError):
             renderer.render_header("not a valid type")
@@ -7425,7 +7332,7 @@ class TestRendererFromConfigPyFile:
     def test_py_file_style(self, tmp_path):
         """A string ending in .py triggers importlib loading."""
 
-        from great_docs._qrenderer._md_renderer import MdRenderer, Renderer
+        from great_docs._qrenderer._md_renderer import Renderer
 
         # Write a custom renderer module
         mod_file = tmp_path / "custom_renderer.py"
@@ -7454,7 +7361,6 @@ class TestFetchMethodParameters:
 
     def test_strips_self(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         el = MagicMock(spec=dc.Function)
@@ -7467,12 +7373,12 @@ class TestFetchMethodParameters:
         )
         result = renderer._fetch_method_parameters(el)
         names = [p.name for p in result]
+
         assert "self" not in names
         assert "x" in names
 
     def test_strips_cls(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         el = MagicMock(spec=dc.Function)
@@ -7484,12 +7390,12 @@ class TestFetchMethodParameters:
         )
         result = renderer._fetch_method_parameters(el)
         names = [p.name for p in result]
+
         assert "cls" not in names
         assert "y" in names
 
     def test_no_strip_for_non_class(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         el = MagicMock(spec=dc.Function)
@@ -7500,6 +7406,7 @@ class TestFetchMethodParameters:
             dc.Parameter("a", kind=dc.ParameterKind.positional_or_keyword),
         )
         result = renderer._fetch_method_parameters(el)
+
         assert len(list(result)) == 1
 
 
@@ -7508,7 +7415,6 @@ class TestRenderAnnotationExpr:
 
     def test_expr_iterable(self):
         from great_docs._qrenderer._griffe import expressions as expr
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         # ExprSubscript is an Expr subclass that iterates over its children
@@ -7516,6 +7422,7 @@ class TestRenderAnnotationExpr:
         inner = expr.ExprName("int")
         sub = expr.ExprSubscript(name, inner)
         result = renderer.render_annotation(sub)
+
         assert "Optional" in result
         assert "int" in result
 
@@ -7525,7 +7432,6 @@ class TestSignatureAlias:
 
     def test_alias_signature(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         target = MagicMock()
@@ -7543,14 +7449,11 @@ class TestSignatureAlias:
         alias.final_target = target
 
         result = renderer.signature(alias)
+
         assert "```python" in result
         assert "myfunc" in result
 
     def test_unsupported_signature_type(self):
-        import pytest
-
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
         with pytest.raises(NotImplementedError, match="signature not supported"):
             renderer.signature("not_a_valid_object")
@@ -7562,7 +7465,6 @@ class TestSignatureDoc:
     def test_signature_doc_uses_signature_name(self):
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer(display_name="relative")
         obj = MagicMock()
@@ -7580,7 +7482,9 @@ class TestSignatureDoc:
             signature_name="full",
         )
         result = renderer.signature(doc)
+
         assert "pkg.mod.func" in result
+
         # verify display_name was restored
         assert renderer.display_name == "relative"
 
@@ -7590,7 +7494,6 @@ class TestRenderOverloadSignatures:
 
     def test_basic_overloads(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -7611,13 +7514,12 @@ class TestRenderOverloadSignatures:
         ov2.returns = "str"
 
         result = renderer._render_overload_signatures("func", [ov1, ov2])
+
         assert "```python" in result
         assert "func(x: int) -> int" in result
         assert "func(x: str) -> str" in result
 
     def test_overload_with_default(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
 
         ov = MagicMock()
@@ -7632,8 +7534,6 @@ class TestRenderOverloadSignatures:
         assert "func(x: int = 0)" in result
 
     def test_overload_no_annotation(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
 
         ov = MagicMock()
@@ -7648,8 +7548,6 @@ class TestRenderOverloadSignatures:
         assert "func(x=5)" in result
 
     def test_overload_plain_param(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
 
         ov = MagicMock()
@@ -7661,11 +7559,10 @@ class TestRenderOverloadSignatures:
         ov.returns = None
 
         result = renderer._render_overload_signatures("func", [ov])
+
         assert "func(x)" in result
 
     def test_overload_no_parameters_attr(self):
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
 
         ov = MagicMock(spec=[])  # no attributes
@@ -7674,9 +7571,7 @@ class TestRenderOverloadSignatures:
 
     def test_signature_func_with_overloads(self):
         """_signature_func_or_class detects and uses overloads."""
-
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -7698,6 +7593,7 @@ class TestRenderOverloadSignatures:
         el.parameters = dc.Parameters()
 
         result = renderer._signature_func_or_class(el)
+
         assert "func(x: int) -> int" in result
 
 
@@ -7706,7 +7602,6 @@ class TestSignatureModuleOrAttrAnnotationValue:
 
     def test_with_annotation_and_value(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         el = MagicMock(spec=dc.Attribute)
@@ -7723,7 +7618,6 @@ class TestSignatureModuleOrAttrAnnotationValue:
 
     def test_long_value_skipped(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         el = MagicMock(spec=dc.Attribute)
@@ -7744,7 +7638,6 @@ class TestRenderHeaderEnumBranch:
     def test_enum_type_class(self):
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -7773,7 +7666,6 @@ class TestRenderParameterAnnotations:
 
     def test_annotation_and_default(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer(show_signature_annotations=True)
         p = dc.Parameter(
@@ -7784,7 +7676,6 @@ class TestRenderParameterAnnotations:
 
     def test_annotation_no_default(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer(show_signature_annotations=True)
         p = dc.Parameter("x", annotation="int", kind=dc.ParameterKind.positional_or_keyword)
@@ -7793,7 +7684,6 @@ class TestRenderParameterAnnotations:
 
     def test_no_annotation_with_annotations_enabled(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer(show_signature_annotations=True)
         p = dc.Parameter("x", kind=dc.ParameterKind.positional_or_keyword)
@@ -7802,7 +7692,6 @@ class TestRenderParameterAnnotations:
 
     def test_var_keyword(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         p = dc.Parameter("kwargs", kind=dc.ParameterKind.var_keyword)
@@ -7834,7 +7723,6 @@ class TestRenderInterlaced:
 
     def test_interlaced_basic(self):
         from great_docs._qrenderer import layout
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         obj1 = self._make_func_obj("func_a", "First function.")
@@ -7849,15 +7737,13 @@ class TestRenderInterlaced:
 
         el = layout.Interlaced(contents=[doc1, doc2])
         result = renderer._render_interlaced(el)
+
         assert "func_a" in result
         assert "First function" in result
 
     def test_interlaced_no_docstring_raises(self):
-        import pytest
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         obj = MagicMock(spec=dc.Function)
@@ -7880,7 +7766,6 @@ class TestRenderInterlaced:
 
     def test_interlaced_without_signature(self):
         from great_docs._qrenderer import layout
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer(show_signature=False)
         obj1 = self._make_func_obj("func_a")
@@ -7890,14 +7775,12 @@ class TestRenderInterlaced:
         )
         el = layout.Interlaced(contents=[doc1])
         result = renderer._render_interlaced(el)
+
         assert "func_a" in result
         assert "```python" not in result
 
     def test_interlaced_invalid_content_type(self):
-        import pytest
-
         from great_docs._qrenderer import layout
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         # DocClass is not DocFunction or DocAttribute
@@ -7980,7 +7863,6 @@ class TestRenderDocClassModuleAdvanced:
     def test_class_with_attributes(self):
         """DocClass with attribute members renders Attributes section."""
         from great_docs._qrenderer import layout
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -8004,13 +7886,13 @@ class TestRenderDocClassModuleAdvanced:
             members=[attr_doc],
         )
         result = renderer._render_doc_class_module(el)
+
         assert "Attributes" in result
         assert "my_attr" in result
 
     def test_class_with_nested_classes(self):
         """DocClass with nested class members renders Classes section."""
         from great_docs._qrenderer import layout
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -8040,7 +7922,6 @@ class TestRenderDocClassModuleAdvanced:
         """DocModule renders Functions section (not Methods)."""
 
         from great_docs._qrenderer import layout
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -8076,7 +7957,6 @@ class TestRenderDocClassModuleAdvanced:
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -8120,7 +8000,6 @@ class TestRenderDocClassModuleFlat:
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -8176,7 +8055,7 @@ class TestRenderDispatchGriffeTypes:
 
     def test_render_docstring_parameter(self):
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer, ParamRow
+        from great_docs._qrenderer._md_renderer import ParamRow
 
         renderer = MdRenderer()
         p = ds.DocstringParameter(name="x", description="Description")
@@ -8186,7 +8065,7 @@ class TestRenderDispatchGriffeTypes:
 
     def test_render_docstring_return(self):
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer, ParamRow
+        from great_docs._qrenderer._md_renderer import ParamRow
 
         renderer = MdRenderer()
         r = ds.DocstringReturn(name="result", annotation="int", description="Count")
@@ -8195,7 +8074,7 @@ class TestRenderDispatchGriffeTypes:
 
     def test_render_docstring_raise(self):
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer, ParamRow
+        from great_docs._qrenderer._md_renderer import ParamRow
 
         renderer = MdRenderer()
         r = ds.DocstringRaise(annotation="ValueError", description="Bad")
@@ -8205,7 +8084,7 @@ class TestRenderDispatchGriffeTypes:
 
     def test_render_docstring_attribute(self):
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer, ParamRow
+        from great_docs._qrenderer._md_renderer import ParamRow
 
         renderer = MdRenderer()
         a = ds.DocstringAttribute(name="x", annotation="int", description="Attr")
@@ -8214,7 +8093,6 @@ class TestRenderDispatchGriffeTypes:
 
     def test_render_dc_parameter(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         p = dc.Parameter("x", kind=dc.ParameterKind.positional_or_keyword)
@@ -8224,7 +8102,6 @@ class TestRenderDispatchGriffeTypes:
 
     def test_render_dc_parameters(self):
         from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         params = dc.Parameters(
@@ -8234,10 +8111,6 @@ class TestRenderDispatchGriffeTypes:
         assert isinstance(result, list)
 
     def test_render_unsupported_type(self):
-        import pytest
-
-        from great_docs._qrenderer._md_renderer import MdRenderer
-
         renderer = MdRenderer()
         with pytest.raises(NotImplementedError, match="Unsupported type"):
             renderer.render(12345)
@@ -8250,7 +8123,6 @@ class TestSummarizeSectionNoTitleNoSubtitle:
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -8283,7 +8155,6 @@ class TestSummarizeInterlaced:
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -8311,12 +8182,9 @@ class TestSummarizePageError:
     """MdRenderer.summarize raises for multi-content Page without flatten."""
 
     def test_page_multi_content_no_flatten_raises(self):
-        import pytest
-
         from great_docs._qrenderer import layout
         from great_docs._qrenderer._griffe import dataclasses as dc
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
 
@@ -8359,7 +8227,6 @@ class TestRenderSectionParametersAndAttributes:
 
     def test_parameters_section(self):
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         p1 = ds.DocstringParameter(name="x", description="X value", annotation="int", value="0")
@@ -8372,7 +8239,6 @@ class TestRenderSectionParametersAndAttributes:
 
     def test_attributes_section(self):
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         a = ds.DocstringAttribute(name="count", annotation="int", description="The count")
@@ -8387,17 +8253,12 @@ class TestRenderSectionAdmonitionGeneric:
 
     def test_generic_admonition(self):
         from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import MdRenderer
 
         renderer = MdRenderer()
         el = ds.DocstringSectionAdmonition(kind="admonition", text="Some tip.", title="Tip")
         result = renderer._render_section_admonition(el)
         assert "Some tip." in result
 
-
-# ============================================================================
-# Blueprint Tests
-# ============================================================================
 
 from great_docs._qrenderer.blueprint import (
     CollectTransformer,
@@ -24751,8 +24612,6 @@ def test_build_static_mode_failure_exits():
                 encoding="utf-8",
             )
 
-            import pytest
-
             with pytest.raises(SystemExit):
                 docs.build(watch=False, refresh=True)
 
@@ -24796,8 +24655,6 @@ def test_build_non_dynamic_failure_exits():
                 format_yaml({"api-reference": {"package": "mypkg"}}),
                 encoding="utf-8",
             )
-
-            import pytest
 
             with pytest.raises(SystemExit):
                 docs.build(watch=False, refresh=True)
@@ -25055,8 +24912,6 @@ def test_build_watch_mode():
 
 def test_build_quarto_render_failure():
     """Test build() exits when quarto render fails."""
-
-    import pytest
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -26358,8 +26213,6 @@ def test_build_sections_from_reference_config_basic():
 def test_preview_builds_if_no_site():
     """Test preview() calls build when site doesn't exist."""
 
-    import pytest
-
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
@@ -26373,8 +26226,6 @@ def test_preview_builds_if_no_site():
 
 def test_preview_port_in_use():
     """Test preview() handles port-in-use error."""
-
-    import pytest
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -34536,13 +34387,8 @@ def test_docmodule_post_init_narrows_types():
     assert render.obj is mod_obj
 
 
-# --- _qrenderer/_render/__init__.py (lines 66-67, 69-70) --------------------
-
-
 def test_get_render_type_raises_for_unmapped_type():
     """get_render_type() raises ValueError for an unmapped type (lines 66-70)."""
-    import pytest
-
     from great_docs._qrenderer._render import get_render_type
 
     class FakeDocObj:
@@ -34550,9 +34396,6 @@ def test_get_render_type_raises_for_unmapped_type():
 
     with pytest.raises(ValueError, match="Cannot document object of type"):
         get_render_type(FakeDocObj())
-
-
-# --- _qrenderer/_render/base.py (lines 111, 133, 139, 170) ------------------
 
 
 def test_renderbase_title_property():
@@ -35243,7 +35086,6 @@ def test_format_name_canonical():
 
 def test_format_name_unknown_raises():
     """format_name raises ValueError for unknown format (lines 169-170)."""
-    import pytest
 
     import griffe as gf
 
@@ -35313,8 +35155,6 @@ def test_format_str_with_ruff():
 
 def test_format_str_bad_syntax():
     """format_str raises RuntimeError for invalid syntax (line 319)."""
-    import pytest
-
     from great_docs._qrenderer._format import HAS_RUFF, format_str
 
     if not HAS_RUFF:
@@ -36136,8 +35976,6 @@ def test_label_unknown_kind_raises():
     """get_label raises ValueError for unknown object kind (line 90)."""
     from unittest.mock import MagicMock
 
-    import pytest
-
     from great_docs._qrenderer._render._label import get_label
 
     obj = MagicMock()
@@ -36638,7 +36476,6 @@ def test_renderdoc_render_annotation_non_attribute_raises():
     from unittest.mock import patch
 
     import griffe as gf
-    import pytest
 
     from great_docs._qrenderer import layout
     from great_docs._qrenderer._render import RenderDocFunction
