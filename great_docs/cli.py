@@ -441,7 +441,9 @@ cli.add_command(scan)
     is_flag=True,
     help="Overwrite existing workflow file without prompting",
 )
-def setup_github_pages(project_path: str | None, main_branch: str, python_version: str, force: bool) -> None:
+def setup_github_pages(
+    project_path: str | None, main_branch: str, python_version: str, force: bool
+) -> None:
     """Set up automatic deployment to GitHub Pages.
 
     This command creates a GitHub Actions workflow that automatically builds
@@ -572,7 +574,15 @@ cli.add_command(setup_github_pages)
     is_flag=True,
     help="Output results as JSON",
 )
-def check_links(project_path: str | None, source_only: bool, docs_only: bool, timeout: int, ignore: tuple[str, ...], verbose: bool, json_output: bool) -> None:
+def check_links(
+    project_path: str | None,
+    source_only: bool,
+    docs_only: bool,
+    timeout: int,
+    ignore: tuple[str, ...],
+    verbose: bool,
+    json_output: bool,
+) -> None:
     """Check for broken links in source code and documentation.
 
     This command scans Python source files and documentation (`.qmd`, `.md`)
