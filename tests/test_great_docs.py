@@ -19,7 +19,55 @@ from click.testing import CliRunner
 
 from great_docs import GreatDocs, Config, load_config, create_default_config
 from great_docs.cli import main, setup_github_pages
-from great_docs._qrenderer._md_renderer import _escape_dunders, MdRenderer
+from great_docs._qrenderer import layout, _globals
+from great_docs._qrenderer._ast import (
+    DocstringSectionWarnings,
+    DocstringSectionSeeAlso,
+    DocstringSectionNotes,
+    ExampleCode,
+    ExampleText,
+)
+from great_docs._qrenderer._griffe import dataclasses as dc
+from great_docs._qrenderer._griffe import docstrings as ds
+from great_docs._qrenderer._md_renderer import (
+    _ensure_blank_before_lists,
+    _escape_dunders,
+    _get_dataclass_field_names,
+    _get_param_descriptions,
+    _has_attr_section,
+    _is_griffe_dataclass,
+    _is_non_callable_class,
+    _sanitize_title,
+    _simple_table,
+    convert_rst_link_to_md,
+    MdRenderer,
+    ParamRow,
+    Renderer,
+)
+
+
+from great_docs._qrenderer._rst_converters import (
+    _convert_bold_section_headers,
+    _convert_google_sections,
+    _convert_rst_citations,
+    _convert_rst_directives,
+    _convert_rst_grid_tables,
+    _convert_rst_simple_tables,
+    _convert_rst_text,
+    _convert_sphinx_fields,
+    _convert_sphinx_roles,
+    _fence_doctest_blocks,
+    _parse_google_entries,
+    _parse_google_raises,
+    _replace_rst_code_block,
+    _rst_directive_to_callout,
+    _rst_grid_table_to_md,
+    _rst_simple_table_to_md,
+    _smart_dedent,
+    escape,
+    sanitize,
+    _RST_CODE_BLOCK_RE,
+)
 
 
 def test_great_docs_init():
@@ -5198,8 +5246,6 @@ class TestRendererRstCodeBlocks:
     """RST :: code blocks are converted to fenced code blocks at render time."""
 
     def test_rst_code_block_to_fenced(self):
-        from great_docs._qrenderer._rst_converters import _convert_rst_text
-
         text = "For example::\n\n    x = 1\n    y = 2\n"
         result = _convert_rst_text(text)
 
@@ -5209,8 +5255,6 @@ class TestRendererRstCodeBlocks:
 
     def test_rst_directive_converted_to_callout(self):
         """RST directives like .. note:: are converted to Quarto callouts."""
-        from great_docs._qrenderer._rst_converters import _convert_rst_text
-
         text = ".. note::\n\n    Important info\n"
         result = _convert_rst_text(text)
 
@@ -5220,8 +5264,6 @@ class TestRendererRstCodeBlocks:
 
     def test_math_directive_to_dollar_signs(self):
         """.. math:: -> $$...$$ display math."""
-        from great_docs._qrenderer._rst_converters import _convert_rst_text
-
         text = "The formula:\n\n.. math::\n\n    a^2 + b^2 = c^2\n"
         result = _convert_rst_text(text)
 
@@ -5231,8 +5273,6 @@ class TestRendererRstCodeBlocks:
 
     def test_inline_math_converted(self):
         """:math:`x^2` -> $x^2$"""
-        from great_docs._qrenderer._rst_converters import _convert_rst_text
-
         text = "The value :math:`x^2` is computed."
         result = _convert_rst_text(text)
 
@@ -5244,8 +5284,6 @@ class TestRendererRstTables:
     """RST tables are converted to Markdown pipe tables at render time."""
 
     def test_simple_table_converted(self):
-        from great_docs._qrenderer._rst_converters import _convert_rst_text
-
         text = (
             "========  =========\n"
             "Method    Speed\n"
@@ -5262,8 +5300,6 @@ class TestRendererRstTables:
         assert "========" not in result
 
     def test_grid_table_converted(self):
-        from great_docs._qrenderer._rst_converters import _convert_rst_text
-
         text = (
             "+--------+-------+\n"
             "| Name   | Value |\n"
@@ -5303,9 +5339,6 @@ class TestRendererDataclassAttributes:
 
     def test_is_griffe_dataclass_true(self):
         """A griffe object with 'dataclass' label is detected."""
-
-        from great_docs._qrenderer._md_renderer import _is_griffe_dataclass
-
         obj = MagicMock()
         obj.labels = {"dataclass"}
 
@@ -5313,9 +5346,6 @@ class TestRendererDataclassAttributes:
 
     def test_is_griffe_dataclass_false(self):
         """A griffe object without 'dataclass' label returns False."""
-
-        from great_docs._qrenderer._md_renderer import _is_griffe_dataclass
-
         obj = MagicMock()
         obj.labels = {"class"}
 
@@ -5324,8 +5354,6 @@ class TestRendererDataclassAttributes:
     def test_get_dataclass_field_names(self):
         """Dynamic import of a stdlib dataclass returns all field names."""
         import dataclasses as _dc
-
-        from great_docs._qrenderer._md_renderer import _get_dataclass_field_names
 
         # Create a temporary dataclass in a temporary module
         mod = types.ModuleType("_test_dc_mod")
@@ -5352,10 +5380,6 @@ class TestRendererDataclassAttributes:
 
     def test_get_param_descriptions(self):
         """Parameter descriptions are extracted from parsed docstring sections."""
-
-        from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import _get_param_descriptions
-
         param1 = MagicMock(spec=ds.DocstringParameter)
         param1.name = "name"
         param1.description = "The name of the item."
@@ -5379,8 +5403,6 @@ class TestRendererDataclassAttributes:
 
     def test_get_dataclass_field_names_non_dataclass_returns_none(self):
         """Non-dataclass returns None."""
-        from great_docs._qrenderer._md_renderer import _get_dataclass_field_names
-
         obj = type("FakeObj", (), {"canonical_path": "os.path", "path": "os.path"})()
         result = _get_dataclass_field_names(obj)
 
@@ -5391,46 +5413,30 @@ class TestRendererSphinxRoles:
     """Sphinx cross-reference roles -> Markdown code spans."""
 
     def test_func_role(self):
-        from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
-
         assert _convert_sphinx_roles(":func:`get_object`") == "`get_object()`"
 
     def test_class_role(self):
-        from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
-
         assert _convert_sphinx_roles(":class:`MyClass`") == "`MyClass`"
 
     def test_exc_role(self):
-        from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
-
         assert _convert_sphinx_roles(":exc:`ValueError`") == "`ValueError`"
 
     def test_py_prefix_role(self):
-        from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
-
         assert _convert_sphinx_roles(":py:func:`bar`") == "`bar()`"
 
     def test_meth_role_appends_parens(self):
-        from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
-
         assert _convert_sphinx_roles(":meth:`run`") == "`run()`"
 
     def test_attr_role_no_parens(self):
-        from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
-
         assert _convert_sphinx_roles(":attr:`name`") == "`name`"
 
     def test_multiple_roles_in_text(self):
-        from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
-
         text = "Use :func:`foo` and :class:`Bar` together."
         result = _convert_sphinx_roles(text)
 
         assert result == "Use `foo()` and `Bar` together."
 
     def test_func_already_has_parens(self):
-        from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
-
         assert _convert_sphinx_roles(":func:`foo()`") == "`foo()`"
 
 
@@ -5438,8 +5444,6 @@ class TestRendererRstDirectives:
     """RST admonition / version directives -> Quarto callout blocks."""
 
     def test_inline_note(self):
-        from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
         result = _convert_rst_directives(".. note:: Something important.")
 
         assert ".callout-note" in result
@@ -5447,16 +5451,12 @@ class TestRendererRstDirectives:
         assert ":::" in result
 
     def test_inline_warning(self):
-        from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
         result = _convert_rst_directives(".. warning:: Be careful.")
 
         assert ".callout-warning" in result
         assert "Be careful." in result
 
     def test_inline_versionadded(self):
-        from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
         result = _convert_rst_directives(".. versionadded:: 2.8.1")
 
         assert ".callout-note" in result
@@ -5464,8 +5464,6 @@ class TestRendererRstDirectives:
         assert "2.8.1" in result
 
     def test_inline_deprecated(self):
-        from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
         result = _convert_rst_directives(".. deprecated:: 2.6 Use X instead.")
 
         assert ".callout-warning" in result
@@ -5473,8 +5471,6 @@ class TestRendererRstDirectives:
         assert "2.6" in result
 
     def test_block_note(self):
-        from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
         text = ".. note::\n\n    This is the note body.\n"
         result = _convert_rst_directives(text)
 
@@ -5482,8 +5478,6 @@ class TestRendererRstDirectives:
         assert "This is the note body." in result
 
     def test_block_tip(self):
-        from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
         text = ".. tip::\n\n    Helpful advice.\n"
         result = _convert_rst_directives(text)
 
@@ -5491,23 +5485,17 @@ class TestRendererRstDirectives:
         assert "Helpful advice." in result
 
     def test_danger_maps_to_important(self):
-        from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
         result = _convert_rst_directives(".. danger:: Critical issue.")
 
         assert ".callout-important" in result
 
     def test_bare_directive(self):
-        from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
         result = _convert_rst_directives(".. note::")
 
         assert ".callout-note" in result
         assert ":::" in result
 
     def test_versionchanged_with_block_body(self):
-        from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
         text = ".. versionchanged:: 3.0\n\n    New behaviour.\n"
         result = _convert_rst_directives(text)
 
@@ -5519,31 +5507,23 @@ class TestRendererBoldSectionHeaders:
     """``**Examples**::`` -> proper QMD section headings."""
 
     def test_examples_header(self):
-        from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
-
         result = _convert_bold_section_headers("**Examples**::", 2)
 
         assert "## Examples" in result
         assert ".doc-section-examples" in result
 
     def test_notes_header(self):
-        from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
-
         result = _convert_bold_section_headers("**Notes**::", 3)
 
         assert "### Notes" in result
         assert ".doc-section-notes" in result
 
     def test_see_also_header(self):
-        from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
-
         result = _convert_bold_section_headers("**See Also**::", 2)
 
         assert ".doc-section-see-also" in result
 
     def test_non_matching_text_unchanged(self):
-        from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
-
         text = "This is **bold** text."
 
         assert _convert_bold_section_headers(text, 2) == text
@@ -5553,8 +5533,6 @@ class TestRendererSphinxFields:
     """Sphinx-style ``:param:`` / ``:returns:`` / ``:raises:`` fields -> sections."""
 
     def test_param_and_type(self):
-        from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
         text = ":param x: The x value.\n:type x: int"
         result = _convert_sphinx_fields(text, 2)
 
@@ -5564,8 +5542,6 @@ class TestRendererSphinxFields:
         assert "The x value." in result
 
     def test_returns_and_rtype(self):
-        from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
         text = ":returns: The result.\n:rtype: str"
         result = _convert_sphinx_fields(text, 2)
 
@@ -5574,8 +5550,6 @@ class TestRendererSphinxFields:
         assert "The result." in result
 
     def test_raises(self):
-        from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
         text = ":raises ValueError: If bad input."
         result = _convert_sphinx_fields(text, 2)
 
@@ -5584,8 +5558,6 @@ class TestRendererSphinxFields:
         assert "If bad input." in result
 
     def test_combined_fields(self):
-        from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
         text = (
             "Description text.\n\n"
             ":param x: The x.\n"
@@ -5602,8 +5574,6 @@ class TestRendererSphinxFields:
         assert "## Raises" in result
 
     def test_no_fields_unchanged(self):
-        from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
         text = "Just normal text."
 
         assert _convert_sphinx_fields(text, 2) == text
@@ -5613,8 +5583,6 @@ class TestRendererGoogleSections:
     """Google-style ``Args:`` / ``Returns:`` / ``Raises:`` sections -> QMD."""
 
     def test_args_section(self):
-        from great_docs._qrenderer._rst_converters import _convert_google_sections
-
         text = "Args:\n    x: The x value.\n    y: The y value."
         result = _convert_google_sections(text, 2)
 
@@ -5623,8 +5591,6 @@ class TestRendererGoogleSections:
         assert "y" in result
 
     def test_returns_section(self):
-        from great_docs._qrenderer._rst_converters import _convert_google_sections
-
         text = "Returns:\n    A dict of results."
         result = _convert_google_sections(text, 2)
 
@@ -5632,8 +5598,6 @@ class TestRendererGoogleSections:
         assert "A dict of results." in result
 
     def test_raises_section(self):
-        from great_docs._qrenderer._rst_converters import _convert_google_sections
-
         text = "Raises:\n    ValueError: If bad input.\n    TypeError: If wrong type."
         result = _convert_google_sections(text, 2)
 
@@ -5642,8 +5606,6 @@ class TestRendererGoogleSections:
         assert "TypeError" in result
 
     def test_note_section(self):
-        from great_docs._qrenderer._rst_converters import _convert_google_sections
-
         text = "Note:\n    This is important."
         result = _convert_google_sections(text, 2)
 
@@ -5651,8 +5613,6 @@ class TestRendererGoogleSections:
         assert ".doc-section-notes" in result
 
     def test_example_section(self):
-        from great_docs._qrenderer._rst_converters import _convert_google_sections
-
         text = "Examples:\n    >>> foo()\n    42"
         result = _convert_google_sections(text, 3)
 
@@ -5660,8 +5620,6 @@ class TestRendererGoogleSections:
         assert ".doc-section-examples" in result
 
     def test_combined_sections(self):
-        from great_docs._qrenderer._rst_converters import _convert_google_sections
-
         text = (
             "Description.\n\n"
             "Args:\n    x: The x.\n\n"
@@ -5676,8 +5634,6 @@ class TestRendererGoogleSections:
         assert "## Raises" in result
 
     def test_no_sections_unchanged(self):
-        from great_docs._qrenderer._rst_converters import _convert_google_sections
-
         text = "Just normal text."
 
         assert _convert_google_sections(text, 2) == text
@@ -5687,8 +5643,6 @@ class TestRendererDoctestFencing:
     """Unfenced ``>>>`` doctest blocks -> fenced ```python code blocks."""
 
     def test_single_doctest_line(self):
-        from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
-
         text = ">>> print('hello')"
         result = _fence_doctest_blocks(text)
 
@@ -5697,8 +5651,6 @@ class TestRendererDoctestFencing:
         assert result.endswith("```")
 
     def test_multi_line_doctest(self):
-        from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
-
         text = ">>> x = 1\n>>> y = 2\n>>> x + y"
         result = _fence_doctest_blocks(text)
 
@@ -5706,8 +5658,6 @@ class TestRendererDoctestFencing:
         assert result.count("```") == 2
 
     def test_doctest_with_continuation(self):
-        from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
-
         text = ">>> for i in range(3):\n...     print(i)"
         result = _fence_doctest_blocks(text)
 
@@ -5715,23 +5665,17 @@ class TestRendererDoctestFencing:
         assert "... " in result
 
     def test_interspersed_text(self):
-        from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
-
         text = "First example:\n\n>>> x = 1\n\nSecond example:\n\n>>> y = 2"
         result = _fence_doctest_blocks(text)
 
         assert result.count("```python") == 2
 
     def test_no_doctest_unchanged(self):
-        from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
-
         text = "Just some normal text."
 
         assert _fence_doctest_blocks(text) == text
 
     def test_bare_prompt(self):
-        from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
-
         text = ">>>"
         result = _fence_doctest_blocks(text)
 
@@ -5739,8 +5683,6 @@ class TestRendererDoctestFencing:
 
     def test_in_render_section_text(self):
         """Doctest fencing is applied in _render_section_text."""
-        from great_docs._qrenderer._rst_converters import _convert_rst_text, _fence_doctest_blocks
-
         text = "Example usage:\n\n>>> foo(42)\n>>> bar()"
         result = _fence_doctest_blocks(_convert_rst_text(text))
 
@@ -5762,8 +5704,6 @@ class TestRendererCallableParens:
         doc.obj.labels = set()
 
         # Make isinstance check work for DocFunction
-        from great_docs._qrenderer import layout
-
         doc.__class__ = layout.DocFunction
 
         result = renderer.render_header(doc)
@@ -5781,8 +5721,6 @@ class TestRendererCallableParens:
         doc.obj.kind.value = "class"
         doc.obj.labels = {"class"}
 
-        from great_docs._qrenderer import layout
-
         doc.__class__ = layout.DocClass
 
         result = renderer.render_header(doc)
@@ -5795,8 +5733,6 @@ class TestRendererTypeBadgeClasses:
     """Headings get ``.doc-type-{kind}`` CSS classes."""
 
     def test_function_type_class(self):
-        from great_docs._qrenderer import layout
-
         renderer = MdRenderer()
 
         doc = MagicMock(spec=["name", "obj", "__class__"])
@@ -5812,8 +5748,6 @@ class TestRendererTypeBadgeClasses:
         assert ".doc-type-function" in result
 
     def test_class_type_class(self):
-        from great_docs._qrenderer import layout
-
         renderer = MdRenderer()
 
         doc = MagicMock(spec=["name", "obj", "__class__"])
@@ -5829,8 +5763,6 @@ class TestRendererTypeBadgeClasses:
         assert ".doc-type-class" in result
 
     def test_enum_type_class(self):
-        from great_docs._qrenderer import layout
-
         renderer = MdRenderer()
 
         doc = MagicMock(spec=["name", "obj", "__class__"])
@@ -5846,8 +5778,6 @@ class TestRendererTypeBadgeClasses:
         assert ".doc-type-enum" in result
 
     def test_attribute_type_class(self):
-        from great_docs._qrenderer import layout
-
         renderer = MdRenderer()
 
         doc = MagicMock(spec=["name", "obj", "__class__"])
@@ -5888,9 +5818,6 @@ class TestRendererSignatureMultiline:
 
     def test_long_sig_wraps(self):
         """Signatures exceeding 80 chars wrap to multi-line."""
-
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
 
         params = []
@@ -5999,9 +5926,6 @@ class TestRendererNonCallableCleanup:
 
     def test_enum_signature_no_parens(self):
         """Enum class signature has no parentheses."""
-
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
 
         el = MagicMock(spec=dc.Class)
@@ -6020,9 +5944,6 @@ class TestRendererNonCallableCleanup:
 
     def test_typeddict_signature_no_parens(self):
         """TypedDict class signature has no parentheses."""
-
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
 
         el = MagicMock(spec=dc.Class)
@@ -6040,10 +5961,7 @@ class TestRendererNonCallableCleanup:
         assert "Config()" not in result
 
     def test_regular_class_still_has_parens(self):
-        """Normal classes retain ``()`` in their signature."""
-
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
+        """Normal classes retain `()` in their signature."""
         renderer = MdRenderer()
 
         el = MagicMock(spec=dc.Class)
@@ -6066,11 +5984,6 @@ class TestRendererSectionSeparators:
 
     def test_separators_between_methods(self):
         """Methods section includes --- separators between member docs."""
-
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
         renderer.display_name = "name"
 
@@ -6141,8 +6054,6 @@ class TestRendererRstCitations:
 
     def test_simple_citations(self):
         """Basic ``.. [1]`` markers become numbered list items."""
-        from great_docs._qrenderer._rst_converters import _convert_rst_citations
-
         text = ".. [1] Author (2023). Title.\n.. [2] Another ref."
         result = _convert_rst_citations(text)
 
@@ -6152,8 +6063,6 @@ class TestRendererRstCitations:
 
     def test_citation_with_url(self):
         """Bare URLs in citation bodies get auto-linked."""
-        from great_docs._qrenderer._rst_converters import _convert_rst_citations
-
         text = ".. [1] See https://example.com for details."
         result = _convert_rst_citations(text)
 
@@ -6162,8 +6071,6 @@ class TestRendererRstCitations:
 
     def test_no_citations_unchanged(self):
         """Text without citation markers passes through unchanged."""
-        from great_docs._qrenderer._rst_converters import _convert_rst_citations
-
         text = "Regular paragraph text.\nNo citations here."
         result = _convert_rst_citations(text)
 
@@ -6171,7 +6078,6 @@ class TestRendererRstCitations:
 
     def test_citations_in_convert_rst_text(self):
         """Citations are converted as part of the full RST -> Markdown pipeline."""
-        from great_docs._qrenderer._rst_converters import _convert_rst_text
 
         text = "References\n\n.. [1] First ref.\n.. [2] Second ref."
         result = _convert_rst_text(text)
@@ -6181,8 +6087,6 @@ class TestRendererRstCitations:
 
     def test_multi_line_citation(self):
         """Multi-line citations are joined."""
-        from great_docs._qrenderer._rst_converters import _convert_rst_citations
-
         text = ".. [1] Author (2023).\n    Title of the work."
         result = _convert_rst_citations(text)
 
@@ -6194,8 +6098,6 @@ class TestRendererRstMathDisplay:
 
     def test_math_directive_to_display_math(self):
         """``.. math::`` block becomes ``$$`` display math."""
-        from great_docs._qrenderer._rst_converters import _convert_rst_text
-
         text = "Some text.\n\n.. math::\n\n    E = mc^2\n"
         result = _convert_rst_text(text)
 
@@ -6205,8 +6107,6 @@ class TestRendererRstMathDisplay:
 
     def test_inline_math_converted(self):
         """Inline ``:math:`` roles become ``$...$``."""
-        from great_docs._qrenderer._rst_converters import _convert_rst_text
-
         text = "The formula :math:`x^2` is simple."
         result = _convert_rst_text(text)
 
@@ -6218,8 +6118,6 @@ class TestRendererIsNonCallableClass:
     """Helper function _is_non_callable_class detects enums and TypedDicts."""
 
     def test_enum_detected(self):
-        from great_docs._qrenderer._md_renderer import _is_non_callable_class
-
         obj = MagicMock()
         obj.labels = {"enum"}
         obj.bases = []
@@ -6227,8 +6125,6 @@ class TestRendererIsNonCallableClass:
         assert _is_non_callable_class(obj) is True
 
     def test_typeddict_detected_by_base(self):
-        from great_docs._qrenderer._md_renderer import _is_non_callable_class
-
         obj = MagicMock()
         obj.labels = set()
         obj.bases = ["TypedDict"]
@@ -6236,8 +6132,6 @@ class TestRendererIsNonCallableClass:
         assert _is_non_callable_class(obj) is True
 
     def test_regular_class_not_detected(self):
-        from great_docs._qrenderer._md_renderer import _is_non_callable_class
-
         obj = MagicMock()
         obj.labels = set()
         obj.bases = ["object"]
@@ -6245,8 +6139,6 @@ class TestRendererIsNonCallableClass:
         assert _is_non_callable_class(obj) is False
 
     def test_int_enum_detected(self):
-        from great_docs._qrenderer._md_renderer import _is_non_callable_class
-
         obj = MagicMock()
         obj.labels = set()
         obj.bases = ["IntEnum"]
@@ -6254,8 +6146,6 @@ class TestRendererIsNonCallableClass:
         assert _is_non_callable_class(obj) is True
 
     def test_str_enum_detected(self):
-        from great_docs._qrenderer._md_renderer import _is_non_callable_class
-
         obj = MagicMock()
         obj.labels = set()
         obj.bases = ["StrEnum"]
@@ -6263,46 +6153,31 @@ class TestRendererIsNonCallableClass:
         assert _is_non_callable_class(obj) is True
 
 
-# ============================================================================
-# MdRenderer Coverage Tests
-# ============================================================================
-
-
 class TestEnsureBlankBeforeLists:
     """_ensure_blank_before_lists inserts blank lines before list items."""
 
     def test_inserts_blank_before_list_after_prose(self):
-        from great_docs._qrenderer._md_renderer import _ensure_blank_before_lists
-
         text = "Some text\n- item one\n- item two"
         result = _ensure_blank_before_lists(text)
         assert result == "Some text\n\n- item one\n- item two"
 
     def test_no_insert_when_already_blank(self):
-        from great_docs._qrenderer._md_renderer import _ensure_blank_before_lists
-
         text = "Some text\n\n- item one"
         result = _ensure_blank_before_lists(text)
         assert result == text
 
     def test_numbered_list(self):
-        from great_docs._qrenderer._md_renderer import _ensure_blank_before_lists
-
         text = "Paragraph\n1. First\n2. Second"
         result = _ensure_blank_before_lists(text)
         assert result == "Paragraph\n\n1. First\n2. Second"
 
     def test_list_at_start(self):
-        from great_docs._qrenderer._md_renderer import _ensure_blank_before_lists
-
         text = "- first item\n- second"
         result = _ensure_blank_before_lists(text)
         # No blank inserted at very start
         assert result == text
 
     def test_star_list(self):
-        from great_docs._qrenderer._md_renderer import _ensure_blank_before_lists
-
         text = "Hello\n* bullet"
         result = _ensure_blank_before_lists(text)
         assert result == "Hello\n\n* bullet"
@@ -6312,15 +6187,11 @@ class TestConvertRstLinkToMd:
     """convert_rst_link_to_md wraps RST cross-references in []()."""
 
     def test_basic_rst_link(self):
-        from great_docs._qrenderer._md_renderer import convert_rst_link_to_md
-
         rst = ":func:`some_func`"
         result = convert_rst_link_to_md(rst)
         assert "[](" in result
 
     def test_no_rst_link_unchanged(self):
-        from great_docs._qrenderer._md_renderer import convert_rst_link_to_md
-
         text = "Just plain text."
         result = convert_rst_link_to_md(text)
         assert result == text
@@ -6330,8 +6201,6 @@ class TestSimpleTable:
     """_simple_table produces a markdown table."""
 
     def test_basic_table(self):
-        from great_docs._qrenderer._md_renderer import _simple_table
-
         result = _simple_table([("a", "b"), ("c", "d")], ["H1", "H2"])
         assert "| H1 | H2 |" in result
         assert "| --- | --- |" in result
@@ -6343,24 +6212,18 @@ class TestHasAttrSection:
     """_has_attr_section checks whether a docstring has an Attributes section."""
 
     def test_none_docstring(self):
-        from great_docs._qrenderer._md_renderer import _has_attr_section
-
         assert _has_attr_section(None) is False
 
     def test_with_attributes(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import _has_attr_section
-
         docstring = MagicMock()
         docstring.parsed = [ds.DocstringSectionAttributes(value=[])]
+
         assert _has_attr_section(docstring) is True
 
     def test_without_attributes(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import _has_attr_section
-
         docstring = MagicMock()
         docstring.parsed = [ds.DocstringSectionText(value="Hello")]
+
         assert _has_attr_section(docstring) is False
 
 
@@ -6368,13 +6231,9 @@ class TestSanitizeTitle:
     """_sanitize_title strips non-alphanumeric characters."""
 
     def test_basic(self):
-        from great_docs._qrenderer._md_renderer import _sanitize_title
-
         assert _sanitize_title("See Also") == "See-Also"
 
     def test_special_chars(self):
-        from great_docs._qrenderer._md_renderer import _sanitize_title
-
         assert _sanitize_title("Hello World!") == "Hello-World"
 
 
@@ -6382,16 +6241,11 @@ class TestGetParamDescriptions:
     """_get_param_descriptions extracts descriptions from docstring."""
 
     def test_no_docstring(self):
-        from great_docs._qrenderer._md_renderer import _get_param_descriptions
-
         obj = MagicMock()
         obj.docstring = None
         assert _get_param_descriptions(obj) == {}
 
     def test_with_parameters_section(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import _get_param_descriptions
-
         param = MagicMock()
         param.name = "x"
         param.description = "The x value"
@@ -6406,37 +6260,33 @@ class TestParamRowToDefinitionList:
     """ParamRow.to_definition_list builds a pandoc definition-list item."""
 
     def test_basic(self):
-        from great_docs._qrenderer._md_renderer import ParamRow
-
         row = ParamRow(name="x", description="An integer", annotation="int", default="0")
         term, desc = row.to_definition_list()
+
         assert "x" in term
         assert "int" in term
         assert "0" in term
         assert "An integer" in desc
 
     def test_no_name(self):
-        from great_docs._qrenderer._md_renderer import ParamRow
-
         row = ParamRow(name=None, description="A return value", annotation="str")
         term, desc = row.to_definition_list()
+
         assert "str" in term
         assert "A return value" in desc
 
     def test_no_default(self):
-        from great_docs._qrenderer._md_renderer import ParamRow
-
         row = ParamRow(name="y", description="Desc", annotation="float")
         term, desc = row.to_definition_list()
+
         assert "y" in term
         assert "float" in term
         assert "Desc" in desc
 
     def test_no_annotation(self):
-        from great_docs._qrenderer._md_renderer import ParamRow
-
         row = ParamRow(name="z", description="Desc")
         term, desc = row.to_definition_list()
+
         assert "z" in term
 
 
@@ -6444,38 +6294,32 @@ class TestParamRowToTuple:
     """ParamRow.to_tuple returns tuples for different table styles."""
 
     def test_parameters_with_default(self):
-        from great_docs._qrenderer._md_renderer import ParamRow
-        from great_docs._qrenderer._rst_converters import escape
-
         row = ParamRow(name="x", description="Desc", annotation="int", default="0")
         result = row.to_tuple("parameters")
+
         assert result == ("x", "int", "Desc", escape("0"))
 
     def test_parameters_no_default(self):
-        from great_docs._qrenderer._md_renderer import ParamRow
-
         row = ParamRow(name="x", description="Desc", annotation="int")
         result = row.to_tuple("parameters")
+
         assert result[3] == "_required_"
 
     def test_attributes(self):
-        from great_docs._qrenderer._md_renderer import ParamRow
-
         row = ParamRow(name="x", description="Desc", annotation="int")
         result = row.to_tuple("attributes")
+
         assert result == ("x", "int", "Desc")
 
     def test_returns(self):
-        from great_docs._qrenderer._md_renderer import ParamRow
-
         row = ParamRow(name="x", description="Desc", annotation="int")
         result = row.to_tuple("returns")
+
         assert result == ("x", "int", "Desc")
 
     def test_unsupported_style(self):
-        from great_docs._qrenderer._md_renderer import ParamRow
-
         row = ParamRow(name="x", description="Desc")
+
         with pytest.raises(NotImplementedError, match="Unsupported table style"):
             row.to_tuple("unknown")
 
@@ -6484,28 +6328,23 @@ class TestRendererFromConfig:
     """Renderer.from_config creates renderers from different config types."""
 
     def test_string_config(self):
-        from great_docs._qrenderer._md_renderer import Renderer
-
         result = Renderer.from_config("markdown")
+
         assert isinstance(result, MdRenderer)
 
     def test_dict_config(self):
-        from great_docs._qrenderer._md_renderer import Renderer
-
         result = Renderer.from_config({"style": "markdown", "header_level": 2})
+
         assert isinstance(result, MdRenderer)
         assert result.header_level == 2
 
     def test_renderer_passthrough(self):
-        from great_docs._qrenderer._md_renderer import Renderer
-
         r = MdRenderer()
         result = Renderer.from_config(r)
+
         assert result is r
 
     def test_invalid_type(self):
-        from great_docs._qrenderer._md_renderer import Renderer
-
         with pytest.raises(TypeError):
             Renderer.from_config(42)
 
@@ -6579,24 +6418,22 @@ class TestMdRendererRenderTable:
     """MdRenderer._render_table supports both table and description-list styles."""
 
     def test_description_list_style(self):
-        from great_docs._qrenderer._md_renderer import ParamRow
-
         renderer = MdRenderer(table_style="description-list")
         rows = [ParamRow(name="x", description="Desc", annotation="int", default="0")]
         result = renderer._render_table(
             rows, ["Name", "Type", "Description", "Default"], "parameters"
         )
+
         # DefinitionList renders differently from a table
         assert "|" not in result or "x" in result
 
     def test_default_table_style(self):
-        from great_docs._qrenderer._md_renderer import ParamRow
-
         renderer = MdRenderer(table_style="table")
         rows = [ParamRow(name="x", description="Desc", annotation="int", default="0")]
         result = renderer._render_table(
             rows, ["Name", "Type", "Description", "Default"], "parameters"
         )
+
         assert "| x | int |" in result
 
 
@@ -6604,36 +6441,33 @@ class TestMdRendererRenderParameters:
     """MdRenderer._render_parameters handles kw_only and pos_only."""
 
     def test_keyword_only_separator(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
         params = dc.Parameters(
             dc.Parameter("a", kind=dc.ParameterKind.positional_or_keyword),
             dc.Parameter("b", kind=dc.ParameterKind.keyword_only),
         )
         result = renderer._render_parameters(params)
+
         assert "*" in result
 
     def test_positional_only_separator(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
         params = dc.Parameters(
             dc.Parameter("a", kind=dc.ParameterKind.positional_only),
             dc.Parameter("b", kind=dc.ParameterKind.positional_or_keyword),
         )
         result = renderer._render_parameters(params)
+
         assert "/" in result
 
     def test_var_positional_suppresses_star(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
         params = dc.Parameters(
             dc.Parameter("args", kind=dc.ParameterKind.var_positional),
             dc.Parameter("b", kind=dc.ParameterKind.keyword_only),
         )
         result = renderer._render_parameters(params)
+
         # No bare "*" separator when *args already present
         assert "*" not in result  # bare * separator should not appear
 
@@ -6643,60 +6477,53 @@ class TestMdRendererRenderDispatch:
 
     def test_render_string(self):
         renderer = MdRenderer()
+
         assert renderer.render("hello") == "hello"
 
     def test_render_warnings_section(self):
-        from great_docs._qrenderer._ast import DocstringSectionWarnings
-
         renderer = MdRenderer()
         el = DocstringSectionWarnings(value="Be careful!")
         result = renderer.render(el)
+
         assert "Be careful" in result
 
     def test_render_see_also_section(self):
-        from great_docs._qrenderer._ast import DocstringSectionSeeAlso
-
         renderer = MdRenderer()
         el = DocstringSectionSeeAlso(value="other_func")
         result = renderer.render(el)
+
         assert "other_func" in result
 
     def test_render_notes_section(self):
-        from great_docs._qrenderer._ast import DocstringSectionNotes
-
         renderer = MdRenderer()
         el = DocstringSectionNotes(value="Important note.")
         result = renderer.render(el)
+
         assert "Important note" in result
 
     def test_render_example_code(self):
-        from great_docs._qrenderer._ast import ExampleCode
-
         renderer = MdRenderer()
         el = ExampleCode(value="x = 1")
         result = renderer.render(el)
+
         assert "```python" in result
         assert "x = 1" in result
 
     def test_render_example_text(self):
-        from great_docs._qrenderer._ast import ExampleText
-
         renderer = MdRenderer()
         el = ExampleText(value="Some text")
         result = renderer.render(el)
+
         assert "Some text" in result
 
     def test_render_admonition_notes(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
         el = ds.DocstringSectionAdmonition(kind="admonition", text="Note content", title="Notes")
         result = renderer.render(el)
+
         assert "Note content" in result
 
     def test_render_admonition_see_also(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
         el = ds.DocstringSectionAdmonition(
             kind="admonition",
@@ -6704,11 +6531,10 @@ class TestMdRendererRenderDispatch:
             title="See Also",
         )
         result = renderer.render(el)
+
         assert "other_func" in result
 
     def test_render_returns_section(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
         ret = ds.DocstringReturn(name="result", annotation="int", description="The count")
         el = ds.DocstringSectionReturns(value=[ret])
@@ -6718,8 +6544,6 @@ class TestMdRendererRenderDispatch:
         assert "The count" in result
 
     def test_render_raises_section(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
         exc = ds.DocstringRaise(annotation="ValueError", description="If invalid")
         el = ds.DocstringSectionRaises(value=[exc])
@@ -6729,8 +6553,6 @@ class TestMdRendererRenderDispatch:
         assert "If invalid" in result
 
     def test_render_unsupported_raises(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
         el = ds.DocstringDeprecated(description="old")
         with pytest.raises(NotImplementedError):
@@ -6741,10 +6563,6 @@ class TestMdRendererRenderPage:
     """MdRenderer._render_page handles pages with and without summaries."""
 
     def test_page_with_summary(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
 
         obj = MagicMock(spec=dc.Function)
@@ -6771,14 +6589,11 @@ class TestMdRendererRenderPage:
         summary = layout.SummaryDetails(name="My Page", desc="Page description")
         page = layout.Page(path="test", summary=summary, contents=[doc])
         result = renderer._render_page(page)
+
         assert "My Page" in result
         assert "Page description" in result
 
     def test_page_without_summary(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
 
         obj = MagicMock(spec=dc.Function)
@@ -6811,10 +6626,6 @@ class TestMdRendererRenderSection:
     """MdRenderer._render_section produces titled sections."""
 
     def test_section_with_title(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
 
         obj = MagicMock(spec=dc.Function)
@@ -6840,6 +6651,7 @@ class TestMdRendererRenderSection:
 
         section = layout.Section(title="Functions", desc="All functions", contents=[doc])
         result = renderer._render_section(section)
+
         assert "# Functions" in result
         assert "All functions" in result
 
@@ -6848,20 +6660,15 @@ class TestMdRendererSummarizeLayout:
     """MdRenderer.summarize renders summary rows for layout elements."""
 
     def test_summarize_layout(self):
-        from great_docs._qrenderer import layout
-
         renderer = MdRenderer()
 
         section = layout.Section(title="API", desc="API docs", contents=[])
         lo = layout.Layout(sections=[section])
         result = renderer.summarize(lo)
+
         assert "API" in result
 
     def test_summarize_section_with_subtitle(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
 
         obj = MagicMock(spec=dc.Function)
@@ -6890,8 +6697,6 @@ class TestMdRendererSummarizeLayout:
         assert "### Sub" in result
 
     def test_summarize_section_empty(self):
-        from great_docs._qrenderer import layout
-
         renderer = MdRenderer()
 
         section = layout.Section(title="Empty", desc=None, contents=[])
@@ -6899,10 +6704,6 @@ class TestMdRendererSummarizeLayout:
         assert "Empty" in result
 
     def test_summarize_member_page(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
 
         obj = MagicMock(spec=dc.Function)
@@ -6931,8 +6732,6 @@ class TestMdRendererSummarizeLayout:
         assert "func" in result
 
     def test_summarize_page_with_summary(self):
-        from great_docs._qrenderer import layout
-
         renderer = MdRenderer()
         summary = layout.SummaryDetails(name="Page", desc="Page desc")
         page = layout.Page(path="test", summary=summary, contents=[])
@@ -6942,10 +6741,6 @@ class TestMdRendererSummarizeLayout:
         assert "Page desc" in result
 
     def test_summarize_page_flatten(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
 
         obj = MagicMock(spec=dc.Function)
@@ -6989,10 +6784,6 @@ class TestMdRendererSummarizeLayout:
         assert "func2" in result
 
     def test_summarize_link(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
 
         obj = MagicMock(spec=dc.Function)
@@ -7008,10 +6799,6 @@ class TestMdRendererSummarizeLayout:
         assert "pkg.func" in result
 
     def test_summarize_doc_with_path(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
 
         obj = MagicMock(spec=dc.Function)
@@ -7039,10 +6826,6 @@ class TestMdRendererSummarizeLayout:
         assert "reference/pkg.qmd#pkg.func" in result
 
     def test_summarize_doc_no_path(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
 
         obj = MagicMock(spec=dc.Function)
@@ -7070,8 +6853,6 @@ class TestMdRendererSummarizeLayout:
         assert "#pkg.func" in result
 
     def test_summarize_object_no_docstring(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
 
         obj = MagicMock(spec=dc.Function)
@@ -7086,10 +6867,6 @@ class TestMdRendererRenderDocFuncAttr:
     """MdRenderer._render_doc_func_attr renders function/attribute docs."""
 
     def test_render_with_signature(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer(show_signature=True)
 
         obj = MagicMock(spec=dc.Function)
@@ -7119,10 +6896,6 @@ class TestMdRendererRenderDocFuncAttr:
         assert "```python" in result
 
     def test_render_without_signature(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer(show_signature=False)
 
         obj = MagicMock(spec=dc.Function)
@@ -7155,8 +6928,6 @@ class TestMdRendererRenderObject:
     """MdRenderer._render_object handles objects with/without docstrings."""
 
     def test_no_docstring(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
         obj = MagicMock(spec=dc.Function)
         obj.docstring = None
@@ -7168,9 +6939,6 @@ class TestMdRendererRenderDocstringParameter:
     """MdRenderer._render_docstring_parameter returns a ParamRow."""
 
     def test_basic_param(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import ParamRow
-
         renderer = MdRenderer()
         p = ds.DocstringParameter(name="x", annotation="int", description="The x", value="0")
         result = renderer._render_docstring_parameter(p)
@@ -7184,12 +6952,10 @@ class TestMdRendererRenderDocstringReturn:
     """MdRenderer._render_docstring_return returns a ParamRow."""
 
     def test_basic_return(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import ParamRow
-
         renderer = MdRenderer()
         r = ds.DocstringReturn(name="result", annotation="int", description="A count")
         result = renderer._render_docstring_return(r)
+
         assert isinstance(result, ParamRow)
         assert result.name == "result"
 
@@ -7198,12 +6964,10 @@ class TestMdRendererRenderDocstringRaise:
     """MdRenderer._render_docstring_raise returns a ParamRow with name=None."""
 
     def test_basic_raise(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import ParamRow
-
         renderer = MdRenderer()
         r = ds.DocstringRaise(annotation="ValueError", description="If bad")
         result = renderer._render_docstring_raise(r)
+
         assert isinstance(result, ParamRow)
         assert result.name is None
 
@@ -7213,8 +6977,6 @@ class TestMdRendererRenderSectionExamples:
 
     def test_example_section(self):
         from griffe import DocstringSectionKind
-
-        from great_docs._qrenderer._griffe import docstrings as ds
 
         renderer = MdRenderer()
         examples = ds.DocstringSectionExamples(
@@ -7231,16 +6993,12 @@ class TestGetDataclassFieldNames:
     """_get_dataclass_field_names handles various cases."""
 
     def test_invalid_path(self):
-        from great_docs._qrenderer._md_renderer import _get_dataclass_field_names
-
         obj = MagicMock()
         obj.canonical_path = "singlename"
         result = _get_dataclass_field_names(obj)
         assert result is None
 
     def test_non_importable(self):
-        from great_docs._qrenderer._md_renderer import _get_dataclass_field_names
-
         obj = MagicMock()
         obj.canonical_path = "nonexistent.module.Class"
         result = _get_dataclass_field_names(obj)
@@ -7251,22 +7009,16 @@ class TestIsGriffeDataclass:
     """_is_griffe_dataclass checks for 'dataclass' label."""
 
     def test_true(self):
-        from great_docs._qrenderer._md_renderer import _is_griffe_dataclass
-
         obj = MagicMock()
         obj.labels = {"dataclass"}
         assert _is_griffe_dataclass(obj) is True
 
     def test_false(self):
-        from great_docs._qrenderer._md_renderer import _is_griffe_dataclass
-
         obj = MagicMock()
         obj.labels = set()
         assert _is_griffe_dataclass(obj) is False
 
     def test_exception(self):
-        from great_docs._qrenderer._md_renderer import _is_griffe_dataclass
-
         obj = MagicMock()
         type(obj).labels = PropertyMock(side_effect=Exception("fail"))
         assert _is_griffe_dataclass(obj) is False
@@ -7276,8 +7028,6 @@ class TestMdRendererRenderHeaderDocstringSection:
     """MdRenderer.render_header for DocstringSection elements."""
 
     def test_section_header_with_title(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer(header_level=2)
         section = ds.DocstringSectionParameters(value=[])
         section.title = "Parameters"
@@ -7287,8 +7037,6 @@ class TestMdRendererRenderHeaderDocstringSection:
         assert ".doc-section" in result
 
     def test_section_header_no_title_uses_kind(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer(header_level=3)
         section = ds.DocstringSectionText(value="")
         section.title = None
@@ -7307,9 +7055,6 @@ class TestIsNonCallableClassExceptionBranches:
 
     def test_labels_raises_exception(self):
         """When labels access raises, falls through to base check."""
-
-        from great_docs._qrenderer._md_renderer import _is_non_callable_class
-
         obj = MagicMock()
         type(obj).labels = PropertyMock(side_effect=Exception("bad"))
         obj.bases = ["TypedDict"]
@@ -7317,9 +7062,6 @@ class TestIsNonCallableClassExceptionBranches:
 
     def test_bases_raises_exception(self):
         """When bases access raises, returns False."""
-
-        from great_docs._qrenderer._md_renderer import _is_non_callable_class
-
         obj = MagicMock()
         obj.labels = set()
         type(obj).bases = PropertyMock(side_effect=Exception("bad"))
@@ -7331,9 +7073,6 @@ class TestRendererFromConfigPyFile:
 
     def test_py_file_style(self, tmp_path):
         """A string ending in .py triggers importlib loading."""
-
-        from great_docs._qrenderer._md_renderer import Renderer
-
         # Write a custom renderer module
         mod_file = tmp_path / "custom_renderer.py"
         mod_file.write_text(
@@ -7348,9 +7087,11 @@ class TestRendererFromConfigPyFile:
         os.chdir(tmp_path)
         try:
             result = Renderer.from_config("custom_renderer.py")
+
             assert isinstance(result, MdRenderer)
         finally:
             os.chdir(old_cwd)
+
             # Clean up the registry
             Renderer._registry.pop("_test_custom_py", None)
             sys.modules.pop("custom_renderer", None)
@@ -7360,8 +7101,6 @@ class TestFetchMethodParameters:
     """MdRenderer._fetch_method_parameters strips self/cls."""
 
     def test_strips_self(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
         el = MagicMock(spec=dc.Function)
         el.is_class = False
@@ -7378,8 +7117,6 @@ class TestFetchMethodParameters:
         assert "x" in names
 
     def test_strips_cls(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
         el = MagicMock(spec=dc.Function)
         el.is_class = True
@@ -7395,8 +7132,6 @@ class TestFetchMethodParameters:
         assert "y" in names
 
     def test_no_strip_for_non_class(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
         el = MagicMock(spec=dc.Function)
         el.is_class = False
@@ -7431,8 +7166,6 @@ class TestSignatureAlias:
     """MdRenderer.signature dispatches to _signature_alias for dc.Alias."""
 
     def test_alias_signature(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
         target = MagicMock()
         target.__class__ = dc.Function
@@ -7463,9 +7196,6 @@ class TestSignatureDoc:
     """MdRenderer._signature_doc respects el.signature_name."""
 
     def test_signature_doc_uses_signature_name(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer(display_name="relative")
         obj = MagicMock()
         obj.__class__ = dc.Function
@@ -7493,8 +7223,6 @@ class TestRenderOverloadSignatures:
     """MdRenderer._render_overload_signatures handles @overload functions."""
 
     def test_basic_overloads(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
 
         ov1 = MagicMock()
@@ -7571,8 +7299,6 @@ class TestRenderOverloadSignatures:
 
     def test_signature_func_with_overloads(self):
         """_signature_func_or_class detects and uses overloads."""
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
 
         ov = MagicMock()
@@ -7601,8 +7327,6 @@ class TestSignatureModuleOrAttrAnnotationValue:
     """_signature_module_or_attr includes annotations and values."""
 
     def test_with_annotation_and_value(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
         el = MagicMock(spec=dc.Attribute)
         el.__class__ = dc.Attribute
@@ -7612,13 +7336,12 @@ class TestSignatureModuleOrAttrAnnotationValue:
         el.value = "42"
 
         result = renderer._signature_module_or_attr(el)
+
         assert "MY_CONST" in result
         assert ": int" in result
         assert "= 42" in result
 
     def test_long_value_skipped(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
         el = MagicMock(spec=dc.Attribute)
         el.__class__ = dc.Attribute
@@ -7628,6 +7351,7 @@ class TestSignatureModuleOrAttrAnnotationValue:
         el.value = "x" * 300  # > 200 chars
 
         result = renderer._signature_module_or_attr(el)
+
         assert "BIG" in result
         assert "x" * 300 not in result
 
@@ -7636,9 +7360,6 @@ class TestRenderHeaderEnumBranch:
     """render_header correctly labels enum classes."""
 
     def test_enum_type_class(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
 
         obj = MagicMock(spec=dc.Class)
@@ -7665,37 +7386,33 @@ class TestRenderParameterAnnotations:
     """MdRenderer._render_parameter with show_signature_annotations=True."""
 
     def test_annotation_and_default(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer(show_signature_annotations=True)
         p = dc.Parameter(
             "x", annotation="int", default="0", kind=dc.ParameterKind.positional_or_keyword
         )
         result = renderer._render_parameter(p)
+
         assert result == "x: int = 0"
 
     def test_annotation_no_default(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer(show_signature_annotations=True)
         p = dc.Parameter("x", annotation="int", kind=dc.ParameterKind.positional_or_keyword)
         result = renderer._render_parameter(p)
+
         assert result == "x: int"
 
     def test_no_annotation_with_annotations_enabled(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer(show_signature_annotations=True)
         p = dc.Parameter("x", kind=dc.ParameterKind.positional_or_keyword)
         result = renderer._render_parameter(p)
+
         assert result == "x"
 
     def test_var_keyword(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
         p = dc.Parameter("kwargs", kind=dc.ParameterKind.var_keyword)
         result = renderer._render_parameter(p)
+
         assert result == "**kwargs"
 
 
@@ -7703,9 +7420,6 @@ class TestRenderInterlaced:
     """MdRenderer._render_interlaced handles Interlaced layout elements."""
 
     def _make_func_obj(self, name, docstring_text="Docstring."):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         obj = MagicMock(spec=dc.Function)
         obj.__class__ = dc.Function
         obj.name = name
@@ -7722,8 +7436,6 @@ class TestRenderInterlaced:
         return obj
 
     def test_interlaced_basic(self):
-        from great_docs._qrenderer import layout
-
         renderer = MdRenderer()
         obj1 = self._make_func_obj("func_a", "First function.")
         obj2 = self._make_func_obj("func_b", "Second function.")
@@ -7742,9 +7454,6 @@ class TestRenderInterlaced:
         assert "First function" in result
 
     def test_interlaced_no_docstring_raises(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
         obj = MagicMock(spec=dc.Function)
         obj.__class__ = dc.Function
@@ -7765,8 +7474,6 @@ class TestRenderInterlaced:
             renderer._render_interlaced(el)
 
     def test_interlaced_without_signature(self):
-        from great_docs._qrenderer import layout
-
         renderer = MdRenderer(show_signature=False)
         obj1 = self._make_func_obj("func_a")
 
@@ -7780,13 +7487,8 @@ class TestRenderInterlaced:
         assert "```python" not in result
 
     def test_interlaced_invalid_content_type(self):
-        from great_docs._qrenderer import layout
-
         renderer = MdRenderer()
         # DocClass is not DocFunction or DocAttribute
-
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         obj = MagicMock(spec=dc.Class)
         obj.__class__ = dc.Class
         obj.name = "C"
@@ -7801,9 +7503,6 @@ class TestRenderDocClassModuleAdvanced:
     """Tests for _render_doc_class_module covering attrs, classes, modules."""
 
     def _make_attr_obj(self, name):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         obj = MagicMock(spec=dc.Attribute)
         obj.__class__ = dc.Attribute
         obj.name = name
@@ -7821,9 +7520,6 @@ class TestRenderDocClassModuleAdvanced:
         return obj
 
     def _make_func_obj(self, name):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         obj = MagicMock(spec=dc.Function)
         obj.__class__ = dc.Function
         obj.name = name
@@ -7841,9 +7537,6 @@ class TestRenderDocClassModuleAdvanced:
         return obj
 
     def _make_class_obj(self, name):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         obj = MagicMock(spec=dc.Class)
         obj.__class__ = dc.Class
         obj.name = name
@@ -7862,8 +7555,6 @@ class TestRenderDocClassModuleAdvanced:
 
     def test_class_with_attributes(self):
         """DocClass with attribute members renders Attributes section."""
-        from great_docs._qrenderer import layout
-
         renderer = MdRenderer()
 
         cls_obj = self._make_class_obj("MyClass")
@@ -7892,8 +7583,6 @@ class TestRenderDocClassModuleAdvanced:
 
     def test_class_with_nested_classes(self):
         """DocClass with nested class members renders Classes section."""
-        from great_docs._qrenderer import layout
-
         renderer = MdRenderer()
 
         parent_obj = self._make_class_obj("Parent")
@@ -7920,9 +7609,6 @@ class TestRenderDocClassModuleAdvanced:
 
     def test_module_with_functions(self):
         """DocModule renders Functions section (not Methods)."""
-
-        from great_docs._qrenderer import layout
-
         renderer = MdRenderer()
 
         mod_obj = self._make_class_obj("mymod")
@@ -7953,11 +7639,6 @@ class TestRenderDocClassModuleAdvanced:
 
     def test_dataclass_with_non_field_attrs(self):
         """Dataclass DocClass separates dc fields from non-field attrs."""
-
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
 
         cls_obj = self._make_class_obj("MyDC")
@@ -7997,10 +7678,6 @@ class TestRenderDocClassModuleFlat:
     """DocClass with flat=True uses n_incr=1 for header increment."""
 
     def test_flat_class(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
 
         cls_obj = MagicMock(spec=dc.Class)
@@ -8046,6 +7723,7 @@ class TestRenderDocClassModuleFlat:
             flat=True,
         )
         result = renderer._render_doc_class_module(el)
+
         assert "Methods" in result
         assert "---" in result
 
@@ -8054,60 +7732,50 @@ class TestRenderDispatchGriffeTypes:
     """MdRenderer.render dispatches for Docstring, Parameters, Parameter, Attribute."""
 
     def test_render_docstring_parameter(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import ParamRow
-
         renderer = MdRenderer()
         p = ds.DocstringParameter(name="x", description="Description")
         result = renderer.render(p)
+
         assert isinstance(result, ParamRow)
         assert result.name == "x"
 
     def test_render_docstring_return(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import ParamRow
-
         renderer = MdRenderer()
         r = ds.DocstringReturn(name="result", annotation="int", description="Count")
         result = renderer.render(r)
+
         assert isinstance(result, ParamRow)
 
     def test_render_docstring_raise(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import ParamRow
-
         renderer = MdRenderer()
         r = ds.DocstringRaise(annotation="ValueError", description="Bad")
         result = renderer.render(r)
+
         assert isinstance(result, ParamRow)
         assert result.name is None
 
     def test_render_docstring_attribute(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-        from great_docs._qrenderer._md_renderer import ParamRow
-
         renderer = MdRenderer()
         a = ds.DocstringAttribute(name="x", annotation="int", description="Attr")
         result = renderer.render(a)
+
         assert isinstance(result, ParamRow)
 
     def test_render_dc_parameter(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
         p = dc.Parameter("x", kind=dc.ParameterKind.positional_or_keyword)
         result = renderer.render(p)
+
         assert isinstance(result, str)
         assert "x" in result
 
     def test_render_dc_parameters(self):
-        from great_docs._qrenderer._griffe import dataclasses as dc
-
         renderer = MdRenderer()
         params = dc.Parameters(
             dc.Parameter("a", kind=dc.ParameterKind.positional_or_keyword),
         )
         result = renderer.render(params)
+
         assert isinstance(result, list)
 
     def test_render_unsupported_type(self):
@@ -8120,10 +7788,6 @@ class TestSummarizeSectionNoTitleNoSubtitle:
     """MdRenderer.summarize handles Section with no title and no subtitle."""
 
     def test_section_no_title_no_subtitle(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
 
         # Section requires at least title, subtitle, or contents
@@ -8152,10 +7816,6 @@ class TestSummarizeInterlaced:
     """MdRenderer.summarize handles Interlaced elements."""
 
     def test_summarize_interlaced(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
 
         obj1 = MagicMock(spec=dc.Function)
@@ -8182,10 +7842,6 @@ class TestSummarizePageError:
     """MdRenderer.summarize raises for multi-content Page without flatten."""
 
     def test_page_multi_content_no_flatten_raises(self):
-        from great_docs._qrenderer import layout
-        from great_docs._qrenderer._griffe import dataclasses as dc
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
 
         obj1 = MagicMock(spec=dc.Function)
@@ -8226,24 +7882,22 @@ class TestRenderSectionParametersAndAttributes:
     """MdRenderer._render_section_parameters and _render_section_attributes."""
 
     def test_parameters_section(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
         p1 = ds.DocstringParameter(name="x", description="X value", annotation="int", value="0")
         p2 = ds.DocstringParameter(name="y", description="Y value", annotation="str")
         el = ds.DocstringSectionParameters(value=[p1, p2])
         result = renderer._render_section_parameters(el)
+
         assert "x" in result
         assert "y" in result
         assert "Name" in result
 
     def test_attributes_section(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
         a = ds.DocstringAttribute(name="count", annotation="int", description="The count")
         el = ds.DocstringSectionAttributes(value=[a])
         result = renderer._render_section_attributes(el)
+
         assert "count" in result
         assert "int" in result
 
@@ -8252,11 +7906,10 @@ class TestRenderSectionAdmonitionGeneric:
     """_render_section_admonition falls through to generic for unknown kinds."""
 
     def test_generic_admonition(self):
-        from great_docs._qrenderer._griffe import docstrings as ds
-
         renderer = MdRenderer()
         el = ds.DocstringSectionAdmonition(kind="admonition", text="Some tip.", title="Tip")
         result = renderer._render_section_admonition(el)
+
         assert "Some tip." in result
 
 
@@ -28515,20 +28168,19 @@ def test_get_object_nested_path():
 def test_resolve_target_direct():
     """_resolve_target returns the target when it's not an Alias."""
     from great_docs._qrenderer.introspection import _resolve_target
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     mod = dc.Module(name="testmod")
     func = dc.Function(name="my_func", lineno=1)
     mod.set_member("my_func", func)
     alias = dc.Alias("my_alias", func, parent=mod)
     result = _resolve_target(alias)
+
     assert result is func
 
 
 def test_resolve_target_chained():
     """_resolve_target follows chained aliases."""
     from great_docs._qrenderer.introspection import _resolve_target
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     mod = dc.Module(name="testmod")
     func = dc.Function(name="my_func", lineno=1)
@@ -28536,6 +28188,7 @@ def test_resolve_target_chained():
     alias1 = dc.Alias("alias1", func, parent=mod)
     alias2 = dc.Alias("alias2", alias1, parent=mod)
     result = _resolve_target(alias2)
+
     assert result is func
 
 
@@ -28634,7 +28287,6 @@ def test_replace_docstring_nested_class():
 def test_replace_docstring_alias():
     """replace_docstring resolves aliases before replacing."""
     from great_docs._qrenderer.introspection import get_object, replace_docstring
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     obj = get_object("json:dumps")
     mod = get_object("json")
@@ -28647,6 +28299,7 @@ def test_canonical_path_module():
     from great_docs._qrenderer.introspection import _canonical_path
 
     result = _canonical_path(json, "")
+
     assert result == "json"
 
 
@@ -28655,6 +28308,7 @@ def test_canonical_path_module_with_qualname():
     from great_docs._qrenderer.introspection import _canonical_path
 
     result = _canonical_path(json, "dumps")
+
     assert result == "json:dumps"
 
 
@@ -28716,49 +28370,49 @@ def test_canonical_path_class_no_module():
 def test_is_valueless_class_attribute_no_value():
     """_is_valueless returns True for class-attribute with no value."""
     from great_docs._qrenderer.introspection import _is_valueless
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     attr = dc.Attribute(name="x", lineno=1, value=None)
     attr.labels.add("class-attribute")
+
     assert _is_valueless(attr) is True
 
 
 def test_is_valueless_instance_attribute():
     """_is_valueless returns True for instance-attribute."""
     from great_docs._qrenderer.introspection import _is_valueless
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     attr = dc.Attribute(name="x", lineno=1)
     attr.labels.add("instance-attribute")
+
     assert _is_valueless(attr) is True
 
 
 def test_is_valueless_class_attribute_with_value():
     """_is_valueless returns False for class-attribute with a value."""
     from great_docs._qrenderer.introspection import _is_valueless
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     attr = dc.Attribute(name="x", lineno=1, value="42")
     attr.labels.add("class-attribute")
+
     assert _is_valueless(attr) is False
 
 
 def test_is_valueless_function():
     """_is_valueless returns False for a function."""
     from great_docs._qrenderer.introspection import _is_valueless
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     func = dc.Function(name="f", lineno=1)
+
     assert _is_valueless(func) is False
 
 
 def test_is_valueless_module_attribute_no_value():
     """_is_valueless returns True for module-attribute with no value."""
     from great_docs._qrenderer.introspection import _is_valueless
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     attr = dc.Attribute(name="x", lineno=1, value=None)
     attr.labels.add("module-attribute")
+
     assert _is_valueless(attr) is True
 
 
@@ -29432,7 +29086,6 @@ def test_builder_generate_sidebar_invalid_contents_type():
 def test_builder_page_to_links():
     """Builder._page_to_links converts a Page to link paths."""
     from great_docs._qrenderer.introspection import Builder
-    from great_docs._qrenderer import layout
 
     builder = Builder(package="json", dir="api")
     page = layout.Page(path="my_func", contents=[])
@@ -30737,10 +30390,10 @@ def test_cli_main_entry_point():
 def test_ast_transform_tuple_examples():
     """transform() converts an examples tuple to ExampleCode."""
     from great_docs._qrenderer._ast import ExampleCode, transform
-    from great_docs._qrenderer._griffe import docstrings as ds
 
     kind_cls = type(ds.DocstringSectionText("x").kind)
     result = transform((kind_cls["examples"], "print(1)"))
+
     assert isinstance(result, ExampleCode)
     assert result.value == "print(1)"
 
@@ -30748,10 +30401,10 @@ def test_ast_transform_tuple_examples():
 def test_ast_transform_tuple_text():
     """transform() converts a text tuple to ExampleText."""
     from great_docs._qrenderer._ast import ExampleText, transform
-    from great_docs._qrenderer._griffe import docstrings as ds
 
     kind_cls = type(ds.DocstringSectionText("x").kind)
     result = transform((kind_cls["text"], "some description"))
+
     assert isinstance(result, ExampleText)
     assert result.value == "some description"
 
@@ -30759,11 +30412,12 @@ def test_ast_transform_tuple_text():
 def test_ast_transform_tuple_unsupported_passthrough():
     """transform() returns unsupported tuple type unchanged when ValueError is raised."""
     from great_docs._qrenderer._ast import transform
-    from great_docs._qrenderer._griffe import docstrings as ds
 
     kind_cls = type(ds.DocstringSectionText("x").kind)
+
     # 'parameters' kind is not handled by tuple_to_data, so ValueError → passthrough
     result = transform((kind_cls["parameters"], "stuff"))
+
     assert isinstance(result, tuple)
     assert result == (kind_cls["parameters"], "stuff")
 
@@ -30771,10 +30425,10 @@ def test_ast_transform_tuple_unsupported_passthrough():
 def test_ast_transform_docstring_section_list():
     """transform() processes a list of DocstringSection objects."""
     from great_docs._qrenderer._ast import transform
-    from great_docs._qrenderer._griffe import docstrings as ds
 
     sections = [ds.DocstringSectionText("Hello world")]
     result = transform(sections)
+
     assert isinstance(result, list)
     assert len(result) >= 1
 
@@ -30790,10 +30444,10 @@ def test_ast_transform_passthrough():
 def test_ast_tuple_to_data_examples():
     """tuple_to_data converts examples kind to ExampleCode."""
     from great_docs._qrenderer._ast import ExampleCode, tuple_to_data
-    from great_docs._qrenderer._griffe import docstrings as ds
 
     kind_cls = type(ds.DocstringSectionText("x").kind)
     result = tuple_to_data((kind_cls["examples"], "x = 1"))
+
     assert isinstance(result, ExampleCode)
     assert result.value == "x = 1"
 
@@ -30801,10 +30455,10 @@ def test_ast_tuple_to_data_examples():
 def test_ast_tuple_to_data_text():
     """tuple_to_data converts text kind to ExampleText."""
     from great_docs._qrenderer._ast import ExampleText, tuple_to_data
-    from great_docs._qrenderer._griffe import docstrings as ds
 
     kind_cls = type(ds.DocstringSectionText("x").kind)
     result = tuple_to_data((kind_cls["text"], "description"))
+
     assert isinstance(result, ExampleText)
     assert result.value == "description"
 
@@ -30812,7 +30466,6 @@ def test_ast_tuple_to_data_text():
 def test_ast_tuple_to_data_unsupported_raises():
     """tuple_to_data raises ValueError for unsupported kinds."""
     from great_docs._qrenderer._ast import tuple_to_data
-    from great_docs._qrenderer._griffe import docstrings as ds
 
     kind_cls = type(ds.DocstringSectionText("x").kind)
     with pytest.raises(ValueError, match="Unsupported"):
@@ -30849,6 +30502,7 @@ def test_ast_split_sections_empty():
     from great_docs._qrenderer._ast import _DocstringSectionPatched
 
     result = _DocstringSectionPatched.split_sections("No sections here.")
+
     assert result == []
 
 
@@ -30859,12 +30513,12 @@ def test_ast_transform_docstring_section_text():
         DocstringSectionSeeAlso,
         _DocstringSectionPatched,
     )
-    from great_docs._qrenderer._griffe import docstrings as ds
 
     text_section = ds.DocstringSectionText(
         "See Also\n--------\nother_func\n\nNotes\n-----\nImportant note.\n"
     )
     result = _DocstringSectionPatched.transform(text_section)
+
     assert len(result) == 2
     assert isinstance(result[0], DocstringSectionSeeAlso)
     assert isinstance(result[1], DocstringSectionNotes)
@@ -30873,10 +30527,10 @@ def test_ast_transform_docstring_section_text():
 def test_ast_transform_docstring_section_text_plain():
     """transform() returns plain DocstringSectionText when no subsections found."""
     from great_docs._qrenderer._ast import _DocstringSectionPatched
-    from great_docs._qrenderer._griffe import docstrings as ds
 
     text_section = ds.DocstringSectionText("Just a plain paragraph.")
     result = _DocstringSectionPatched.transform(text_section)
+
     assert len(result) == 1
     assert isinstance(result[0], ds.DocstringSectionText)
 
@@ -30887,12 +30541,12 @@ def test_ast_transform_docstring_section_admonition_known():
         DocstringSectionWarnings,
         _DocstringSectionPatched,
     )
-    from great_docs._qrenderer._griffe import docstrings as ds
 
     adm_section = ds.DocstringSectionAdmonition(
         kind="warning", text="Be careful!", title="Warnings"
     )
     result = _DocstringSectionPatched.transform(adm_section)
+
     assert len(result) == 1
     assert isinstance(result[0], DocstringSectionWarnings)
     assert result[0].value == "Be careful!"
@@ -30901,10 +30555,10 @@ def test_ast_transform_docstring_section_admonition_known():
 def test_ast_transform_docstring_section_admonition_unknown():
     """transform() returns unknown DocstringSectionAdmonition unchanged."""
     from great_docs._qrenderer._ast import _DocstringSectionPatched
-    from great_docs._qrenderer._griffe import docstrings as ds
 
     adm_section = ds.DocstringSectionAdmonition(kind="custom", text="stuff", title="Custom Section")
     result = _DocstringSectionPatched.transform(adm_section)
+
     assert len(result) == 1
     assert result[0] is adm_section  # returned as-is
 
@@ -30912,23 +30566,23 @@ def test_ast_transform_docstring_section_admonition_unknown():
 def test_ast_transform_docstring_section_passthrough():
     """transform() returns non-text, non-admonition sections unchanged."""
     from great_docs._qrenderer._ast import _DocstringSectionPatched
-    from great_docs._qrenderer._griffe import docstrings as ds
 
     params_section = ds.DocstringSectionParameters([])
     result = _DocstringSectionPatched.transform(params_section)
+
     assert result == [params_section]
 
 
 def test_ast_transform_all():
     """transform_all() processes list of mixed sections."""
     from great_docs._qrenderer._ast import _DocstringSectionPatched
-    from great_docs._qrenderer._griffe import docstrings as ds
 
     sections = [
         ds.DocstringSectionText("Notes\n-----\nA note.\n"),
         ds.DocstringSectionParameters([]),
     ]
     result = _DocstringSectionPatched.transform_all(sections)
+
     assert len(result) >= 2  # at least the note + parameters
 
 
@@ -30953,83 +30607,83 @@ def test_ast_fields_example_text():
 def test_ast_fields_function():
     """fields() returns expected fields for dc.Function."""
     from great_docs._qrenderer._ast import fields
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     func = dc.Function(name="my_func", lineno=1)
     result = fields(func)
+
     assert result == ["name", "annotation", "parameters", "docstring"]
 
 
 def test_ast_fields_attribute():
     """fields() returns expected fields for dc.Attribute."""
     from great_docs._qrenderer._ast import fields
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     attr = dc.Attribute(name="x", lineno=1)
     result = fields(attr)
+
     assert result == ["name", "annotation"]
 
 
 def test_ast_fields_docstring():
     """fields() returns expected fields for dc.Docstring."""
     from great_docs._qrenderer._ast import fields
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     ds_obj = dc.Docstring("Hello", parser="numpy")
     result = fields(ds_obj)
+
     assert result == ["parser", "parsed"]
 
 
 def test_ast_fields_parameter():
     """fields() returns expected fields for dc.Parameter."""
     from great_docs._qrenderer._ast import fields
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     param = dc.Parameter(name="x")
     result = fields(param)
+
     assert result == ["annotation", "kind", "name", "default"]
 
 
 def test_ast_fields_docstring_parameter():
     """fields() returns expected fields for ds.DocstringParameter."""
     from great_docs._qrenderer._ast import fields
-    from great_docs._qrenderer._griffe import docstrings as ds
 
     dp = ds.DocstringParameter(name="x", description="a number", annotation="int")
     result = fields(dp)
+
     assert result == ["annotation", "default", "description", "name", "value"]
 
 
 def test_ast_fields_docstring_named_element():
     """fields() returns expected fields for ds.DocstringNamedElement."""
     from great_docs._qrenderer._ast import fields
-    from great_docs._qrenderer._griffe import docstrings as ds
 
     ne = ds.DocstringNamedElement(name="x", description="desc")
     result = fields(ne)
+
     assert result == ["name", "annotation", "description"]
 
 
 def test_ast_fields_docstring_section():
     """fields() returns expected fields for ds.DocstringSection."""
     from great_docs._qrenderer._ast import fields
-    from great_docs._qrenderer._griffe import docstrings as ds
 
     sec = ds.DocstringSectionText("hello")
     result = fields(sec)
+
     assert result == ["kind", "title", "value"]
 
 
 def test_ast_fields_alias():
     """fields() follows alias target for dc.Alias."""
     from great_docs._qrenderer._ast import fields
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     mod = dc.Module(name="testmod")
     func = dc.Function(name="f", lineno=1)
     mod.set_member("f", func)
     alias = dc.Alias("f", func, parent=mod)
     result = fields(alias)
+
     # Should match fields of the target (Function)
     assert result == ["name", "annotation", "parameters", "docstring"]
 
@@ -31041,7 +30695,6 @@ def test_ast_fields_alias_unresolvable():
     from griffe import ModulesCollection
 
     from great_docs._qrenderer._ast import fields
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     mc = ModulesCollection()
     mod = dc.Module(name="testmod")
@@ -31051,6 +30704,7 @@ def test_ast_fields_alias_unresolvable():
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         result = fields(alias)
+
     assert result == ["name", "target_path"]
     assert len(w) >= 1
     assert "Could not resolve" in str(w[0].message)
@@ -31059,10 +30713,10 @@ def test_ast_fields_alias_unresolvable():
 def test_ast_fields_object():
     """fields() returns discovered attributes for dc.Object (Module)."""
     from great_docs._qrenderer._ast import fields
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     mod = dc.Module(name="mymod")
     result = fields(mod)
+
     assert "name" in result
     assert "members" in result
     assert "docstring" in result
@@ -31097,10 +30751,10 @@ def test_ast_fields_list():
 def test_ast_fields_parameters():
     """fields() returns indices for dc.Parameters."""
     from great_docs._qrenderer._ast import fields
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     params = dc.Parameters(dc.Parameter(name="a"), dc.Parameter(name="b"))
     result = fields(params)
+
     assert result == [0, 1]
 
 
@@ -31222,11 +30876,11 @@ def test_ast_formatter_fmt_pipe_with_pad():
 def test_ast_formatter_format_griffe_function():
     """Formatter.format renders a griffe Function as a tree."""
     from great_docs._qrenderer._ast import Formatter
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     f = Formatter()
     func = dc.Function(name="my_func", lineno=1)
     result = f.format(func)
+
     assert "Function" in result
     assert "my_func" in result
 
@@ -31244,7 +30898,6 @@ def test_ast_formatter_format_dict():
 def test_ast_formatter_format_nested():
     """Formatter.format handles nested structures."""
     from great_docs._qrenderer._ast import Formatter
-    from great_docs._qrenderer._griffe import dataclasses as dc
 
     f = Formatter()
     func = dc.Function(
@@ -31253,6 +30906,7 @@ def test_ast_formatter_format_nested():
         docstring=dc.Docstring("A docstring", parser="numpy"),
     )
     result = f.format(func)
+
     assert "Function" in result
     assert "Docstring" in result
 
@@ -31323,27 +30977,25 @@ def test_ast_docstring_section_warnings():
     )
 
     sec = DocstringSectionWarnings("content", "Warnings")
+
     assert sec.kind == DocstringSectionKindPatched.warnings
 
 
 def test_ast_fields_docstring_element():
     """fields() returns expected fields for ds.DocstringElement."""
     from great_docs._qrenderer._ast import fields
-    from great_docs._qrenderer._griffe import docstrings as ds
 
     # DocstringElement is the base; DocstringReturn is a subclass not matching
     # DocstringNamedElement or DocstringParameter
     elem = ds.DocstringElement(annotation="int", description="returns an int")
     result = fields(elem)
+
     assert result == ["annotation", "description"]
 
 
 # Helper to build a griffe class with attribute/function/class members
 def _build_class_with_members():
     """Build a griffe Class with one attribute, one function, one inner class."""
-    from great_docs._qrenderer._griffe import dataclasses as dc
-    from great_docs._qrenderer import layout
-
     cls_obj = dc.Class(name="MyClass", lineno=1)
     attr_obj = dc.Attribute(name="my_attr", lineno=2)
     func_obj = dc.Function(name="method", lineno=3)
@@ -31361,9 +31013,6 @@ def _build_class_with_members():
 
 def _build_class_with_member_pages():
     """Build a griffe Class with MemberPage members."""
-    from great_docs._qrenderer._griffe import dataclasses as dc
-    from great_docs._qrenderer import layout
-
     cls_obj = dc.Class(name="MyClass", lineno=1)
     attr_obj = dc.Attribute(name="my_attr", lineno=2)
     func_obj = dc.Function(name="method", lineno=3)
@@ -31466,8 +31115,6 @@ def test_mixin_render_body_with_member_pages():
 
 def test_mixin_render_body_no_members():
     """render_body returns just docstring when no members."""
-    from great_docs._qrenderer._griffe import dataclasses as dc
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render import RenderDocClass
     from great_docs._qrenderer._renderer import Renderer
 
@@ -31477,14 +31124,13 @@ def test_mixin_render_body_no_members():
     render = RenderDocClass(doc_cls, r, level=1)
 
     body = render.render_body()
+
     # With no members, body is just the docstring result (could be None)
     assert body is None or "Members" not in str(body)
 
 
 def test_mixin_render_body_invalid_member_type_raises():
     """render_body raises ValueError for unrecognized member types."""
-    from great_docs._qrenderer._griffe import dataclasses as dc
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render import RenderDocClass
     from great_docs._qrenderer._renderer import Renderer
 
@@ -31644,7 +31290,6 @@ def test_mixin_attributes_exclude_filter():
     """attributes property respects EXCLUDE_ATTRIBUTES."""
     from great_docs._qrenderer._render import RenderDocClass
     from great_docs._qrenderer._renderer import Renderer
-    from great_docs._qrenderer import _globals
 
     _, doc_cls = _build_class_with_members()
     r = Renderer()
@@ -31666,7 +31311,6 @@ def test_mixin_functions_exclude_filter():
     """functions property respects EXCLUDE_FUNCTIONS."""
     from great_docs._qrenderer._render import RenderDocClass
     from great_docs._qrenderer._renderer import Renderer
-    from great_docs._qrenderer import _globals
 
     _, doc_cls = _build_class_with_members()
     r = Renderer()
@@ -31688,7 +31332,6 @@ def test_mixin_classes_exclude_filter():
     """classes property respects EXCLUDE_CLASSES."""
     from great_docs._qrenderer._render import RenderDocClass
     from great_docs._qrenderer._renderer import Renderer
-    from great_docs._qrenderer import _globals
 
     _, doc_cls = _build_class_with_members()
     r = Renderer()
@@ -31710,7 +31353,6 @@ def test_mixin_attribute_member_pages_exclude_filter():
     """attribute_member_pages respects EXCLUDE_ATTRIBUTES."""
     from great_docs._qrenderer._render import RenderDocClass
     from great_docs._qrenderer._renderer import Renderer
-    from great_docs._qrenderer import _globals
 
     _, doc_cls = _build_class_with_member_pages()
     r = Renderer()
@@ -31732,7 +31374,6 @@ def test_mixin_class_member_pages_exclude_filter():
     """class_member_pages respects EXCLUDE_CLASSES."""
     from great_docs._qrenderer._render import RenderDocClass
     from great_docs._qrenderer._renderer import Renderer
-    from great_docs._qrenderer import _globals
 
     _, doc_cls = _build_class_with_member_pages()
     r = Renderer()
@@ -31754,7 +31395,6 @@ def test_mixin_function_member_pages_exclude_filter():
     """function_member_pages respects EXCLUDE_FUNCTIONS."""
     from great_docs._qrenderer._render import RenderDocClass
     from great_docs._qrenderer._renderer import Renderer
-    from great_docs._qrenderer import _globals
 
     _, doc_cls = _build_class_with_member_pages()
     r = Renderer()
@@ -31984,8 +31624,6 @@ def test_mixin_render_members_group_no_summary_global():
 
 def test_mixin_render_members_group_empty_returns_none():
     """_render_members_group returns None when no members of that type."""
-    from great_docs._qrenderer._griffe import dataclasses as dc
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render import RenderDocClass
     from great_docs._qrenderer._renderer import Renderer
 
@@ -32054,8 +31692,6 @@ def test_mixin_render_member_pages_group_no_summary():
 
 def test_mixin_render_member_pages_group_empty_returns_none():
     """_render_member_pages_group returns None when no pages of that type."""
-    from great_docs._qrenderer._griffe import dataclasses as dc
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render import RenderDocClass
     from great_docs._qrenderer._renderer import Renderer
 
@@ -32167,8 +31803,6 @@ def test_mixin_render_member_pages_group_has_summary_table():
 
 def test_mixin_render_functions_module_uses_functions_slug():
     """For DocModule, render_functions uses 'Functions' not 'Methods'."""
-    from great_docs._qrenderer._griffe import dataclasses as dc
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render import RenderDocModule
     from great_docs._qrenderer._renderer import Renderer
 
@@ -32191,8 +31825,6 @@ def test_mixin_render_members_module_uses_functions_slug():
     """For DocModule, render_members has 'Functions' group not 'Methods'."""
     from unittest.mock import patch
 
-    from great_docs._qrenderer._griffe import dataclasses as dc
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render import RenderDocModule
     from great_docs._qrenderer._renderer import Renderer
 
@@ -32736,16 +32368,12 @@ def test_blocks_str_items_single_block():
 
 def test_rstconv_escape():
     """escape() wraps value in backticks."""
-    from great_docs._qrenderer._rst_converters import escape
-
     assert escape("foo") == "`foo`"
     assert escape("int | str") == "`int | str`"
 
 
 def test_rstconv_sanitize_defaults():
     """sanitize() replaces newlines and escapes pipes/brackets by default."""
-    from great_docs._qrenderer._rst_converters import sanitize
-
     assert sanitize("a\nb") == "a b"
     assert sanitize("a|b") == "a\\|b"
     assert sanitize("[link]") == "\\[link\\]"
@@ -32753,93 +32381,81 @@ def test_rstconv_sanitize_defaults():
 
 def test_rstconv_sanitize_preserve_newlines():
     """sanitize() with preserve_newlines keeps newlines."""
-    from great_docs._qrenderer._rst_converters import sanitize
-
     assert sanitize("a\nb", preserve_newlines=True) == "a\nb"
 
 
 def test_rstconv_sanitize_escape_quotes():
     """sanitize() with escape_quotes escapes single/double quotes."""
-    from great_docs._qrenderer._rst_converters import sanitize
-
     result = sanitize('it\'s a "test"', escape_quotes=True)
+
     assert "\\'" in result
     assert '\\"' in result
 
 
 def test_rstconv_sanitize_allow_markdown():
     """sanitize() with allow_markdown preserves brackets."""
-    from great_docs._qrenderer._rst_converters import sanitize
-
     assert sanitize("[link](url)", allow_markdown=True) == "[link](url)"
 
 
 def test_rstconv_convert_rst_text_code_block():
     """_convert_rst_text converts RST :: code blocks to fenced blocks."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_text
-
     text = "Example::\n\n    x = 1\n    y = 2\n"
     result = _convert_rst_text(text)
+
     assert "```python" in result
     assert "x = 1" in result
 
 
 def test_rstconv_convert_rst_text_math_directive():
     """_convert_rst_text converts .. math:: to $$...$$ display math."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_text
-
     text = ".. math::\n\n    E = mc^2\n"
     result = _convert_rst_text(text)
+
     assert "$$" in result
     assert "E = mc^2" in result
 
 
 def test_rstconv_convert_rst_text_math_empty_body():
     """_convert_rst_text handles .. math:: with empty indented body."""
-    from great_docs._qrenderer._rst_converters import _replace_rst_code_block, _RST_CODE_BLOCK_RE
 
     # Construct text that hits the empty-lines branch of math
     text = ".. math::\n\n    \n"
     m = _RST_CODE_BLOCK_RE.search(text)
     if m:
         result = _replace_rst_code_block(m)
+
         assert "$$" in result
 
 
 def test_rstconv_rst_directive_preserved():
     """Known RST directives like .. note:: are left untouched by code block conversion."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_text
-
     text = ".. note::\n\n    This is a note.\n"
     result = _convert_rst_text(text)
+
     # The note directive should be converted by _convert_rst_directives, not code block handler
     assert "```python" not in result
 
 
 def test_rstconv_code_block_no_prefix():
     """RST :: code block with no prefix text (bare ::)."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_text
-
     text = "::\n\n    code_here\n"
     result = _convert_rst_text(text)
+
     assert "```python" in result
     assert "code_here" in result
 
 
 def test_rstconv_code_block_with_prefix():
     """RST :: code block with prefix text gets prefix: before fenced block."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_text
-
     text = "For example::\n\n    x = 1\n"
     result = _convert_rst_text(text)
+
     assert "```python" in result
     assert "For example:" in result
 
 
 def test_rstconv_inline_math():
     """_convert_rst_text converts :math:`...` to $...$."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_text
-
     text = "The value is :math:`x^2 + y^2`."
     result = _convert_rst_text(text)
     assert "$x^2 + y^2$" in result
@@ -32847,46 +32463,41 @@ def test_rstconv_inline_math():
 
 def test_rstconv_quarto_cell_to_fenced():
     """_convert_rst_text converts ```{python} to ```python."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_text
-
     text = "```{python}\nprint('hi')\n```"
     result = _convert_rst_text(text)
+
     assert "```python" in result
     assert "```{python}" not in result
 
 
 def test_rstconv_smart_dedent_no_indent():
     """_smart_dedent returns text unchanged when first line has no indent."""
-    from great_docs._qrenderer._rst_converters import _smart_dedent
-
     text = "no indent\n  some indent\n"
+
     assert _smart_dedent(text) == text
 
 
 def test_rstconv_smart_dedent_with_indent():
     """_smart_dedent strips common indent from all lines."""
-    from great_docs._qrenderer._rst_converters import _smart_dedent
-
     text = "    line1\n    line2\n      line3\n"
     result = _smart_dedent(text)
+
     assert result == "line1\nline2\n  line3\n"
 
 
 def test_rstconv_smart_dedent_blank_lines():
     """_smart_dedent preserves blank lines."""
-    from great_docs._qrenderer._rst_converters import _smart_dedent
-
     text = "    line1\n\n    line2\n"
     result = _smart_dedent(text)
+
     assert result == "line1\n\nline2\n"
 
 
 def test_rstconv_smart_dedent_less_indent():
     """_smart_dedent tolerates lines with less indent than margin."""
-    from great_docs._qrenderer._rst_converters import _smart_dedent
-
     text = "    line1\n  line2\n    line3\n"
     result = _smart_dedent(text)
+
     # margin=4 from first line, line2 only has 2 spaces -> strips 2
     assert "line1" in result
     assert "line2" in result
@@ -32894,46 +32505,41 @@ def test_rstconv_smart_dedent_less_indent():
 
 def test_rstconv_smart_dedent_all_blank():
     """_smart_dedent handles text with only blank lines."""
-    from great_docs._qrenderer._rst_converters import _smart_dedent
-
     text = "\n\n\n"
     result = _smart_dedent(text)
+
     assert result == text
 
 
 def test_rstconv_citations_basic():
     """_convert_rst_citations converts .. [N] markers to numbered list."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_citations
-
     text = ".. [1] Author (Year). Title.\n.. [2] https://example.com\n"
     result = _convert_rst_citations(text)
+
     assert "1. Author (Year). Title." in result
     assert "2. <https://example.com>" in result
 
 
 def test_rstconv_citations_no_citations():
     """_convert_rst_citations returns text unchanged when no citations present."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_citations
-
     text = "Regular paragraph text."
+
     assert _convert_rst_citations(text) == text
 
 
 def test_rstconv_citations_continuation_lines():
     """_convert_rst_citations handles continuation lines."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_citations
-
     text = ".. [1] Author (Year).\n   Continuation of citation.\n"
     result = _convert_rst_citations(text)
+
     assert "1. Author (Year). Continuation of citation." in result
 
 
 def test_rstconv_simple_table_basic():
     """_convert_rst_simple_tables converts basic 2-separator table."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_simple_tables
-
     text = "======  ======\nName    Value\n======  ======\nfoo     1\nbar     2\n======  ======\n"
     result = _convert_rst_simple_tables(text)
+
     assert "| Name" in result
     assert "| ---" in result
     assert "| foo" in result
@@ -32942,27 +32548,23 @@ def test_rstconv_simple_table_basic():
 
 def test_rstconv_simple_table_three_separators():
     """_convert_rst_simple_tables handles 3-separator table (header + body)."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_simple_tables
-
     text = "======  ======\nName    Value\n======  ======\nfoo     1\nbar     2\n======  ======\n"
     result = _convert_rst_simple_tables(text)
+
     assert "| Name" in result
     assert "| foo" in result
 
 
 def test_rstconv_simple_table_no_header_rows():
     """_rst_simple_table_to_md returns None when no header rows exist."""
-    from great_docs._qrenderer._rst_converters import _rst_simple_table_to_md
-
     # Only one separator line -> returns None
     result = _rst_simple_table_to_md(["======  ======"])
+
     assert result is None
 
 
 def test_rstconv_simple_table_to_md_two_sep():
     """_rst_simple_table_to_md with 2 separators uses first data row as header."""
-    from great_docs._qrenderer._rst_converters import _rst_simple_table_to_md
-
     table_lines = [
         "======  ======",
         "Name    Value",
@@ -32970,6 +32572,7 @@ def test_rstconv_simple_table_to_md_two_sep():
         "======  ======",
     ]
     result = _rst_simple_table_to_md(table_lines)
+
     assert result is not None
     assert "| Name" in result
     assert "| foo" in result
@@ -32977,8 +32580,6 @@ def test_rstconv_simple_table_to_md_two_sep():
 
 def test_rstconv_simple_table_to_md_three_sep():
     """_rst_simple_table_to_md with 3 separators separates header from body."""
-    from great_docs._qrenderer._rst_converters import _rst_simple_table_to_md
-
     table_lines = [
         "=====  =====",
         "Col1   Col2",
@@ -32988,6 +32589,7 @@ def test_rstconv_simple_table_to_md_three_sep():
         "=====  =====",
     ]
     result = _rst_simple_table_to_md(table_lines)
+
     assert result is not None
     assert "| Col1" in result
     assert "| a" in result
@@ -32996,8 +32598,6 @@ def test_rstconv_simple_table_to_md_three_sep():
 
 def test_rstconv_simple_table_padding():
     """_rst_simple_table_to_md pads rows with fewer cells than columns."""
-    from great_docs._qrenderer._rst_converters import _rst_simple_table_to_md
-
     table_lines = [
         "=====  =====  =====",
         "A      B      C",
@@ -33006,14 +32606,13 @@ def test_rstconv_simple_table_padding():
         "=====  =====  =====",
     ]
     result = _rst_simple_table_to_md(table_lines)
+
     assert result is not None
     assert "| A | B | C |" in result
 
 
 def test_rstconv_simple_table_no_col_spans():
     """_rst_simple_table_to_md returns None when separator has no column spans."""
-    from great_docs._qrenderer._rst_converters import _rst_simple_table_to_md
-
     # A single block of === with no spaces -> no col_spans
     table_lines = [
         "==========",
@@ -33021,17 +32620,17 @@ def test_rstconv_simple_table_no_col_spans():
         "==========",
     ]
     result = _rst_simple_table_to_md(table_lines)
+
     assert result is None
 
 
 def test_rstconv_simple_table_in_context():
     """_convert_rst_simple_tables converts a table surrounded by text."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_simple_tables
-
     text = (
         "Before text.\n=====  =====\nA      B\n=====  =====\n1      2\n=====  =====\nAfter text.\n"
     )
     result = _convert_rst_simple_tables(text)
+
     assert "Before text." in result
     assert "After text." in result
     assert "| A" in result
@@ -33039,20 +32638,18 @@ def test_rstconv_simple_table_in_context():
 
 def test_rstconv_simple_table_conversion_fails():
     """_convert_rst_simple_tables falls back when table conversion returns None."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_simple_tables
-
     # A separator-like line that looks like a table start but isn't valid
     text = "=====  =====\n"
     result = _convert_rst_simple_tables(text)
+
     assert "=====" in result
 
 
 def test_rstconv_grid_table_basic():
     """_convert_rst_grid_tables converts a basic grid table."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_grid_tables
-
     text = "+------+------+\n| Name | Val  |\n+======+======+\n| foo  | 1    |\n+------+------+\n"
     result = _convert_rst_grid_tables(text)
+
     assert "| Name | Val |" in result
     assert "| ---" in result
     assert "| foo | 1 |" in result
@@ -33060,8 +32657,6 @@ def test_rstconv_grid_table_basic():
 
 def test_rstconv_grid_table_no_header_sep():
     """_rst_grid_table_to_md without header separator uses first row as header."""
-    from great_docs._qrenderer._rst_converters import _rst_grid_table_to_md
-
     table_lines = [
         "+------+------+",
         "| A    | B    |",
@@ -33070,6 +32665,7 @@ def test_rstconv_grid_table_no_header_sep():
         "+------+------+",
     ]
     result = _rst_grid_table_to_md(table_lines)
+
     assert result is not None
     assert "| A | B |" in result
     assert "| 1 | 2 |" in result
@@ -33077,16 +32673,13 @@ def test_rstconv_grid_table_no_header_sep():
 
 def test_rstconv_grid_table_to_md_too_few_positions():
     """_rst_grid_table_to_md returns None when < 2 column positions."""
-    from great_docs._qrenderer._rst_converters import _rst_grid_table_to_md
-
     result = _rst_grid_table_to_md(["+"])
+
     assert result is None
 
 
 def test_rstconv_grid_table_header_sep_no_header_rows():
     """_rst_grid_table_to_md with header sep but no header rows returns None."""
-    from great_docs._qrenderer._rst_converters import _rst_grid_table_to_md
-
     table_lines = [
         "+------+------+",
         "+======+======+",
@@ -33094,25 +32687,23 @@ def test_rstconv_grid_table_header_sep_no_header_rows():
         "+------+------+",
     ]
     result = _rst_grid_table_to_md(table_lines)
+
     assert result is None
 
 
 def test_rstconv_grid_table_no_body_rows():
     """_rst_grid_table_to_md without header sep and empty rows returns None."""
-    from great_docs._qrenderer._rst_converters import _rst_grid_table_to_md
-
     table_lines = [
         "+------+------+",
         "+------+------+",
     ]
     result = _rst_grid_table_to_md(table_lines)
+
     assert result is None
 
 
 def test_rstconv_grid_table_padding():
     """_rst_grid_table_to_md pads rows with fewer cells."""
-    from great_docs._qrenderer._rst_converters import _rst_grid_table_to_md
-
     table_lines = [
         "+---+---+---+",
         "| A | B | C |",
@@ -33121,14 +32712,13 @@ def test_rstconv_grid_table_padding():
         "+---+---+---+",
     ]
     result = _rst_grid_table_to_md(table_lines)
+
     assert result is not None
     assert "| A | B | C |" in result
 
 
 def test_rstconv_grid_table_in_context():
     """_convert_rst_grid_tables handles tables surrounded by text."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_grid_tables
-
     text = (
         "Before.\n"
         "+------+------+\n"
@@ -33139,6 +32729,7 @@ def test_rstconv_grid_table_in_context():
         "After.\n"
     )
     result = _convert_rst_grid_tables(text)
+
     assert "Before." in result
     assert "After." in result
     assert "| A | B |" in result
@@ -33146,307 +32737,264 @@ def test_rstconv_grid_table_in_context():
 
 def test_rstconv_grid_table_conversion_fails():
     """_convert_rst_grid_tables falls back when conversion returns None."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_grid_tables
-
     text = "+---+---+\n+---+---+\n"
     result = _convert_rst_grid_tables(text)
+
     assert "+---+" in result
 
 
 def test_rstconv_sphinx_role_func():
     """Sphinx :func: role adds ()."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
-
     assert _convert_sphinx_roles(":func:`get_object`") == "`get_object()`"
 
 
 def test_rstconv_sphinx_role_func_already_parens():
     """Sphinx :func: role with existing () doesn't double them."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
-
     assert _convert_sphinx_roles(":func:`get_object()`") == "`get_object()`"
 
 
 def test_rstconv_sphinx_role_meth():
     """Sphinx :meth: role adds ()."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
-
     assert _convert_sphinx_roles(":meth:`process`") == "`process()`"
 
 
 def test_rstconv_sphinx_role_class():
     """Sphinx :class: role produces code span without ()."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
-
     assert _convert_sphinx_roles(":class:`MyClass`") == "`MyClass`"
 
 
 def test_rstconv_sphinx_role_exc():
     """Sphinx :exc: role."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
-
     assert _convert_sphinx_roles(":exc:`ValueError`") == "`ValueError`"
 
 
 def test_rstconv_sphinx_role_py_prefix():
     """Sphinx :py:class: prefix is handled."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
-
     assert _convert_sphinx_roles(":py:class:`int`") == "`int`"
 
 
 def test_rstconv_sphinx_role_attr():
     """Sphinx :attr: role."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
-
     assert _convert_sphinx_roles(":attr:`name`") == "`name`"
 
 
 def test_rstconv_sphinx_role_data():
     """Sphinx :data: role."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
-
     assert _convert_sphinx_roles(":data:`MY_CONST`") == "`MY_CONST`"
 
 
 def test_rstconv_sphinx_role_multiple():
     """Multiple Sphinx roles in same text are all converted."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_roles
-
     text = "Use :func:`foo` or :class:`Bar`."
     result = _convert_sphinx_roles(text)
+
     assert "`foo()`" in result
     assert "`Bar`" in result
 
 
 def test_rstconv_directive_note_block():
     """Block-form .. note:: converted to callout-note."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
     text = ".. note::\n\n    This is important.\n"
     result = _convert_rst_directives(text)
+
     assert ".callout-note" in result
     assert "This is important." in result
 
 
 def test_rstconv_directive_warning_block():
     """Block-form .. warning:: converted to callout-warning."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
     text = ".. warning::\n\n    Be careful.\n"
     result = _convert_rst_directives(text)
+
     assert ".callout-warning" in result
 
 
 def test_rstconv_directive_tip_block():
     """Block-form .. tip:: converted to callout-tip."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
     text = ".. tip::\n\n    A useful tip.\n"
     result = _convert_rst_directives(text)
+
     assert ".callout-tip" in result
 
 
 def test_rstconv_directive_hint_block():
     """.. hint:: maps to callout-tip."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
     text = ".. hint::\n\n    A hint.\n"
     result = _convert_rst_directives(text)
+
     assert ".callout-tip" in result
 
 
 def test_rstconv_directive_danger_block():
     """.. danger:: maps to callout-important."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
     text = ".. danger::\n\n    Dangerous.\n"
     result = _convert_rst_directives(text)
+
     assert ".callout-important" in result
 
 
 def test_rstconv_directive_important_block():
     """.. important:: maps to callout-important."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
     text = ".. important::\n\n    Very important.\n"
     result = _convert_rst_directives(text)
+
     assert ".callout-important" in result
 
 
 def test_rstconv_directive_caution_block():
     """.. caution:: maps to callout-caution."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
     text = ".. caution::\n\n    Exercise caution.\n"
     result = _convert_rst_directives(text)
+
     assert ".callout-caution" in result
 
 
 def test_rstconv_directive_inline_form():
     """Inline-form ``.. note:: text`` on a single line."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
     text = ".. note:: This is a quick note."
     result = _convert_rst_directives(text)
+
     assert ".callout-note" in result
     assert "This is a quick note." in result
 
 
 def test_rstconv_directive_bare():
     """Bare directive ``.. note::`` with no body."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
     text = ".. note::"
     result = _convert_rst_directives(text)
+
     assert ".callout-note" in result
 
 
 def test_rstconv_directive_versionadded():
     """.. versionadded:: produces callout-note with version title."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
     text = ".. versionadded:: 2.0"
     result = _convert_rst_directives(text)
+
     assert ".callout-note" in result
     assert "Added in version 2.0" in result
 
 
 def test_rstconv_directive_versionchanged():
     """.. versionchanged:: produces callout-note."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
     text = ".. versionchanged:: 3.1"
     result = _convert_rst_directives(text)
+
     assert ".callout-note" in result
     assert "Changed in version 3.1" in result
 
 
 def test_rstconv_directive_deprecated():
     """.. deprecated:: produces callout-warning."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
     text = ".. deprecated:: 1.5"
     result = _convert_rst_directives(text)
+
     assert ".callout-warning" in result
     assert "Deprecated since version 1.5" in result
 
 
 def test_rstconv_directive_versionadded_block():
     """Block-form .. versionadded:: with body text."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
     text = ".. versionadded:: 2.0\n\n    Use the new API.\n"
     result = _convert_rst_directives(text)
+
     assert "Added in version 2.0" in result
     assert "Use the new API." in result
 
 
 def test_rstconv_directive_deprecated_with_description():
     """.. deprecated:: with inline version and block description."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
     text = ".. deprecated:: 1.0\n\n    Use new_func() instead.\n"
     result = _convert_rst_directives(text)
+
     assert "Deprecated since version 1.0" in result
     assert "Use new_func() instead." in result
 
 
 def test_rstconv_directive_to_callout_version_no_version():
     """_rst_directive_to_callout handles version directive with no version string."""
-    from great_docs._qrenderer._rst_converters import _rst_directive_to_callout
-
     result = _rst_directive_to_callout("versionadded", "")
+
     assert "Added in version" in result
     assert ".callout-note" in result
 
 
 def test_rstconv_directive_to_callout_note_empty():
     """_rst_directive_to_callout for note with empty body."""
-    from great_docs._qrenderer._rst_converters import _rst_directive_to_callout
-
     result = _rst_directive_to_callout("note", "")
+
     assert ".callout-note" in result
     assert ":::" in result
 
 
 def test_rstconv_directive_to_callout_note_with_content():
     """_rst_directive_to_callout for note with content."""
-    from great_docs._qrenderer._rst_converters import _rst_directive_to_callout
-
     result = _rst_directive_to_callout("note", "Some text", "inline part")
+
     assert ".callout-note" in result
     assert "inline part" in result or "Some text" in result
 
 
 def test_rstconv_directive_inline_with_inline_arg():
     """Block directive with inline text plus block body."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_directives
-
     text = ".. note:: Important\n\n    Details here.\n"
     result = _convert_rst_directives(text)
+
     assert ".callout-note" in result
 
 
 def test_rstconv_bold_section_examples():
     """**Examples**:: is converted to QMD section heading."""
-    from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
-
     text = "**Examples**::"
     result = _convert_bold_section_headers(text, 2)
+
     assert "## Examples {.doc-section .doc-section-examples}" in result
 
 
 def test_rstconv_bold_section_notes():
     """**Notes**:: is converted."""
-    from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
-
     text = "**Notes**::"
     result = _convert_bold_section_headers(text, 3)
+
     assert "### Notes {.doc-section .doc-section-notes}" in result
 
 
 def test_rstconv_bold_section_references():
     """**References**:: is converted."""
-    from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
-
     text = "**References**::"
     result = _convert_bold_section_headers(text, 2)
+
     assert "## References {.doc-section .doc-section-references}" in result
 
 
 def test_rstconv_bold_section_see_also():
     """**See Also**:: is converted."""
-    from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
-
     text = "**See Also**::"
     result = _convert_bold_section_headers(text, 2)
+
     assert "## See Also {.doc-section .doc-section-see-also}" in result
 
 
 def test_rstconv_bold_section_warnings():
     """**Warnings**:: is converted."""
-    from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
-
     text = "**Warnings**::"
     result = _convert_bold_section_headers(text, 2)
+
     assert "## Warnings {.doc-section .doc-section-warnings}" in result
 
 
 def test_rstconv_bold_section_no_match():
     """Text without bold section headers is unchanged."""
-    from great_docs._qrenderer._rst_converters import _convert_bold_section_headers
-
     text = "Regular text without bold sections."
+
     assert _convert_bold_section_headers(text, 2) == text
 
 
 def test_rstconv_sphinx_fields_param():
     """:param: fields produce a Parameters table."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
     text = ":param x: The x value.\n:param y: The y value.\n"
     result = _convert_sphinx_fields(text, 2)
+
     assert "## Parameters" in result
     assert "| x |" in result
     assert "| y |" in result
@@ -33454,59 +33002,53 @@ def test_rstconv_sphinx_fields_param():
 
 def test_rstconv_sphinx_fields_param_with_type():
     """:param: + :type: fields populate Type column."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
     text = ":param x: The x value.\n:type x: int\n"
     result = _convert_sphinx_fields(text, 2)
+
     assert "## Parameters" in result
     assert "int" in result
 
 
 def test_rstconv_sphinx_fields_returns():
     """:returns: field produces a Returns table."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
     text = ":returns: The computed result.\n"
     result = _convert_sphinx_fields(text, 2)
+
     assert "## Returns" in result
     assert "The computed result." in result
 
 
 def test_rstconv_sphinx_fields_return_singular():
     """:return: (singular) field produces a Returns table."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
     text = ":return: A value.\n"
     result = _convert_sphinx_fields(text, 2)
+
     assert "## Returns" in result
 
 
 def test_rstconv_sphinx_fields_rtype():
     """:rtype: field populates the return type."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
     text = ":returns: Result.\n:rtype: int\n"
     result = _convert_sphinx_fields(text, 2)
+
     assert "## Returns" in result
     assert "int" in result
 
 
 def test_rstconv_sphinx_fields_rtype_no_returns():
     """:rtype: without preceding :returns: creates a returns entry."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
     text = ":rtype: str\n"
     result = _convert_sphinx_fields(text, 3)
+
     assert "### Returns" in result
     assert "str" in result
 
 
 def test_rstconv_sphinx_fields_raises():
     """:raises: field produces a Raises table."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
     text = ":raises ValueError: If input is invalid.\n"
     result = _convert_sphinx_fields(text, 2)
+
     assert "## Raises" in result
     assert "ValueError" in result
     assert "If input is invalid." in result
@@ -33514,18 +33056,15 @@ def test_rstconv_sphinx_fields_raises():
 
 def test_rstconv_sphinx_fields_raise_singular():
     """:raise: (singular) field produces a Raises table."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
     text = ":raise TypeError: Wrong type.\n"
     result = _convert_sphinx_fields(text, 2)
+
     assert "## Raises" in result
     assert "TypeError" in result
 
 
 def test_rstconv_sphinx_fields_combined():
     """Multiple Sphinx field types produce all sections."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
     text = (
         "Description.\n\n"
         ":param x: Input.\n"
@@ -33535,6 +33074,7 @@ def test_rstconv_sphinx_fields_combined():
         ":raises ValueError: Bad input.\n"
     )
     result = _convert_sphinx_fields(text, 2)
+
     assert "## Parameters" in result
     assert "## Returns" in result
     assert "## Raises" in result
@@ -33543,28 +33083,25 @@ def test_rstconv_sphinx_fields_combined():
 
 def test_rstconv_sphinx_fields_no_fields():
     """Text without Sphinx fields is returned unchanged."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
     text = "Just a plain text paragraph."
+
     assert _convert_sphinx_fields(text, 2) == text
 
 
 def test_rstconv_sphinx_fields_before_text():
     """Text before fields is preserved."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
     text = "This function does things.\n\n:param x: Value.\n"
     result = _convert_sphinx_fields(text, 2)
+
     assert "This function does things." in result
     assert "## Parameters" in result
 
 
 def test_rstconv_google_args_section():
     """Google-style Args: section produces a Parameters table."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "Args:\n    x: The x value.\n    y: The y value.\n"
     result = _convert_google_sections(text, 2)
+
     assert "## Parameters" in result
     assert "| x |" in result
     assert "| y |" in result
@@ -33572,30 +33109,27 @@ def test_rstconv_google_args_section():
 
 def test_rstconv_google_parameters_section():
     """Google-style Parameters: section."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "Parameters:\n    name: A name.\n"
     result = _convert_google_sections(text, 2)
+
     assert "## Parameters" in result
     assert "| name |" in result
 
 
 def test_rstconv_google_returns_section():
     """Google-style Returns: section."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "Returns:\n    The result value.\n"
     result = _convert_google_sections(text, 2)
+
     assert "## Returns" in result
     assert "The result value." in result
 
 
 def test_rstconv_google_raises_section():
     """Google-style Raises: section produces a Raises table."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "Raises:\n    ValueError: If input is bad.\n    TypeError: Wrong type.\n"
     result = _convert_google_sections(text, 2)
+
     assert "## Raises" in result
     assert "ValueError" in result
     assert "TypeError" in result
@@ -33603,84 +33137,74 @@ def test_rstconv_google_raises_section():
 
 def test_rstconv_google_raises_no_entries():
     """Google-style Raises: with unparsable body falls back to raw text."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "Raises:\n    some random text without proper format\n"
     result = _convert_google_sections(text, 2)
+
     assert "some random text" in result
 
 
 def test_rstconv_google_examples_section():
     """Google-style Examples: section produces a prose section."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "Examples:\n    >>> import foo\n    >>> foo.bar()\n"
     result = _convert_google_sections(text, 2)
+
     assert "## Examples" in result
     assert ".doc-section-examples" in result
 
 
 def test_rstconv_google_notes_section():
     """Google-style Notes: section."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "Notes:\n    This is a note.\n"
     result = _convert_google_sections(text, 3)
+
     assert "### Notes" in result
     assert ".doc-section-notes" in result
 
 
 def test_rstconv_google_warning_section():
     """Google-style Warning: section."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "Warning:\n    Be careful.\n"
     result = _convert_google_sections(text, 2)
+
     assert "## Warning" in result
     assert ".doc-section-warnings" in result
 
 
 def test_rstconv_google_see_also_section():
     """Google-style See Also: section."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "See Also:\n    other_func\n"
     result = _convert_google_sections(text, 2)
+
     assert "## See Also" in result
     assert ".doc-section-see-also" in result
 
 
 def test_rstconv_google_no_sections():
     """Text without Google-style sections is unchanged."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "Plain text."
+
     assert _convert_google_sections(text, 2) == text
 
 
 def test_rstconv_google_args_no_entries():
     """Google-style Args: with no parsable entries falls back to raw text."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "Args:\n    just some plain text without entries\n"
     result = _convert_google_sections(text, 2)
+
     assert "just some plain text" in result
 
 
 def test_rstconv_google_before_text():
     """Text before Google sections is preserved."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "This function does stuff.\n\nArgs:\n    x: Value.\n"
     result = _convert_google_sections(text, 2)
+
     assert "This function does stuff." in result
     assert "## Parameters" in result
 
 
 def test_rstconv_google_multiple_sections():
     """Multiple Google-style sections produce all sections."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = (
         "Description.\n\n"
         "Args:\n    x: Input.\n\n"
@@ -33688,6 +33212,7 @@ def test_rstconv_google_multiple_sections():
         "Raises:\n    ValueError: Bad.\n"
     )
     result = _convert_google_sections(text, 2)
+
     assert "## Parameters" in result
     assert "## Returns" in result
     assert "## Raises" in result
@@ -33695,39 +33220,35 @@ def test_rstconv_google_multiple_sections():
 
 def test_rstconv_google_inline_section():
     """Google-style section with inline text on same line."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "Returns: The result.\n"
     result = _convert_google_sections(text, 2)
+
     assert "## Returns" in result
     assert "The result." in result
 
 
 def test_rstconv_google_args_continuation_lines():
     """Google-style Args entries with continuation lines."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "Args:\n    x: The first\n        value.\n    y: Second.\n"
     result = _convert_google_sections(text, 2)
+
     assert "## Parameters" in result
 
 
 def test_rstconv_google_raises_continuation():
     """Google-style Raises entries with continuation lines."""
-    from great_docs._qrenderer._rst_converters import _parse_google_raises
-
     body = "ValueError: If x is\n    negative.\nTypeError: Wrong type.\n"
     entries = _parse_google_raises(body)
+
     assert len(entries) == 2
     assert "negative" in entries[0][1]
 
 
 def test_rstconv_parse_google_entries_basic():
     """_parse_google_entries parses name: desc pairs."""
-    from great_docs._qrenderer._rst_converters import _parse_google_entries
-
     body = "x: The x value.\ny: The y value.\n"
     entries = _parse_google_entries(body)
+
     assert len(entries) == 2
     assert entries[0] == ("x", "The x value.")
     assert entries[1] == ("y", "The y value.")
@@ -33735,20 +33256,18 @@ def test_rstconv_parse_google_entries_basic():
 
 def test_rstconv_parse_google_entries_with_type():
     """_parse_google_entries handles name (type): desc format."""
-    from great_docs._qrenderer._rst_converters import _parse_google_entries
-
     body = "x (int): The x value.\n"
     entries = _parse_google_entries(body)
+
     assert len(entries) == 1
     assert entries[0][0] == "x"
 
 
 def test_rstconv_parse_google_entries_continuation():
     """_parse_google_entries handles continuation lines."""
-    from great_docs._qrenderer._rst_converters import _parse_google_entries
-
     body = "x: The first\n    value.\ny: Second.\n"
     entries = _parse_google_entries(body)
+
     assert len(entries) == 2
     assert "first" in entries[0][1]
     assert "value" in entries[0][1]
@@ -33756,35 +33275,29 @@ def test_rstconv_parse_google_entries_continuation():
 
 def test_rstconv_parse_google_entries_empty():
     """_parse_google_entries with empty body returns empty list."""
-    from great_docs._qrenderer._rst_converters import _parse_google_entries
-
     assert _parse_google_entries("") == []
     assert _parse_google_entries("\n\n") == []
 
 
 def test_rstconv_parse_google_raises_basic():
     """_parse_google_raises parses ExcType: desc pairs."""
-    from great_docs._qrenderer._rst_converters import _parse_google_raises
-
     body = "ValueError: If x is negative.\nTypeError: Wrong type.\n"
     entries = _parse_google_raises(body)
+
     assert len(entries) == 2
     assert entries[0] == ("ValueError", "If x is negative.")
 
 
 def test_rstconv_parse_google_raises_empty():
     """_parse_google_raises with empty body returns empty list."""
-    from great_docs._qrenderer._rst_converters import _parse_google_raises
-
     assert _parse_google_raises("") == []
 
 
 def test_rstconv_fence_doctest_basic():
     """_fence_doctest_blocks wraps >>> lines in fenced blocks."""
-    from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
-
     text = ">>> import os\n>>> os.getcwd()\n"
     result = _fence_doctest_blocks(text)
+
     assert "```python" in result
     assert ">>> import os" in result
     assert result.count("```") == 2  # open + close
@@ -33792,20 +33305,18 @@ def test_rstconv_fence_doctest_basic():
 
 def test_rstconv_fence_doctest_with_continuation():
     """_fence_doctest_blocks handles ... continuation lines."""
-    from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
-
     text = ">>> for i in range(3):\n...     print(i)\n"
     result = _fence_doctest_blocks(text)
+
     assert "```python" in result
     assert "... " in result
 
 
 def test_rstconv_fence_doctest_mixed_with_text():
     """_fence_doctest_blocks preserves non-doctest lines."""
-    from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
-
     text = "Some text.\n>>> x = 1\nMore text.\n>>> y = 2\n"
     result = _fence_doctest_blocks(text)
+
     assert "Some text." in result
     assert "More text." in result
     assert result.count("```python") == 2
@@ -33814,27 +33325,23 @@ def test_rstconv_fence_doctest_mixed_with_text():
 
 def test_rstconv_fence_doctest_no_doctest():
     """_fence_doctest_blocks returns text unchanged without doctest lines."""
-    from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
-
     text = "Regular text.\nNo doctest here.\n"
     result = _fence_doctest_blocks(text)
+
     assert "```" not in result
     assert result == text
 
 
 def test_rstconv_fence_doctest_bare_prompt():
     """_fence_doctest_blocks handles bare >>> without trailing space."""
-    from great_docs._qrenderer._rst_converters import _fence_doctest_blocks
-
     text = ">>>\n"
     result = _fence_doctest_blocks(text)
+
     assert "```python" in result
 
 
 def test_rstconv_convert_rst_text_all_transforms():
     """_convert_rst_text applies all transforms in sequence."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_text
-
     text = "Use :func:`foo` to call.\n\nExample::\n\n    x = 1\n\nInline math :math:`E = mc^2`.\n"
     result = _convert_rst_text(text)
     assert "`foo()`" in result
@@ -33844,8 +33351,6 @@ def test_rstconv_convert_rst_text_all_transforms():
 
 def test_rstconv_convert_rst_text_simple_table():
     """_convert_rst_text handles RST simple tables."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_text
-
     text = "=====  =====\nA      B\n=====  =====\n1      2\n=====  =====\n"
     result = _convert_rst_text(text)
     assert "| A" in result
@@ -33853,26 +33358,22 @@ def test_rstconv_convert_rst_text_simple_table():
 
 def test_rstconv_convert_rst_text_grid_table():
     """_convert_rst_text converts RST grid tables."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_text
-
     text = "+------+------+\n| A    | B    |\n+======+======+\n| 1    | 2    |\n+------+------+\n"
     result = _convert_rst_text(text)
+
     assert "| A | B |" in result
 
 
 def test_rstconv_convert_rst_text_citations():
     """_convert_rst_text converts RST citations."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_text
-
     text = ".. [1] Author. Title.\n"
     result = _convert_rst_text(text)
+
     assert "1. Author. Title." in result
 
 
 def test_rstconv_grid_table_non_table_line_breaks():
     """Grid table collection stops on non-table lines."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_grid_tables
-
     text = (
         "+------+------+\n"
         "| A    | B    |\n"
@@ -33882,14 +33383,13 @@ def test_rstconv_grid_table_non_table_line_breaks():
         "Not a table line.\n"
     )
     result = _convert_rst_grid_tables(text)
+
     assert "| A | B |" in result
     assert "Not a table line." in result
 
 
 def test_rstconv_simple_table_peek_logic():
     """Simple table handles the peek-ahead logic for mid-table separators."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_simple_tables
-
     # Two separators with data that has content in the second column position
     text = "======  ======\nHead1   Head2\n======  ======\ndata1   data2\n======  ======\n"
     result = _convert_rst_simple_tables(text)
@@ -33898,9 +33398,7 @@ def test_rstconv_simple_table_peek_logic():
 
 def test_rstconv_simple_table_peek_pass():
     """Simple table mid-separator peek passes through when next line has 2nd-col content."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_simple_tables
-
-    # This triggers the `pass` branch at line 253: a mid-table separator where
+    # This triggers the `pass` branch at: a mid-table separator where
     # the next line has non-space content at the second_col_start position.
     # Structure: sep, header, sep (mid-table), data (with 2nd-col content), sep
     text = "=====  =====\nCol1   Col2\n=====  =====\nval1   val2\n=====  =====\n"
@@ -33910,8 +33408,6 @@ def test_rstconv_simple_table_peek_pass():
 
 def test_rstconv_simple_table_3sep_no_header():
     """_rst_simple_table_to_md returns None if 3 seps but no header rows."""
-    from great_docs._qrenderer._rst_converters import _rst_simple_table_to_md
-
     # 3 separators with nothing between first and second
     table_lines = [
         "=====  =====",
@@ -33920,14 +33416,13 @@ def test_rstconv_simple_table_3sep_no_header():
         "=====  =====",
     ]
     result = _rst_simple_table_to_md(table_lines)
+
     # first_sep=0, second_sep=1, range(1,1) is empty -> no header_rows -> None
     assert result is None
 
 
 def test_rstconv_simple_table_header_short_padding():
     """Simple table pads header row when shorter than total columns."""
-    from great_docs._qrenderer._rst_converters import _rst_simple_table_to_md
-
     table_lines = [
         "===  ===  ===",
         "A    B",
@@ -33936,14 +33431,13 @@ def test_rstconv_simple_table_header_short_padding():
         "===  ===  ===",
     ]
     result = _rst_simple_table_to_md(table_lines)
+
     assert result is not None
     assert "| ---" in result
 
 
 def test_rstconv_simple_table_data_row_short_padding():
     """Simple table pads data rows shorter than columns."""
-    from great_docs._qrenderer._rst_converters import _rst_simple_table_to_md
-
     table_lines = [
         "===  ===  ===",
         "A    B    C",
@@ -33952,14 +33446,13 @@ def test_rstconv_simple_table_data_row_short_padding():
         "===  ===  ===",
     ]
     result = _rst_simple_table_to_md(table_lines)
+
     assert result is not None
     assert result.count("|") > 4
 
 
 def test_rstconv_grid_table_header_short_padding():
     """Grid table pads header when shorter than column count."""
-    from great_docs._qrenderer._rst_converters import _rst_grid_table_to_md
-
     # Grid table with 3 columns but header row that's short
     table_lines = [
         "+---+---+---+",
@@ -33969,14 +33462,13 @@ def test_rstconv_grid_table_header_short_padding():
         "+---+---+---+",
     ]
     result = _rst_grid_table_to_md(table_lines)
+
     assert result is not None
     assert "| ---" in result
 
 
 def test_rstconv_grid_table_body_row_short_padding():
     """Grid table pads body rows shorter than column count."""
-    from great_docs._qrenderer._rst_converters import _rst_grid_table_to_md
-
     table_lines = [
         "+---+---+---+",
         "| A | B | C |",
@@ -33985,55 +33477,51 @@ def test_rstconv_grid_table_body_row_short_padding():
         "+---+---+---+",
     ]
     result = _rst_grid_table_to_md(table_lines)
+
     assert result is not None
     assert "| A | B | C |" in result
 
 
 def test_rstconv_directive_block_empty_body():
     """Block directive with empty body lines hits else branch."""
-    from great_docs._qrenderer._rst_converters import _rst_directive_to_callout
-
     result = _rst_directive_to_callout("warning", "")
+
     assert ".callout-warning" in result
     assert ":::" in result
 
 
 def test_rstconv_sphinx_fields_no_matching():
     """Sphinx fields regex matches but produces no params/returns/raises."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
     # Text that has :param-like patterns but doesn't match SPHINX_FIELD_RE
     text = "Something :parameter note: not a field."
     result = _convert_sphinx_fields(text, 2)
+
     assert result == text
 
 
 def test_rstconv_sphinx_fields_rtype_appends_to_returns():
     """:rtype: adds type to most recent :returns: entry."""
-    from great_docs._qrenderer._rst_converters import _convert_sphinx_fields
-
     text = ":returns: The result.\n:rtype: list\n"
     result = _convert_sphinx_fields(text, 2)
+
     assert "list" in result
     assert "## Returns" in result
 
 
 def test_rstconv_google_entries_continuation():
     """_parse_google_entries appends continuation lines to previous entry."""
-    from great_docs._qrenderer._rst_converters import _parse_google_entries
-
     body = "x: First line\n    continuation line\ny: Second.\n"
     entries = _parse_google_entries(body)
+
     assert len(entries) == 2
     assert "continuation" in entries[0][1]
 
 
 def test_rstconv_google_section_body_dedent():
     """Google section body lines are properly dedented."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "Args:\n    x: First.\n    y: Second.\n"
     result = _convert_google_sections(text, 2)
+
     assert "## Parameters" in result
     assert "| x |" in result
     assert "| y |" in result
@@ -34041,79 +33529,65 @@ def test_rstconv_google_section_body_dedent():
 
 def test_rstconv_google_section_with_blank_body_lines():
     """Google section with blank lines in the body."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "Notes:\n    First paragraph.\n\n    Second paragraph.\n"
     result = _convert_google_sections(text, 2)
+
     assert "## Notes" in result
     assert "First paragraph." in result
 
 
 def test_rstconv_google_section_tab_indent():
     """Google section body with tab-indented lines."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "Returns:\n\tThe result.\n"
     result = _convert_google_sections(text, 2)
+
     assert "## Returns" in result
     assert "The result." in result
 
 
 def test_rstconv_google_section_non_indented_break():
     """Google section body collection stops at non-indented lines."""
-    from great_docs._qrenderer._rst_converters import _convert_google_sections
-
     text = "Notes:\n    A note.\nNot indented.\n"
     result = _convert_google_sections(text, 2)
+
     assert "## Notes" in result
     assert "A note." in result
 
 
 def test_rstconv_parse_google_raises_blank_lines():
     """_parse_google_raises skips blank lines in the body."""
-    from great_docs._qrenderer._rst_converters import _parse_google_raises
-
     body = "ValueError: Bad input.\n\nTypeError: Wrong type.\n"
     entries = _parse_google_raises(body)
+
     assert len(entries) == 2
     assert entries[0][0] == "ValueError"
     assert entries[1][0] == "TypeError"
 
 
 def test_rstconv_simple_table_peek_pass_branch():
-    """Trigger the peek `pass` branch in simple table parsing (lines 253-254)."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_simple_tables
-
+    """Trigger the peek `pass` branch in simple table parsing."""
     # The pass branch triggers when the middle separator is followed by a line
     # that: is non-empty, is not a separator, is longer than second_col_start,
     # and has a non-space char at second_col_start.
     # This makes the parser continue collecting rather than breaking.
     text = "=====  =====\nHdr1   Hdr2\n=====  =====\nval1   val2\nmore   data\n=====  =====\n"
     result = _convert_rst_simple_tables(text)
+
     assert "| Hdr1" in result or "|" in result
 
 
 def test_rstconv_simple_table_two_sep_via_wrapper():
     """_convert_rst_simple_tables with 2-separator table hits the else/break branch."""
-    from great_docs._qrenderer._rst_converters import _convert_rst_simple_tables
-
     # Only 2 separators: the else branch (j += 1; break) fires at the 2nd sep
     text = "=====  =====\nA      B\n=====  =====\n"
     result = _convert_rst_simple_tables(text)
+
     # _rst_simple_table_to_md needs >=2 seps, which we have; first data row becomes header
     assert "|" in result
 
 
-# =============================================================================
-# Coverage tests for 10 small files (< 10 lines missed each)
-# =============================================================================
-
-
-# --- _qrenderer/_renderer.py (lines 30, 32, 40, 42, 45, 51, 53-54) ---------
-
-
 def test_renderer_render_method():
-    """Renderer.render() imports and instantiates RenderAPIPage (lines 30, 32)."""
+    """Renderer.render() imports and instantiates RenderAPIPage."""
     from unittest.mock import MagicMock, patch
 
     from great_docs._qrenderer._renderer import Renderer
@@ -34131,7 +33605,7 @@ def test_renderer_render_method():
 
 
 def test_renderer_summarize_method():
-    """Renderer.summarize() imports and instantiates RenderReferencePage (lines 40, 42)."""
+    """Renderer.summarize() imports and instantiates RenderReferencePage."""
     from unittest.mock import MagicMock, patch
 
     from great_docs._qrenderer._renderer import Renderer
@@ -34148,7 +33622,7 @@ def test_renderer_summarize_method():
 
 
 def test_renderer_pages_written_calls_write_typing():
-    """Renderer._pages_written() calls _write_typing_information (line 45)."""
+    """Renderer._pages_written() calls _write_typing_information."""
     from unittest.mock import MagicMock, patch
 
     from great_docs._qrenderer._renderer import Renderer
@@ -34163,7 +33637,7 @@ def test_renderer_pages_written_calls_write_typing():
 
 
 def test_renderer_write_typing_information():
-    """Renderer._write_typing_information() creates TypeInformation per module (lines 51, 53-54)."""
+    """Renderer._write_typing_information() creates TypeInformation per module."""
     from unittest.mock import MagicMock, patch
 
     from great_docs._qrenderer._renderer import Renderer
@@ -34181,17 +33655,12 @@ def test_renderer_write_typing_information():
     assert mock_ti_cls.return_value.write.call_count == 2
 
 
-# --- _qrenderer/_render/docclass.py (lines 64-68, 112, 122) -----------------
-
-
 def test_docclass_attributes_excludes_dataclass_params():
-    """DocClass.attributes filters out dataclass params when is_dataclass=True (lines 64-68)."""
+    """DocClass.attributes filters out dataclass params when is_dataclass=True."""
     from unittest.mock import patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
-    from great_docs._qrenderer._griffe import dataclasses as dc
     from great_docs._qrenderer._render import RenderDocClass
     from great_docs._qrenderer._renderer import Renderer
 
@@ -34235,13 +33704,11 @@ def test_docclass_attributes_excludes_dataclass_params():
 
 
 def test_docclass_parameter_attributes_with_dataclass():
-    """DocClass.parameter_attributes returns params found in class attributes (line 112)."""
+    """DocClass.parameter_attributes returns params found in class attributes."""
     from unittest.mock import patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
-    from great_docs._qrenderer._griffe import dataclasses as dc
     from great_docs._qrenderer._render import RenderDocClass
     from great_docs._qrenderer._renderer import Renderer
 
@@ -34274,13 +33741,11 @@ def test_docclass_parameter_attributes_with_dataclass():
 
 
 def test_docclass_init_parameters_with_dataclass():
-    """DocClass.init_parameters returns params NOT in class attributes (line 122)."""
+    """DocClass.init_parameters returns params NOT in class attributes."""
     from unittest.mock import patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
-    from great_docs._qrenderer._griffe import dataclasses as dc
     from great_docs._qrenderer._render import RenderDocClass
     from great_docs._qrenderer._renderer import Renderer
 
@@ -34312,21 +33777,18 @@ def test_docclass_init_parameters_with_dataclass():
         os.environ.pop("GITHUB_REPO_URL", None)
         render = RenderDocClass(doc_cls, r, level=1)
         ip = render.init_parameters
+
         # "self" and "b" are not in class attributes; "a" is
         param_names = [p.name for p in ip]
+
         assert "b" in param_names
         assert "a" not in param_names
 
 
-# --- _qrenderer/_render/docmodule.py (lines 24, 27-28, 33-35) ---------------
-
-
 def test_docmodule_render_signature_no_signature_name():
-    """DocModule.render_signature() returns None when signature_name is falsy (lines 33-34)."""
+    """DocModule.render_signature() returns None when signature_name is falsy."""
     from unittest.mock import patch
 
-    from great_docs._qrenderer import layout
-    from great_docs._qrenderer._griffe import dataclasses as dc
     from great_docs._qrenderer._render import RenderDocModule
     from great_docs._qrenderer._renderer import Renderer
 
@@ -34344,11 +33806,9 @@ def test_docmodule_render_signature_no_signature_name():
 
 
 def test_docmodule_render_signature_with_name():
-    """DocModule.render_signature() returns Div when signature_name is set (line 35)."""
+    """DocModule.render_signature() returns Div when signature_name is set."""
     from unittest.mock import patch
 
-    from great_docs._qrenderer import layout
-    from great_docs._qrenderer._griffe import dataclasses as dc
     from great_docs._qrenderer._render import RenderDocModule
     from great_docs._qrenderer._renderer import Renderer
 
@@ -34362,16 +33822,15 @@ def test_docmodule_render_signature_with_name():
         # Ensure signature_name is non-empty
         render.__dict__["signature_name"] = "my_module"
         result = render.render_signature()
+
     assert result is not None
     assert "my_module" in str(result)
 
 
 def test_docmodule_post_init_narrows_types():
-    """DocModule.__post_init__() narrows self.doc and self.obj types (lines 24, 27-28)."""
+    """DocModule.__post_init__() narrows self.doc and self.obj types."""
     from unittest.mock import patch
 
-    from great_docs._qrenderer import layout
-    from great_docs._qrenderer._griffe import dataclasses as dc
     from great_docs._qrenderer._render import RenderDocModule
     from great_docs._qrenderer._renderer import Renderer
 
@@ -34382,13 +33841,14 @@ def test_docmodule_post_init_narrows_types():
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
         render = RenderDocModule(doc_mod, r, level=1)
+
     # After __post_init__, self.doc and self.obj should be set
     assert render.doc is doc_mod
     assert render.obj is mod_obj
 
 
 def test_get_render_type_raises_for_unmapped_type():
-    """get_render_type() raises ValueError for an unmapped type (lines 66-70)."""
+    """get_render_type() raises ValueError for an unmapped type."""
     from great_docs._qrenderer._render import get_render_type
 
     class FakeDocObj:
@@ -34399,11 +33859,9 @@ def test_get_render_type_raises_for_unmapped_type():
 
 
 def test_renderbase_title_property():
-    """RenderBase.title calls render_title() (line 111)."""
+    """RenderBase.title calls render_title()."""
     from unittest.mock import patch
 
-    from great_docs._qrenderer import layout
-    from great_docs._qrenderer._griffe import dataclasses as dc
     from great_docs._qrenderer._render import RenderDocModule
     from great_docs._qrenderer._renderer import Renderer
 
@@ -34414,14 +33872,16 @@ def test_renderbase_title_property():
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
         render = RenderDocModule(doc_mod, r, level=1)
+
         # Access the 'title' cached property, which calls render_title()
         title = render.title
+
     # render_title for a module returns a Header or None; just verify it ran
     assert title is not None or title is None  # doesn't raise
 
 
 def test_renderbase_summary_name_property():
-    """RenderBase.summary_name returns empty string (line 170)."""
+    """RenderBase.summary_name returns empty string."""
     from great_docs._qrenderer._render.base import RenderBase
 
     # RenderBase expects layout_obj and renderer; use a minimal approach
@@ -34433,9 +33893,6 @@ def test_renderbase_summary_name_property():
     rb.renderer = MagicMock()
     rb.level = 1
     assert rb.summary_name == ""
-
-
-# --- _directives.py (line 82) -----------------------------------------------
 
 
 def test_extract_directives_nodoc():
@@ -34456,30 +33913,27 @@ def test_extract_directives_nodoc():
 
 
 def test_extract_directives_seealso_empty_entry():
-    """extract_directives() skips empty entries in seealso list (line 82 continue)."""
+    """extract_directives() skips empty entries in seealso list."""
     from great_docs._directives import extract_directives
 
     docstring = "%seealso func_a,,func_b"
     result = extract_directives(docstring)
+
     assert result.seealso == [("func_a", ""), ("func_b", "")]
 
 
-# --- _qrenderer/_render/docattribute.py (line 43) ---------------------------
-
-
 def test_docattribute_render_signature_type_kind():
-    """DocAttribute.render_signature() clears name/annotation for TypeAlias kind (line 43)."""
+    """DocAttribute.render_signature() clears name/annotation for TypeAlias kind."""
     from unittest.mock import patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
-    from great_docs._qrenderer._griffe import dataclasses as dc
     from great_docs._qrenderer._render import RenderDocAttribute
     from great_docs._qrenderer._renderer import Renderer
 
     attr_obj = dc.Attribute(name="MyType", lineno=1)
     attr_obj.annotation = gf.ExprName("str")
+
     # Set the kind to TYPE_ALIAS so kind.value is "type alias" which contains "type"
     attr_obj.kind = gf.Kind.TYPE_ALIAS
 
@@ -34489,17 +33943,17 @@ def test_docattribute_render_signature_type_kind():
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
         render = RenderDocAttribute(doc_attr, r, level=1)
+
         assert "type" in render.kind
+
         sig = render.render_signature()
         sig_str = str(sig)
+
         assert isinstance(sig_str, str)
 
 
-# --- _qrenderer/_render/mixin_page.py (line 20) -----------------------------
-
-
 def test_mixin_page_render_title():
-    """RenderPageMixin.render_title() returns render_metadata() (line 20)."""
+    """RenderPageMixin.render_title() returns render_metadata()."""
     from unittest.mock import MagicMock
 
     from great_docs._qrenderer._render.mixin_page import RenderPageMixin
@@ -34512,16 +33966,13 @@ def test_mixin_page_render_title():
 
     # render_metadata returns None by default (no override)
     result = obj.render_title()
+
     # The base render_metadata() returns None
     assert result is None
 
 
-# --- Additional coverage tests for remaining missed lines --------------------
-
-
 def test_get_render_type_valid_type():
-    """get_render_type() returns correct class for a mapped type (line 67)."""
-    from great_docs._qrenderer._griffe import dataclasses as dc
+    """get_render_type() returns correct class for a mapped type."""
     from great_docs._qrenderer._render import RenderDocClass, get_render_type
     from great_docs._qrenderer.layout import DocClass
 
@@ -34531,7 +33982,7 @@ def test_get_render_type_valid_type():
 
 
 def test_renderbase_summary_property():
-    """RenderBase.summary calls render_summary() (lines 111, 139)."""
+    """RenderBase.summary calls render_summary()."""
     from unittest.mock import MagicMock
 
     from great_docs._qrenderer._render.base import RenderBase
@@ -34546,13 +33997,11 @@ def test_renderbase_summary_property():
 
 
 def test_docclass_attribute_member_pages_dataclass():
-    """DocClass.attribute_member_pages filters dataclass params (lines 66-67)."""
+    """DocClass.attribute_member_pages filters dataclass params."""
     from unittest.mock import patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
-    from great_docs._qrenderer._griffe import dataclasses as dc
     from great_docs._qrenderer._render import RenderDocClass
     from great_docs._qrenderer._renderer import Renderer
 
@@ -34592,11 +34041,9 @@ def test_docclass_attribute_member_pages_dataclass():
 
 
 def test_docclass_parameter_attributes_non_dataclass():
-    """DocClass.parameter_attributes returns empty for non-dataclass (line 112)."""
+    """DocClass.parameter_attributes returns empty for non-dataclass."""
     from unittest.mock import patch
 
-    from great_docs._qrenderer import layout
-    from great_docs._qrenderer._griffe import dataclasses as dc
     from great_docs._qrenderer._render import RenderDocClass
     from great_docs._qrenderer._renderer import Renderer
 
@@ -34613,11 +34060,9 @@ def test_docclass_parameter_attributes_non_dataclass():
 
 
 def test_docclass_init_parameters_non_dataclass():
-    """DocClass.init_parameters returns empty for non-dataclass (line 122)."""
+    """DocClass.init_parameters returns empty for non-dataclass."""
     from unittest.mock import patch
 
-    from great_docs._qrenderer import layout
-    from great_docs._qrenderer._griffe import dataclasses as dc
     from great_docs._qrenderer._render import RenderDocClass
     from great_docs._qrenderer._renderer import Renderer
 
@@ -34634,7 +34079,7 @@ def test_docclass_init_parameters_non_dataclass():
 
 
 def test_dc_docstring_section_bool():
-    """DCDocstringSection.__bool__ returns True/False based on value (line 58)."""
+    """DCDocstringSection.__bool__ returns True/False based on value."""
     from great_docs._qrenderer._griffe.docstrings import DCDocstringSection
 
     section_empty = DCDocstringSection(value=[], title="Empty")
@@ -34647,7 +34092,7 @@ def test_dc_docstring_section_bool():
 
 
 def test_attr_str_with_identifier():
-    """Attr.__str__ renders identifier with # prefix (line 31)."""
+    """Attr.__str__ renders identifier with # prefix."""
     from great_docs._qrenderer.pandoc.components import Attr
 
     attr = Attr(identifier="my-id")
@@ -34666,7 +34111,7 @@ def test_attr_str_with_all_parts():
 
 
 def test_attr_html_with_identifier():
-    """Attr.html renders identifier as id= attribute (line 46)."""
+    """Attr.html renders identifier as id= attribute."""
     from great_docs._qrenderer.pandoc.components import Attr
 
     attr = Attr(identifier="test-id")
@@ -34674,7 +34119,7 @@ def test_attr_html_with_identifier():
 
 
 def test_attr_html_with_attributes():
-    """Attr.html renders custom attributes (line 53)."""
+    """Attr.html renders custom attributes."""
     from great_docs._qrenderer.pandoc.components import Attr
 
     attr = Attr(attributes={"data-x": "1", "data-y": "2"})
@@ -34684,7 +34129,7 @@ def test_attr_html_with_attributes():
 
 
 def test_attr_empty_property():
-    """Attr.empty returns True when no fields set (line 58)."""
+    """Attr.empty returns True when no fields set."""
     from great_docs._qrenderer.pandoc.components import Attr
 
     assert Attr().empty is True
@@ -34694,7 +34139,7 @@ def test_attr_empty_property():
 
 
 def test_inlines0_str_with_content():
-    """Inlines0.__str__ joins elements without separator (line 63)."""
+    """Inlines0.__str__ joins elements without separator."""
     from great_docs._qrenderer.pandoc.inlines import Inlines0
 
     result = str(Inlines0(elements=["a", "b", "c"]))
@@ -34702,7 +34147,7 @@ def test_inlines0_str_with_content():
 
 
 def test_code_html_property():
-    """Code.html returns code wrapped in <code> tags (line 137)."""
+    """Code.html returns code wrapped in <code> tags."""
     from great_docs._qrenderer.pandoc.inlines import Code
 
     c = Code(text="x = 1")
@@ -34720,7 +34165,7 @@ def test_code_html_with_attr():
 
 
 def test_strong_str():
-    """Strong.__str__ wraps content in ** (lines 147-150)."""
+    """Strong.__str__ wraps content in **."""
     from great_docs._qrenderer.pandoc.inlines import Strong
 
     assert str(Strong(content="bold")) == "**bold**"
@@ -34729,7 +34174,7 @@ def test_strong_str():
 
 
 def test_emph_str():
-    """Emph.__str__ wraps content in * (lines 161-165)."""
+    """Emph.__str__ wraps content in *."""
     from great_docs._qrenderer.pandoc.inlines import Emph
 
     assert str(Emph(content="italic")) == "*italic*"
@@ -34737,7 +34182,7 @@ def test_emph_str():
 
 
 def test_image_str():
-    """Image.__str__ renders markdown image syntax (lines 180-183)."""
+    """Image.__str__ renders markdown image syntax."""
     from great_docs._qrenderer.pandoc.inlines import Image
 
     img = Image(caption="Logo", src="img.png")
@@ -34748,7 +34193,7 @@ def test_image_str():
 
 
 def test_inlinecontent_to_str_sequence():
-    """inlinecontent_to_str handles a Sequence of items (line 203)."""
+    """inlinecontent_to_str handles a Sequence of items."""
     from great_docs._qrenderer.pandoc.inlines import inlinecontent_to_str
 
     result = inlinecontent_to_str(["hello", "world"])
@@ -34756,7 +34201,7 @@ def test_inlinecontent_to_str_sequence():
 
 
 def test_interlink_post_init():
-    """InterLink.__post_init__ wraps target in backticks (lines 225-227)."""
+    """InterLink.__post_init__ wraps target in backticks."""
     from great_docs._qrenderer.pandoc.inlines import InterLink
 
     link = InterLink(content="MyClass", target="pkg.MyClass")
@@ -34764,7 +34209,7 @@ def test_interlink_post_init():
 
 
 def test_shortcode_str():
-    """shortcode.__init__ and __str__ render quarto shortcode (lines 230-233)."""
+    """shortcode.__init__ and __str__ render quarto shortcode."""
     from great_docs._qrenderer.pandoc.inlines import shortcode
 
     sc = shortcode("meta", "title")
@@ -34778,7 +34223,7 @@ def test_shortcode_str():
 
 
 def test_is_typealias_with_exprname():
-    """is_typealias returns True for Attribute with TypeAlias annotation (lines 27-30)."""
+    """is_typealias returns True for Attribute with TypeAlias annotation."""
     import griffe as gf
 
     from great_docs._qrenderer._type_checks import is_typealias
@@ -34789,7 +34234,7 @@ def test_is_typealias_with_exprname():
 
 
 def test_is_typealias_with_str_annotation():
-    """is_typealias returns True for Attribute with string annotation (lines 31-32)."""
+    """is_typealias returns True for Attribute with string annotation."""
     import griffe as gf
 
     from great_docs._qrenderer._type_checks import is_typealias
@@ -34800,7 +34245,7 @@ def test_is_typealias_with_str_annotation():
 
 
 def test_is_typealias_not_attribute():
-    """is_typealias returns False for non-Attribute (line 28)."""
+    """is_typealias returns False for non-Attribute."""
     import griffe as gf
 
     from great_docs._qrenderer._type_checks import is_typealias
@@ -34810,7 +34255,7 @@ def test_is_typealias_not_attribute():
 
 
 def test_is_typealias_no_annotation():
-    """is_typealias returns False for Attribute without annotation (line 27)."""
+    """is_typealias returns False for Attribute without annotation."""
     import griffe as gf
 
     from great_docs._qrenderer._type_checks import is_typealias
@@ -34821,7 +34266,7 @@ def test_is_typealias_no_annotation():
 
 
 def test_is_typealias_other_exprname():
-    """is_typealias returns False when annotation is ExprName but not TypeAlias (line 33)."""
+    """is_typealias returns False when annotation is ExprName but not TypeAlias."""
     import griffe as gf
 
     from great_docs._qrenderer._type_checks import is_typealias
@@ -34832,7 +34277,7 @@ def test_is_typealias_other_exprname():
 
 
 def test_is_protocol_true():
-    """is_protocol returns True for class extending typing.Protocol (line 40)."""
+    """is_protocol returns True for class extending typing.Protocol."""
     from unittest.mock import PropertyMock, patch
 
     import griffe as gf
@@ -34860,7 +34305,7 @@ def test_is_protocol_false():
 
 
 def test_is_typevar_true():
-    """is_typevar returns True for TypeVar attribute (line 52)."""
+    """is_typevar returns True for TypeVar attribute."""
     import griffe as gf
 
     from great_docs._qrenderer._type_checks import is_typevar
@@ -34885,7 +34330,7 @@ def test_is_typevar_false():
 
 
 def test_is_initvar_true():
-    """is_initvar returns True for InitVar subscript (line 65)."""
+    """is_initvar returns True for InitVar subscript."""
     from unittest.mock import PropertyMock, patch
 
     import griffe as gf
@@ -34909,7 +34354,7 @@ def test_is_initvar_false():
 
 
 def test_isdoc_module():
-    """isDoc.Module checks obj.is_attribute (line 91)."""
+    """isDoc.Module checks obj.is_attribute."""
     from unittest.mock import MagicMock
 
     from great_docs._qrenderer._type_checks import isDoc
@@ -34924,7 +34369,7 @@ def test_isdoc_module():
 
 
 def test_griffe_to_doc():
-    """griffe_to_doc converts griffe object to layout Doc (line 108)."""
+    """griffe_to_doc converts griffe object to layout Doc."""
     import griffe as gf
 
     from great_docs._qrenderer._type_checks import griffe_to_doc
@@ -34937,7 +34382,7 @@ def test_griffe_to_doc():
 
 
 def test_no_init():
-    """no_init returns a dataclass field with init=False (line 108)."""
+    """no_init returns a dataclass field with init=False."""
     from dataclasses import fields, Field
     from great_docs._qrenderer._type_checks import no_init
 
@@ -34948,7 +34393,7 @@ def test_no_init():
 
 
 def test_is_field_init_false_true():
-    """is_field_init_false returns True for field(init=False) (lines 115-124)."""
+    """is_field_init_false returns True for field(init=False)."""
     import griffe as gf
 
     from great_docs._qrenderer._type_checks import is_field_init_false
@@ -34965,7 +34410,7 @@ def test_is_field_init_false_true():
 
 
 def test_is_field_init_false_no_field():
-    """is_field_init_false returns False for non-field default (lines 115-120)."""
+    """is_field_init_false returns False for non-field default."""
     import griffe as gf
 
     from great_docs._qrenderer._type_checks import is_field_init_false
@@ -34979,7 +34424,7 @@ def test_is_field_init_false_no_field():
 
 
 def test_canonical_path_with_type():
-    """_canonical_path returns module.qualname for a type (lines 37-42)."""
+    """_canonical_path returns module.qualname for a type."""
     from great_docs._qrenderer._tools import _canonical_path
 
     result = _canonical_path(int)
@@ -35001,7 +34446,7 @@ def test_canonical_path_with_class():
 
 
 def test_canonical_path_with_instance():
-    """_canonical_path handles non-type by using __class__ (line 38)."""
+    """_canonical_path handles non-type by using __class__."""
     from great_docs._qrenderer._tools import _canonical_path
 
     result = _canonical_path("hello")
@@ -35009,7 +34454,7 @@ def test_canonical_path_with_instance():
 
 
 def test_render_code_variable_function():
-    """render_code_variable renders a function (line 67-68)."""
+    """render_code_variable renders a function."""
     from great_docs._qrenderer._tools import render_code_variable
 
     code = 'def my_func():\n    """A function."""\n    pass\n'
@@ -35018,7 +34463,7 @@ def test_render_code_variable_function():
 
 
 def test_render_code_variable_module():
-    """render_code_variable renders module when name=None (line 62)."""
+    """render_code_variable renders module when name=None."""
     from great_docs._qrenderer._tools import render_code_variable
 
     code = '"""Module docstring."""\nx = 1\n'
@@ -35027,7 +34472,7 @@ def test_render_code_variable_module():
 
 
 def test_render_type_object_with_type():
-    """render_type_object renders a python type (lines 92-94)."""
+    """render_type_object renders a python type."""
     from great_docs._qrenderer._tools import render_type_object
 
     # Use a type from the package itself that griffe can find
@@ -35036,7 +34481,7 @@ def test_render_type_object_with_type():
 
 
 def test_format_see_also():
-    """format_see_also converts qualnames into interlinks (lines 139-146)."""
+    """format_see_also converts qualnames into interlinks."""
     from great_docs._qrenderer._format import format_see_also
 
     result = format_see_also("some_func, other_func")
@@ -35045,7 +34490,7 @@ def test_format_see_also():
 
 
 def test_format_name_short():
-    """format_name returns obj.name for 'short' format (line 161-162)."""
+    """format_name returns obj.name for 'short' format."""
     import griffe as gf
 
     from great_docs._qrenderer._format import format_name
@@ -35058,7 +34503,7 @@ def test_format_name_short():
 
 
 def test_format_name_full():
-    """format_name returns obj.path for 'full' format (lines 165-166)."""
+    """format_name returns obj.path for 'full' format."""
     import griffe as gf
 
     from great_docs._qrenderer._format import format_name
@@ -35072,7 +34517,7 @@ def test_format_name_full():
 
 
 def test_format_name_canonical():
-    """format_name returns obj.canonical_path for 'canonical' format (lines 167-168)."""
+    """format_name returns obj.canonical_path for 'canonical' format."""
     import griffe as gf
 
     from great_docs._qrenderer._format import format_name
@@ -35085,7 +34530,7 @@ def test_format_name_canonical():
 
 
 def test_format_name_unknown_raises():
-    """format_name raises ValueError for unknown format (lines 169-170)."""
+    """format_name raises ValueError for unknown format."""
 
     import griffe as gf
 
@@ -35099,7 +34544,7 @@ def test_format_name_unknown_raises():
 
 
 def test_repr_obj_default():
-    """repr_obj default returns repr() for unknown types (line 176)."""
+    """repr_obj default returns repr() for unknown types."""
     from great_docs._qrenderer._format import repr_obj
 
     assert repr_obj(42) == "42"
@@ -35107,7 +34552,7 @@ def test_repr_obj_default():
 
 
 def test_repr_obj_expr():
-    """repr_obj for gf.Expr iterates and joins (line 186)."""
+    """repr_obj for gf.Expr iterates and joins."""
     import griffe as gf
 
     from great_docs._qrenderer._format import repr_obj
@@ -35119,7 +34564,7 @@ def test_repr_obj_expr():
 
 
 def test_repr_obj_str_with_single_quotes():
-    """repr_obj for str replaces single quotes with double (lines 194-195)."""
+    """repr_obj for str replaces single quotes with double."""
     from great_docs._qrenderer._format import repr_obj
 
     result = repr_obj("'hello'")
@@ -35131,7 +34576,7 @@ def test_repr_obj_str_with_single_quotes():
 
 
 def test_formatted_signature_long_params():
-    """formatted_signature wraps lines when params are long (lines 225-231)."""
+    """formatted_signature wraps lines when params are long."""
     from great_docs._qrenderer._format import formatted_signature
 
     params = [f"param_{i}: str = 'default_value_{i}'" for i in range(10)]
@@ -35141,7 +34586,7 @@ def test_formatted_signature_long_params():
 
 
 def test_format_str_with_ruff():
-    """format_str formats Python code via ruff (line 303 skipped when no ruff)."""
+    """format_str formats Python code via ruff."""
     from great_docs._qrenderer._format import HAS_RUFF, format_str
 
     # Clear lru_cache to ensure a fresh call
@@ -35154,7 +34599,7 @@ def test_format_str_with_ruff():
 
 
 def test_format_str_bad_syntax():
-    """format_str raises RuntimeError for invalid syntax (line 319)."""
+    """format_str raises RuntimeError for invalid syntax."""
     from great_docs._qrenderer._format import HAS_RUFF, format_str
 
     if not HAS_RUFF:
@@ -35168,7 +34613,7 @@ def test_format_str_bad_syntax():
 
 
 def test_format_value():
-    """format_value renders a value through pretty_code (line 340 / missed line 303)."""
+    """format_value renders a value through pretty_code."""
     from great_docs._qrenderer._format import format_value
 
     result = format_value("hello")
@@ -35475,7 +34920,6 @@ def test_create_inventory_with_layout_item():
     """create_inventory handles layout.Item objects."""
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer.inventory import create_inventory
 
     obj = gf.Function(name="my_func", lineno=1)
@@ -35680,7 +35124,6 @@ def test_render_reference_section_title():
     """RenderReferenceSection.render_title() returns a Header."""
     from unittest.mock import MagicMock
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.reference_section import RenderReferenceSection
 
     section = layout.Section(title="Functions", contents=[layout.Auto(name="x")])
@@ -35696,7 +35139,6 @@ def test_render_reference_section_subtitle():
     """RenderReferenceSection.render_title() handles subtitles."""
     from unittest.mock import MagicMock
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.reference_section import RenderReferenceSection
 
     section = layout.Section(subtitle="Helper Functions", contents=[layout.Auto(name="x")])
@@ -35712,7 +35154,6 @@ def test_render_reference_section_no_title():
     """RenderReferenceSection.render_title() returns None when no title/subtitle."""
     from unittest.mock import MagicMock
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.reference_section import RenderReferenceSection
 
     section = layout.Section(contents=[layout.Auto(name="x")])
@@ -35727,7 +35168,6 @@ def test_render_reference_section_description():
     """RenderReferenceSection.render_description() returns a Div."""
     from unittest.mock import MagicMock
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.reference_section import RenderReferenceSection
 
     section = layout.Section(title="Test", desc="A description", contents=[layout.Auto(name="x")])
@@ -35742,7 +35182,6 @@ def test_render_reference_section_body_empty():
     """RenderReferenceSection.render_body() returns None for empty section."""
     from unittest.mock import MagicMock
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.reference_section import RenderReferenceSection
 
     section = layout.Section(title="Empty", contents=[])
@@ -35757,7 +35196,6 @@ def test_render_reference_page_post_init():
     """RenderReferencePage.__post_init__ sets layout, sections, package, options."""
     from unittest.mock import MagicMock
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.reference_page import RenderReferencePage
 
     lyt = layout.Layout(
@@ -35779,7 +35217,6 @@ def test_render_reference_page_description():
     """RenderReferencePage.render_description() returns a Div when description exists."""
     from unittest.mock import MagicMock
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.reference_page import RenderReferencePage
 
     lyt = layout.Layout(
@@ -35799,7 +35236,6 @@ def test_render_reference_page_no_description():
     """RenderReferencePage.render_description() returns None when no description."""
     from unittest.mock import MagicMock
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.reference_page import RenderReferencePage
 
     lyt = layout.Layout(
@@ -35817,7 +35253,6 @@ def test_render_reference_page_metadata():
     """RenderReferencePage.render_metadata() returns Meta with title."""
     from unittest.mock import MagicMock
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.reference_page import RenderReferencePage
 
     lyt = layout.Layout(
@@ -35837,7 +35272,6 @@ def test_render_api_page_post_init():
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.api_page import RenderAPIPage
     from great_docs._qrenderer._type_checks import griffe_to_doc
 
@@ -35857,7 +35291,6 @@ def test_render_api_page_has_one_object():
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.api_page import RenderAPIPage
     from great_docs._qrenderer._type_checks import griffe_to_doc
 
@@ -35876,7 +35309,6 @@ def test_render_api_page_metadata():
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.api_page import RenderAPIPage
     from great_docs._qrenderer._type_checks import griffe_to_doc
 
@@ -35900,7 +35332,6 @@ def test_render_api_page_render_body():
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.api_page import RenderAPIPage
     from great_docs._qrenderer._type_checks import griffe_to_doc
 
@@ -35923,7 +35354,6 @@ def test_render_api_page_summary_with_summary_details():
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.api_page import RenderAPIPage
     from great_docs._qrenderer._type_checks import griffe_to_doc
 
@@ -35952,7 +35382,6 @@ def test_render_api_page_summary_multi_no_flatten_raises():
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.api_page import RenderAPIPage
     from great_docs._qrenderer._type_checks import griffe_to_doc
 
@@ -35973,7 +35402,7 @@ def test_render_api_page_summary_multi_no_flatten_raises():
 
 
 def test_label_unknown_kind_raises():
-    """get_label raises ValueError for unknown object kind (line 90)."""
+    """get_label raises ValueError for unknown object kind."""
     from unittest.mock import MagicMock
 
     from great_docs._qrenderer._render._label import get_label
@@ -35989,7 +35418,7 @@ def test_label_unknown_kind_raises():
 
 
 def test_attribute_label_typealias_kind():
-    """_attribute_label returns 'typealias' for type alias kind (line 98)."""
+    """_attribute_label returns 'typealias' for type alias kind."""
     import griffe as gf
 
     from great_docs._qrenderer._render._label import _attribute_label
@@ -36001,7 +35430,7 @@ def test_attribute_label_typealias_kind():
 
 
 def test_attribute_label_typevar_annotation():
-    """_attribute_label returns 'typevar' for TypeVar annotation (line 100)."""
+    """_attribute_label returns 'typevar' for TypeVar annotation."""
     import griffe as gf
 
     from great_docs._qrenderer._render._label import _attribute_label
@@ -36013,7 +35442,7 @@ def test_attribute_label_typevar_annotation():
 
 
 def test_function_label_async():
-    """_function_label returns 'async' for async functions (line 113)."""
+    """_function_label returns 'async' for async functions."""
     import griffe as gf
 
     from great_docs._qrenderer._render._label import _function_label
@@ -36025,7 +35454,7 @@ def test_function_label_async():
 
 
 def test_function_label_classmethod():
-    """_function_label returns 'classmethod' (line 115)."""
+    """_function_label returns 'classmethod'."""
     import griffe as gf
 
     from great_docs._qrenderer._render._label import _function_label
@@ -36037,7 +35466,7 @@ def test_function_label_classmethod():
 
 
 def test_function_label_staticmethod():
-    """_function_label returns 'staticmethod' (line 117)."""
+    """_function_label returns 'staticmethod'."""
     import griffe as gf
 
     from great_docs._qrenderer._render._label import _function_label
@@ -36049,7 +35478,7 @@ def test_function_label_staticmethod():
 
 
 def test_function_label_property():
-    """_function_label returns 'property' (line 119)."""
+    """_function_label returns 'property'."""
     import griffe as gf
 
     from great_docs._qrenderer._render._label import _function_label
@@ -36061,7 +35490,7 @@ def test_function_label_property():
 
 
 def test_class_label_bases_exception():
-    """_class_label catches exceptions accessing bases (lines 130-131)."""
+    """_class_label catches exceptions accessing bases."""
     from unittest.mock import MagicMock, PropertyMock
 
     from great_docs._qrenderer._render._label import _class_label
@@ -36075,7 +35504,7 @@ def test_class_label_bases_exception():
 
 
 def test_class_label_enum():
-    """_class_label returns 'enum' for Enum bases (line 134)."""
+    """_class_label returns 'enum' for Enum bases."""
     import griffe as gf
 
     from great_docs._qrenderer._render._label import _class_label
@@ -36087,7 +35516,7 @@ def test_class_label_enum():
 
 
 def test_class_label_exception():
-    """_class_label returns 'exception' for Exception bases (line 136)."""
+    """_class_label returns 'exception' for Exception bases."""
     import griffe as gf
 
     from great_docs._qrenderer._render._label import _class_label
@@ -36099,7 +35528,7 @@ def test_class_label_exception():
 
 
 def test_class_label_namedtuple():
-    """_class_label returns 'namedtuple' for NamedTuple bases (line 138)."""
+    """_class_label returns 'namedtuple' for NamedTuple bases."""
     import griffe as gf
 
     from great_docs._qrenderer._render._label import _class_label
@@ -36111,7 +35540,7 @@ def test_class_label_namedtuple():
 
 
 def test_class_label_typeddict():
-    """_class_label returns 'typeddict' for TypedDict bases (line 140)."""
+    """_class_label returns 'typeddict' for TypedDict bases."""
     import griffe as gf
 
     from great_docs._qrenderer._render._label import _class_label
@@ -36123,7 +35552,7 @@ def test_class_label_typeddict():
 
 
 def test_class_label_protocol():
-    """_class_label returns 'protocol' for Protocol bases (line 142)."""
+    """_class_label returns 'protocol' for Protocol bases."""
     import griffe as gf
 
     from great_docs._qrenderer._render._label import _class_label
@@ -36135,7 +35564,7 @@ def test_class_label_protocol():
 
 
 def test_class_label_abc():
-    """_class_label returns 'abc' for ABC bases (line 144)."""
+    """_class_label returns 'abc' for ABC bases."""
     import griffe as gf
 
     from great_docs._qrenderer._render._label import _class_label
@@ -36147,7 +35576,7 @@ def test_class_label_abc():
 
 
 def test_extend_base_class_with_super():
-    """extend_base_class handles methods using super() (lines 39-43, 70-97)."""
+    """extend_base_class handles methods using super()."""
     from great_docs._qrenderer._render.extending import extend_base_class
 
     class GrandBase:
@@ -36168,7 +35597,7 @@ def test_extend_base_class_with_super():
 
 
 def test_set_class_attr_with_closure():
-    """set_class_attr adjusts closure-based functions (lines 70-90)."""
+    """set_class_attr adjusts closure-based functions."""
     from great_docs._qrenderer._render.extending import set_class_attr
 
     class Base3:
@@ -36186,7 +35615,7 @@ def test_set_class_attr_with_closure():
 
 
 def test_set_class_attr_property_with_closure():
-    """set_class_attr adjusts property getters with closures (lines 78-80)."""
+    """set_class_attr adjusts property getters with closures."""
     from great_docs._qrenderer._render.extending import set_class_attr
 
     class Target3:
@@ -36199,7 +35628,7 @@ def test_set_class_attr_property_with_closure():
 
 
 def test_set_class_attr_static_method():
-    """set_class_attr handles MethodType (staticmethod) (lines 92-93)."""
+    """set_class_attr handles MethodType (staticmethod)."""
     from types import MethodType
 
     from great_docs._qrenderer._render.extending import set_class_attr
@@ -36217,7 +35646,7 @@ def test_set_class_attr_static_method():
 
 
 def test_exclude_parameters_function():
-    """exclude_parameters updates EXCLUDE_PARAMETERS (line 154, 156)."""
+    """exclude_parameters updates EXCLUDE_PARAMETERS."""
     from great_docs._qrenderer._globals import EXCLUDE_PARAMETERS
     from great_docs._qrenderer._render.extending import exclude_parameters
 
@@ -36231,7 +35660,7 @@ def test_exclude_parameters_function():
 
 
 def test_exclude_attributes_function():
-    """exclude_attributes updates EXCLUDE_ATTRIBUTES (line 205, 207)."""
+    """exclude_attributes updates EXCLUDE_ATTRIBUTES."""
     from great_docs._qrenderer._globals import EXCLUDE_ATTRIBUTES
     from great_docs._qrenderer._render.extending import exclude_attributes
 
@@ -36245,7 +35674,7 @@ def test_exclude_attributes_function():
 
 
 def test_exclude_functions_function():
-    """exclude_functions updates EXCLUDE_FUNCTIONS (line 250, 252)."""
+    """exclude_functions updates EXCLUDE_FUNCTIONS."""
     from great_docs._qrenderer._globals import EXCLUDE_FUNCTIONS
     from great_docs._qrenderer._render.extending import exclude_functions
 
@@ -36259,7 +35688,7 @@ def test_exclude_functions_function():
 
 
 def test_exclude_classes_function():
-    """exclude_classes updates EXCLUDE_CLASSES (line 294, 296)."""
+    """exclude_classes updates EXCLUDE_CLASSES."""
     from great_docs._qrenderer._globals import EXCLUDE_CLASSES
     from great_docs._qrenderer._render.extending import exclude_classes
 
@@ -36273,12 +35702,11 @@ def test_exclude_classes_function():
 
 
 def test_render_reference_page_render_body():
-    """RenderReferencePage.render_body() renders sections (lines 73-76)."""
+    """RenderReferencePage.render_body() renders sections."""
     from unittest.mock import MagicMock, patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.reference_page import RenderReferencePage
 
     func_obj = gf.Function(name="my_func", lineno=1)
@@ -36305,12 +35733,11 @@ def test_render_reference_page_render_body():
 
 
 def test_render_reference_section_body_with_contents():
-    """RenderReferenceSection.render_body() renders Doc objects (lines 103-117)."""
+    """RenderReferenceSection.render_body() renders Doc objects."""
     from unittest.mock import MagicMock, patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.reference_section import RenderReferenceSection
 
     func_obj = gf.Function(name="some_func", lineno=1)
@@ -36336,10 +35763,9 @@ def test_render_reference_section_body_with_contents():
 
 
 def test_render_reference_section_post_init():
-    """RenderReferenceSection.__post_init__() sets section (lines 35-36)."""
+    """RenderReferenceSection.__post_init__() sets section."""
     from unittest.mock import MagicMock
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.reference_section import RenderReferenceSection
 
     section = layout.Section(title="Test", contents=[layout.Auto(name="x")])
@@ -36350,10 +35776,9 @@ def test_render_reference_section_post_init():
 
 
 def test_render_reference_section_title_and_subtitle():
-    """RenderReferenceSection.render_title() for title vs subtitle (lines 50-56)."""
+    """RenderReferenceSection.render_title() for title vs subtitle."""
     from unittest.mock import MagicMock
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.reference_section import RenderReferenceSection
 
     # Title case
@@ -36370,12 +35795,11 @@ def test_render_reference_section_title_and_subtitle():
 
 
 def test_render_api_page_full_lifecycle():
-    """RenderAPIPage full lifecycle with real Doc objects (lines 31-98)."""
+    """RenderAPIPage full lifecycle with real Doc objects."""
     from unittest.mock import MagicMock, patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.api_page import RenderAPIPage
 
     func_obj = gf.Function(name="my_func", lineno=1)
@@ -36418,12 +35842,11 @@ def test_render_api_page_full_lifecycle():
 
 
 def test_render_api_page_with_summary_details():
-    """RenderAPIPage.render_summary() with explicit summary (lines 85-90)."""
+    """RenderAPIPage.render_summary() with explicit summary."""
     from unittest.mock import MagicMock, patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render.api_page import RenderAPIPage
 
     func_obj = gf.Function(name="fn", lineno=1)
@@ -36450,12 +35873,11 @@ def test_render_api_page_with_summary_details():
 
 
 def test_renderdoc_display_name_relative_level_gt1():
-    """RenderDoc.display_name uses 'name' format when level > 1 (line 173)."""
+    """RenderDoc.display_name uses 'name' format when level > 1."""
     from unittest.mock import patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render import RenderDocFunction
     from great_docs._qrenderer._renderer import Renderer
 
@@ -36472,12 +35894,11 @@ def test_renderdoc_display_name_relative_level_gt1():
 
 
 def test_renderdoc_render_annotation_non_attribute_raises():
-    """RenderDoc.render_annotation() raises TypeError for non-attribute (lines 259-264)."""
+    """RenderDoc.render_annotation() raises TypeError for non-attribute."""
     from unittest.mock import patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render import RenderDocFunction
     from great_docs._qrenderer._renderer import Renderer
 
@@ -36493,12 +35914,11 @@ def test_renderdoc_render_annotation_non_attribute_raises():
 
 
 def test_renderdoc_render_annotation_attribute():
-    """RenderDoc.render_annotation() for attribute (lines 266-283)."""
+    """RenderDoc.render_annotation() for attribute."""
     from unittest.mock import patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render import RenderDocAttribute
     from great_docs._qrenderer._renderer import Renderer
 
@@ -36516,12 +35936,11 @@ def test_renderdoc_render_annotation_attribute():
 
 
 def test_renderdoc_render_annotation_none():
-    """RenderDoc.render_annotation() with None annotation (line 271)."""
+    """RenderDoc.render_annotation() with None annotation."""
     from unittest.mock import patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render import RenderDocAttribute
     from great_docs._qrenderer._renderer import Renderer
 
@@ -36538,12 +35957,11 @@ def test_renderdoc_render_annotation_none():
 
 
 def test_renderdoc_docstring_section_deprecated():
-    """RenderDoc handles DocstringSectionDeprecated (lines 469-481)."""
+    """RenderDoc handles DocstringSectionDeprecated."""
     from unittest.mock import MagicMock, patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render import RenderDocFunction
     from great_docs._qrenderer._renderer import Renderer
 
@@ -36565,12 +35983,11 @@ def test_renderdoc_docstring_section_deprecated():
 
 
 def test_renderdoc_docstring_section_examples():
-    """RenderDoc handles DocstringSectionExamples (lines 460, 465)."""
+    """RenderDoc handles DocstringSectionExamples."""
     from unittest.mock import patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render import RenderDocFunction
     from great_docs._qrenderer._renderer import Renderer
 
@@ -36592,12 +36009,11 @@ def test_renderdoc_docstring_section_examples():
 
 
 def test_renderdoc_docstring_section_text_in_div():
-    """RenderDoc wraps 'Text' sections in a Div (line 425)."""
+    """RenderDoc wraps 'Text' sections in a Div."""
     from unittest.mock import patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render import RenderDocFunction
     from great_docs._qrenderer._renderer import Renderer
 
@@ -36618,13 +36034,12 @@ def test_renderdoc_docstring_section_text_in_div():
 
 
 def test_renderdoc_source_link_with_github_url():
-    """RenderDoc.source_link returns Link when GITHUB_REPO_URL is set (lines 566-571)."""
+    """RenderDoc.source_link returns Link when GITHUB_REPO_URL is set."""
     from pathlib import Path
     from unittest.mock import patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render import RenderDocFunction
     from great_docs._qrenderer._renderer import Renderer
 
@@ -36652,12 +36067,11 @@ def test_renderdoc_source_link_with_github_url():
 
 
 def test_renderdoc_see_also_section():
-    """RenderDoc handles See Also section (lines 503-510)."""
+    """RenderDoc handles See Also section."""
     from unittest.mock import patch
 
     import griffe as gf
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._render import RenderDocFunction
     from great_docs._qrenderer._renderer import Renderer
 
@@ -36679,7 +36093,7 @@ def test_renderdoc_see_also_section():
 
 
 def test_prepare_build_directory_config_js_branches():
-    """_prepare_build_directory appends JS files for enabled config options (lines 109-113)."""
+    """_prepare_build_directory appends JS files for enabled config options."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         # Provide a real package with pyproject.toml
@@ -36705,7 +36119,7 @@ def test_prepare_build_directory_config_js_branches():
 
 
 def test_copy_user_guide_files_hyphen_variant():
-    """_copy_user_guide_files falls back to 'user-guide' hyphenated dir (line 172)."""
+    """_copy_user_guide_files falls back to 'user-guide' hyphenated dir."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
@@ -36724,7 +36138,7 @@ def test_copy_user_guide_files_hyphen_variant():
 
 
 def test_update_project_gitignore_force_new():
-    """_update_project_gitignore with force=True creates new .gitignore (lines 315-317)."""
+    """_update_project_gitignore with force=True creates new .gitignore."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
@@ -36738,7 +36152,7 @@ def test_update_project_gitignore_force_new():
 
 
 def test_detect_git_ref_git_describe_tag():
-    """_detect_git_ref returns tag when git describe succeeds (line 3523)."""
+    """_detect_git_ref returns tag when git describe succeeds."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
@@ -36758,7 +36172,7 @@ def test_detect_git_ref_git_describe_tag():
 
 
 def test_detect_git_ref_branch_fallback():
-    """_detect_git_ref returns branch name when tag not found (lines 3537-3538)."""
+    """_detect_git_ref returns branch name when tag not found."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
@@ -36780,7 +36194,7 @@ def test_detect_git_ref_branch_fallback():
 
 
 def test_detect_git_ref_exception_fallback():
-    """_detect_git_ref returns 'main' when subprocess raises (line 3539)."""
+    """_detect_git_ref returns 'main' when subprocess raises."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
@@ -36794,7 +36208,7 @@ def test_detect_git_ref_exception_fallback():
 
 
 def test_get_github_repo_info_git_suffix():
-    """_get_github_repo_info strips .git suffix from repo URL (line 1148)."""
+    """_get_github_repo_info strips .git suffix from repo URL."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text(
@@ -36812,7 +36226,7 @@ def test_get_github_repo_info_git_suffix():
 
 
 def test_get_github_repo_info_no_match():
-    """_get_github_repo_info returns None tuple when URL doesn't match pattern (line 1152)."""
+    """_get_github_repo_info returns None tuple when URL doesn't match pattern."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text(
@@ -36829,7 +36243,7 @@ def test_get_github_repo_info_no_match():
 
 
 def test_detect_docstring_style_no_docstrings():
-    """_detect_docstring_style returns 'numpy' when no docstrings found (line 4132)."""
+    """_detect_docstring_style returns 'numpy' when no docstrings found."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         pkg_dir = tmp / "nodocpkg2"
@@ -36848,7 +36262,7 @@ def test_detect_docstring_style_no_docstrings():
 
 
 def test_detect_docstring_style_google():
-    """_detect_docstring_style detects google style without numpy dashes (line 4184)."""
+    """_detect_docstring_style detects google style without numpy dashes."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         pkg_dir = tmp / "googlepkg2"
@@ -36894,7 +36308,7 @@ def sub(a, b):
 
 
 def test_detect_module_name_where_string():
-    """_detect_module_name handles [tool.setuptools.packages.find] where as a string (line 732)."""
+    """_detect_module_name handles [tool.setuptools.packages.find] where as a string."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         # Create pyproject.toml with where as a string instead of list
@@ -36913,7 +36327,7 @@ def test_detect_module_name_where_string():
 
 
 def test_inject_section_body_class_yaml_error():
-    """_inject_section_body_class skips files with invalid YAML frontmatter (line 1898-1900)."""
+    """_inject_section_body_class skips files with invalid YAML frontmatter."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
@@ -36945,7 +36359,7 @@ def test_inject_section_body_class_yaml_error():
 
 
 def test_inject_section_body_class_adds_body_class():
-    """_inject_section_body_class adds class to valid QMD files (lines 1905-1935)."""
+    """_inject_section_body_class adds class to valid QMD files."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
@@ -36965,7 +36379,7 @@ def test_inject_section_body_class_adds_body_class():
 
 
 def test_fetch_github_releases_with_token():
-    """_fetch_github_releases adds auth header when GITHUB_TOKEN is set (line 1193)."""
+    """_fetch_github_releases adds auth header when GITHUB_TOKEN is set."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
@@ -37000,7 +36414,7 @@ def test_fetch_github_releases_with_token():
 
 
 def test_fetch_github_releases_rate_limited():
-    """_fetch_github_releases handles 403 rate limit (line 1220)."""
+    """_fetch_github_releases handles 403 rate limit."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
@@ -37018,7 +36432,7 @@ def test_fetch_github_releases_rate_limited():
 
 
 def test_detect_dynamic_mode_empty_package_name():
-    """_detect_dynamic_mode returns True for empty package name (line 4227-4229)."""
+    """_detect_dynamic_mode returns True for empty package name."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
@@ -37029,7 +36443,7 @@ def test_detect_dynamic_mode_empty_package_name():
 
 
 def test_rewrite_href_recursive_nested_list():
-    """_rewrite_href_recursive rewrites hrefs in nested lists/dicts (line 3149-3191)."""
+    """_rewrite_href_recursive rewrites hrefs in nested lists/dicts."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
@@ -37076,7 +36490,7 @@ def test_rewrite_href_recursive_nested_list():
 
 
 def test_build_github_source_url_with_source_path():
-    """_build_github_source_url uses custom source_link_path (line 3457)."""
+    """_build_github_source_url uses custom source_link_path."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text(
@@ -37127,7 +36541,6 @@ def test_type_sections_items_combines_all():
     """TypeSections.items returns protocols + typevars + typealiases combined."""
     from unittest.mock import MagicMock, patch
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._renderer import Renderer
     from great_docs._qrenderer.typing_information import TypeSections
 
@@ -37164,7 +36577,6 @@ def test_type_sections_post_init_protocols_no_summary():
     """TypeSections.__post_init__ sets show_members_summary=False on protocols."""
     from unittest.mock import MagicMock, patch
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._renderer import Renderer
     from great_docs._qrenderer.typing_information import TypeSections
 
@@ -37195,7 +36607,6 @@ def test_type_sections_post_init_typevars_no_sig_name():
     """TypeSections.__post_init__ sets show_signature_name=False on typevars."""
     from unittest.mock import MagicMock, patch
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._renderer import Renderer
     from great_docs._qrenderer.typing_information import TypeSections
 
@@ -37226,7 +36637,6 @@ def test_type_sections_post_init_typealiases_settings():
     """TypeSections.__post_init__ sets show_signature_name=False and show_signature_annotation=False on typealiases."""
     from unittest.mock import MagicMock, patch
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._renderer import Renderer
     from great_docs._qrenderer.typing_information import TypeSections
 
@@ -37258,7 +36668,6 @@ def test_type_sections_render_body_protocols_section():
     """TypeSections.render_body includes 'Protocols' header when protocols exist."""
     from unittest.mock import MagicMock, patch
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._renderer import Renderer
     from great_docs._qrenderer.typing_information import TypeSections
 
@@ -37294,7 +36703,6 @@ def test_type_sections_render_body_typevars_section():
     """TypeSections.render_body includes 'Type Variables' header when typevars exist."""
     from unittest.mock import MagicMock, patch
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._renderer import Renderer
     from great_docs._qrenderer.typing_information import TypeSections
 
@@ -37328,7 +36736,6 @@ def test_type_sections_render_body_typealiases_section():
     """TypeSections.render_body includes 'Type Aliases' header when typealiases exist."""
     from unittest.mock import MagicMock, patch
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._renderer import Renderer
     from great_docs._qrenderer.typing_information import TypeSections
 
@@ -37362,7 +36769,6 @@ def test_type_sections_render_body_all_sections():
     """TypeSections.render_body includes all three section headers when all types present."""
     from unittest.mock import MagicMock, patch
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._renderer import Renderer
     from great_docs._qrenderer.typing_information import TypeSections
 
@@ -37622,7 +37028,6 @@ def test_type_information_write_extends_builder_items():
     import tempfile
     from unittest.mock import MagicMock, patch
 
-    from great_docs._qrenderer import layout
     from great_docs._qrenderer._renderer import Renderer
     from great_docs._qrenderer.typing_information import TypeInformation
 
