@@ -932,45 +932,95 @@ reference:
 
 ## Agent Skills (skill.md)
 
-Great Docs automatically generates a `skill.md` file conforming to the [Agent Skills](https://agentskills.io/) open standard. This file gives AI coding agents—such as Claude Code, GitHub Copilot, Cursor, Codex, Gemini CLI, and 30+ others—structured context about your package so they can write better code when using it.
+Great Docs supports the [Agent Skills](https://agentskills.io/) open standard, which gives AI coding agents (Claude Code, GitHub Copilot, Cursor, Codex, Gemini CLI, and 30+ others) structured context about your package so they can write better code when using it.
 
-The generated `skill.md` includes:
-
-- Package name, description, and installation command
-- An API overview with each section and docstring summaries
-- Links to `llms.txt` and `llms-full.txt` for deeper context
-- Optional gotchas, best practices, and decision tables you provide
-
-### Default Behavior
-
-Skill generation is **enabled by default**. The file is:
-
-- Written to your docs directory as `skill.md`
-- Copied to `.well-known/skills/default/SKILL.md` for auto-discovery
-- Linked in the homepage margin sidebar alongside `llms.txt`
-
-Users can install your skill with:
+During the build, a `skill.md` file is placed in your docs directory (and at `.well-known/skills/default/SKILL.md` for auto-discovery). Users of your package can then install the skill into their agent of choice:
 
 ```bash
 npx skills add https://your-docs-site.com
 ```
 
-### Configuration
+### Writing your own skill (recommended)
 
-```{.yaml filename="great-docs.yml"}
-skill:
-  enabled: true          # Set to false to disable skill.md generation
-  file: null             # Path to a hand-written SKILL.md (overrides auto-generation)
-  well_known: true       # Serve at /.well-known/skills/default/SKILL.md
-  gotchas: []            # List of gotcha strings
-  best_practices: []     # List of best-practice strings
-  decision_table: []     # Rows: [{need: "...", use: "..."}]
-  extra_body: null       # Path to extra Markdown to append
+The best results come from a hand-crafted skill written by someone who knows the package well: you! Create a `SKILL.md` file in `skills/<package-name>/` at your project root:
+
+```
+my-package/
+├── skills/
+│   └── my-package/
+│       └── SKILL.md    ← Your curated skill
+├── pyproject.toml
+└── great-docs.yml
 ```
 
-### Adding Gotchas and Best Practices
+Great Docs automatically detects this file and uses it instead of generating one. The `skills/` directory also makes your skill installable directly from GitHub:
 
-Help agents avoid common mistakes by listing gotchas and best practices:
+```bash
+npx skills add owner/my-package
+```
+
+#### What to include
+
+A good skill is a **cheat sheet for agents**: concise, opinionated, and focused on the decisions and mistakes that matter most.
+
+**YAML frontmatter** (required by the [spec](https://agentskills.io/specification)):
+
+```markdown
+---
+name: my-package
+description: >
+  Build widgets with my-package. Use when creating, configuring, or
+  troubleshooting widgets in Python.
+license: MIT
+compatibility: Requires Python >=3.10.
+---
+```
+
+The `name` field must be lowercase with hyphens only (max 64 chars) and match the directory name. The `description` should say both **what the skill does** and **when to use it**.
+
+**Recommended body sections:**
+
+| Section | Purpose |
+|---------|---------|
+| **Installation** | `pip install` command |
+| **Decision table** | Map common tasks → the right class/function |
+| **Gotchas** | Mistakes agents make repeatedly without guidance |
+| **Capabilities & boundaries** | What agents can configure vs. what needs human setup |
+| **Resources** | Links to `llms.txt`, `llms-full.txt`, and full docs |
+
+**Example decision table:**
+
+```markdown
+| Need                    | Use                |
+|-------------------------|--------------------|
+| Create a widget         | `Widget()`         |
+| Style a widget          | `Widget.style()`   |
+| Export to HTML          | `Widget.to_html()` |
+```
+
+**Example gotchas:**
+
+```markdown
+1. Always call `init()` before `process()` — order matters.
+2. The module name is `my_pkg`, not `my-package`.
+3. Use `dynamic: false` for packages with circular imports.
+```
+
+Keep the file under 500 lines. Link out to `llms-full.txt` for anything that needs more detail.
+
+### Automatic generation (fallback)
+
+If no curated skill exists in `skills/<package-name>/`, Great Docs auto-generates one from your package metadata and API reference. The generated file includes:
+
+- Package name, description, and `pip install` command
+- An API overview with section titles and docstring summaries
+- Links to `llms.txt` and `llms-full.txt`
+
+This is a reasonable starting point, but a hand-written skill will always produce better results because you can encode tribal knowledge (gotchas, decision tables, best practices) that can't be inferred from docstrings alone.
+
+### Enriching the generated skill
+
+If you'd rather let Great Docs generate the base skill but want to add your own sections, use the configuration options in `great-docs.yml`:
 
 ```{.yaml filename="great-docs.yml"}
 skill:
@@ -981,35 +1031,36 @@ skill:
   best_practices:
     - "Use context managers for resource cleanup"
     - "Prefer keyword arguments for clarity"
-```
-
-### Decision Tables
-
-Guide agents to the right class or function for each task:
-
-```{.yaml filename="great-docs.yml"}
-skill:
   decision_table:
     - need: "Parse a CSV file"
       use: "read_csv()"
     - need: "Write results to disk"
       use: "Writer()"
-    - need: "Transform columns"
-      use: "DataFrame.mutate()"
+  extra_body: skill-extra.md  # Append extra Markdown from this file
 ```
 
-### Using a Hand-Written Skill
-
-For full control, write your own `SKILL.md` and point to it:
+### Configuration reference
 
 ```{.yaml filename="great-docs.yml"}
 skill:
-  file: skill.md  # Relative to project root
+  enabled: true          # Set to false to disable skill.md entirely
+  file: null             # Path to a SKILL.md (overrides both curated and generated)
+  well_known: true       # Also serve at /.well-known/skills/default/SKILL.md
+  gotchas: []            # Gotcha strings (for auto-generated skill)
+  best_practices: []     # Best-practice strings (for auto-generated skill)
+  decision_table: []     # Rows: [{need: "...", use: "..."}]
+  extra_body: null       # Path to extra Markdown to append (for auto-generated skill)
 ```
 
-The file must have valid YAML frontmatter with `name` and `description` fields per the [Agent Skills specification](https://agentskills.io/specification).
+### Resolution order
 
-### Disabling Skill Generation
+Great Docs resolves the skill file in this order:
+
+1. **`skill.file`** in `great-docs.yml`: explicit path, highest priority
+2. **`skills/<package-name>/SKILL.md`**: curated skill in the repo (checked with both hyphenated and underscored package name)
+3. **Auto-generated**: built from package metadata and API sections
+
+### Disabling skill generation
 
 ```{.yaml filename="great-docs.yml"}
 skill:
