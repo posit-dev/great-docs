@@ -240,6 +240,7 @@ from great_docs.cli import (
     uninstall,
 )
 
+
 def test_great_docs_init():
     """Test GreatDocs initialization."""
     docs = GreatDocs()
@@ -6561,7 +6562,6 @@ class TestMdRendererRenderAnnotation:
         assert "int" in result
 
     def test_expr_name_no_interlinks(self):
-
         renderer = MdRenderer(render_interlinks=False)
         el = expr.ExprName("MyType")
         result = renderer.render_annotation(el)
@@ -6569,7 +6569,6 @@ class TestMdRendererRenderAnnotation:
         assert "[" not in result
 
     def test_expr_name_with_interlinks(self):
-
         renderer = MdRenderer(render_interlinks=True)
         el = expr.ExprName("MyType")
         result = renderer.render_annotation(el)
@@ -7144,7 +7143,6 @@ class TestMdRendererRenderSectionExamples:
     """MdRenderer._render_section_examples handles Examples sections."""
 
     def test_example_section(self):
-
         renderer = MdRenderer()
         examples = ds.DocstringSectionExamples(
             value=[
@@ -7316,7 +7314,6 @@ class TestRenderAnnotationExpr:
     """MdRenderer.render_annotation handles Expr (iterable of sub-annotations)."""
 
     def test_expr_iterable(self):
-
         renderer = MdRenderer()
         # ExprSubscript is an Expr subclass that iterates over its children
         name = expr.ExprName("Optional")
@@ -24724,7 +24721,6 @@ def test_discover_click_cli_no_click():
 
         # Simpler approach: mock the import
         with patch.object(docs, "_get_package_metadata", return_value={"cli_enabled": True}):
-
             original_import = (
                 __builtins__.__import__ if hasattr(__builtins__, "__import__") else __import__
             )
@@ -24743,7 +24739,6 @@ def test_discover_click_cli_with_explicit_cli_module():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-
 
         mock_cli = click.Group(name="test-cli", help="Test CLI")
 
@@ -24776,7 +24771,6 @@ def test_discover_click_cli_auto_discovers_module():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-
 
         mock_cmd = click.Command(name="tool", callback=lambda: None)
 
@@ -24816,7 +24810,6 @@ def test_discover_click_cli_explicit_cli_name():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-
 
         mock_app = click.Group(name="myapp", help="My app")
 
@@ -24892,7 +24885,6 @@ def test_discover_click_cli_fallback_dir_search():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-
 
         # Create a module with a non-standard Click command name
         mock_module = types.ModuleType("pkg.cli")
@@ -27034,7 +27026,6 @@ def test_categorize_api_objects_griffe_load_failure():
         try:
             docs = GreatDocs(project_path=tmp_dir)
 
-
             with patch.object(griffe, "load", side_effect=RuntimeError("load failed")):
                 result = docs._categorize_api_objects("loadfailpkg", ["func"])
 
@@ -27069,7 +27060,6 @@ def test_categorize_api_objects_cyclic_alias():
 def test_sub_classify_class_typeddict():
     """Test _sub_classify_class detects TypedDict."""
 
-
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg_dir = Path(tmp_dir) / "tdpkg"
         pkg_dir.mkdir()
@@ -27095,7 +27085,6 @@ def test_sub_classify_class_typeddict():
 
 def test_sub_classify_class_abc():
     """Test _sub_classify_class detects ABC."""
-
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg_dir = Path(tmp_dir) / "abcpkg"
@@ -28099,13 +28088,11 @@ def test_update_quarto_config_no_releases():
 
 
 def test_get_parser_defaults_numpy():
-
     result = get_parser_defaults("numpy")
     assert result == {}
 
 
 def test_get_parser_defaults_unknown():
-
     result = get_parser_defaults("unknown_parser")
     assert result == {}
 
@@ -28127,7 +28114,6 @@ def test_get_object_module_only():
 def test_get_object_deprecated_object_name():
     """get_object with the deprecated object_name parameter still works."""
 
-
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         obj = get_object("json", object_name="dumps")
@@ -28136,7 +28122,6 @@ def test_get_object_deprecated_object_name():
 
 def test_get_object_deprecated_object_name_warns():
     """get_object with object_name emits a DeprecationWarning."""
-
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -28196,7 +28181,6 @@ def test_get_object_nested_path():
         )
         sys.path.insert(0, tmp_dir)
         try:
-
             obj = get_object("introtest_nested:Outer.Inner")
             assert obj.name == "Inner"
         finally:
@@ -28280,7 +28264,6 @@ def test_replace_docstring_class_replaces_members():
         )
         sys.path.insert(0, tmp_dir)
         try:
-
             obj = get_object("introtest_repdoc:MyClass")
             replace_docstring(obj)
             # Should not raise
@@ -28307,7 +28290,6 @@ def test_replace_docstring_nested_class():
         )
         sys.path.insert(0, tmp_dir)
         try:
-
             obj = get_object("introtest_nested_cls:Outer.Inner.method")
             replace_docstring(obj)
             assert obj.docstring is not None
@@ -28605,7 +28587,6 @@ def test_dynamic_alias_from_test_package():
         )
         sys.path.insert(0, tmp_dir)
         try:
-
             obj = dynamic_alias("introtest_dyn:my_func")
             assert obj.name == "my_func"
         finally:
@@ -28624,7 +28605,6 @@ def test_dynamic_alias_canonical_path_match():
         )
         sys.path.insert(0, tmp_dir)
         try:
-
             obj = dynamic_alias("introtest_canon:hello")
             assert obj.name == "hello"
         finally:
@@ -28649,7 +28629,6 @@ def test_dynamic_alias_reexported_creates_alias():
         )
         sys.path.insert(0, tmp_dir)
         try:
-
             obj = dynamic_alias("introtest_reexp:helper")
             # Should be either an Alias or the resolved object
             assert obj is not None
@@ -33382,7 +33361,6 @@ def test_renderer_write_typing_information():
 def test_docclass_attributes_excludes_dataclass_params():
     """DocClass.attributes filters out dataclass params when is_dataclass=True."""
 
-
     from great_docs._qrenderer._renderer import Renderer
 
     cls_obj = dc.Class(name="DC", lineno=1)
@@ -33427,7 +33405,6 @@ def test_docclass_attributes_excludes_dataclass_params():
 def test_docclass_parameter_attributes_with_dataclass():
     """DocClass.parameter_attributes returns params found in class attributes."""
 
-
     from great_docs._qrenderer._renderer import Renderer
 
     cls_obj = dc.Class(name="DC2", lineno=1)
@@ -33460,7 +33437,6 @@ def test_docclass_parameter_attributes_with_dataclass():
 
 def test_docclass_init_parameters_with_dataclass():
     """DocClass.init_parameters returns params NOT in class attributes."""
-
 
     from great_docs._qrenderer._renderer import Renderer
 
@@ -33627,7 +33603,6 @@ def test_extract_directives_seealso_empty_entry():
 def test_docattribute_render_signature_type_kind():
     """DocAttribute.render_signature() clears name/annotation for TypeAlias kind."""
 
-
     from great_docs._qrenderer._renderer import Renderer
 
     attr_obj = dc.Attribute(name="MyType", lineno=1)
@@ -33654,7 +33629,6 @@ def test_docattribute_render_signature_type_kind():
 def test_mixin_page_render_title():
     """RenderPageMixin.render_title() returns render_metadata()."""
 
-
     # Create instance bypassing __init__
     obj = object.__new__(RenderPageMixin)
     obj.layout_obj = MagicMock()
@@ -33679,7 +33653,6 @@ def test_get_render_type_valid_type():
 def test_renderbase_summary_property():
     """RenderBase.summary calls render_summary()."""
 
-
     rb = object.__new__(RenderBase)
     rb.layout_obj = MagicMock()
     rb.renderer = MagicMock()
@@ -33691,7 +33664,6 @@ def test_renderbase_summary_property():
 
 def test_docclass_attribute_member_pages_dataclass():
     """DocClass.attribute_member_pages filters dataclass params."""
-
 
     from great_docs._qrenderer._renderer import Renderer
 
@@ -33769,7 +33741,6 @@ def test_dc_docstring_section_bool():
 
     section_empty = DCDocstringSection(value=[], title="Empty")
     assert not section_empty
-
 
     section_full = DCDocstringSection(value=[MagicMock()], title="Full")
     assert section_full
@@ -33895,7 +33866,6 @@ def test_shortcode_str():
 def test_is_typealias_with_exprname():
     """is_typealias returns True for Attribute with TypeAlias annotation."""
 
-
     attr = gf.Attribute(name="MyType", lineno=1)
     attr.annotation = gf.ExprName("TypeAlias")
     assert is_typealias(attr) is True
@@ -33903,7 +33873,6 @@ def test_is_typealias_with_exprname():
 
 def test_is_typealias_with_str_annotation():
     """is_typealias returns True for Attribute with string annotation."""
-
 
     attr = gf.Attribute(name="X", lineno=1)
     attr.annotation = "TypeAlias"
@@ -33913,14 +33882,12 @@ def test_is_typealias_with_str_annotation():
 def test_is_typealias_not_attribute():
     """is_typealias returns False for non-Attribute."""
 
-
     func = gf.Function(name="foo", lineno=1)
     assert is_typealias(func) is False
 
 
 def test_is_typealias_no_annotation():
     """is_typealias returns False for Attribute without annotation."""
-
 
     attr = gf.Attribute(name="X", lineno=1)
     attr.annotation = None
@@ -33930,7 +33897,6 @@ def test_is_typealias_no_annotation():
 def test_is_typealias_other_exprname():
     """is_typealias returns False when annotation is ExprName but not TypeAlias."""
 
-
     attr = gf.Attribute(name="X", lineno=1)
     attr.annotation = gf.ExprName("int")
     assert is_typealias(attr) is False
@@ -33938,7 +33904,6 @@ def test_is_typealias_other_exprname():
 
 def test_is_protocol_true():
     """is_protocol returns True for class extending typing.Protocol."""
-
 
     cls = gf.Class(name="MyProto", lineno=1)
     base = gf.ExprName("Protocol")
@@ -33953,14 +33918,12 @@ def test_is_protocol_true():
 def test_is_protocol_false():
     """is_protocol returns False for regular class."""
 
-
     cls = gf.Class(name="Regular", lineno=1)
     assert is_protocol(cls) is False
 
 
 def test_is_typevar_true():
     """is_typevar returns True for TypeVar attribute."""
-
 
     attr = gf.Attribute(name="T", lineno=1)
     attr.value = gf.ExprCall(
@@ -33973,7 +33936,6 @@ def test_is_typevar_true():
 def test_is_typevar_false():
     """is_typevar returns False for non-TypeVar."""
 
-
     attr = gf.Attribute(name="X", lineno=1)
     attr.value = "something"
     assert is_typevar(attr) is False
@@ -33981,7 +33943,6 @@ def test_is_typevar_false():
 
 def test_is_initvar_true():
     """is_initvar returns True for InitVar subscript."""
-
 
     left = gf.ExprName("InitVar")
     expr = gf.ExprSubscript(left=left, slice=gf.ExprName("int"))
@@ -34001,7 +33962,6 @@ def test_is_initvar_false():
 def test_isdoc_module():
     """isDoc.Module checks obj.is_attribute."""
 
-
     el = MagicMock()
     el.obj.is_attribute = True
     assert isDoc.Module(el) is True
@@ -34013,7 +33973,6 @@ def test_isdoc_module():
 
 def test_griffe_to_doc():
     """griffe_to_doc converts griffe object to layout Doc."""
-
 
     func = gf.Function(name="my_func", lineno=1)
     result = griffe_to_doc(func, deep=False)
@@ -34034,7 +33993,6 @@ def test_no_init():
 def test_is_field_init_false_true():
     """is_field_init_false returns True for field(init=False)."""
 
-
     param = gf.Parameter(
         name="x",
         kind=gf.ParameterKind.positional_or_keyword,
@@ -34048,7 +34006,6 @@ def test_is_field_init_false_true():
 
 def test_is_field_init_false_no_field():
     """is_field_init_false returns False for non-field default."""
-
 
     param = gf.Parameter(
         name="x",
@@ -34072,7 +34029,6 @@ def test_canonical_path_with_type():
 def test_canonical_path_with_class():
     """_canonical_path returns full path for non-builtin type."""
     from great_docs._qrenderer._tools import _canonical_path
-
 
     result = _canonical_path(Attr)
     assert "Attr" in result
@@ -34122,7 +34078,6 @@ def test_format_see_also():
 def test_format_name_short():
     """format_name returns obj.name for 'short' format."""
 
-
     obj = gf.Function(name="my_func", lineno=1)
     doc = DocFunction(name="my_func", obj=obj)
     result = format_name(doc, "short")
@@ -34131,7 +34086,6 @@ def test_format_name_short():
 
 def test_format_name_full():
     """format_name returns obj.path for 'full' format."""
-
 
     obj = gf.Function(name="my_func", lineno=1)
     doc = DocFunction(name="my_func", obj=obj)
@@ -34143,7 +34097,6 @@ def test_format_name_full():
 def test_format_name_canonical():
     """format_name returns obj.canonical_path for 'canonical' format."""
 
-
     obj = gf.Function(name="my_func", lineno=1)
     doc = DocFunction(name="my_func", obj=obj)
     result = format_name(doc, "canonical")
@@ -34152,7 +34105,6 @@ def test_format_name_canonical():
 
 def test_format_name_unknown_raises():
     """format_name raises ValueError for unknown format."""
-
 
     obj = gf.Function(name="f", lineno=1)
     doc = DocFunction(name="f", obj=obj)
@@ -34169,7 +34121,6 @@ def test_repr_obj_default():
 
 def test_repr_obj_expr():
     """repr_obj for gf.Expr iterates and joins."""
-
 
     # A simple ExprName
     name = gf.ExprName("int")
@@ -34233,14 +34184,12 @@ def test_format_value():
 def test_get_label_function():
     """get_label returns 'function' for a top-level function."""
 
-
     obj = gf.Function(name="my_func", lineno=1)
     assert get_label(obj) == "function"
 
 
 def test_get_label_class():
     """get_label returns 'class' for a plain class."""
-
 
     obj = gf.Class(name="MyClass", lineno=1)
     assert get_label(obj) == "class"
@@ -34249,7 +34198,6 @@ def test_get_label_class():
 def test_get_label_module():
     """get_label returns 'module' for a module."""
 
-
     obj = gf.Module(name="mymod")
     assert get_label(obj) == "module"
 
@@ -34257,14 +34205,12 @@ def test_get_label_module():
 def test_get_label_attribute_constant():
     """get_label returns 'constant' for a plain attribute."""
 
-
     obj = gf.Attribute(name="MY_CONST", lineno=1)
     assert get_label(obj) == "constant"
 
 
 def test_attribute_label_typealias():
     """_attribute_label returns 'typealias' for a type alias."""
-
 
     obj = MagicMock(spec=gf.Attribute)
     obj.kind.value = "type alias"
@@ -34276,7 +34222,6 @@ def test_attribute_label_typealias():
 def test_attribute_label_typevar():
     """_attribute_label returns 'typevar' for TypeVar annotation."""
 
-
     obj = gf.Attribute(name="T", lineno=1, annotation="TypeVar('T')")
     assert _attribute_label(obj) == "typevar"
 
@@ -34284,14 +34229,12 @@ def test_attribute_label_typevar():
 def test_attribute_label_paramspec():
     """_attribute_label returns 'typevar' for ParamSpec annotation."""
 
-
     obj = gf.Attribute(name="P", lineno=1, annotation="ParamSpec('P')")
     assert _attribute_label(obj) == "typevar"
 
 
 def test_attribute_label_property():
     """_attribute_label returns 'property' for a property attribute."""
-
 
     obj = gf.Attribute(name="val", lineno=1)
     obj.labels.add("property")
@@ -34301,7 +34244,6 @@ def test_attribute_label_property():
 def test_function_label_method():
     """_function_label returns 'method' for a class method."""
 
-
     parent = gf.Class(name="MyClass", lineno=1)
     obj = gf.Function(name="do_thing", lineno=2, parent=parent)
     assert _function_label(obj) == "method"
@@ -34309,7 +34251,6 @@ def test_function_label_method():
 
 def test_function_label_async():
     """_function_label returns 'async' for an async function."""
-
 
     obj = gf.Function(name="my_async", lineno=1)
     obj.labels.add("async")
@@ -34319,7 +34260,6 @@ def test_function_label_async():
 def test_function_label_classmethod():
     """_function_label returns 'classmethod' for a classmethod."""
 
-
     obj = gf.Function(name="from_config", lineno=1)
     obj.labels.add("classmethod")
     assert _function_label(obj) == "classmethod"
@@ -34327,7 +34267,6 @@ def test_function_label_classmethod():
 
 def test_function_label_staticmethod():
     """_function_label returns 'staticmethod' for a staticmethod."""
-
 
     obj = gf.Function(name="helper", lineno=1)
     obj.labels.add("staticmethod")
@@ -34337,7 +34276,6 @@ def test_function_label_staticmethod():
 def test_function_label_property():
     """_function_label returns 'property' for a property function."""
 
-
     obj = gf.Function(name="value", lineno=1)
     obj.labels.add("property")
     assert _function_label(obj) == "property"
@@ -34345,7 +34283,6 @@ def test_function_label_property():
 
 def test_class_label_dataclass():
     """_class_label returns 'dataclass' for a dataclass."""
-
 
     obj = gf.Class(name="MyDC", lineno=1)
     obj.labels.add("dataclass")
@@ -34355,7 +34292,6 @@ def test_class_label_dataclass():
 def test_class_label_enum():
     """_class_label returns 'enum' for an enum class."""
 
-
     obj = gf.Class(name="Color", lineno=1)
     obj.bases = [ExprName("Enum")]
     assert _class_label(obj) == "enum"
@@ -34363,7 +34299,6 @@ def test_class_label_enum():
 
 def test_class_label_exception():
     """_class_label returns 'exception' for an exception class."""
-
 
     obj = gf.Class(name="MyError", lineno=1)
     obj.bases = [ExprName("ValueError")]
@@ -34373,7 +34308,6 @@ def test_class_label_exception():
 def test_class_label_namedtuple():
     """_class_label returns 'namedtuple' for a NamedTuple class."""
 
-
     obj = gf.Class(name="Point", lineno=1)
     obj.bases = [ExprName("NamedTuple")]
     assert _class_label(obj) == "namedtuple"
@@ -34381,7 +34315,6 @@ def test_class_label_namedtuple():
 
 def test_class_label_typeddict():
     """_class_label returns 'typeddict' for a TypedDict class."""
-
 
     obj = gf.Class(name="Config", lineno=1)
     obj.bases = [ExprName("TypedDict")]
@@ -34391,7 +34324,6 @@ def test_class_label_typeddict():
 def test_class_label_protocol():
     """_class_label returns 'protocol' for a Protocol class."""
 
-
     obj = gf.Class(name="Readable", lineno=1)
     obj.bases = [ExprName("Protocol")]
     assert _class_label(obj) == "protocol"
@@ -34400,7 +34332,6 @@ def test_class_label_protocol():
 def test_class_label_abc():
     """_class_label returns 'abc' for an ABC class."""
 
-
     obj = gf.Class(name="Base", lineno=1)
     obj.bases = [ExprName("ABC")]
     assert _class_label(obj) == "abc"
@@ -34408,7 +34339,6 @@ def test_class_label_abc():
 
 def test_convert_inventory_dict(tmp_path):
     """convert_inventory writes a dict directly as JSON."""
-
 
     inv = {"project": "test", "version": "1.0", "items": []}
     out = str(tmp_path / "inv.json")
@@ -34436,7 +34366,6 @@ def test_convert_inventory_unsupported_type():
 def test_convert_inventory_sphobjinv(tmp_path):
     """convert_inventory handles sphobjinv-like Inventory objects."""
 
-
     mock_inv = MagicMock()
     mock_inv.json_dict.return_value = {
         "project": "myproj",
@@ -34457,7 +34386,6 @@ def test_convert_inventory_sphobjinv(tmp_path):
 def test_create_inventory_basic():
     """create_inventory returns a properly structured dict."""
 
-
     obj = gf.Function(name="my_func", lineno=1)
     result = create_inventory("myproj", "1.0", [obj])
 
@@ -34470,7 +34398,6 @@ def test_create_inventory_basic():
 
 def test_create_inventory_with_layout_item():
     """create_inventory handles layout.Item objects."""
-
 
     obj = gf.Function(name="my_func", lineno=1)
     item = layout.Item(
@@ -34490,7 +34417,6 @@ def test_create_inventory_with_layout_item():
 def test_create_inventory_custom_uri_and_dispname():
     """create_inventory uses custom uri/dispname callables."""
 
-
     obj = gf.Function(name="my_func", lineno=1)
     result = create_inventory(
         "myproj",
@@ -34506,7 +34432,6 @@ def test_create_inventory_custom_uri_and_dispname():
 
 def test_create_inventory_string_dispname():
     """create_inventory uses string dispname directly."""
-
 
     obj = gf.Function(name="my_func", lineno=1)
     result = create_inventory("myproj", "1.0", [obj], dispname="-")
@@ -34590,7 +34515,6 @@ def test_set_class_attr_property():
 def test_set_class_attr_cached_property():
     """set_class_attr handles cached_property values."""
 
-
     class Target:
         pass
 
@@ -34652,7 +34576,6 @@ def test_exclude_classes_updates_globals():
 def test_render_reference_section_title():
     """RenderReferenceSection.render_title() returns a Header."""
 
-
     section = layout.Section(title="Functions", contents=[layout.Auto(name="x")])
     renderer = MagicMock()
     rs = RenderReferenceSection(layout_obj=section, renderer=renderer, level=1)
@@ -34664,7 +34587,6 @@ def test_render_reference_section_title():
 
 def test_render_reference_section_subtitle():
     """RenderReferenceSection.render_title() handles subtitles."""
-
 
     section = layout.Section(subtitle="Helper Functions", contents=[layout.Auto(name="x")])
     renderer = MagicMock()
@@ -34678,7 +34600,6 @@ def test_render_reference_section_subtitle():
 def test_render_reference_section_no_title():
     """RenderReferenceSection.render_title() returns None when no title/subtitle."""
 
-
     section = layout.Section(contents=[layout.Auto(name="x")])
     renderer = MagicMock()
     rs = RenderReferenceSection(layout_obj=section, renderer=renderer, level=1)
@@ -34689,7 +34610,6 @@ def test_render_reference_section_no_title():
 
 def test_render_reference_section_description():
     """RenderReferenceSection.render_description() returns a Div."""
-
 
     section = layout.Section(title="Test", desc="A description", contents=[layout.Auto(name="x")])
     renderer = MagicMock()
@@ -34702,7 +34622,6 @@ def test_render_reference_section_description():
 def test_render_reference_section_body_empty():
     """RenderReferenceSection.render_body() returns None for empty section."""
 
-
     section = layout.Section(title="Empty", contents=[])
     renderer = MagicMock()
     rs = RenderReferenceSection(layout_obj=section, renderer=renderer, level=1)
@@ -34713,7 +34632,6 @@ def test_render_reference_section_body_empty():
 
 def test_render_reference_page_post_init():
     """RenderReferencePage.__post_init__ sets layout, sections, package, options."""
-
 
     lyt = layout.Layout(
         title="API Ref",
@@ -34733,7 +34651,6 @@ def test_render_reference_page_post_init():
 def test_render_reference_page_description():
     """RenderReferencePage.render_description() returns a Div when description exists."""
 
-
     lyt = layout.Layout(
         title="API Ref",
         description="My description",
@@ -34750,7 +34667,6 @@ def test_render_reference_page_description():
 def test_render_reference_page_no_description():
     """RenderReferencePage.render_description() returns None when no description."""
 
-
     lyt = layout.Layout(
         title="API Ref",
         sections=[layout.Section(title="S", contents=[layout.Auto(name="x")])],
@@ -34764,7 +34680,6 @@ def test_render_reference_page_no_description():
 
 def test_render_reference_page_metadata():
     """RenderReferencePage.render_metadata() returns Meta with title."""
-
 
     lyt = layout.Layout(
         title="API Reference",
@@ -34780,7 +34695,6 @@ def test_render_reference_page_metadata():
 def test_render_api_page_post_init():
     """RenderAPIPage.__post_init__ sets page and path attributes."""
 
-
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
     page = layout.Page(path="reference/my_func", contents=[doc_obj])
@@ -34794,7 +34708,6 @@ def test_render_api_page_post_init():
 def test_render_api_page_has_one_object():
     """RenderAPIPage._has_one_object is True for single-content pages."""
 
-
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
     page = layout.Page(path="reference/my_func", contents=[doc_obj])
@@ -34806,7 +34719,6 @@ def test_render_api_page_has_one_object():
 
 def test_render_api_page_metadata():
     """RenderAPIPage.render_metadata() returns Meta with title."""
-
 
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
@@ -34825,7 +34737,6 @@ def test_render_api_page_metadata():
 def test_render_api_page_render_body():
     """RenderAPIPage.render_body() returns Blocks with render_objs."""
 
-
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
     page = layout.Page(path="reference/my_func", contents=[doc_obj])
@@ -34841,7 +34752,6 @@ def test_render_api_page_render_body():
 
 def test_render_api_page_summary_with_summary_details():
     """RenderAPIPage.render_summary() uses page.summary when set."""
-
 
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
@@ -34865,7 +34775,6 @@ def test_render_api_page_summary_with_summary_details():
 def test_render_api_page_summary_multi_no_flatten_raises():
     """RenderAPIPage.render_summary() raises ValueError for multi-content without flatten."""
 
-
     f1 = griffe_to_doc(gf.Function(name="func1", lineno=1))
     f2 = griffe_to_doc(gf.Function(name="func2", lineno=2))
     page = layout.Page(
@@ -34885,7 +34794,6 @@ def test_render_api_page_summary_multi_no_flatten_raises():
 def test_label_unknown_kind_raises():
     """get_label raises ValueError for unknown object kind."""
 
-
     obj = MagicMock()
     obj.is_function = False
     obj.is_class = False
@@ -34899,7 +34807,6 @@ def test_label_unknown_kind_raises():
 def test_attribute_label_typealias_kind():
     """_attribute_label returns 'typealias' for type alias kind."""
 
-
     obj = gf.Attribute(name="MyType", lineno=1)
     obj.kind = gf.Kind.TYPE_ALIAS
 
@@ -34908,7 +34815,6 @@ def test_attribute_label_typealias_kind():
 
 def test_attribute_label_typevar_annotation():
     """_attribute_label returns 'typevar' for TypeVar annotation."""
-
 
     obj = gf.Attribute(name="T", lineno=1)
     obj.annotation = gf.ExprName("TypeVar")
@@ -34919,7 +34825,6 @@ def test_attribute_label_typevar_annotation():
 def test_function_label_async():
     """_function_label returns 'async' for async functions."""
 
-
     obj = gf.Function(name="afunc", lineno=1)
     obj.labels.add("async")
 
@@ -34928,7 +34833,6 @@ def test_function_label_async():
 
 def test_function_label_classmethod():
     """_function_label returns 'classmethod'."""
-
 
     obj = gf.Function(name="cm", lineno=1)
     obj.labels.add("classmethod")
@@ -34939,7 +34843,6 @@ def test_function_label_classmethod():
 def test_function_label_staticmethod():
     """_function_label returns 'staticmethod'."""
 
-
     obj = gf.Function(name="sm", lineno=1)
     obj.labels.add("staticmethod")
 
@@ -34949,7 +34852,6 @@ def test_function_label_staticmethod():
 def test_function_label_property():
     """_function_label returns 'property'."""
 
-
     obj = gf.Function(name="prop", lineno=1)
     obj.labels.add("property")
 
@@ -34958,7 +34860,6 @@ def test_function_label_property():
 
 def test_class_label_bases_exception():
     """_class_label catches exceptions accessing bases."""
-
 
     obj = MagicMock()
     obj.labels = set()
@@ -34971,7 +34872,6 @@ def test_class_label_bases_exception():
 def test_class_label_enum():
     """_class_label returns 'enum' for Enum bases."""
 
-
     obj = gf.Class(name="MyEnum", lineno=1)
     obj.bases = [gf.ExprName("IntEnum")]
 
@@ -34980,7 +34880,6 @@ def test_class_label_enum():
 
 def test_class_label_exception():
     """_class_label returns 'exception' for Exception bases."""
-
 
     obj = gf.Class(name="MyErr", lineno=1)
     obj.bases = [gf.ExprName("ValueError")]
@@ -34991,7 +34890,6 @@ def test_class_label_exception():
 def test_class_label_namedtuple():
     """_class_label returns 'namedtuple' for NamedTuple bases."""
 
-
     obj = gf.Class(name="NT", lineno=1)
     obj.bases = [gf.ExprName("NamedTuple")]
 
@@ -35000,7 +34898,6 @@ def test_class_label_namedtuple():
 
 def test_class_label_typeddict():
     """_class_label returns 'typeddict' for TypedDict bases."""
-
 
     obj = gf.Class(name="TD", lineno=1)
     obj.bases = [gf.ExprName("TypedDict")]
@@ -35011,7 +34908,6 @@ def test_class_label_typeddict():
 def test_class_label_protocol():
     """_class_label returns 'protocol' for Protocol bases."""
 
-
     obj = gf.Class(name="Proto", lineno=1)
     obj.bases = [gf.ExprName("Protocol")]
 
@@ -35020,7 +34916,6 @@ def test_class_label_protocol():
 
 def test_class_label_abc():
     """_class_label returns 'abc' for ABC bases."""
-
 
     obj = gf.Class(name="Base", lineno=1)
     obj.bases = [gf.ExprName("ABC")]
@@ -35079,7 +34974,6 @@ def test_set_class_attr_property_with_closure():
 
 def test_set_class_attr_static_method():
     """set_class_attr handles MethodType (staticmethod)."""
-
 
     class Target4:
         pass
@@ -35144,7 +35038,6 @@ def test_exclude_classes_function():
 def test_render_reference_page_render_body():
     """RenderReferencePage.render_body() renders sections."""
 
-
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_func = layout.DocFunction(name="my_func", obj=func_obj, anchor="my_func")
 
@@ -35171,7 +35064,6 @@ def test_render_reference_page_render_body():
 def test_render_reference_section_body_with_contents():
     """RenderReferenceSection.render_body() renders Doc objects."""
 
-
     func_obj = gf.Function(name="some_func", lineno=1)
     doc_func = layout.DocFunction(name="some_func", obj=func_obj, anchor="some_func")
 
@@ -35197,7 +35089,6 @@ def test_render_reference_section_body_with_contents():
 def test_render_reference_section_post_init():
     """RenderReferenceSection.__post_init__() sets section."""
 
-
     section = layout.Section(title="Test", contents=[layout.Auto(name="x")])
     renderer = MagicMock()
     rs = RenderReferenceSection(layout_obj=section, renderer=renderer, level=1)
@@ -35207,7 +35098,6 @@ def test_render_reference_section_post_init():
 
 def test_render_reference_section_title_and_subtitle():
     """RenderReferenceSection.render_title() for title vs subtitle."""
-
 
     # Title case
     sec_t = layout.Section(title="Methods", contents=[layout.Auto(name="x")])
@@ -35224,7 +35114,6 @@ def test_render_reference_section_title_and_subtitle():
 
 def test_render_api_page_full_lifecycle():
     """RenderAPIPage full lifecycle with real Doc objects."""
-
 
     func_obj = gf.Function(name="my_func", lineno=1)
     func_obj.endlineno = 10
@@ -35268,7 +35157,6 @@ def test_render_api_page_full_lifecycle():
 def test_render_api_page_with_summary_details():
     """RenderAPIPage.render_summary() with explicit summary."""
 
-
     func_obj = gf.Function(name="fn", lineno=1)
     doc_func = layout.DocFunction(name="fn", obj=func_obj, anchor="fn")
 
@@ -35295,7 +35183,6 @@ def test_render_api_page_with_summary_details():
 def test_renderdoc_display_name_relative_level_gt1():
     """RenderDoc.display_name uses 'name' format when level > 1."""
 
-
     from great_docs._qrenderer._renderer import Renderer
 
     func_obj = gf.Function(name="my_func", lineno=1)
@@ -35313,7 +35200,6 @@ def test_renderdoc_display_name_relative_level_gt1():
 def test_renderdoc_render_annotation_non_attribute_raises():
     """RenderDoc.render_annotation() raises TypeError for non-attribute."""
 
-
     from great_docs._qrenderer._renderer import Renderer
 
     func_obj = gf.Function(name="fn", lineno=1)
@@ -35329,7 +35215,6 @@ def test_renderdoc_render_annotation_non_attribute_raises():
 
 def test_renderdoc_render_annotation_attribute():
     """RenderDoc.render_annotation() for attribute."""
-
 
     from great_docs._qrenderer._renderer import Renderer
 
@@ -35349,7 +35234,6 @@ def test_renderdoc_render_annotation_attribute():
 def test_renderdoc_render_annotation_none():
     """RenderDoc.render_annotation() with None annotation."""
 
-
     from great_docs._qrenderer._renderer import Renderer
 
     attr_obj = gf.Attribute(name="y", lineno=1)
@@ -35366,7 +35250,6 @@ def test_renderdoc_render_annotation_none():
 
 def test_renderdoc_docstring_section_deprecated():
     """RenderDoc handles DocstringSectionDeprecated."""
-
 
     from great_docs._qrenderer._renderer import Renderer
 
@@ -35390,7 +35273,6 @@ def test_renderdoc_docstring_section_deprecated():
 def test_renderdoc_docstring_section_examples():
     """RenderDoc handles DocstringSectionExamples."""
 
-
     from great_docs._qrenderer._renderer import Renderer
 
     func_obj = gf.Function(name="ex_fn", lineno=1)
@@ -35413,7 +35295,6 @@ def test_renderdoc_docstring_section_examples():
 def test_renderdoc_docstring_section_text_in_div():
     """RenderDoc wraps 'Text' sections in a Div."""
 
-
     from great_docs._qrenderer._renderer import Renderer
 
     func_obj = gf.Function(name="txt_fn", lineno=1)
@@ -35434,7 +35315,6 @@ def test_renderdoc_docstring_section_text_in_div():
 
 def test_renderdoc_source_link_with_github_url():
     """RenderDoc.source_link returns Link when GITHUB_REPO_URL is set."""
-
 
     from great_docs._qrenderer._renderer import Renderer
 
@@ -35463,7 +35343,6 @@ def test_renderdoc_source_link_with_github_url():
 
 def test_renderdoc_see_also_section():
     """RenderDoc handles See Also section."""
-
 
     from great_docs._qrenderer._renderer import Renderer
 
@@ -39591,3 +39470,561 @@ class TestProcessSectionsFallbackHrefBatch10:
                 )
             n = docs._process_sections()
             assert n >= 1
+
+
+# ---------------------------------------------------------------------------
+# SKILL.md generation tests
+# ---------------------------------------------------------------------------
+
+
+def test_generate_skill_md_basic():
+    """Test basic SKILL.md generation with API sections."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        # Create a pyproject.toml with package info
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            """
+[project]
+name = "test-package"
+description = "A test package for testing"
+license = "MIT"
+requires-python = ">=3.10"
+"""
+        )
+
+        # Create great-docs directory and _quarto.yml
+        great_docs_dir = Path(tmp_dir) / "great-docs"
+        great_docs_dir.mkdir()
+        quarto_yml = great_docs_dir / "_quarto.yml"
+        quarto_yml.write_text(
+            """
+api-reference:
+  package: test_package
+  sections:
+    - title: Core
+      desc: Core functionality
+      contents:
+        - Widget
+        - create_widget
+"""
+        )
+
+        docs._generate_skill_md()
+
+        skill_md = great_docs_dir / "skill.md"
+        assert skill_md.exists()
+
+        content = skill_md.read_text()
+
+        # Check frontmatter
+        assert content.startswith("---\n")
+        assert "name: test-package" in content
+        assert "description: >" in content
+        assert "A test package for testing." in content
+        assert "license: MIT" in content
+        assert "compatibility: Requires Python >=3.10." in content
+
+        # Check body
+        assert "## Installation" in content
+        assert "pip install test-package" in content
+        assert "## API overview" in content
+        assert "### Core" in content
+        assert "Core functionality" in content
+        assert "- `Widget`" in content
+        assert "- `create_widget`" in content
+
+        # Check resources section
+        assert "## Resources" in content
+        assert "[llms.txt](llms.txt)" in content
+        assert "[llms-full.txt](llms-full.txt)" in content
+
+
+def test_generate_skill_md_well_known():
+    """Test that SKILL.md is copied to .well-known/ directory."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            """
+[project]
+name = "test-package"
+description = "A test package"
+"""
+        )
+
+        great_docs_dir = Path(tmp_dir) / "great-docs"
+        great_docs_dir.mkdir()
+        quarto_yml = great_docs_dir / "_quarto.yml"
+        quarto_yml.write_text(
+            """
+api-reference:
+  package: test_package
+  sections:
+    - title: Main
+      contents:
+        - foo
+"""
+        )
+
+        docs._generate_skill_md()
+
+        # Check .well-known placement
+        well_known = great_docs_dir / ".well-known" / "skills" / "default" / "SKILL.md"
+        assert well_known.exists()
+
+        # Content should match skill.md
+        skill_md = great_docs_dir / "skill.md"
+        assert skill_md.read_text() == well_known.read_text()
+
+
+def test_generate_skill_md_disabled():
+    """Test that SKILL.md is not generated when skill.enabled is false."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Create great-docs.yml with skill disabled
+        config_path = Path(tmp_dir) / "great-docs.yml"
+        config_path.write_text("skill:\n  enabled: false\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        great_docs_dir = Path(tmp_dir) / "great-docs"
+        great_docs_dir.mkdir()
+
+        docs._generate_skill_md()
+
+        skill_md = great_docs_dir / "skill.md"
+        assert not skill_md.exists()
+
+
+def test_generate_skill_md_well_known_disabled():
+    """Test that .well-known is skipped when skill.well_known is false."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        config_path = Path(tmp_dir) / "great-docs.yml"
+        config_path.write_text("skill:\n  well_known: false\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            """
+[project]
+name = "test-package"
+description = "A test package"
+"""
+        )
+
+        great_docs_dir = Path(tmp_dir) / "great-docs"
+        great_docs_dir.mkdir()
+        quarto_yml = great_docs_dir / "_quarto.yml"
+        quarto_yml.write_text(
+            """
+api-reference:
+  package: test_package
+  sections:
+    - title: Main
+      contents:
+        - foo
+"""
+        )
+
+        docs._generate_skill_md()
+
+        # skill.md should exist but .well-known should not
+        assert (great_docs_dir / "skill.md").exists()
+        assert not (great_docs_dir / ".well-known").exists()
+
+
+def test_generate_skill_md_user_override():
+    """Test that a user-provided SKILL.md is copied verbatim."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Create great-docs.yml pointing to a custom file
+        config_path = Path(tmp_dir) / "great-docs.yml"
+        config_path.write_text("skill:\n  file: my-skill.md\n")
+
+        # Create the custom skill file
+        custom_skill = Path(tmp_dir) / "my-skill.md"
+        custom_skill.write_text("---\nname: custom\ndescription: Custom skill\n---\n\n# Custom\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        great_docs_dir = Path(tmp_dir) / "great-docs"
+        great_docs_dir.mkdir()
+
+        docs._generate_skill_md()
+
+        skill_md = great_docs_dir / "skill.md"
+        assert skill_md.exists()
+        assert "# Custom" in skill_md.read_text()
+
+        # Should also be in .well-known
+        well_known = great_docs_dir / ".well-known" / "skills" / "default" / "SKILL.md"
+        assert well_known.exists()
+
+
+def test_generate_skill_md_user_override_missing():
+    """Test fallback to generation when user-provided SKILL.md doesn't exist."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        config_path = Path(tmp_dir) / "great-docs.yml"
+        config_path.write_text("skill:\n  file: nonexistent.md\n")
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            """
+[project]
+name = "test-package"
+description = "A test package"
+"""
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        great_docs_dir = Path(tmp_dir) / "great-docs"
+        great_docs_dir.mkdir()
+        quarto_yml = great_docs_dir / "_quarto.yml"
+        quarto_yml.write_text(
+            """
+api-reference:
+  package: test_package
+  sections:
+    - title: Main
+      contents:
+        - foo
+"""
+        )
+
+        docs._generate_skill_md()
+
+        # Should still generate a skill.md (fallback)
+        skill_md = great_docs_dir / "skill.md"
+        assert skill_md.exists()
+        assert "name: test-package" in skill_md.read_text()
+
+
+def test_generate_skill_md_gotchas_and_best_practices():
+    """Test that gotchas and best_practices from config appear in SKILL.md."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        config_path = Path(tmp_dir) / "great-docs.yml"
+        config_path.write_text(
+            """
+skill:
+  gotchas:
+    - "Never call foo() before bar()"
+    - "The config file must be in the project root"
+  best_practices:
+    - "Always use context managers"
+    - "Prefer keyword arguments"
+"""
+        )
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            """
+[project]
+name = "test-package"
+description = "A test package"
+"""
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        great_docs_dir = Path(tmp_dir) / "great-docs"
+        great_docs_dir.mkdir()
+        quarto_yml = great_docs_dir / "_quarto.yml"
+        quarto_yml.write_text(
+            """
+api-reference:
+  package: test_package
+  sections:
+    - title: Main
+      contents:
+        - foo
+"""
+        )
+
+        docs._generate_skill_md()
+
+        content = (great_docs_dir / "skill.md").read_text()
+
+        assert "## Gotchas" in content
+        assert "1. Never call foo() before bar()" in content
+        assert "2. The config file must be in the project root" in content
+        assert "## Best practices" in content
+        assert "- Always use context managers" in content
+        assert "- Prefer keyword arguments" in content
+
+
+def test_generate_skill_md_decision_table():
+    """Test that manual decision table rows appear in SKILL.md."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        config_path = Path(tmp_dir) / "great-docs.yml"
+        config_path.write_text(
+            """
+skill:
+  decision_table:
+    - need: "Create a widget"
+      use: "Widget()"
+    - need: "Format output"
+      use: "fmt()"
+"""
+        )
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            """
+[project]
+name = "test-package"
+description = "A test package"
+"""
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        great_docs_dir = Path(tmp_dir) / "great-docs"
+        great_docs_dir.mkdir()
+        quarto_yml = great_docs_dir / "_quarto.yml"
+        quarto_yml.write_text(
+            """
+api-reference:
+  package: test_package
+  sections:
+    - title: Main
+      contents:
+        - Widget
+"""
+        )
+
+        docs._generate_skill_md()
+
+        content = (great_docs_dir / "skill.md").read_text()
+
+        assert "## When to use what" in content
+        assert "| Need | Use |" in content
+        assert "| Create a widget | `Widget()` |" in content
+        assert "| Format output | `fmt()` |" in content
+
+
+def test_generate_skill_md_extra_body():
+    """Test that extra_body content is appended to SKILL.md."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        config_path = Path(tmp_dir) / "great-docs.yml"
+        config_path.write_text("skill:\n  extra_body: extra.md\n")
+
+        # Create the extra content file
+        extra_file = Path(tmp_dir) / "extra.md"
+        extra_file.write_text("## Custom Section\n\nExtra content here.\n")
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            """
+[project]
+name = "test-package"
+description = "A test package"
+"""
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        great_docs_dir = Path(tmp_dir) / "great-docs"
+        great_docs_dir.mkdir()
+        quarto_yml = great_docs_dir / "_quarto.yml"
+        quarto_yml.write_text(
+            """
+api-reference:
+  package: test_package
+  sections:
+    - title: Main
+      contents:
+        - foo
+"""
+        )
+
+        docs._generate_skill_md()
+
+        content = (great_docs_dir / "skill.md").read_text()
+        assert "## Custom Section" in content
+        assert "Extra content here." in content
+
+
+def test_generate_skill_md_no_quarto_yml():
+    """Test _generate_skill_md returns early when no _quarto.yml."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._generate_skill_md()
+        assert not (docs.project_path / "skill.md").exists()
+
+
+def test_generate_skill_md_with_site_url():
+    """Test that site URL is included in the Resources section."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            """
+[project]
+name = "test-package"
+description = "A test package"
+
+[project.urls]
+Documentation = "https://example.com/docs"
+Repository = "https://github.com/test/test-package"
+"""
+        )
+
+        great_docs_dir = Path(tmp_dir) / "great-docs"
+        great_docs_dir.mkdir()
+        quarto_yml = great_docs_dir / "_quarto.yml"
+        quarto_yml.write_text(
+            """
+api-reference:
+  package: test_package
+  sections:
+    - title: Main
+      contents:
+        - foo
+"""
+        )
+
+        docs._generate_skill_md()
+
+        content = (great_docs_dir / "skill.md").read_text()
+        assert "[Full documentation](https://example.com/docs/)" in content
+        assert "[Source code](https://github.com/test/test-package)" in content
+
+
+def test_config_skill_defaults():
+    """Test that skill config properties have correct defaults."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        config = Config(Path(tmp_dir))
+        assert config.skill_enabled is True
+        assert config.skill_file is None
+        assert config.skill_well_known is True
+        assert config.skill_gotchas == []
+        assert config.skill_best_practices == []
+        assert config.skill_decision_table == []
+        assert config.skill_extra_body is None
+
+
+def test_config_skill_overrides():
+    """Test that skill config properties respect user overrides."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        config_path = Path(tmp_dir) / "great-docs.yml"
+        config_path.write_text(
+            """
+skill:
+  enabled: false
+  file: custom.md
+  well_known: false
+  gotchas:
+    - "Watch out!"
+  best_practices:
+    - "Do this"
+  decision_table:
+    - need: X
+      use: Y
+  extra_body: extra.md
+"""
+        )
+        config = Config(Path(tmp_dir))
+        assert config.skill_enabled is False
+        assert config.skill_file == "custom.md"
+        assert config.skill_well_known is False
+        assert config.skill_gotchas == ["Watch out!"]
+        assert config.skill_best_practices == ["Do this"]
+        assert config.skill_decision_table == [{"need": "X", "use": "Y"}]
+        assert config.skill_extra_body == "extra.md"
+
+
+def test_generate_skill_md_uses_curated_skill():
+    """Test that a curated skills/<pkg>/SKILL.md is used instead of auto-generating."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            """
+[project]
+name = "test-package"
+description = "A test package"
+"""
+        )
+
+        # Create the curated skill in skills/test-package/SKILL.md
+        skills_dir = Path(tmp_dir) / "skills" / "test-package"
+        skills_dir.mkdir(parents=True)
+        curated_skill = skills_dir / "SKILL.md"
+        curated_skill.write_text(
+            "---\nname: test-package\ndescription: Curated skill\n---\n\n# Curated\n"
+        )
+
+        great_docs_dir = Path(tmp_dir) / "great-docs"
+        great_docs_dir.mkdir()
+        quarto_yml = great_docs_dir / "_quarto.yml"
+        quarto_yml.write_text(
+            """
+api-reference:
+  package: test_package
+  sections:
+    - title: Main
+      contents:
+        - foo
+"""
+        )
+
+        docs._generate_skill_md()
+
+        skill_md = great_docs_dir / "skill.md"
+        assert skill_md.exists()
+        content = skill_md.read_text()
+        # Should contain the curated content, NOT auto-generated
+        assert "# Curated" in content
+        assert "## API overview" not in content
+
+        # Should also be in .well-known
+        well_known = great_docs_dir / ".well-known" / "skills" / "default" / "SKILL.md"
+        assert well_known.exists()
+        assert "# Curated" in well_known.read_text()
+
+
+def test_generate_skill_md_curated_with_underscore_name():
+    """Test curated skill discovery with underscore package names."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            """
+[project]
+name = "my_package"
+description = "A package with underscores"
+"""
+        )
+
+        # Create skill using hyphenated name (PyPI convention)
+        skills_dir = Path(tmp_dir) / "skills" / "my-package"
+        skills_dir.mkdir(parents=True)
+        curated_skill = skills_dir / "SKILL.md"
+        curated_skill.write_text(
+            "---\nname: my-package\ndescription: Underscore skill\n---\n\n# Hyphenated\n"
+        )
+
+        great_docs_dir = Path(tmp_dir) / "great-docs"
+        great_docs_dir.mkdir()
+        quarto_yml = great_docs_dir / "_quarto.yml"
+        quarto_yml.write_text(
+            """
+api-reference:
+  package: my_package
+  sections:
+    - title: Main
+      contents:
+        - foo
+"""
+        )
+
+        docs._generate_skill_md()
+
+        content = (great_docs_dir / "skill.md").read_text()
+        assert "# Hyphenated" in content
