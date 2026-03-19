@@ -930,6 +930,92 @@ reference:
         - MyClass
 ```
 
+## Agent Skills (skill.md)
+
+Great Docs automatically generates a `skill.md` file conforming to the [Agent Skills](https://agentskills.io/) open standard. This file gives AI coding agents—such as Claude Code, GitHub Copilot, Cursor, Codex, Gemini CLI, and 30+ others—structured context about your package so they can write better code when using it.
+
+The generated `skill.md` includes:
+
+- Package name, description, and installation command
+- An API overview with each section and docstring summaries
+- Links to `llms.txt` and `llms-full.txt` for deeper context
+- Optional gotchas, best practices, and decision tables you provide
+
+### Default Behavior
+
+Skill generation is **enabled by default**. The file is:
+
+- Written to your docs directory as `skill.md`
+- Copied to `.well-known/skills/default/SKILL.md` for auto-discovery
+- Linked in the homepage margin sidebar alongside `llms.txt`
+
+Users can install your skill with:
+
+```bash
+npx skills add https://your-docs-site.com
+```
+
+### Configuration
+
+```{.yaml filename="great-docs.yml"}
+skill:
+  enabled: true          # Set to false to disable skill.md generation
+  file: null             # Path to a hand-written SKILL.md (overrides auto-generation)
+  well_known: true       # Serve at /.well-known/skills/default/SKILL.md
+  gotchas: []            # List of gotcha strings
+  best_practices: []     # List of best-practice strings
+  decision_table: []     # Rows: [{need: "...", use: "..."}]
+  extra_body: null       # Path to extra Markdown to append
+```
+
+### Adding Gotchas and Best Practices
+
+Help agents avoid common mistakes by listing gotchas and best practices:
+
+```{.yaml filename="great-docs.yml"}
+skill:
+  gotchas:
+    - "Always call init() before process()"
+    - "The config file must use YAML, not JSON"
+    - "Module name is 'my_pkg', not 'my-pkg'"
+  best_practices:
+    - "Use context managers for resource cleanup"
+    - "Prefer keyword arguments for clarity"
+```
+
+### Decision Tables
+
+Guide agents to the right class or function for each task:
+
+```{.yaml filename="great-docs.yml"}
+skill:
+  decision_table:
+    - need: "Parse a CSV file"
+      use: "read_csv()"
+    - need: "Write results to disk"
+      use: "Writer()"
+    - need: "Transform columns"
+      use: "DataFrame.mutate()"
+```
+
+### Using a Hand-Written Skill
+
+For full control, write your own `SKILL.md` and point to it:
+
+```{.yaml filename="great-docs.yml"}
+skill:
+  file: skill.md  # Relative to project root
+```
+
+The file must have valid YAML frontmatter with `name` and `description` fields per the [Agent Skills specification](https://agentskills.io/specification).
+
+### Disabling Skill Generation
+
+```{.yaml filename="great-docs.yml"}
+skill:
+  enabled: false
+```
+
 ## Complete Example
 
 Here's a comprehensive configuration demonstrating all available options:
@@ -1039,6 +1125,18 @@ authors:
   - name: John Contributor
     role: Contributor
     github: johncontrib
+
+# Agent Skills (skill.md)
+skill:
+  gotchas:
+    - "Always call init() before using other functions"
+  best_practices:
+    - "Use context managers for resource cleanup"
+  decision_table:
+    - need: "Create a widget"
+      use: "Widget()"
+    - need: "Process data"
+      use: "MainClass.process()"
 ```
 
 You don't need all of these settings. Start with just the options you need and add more as your project grows. The defaults work well for most packages, so you may find that a minimal configuration (or none at all) is sufficient.
