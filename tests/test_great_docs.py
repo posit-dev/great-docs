@@ -22,8 +22,10 @@ import griffe
 import pytest
 import requests
 from click.testing import CliRunner
+from PIL import Image as PILImage
 from griffe import DocstringSectionKind, ExprName
 from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
+from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
 
 from great_docs import Config, create_default_config, GreatDocs, load_config
 from great_docs._directives import DocDirectives, extract_directives
@@ -9042,18 +9044,14 @@ class TestFitToSquare:
 
     def test_square_image_unchanged_dimensions(self):
         """A square image should remain square with the requested size."""
-        from PIL import Image
-
-        img = Image.new("RGBA", (100, 100), (255, 0, 0, 255))
+        img = PILImage.new("RGBA", (100, 100), (255, 0, 0, 255))
         result = GreatDocs._fit_to_square(img, 64)
 
         assert result.size == (64, 64)
 
     def test_wide_image_padded_to_square(self):
         """A wide image should be padded vertically to become square."""
-        from PIL import Image
-
-        img = Image.new("RGBA", (200, 100), (255, 0, 0, 255))
+        img = PILImage.new("RGBA", (200, 100), (255, 0, 0, 255))
         result = GreatDocs._fit_to_square(img, 200)
 
         assert result.size == (200, 200)
@@ -9066,9 +9064,7 @@ class TestFitToSquare:
 
     def test_tall_image_padded_to_square(self):
         """A tall image should be padded horizontally to become square."""
-        from PIL import Image
-
-        img = Image.new("RGBA", (100, 200), (0, 255, 0, 255))
+        img = PILImage.new("RGBA", (100, 200), (0, 255, 0, 255))
         result = GreatDocs._fit_to_square(img, 200)
 
         assert result.size == (200, 200)
@@ -9081,18 +9077,14 @@ class TestFitToSquare:
 
     def test_output_is_rgba(self):
         """Output should always be RGBA regardless of input mode."""
-        from PIL import Image
-
-        img = Image.new("RGB", (50, 50), (0, 0, 255))
+        img = PILImage.new("RGB", (50, 50), (0, 0, 255))
         result = GreatDocs._fit_to_square(img, 64)
 
         assert result.mode == "RGBA"
 
     def test_downscale_preserves_aspect_ratio(self):
         """A large image should be scaled down to fit within the target size."""
-        from PIL import Image
-
-        img = Image.new("RGBA", (400, 200), (255, 0, 0, 255))
+        img = PILImage.new("RGBA", (400, 200), (255, 0, 0, 255))
         result = GreatDocs._fit_to_square(img, 100)
 
         assert result.size == (100, 100)
@@ -9141,8 +9133,6 @@ class TestGenerateFaviconsSvg:
 
     def test_svg_png_sizes_correct(self):
         """Generated PNGs should have the correct pixel dimensions."""
-        from PIL import Image
-
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp = Path(tmp_dir)
             svg_file = tmp / "logo.svg"
@@ -9154,9 +9144,9 @@ class TestGenerateFaviconsSvg:
             docs = GreatDocs(project_path=tmp_dir)
             docs._generate_favicons(svg_file, dest)
 
-            assert Image.open(dest / "favicon-16x16.png").size == (16, 16)
-            assert Image.open(dest / "favicon-32x32.png").size == (32, 32)
-            assert Image.open(dest / "apple-touch-icon.png").size == (180, 180)
+            assert PILImage.open(dest / "favicon-16x16.png").size == (16, 16)
+            assert PILImage.open(dest / "favicon-32x32.png").size == (32, 32)
+            assert PILImage.open(dest / "apple-touch-icon.png").size == (180, 180)
 
     def test_svg_copied_as_favicon_svg(self):
         """The SVG source should be copied verbatim as favicon.svg."""
@@ -9175,8 +9165,6 @@ class TestGenerateFaviconsSvg:
 
     def test_non_square_svg_generates_square_favicons(self):
         """A non-square SVG should produce square favicons via padding."""
-        from PIL import Image
-
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp = Path(tmp_dir)
             svg_file = tmp / "wide-logo.svg"
@@ -9191,7 +9179,7 @@ class TestGenerateFaviconsSvg:
             # All outputs should be square
             assert result["icon"] == "favicon.ico"
             for name in ["favicon-16x16.png", "favicon-32x32.png", "apple-touch-icon.png"]:
-                img = Image.open(dest / name)
+                img = PILImage.open(dest / name)
 
                 assert img.size[0] == img.size[1], f"{name} should be square"
 
@@ -9201,12 +9189,10 @@ class TestGenerateFaviconsPng:
 
     def test_png_generates_all_raster_files(self):
         """PNG source should produce ico, 16px, 32px, and apple-touch-icon."""
-        from PIL import Image
-
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp = Path(tmp_dir)
             png_file = tmp / "logo.png"
-            Image.new("RGBA", (128, 128), (255, 0, 0, 255)).save(png_file, "PNG")
+            PILImage.new("RGBA", (128, 128), (255, 0, 0, 255)).save(png_file, "PNG")
 
             dest = tmp / "output"
             dest.mkdir()
@@ -9221,12 +9207,10 @@ class TestGenerateFaviconsPng:
 
     def test_png_does_not_produce_svg(self):
         """PNG source should not produce a favicon.svg."""
-        from PIL import Image
-
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp = Path(tmp_dir)
             png_file = tmp / "logo.png"
-            Image.new("RGBA", (64, 64), (0, 0, 255, 255)).save(png_file, "PNG")
+            PILImage.new("RGBA", (64, 64), (0, 0, 255, 255)).save(png_file, "PNG")
 
             dest = tmp / "output"
             dest.mkdir()
@@ -9239,12 +9223,10 @@ class TestGenerateFaviconsPng:
 
     def test_png_files_exist_on_disk(self):
         """All generated files from PNG source should exist."""
-        from PIL import Image
-
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp = Path(tmp_dir)
             png_file = tmp / "logo.png"
-            Image.new("RGBA", (128, 128), (255, 0, 0, 255)).save(png_file, "PNG")
+            PILImage.new("RGBA", (128, 128), (255, 0, 0, 255)).save(png_file, "PNG")
 
             dest = tmp / "output"
             dest.mkdir()
@@ -9259,12 +9241,10 @@ class TestGenerateFaviconsPng:
 
     def test_png_sizes_correct(self):
         """Generated PNGs from PNG source should have correct dimensions."""
-        from PIL import Image
-
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp = Path(tmp_dir)
             png_file = tmp / "logo.png"
-            Image.new("RGBA", (256, 256), (0, 128, 0, 255)).save(png_file, "PNG")
+            PILImage.new("RGBA", (256, 256), (0, 128, 0, 255)).save(png_file, "PNG")
 
             dest = tmp / "output"
             dest.mkdir()
@@ -9272,18 +9252,16 @@ class TestGenerateFaviconsPng:
             docs = GreatDocs(project_path=tmp_dir)
             docs._generate_favicons(png_file, dest)
 
-            assert Image.open(dest / "favicon-16x16.png").size == (16, 16)
-            assert Image.open(dest / "favicon-32x32.png").size == (32, 32)
-            assert Image.open(dest / "apple-touch-icon.png").size == (180, 180)
+            assert PILImage.open(dest / "favicon-16x16.png").size == (16, 16)
+            assert PILImage.open(dest / "favicon-32x32.png").size == (32, 32)
+            assert PILImage.open(dest / "apple-touch-icon.png").size == (180, 180)
 
     def test_non_square_png_generates_square_favicons(self):
         """A non-square PNG should produce square favicons via padding."""
-        from PIL import Image
-
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp = Path(tmp_dir)
             png_file = tmp / "wide-logo.png"
-            Image.new("RGBA", (200, 100), (255, 0, 0, 255)).save(png_file, "PNG")
+            PILImage.new("RGBA", (200, 100), (255, 0, 0, 255)).save(png_file, "PNG")
 
             dest = tmp / "output"
             dest.mkdir()
@@ -9293,7 +9271,7 @@ class TestGenerateFaviconsPng:
 
             assert result["icon"] == "favicon.ico"
             for name in ["favicon-16x16.png", "favicon-32x32.png", "apple-touch-icon.png"]:
-                img = Image.open(dest / name)
+                img = PILImage.open(dest / name)
 
                 assert img.size[0] == img.size[1], f"{name} should be square"
 
@@ -19068,8 +19046,6 @@ def test_add_changelog_to_navbar_creates_entry():
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
         config = {"website": {"navbar": {"left": [{"text": "Home", "href": "index.qmd"}]}}}
 
-        from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
-
         quarto_yml.write_text(_format_yaml(config), encoding="utf-8")
         docs._add_changelog_to_navbar()
         content = _parse_yaml(quarto_yml.read_text(encoding="utf-8"))
@@ -19094,8 +19070,6 @@ def test_add_changelog_to_navbar_idempotent():
                 }
             }
         }
-
-        from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
 
         quarto_yml.write_text(_format_yaml(config), encoding="utf-8")
         docs._add_changelog_to_navbar()
@@ -19187,8 +19161,6 @@ def test_process_sections_default_type():
         build_dir = Path(tmp_dir) / "great-docs"
         build_dir.mkdir(parents=True)
         quarto_yml = build_dir / "_quarto.yml"
-        from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
-
         quarto_yml.write_text(
             _format_yaml(
                 {
@@ -19721,8 +19693,6 @@ def test_add_section_to_navbar_creates_link():
         docs = GreatDocs(project_path=tmp_dir)
         quarto_yml = Path(tmp_dir) / "great-docs" / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-        from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
-
         config = {
             "website": {
                 "navbar": {"left": [{"text": "Home", "href": "index.qmd"}]},
@@ -19742,8 +19712,6 @@ def test_add_section_to_navbar_idempotent():
         docs = GreatDocs(project_path=tmp_dir)
         quarto_yml = Path(tmp_dir) / "great-docs" / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-        from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
-
         config = {
             "website": {
                 "navbar": {
@@ -19772,8 +19740,6 @@ def test_add_section_to_navbar_after_item():
         docs = GreatDocs(project_path=tmp_dir)
         quarto_yml = Path(tmp_dir) / "great-docs" / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-        from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
-
         config = {
             "website": {
                 "navbar": {
@@ -19877,8 +19843,6 @@ def test_update_sidebar_with_cli_creates_section():
         docs = GreatDocs(project_path=tmp_dir)
         quarto_yml = Path(tmp_dir) / "great-docs" / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-        from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
-
         config = {
             "website": {"sidebar": [{"id": "reference", "title": "API Reference", "contents": []}]}
         }
@@ -19895,8 +19859,6 @@ def test_update_sidebar_with_cli_updates_existing():
         docs = GreatDocs(project_path=tmp_dir)
         quarto_yml = Path(tmp_dir) / "great-docs" / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-        from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
-
         config = {
             "website": {
                 "sidebar": [
@@ -20405,8 +20367,6 @@ def test_update_config_with_user_guide():
         # Create build dir with quarto config
         build_dir = Path(tmp_dir) / "great-docs"
         build_dir.mkdir(parents=True, exist_ok=True)
-        from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
-
         quarto_yml = build_dir / "_quarto.yml"
         config = {
             "website": {
@@ -20639,8 +20599,6 @@ def test_process_user_guide_returns_true():
         # Create build dir with quarto config
         build_dir = Path(tmp_dir) / "great-docs"
         build_dir.mkdir(parents=True, exist_ok=True)
-        from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
-
         quarto_yml = build_dir / "_quarto.yml"
         quarto_yml.write_text(
             _format_yaml(
@@ -20732,8 +20690,6 @@ def test_add_section_sidebar():
         docs = GreatDocs(project_path=tmp_dir)
         build_dir = Path(tmp_dir) / "great-docs"
         build_dir.mkdir(parents=True, exist_ok=True)
-        from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
-
         quarto_yml = build_dir / "_quarto.yml"
         quarto_yml.write_text(
             _format_yaml(
@@ -20988,8 +20944,6 @@ def test_update_quarto_config_creates_structure():
 
         docs._update_quarto_config()
 
-        from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
-
         result = _parse_yaml(quarto_yml.read_text(encoding="utf-8"))
         assert "post-render" in result.get("project", {})
         theme = result.get("format", {}).get("html", {}).get("theme", [])
@@ -21007,8 +20961,6 @@ def test_update_quarto_config_no_existing_file():
         build_dir.mkdir(parents=True, exist_ok=True)
 
         docs._update_quarto_config()
-
-        from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
 
         quarto_yml = build_dir / "_quarto.yml"
         assert quarto_yml.exists()
