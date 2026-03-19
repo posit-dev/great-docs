@@ -11,11 +11,16 @@ import re
 # Shared text utilities --------------------------------------------------------
 
 
-def escape(val: str):
+def escape(val: str) -> str:
     return f"`{val}`"
 
 
-def sanitize(val: str, allow_markdown=False, escape_quotes=False, preserve_newlines=False):
+def sanitize(
+    val: str,
+    allow_markdown: bool = False,
+    escape_quotes: bool = False,
+    preserve_newlines: bool = False,
+) -> str:
     if preserve_newlines:
         res = val
     else:

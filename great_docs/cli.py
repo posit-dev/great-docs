@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sys
 
 import click
@@ -9,7 +11,7 @@ from .core import GreatDocs
 class OrderedGroup(click.Group):
     """Click group that lists commands in the order they were added."""
 
-    def list_commands(self, ctx):
+    def list_commands(self, ctx: click.Context) -> list[str]:
         return list(self.commands.keys())
 
 
@@ -38,7 +40,7 @@ def cli():
     is_flag=True,
     help="Delete existing great-docs.yml and generate a fresh default config",
 )
-def init(project_path, force):
+def init(project_path: str | None, force: bool) -> None:
     """Initialize great-docs in your project (one-time bootstrap).
 
     Creates a fresh great-docs.yml configuration file with discovered
@@ -85,7 +87,7 @@ def init(project_path, force):
     is_flag=True,
     help="Skip re-discovering package exports (faster rebuild when API unchanged)",
 )
-def build(project_path, watch, no_refresh):
+def build(project_path: str | None, watch: bool, no_refresh: bool) -> None:
     """Build your documentation site.
 
     Requires great-docs.yml to exist (run 'great-docs init' first).
@@ -132,7 +134,7 @@ def build(project_path, watch, no_refresh):
     type=click.Path(exists=True, file_okay=False, dir_okay=True),
     help="Path to your project root directory (default: current directory)",
 )
-def uninstall(project_path):
+def uninstall(project_path: str | None) -> None:
     """Remove great-docs from your project.
 
     This command removes the great-docs configuration and build directory:
@@ -168,7 +170,7 @@ def uninstall(project_path):
     show_default=True,
     help="Port for the local preview server",
 )
-def preview(project_path, port):
+def preview(project_path: str | None, port: int) -> None:
     """Preview your documentation locally.
 
     Starts a local HTTP server and opens the built documentation site in your
@@ -203,7 +205,7 @@ def preview(project_path, port):
     is_flag=True,
     help="Overwrite existing great-docs.yml without prompting",
 )
-def config(project_path, force):
+def config(project_path: str | None, force: bool) -> None:
     """Generate a great-docs.yml configuration file.
 
     Creates a great-docs.yml file with all available options documented.
@@ -266,7 +268,7 @@ cli.add_command(config)
     is_flag=True,
     help="Show method names for each class",
 )
-def scan(project_path, docs_dir, verbose):
+def scan(project_path: str | None, docs_dir: str | None, verbose: bool) -> None:
     """Discover package exports and preview what can be documented.
 
     This command analyzes your package to find public classes, functions,

@@ -43,10 +43,9 @@ _LIST_ITEM_RE = re.compile(r"^[ \t]*(?:[-*+]|\d+[.)])\s")
 def _ensure_blank_before_lists(text: str) -> str:
     """Ensure a blank line before the first markdown list item in each run.
 
-    Pandoc Markdown requires a blank line before a list for it to be
-    recognised as a list rather than continuation of a paragraph.  This
-    inserts a blank line before the first list item when the preceding
-    line is non-blank, non-list text.
+    Pandoc Markdown requires a blank line before a list for it to be recognized as a list rather
+    than continuation of a paragraph. This inserts a blank line before the first list item when the
+    preceding line is non-blank, non-list text.
     """
     lines = text.split("\n")
     result: list[str] = []
@@ -62,14 +61,14 @@ def _ensure_blank_before_lists(text: str) -> str:
     return "\n".join(result)
 
 
-def convert_rst_link_to_md(rst):
+def convert_rst_link_to_md(rst: str) -> str:
     expr_pat = r"((:external(\+[a-zA-Z\._]+))?(:[a-zA-Z\._]+)?:[a-zA-Z\._]+:`~?[a-zA-Z\._]+`)"
 
     return re.sub(expr_pat, r"[](\1)", rst, flags=re.MULTILINE)
 
 
-def _simple_table(rows, headers):
-    """Simple markdown table without tabulate dependency."""
+def _simple_table(rows: list[tuple], headers: list[str]) -> str:
+    """Simple Markdown table without the tabulate dependency."""
     lines = ["| " + " | ".join(str(h) for h in headers) + " |"]
     lines.append("| " + " | ".join("---" for _ in headers) + " |")
     for row in rows:
@@ -77,14 +76,14 @@ def _simple_table(rows, headers):
     return "\n".join(lines)
 
 
-def _has_attr_section(el: dc.Docstring | None):
+def _has_attr_section(el: dc.Docstring | None) -> bool:
     if el is None:
         return False
 
     return any([isinstance(x, ds.DocstringSectionAttributes) for x in el.parsed])
 
 
-def _sanitize_title(title: str):
+def _sanitize_title(title: str) -> str:
     return re.sub(r"[^a-zA-Z0-9-]+", "", title.replace(" ", "-"))
 
 
@@ -182,7 +181,7 @@ class ParamRow:
     annotation: str | None = None
     default: str | None = None
 
-    def to_definition_list(self):
+    def to_definition_list(self) -> tuple[str, str]:
         name = self.name
         anno = self.annotation
         desc = sanitize(self.description, allow_markdown=True, preserve_newlines=True)
@@ -208,7 +207,9 @@ class ParamRow:
         ).html
         return (param, part_desc)
 
-    def to_tuple(self, style: Literal["parameters", "attributes", "returns"]):
+    def to_tuple(
+        self, style: Literal["parameters", "attributes", "returns"]
+    ) -> tuple[str | None, str | None, str, str] | tuple[str | None, str | None, str]:
         name = self.name
         description = sanitize(self.description, allow_markdown=True)
 
@@ -232,7 +233,7 @@ class Renderer:
     style: str
     _registry: "dict[str, Renderer]" = {}
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **kwargs: object) -> None:
         super().__init_subclass__(**kwargs)
 
         if hasattr(cls, "style") and cls.style in cls._registry:  # pragma: no cover
@@ -242,7 +243,7 @@ class Renderer:
             cls._registry[cls.style] = cls
 
     @classmethod
-    def from_config(cls, cfg: "dict | Renderer | str"):
+    def from_config(cls, cfg: "dict | Renderer | str") -> Renderer:
         if isinstance(cfg, Renderer):
             return cfg
         elif isinstance(cfg, str):
@@ -269,10 +270,10 @@ class Renderer:
         subclass = cls._registry[style]
         return subclass(**cfg)
 
-    def render(self, el):
+    def render(self, el: object) -> str:
         raise NotImplementedError(f"render method does not support type: {type(el)}")
 
-    def _pages_written(self, builder):  # pragma: no cover
+    def _pages_written(self, builder: object) -> None:  # pragma: no cover
         """Called after all the qmd pages have been rendered and written to disk."""
         ...
 
@@ -291,10 +292,10 @@ class MdRenderer(Renderer):
         show_signature: bool = True,
         show_signature_annotations: bool = False,
         display_name: str = "relative",
-        hook_pre=None,
-        render_interlinks=False,
-        table_style="table",
-    ):
+        hook_pre: object | None = None,
+        render_interlinks: bool = False,
+        table_style: str = "table",
+    ) -> None:
         self.header_level = header_level
         self.show_signature = show_signature
         self.show_signature_annotations = show_signature_annotations
@@ -306,14 +307,14 @@ class MdRenderer(Renderer):
         self.crnt_header_level = self.header_level
 
     @contextmanager
-    def _increment_header(self, n=1):
+    def _increment_header(self, n: int = 1):
         self.crnt_header_level += n
         try:
             yield
         finally:
             self.crnt_header_level -= n
 
-    def _fetch_object_dispname(self, el: "dc.Alias | dc.Object"):
+    def _fetch_object_dispname(self, el: "dc.Alias | dc.Object") -> str:
         if self.display_name in {"name", "short"}:
             return el.name
         elif self.display_name == "relative":
@@ -325,7 +326,7 @@ class MdRenderer(Renderer):
 
         raise ValueError(f"Unsupported display_name: `{self.display_name}`")
 
-    def _fetch_method_parameters(self, el: dc.Function):
+    def _fetch_method_parameters(self, el: dc.Function) -> dc.Parameters:
         if (el.is_class or (el.parent and el.parent.is_class)) and len(el.parameters) > 0:
             if el.parameters[0].name in {"self", "cls"}:
                 return dc.Parameters(*list(el.parameters)[1:])
@@ -334,10 +335,10 @@ class MdRenderer(Renderer):
 
     def _render_table(
         self,
-        rows,
-        headers,
+        rows: list[ParamRow],
+        headers: list[str],
         style: Literal["parameters", "attributes", "returns"],
-    ):
+    ) -> str:
         if self.table_style == "description-list":
             return str(DefinitionList([row.to_definition_list() for row in rows]))
         else:
@@ -346,7 +347,7 @@ class MdRenderer(Renderer):
 
     # render_annotation -------------------------------------------------------
 
-    def render_annotation(self, el) -> str:
+    def render_annotation(self, el: "str | expr.Expr | expr.ExprName | None") -> str:
         """Render a type annotation."""
         if el is None:
             return ""
@@ -363,7 +364,9 @@ class MdRenderer(Renderer):
 
     # signature ---------------------------------------------------------------
 
-    def signature(self, el) -> str:
+    def signature(
+        self, el: "layout.Doc | dc.Alias | dc.Class | dc.Function | dc.Module | dc.Attribute"
+    ) -> str:
         """Return a string representation of an object's signature."""
         if isinstance(el, layout.Doc):
             return self._signature_doc(el)
@@ -385,10 +388,12 @@ class MdRenderer(Renderer):
         self.display_name = orig
         return res
 
-    def _signature_alias(self, el: dc.Alias, source=None) -> str:
+    def _signature_alias(self, el: dc.Alias, source: "dc.Object | None" = None) -> str:
         return self._signature_func_or_class(el.final_target, el)
 
-    def _signature_func_or_class(self, el, source=None) -> str:
+    def _signature_func_or_class(
+        self, el: "dc.Class | dc.Function | dc.Object", source: "dc.Object | dc.Alias | None" = None
+    ) -> str:
         name = self._fetch_object_dispname(source or el)
 
         # For non-callable class types (Enum, TypedDict), emit just the name
@@ -449,7 +454,9 @@ class MdRenderer(Renderer):
 
         return "```python\n" + "\n".join(sig_lines) + "\n```"
 
-    def _signature_module_or_attr(self, el, source=None) -> str:
+    def _signature_module_or_attr(
+        self, el: "dc.Module | dc.Attribute", source: "dc.Object | dc.Alias | None" = None
+    ) -> str:
         name = self._fetch_object_dispname(source or el)
 
         # For constants/attributes, include type annotation and value when
@@ -474,7 +481,7 @@ class MdRenderer(Renderer):
 
     # render_header -----------------------------------------------------------
 
-    def render_header(self, el) -> str:
+    def render_header(self, el: "layout.Doc | ds.DocstringSection") -> str:
         """Render the header of a docstring, including any anchors."""
         if isinstance(el, layout.Doc):
             _str_dispname = _escape_dunders(el.name)
@@ -515,7 +522,7 @@ class MdRenderer(Renderer):
 
     # render ------------------------------------------------------------------
 
-    def render(self, el) -> "str | ParamRow | list":
+    def render(self, el: object) -> "str | ParamRow | list":
         """Return a string representation of an object, or layout element.
 
         Dispatches based on the type of el.
@@ -655,7 +662,7 @@ class MdRenderer(Renderer):
 
         return "\n\n".join(parts)
 
-    def _render_doc_class_module(self, el) -> str:
+    def _render_doc_class_module(self, el: "layout.DocClass | layout.DocModule") -> str:
         title = self.render_header(el)
 
         attr_docs = []
@@ -735,7 +742,7 @@ class MdRenderer(Renderer):
 
         return "\n\n".join([title, *sig_part, body, *attr_docs, *class_docs, *meth_docs])
 
-    def _render_doc_func_attr(self, el) -> str:
+    def _render_doc_func_attr(self, el: "layout.DocFunction | layout.DocAttribute") -> str:
         title = self.render_header(el)
 
         str_sig = self.signature(el)
@@ -746,7 +753,7 @@ class MdRenderer(Renderer):
 
         return "\n\n".join([title, *sig_part, body])
 
-    def _render_object(self, el) -> str:
+    def _render_object(self, el: "dc.Object | dc.Alias") -> str:
         if el.docstring is None:
             return ""
         else:
@@ -769,7 +776,7 @@ class MdRenderer(Renderer):
         parts = [*str_body]
         return "\n\n".join(parts)
 
-    def _render_parameters(self, el) -> list:
+    def _render_parameters(self, el: "dc.Parameters | dc.Object") -> list[str]:
         """Render dc.Parameters to list of strings."""
         if isinstance(el, dc.Parameters):
             params = el
@@ -880,7 +887,9 @@ class MdRenderer(Renderer):
         data = map(qast.transform, el.value)
         return "\n\n".join(list(map(self.render, data)))
 
-    def _render_section_returns_or_raises(self, el) -> str:
+    def _render_section_returns_or_raises(
+        self, el: "ds.DocstringSectionReturns | ds.DocstringSectionRaises"
+    ) -> str:
         rows = []
         for item in el.value:
             if isinstance(item, ds.DocstringRaise):
@@ -907,10 +916,10 @@ class MdRenderer(Renderer):
     # Summarize ===============================================================
 
     @staticmethod
-    def _summary_row(link, description):
+    def _summary_row(link: str, description: str) -> str:
         return f"| {link} | {sanitize(description, allow_markdown=True)} |"
 
-    def summarize(self, el, *args, **kwargs) -> str:
+    def summarize(self, el: object, *args: object, **kwargs: object) -> str:
         """Produce a summary table."""
         if isinstance(el, layout.Layout):
             rendered_sections = list(map(self.summarize, el.sections))

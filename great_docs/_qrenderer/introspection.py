@@ -29,7 +29,7 @@ _log = logging.getLogger(__name__)
 DEFAULT_OPTIONS: dict[str, dict[str, object]] = {}
 
 
-def get_parser_defaults(name: str):
+def get_parser_defaults(name: str) -> dict[str, object]:
     return DEFAULT_OPTIONS.get(name, {})
 
 
@@ -111,7 +111,7 @@ def get_object(
     return f_data
 
 
-def _resolve_target(obj: dc.Alias):
+def _resolve_target(obj: dc.Alias) -> dc.Object:
     target = obj.target
 
     count = 0
@@ -278,7 +278,7 @@ def dynamic_alias(path: str, target: "str | None" = None, loader=None) -> dc.Obj
         return dc.Alias(attr_name, obj, parent=parent)
 
 
-def _canonical_path(crnt_part: object, qualname: str):
+def _canonical_path(crnt_part: object, qualname: str) -> str | None:
     suffix = (":" + qualname) if qualname else ""
     if not isinstance(crnt_part, ModuleType):
         if inspect.isclass(crnt_part) or inspect.isfunction(crnt_part):
@@ -297,7 +297,7 @@ def _canonical_path(crnt_part: object, qualname: str):
         return crnt_part.__name__ + suffix
 
 
-def _is_valueless(obj: dc.Object):
+def _is_valueless(obj: dc.Object) -> bool:
     if isinstance(obj, dc.Attribute):
         if obj.labels.union({"class-attribute", "module-attribute"}) and obj.value is None:
             return True
@@ -311,7 +311,7 @@ def _insert_contents(
     x: dict | list,
     contents: list,
     sentinel: str = "{{ contents }}",
-):
+) -> bool:
     """Splice `contents` into a list."""
     if isinstance(x, dict):
         for value in x.values():
@@ -401,7 +401,7 @@ class Builder:
     renderer: Renderer
     items: list[layout.Item]
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **kwargs: object) -> None:
         super().__init_subclass__(**kwargs)
 
         if hasattr(cls, "style") and cls.style in cls._registry:
@@ -423,13 +423,13 @@ class Builder:
         out_index: str = None,
         sidebar: "str | dict[str, Any] | None" = None,
         css: "str | None" = None,
-        rewrite_all_pages=False,
+        rewrite_all_pages: bool = False,
         source_dir: "str | None" = None,
         dynamic: bool | None = None,
-        parser="numpy",
+        parser: str = "numpy",
         render_interlinks: bool = False,
-        _fast_inventory=False,
-    ):
+        _fast_inventory: bool = False,
+    ) -> None:
         self.layout = self.load_layout(
             title, desc=desc, sections=sections, package=package, options=options
         )
@@ -462,7 +462,9 @@ class Builder:
 
         self._fast_inventory = _fast_inventory
 
-    def load_layout(self, title: str, desc: str, sections: dict, package: str, options=None):
+    def load_layout(
+        self, title: str, desc: str, sections: dict, package: str, options: "dict | None" = None
+    ) -> layout.Layout:
         try:
             return layout.Layout(title, desc, sections=sections, package=package, options=options)
         except (ValueError, TypeError) as e:
@@ -470,7 +472,7 @@ class Builder:
 
     # building ----------------------------------------------------------------
 
-    def build(self, filter: str = "*"):
+    def build(self, filter: str = "*") -> None:
         """Build index page, inventory, and individual doc pages."""
 
         from .blueprint import blueprint as _blueprint
@@ -502,7 +504,7 @@ class Builder:
             _log.info(f"Writing sidebar yaml to {self.sidebar['file']}")
             self.write_sidebar(bp)
 
-    def write_index(self, blueprint_layout: layout.Layout):
+    def write_index(self, blueprint_layout: layout.Layout) -> str:
         """Write API index page."""
 
         _log.info("Summarizing docs for index page.")
@@ -515,7 +517,7 @@ class Builder:
 
         return str(p_index)
 
-    def write_doc_pages(self, pages, filter: str):
+    def write_doc_pages(self, pages: list[layout.Page], filter: str) -> None:
         """Write individual function documentation pages."""
 
         for page in pages:
@@ -546,7 +548,7 @@ class Builder:
             else:
                 _log.info("Skipping write (content unchanged)")
 
-    def create_inventory(self, items):
+    def create_inventory(self, items: list[layout.Item]) -> dict:
         """Generate inventory object."""
 
         _log.info("Creating inventory")
@@ -602,7 +604,7 @@ class Builder:
         entries = [sidebar, {"id": "dummy-sidebar"}]
         return {"website": {"sidebar": entries}}
 
-    def write_sidebar(self, blueprint_layout: layout.Layout):
+    def write_sidebar(self, blueprint_layout: layout.Layout) -> None:
         """Write a yaml config file for API sidebar."""
 
         d_sidebar = self._generate_sidebar(blueprint_layout)
@@ -614,7 +616,7 @@ class Builder:
     # constructors ----
 
     @classmethod
-    def from_quarto_config(cls, quarto_cfg: "str | dict"):
+    def from_quarto_config(cls, quarto_cfg: "str | dict") -> Builder:
         """Construct a Builder from a configuration object (or yaml file)."""
 
         if isinstance(quarto_cfg, str):

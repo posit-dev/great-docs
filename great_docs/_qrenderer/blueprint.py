@@ -17,7 +17,7 @@ from ._griffe import (
 )
 from ._griffe import dataclasses as dc
 from ._griffe import docstrings as ds
-from ._transformers import PydanticTransformer, WorkaroundKeyError, ctx_node
+from ._transformers import Node, PydanticTransformer, WorkaroundKeyError, ctx_node
 from .introspection import get_parser_defaults
 from .layout import (
     MISSING,
@@ -44,7 +44,7 @@ class CollectTransformer(PydanticTransformer):
         self.items: list[layout.Item] = []
         self.pages: list[layout.Page] = []
 
-    def find_page_node(self):
+    def find_page_node(self) -> Node:
         crnt_node = ctx_node.get()
 
         while True:
@@ -58,14 +58,14 @@ class CollectTransformer(PydanticTransformer):
 
         return crnt_node
 
-    def exit(self, el):
+    def exit(self, el: object) -> object:
         if isinstance(el, layout.Doc):
             return self._exit_doc(el)
         if isinstance(el, layout.Page):
             return self._exit_page(el)
         return super().exit(el)
 
-    def _exit_doc(self, el: layout.Doc):
+    def _exit_doc(self, el: layout.Doc) -> layout.Doc:
         page_node = self.find_page_node()
         p_el = page_node.value
 
@@ -83,12 +83,12 @@ class CollectTransformer(PydanticTransformer):
 
         return el
 
-    def _exit_page(self, el: layout.Page):
+    def _exit_page(self, el: layout.Page) -> layout.Page:
         self.pages.append(el)
         return el
 
 
-def collect(el: layout._Base, base_dir: str):
+def collect(el: layout._Base, base_dir: str) -> tuple[list[layout.Page], list[layout.Item]]:
     """Return all pages and items in a layout.
 
     Parameters
@@ -173,7 +173,7 @@ def _is_external_alias(obj: dc.Alias | dc.Object, mod: dc.Module):
     return False
 
 
-def _to_simple_dict(el):
+def _to_simple_dict(el: object) -> object:
     """Recursively convert a dataclass tree to plain dicts/lists for YAML."""
     if isinstance(el, _Base):
         return {k: _to_simple_dict(v) for k, v in el._iter_fields()}
@@ -186,11 +186,11 @@ def _to_simple_dict(el):
     return el
 
 
-def _non_default_entries(el: Auto):
+def _non_default_entries(el: Auto) -> dict[str, object]:
     return {k: getattr(el, k) for k in el._fields_specified}
 
 
-def _resolve_alias(obj: dc.Alias | dc.Object, get_object):
+def _resolve_alias(obj: dc.Alias | dc.Object, get_object: object) -> dc.Object:
     if not isinstance(obj, dc.Alias):
         return obj
 
@@ -234,7 +234,7 @@ class BlueprintTransformer(PydanticTransformer):
             return f"{path}.{new}"
         return f"{path}:{new}"
 
-    def get_object_fixed(self, path, **kwargs):
+    def get_object_fixed(self, path: str, **kwargs: object) -> dc.Object:
         try:
             return self.get_object(path, **kwargs)
         except KeyError as e:
@@ -250,7 +250,7 @@ class BlueprintTransformer(PydanticTransformer):
             return new.replace(":", ".")
         return new
 
-    def visit(self, el):
+    def visit(self, el: object) -> object:
         self._log("VISITING", el)
 
         # set package
@@ -273,7 +273,7 @@ class BlueprintTransformer(PydanticTransformer):
             self.crnt_package = old
             self.options = old_options
 
-    def enter(self, el):
+    def enter(self, el: object) -> object:
         # isinstance-based dispatch replacing plum @dispatch
         if isinstance(el, Auto):
             return self._enter_auto(el)
@@ -281,12 +281,12 @@ class BlueprintTransformer(PydanticTransformer):
             return self._enter_layout(el)
         return super().enter(el)
 
-    def exit(self, el):
+    def exit(self, el: object) -> object:
         if isinstance(el, Section):
             return self._exit_section(el)
         return super().exit(el)
 
-    def _enter_layout(self, el: Layout):
+    def _enter_layout(self, el: Layout) -> _Base:
         if not el.sections:
             print("Autogenerating contents (since no contents specified in config)")
 
@@ -314,7 +314,7 @@ class BlueprintTransformer(PydanticTransformer):
 
         return super().enter(el)
 
-    def _exit_section(self, el: Section):
+    def _exit_section(self, el: Section) -> Section:
         """Transform top-level sections, so their contents are all Pages."""
 
         node = ctx_node.get()
@@ -332,7 +332,7 @@ class BlueprintTransformer(PydanticTransformer):
 
         return new
 
-    def _enter_auto(self, el: Auto):
+    def _enter_auto(self, el: Auto) -> Doc:
         self._log("Entering", el)
 
         pkg = self.crnt_package
@@ -392,7 +392,7 @@ class BlueprintTransformer(PydanticTransformer):
             signature_name=el.signature_name,
         )
 
-    def _fetch_members(self, el: Auto, obj: dc.Object | dc.Alias):
+    def _fetch_members(self, el: Auto, obj: dc.Object | dc.Alias) -> list[str]:
         if el.members is not None:
             return el.members
 
@@ -448,15 +448,15 @@ class BlueprintTransformer(PydanticTransformer):
 
 
 class _PagePackageStripper(PydanticTransformer):
-    def __init__(self, package: str):
+    def __init__(self, package: str) -> None:
         self.package = package
 
-    def exit(self, el):
+    def exit(self, el: object) -> object:
         if isinstance(el, Page):
             return self._exit_page(el)
         return super().exit(el)
 
-    def _exit_page(self, el: Page):
+    def _exit_page(self, el: Page) -> Page:
         parts = el.path.split(".")
         if parts[0] == self.package and len(parts) > 1:
             new_path = ".".join(parts[1:])
@@ -467,7 +467,7 @@ class _PagePackageStripper(PydanticTransformer):
 
 
 def blueprint(
-    el: _Base, package: str = None, dynamic: "None | bool" = None, parser="numpy"
+    el: _Base, package: str | None = None, dynamic: bool | None = None, parser: str = "numpy"
 ) -> _Base:
     """Convert a configuration element to something that is ready to render.
 
@@ -493,7 +493,7 @@ def blueprint(
     return trans.visit(el)
 
 
-def strip_package_name(el: _Base, package: str):
+def strip_package_name(el: _Base, package: str) -> _Base:
     """Removes leading package name from layout Pages."""
 
     stripper = _PagePackageStripper(package)

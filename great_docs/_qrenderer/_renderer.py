@@ -23,7 +23,7 @@ class Renderer(_Renderer):
 
     style: str = field(init=False, default="q")
 
-    def render(self, el: layout.Page):
+    def render(self, el: layout.Page) -> str:
         """
         Render a page
         """
@@ -31,7 +31,7 @@ class Renderer(_Renderer):
 
         return str(RenderAPIPage(el, self, self.header_level))
 
-    def summarize(self, el: layout.Layout):
+    def summarize(self, el: layout.Layout) -> str:
         """
         Summarize a Layout
 
@@ -41,10 +41,10 @@ class Renderer(_Renderer):
 
         return str(RenderReferencePage(el, self, self.header_level))
 
-    def _pages_written(self, builder: Builder):
+    def _pages_written(self, builder: Builder) -> None:
         self._write_typing_information(builder)
 
-    def _write_typing_information(self, builder: Builder):
+    def _write_typing_information(self, builder: Builder) -> None:
         """
         Render typing information and the interlinks
         """

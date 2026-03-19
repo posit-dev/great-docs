@@ -7,7 +7,7 @@ from . import layout
 from ._griffe import dataclasses as dc
 
 
-def convert_inventory(inv: "dict | object", out_name=None):
+def convert_inventory(inv: "dict | object", out_name: str | None = None) -> None:
     """Convert an inventory to JSON.
 
     Parameters
@@ -84,7 +84,12 @@ def create_inventory(
     }
 
 
-def _create_inventory_item(item, uri, dispname="-", priority="1") -> dict:
+def _create_inventory_item(
+    item: "layout.Item | dc.Object | dc.Alias",
+    uri: "str | Callable",
+    dispname: "str | Callable" = "-",
+    priority: str = "1",
+) -> dict:
     """Create a single inventory item dict."""
 
     if isinstance(item, layout.Item):
@@ -110,7 +115,7 @@ def _create_inventory_item(item, uri, dispname="-", priority="1") -> dict:
         raise TypeError(f"Unsupported item type: {type(item)}")
 
 
-def _maybe_call(s: "str | Callable", obj):
+def _maybe_call(s: "str | Callable", obj: object) -> str:
     if callable(s):
         return s(obj)
     elif isinstance(s, str):

@@ -42,7 +42,7 @@ def _canonical_path(klass: type | MethodType) -> str:
     return f"{module}.{klass.__qualname__}"
 
 
-def _render(obj: gf.Object):
+def _render(obj: gf.Object) -> str:
     """
     Render gf.Object to qmd
     """
