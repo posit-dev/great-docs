@@ -34,7 +34,7 @@ class TypeSections(Block):
     typealiases_items: list[layout.Item]
     renderer: Renderer
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         def make_render(item: layout.Item):
             """
             Create RenderDoc object
@@ -66,7 +66,7 @@ class TypeSections(Block):
             r.show_signature_name = False
             r.show_signature_annotation = False
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.render_body())
 
     @cached_property
@@ -116,11 +116,11 @@ class TypeInformation(Block):
     renderer: Renderer
     builder: Builder
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.package = self.builder.package
         self.dir = self.builder.dir
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.content)
 
     @cached_property
@@ -165,7 +165,7 @@ class TypeInformation(Block):
         meta = Meta({"title": "Typing Information"})
         return Blocks([meta, self.sections])
 
-    def write(self):
+    def write(self) -> None:
         """
         Write typing information to qmd file
         """

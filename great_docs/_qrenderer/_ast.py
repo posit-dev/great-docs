@@ -12,7 +12,7 @@ from ._griffe import docstrings as ds
 from .layout import _Base as LayoutBase
 
 
-def transform(el):
+def transform(el: object) -> object:
     """Return a more specific docstring element, or simply return the original one."""
 
     if isinstance(el, tuple):
@@ -39,11 +39,11 @@ class DocstringSectionKindPatched(Enum):
 class _DocstringSectionPatched(ds.DocstringSection):
     _registry: "dict[str, Type[_DocstringSectionPatched]]" = {}
 
-    def __init__(self, value: str, title: "str | None" = None):
+    def __init__(self, value: str, title: "str | None" = None) -> None:
         super().__init__(title)
         self.value = value
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **kwargs: object) -> None:
         super().__init_subclass__(**kwargs)
 
         if cls.kind.value in cls._registry:
@@ -52,7 +52,7 @@ class _DocstringSectionPatched(ds.DocstringSection):
         cls._registry[cls.kind.value] = cls
 
     @staticmethod
-    def split_sections(text) -> list[tuple[str, str]]:
+    def split_sections(text: str) -> list[tuple[str, str]]:
         """Return tuples of (title, body) for all numpydoc style sections in the text."""
         import re
 
@@ -132,7 +132,7 @@ class ExampleText:
     value: str
 
 
-def tuple_to_data(el: "tuple[ds.DocstringSectionKind, str]"):
+def tuple_to_data(el: "tuple[ds.DocstringSectionKind, str]") -> ExampleCode | ExampleText:
     """Re-format funky tuple setup in example section to be a class."""
     assert len(el) == 2
 
@@ -148,7 +148,7 @@ def tuple_to_data(el: "tuple[ds.DocstringSectionKind, str]"):
 # Tree previewer ==============================================================
 
 
-def fields(el):
+def fields(el: object) -> list[str] | list[int] | None:
     """Return the relevant fields for an object, for preview purposes.
 
     Replaces plum dispatch with isinstance-based dispatch.
@@ -237,12 +237,14 @@ class Formatter:
     icon_connector = "│ "
     string_truncate_mark = " ..."
 
-    def __init__(self, string_max_length: int = 50, max_depth=999, compact=False):
+    def __init__(
+        self, string_max_length: int = 50, max_depth: int = 999, compact: bool = False
+    ) -> None:
         self.string_max_length = string_max_length
         self.max_depth = max_depth
         self.compact = compact
 
-    def format(self, call, depth=0, pad=0):
+    def format(self, call: object, depth: int = 0, pad: int = 0) -> str:
         """Return a nice tree, with boxes for nodes."""
 
         call = transform(call)
@@ -284,13 +286,13 @@ class Formatter:
 
         return "".join([call_str, *padded])
 
-    def get_field(self, obj, k):
+    def get_field(self, obj: object, k: str | int) -> object:
         if isinstance(obj, (dict, list, dc.Parameters)):
             return obj[k]
 
         return getattr(obj, k)
 
-    def fmt_pipe(self, x, is_final=False, pad=0):
+    def fmt_pipe(self, x: str, is_final: bool = False, pad: int = 0) -> str:
         if not is_final:
             connector = self.icon_connector if not is_final else "  "
             prefix = self.icon_pipe
@@ -305,10 +307,10 @@ class Formatter:
 
 def preview(
     ast: "dc.Object | ds.Docstring | object",
-    max_depth=999,
-    compact=False,
+    max_depth: int = 999,
+    compact: bool = False,
     as_string: bool = False,
-):
+) -> str | None:
     """Print a friendly representation of a griffe object."""
 
     res = Formatter(max_depth=max_depth, compact=compact).format(ast)

@@ -557,7 +557,9 @@ class Builder:
 
         return inventory
 
-    def _generate_sidebar(self, blueprint_layout: layout.Layout, options: "dict | None" = None):
+    def _generate_sidebar(
+        self, blueprint_layout: layout.Layout, options: "dict | None" = None
+    ) -> dict:
         contents = [f"{self.dir}/index{self.out_page_suffix}"]
         in_subsection = False
         crnt_entry = {}

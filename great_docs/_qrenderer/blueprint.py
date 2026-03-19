@@ -210,7 +210,7 @@ def _resolve_alias(obj: dc.Alias | dc.Object, get_object: object) -> dc.Object:
 
 
 class BlueprintTransformer(PydanticTransformer):
-    def __init__(self, get_object=None, parser="numpy"):
+    def __init__(self, get_object: object = None, parser: str = "numpy") -> None:
         if get_object is None:
             from .introspection import get_object as _get_object
 
@@ -229,7 +229,7 @@ class BlueprintTransformer(PydanticTransformer):
         self.dynamic = False
 
     @staticmethod
-    def _append_member_path(path: str, new: str):
+    def _append_member_path(path: str, new: str) -> str:
         if ":" in path:
             return f"{path}.{new}"
         return f"{path}:{new}"
@@ -245,7 +245,7 @@ class BlueprintTransformer(PydanticTransformer):
             )
 
     @staticmethod
-    def _clean_member_path(path, new):
+    def _clean_member_path(path: str, new: str) -> str:
         if ":" in new:
             return new.replace(":", ".")
         return new
