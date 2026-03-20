@@ -9469,17 +9469,17 @@ toc: false
         lines.append("**Any agent** --- install with [npx](https://github.com/vercel-labs/skills):")
         lines.append("")
         if site_url:
-            lines.append("```bash")
-            lines.append(f"npx skills add {site_url}")
-            lines.append("```")
+            _npx_cmd = f"npx skills add {site_url}"
         elif github_owner_repo:
-            lines.append("```bash")
-            lines.append(f"npx skills add {github_owner_repo}")
-            lines.append("```")
+            _npx_cmd = f"npx skills add {github_owner_repo}"
         else:
-            lines.append("```bash")
-            lines.append("npx skills add <site-url>")
-            lines.append("```")
+            _npx_cmd = "npx skills add <site-url>"
+        lines.append("```{=html}")
+        lines.append(
+            f'<div class="sourceCode"><pre class="sourceCode bash code-with-copy">'
+            f"<code>{_npx_cmd}</code></pre></div>"
+        )
+        lines.append("```")
         lines.append("")
         lines.append(
             "Works with Claude Code, GitHub Copilot, Cursor, Gemini CLI, Codex, "
@@ -9492,34 +9492,41 @@ toc: false
         lines.append("**Codex / OpenCode** --- tell the agent:")
         lines.append("")
         if skill_file_url:
-            lines.append("```")
-            lines.append(f"Fetch the skill file at {skill_file_url} and follow the instructions.")
-            lines.append("```")
+            _prompt_text = (
+                f"Fetch the skill file at {skill_file_url} and follow the instructions."
+            )
         elif github_owner_repo:
-            lines.append("```")
-            lines.append(
+            _prompt_text = (
                 f"Fetch the skill file from "
                 f"https://github.com/{github_owner_repo} "
                 "and follow the instructions."
             )
-            lines.append("```")
         else:
-            lines.append("```")
-            lines.append("Fetch the skill file at <site-url>/skill.md and follow the instructions.")
-            lines.append("```")
+            _prompt_text = (
+                "Fetch the skill file at &lt;site-url&gt;/skill.md"
+                " and follow the instructions."
+            )
+        lines.append("```{=html}")
+        lines.append(
+            f'<div class="sourceCode"><pre class="sourceCode text code-with-copy">'
+            f"<code>{_prompt_text}</code></pre></div>"
+        )
+        lines.append("```")
         lines.append("")
 
         # ── Manual (curl + raw links) ──
         lines.append("**Manual** --- download the skill file:")
         lines.append("")
         if skill_file_url:
-            lines.append("```bash")
-            lines.append(f"curl -O {skill_file_url}")
-            lines.append("```")
+            _curl_cmd = f"curl -O {skill_file_url}"
         else:
-            lines.append("```bash")
-            lines.append("curl -O <site-url>/skill.md")
-            lines.append("```")
+            _curl_cmd = "curl -O &lt;site-url&gt;/skill.md"
+        lines.append("```{=html}")
+        lines.append(
+            f'<div class="sourceCode"><pre class="sourceCode bash code-with-copy">'
+            f"<code>{_curl_cmd}</code></pre></div>"
+        )
+        lines.append("```")
         lines.append("")
         # Use raw HTML to prevent Quarto rewriting skill.md → skill.html.
         # The post-render script also fixes this link back to skill.md.
