@@ -3627,6 +3627,250 @@ html[data-bs-theme="dark"] .gd-content-glow-mint  { --gd-glow-color: #00695c; }
     }
 }
 
+/*---------------------------------- Skills Page -----------------------------------*/
+
+.gd-skills-install {
+    border: 1px solid tint-color($primary, 70%);
+    border-radius: 0.5rem;
+    margin-bottom: 2rem;
+    overflow: hidden;
+    width: 100%;
+}
+
+.gd-skills-install-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.75rem 1.25rem;
+    border: none;
+    background: tint-color($primary, 93%);
+    color: $primary;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease;
+
+    &:hover {
+        background: tint-color($primary, 87%);
+    }
+
+    &[aria-expanded="true"] {
+        border-bottom: 1px solid tint-color($primary, 70%);
+    }
+}
+
+.gd-skills-install-icon {
+    display: inline-block;
+    font-size: 0.65rem;
+    transition: transform 0.25s ease;
+    line-height: 1;
+
+    .gd-skills-install-toggle[aria-expanded="true"] & {
+        transform: rotate(90deg);
+    }
+}
+
+.gd-skills-install-body {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.35s ease;
+    background: tint-color($primary, 97%);
+
+    > * {
+        overflow: hidden;
+        min-height: 0;
+    }
+
+    &.gd-skills-install-open {
+        grid-template-rows: 1fr;
+    }
+
+    // Inner wrapper — the direct grid child. MUST have no padding
+    // so that 0fr collapses to true zero height.
+    .gd-skills-install-inner {
+        // padding lives on .gd-skills-install-pad below
+    }
+
+    // Padding wrapper inside the overflow-hidden element
+    .gd-skills-install-pad {
+        padding: 1rem 1.25rem 0.75rem;
+    }
+
+    // Override Quarto's code block styling inside the install section
+    .sourceCode {
+        margin: 0.35rem 0 0.75rem;
+    }
+
+    // Compact single-line code cells — reduce Quarto's generous pre padding
+    pre.sourceCode {
+        padding: 0.45rem 2.5rem 0.45rem 0.75rem; // right padding leaves room for copy btn
+        font-size: 0.88rem;
+
+        code {
+            padding: 0;
+        }
+    }
+
+    p {
+        margin: 0.25rem 0;
+        font-size: 0.92rem;
+        line-height: 1.55;
+    }
+
+    strong {
+        color: shade-color($primary, 15%);
+    }
+}
+
+html[data-bs-theme="dark"] {
+    .gd-skills-install {
+        border-color: shade-color($primary, 50%);
+    }
+
+    .gd-skills-install-toggle {
+        background: shade-color($primary, 80%);
+        color: tint-color($primary, 50%);
+
+        &:hover {
+            background: shade-color($primary, 72%);
+        }
+
+        &[aria-expanded="true"] {
+            border-bottom-color: shade-color($primary, 50%);
+        }
+    }
+
+    .gd-skills-install-body {
+        background: shade-color($primary, 88%);
+
+        strong {
+            color: tint-color($primary, 40%);
+        }
+    }
+}
+
+// Skills page: eliminate column-page side margins
+body.gd-skills-page .content.column-page {
+    grid-column: page-start / page-end !important;
+    max-width: 100%;
+}
+
+// Terminal-style raw skill file rendering
+.gd-skills-raw {
+    background: $gray-100;
+    color: $gray-800;
+    font-family: $font-family-monospace;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    padding: 1.25rem 1.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid $gray-300;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin: 0;
+    max-width: 100%;
+
+    // Quarto wraps the fenced code block content in its own elements;
+    // flatten them so they inherit pre styling.
+    .sourceCode {
+        background: transparent !important;
+        border: none !important;
+        margin: 0;
+        padding: 0;
+    }
+
+    code {
+        background: transparent;
+        color: inherit;
+        padding: 0;
+        font-size: inherit;
+        white-space: pre-wrap;
+    }
+
+    pre {
+        background: transparent !important;
+        border: none !important;
+        margin: 0;
+        padding: 0;
+        color: inherit;
+    }
+}
+
+html[data-bs-theme="dark"] .gd-skills-raw {
+    background: $gray-900;
+    border-color: $gray-700;
+    color: $gray-200;
+}
+
+// Directory tree for skill packages with companion subdirectories
+.gd-skills-tree {
+    background: $gray-100;
+    color: $gray-700;
+    font-family: $font-family-monospace;
+    font-size: 0.88rem;
+    line-height: 1.8;
+    padding: 1rem 1.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid $gray-300;
+    margin: 0 0 1.5rem;
+    white-space: pre;
+    overflow-x: auto;
+
+    a {
+        color: $primary;
+        text-decoration: none;
+
+        &:hover {
+            text-decoration: underline;
+        }
+    }
+}
+
+html[data-bs-theme="dark"] .gd-skills-tree {
+    background: $gray-900;
+    border-color: $gray-700;
+    color: $gray-400;
+
+    a {
+        color: tint-color($primary, 40%);
+    }
+}
+
+// Capitalized section heading above the directory tree
+.gd-skills-section-heading {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: $gray-500;
+    margin: 0 0 0.5rem;
+    padding: 0;
+}
+
+html[data-bs-theme="dark"] .gd-skills-section-heading {
+    color: $gray-400;
+}
+
+// Heading label for each companion file section
+.gd-skills-file-heading {
+    font-family: $font-family-monospace;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: $gray-700;
+    margin: 1.5rem 0 0.35rem;
+    padding: 0;
+
+    &:first-of-type {
+        margin-top: 0;
+    }
+}
+
+html[data-bs-theme="dark"] .gd-skills-file-heading {
+    color: $gray-300;
+}
 
 
 /*-- scss:functions --*/

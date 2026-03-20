@@ -6185,7 +6185,7 @@ class GreatDocs:
         cli_yaml = self._format_cli_yaml()
 
         return f"""# Great Docs Configuration
-# See https://rich-iannone.github.io/great-docs/user-guide/03-configuration.html
+# See https://posit-dev.github.io/great-docs/user-guide/03-configuration.html
 
 # Module Name (optional)
 # ----------------------
@@ -6292,7 +6292,7 @@ jupyter: python3
 
         lines = [
             "# Great Docs Configuration",
-            "# See https://rich-iannone.github.io/great-docs/user-guide/03-configuration.html",
+            "# See https://posit-dev.github.io/great-docs/user-guide/03-configuration.html",
             "",
             "# Module Name (optional)",
             "# ----------------------",
@@ -6930,8 +6930,8 @@ jupyter: python3
         """
         Build the `.column-margin` metadata sidebar content for the homepage.
 
-        Generates Markdown for the right-hand margin containing project metadata:
-        links, license, community pages, developers, funding, meta, and citation.
+        Generates Markdown for the right-hand margin containing project metadata
+        in five sections: Links, AI / Agents, Developers, Community, and Meta.
 
         As a side effect, creates `contributing.qmd` and `code-of-conduct.qmd`
         in the project directory if the corresponding source files exist.
@@ -6951,135 +6951,53 @@ jupyter: python3
         citation_qmd = self.project_path / "citation.qmd"
         citation_link = "citation.qmd" if citation_qmd.exists() else None
 
-        # If license.qmd doesn't exist yet, check if LICENSE file exists and note it
-        if not license_link and metadata.get("license"):
-            # Fallback: just show the license name without a link
-            pass
+        margin_sections: list[str] = []
 
-        margin_sections = []
+        # ── 1. Links ─────────────────────────────────────────────────────
+        links_items: list[str] = []
 
-        # Links section
-        links_added = []
-
-        # Try to add PyPI link based on package name
         package_name = self._detect_package_name()
         if package_name:
             pypi_url = f"https://pypi.org/project/{package_name}/"
-            margin_sections.append("#### Links\n")
-            margin_sections.append(f"[View on PyPI]({pypi_url})<br>")
-            links_added.append("pypi")
+            links_items.append(f"[View on PyPI]({pypi_url})<br>")
 
         if metadata.get("urls"):
-            if not links_added:
-                margin_sections.append("#### Links\n")
-
             urls = metadata["urls"]
-
-            # Map common URL names to display text
             url_map = {
-                "homepage": None,  # Skip if we already added PyPI
+                "homepage": None,
                 "repository": "Browse source code",
                 "bug_tracker": "Report a bug",
-                "documentation": None,  # Skip for that's the site we're on
+                "documentation": None,
             }
-
             for name, url in urls.items():
                 name_lower = name.lower().replace(" ", "_")
                 display_name = url_map.get(name_lower, name.replace("_", " ").title())
-
-                # Skip if display_name is None (homepage/documentation)
                 if display_name:
-                    margin_sections.append(f"[{display_name}]({url})<br>")
+                    links_items.append(f"[{display_name}]({url})<br>")
 
-        # Add llms.txt and llms-full.txt links at the end of Links section
-        if links_added or metadata.get("urls"):
-            margin_sections.append("[llms.txt](llms.txt)<br>")
-            margin_sections.append("[llms-full.txt](llms-full.txt)<br>")
-            if self._config.skill_enabled:
-                margin_sections.append("[skill.md](skill.md)<br>")
-        else:
-            # If no links section exists yet, create one just for llms.txt files
+        if links_items:
             margin_sections.append("#### Links\n")
-            margin_sections.append("[llms.txt](llms.txt)<br>")
-            margin_sections.append("[llms-full.txt](llms-full.txt)<br>")
-            if self._config.skill_enabled:
-                margin_sections.append("[skill.md](skill.md)<br>")
+            margin_sections.extend(links_items)
 
-        # License section
-        if license_link:
-            margin_sections.append("\n#### License\n")
-            margin_sections.append(f"[Full license]({license_link})<br>")
-        elif metadata.get("license"):
-            margin_sections.append("\n#### License\n")
-            margin_sections.append(f"{metadata['license']}")
+        # ── 2. AI / Agents ───────────────────────────────────────────────
+        ai_items: list[str] = []
+        if self._config.skill_enabled:
+            ai_items.append("[Skills](skills.html)<br>")
+        ai_items.append("[llms.txt](llms.txt)<br>")
+        ai_items.append("[llms-full.txt](llms-full.txt)<br>")
 
-        # Community section: check for CONTRIBUTING.md and CODE_OF_CONDUCT.md
-        community_items = []
+        margin_sections.append("\n#### AI / Agents\n")
+        margin_sections.extend(ai_items)
 
-        # Check for CONTRIBUTING.md in root or .github directory
-        contributing_path = package_root / "CONTRIBUTING.md"
-        if not contributing_path.exists():
-            contributing_path = package_root / ".github" / "CONTRIBUTING.md"
-
-        # Check for CODE_OF_CONDUCT.md in root or .github directory
-        coc_path = package_root / "CODE_OF_CONDUCT.md"
-        if not coc_path.exists():
-            coc_path = package_root / ".github" / "CODE_OF_CONDUCT.md"
-
-        if contributing_path.exists():
-            community_items.append("[Contributing guide](contributing.qmd)<br>")
-            # Create contributing.qmd (idempotent)
-            with open(contributing_path, "r", encoding="utf-8") as f:
-                contributing_content = f.read()
-
-            # Strip first heading if it exists to avoid duplication with title
-            lines = contributing_content.split("\n")
-            if lines and lines[0].startswith("# "):
-                contributing_content = "\n".join(lines[1:]).lstrip()
-
-            contributing_qmd = self.project_path / "contributing.qmd"
-            contributing_qmd_content = f"""---
-title: "Contributing"
----
-
-{contributing_content}
-"""
-            with open(contributing_qmd, "w", encoding="utf-8") as f:
-                f.write(contributing_qmd_content)
-
-        if coc_path.exists():
-            community_items.append("[Code of conduct](code-of-conduct.qmd)<br>")
-            # Create code-of-conduct.qmd (idempotent)
-            with open(coc_path, "r", encoding="utf-8") as f:
-                coc_content = f.read()
-
-            # Strip first heading if it exists to avoid duplication with title
-            lines = coc_content.split("\n")
-            if lines and lines[0].startswith("# "):
-                coc_content = "\n".join(lines[1:]).lstrip()
-
-            coc_qmd = self.project_path / "code-of-conduct.qmd"
-            coc_qmd_content = f"""---
-title: "Code of Conduct"
----
-
-{coc_content}
-"""
-            with open(coc_qmd, "w", encoding="utf-8") as f:
-                f.write(coc_qmd_content)
-
-        if community_items:
-            margin_sections.append("\n#### Community\n")
-            margin_sections.extend(community_items)
-
-        # Developers section (Authors)
-        # Use rich author metadata if available, otherwise fall back to standard authors
+        # ── 3. Developers (Authors + Funding) ────────────────────────────
         authors_to_display = metadata.get("rich_authors") or metadata.get("authors", [])
+        funding = metadata.get("funding")
+        has_funding = funding and isinstance(funding, dict) and funding.get("name")
 
-        if authors_to_display:
+        if authors_to_display or has_funding:
             margin_sections.append("\n#### Developers\n")
 
-            # Try to extract GitHub username from repository URL as fallback
+            # Authors
             fallback_github = None
             if metadata.get("urls"):
                 repo_url = metadata["urls"].get("repository", "") or metadata["urls"].get(
@@ -7092,28 +7010,23 @@ title: "Code of Conduct"
                         if username_part:
                             fallback_github = username_part
 
-            for idx, author in enumerate(authors_to_display):
+            dev_idx = 0
+            for author in authors_to_display:
                 if isinstance(author, dict):
                     name = author.get("name", "")
                     email = author.get("email", "")
-
-                    # Rich metadata fields (from great-docs.yml authors)
                     role = author.get("role", "")
                     affiliation = author.get("affiliation", "")
                     github = author.get("github", "")
                     homepage = author.get("homepage", "") or author.get("url", "")
                     orcid = author.get("orcid", "")
 
-                    # Build author HTML
                     author_html_parts = []
-
-                    # Name line
                     name_html = (
                         f'<span><p><strong style="padding-bottom: 4px;">{name}</strong></p></span>'
                     )
                     author_html_parts.append(name_html)
 
-                    # Role line (if available)
                     if role:
                         role_html = (
                             f'<span style="margin-top: -0.15em; display: block;">'
@@ -7121,7 +7034,6 @@ title: "Code of Conduct"
                         )
                         author_html_parts.append(role_html)
 
-                    # Affiliation line (if available)
                     if affiliation:
                         affiliation_html = (
                             f'<span><p><small style="margin-top: -0.15em; display: block;">'
@@ -7129,14 +7041,11 @@ title: "Code of Conduct"
                         )
                         author_html_parts.append(affiliation_html)
 
-                    # Icon links (if available)
                     icon_links = []
-
                     if email:
                         icon_links.append(
                             f'<a href="mailto:{email}" title="Email"><i class="bi bi-envelope-fill"></i></a>'
                         )
-
                     if github:
                         icon_links.append(
                             f'<a href="https://github.com/{github}" title="GitHub"><i class="bi bi-github"></i></a>'
@@ -7145,12 +7054,10 @@ title: "Code of Conduct"
                         icon_links.append(
                             f'<a href="https://github.com/{fallback_github}" title="GitHub"><i class="bi bi-github"></i></a>'
                         )
-
                     if homepage:
                         icon_links.append(
                             f'<a href="{homepage}" title="Website"><i class="bi bi-globe"></i></a>'
                         )
-
                     if orcid:
                         orcid_url = (
                             orcid if orcid.startswith("http") else f"https://orcid.org/{orcid}"
@@ -7167,102 +7074,152 @@ title: "Code of Conduct"
                         )
                         author_html_parts.append(icon_html)
 
-                    # Wrap entire author in <div> tag with padding for non-first authors
                     author_div_content = "".join(author_html_parts)
-                    if idx == 0:
+                    if dev_idx == 0:
                         margin_sections.append(f"<div>{author_div_content}</div>")
                     else:
                         margin_sections.append(
                             f'<div style="padding-top: 10px;">{author_div_content}</div>'
                         )
+                    dev_idx += 1
 
-        # Funding section (similar to Developers but for organizations)
-        funding = metadata.get("funding")
-        if funding and isinstance(funding, dict) and funding.get("name"):
-            margin_sections.append("\n#### Funding\n")
+            # Funding (rendered as another entry in the Developers section)
+            if has_funding:
+                funder_name = funding.get("name", "")
+                roles = funding.get("roles", [])
+                homepage = funding.get("homepage", "")
+                ror_url = funding.get("ror", "")
 
-            funder_name = funding.get("name", "")
-            roles = funding.get("roles", [])
-            homepage = funding.get("homepage", "")
-            ror_url = funding.get("ror", "")
+                funder_html_parts = []
+                name_html = f'<span><p><strong style="padding-bottom: 4px;">{funder_name}</strong></p></span>'
+                funder_html_parts.append(name_html)
 
-            # Build funder HTML
-            funder_html_parts = []
+                if roles:
+                    roles_text = ", ".join(roles)
+                    roles_html = (
+                        f'<span style="margin-top: -0.15em; display: block;">'
+                        f"<p><small>{roles_text}</small></p></span>"
+                    )
+                    funder_html_parts.append(roles_html)
 
-            # Name line
-            name_html = (
-                f'<span><p><strong style="padding-bottom: 4px;">{funder_name}</strong></p></span>'
-            )
-            funder_html_parts.append(name_html)
+                icon_links = []
+                if homepage:
+                    icon_links.append(
+                        f'<a href="{homepage}" title="Website"><i class="bi bi-globe"></i></a>'
+                    )
+                if ror_url:
+                    ror_icon = (
+                        '<svg class="ror-sidebar-icon" viewBox="0 0 164 118" '
+                        'xmlns="http://www.w3.org/2000/svg" '
+                        'style="width: 1em; height: 0.75em; vertical-align: -0.05em; fill: currentColor;">'
+                        '<g transform="translate(-0.945,-0.815)">'
+                        '<path d="M68.65,4.16L56.52,22.74L44.38,4.16L68.65,4.16Z" style="fill:rgb(83,186,161);"/>'
+                        '<path d="M119.41,4.16L107.28,22.74L95.14,4.16L119.41,4.16Z" style="fill:rgb(83,186,161);"/>'
+                        '<path d="M44.38,115.47L56.52,96.88L68.65,115.47L44.38,115.47Z" style="fill:rgb(83,186,161);"/>'
+                        '<path d="M95.14,115.47L107.28,96.88L119.41,115.47L95.14,115.47Z" style="fill:rgb(83,186,161);"/>'
+                        '<path d="M145.53,63.71C149.83,62.91 153.1,61 155.33,57.99C157.57,54.98 158.68,51.32 158.68,47.03C158.68,43.47 158.06,40.51 156.83,38.13C155.6,35.75 153.93,33.86 151.84,32.45C149.75,31.05 147.31,30.04 144.53,29.44C141.75,28.84 138.81,28.54 135.72,28.54L112.16,28.54L112.16,47.37C111.97,46.82 111.77,46.28 111.55,45.74C109.92,41.79 107.64,38.42 104.71,35.64C101.78,32.86 98.32,30.72 94.3,29.23C90.29,27.74 85.9,26.99 81.14,26.99C76.38,26.99 72,27.74 67.98,29.23C63.97,30.72 60.5,32.86 57.57,35.64C54.95,38.13 52.85,41.1 51.27,44.54C51.04,42.07 50.46,39.93 49.53,38.13C48.3,35.75 46.63,33.86 44.54,32.45C42.45,31.05 40.01,30.04 37.23,29.44C34.45,28.84 31.51,28.54 28.42,28.54L4.87,28.54L4.87,89.42L18.28,89.42L18.28,65.08L24.9,65.08L37.63,89.42L53.71,89.42L38.24,63.71C42.54,62.91 45.81,61 48.04,57.99C48.14,57.85 48.23,57.7 48.33,57.56C48.31,58.03 48.3,58.5 48.3,58.98C48.3,63.85 49.12,68.27 50.75,72.22C52.38,76.17 54.66,79.54 57.59,82.32C60.51,85.1 63.98,87.24 68,88.73C72.01,90.22 76.4,90.97 81.16,90.97C85.92,90.97 90.3,90.22 94.32,88.73C98.33,87.24 101.8,85.1 104.73,82.32C107.65,79.54 109.93,76.17 111.57,72.22C111.79,71.69 111.99,71.14 112.18,70.59L112.18,89.42L125.59,89.42L125.59,65.08L132.21,65.08L144.94,89.42L161.02,89.42L145.53,63.71ZM36.39,50.81C35.67,51.73 34.77,52.4 33.68,52.83C32.59,53.26 31.37,53.52 30.03,53.6C28.68,53.69 27.41,53.73 26.2,53.73L18.29,53.73L18.29,39.89L27.06,39.89C28.26,39.89 29.5,39.98 30.76,40.15C32.02,40.32 33.14,40.65 34.11,41.14C35.08,41.63 35.89,42.33 36.52,43.25C37.15,44.17 37.47,45.4 37.47,46.95C37.47,48.6 37.11,49.89 36.39,50.81ZM98.74,66.85C97.85,69.23 96.58,71.29 94.91,73.04C93.25,74.79 91.26,76.15 88.93,77.13C86.61,78.11 84.01,78.59 81.15,78.59C78.28,78.59 75.69,78.1 73.37,77.13C71.05,76.16 69.06,74.79 67.39,73.04C65.73,71.29 64.45,69.23 63.56,66.85C62.67,64.47 62.23,61.85 62.23,58.98C62.23,56.17 62.67,53.56 63.56,51.15C64.45,48.74 65.72,46.67 67.39,44.92C69.05,43.17 71.04,41.81 73.37,40.83C75.69,39.86 78.28,39.37 81.15,39.37C84.02,39.37 86.61,39.86 88.93,40.83C91.25,41.8 93.24,43.17 94.91,44.92C96.57,46.67 97.85,48.75 98.74,51.15C99.63,53.56 100.07,56.17 100.07,58.98C100.07,61.85 99.63,64.47 98.74,66.85ZM143.68,50.81C142.96,51.73 142.06,52.4 140.97,52.83C139.88,53.26 138.66,53.52 137.32,53.6C135.97,53.69 134.7,53.73 133.49,53.73L125.58,53.73L125.58,39.89L134.35,39.89C135.55,39.89 136.79,39.98 138.05,40.15C139.31,40.32 140.43,40.65 141.4,41.14C142.37,41.63 143.18,42.33 143.81,43.25C144.44,44.17 144.76,45.4 144.76,46.95C144.76,48.6 144.4,49.89 143.68,50.81Z" style="fill:currentColor;"/>'
+                        "</g></svg>"
+                    )
+                    icon_links.append(
+                        f'<a href="{ror_url}" title="Research Organization Registry">{ror_icon}</a>'
+                    )
 
-            # Roles line (if available)
-            if roles:
-                roles_text = ", ".join(roles)
-                roles_html = (
-                    f'<span style="margin-top: -0.15em; display: block;">'
-                    f"<p><small>{roles_text}</small></p></span>"
-                )
-                funder_html_parts.append(roles_html)
+                if icon_links:
+                    icon_html = (
+                        '<span style="margin-top: -0.15em; display: block;">'
+                        + " ".join(icon_links)
+                        + "</span>"
+                    )
+                    funder_html_parts.append(icon_html)
 
-            # Icon links (if available)
-            icon_links = []
+                funder_div_content = "".join(funder_html_parts)
+                if dev_idx == 0:
+                    margin_sections.append(f"<div>{funder_div_content}</div>")
+                else:
+                    margin_sections.append(
+                        f'<div style="padding-top: 10px;">{funder_div_content}</div>'
+                    )
 
-            if homepage:
-                icon_links.append(
-                    f'<a href="{homepage}" title="Website"><i class="bi bi-globe"></i></a>'
-                )
+        # ── 4. Community (Contributing, CoC, License, Citation) ──────────
+        community_items: list[str] = []
 
-            if ror_url:
-                # ROR icon (use inline SVG styled to match Bootstrap Icons)
-                ror_icon = (
-                    '<svg class="ror-sidebar-icon" viewBox="0 0 164 118" '
-                    'xmlns="http://www.w3.org/2000/svg" '
-                    'style="width: 1em; height: 0.75em; vertical-align: -0.05em; fill: currentColor;">'
-                    '<g transform="translate(-0.945,-0.815)">'
-                    '<path d="M68.65,4.16L56.52,22.74L44.38,4.16L68.65,4.16Z" style="fill:rgb(83,186,161);"/>'
-                    '<path d="M119.41,4.16L107.28,22.74L95.14,4.16L119.41,4.16Z" style="fill:rgb(83,186,161);"/>'
-                    '<path d="M44.38,115.47L56.52,96.88L68.65,115.47L44.38,115.47Z" style="fill:rgb(83,186,161);"/>'
-                    '<path d="M95.14,115.47L107.28,96.88L119.41,115.47L95.14,115.47Z" style="fill:rgb(83,186,161);"/>'
-                    '<path d="M145.53,63.71C149.83,62.91 153.1,61 155.33,57.99C157.57,54.98 158.68,51.32 158.68,47.03C158.68,43.47 158.06,40.51 156.83,38.13C155.6,35.75 153.93,33.86 151.84,32.45C149.75,31.05 147.31,30.04 144.53,29.44C141.75,28.84 138.81,28.54 135.72,28.54L112.16,28.54L112.16,47.37C111.97,46.82 111.77,46.28 111.55,45.74C109.92,41.79 107.64,38.42 104.71,35.64C101.78,32.86 98.32,30.72 94.3,29.23C90.29,27.74 85.9,26.99 81.14,26.99C76.38,26.99 72,27.74 67.98,29.23C63.97,30.72 60.5,32.86 57.57,35.64C54.95,38.13 52.85,41.1 51.27,44.54C51.04,42.07 50.46,39.93 49.53,38.13C48.3,35.75 46.63,33.86 44.54,32.45C42.45,31.05 40.01,30.04 37.23,29.44C34.45,28.84 31.51,28.54 28.42,28.54L4.87,28.54L4.87,89.42L18.28,89.42L18.28,65.08L24.9,65.08L37.63,89.42L53.71,89.42L38.24,63.71C42.54,62.91 45.81,61 48.04,57.99C48.14,57.85 48.23,57.7 48.33,57.56C48.31,58.03 48.3,58.5 48.3,58.98C48.3,63.85 49.12,68.27 50.75,72.22C52.38,76.17 54.66,79.54 57.59,82.32C60.51,85.1 63.98,87.24 68,88.73C72.01,90.22 76.4,90.97 81.16,90.97C85.92,90.97 90.3,90.22 94.32,88.73C98.33,87.24 101.8,85.1 104.73,82.32C107.65,79.54 109.93,76.17 111.57,72.22C111.79,71.69 111.99,71.14 112.18,70.59L112.18,89.42L125.59,89.42L125.59,65.08L132.21,65.08L144.94,89.42L161.02,89.42L145.53,63.71ZM36.39,50.81C35.67,51.73 34.77,52.4 33.68,52.83C32.59,53.26 31.37,53.52 30.03,53.6C28.68,53.69 27.41,53.73 26.2,53.73L18.29,53.73L18.29,39.89L27.06,39.89C28.26,39.89 29.5,39.98 30.76,40.15C32.02,40.32 33.14,40.65 34.11,41.14C35.08,41.63 35.89,42.33 36.52,43.25C37.15,44.17 37.47,45.4 37.47,46.95C37.47,48.6 37.11,49.89 36.39,50.81ZM98.74,66.85C97.85,69.23 96.58,71.29 94.91,73.04C93.25,74.79 91.26,76.15 88.93,77.13C86.61,78.11 84.01,78.59 81.15,78.59C78.28,78.59 75.69,78.1 73.37,77.13C71.05,76.16 69.06,74.79 67.39,73.04C65.73,71.29 64.45,69.23 63.56,66.85C62.67,64.47 62.23,61.85 62.23,58.98C62.23,56.17 62.67,53.56 63.56,51.15C64.45,48.74 65.72,46.67 67.39,44.92C69.05,43.17 71.04,41.81 73.37,40.83C75.69,39.86 78.28,39.37 81.15,39.37C84.02,39.37 86.61,39.86 88.93,40.83C91.25,41.8 93.24,43.17 94.91,44.92C96.57,46.67 97.85,48.75 98.74,51.15C99.63,53.56 100.07,56.17 100.07,58.98C100.07,61.85 99.63,64.47 98.74,66.85ZM143.68,50.81C142.96,51.73 142.06,52.4 140.97,52.83C139.88,53.26 138.66,53.52 137.32,53.6C135.97,53.69 134.7,53.73 133.49,53.73L125.58,53.73L125.58,39.89L134.35,39.89C135.55,39.89 136.79,39.98 138.05,40.15C139.31,40.32 140.43,40.65 141.4,41.14C142.37,41.63 143.18,42.33 143.81,43.25C144.44,44.17 144.76,45.4 144.76,46.95C144.76,48.6 144.4,49.89 143.68,50.81Z" style="fill:currentColor;"/>'
-                    "</g></svg>"
-                )
-                icon_links.append(
-                    f'<a href="{ror_url}" title="Research Organization Registry">{ror_icon}</a>'
-                )
+        # Check for CONTRIBUTING.md in root or .github directory
+        contributing_path = package_root / "CONTRIBUTING.md"
+        if not contributing_path.exists():
+            contributing_path = package_root / ".github" / "CONTRIBUTING.md"
 
-            if icon_links:
-                icon_html = (
-                    '<span style="margin-top: -0.15em; display: block;">'
-                    + " ".join(icon_links)
-                    + "</span>"
-                )
-                funder_html_parts.append(icon_html)
+        # Check for CODE_OF_CONDUCT.md in root or .github directory
+        coc_path = package_root / "CODE_OF_CONDUCT.md"
+        if not coc_path.exists():
+            coc_path = package_root / ".github" / "CODE_OF_CONDUCT.md"
 
-            # Wrap entire funding entry in <div> tag
-            funder_div_content = "".join(funder_html_parts)
-            margin_sections.append(f"<div>{funder_div_content}</div>")
+        if contributing_path.exists():
+            community_items.append("[Contributing guide](contributing.qmd)<br>")
+            with open(contributing_path, "r", encoding="utf-8") as f:
+                contributing_content = f.read()
 
-        # Meta section (Python version and extras)
-        meta_items = []
+            lines = contributing_content.split("\n")
+            if lines and lines[0].startswith("# "):
+                contributing_content = "\n".join(lines[1:]).lstrip()
+
+            contributing_qmd = self.project_path / "contributing.qmd"
+            contributing_qmd_content = f"""---
+title: "Contributing"
+---
+
+{contributing_content}
+"""
+            with open(contributing_qmd, "w", encoding="utf-8") as f:
+                f.write(contributing_qmd_content)
+
+        if coc_path.exists():
+            community_items.append("[Code of conduct](code-of-conduct.qmd)<br>")
+            with open(coc_path, "r", encoding="utf-8") as f:
+                coc_content = f.read()
+
+            lines = coc_content.split("\n")
+            if lines and lines[0].startswith("# "):
+                coc_content = "\n".join(lines[1:]).lstrip()
+
+            coc_qmd = self.project_path / "code-of-conduct.qmd"
+            coc_qmd_content = f"""---
+title: "Code of Conduct"
+---
+
+{coc_content}
+"""
+            with open(coc_qmd, "w", encoding="utf-8") as f:
+                f.write(coc_qmd_content)
+
+        # License (folded into Community)
+        if license_link:
+            community_items.append(f"[Full license]({license_link})<br>")
+        elif metadata.get("license"):
+            community_items.append(f"{metadata['license']}<br>")
+
+        # Citation (folded into Community)
+        if citation_link:
+            pkg_display = package_name or self._detect_package_name() or "this package"
+            community_items.append(f"[Citing {pkg_display}]({citation_link})<br>")
+
+        if community_items:
+            margin_sections.append("\n#### Community\n")
+            margin_sections.extend(community_items)
+
+        # ── 5. Meta ──────────────────────────────────────────────────────
+        meta_items: list[str] = []
         if metadata.get("requires_python"):
             meta_items.append(f"**Requires:** Python `{metadata['requires_python']}`")
 
         if metadata.get("optional_dependencies"):
             extras = list(metadata["optional_dependencies"].keys())
             if extras:
-                # Wrap each extra in backticks for monospace
                 extras_formatted = ", ".join(f"`{extra}`" for extra in extras)
                 meta_items.append(f"**Provides-Extra:** {extras_formatted}")
 
         if meta_items:
             margin_sections.append("\n#### Meta\n")
             margin_sections.append("<br>\n".join(meta_items))
-
-        # Citation section (if CITATION.cff exists)
-        if citation_link:
-            margin_sections.append("\n#### Citation\n")
-            package_name = package_name or self._detect_package_name() or "this package"
-            margin_sections.append(f"[Citing {package_name}]({citation_link})")
 
         return "\n".join(margin_sections) if margin_sections else ""
 
@@ -8474,7 +8431,7 @@ toc: false
                     if result.returncode == 0:
                         short_hash = result.stdout.strip()
                         gd_version_label = (
-                            f' (<a href="https://github.com/rich-iannone/great-docs/'
+                            f' (<a href="https://github.com/posit-dev/great-docs/'
                             f'commit/{short_hash}">{short_hash}</a>)'
                         )
             except Exception:  # pragma: no cover
@@ -9229,6 +9186,7 @@ toc: false
                 shutil.copy2(src, dest)
                 print(f"Copied user SKILL.md from {src}")
                 self._place_well_known_skill(dest)
+                self._generate_skills_page(dest, skill_dir=src.parent)
                 return
             else:
                 print(f"Warning: skill.file '{src}' not found, falling back to discovery")
@@ -9247,6 +9205,7 @@ toc: false
                 shutil.copy2(skills_path, dest)
                 print(f"Using curated skill from {skills_path}")
                 self._place_well_known_skill(dest)
+                self._generate_skills_page(dest, skill_dir=skills_path.parent)
                 return
 
         quarto_yml = self.project_path / "_quarto.yml"
@@ -9414,6 +9373,286 @@ toc: false
 
         # Place in .well-known if enabled
         self._place_well_known_skill(skill_path)
+
+        # Generate the rendered skills.qmd page
+        self._generate_skills_page(skill_path)
+
+    def _generate_skills_page(self, skill_path: "Path", *, skill_dir: "Path | None" = None) -> None:
+        """
+        Generate a ``skills.qmd`` page that renders the raw SKILL.md content in a
+        styled, human-readable format.
+
+        The page displays the skill's YAML frontmatter as a highlighted block and
+        the Markdown body with color-coded headings and monospaced font — a halfway
+        point between raw Markdown and fully rendered HTML.
+
+        When *skill_dir* points to a curated skill directory that contains companion
+        subdirectories (``references/``, ``scripts/``, ``assets/``), a directory
+        tree is rendered before the SKILL.md and each ``.md`` / ``.sh`` file is
+        displayed in its own text area with anchor links.
+
+        Parameters
+        ----------
+        skill_path
+            Path to the skill.md file to render.
+        skill_dir
+            Optional path to the curated skill directory containing SKILL.md and
+            its companion subdirectories.
+        """
+        import re
+
+        if not skill_path.exists():
+            return
+
+        raw_content = skill_path.read_text(encoding="utf-8")
+
+        # Split frontmatter from body
+        frontmatter = ""
+        body = raw_content
+        if raw_content.startswith("---"):
+            fm_match = re.match(r"^---\n(.*?\n)---\n?(.*)", raw_content, re.DOTALL)
+            if fm_match:
+                frontmatter = fm_match.group(1)
+                body = fm_match.group(2).lstrip("\n")
+
+        # Build the skills.qmd page
+        lines = []
+        lines.append("---")
+        lines.append("title: Skills")
+        lines.append("toc: false")
+        lines.append("sidebar: false")
+        lines.append("page-layout: full")
+        lines.append('body-classes: "gd-skills-page"')
+        lines.append("---")
+        lines.append("")
+
+        # Install instructions
+        # Detect GitHub repo URL from metadata
+        metadata = self._get_package_metadata()
+        urls = metadata.get("urls", {})
+        repo_url = urls.get("Repository", "") or urls.get("Source", "")
+        github_owner_repo = ""
+        if repo_url:
+            gh_match = re.match(r"https?://github\.com/([^/]+/[^/]+?)(?:\.git)?/?$", repo_url)
+            if gh_match:
+                github_owner_repo = gh_match.group(1)
+
+        # Detect site URL
+        quarto_yml = self.project_path / "_quarto.yml"
+        site_url = ""
+        if quarto_yml.exists():
+            with open(quarto_yml, "r") as f:
+                qconfig = read_yaml(f) or {}
+            site_url = urls.get("Documentation", "") or qconfig.get("website", {}).get(
+                "site-url", ""
+            )
+            if site_url and not site_url.endswith("/"):
+                site_url += "/"
+
+        lines.append("```{=html}")
+        lines.append('<div class="gd-skills-install">')
+        lines.append(
+            '  <button class="gd-skills-install-toggle" '
+            'aria-expanded="false" aria-controls="gd-skills-install-body">'
+        )
+        lines.append(
+            '    <span class="gd-skills-install-icon">&#9654;</span>    Install this skill'
+        )
+        lines.append("  </button>")
+        lines.append('  <div class="gd-skills-install-body" id="gd-skills-install-body">')
+        lines.append('    <div class="gd-skills-install-inner">')
+        lines.append('      <div class="gd-skills-install-pad">')
+        lines.append("```")
+        lines.append("")
+
+        # ── npx (universal installer) ──
+        lines.append(
+            "**Any agent** --- install with [npx](https://github.com/nicepkg/agent-skills):"
+        )
+        lines.append("")
+        if site_url:
+            lines.append("```bash")
+            lines.append(f"npx skills add {site_url}")
+            lines.append("```")
+        elif github_owner_repo:
+            lines.append("```bash")
+            lines.append(f"npx skills add {github_owner_repo}")
+            lines.append("```")
+        else:
+            lines.append("```bash")
+            lines.append("npx skills add <site-url>")
+            lines.append("```")
+        lines.append("")
+        lines.append(
+            "Works with Claude Code, GitHub Copilot, Cursor, Gemini CLI, Codex, "
+            "and [30+ other agents](https://github.com/nicepkg/agent-skills)."
+        )
+        lines.append("")
+
+        # ── Codex / OpenCode (prompt-based fetch) ──
+        skill_file_url = f"{site_url}skill.md" if site_url else ""
+        lines.append("**Codex / OpenCode** --- tell the agent:")
+        lines.append("")
+        if skill_file_url:
+            lines.append(
+                f"> Fetch the skill file at `{skill_file_url}` and follow the instructions."
+            )
+        elif github_owner_repo:
+            lines.append(
+                f"> Fetch the skill file from "
+                f"`https://github.com/{github_owner_repo}` "
+                "and follow the instructions."
+            )
+        else:
+            lines.append(
+                "> Fetch the skill file at `<site-url>/skill.md` and follow the instructions."
+            )
+        lines.append("")
+
+        # ── Manual (curl + raw links) ──
+        lines.append("**Manual** --- download the skill file:")
+        lines.append("")
+        if skill_file_url:
+            lines.append("```bash")
+            lines.append(f"curl -O {skill_file_url}")
+            lines.append("```")
+        else:
+            lines.append("```bash")
+            lines.append("curl -O <site-url>/skill.md")
+            lines.append("```")
+        lines.append("")
+        lines.append("Or browse the raw files:")
+        lines.append("")
+        # Use raw HTML links. Quarto will rewrite skill.md → skill.html,
+        # but the post-render script fixes this back to skill.md.
+        lines.append("```{=html}")
+        lines.append("<ul>")
+        lines.append(
+            '<li><a href="skill.md" class="gd-raw-link">skill.md</a> — Root skill file</li>'
+        )
+        if self._config.skill_well_known:
+            lines.append(
+                '<li><a href=".well-known/skills/default/SKILL.md">'
+                ".well-known/skills/default/SKILL.md</a> — Auto-discovery path</li>"
+            )
+        lines.append("</ul>")
+        lines.append("```")
+        lines.append("")
+
+        lines.append("```{=html}")
+        lines.append("      </div>")
+        lines.append("    </div>")
+        lines.append("  </div>")
+        lines.append("</div>")
+        lines.append("<script>")
+        lines.append("(function() {")
+        lines.append("  var btn = document.querySelector('.gd-skills-install-toggle');")
+        lines.append("  var body = document.getElementById('gd-skills-install-body');")
+        lines.append("  if (!btn || !body) return;")
+        lines.append("  btn.addEventListener('click', function() {")
+        lines.append("    var open = body.classList.toggle('gd-skills-install-open');")
+        lines.append("    btn.setAttribute('aria-expanded', open);")
+        lines.append("  });")
+        lines.append("})();")
+        lines.append("</script>")
+        lines.append("```")
+        lines.append("")
+
+        # ── Discover companion files in the skill directory ──
+        companion_files: list[tuple[str, str, str]] = []  # (subdir/name, ext, content)
+        _ALLOWED_SUBDIRS = ("references", "scripts", "assets")
+        _RENDERABLE_EXTS = {".md", ".sh", ".yaml", ".yml", ".py"}
+
+        if skill_dir and skill_dir.is_dir():
+            for subdir_name in _ALLOWED_SUBDIRS:
+                subdir = skill_dir / subdir_name
+                if not subdir.is_dir():
+                    continue
+                for file_path in sorted(subdir.iterdir()):
+                    if file_path.is_file() and file_path.suffix in _RENDERABLE_EXTS:
+                        rel = f"{subdir_name}/{file_path.name}"
+                        content = file_path.read_text(encoding="utf-8")
+                        companion_files.append((rel, file_path.suffix, content))
+
+        # ── Directory tree (only when companion files exist) ──
+        if companion_files:
+            # Build the skill directory name from its parent dir name
+            dir_label = skill_dir.name if skill_dir else "skill"
+            tree_lines = [f"{dir_label}/"]
+            # SKILL.md first
+            tree_lines.append("\u251c\u2500\u2500 SKILL.md")
+            # Group by subdirectory
+            seen_subdirs: dict[str, list[str]] = {}
+            for rel, _ext, _content in companion_files:
+                parts = rel.split("/", 1)
+                seen_subdirs.setdefault(parts[0], []).append(parts[1])
+            subdir_items = list(seen_subdirs.items())
+            for i, (sdir, files) in enumerate(subdir_items):
+                is_last_dir = i == len(subdir_items) - 1
+                branch = "\u2514\u2500\u2500" if is_last_dir else "\u251c\u2500\u2500"
+                tree_lines.append(f"{branch} {sdir}/")
+                for j, fname in enumerate(files):
+                    is_last_file = j == len(files) - 1
+                    prefix = "    " if is_last_dir else "\u2502   "
+                    connector = "\u2514\u2500\u2500" if is_last_file else "\u251c\u2500\u2500"
+                    # Create anchor id from the relative path
+                    anchor = f"{sdir}/{fname}".replace("/", "-").replace(".", "-")
+                    tree_lines.append(f'{prefix}{connector} <a href="#{anchor}">{fname}</a>')
+
+            lines.append("```{=html}")
+            lines.append('<h3 class="gd-skills-section-heading">SKILL LAYOUT</h3>')
+            lines.append('<pre class="gd-skills-tree">')
+            lines.append("\n".join(tree_lines))
+            lines.append("</pre>")
+            lines.append("```")
+            lines.append("")
+
+        # ── Render the full skill.md as a raw pre block (terminal style) ──
+        full_skill = raw_content
+        lines.append("```{=html}")
+        lines.append('<h3 class="gd-skills-file-heading">SKILL.md</h3>')
+        lines.append('<pre class="gd-skills-raw">')
+        lines.append("```")
+        lines.append("")
+        lines.append("````markdown")
+        lines.append(full_skill.rstrip("\n"))
+        lines.append("````")
+        lines.append("")
+        lines.append("```{=html}")
+        lines.append("</pre>")
+        lines.append("```")
+        lines.append("")
+
+        # ── Render each companion file in its own pre block ──
+        for rel, ext, content in companion_files:
+            anchor = rel.replace("/", "-").replace(".", "-")
+            # Choose syntax hint for the fenced block
+            lang_map = {
+                ".md": "markdown",
+                ".sh": "bash",
+                ".yaml": "yaml",
+                ".yml": "yaml",
+                ".py": "python",
+            }
+            lang = lang_map.get(ext, "")
+
+            lines.append("```{=html}")
+            lines.append(f'<h3 id="{anchor}" class="gd-skills-file-heading">{rel}</h3>')
+            lines.append('<pre class="gd-skills-raw">')
+            lines.append("```")
+            lines.append("")
+            lines.append(f"````{lang}")
+            lines.append(content.rstrip("\n"))
+            lines.append("````")
+            lines.append("")
+            lines.append("```{=html}")
+            lines.append("</pre>")
+            lines.append("```")
+            lines.append("")
+
+        skills_page = self.project_path / "skills.qmd"
+        with open(skills_page, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
 
     def _place_well_known_skill(self, skill_path: "Path") -> None:
         """

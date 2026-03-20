@@ -236,7 +236,7 @@ def config(project_path: str | None, force: bool) -> None:
         config_path.write_text(config_content, encoding="utf-8")
         click.echo(f"✓ Created {config_path}")
         click.echo("\nEdit this file to customize your documentation settings.")
-        click.echo("See https://rich-iannone.github.io/great-docs/user-guide/03-configuration.html")
+        click.echo("See https://posit-dev.github.io/great-docs/user-guide/03-configuration.html")
 
     except Exception as e:
         click.echo(f"Error: {e}", err=True)

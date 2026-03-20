@@ -38,6 +38,7 @@
         // Small delay to ensure CSS is processed
         requestAnimationFrame(function() {
             html.classList.remove('theme-loading');
+            html.classList.add('theme-loaded');
         });
     }
 
