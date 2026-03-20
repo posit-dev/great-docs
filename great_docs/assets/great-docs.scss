@@ -3705,11 +3705,11 @@ html[data-bs-theme="dark"] .gd-content-glow-mint  { --gd-glow-color: #00695c; }
 
     // Compact single-line code cells — reduce Quarto's generous pre padding
     pre.sourceCode {
-        padding: 0.45rem 2.5rem 0.45rem 0.75rem; // right padding leaves room for copy btn
+        padding: 0.5rem 2.5rem 0.5rem 0.75rem; // right padding leaves room for copy btn
         font-size: 0.88rem;
 
         code {
-            padding: 0;
+            padding: 0 !important;
         }
     }
 

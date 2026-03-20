@@ -9476,7 +9476,7 @@ toc: false
             _npx_cmd = "npx skills add <site-url>"
         lines.append("```{=html}")
         lines.append(
-            f'<div class="sourceCode"><pre class="sourceCode bash code-with-copy">'
+            f'<div class="sourceCode"><pre class="sourceCode bash code-with-copy" style="padding-bottom: 0;">'
             f"<code>{_npx_cmd}</code></pre></div>"
         )
         lines.append("```")
@@ -9492,9 +9492,7 @@ toc: false
         lines.append("**Codex / OpenCode** --- tell the agent:")
         lines.append("")
         if skill_file_url:
-            _prompt_text = (
-                f"Fetch the skill file at {skill_file_url} and follow the instructions."
-            )
+            _prompt_text = f"Fetch the skill file at {skill_file_url} and follow the instructions."
         elif github_owner_repo:
             _prompt_text = (
                 f"Fetch the skill file from "
@@ -9503,12 +9501,11 @@ toc: false
             )
         else:
             _prompt_text = (
-                "Fetch the skill file at &lt;site-url&gt;/skill.md"
-                " and follow the instructions."
+                "Fetch the skill file at &lt;site-url&gt;/skill.md and follow the instructions."
             )
         lines.append("```{=html}")
         lines.append(
-            f'<div class="sourceCode"><pre class="sourceCode text code-with-copy">'
+            f'<div class="sourceCode"><pre class="sourceCode text code-with-copy" style="padding-bottom: 0;">'
             f"<code>{_prompt_text}</code></pre></div>"
         )
         lines.append("```")
@@ -9523,7 +9520,7 @@ toc: false
             _curl_cmd = "curl -O &lt;site-url&gt;/skill.md"
         lines.append("```{=html}")
         lines.append(
-            f'<div class="sourceCode"><pre class="sourceCode bash code-with-copy">'
+            f'<div class="sourceCode"><pre class="sourceCode bash code-with-copy" style="padding-bottom: 0;">'
             f"<code>{_curl_cmd}</code></pre></div>"
         )
         lines.append("```")
