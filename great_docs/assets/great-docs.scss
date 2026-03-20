@@ -3717,6 +3717,11 @@ html[data-bs-theme="dark"] .gd-content-glow-mint  { --gd-glow-color: #00695c; }
         margin: 0.25rem 0;
         font-size: 0.92rem;
         line-height: 1.55;
+
+        a {
+            text-decoration: underline;
+            cursor: pointer;
+        }
     }
 
     strong {
