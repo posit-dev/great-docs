@@ -7257,9 +7257,9 @@ title: "Code of Conduct"
 title: "License"
 ---
 
-```
-{license_content}
-```
+::: {{.license-container}}
+<pre><code style="padding: 1rem;">{license_content}</code></pre>
+:::
 """
             with open(license_qmd, "w", encoding="utf-8") as f:
                 f.write(license_qmd_content)
