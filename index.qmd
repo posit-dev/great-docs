@@ -1,0 +1,65 @@
+# Great Docs
+
+A documentation site generator for Python packages. Run `great-docs init` in your project directory and get a complete documentation site with auto-generated API reference, CLI docs, and modern styling.
+
+## Install
+
+```bash
+pip install great-docs
+```
+
+## Quick Start
+
+```bash
+cd your-python-package
+
+great-docs init      # detect your package and generate config
+great-docs build     # generate and render the site
+great-docs preview   # view at localhost:3000
+```
+
+## What It Does
+
+Great Docs inspects your Python package to generate a full documentation site:
+
+- **API Reference** — classes, functions, methods, and attributes organized into structured pages with parameter tables, return types, examples, and source links
+- **CLI Reference** — Click-based CLIs documented automatically with terminal-style help output
+- **Landing Page** — your README transformed into a homepage with a metadata sidebar
+- **User Guide** — narrative documentation from your `user_guide/` directory
+- **Custom Sections** — recipes, blog posts, tutorials, or any other content you add
+
+Everything is rendered by [Quarto](https://quarto.org/) into a static site you can host anywhere.
+
+## Site Features
+
+- Dark mode toggle with persistent preference
+- Gradient navbar themes (8 presets)
+- GitHub widget with live star and fork counts
+- Sidebar search filter for large APIs
+- Source links to GitHub for every documented item
+- Responsive layout for mobile and desktop
+- Announcement banners (dismissible, styled)
+- `llms.txt` and `llms-full.txt` for AI documentation indexing
+- Agent Skills generation ([agentskills.io](https://agentskills.io/) compliant)
+
+## Configuration
+
+All options live in `great-docs.yml`. The `init` command generates this for you. See the [Configuration Guide](user-guide/configuration.qmd) for the full reference.
+
+## Deploy to GitHub Pages
+
+```bash
+great-docs setup-github-pages
+```
+
+Creates a GitHub Actions workflow that builds and publishes your site on every push to `main`.
+
+## Learn More
+
+- [User Guide](user-guide/installation.qmd) — setup, configuration, theming, and deployment
+- [Recipes](recipes/01-hide-internal-symbols.qmd) — step-by-step guides for common tasks
+- [API Reference](reference/index.qmd) — Great Docs' own API documentation
+
+## License
+
+MIT. See [LICENSE](license.qmd) for the full text.
