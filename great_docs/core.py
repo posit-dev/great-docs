@@ -9519,16 +9519,12 @@ toc: false
             lines.append("curl -O <site-url>/skill.md")
             lines.append("```")
         lines.append("")
-        lines.append("Or browse the raw file:")
-        lines.append("")
-        # Use raw HTML links. Quarto will rewrite skill.md → skill.html,
-        # but the post-render script fixes this back to skill.md.
+        # Use raw HTML to prevent Quarto rewriting skill.md → skill.html.
+        # The post-render script also fixes this link back to skill.md.
         lines.append("```{=html}")
-        lines.append("<ul>")
         lines.append(
-            '<li><a href="skill.md" class="gd-raw-link">skill.md</a> — Root skill file</li>'
+            '<p>Or browse the <a href="skill.md" class="gd-raw-link">SKILL.md</a> file.</p>'
         )
-        lines.append("</ul>")
         lines.append("```")
         lines.append("")
 
