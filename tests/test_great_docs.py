@@ -40312,3 +40312,115 @@ def test_homepage_sidebar_skills_link_position():
         assert skills_pos != -1, "Skills link not found in sidebar"
         assert llms_pos != -1, "llms.txt link not found in sidebar"
         assert skills_pos < llms_pos, "Skills should appear before llms.txt"
+
+
+def test_announcement_inline_markdown_backticks():
+    """Backtick code spans in announcement content are converted to <code> tags."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content=("announcement:\n  content: 'Install with: `pip install great-docs`'\n"),
+        )
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        header = result["format"]["html"]["include-in-header"]
+        meta_str = str(header)
+        assert "&lt;code&gt;pip install great-docs&lt;/code&gt;" in meta_str
+
+
+def test_announcement_inline_markdown_bold():
+    """Double-asterisk bold in announcement content becomes <strong>."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content=("announcement:\n  content: '**Breaking change** in v2.0'\n"),
+        )
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        meta_str = str(result["format"]["html"]["include-in-header"])
+        assert "&lt;strong&gt;Breaking change&lt;/strong&gt;" in meta_str
+
+
+def test_announcement_inline_markdown_italic():
+    """Single-asterisk italic in announcement content becomes <em>."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content=("announcement:\n  content: 'This is *important* news'\n"),
+        )
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        meta_str = str(result["format"]["html"]["include-in-header"])
+        assert "&lt;em&gt;important&lt;/em&gt;" in meta_str
+
+
+def test_announcement_inline_markdown_link():
+    """Markdown links in announcement content become <a> tags."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content=(
+                "announcement:\n  content: 'See [release notes](https://example.com/changelog)'\n"
+            ),
+        )
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        meta_str = str(result["format"]["html"]["include-in-header"])
+        assert "release notes" in meta_str
+        assert "https://example.com/changelog" in meta_str
+        assert "&lt;a href=" in meta_str
+
+
+def test_announcement_inline_markdown_combined():
+    """Multiple Markdown constructs in one announcement line all convert."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content=(
+                "announcement:\n"
+                "  content: '**New!** Try `great-docs init` — see [docs](https://example.com)'\n"
+            ),
+        )
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        meta_str = str(result["format"]["html"]["include-in-header"])
+        assert "&lt;strong&gt;New!&lt;/strong&gt;" in meta_str
+        assert "&lt;code&gt;great-docs init&lt;/code&gt;" in meta_str
+        assert "&lt;a href=" in meta_str
+
+
+def test_announcement_plain_text_unaffected():
+    """Plain text without Markdown syntax passes through unchanged."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content=("announcement:\n  content: 'Just a plain announcement'\n"),
+        )
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        meta_str = str(result["format"]["html"]["include-in-header"])
+        assert "Just a plain announcement" in meta_str

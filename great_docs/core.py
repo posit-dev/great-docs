@@ -8524,8 +8524,23 @@ toc: false
         announcement = self._config.announcement
         if announcement:
             import html as html_mod
+            import re as re_mod
 
-            ann_content = html_mod.escape(announcement["content"])
+            # Convert inline Markdown (backticks, bold, italic, links) to HTML
+            # before escaping for the data attribute. The browser's getAttribute()
+            # decodes the entities, so the HTML tags survive the round-trip.
+            def _inline_md_to_html(text: str) -> str:
+                text = re_mod.sub(r"`([^`]+)`", r"<code>\1</code>", text)
+                text = re_mod.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", text)
+                text = re_mod.sub(r"\*([^*]+)\*", r"<em>\1</em>", text)
+                text = re_mod.sub(
+                    r"\[([^\]]+)\]\(([^)]+)\)",
+                    r'<a href="\2" style="color:inherit">\1</a>',
+                    text,
+                )
+                return text
+
+            ann_content = html_mod.escape(_inline_md_to_html(announcement["content"]))
             ann_type = html_mod.escape(announcement.get("type", "info"))
             ann_dismissable = "true" if announcement.get("dismissable", True) else "false"
             ann_url = html_mod.escape(announcement.get("url") or "")
