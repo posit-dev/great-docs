@@ -9523,7 +9523,7 @@ toc: false
         # The post-render script also fixes this link back to skill.md.
         lines.append("```{=html}")
         lines.append(
-            '<p>Or browse the <a href="skill.md" class="gd-raw-link">SKILL.md</a> file.</p>'
+            '<p>Or browse the <a href="skill.md" class="gd-raw-link"><code>SKILL.md</code></a> file.</p>'
         )
         lines.append("```")
         lines.append("")
