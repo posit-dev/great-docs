@@ -1,172 +1,310 @@
 ---
 name: great-docs
 description: >
-  Generate beautiful documentation sites for Python packages with Great Docs.
-  Use when creating, configuring, building, or troubleshooting Python package
-  documentation. Covers configuration (great-docs.yml), API reference generation,
-  CLI documentation, user guides, theming, logos, hero sections, deployment, and
-  the llms.txt/llms-full.txt agent context files.
+  Generate documentation sites for Python packages with Great Docs.
+  Covers init, build, preview, configuration (great-docs.yml), API
+  reference, CLI docs, user guides, theming, deployment, and the
+  llms.txt agent-context files. Use when creating, configuring,
+  building, or troubleshooting Python package documentation.
 license: MIT
-compatibility: Requires Python 3.10+, Quarto CLI installed.
+compatibility: Requires Python >=3.11, Quarto CLI installed.
 metadata:
   author: rich-iannone
-  version: "1.0"
+  version: "2.0"
+  tags:
+    - documentation
+    - python-packages
+    - quarto
+    - api-reference
+    - static-site
 ---
 
 # Great Docs
 
-Great Docs generates documentation sites for Python packages. It introspects your
-package's API, renders reference pages, and produces a Quarto-based static site with
-user guides, CLI docs, changelogs, and more.
-
-## When to use this skill
-
-- Setting up a new documentation site for a Python package
-- Configuring `great-docs.yml` options
-- Troubleshooting build or rendering errors
-- Customizing themes, logos, hero sections, or navigation
-- Adding user guide pages, recipes, or custom sections
-- Generating CLI reference documentation
-
-## Installation
-
-```bash
-pip install great-docs
-```
-
-Quarto must also be installed: <https://quarto.org/docs/get-started/>
+A docs generator for Python packages. Introspects your API, renders
+reference pages, and produces a Quarto-based static site with user
+guides, CLI docs, theming, and more.
 
 ## Quick start
 
 ```bash
-# Initialize a docs site in your package root
-great-docs init
+pip install great-docs
+# Quarto must also be installed: https://quarto.org/docs/get-started/
 
-# Build the documentation
-great-docs build
-
-# Preview locally
-great-docs preview
+cd my-package/        # directory with pyproject.toml
+great-docs init       # create great-docs.yml, discover API
+great-docs build      # full build -> great-docs/_site/
+great-docs preview    # local server on port 3000
 ```
 
-This creates a `great-docs/` directory with the rendered site in `great-docs/_site/`.
+## Skill directory structure
 
-## Configuration decision table
+This skill ships with companion files for agent consumption:
 
-All configuration goes in `great-docs.yml` at the project root.
+```
+skills/great-docs/
+├── SKILL.md                ← This file
+├── references/
+│   ├── config-reference.md ← All great-docs.yml options
+│   ├── cli-reference.md    ← CLI commands and arguments
+│   └── common-errors.md    ← Error patterns and fixes
+├── scripts/
+│   ├── setup-env.sh        ← Environment bootstrap script
+│   └── run-build.sh        ← Build with validation
+└── assets/
+    └── config-template.yaml ← Starter great-docs.yml
+```
 
-| Need                            | Config key          | Example value                                       |
-| ------------------------------- | ------------------- | --------------------------------------------------- |
-| Change docstring parser         | `parser`            | `google`, `numpy`, or `sphinx`                      |
-| Add CLI reference docs          | `cli.enabled`       | `true`                                              |
-| Set a custom logo               | `logo`              | `assets/logo.svg` or `{light: ..., dark: ...}`      |
-| Toggle dark mode switch         | `dark_mode_toggle`  | `true` (default) or `false`                         |
-| GitHub stars widget             | `github_style`      | `widget` or `icon`                                  |
-| Announcement banner             | `announcement`      | `"v2 is out!"` or `{content: ..., type: info}`      |
-| Navbar gradient                 | `navbar_style`      | `sky`, `peach`, `lilac`, `mint`, etc.               |
-| Content area glow               | `content_style`     | `lilac` or `{preset: sky, pages: homepage}`         |
-| Exclude items from API docs     | `exclude`           | `["InternalClass", "helper_fn"]`                    |
-| Custom page sections            | `sections`          | `[{title: Examples, dir: examples}]`                |
-| Hero section on homepage        | `hero`              | `true`, `false`, or `{enabled: true, tagline: ...}` |
-| Solid navbar color              | `navbar_color`      | `"#1a1a2e"` or `{light: ..., dark: ...}`            |
-| Disable attribution footer      | `attribution`       | `false`                                             |
-| Control changelog               | `changelog.enabled` | `true` (default) or `false`                         |
-| Homepage mode                   | `homepage`          | `index` (default) or `user_guide`                   |
-| Static analysis for tricky pkgs | `dynamic`           | `false`                                             |
+## When to use what
+
+| Need                      | Use                                     |
+| ------------------------- | --------------------------------------- |
+| Start a new docs site     | `great-docs init`                       |
+| Full build from scratch   | `great-docs build`                      |
+| Rebuild after edits       | `great-docs build --no-refresh`         |
+| Live preview              | `great-docs preview`                    |
+| See discoverable API      | `great-docs scan --verbose`             |
+| Change docstring parser   | `parser: google` in great-docs.yml      |
+| Add CLI reference         | `cli: {enabled: true, module: pkg.cli}` |
+| Add a gradient navbar     | `navbar_style: sky`                     |
+| Exclude internal symbols  | `exclude: [_InternalClass]`             |
+| Add user guide pages      | Create `user_guide/05-topic.qmd`        |
+| Add recipes               | Create `recipes/07-topic.qmd`           |
+| Set up GitHub Pages CI    | `great-docs setup-github-pages`         |
+| Use static analysis       | `dynamic: false` (for tricky imports)   |
+| Generate agent skill file | `skill: {enabled: true}`                |
+
+## Core concepts
+
+### Configuration (`great-docs.yml`)
+
+Single YAML file at the project root controls everything. All keys
+are optional — sensible defaults are auto-detected from
+`pyproject.toml` and package structure.
+
+**Full config reference**: See [references/config-reference.md](references/config-reference.md)
+
+### Build pipeline
+
+The `build` command runs 13 steps in order:
+
+1. Prepare build directory (copy assets, JS, SCSS)
+2. Copy user guide from `user_guide/`
+3. Copy project `assets/`
+4. Refresh API reference (introspect package)
+5. Generate `llms.txt` and `llms-full.txt`
+6. Generate `skill.md` (if enabled)
+7. Generate source links JSON
+8. Generate changelog (from GitHub Releases)
+9. Generate CLI reference (if enabled)
+10. Process user guide (frontmatter, sidebar)
+11. Process custom sections
+12. Render API reference (`.qmd` files)
+13. Run `quarto render` -> `_site/` HTML output
+
+The `great-docs/` directory is **ephemeral** — regenerated on every
+build. Never edit files inside it directly.
+
+### Two rendering modes
+
+- **Dynamic** (default): imports the package at runtime for full
+  introspection. Requires `pip install -e .` first.
+- **Static** (`dynamic: false`): uses griffe for AST-based analysis.
+  Use when the package has circular imports, lazy loading, or
+  compiled extensions.
+
+Dynamic mode auto-falls-back to static if the import fails.
+
+### Docstring directives
+
+Custom directives inside docstrings use `%` prefix:
+
+```python
+def my_function():
+    """
+    Description.
+
+    %seealso func_a, func_b: related functions, ClassC
+    %nodoc
+    """
+```
+
+- `%seealso name1, name2: desc` — Cross-references in rendered docs
+- `%nodoc` — Exclude this item from documentation
+
+## Workflows
+
+### New documentation site
+
+```
+Task Progress:
+- [ ] Step 1: Install prerequisites
+- [ ] Step 2: Initialize configuration
+- [ ] Step 3: Customize config
+- [ ] Step 4: Build and preview
+- [ ] Step 5: Verify output
+```
+
+**Step 1**: Ensure `great-docs` and `quarto` are installed. The
+target package must be importable (`pip install -e .`).
+
+**Step 2**: Run `great-docs init` from the project root (where
+`pyproject.toml` lives). This creates `great-docs.yml`.
+
+**Step 3**: Edit `great-docs.yml` to customize. See
+[references/config-reference.md](references/config-reference.md) or
+[assets/config-template.yaml](assets/config-template.yaml) for all
+options.
+
+**Step 4**: Run `great-docs build` then `great-docs preview`.
+
+**Step 5**: Check the site at `http://localhost:3000`. If errors
+occur, see [references/common-errors.md](references/common-errors.md).
+
+### Adding content
+
+**User guide page**: Create `user_guide/NN-title.qmd` with a
+2-digit numeric prefix. Auto-discovered on next build.
+
+**Recipe**: Create `recipes/NN-title.qmd`. Same numeric prefix
+convention.
+
+**Custom section**: Add to `great-docs.yml`:
+
+```yaml
+sections:
+  - title: Examples
+    dir: examples
+```
+
+### Customizing appearance
+
+```yaml
+# great-docs.yml
+navbar_style: sky # gradient: sky, peach, lilac, mint, etc.
+content_style: lilac # content area glow
+dark_mode_toggle: true # toggle switch in navbar
+logo: assets/logo.svg # or {light: ..., dark: ...}
+hero: true # landing page hero section
+announcement:
+  content: "v2 is out!"
+  type: info
+  dismissable: true
+```
+
+### Troubleshooting a build
+
+1. Run `great-docs build` and read the error output
+2. Check [references/common-errors.md](references/common-errors.md) for
+   the error pattern
+3. Fix the config or source file
+4. Rebuild with `great-docs build --no-refresh` (faster, skips API
+   rediscovery)
+5. If the error persists, try `great-docs build` with full refresh
+
+## Reference files
+
+### Config reference (`references/config-reference.md`)
+
+Complete list of every `great-docs.yml` option with types, defaults,
+and examples. Organized by category: metadata, GitHub, navigation,
+theming, content, features, and advanced.
+
+### CLI reference (`references/cli-reference.md`)
+
+All CLI commands with arguments and usage examples:
+
+| Command              | Purpose                     |
+| -------------------- | --------------------------- |
+| `init`               | Create config, discover API |
+| `build`              | Full build pipeline         |
+| `preview`            | Local dev server            |
+| `scan`               | Preview discoverable API    |
+| `config`             | Generate template config    |
+| `uninstall`          | Remove config and build dir |
+| `setup-github-pages` | Create CI/CD workflow       |
+
+### Common errors (`references/common-errors.md`)
+
+Error patterns, causes, and fixes for the most frequent build
+failures — import errors, missing exports, config mismatches,
+Quarto issues, and more.
+
+## Scripts
+
+### `scripts/setup-env.sh`
+
+Bootstrap a development environment:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+pip install great-docs
+quarto --version || echo "ERROR: Quarto not installed"
+```
+
+### `scripts/run-build.sh`
+
+Build with validation:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+great-docs build
+echo "Build complete. Site at great-docs/_site/"
+ls great-docs/_site/index.html && echo "OK: index.html exists"
+```
+
+## Configuration template
+
+The `assets/config-template.yaml` provides a starter config with
+annotated options. Copy it as `great-docs.yml` and customize.
 
 ## Gotchas
 
-1. **Run from project root.** All commands (`init`, `build`, `preview`) must run from the
-   directory containing `great-docs.yml`.
-2. **`module` vs package name.** The `module` config key is the Python importable name,
-   not the PyPI distribution name. For a package installed as `py-shiny`, set
+1. **Run from project root.** All commands must run from the
+   directory containing `great-docs.yml` (and `pyproject.toml`).
+2. **`module` vs package name.** The `module` key is the Python
+   importable name, not the PyPI name. For `py-shiny`, set
    `module: shiny`.
-3. **Circular imports.** If the package uses lazy loading or circular aliases, set
-   `dynamic: false` to use static (griffe-based) analysis instead of runtime introspection.
-4. **User guide ordering.** User guide `.qmd` files must have numeric prefixes
-   (`00-introduction.qmd`, `01-installation.qmd`) for deterministic ordering.
-5. **Don't edit `great-docs/` directly.** The `great-docs/` directory is regenerated on
-   every build. Make changes in source files (`great-docs.yml`, `user_guide/`, `recipes/`)
-   instead.
-6. **Quarto must be installed.** Great Docs delegates HTML rendering to Quarto. If
-   `quarto` is not on PATH, the build will fail at step 2.
+3. **Circular imports.** Set `dynamic: false` for packages with
+   lazy loading or circular aliases.
+4. **User guide ordering.** Files need numeric prefixes
+   (`00-intro.qmd`, `01-install.qmd`) for deterministic order.
+5. **Don't edit `great-docs/` directly.** It's regenerated on every
+   build. Edit source files instead.
+6. **Quarto required.** If `quarto` is not on `PATH`, the build
+   fails at step 13.
+7. **Package must be importable.** In dynamic mode, run
+   `pip install -e .` before building.
 
 ## Capabilities and boundaries
 
-**What agents can configure (via `great-docs.yml` or source files):**
+**What agents can configure:**
 
-- All `great-docs.yml` settings listed above
+- All `great-docs.yml` settings
 - User guide `.qmd` pages in `user_guide/`
 - Recipe `.qmd` pages in `recipes/`
 - Custom section `.qmd` pages
+- Logo, favicon, and other assets
 - Custom CSS/SCSS overrides
-- Logo and favicon assets
+- Docstring directives (`%seealso`, `%nodoc`)
 
 **Requires human setup:**
 
-- Initial `pip install great-docs` and `quarto` installation
-- PyPI publishing of the documented package
-- GitHub Pages or other hosting deployment configuration
-- Custom domain DNS setup
-- GitHub repository creation and access tokens
-
-## Build pipeline
-
-The build runs in this order:
-
-1. Prepare build directory (copy assets, JS, SCSS to `great-docs/`)
-2. Generate `_quarto.yml` configuration
-3. Refresh API reference config (if `--refresh`)
-4. Generate `llms.txt` and `llms-full.txt`
-5. Generate source links JSON
-6. Generate changelog from GitHub Releases
-7. Generate CLI reference pages (if `cli.enabled: true`)
-8. Process user guide
-9. Process custom sections
-10. Build API reference via internal renderer
-11. Run `quarto render` to produce final HTML in `_site/`
-
-## Common tasks
-
-### Add a user guide page
-
-Create a `.qmd` file in `user_guide/` with a numeric prefix:
-
-```
-user_guide/05-advanced-usage.qmd
-```
-
-It will be auto-discovered and added to the sidebar on next build.
-
-### Add a recipe
-
-Create a `.qmd` file in `recipes/`:
-
-```
-recipes/07-custom-theme.qmd
-```
-
-### Enable CLI documentation
-
-```yaml
-# great-docs.yml
-cli:
-  enabled: true
-  module: my_package.cli # module containing the Click app
-  name: my-cli # CLI command name
-```
-
-### Override the homepage
-
-```yaml
-# great-docs.yml
-homepage: user_guide # Use the first user guide page as landing
-```
+- `pip install great-docs` and Quarto installation
+- `pip install -e .` for the target package
+- GitHub Pages or hosting deployment
+- Custom domain DNS
+- GitHub access tokens (for changelog)
 
 ## Resources
 
 - [Full documentation](https://posit-dev.github.io/great-docs/)
-- [llms.txt](https://posit-dev.github.io/great-docs/llms.txt) — Indexed API reference
-- [llms-full.txt](https://posit-dev.github.io/great-docs/llms-full.txt) — Comprehensive docs
+- [llms.txt](llms.txt) — Indexed API reference for LLMs
+- [llms-full.txt](llms-full.txt) — Comprehensive documentation for LLMs
 - [Configuration guide](https://posit-dev.github.io/great-docs/user-guide/03-configuration.html)
 - [GitHub repository](https://github.com/posit-dev/great-docs)

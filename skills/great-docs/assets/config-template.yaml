@@ -1,0 +1,71 @@
+# great-docs.yml starter configuration
+# Copy to your project root and customize.
+# All keys are optional — remove what you don't need.
+
+# ── Package identity ──────────────────────────────────────────
+# module: my_package          # Python importable name (auto-detected)
+# display_name: My Package    # Custom site title
+# parser: numpy               # Docstring style: numpy, google, sphinx
+# dynamic: true               # false = static analysis (for tricky imports)
+
+# ── Exclusions ────────────────────────────────────────────────
+# exclude:
+#   - _InternalClass
+#   - _helper_fn
+
+# ── Theming ───────────────────────────────────────────────────
+# navbar_style: sky           # Gradient: sky, peach, lilac, slate, honey, dusk, mint
+# navbar_color: "#1a1a2e"     # Solid color (overrides navbar_style)
+# content_style: lilac        # Content area glow
+# dark_mode_toggle: true      # Dark mode toggle in navbar
+# attribution: true           # "Built with Great Docs" footer
+
+# ── Logo and hero ─────────────────────────────────────────────
+# logo: assets/logo.svg       # Or: {light: assets/logo.svg, dark: assets/logo-dark.svg}
+# favicon: assets/favicon.png # Auto-generated from logo if SVG
+# hero:
+#   enabled: true
+#   tagline: "Beautiful docs for your Python package"
+
+# ── Announcement banner ───────────────────────────────────────
+# announcement:
+#   content: "v2.0 released!"
+#   type: info                # info, warning, success
+#   dismissable: true
+#   url: https://example.com/changelog
+
+# ── GitHub ────────────────────────────────────────────────────
+# repo: https://github.com/my-org/my-package
+# github_style: widget        # widget (shows stars) or icon
+
+# ── Source links ──────────────────────────────────────────────
+# source:
+#   enabled: true
+#   branch: main
+#   path: my_package           # Path to source (auto-detected)
+
+# ── Content ───────────────────────────────────────────────────
+# homepage: index              # index (README) or user_guide
+# sections:
+#   - title: Examples
+#     dir: examples
+
+# ── CLI documentation ─────────────────────────────────────────
+# cli:
+#   enabled: true
+#   module: my_package.cli     # Module with Click app
+#   name: my-cli               # CLI command name
+
+# ── Changelog ─────────────────────────────────────────────────
+# changelog:
+#   enabled: true              # Auto-generate from GitHub Releases
+
+# ── Sidebar filter ────────────────────────────────────────────
+# sidebar_filter:
+#   enabled: true
+#   min_items: 10              # Show filter when sidebar has 10+ items
+
+# ── Agent skill ───────────────────────────────────────────────
+# skill:
+#   enabled: true
+#   file: skills/my-package/SKILL.md  # Path to hand-written SKILL.md
