@@ -9519,7 +9519,7 @@ toc: false
             lines.append("curl -O <site-url>/skill.md")
             lines.append("```")
         lines.append("")
-        lines.append("Or browse the raw files:")
+        lines.append("Or browse the raw file:")
         lines.append("")
         # Use raw HTML links. Quarto will rewrite skill.md → skill.html,
         # but the post-render script fixes this back to skill.md.
@@ -9528,11 +9528,6 @@ toc: false
         lines.append(
             '<li><a href="skill.md" class="gd-raw-link">skill.md</a> — Root skill file</li>'
         )
-        if self._config.skill_well_known:
-            lines.append(
-                '<li><a href=".well-known/skills/default/SKILL.md">'
-                ".well-known/skills/default/SKILL.md</a> — Auto-discovery path</li>"
-            )
         lines.append("</ul>")
         lines.append("```")
         lines.append("")
