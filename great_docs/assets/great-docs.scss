@@ -3703,6 +3703,11 @@ html[data-bs-theme="dark"] .gd-content-glow-mint  { --gd-glow-color: #00695c; }
         margin: 0.35rem 0 0.75rem;
     }
 
+    // Make copy buttons always visible inside the install dropdown
+    .code-copy-button {
+        opacity: 1 !important;
+    }
+
     // Compact single-line code cells — reduce Quarto's generous pre padding
     pre.sourceCode {
         padding: 0.5rem 2.5rem 0.5rem 0.75rem; // right padding leaves room for copy btn
@@ -3752,6 +3757,12 @@ html[data-bs-theme="dark"] {
 
         strong {
             color: tint-color($primary, 40%);
+        }
+
+        .code-copy-outer-scaffold,
+        .sourceCode,
+        pre.sourceCode {
+            background: transparent;
         }
     }
 }
