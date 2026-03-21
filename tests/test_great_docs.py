@@ -17258,6 +17258,7 @@ def test_prepare_build_directory_copies_js_files():
         assert (docs.project_path / "sidebar-filter.js").exists()
         assert (docs.project_path / "dark-mode-toggle.js").exists()
         assert (docs.project_path / "theme-init.js").exists()
+        assert (docs.project_path / "copy-code.js").exists()
 
 
 def test_prepare_build_directory_optional_js_copy_page():
@@ -40424,3 +40425,67 @@ def test_announcement_plain_text_unaffected():
 
         meta_str = str(result["format"]["html"]["include-in-header"])
         assert "Just a plain announcement" in meta_str
+
+
+def test_update_quarto_config_disables_native_code_copy():
+    """_update_quarto_config sets code-copy: false to suppress Quarto's button."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        assert result["format"]["html"]["code-copy"] is False
+
+
+def test_update_quarto_config_includes_copy_code_js_in_resources():
+    """_update_quarto_config adds copy-code.js to project resources."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        assert "copy-code.js" in result["project"]["resources"]
+
+
+def test_update_quarto_config_includes_copy_code_js_in_after_body():
+    """_update_quarto_config adds copy-code.js script to include-after-body."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        after_body = result["format"]["html"]["include-after-body"]
+        after_body_str = str(after_body)
+        assert "copy-code.js" in after_body_str
+
+
+def test_update_quarto_config_copy_code_not_duplicated():
+    """Running _update_quarto_config twice doesn't duplicate copy-code.js."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+        docs._update_quarto_config()
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        after_body = result["format"]["html"]["include-after-body"]
+        copy_code_count = sum(
+            1
+            for item in after_body
+            if isinstance(item, dict) and "copy-code.js" in str(item.get("text", ""))
+        )
+        assert copy_code_count == 1
+
+        resource_count = result["project"]["resources"].count("copy-code.js")
+        assert resource_count == 1

@@ -1345,13 +1345,14 @@ def fix_plain_doctest_code_blocks(html_content):
 
         return (
             f'<div class="code-copy-outer-scaffold">'
+            f'<nav class="gd-code-nav">'
+            f'<button class="gd-code-copy" title="Copy to clipboard"></button>'
+            f"</nav>"
             f'<div class="sourceCode" id="{cb_id}">'
-            f'<pre class="sourceCode python code-with-copy">'
+            f'<pre class="sourceCode python">'
             f'<code class="sourceCode python">'
             f"{highlighted}"
-            f"</code></pre></div>"
-            f'<button title="Copy to Clipboard" class="code-copy-button">'
-            f'<i class="bi"></i></button></div>'
+            f"</code></pre></div></div>"
         )
 
     return _PLAIN_DOCTEST_RE.sub(_replace_plain_doctest, html_content)
@@ -2530,6 +2531,14 @@ def fix_script_paths():
             content = content.replace(old_cs_style, new_cs_style)
             modified = True
 
+        # Fix copy-code.js path
+        old_copy_code = '<script src="copy-code.js"></script>'
+        new_copy_code = f'<script src="{prefix}copy-code.js"></script>'
+
+        if old_copy_code in content:
+            content = content.replace(old_copy_code, new_copy_code)
+            modified = True
+
         if modified:
             with open(html_file, "w") as file:
                 file.write(content)
@@ -2709,9 +2718,15 @@ def generate_markdown_pages():
                 "",
                 main_html,
             )
-            # Remove the copy buttons
+            # Remove the copy nav + buttons (gd-code-nav and legacy code-copy-button)
             main_html = re.sub(
-                r'<button\s+title="Copy to Clipboard"[^>]*>.*?</button>',
+                r'<nav\s+class="gd-code-nav">.*?</nav>',
+                "",
+                main_html,
+                flags=re.DOTALL,
+            )
+            main_html = re.sub(
+                r'<button\s+title="Copy to [Cc]lipboard"[^>]*>.*?</button>',
                 "",
                 main_html,
                 flags=re.DOTALL,

@@ -1274,11 +1274,52 @@ body.quarto-light .navbar .gd-navbar-icon:hover {
     position: relative;
 }
 
-.code-copy-outer-scaffold > .code-copy-button {
+/* ---- Custom copy-code button (gd-code-nav) ---- */
+.gd-code-nav {
     position: absolute;
-    top: auto;
-    bottom: 0.5em;
-    right: 0.5em;
+    top: 0;
+    right: 0;
+    z-index: 3;
+    padding: 0.35rem;
+}
+
+.gd-code-copy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: #6c757d;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease, background-color 0.15s ease,
+        color 0.15s ease, border-color 0.15s ease;
+}
+
+.code-copy-outer-scaffold:hover .gd-code-copy,
+div.sourceCode:hover > .gd-code-nav .gd-code-copy,
+.gd-code-copy:focus-visible {
+    opacity: 1;
+}
+
+.gd-code-copy:hover {
+    background-color: rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 0, 0, 0.1);
+    color: #495057;
+}
+
+.gd-code-copy.gd-code-copied {
+    opacity: 1;
+    color: #198754;
+}
+
+/* Hide Quarto's native copy button (we provide our own) */
+.code-copy-button {
+    display: none !important;
 }
 
 /* Adjust mobile secondary nav positioning */
@@ -2991,15 +3032,18 @@ body.quarto-dark .source-link:hover {
    Dark Mode - Copy Button
    ========================================================================== */
 
-body.quarto-dark .code-copy-button {
-    background-color: var(--gd-bg-tertiary);
-    border-color: var(--gd-border-color);
+body.quarto-dark .gd-code-copy {
     color: var(--gd-text-muted);
 }
 
-body.quarto-dark .code-copy-button:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+body.quarto-dark .gd-code-copy:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
     color: var(--gd-text-primary);
+}
+
+body.quarto-dark .gd-code-copy.gd-code-copied {
+    color: #75b798;
 }
 
 /* ==========================================================================
@@ -3704,7 +3748,7 @@ html[data-bs-theme="dark"] .gd-content-glow-mint  { --gd-glow-color: #00695c; }
     }
 
     // Make copy buttons always visible inside the install dropdown
-    .code-copy-button {
+    .gd-code-copy {
         opacity: 1 !important;
     }
 

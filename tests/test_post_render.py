@@ -20,12 +20,6 @@ def _load_post_render():
     return spec, mod
 
 
-# ---------------------------------------------------------------------------
-# Instead of importing the whole script (which has top-level side effects),
-# extract just the functions we need by exec-ing the function defs.
-# ---------------------------------------------------------------------------
-
-
 def _get_functions():
     """Extract translate_sphinx_roles and translate_rst_directives via exec."""
     import re as _re  # noqa: F811
@@ -161,9 +155,6 @@ def _get_seealso_functions():
 ) = _get_seealso_functions()
 
 
-# ── translate_sphinx_roles ──────────────────────────────────────────────────
-
-
 class TestTranslateSphinxRoles:
     """Tests for Sphinx cross-reference role translation."""
 
@@ -258,9 +249,6 @@ class TestTranslateSphinxRoles:
         html = "<p>Is :py:type:<code>int</code>.</p>"
         result = translate_sphinx_roles(html)
         assert result == "<p>Is <code>int</code>.</p>"
-
-
-# ── translate_rst_directives ────────────────────────────────────────────────
 
 
 class TestTranslateRstDirectives:
@@ -398,9 +386,6 @@ class TestTranslateRstDirectives:
         assert "<code>bar()</code>" in result
 
 
-# ── translate_rst_math ──────────────────────────────────────────────────────
-
-
 class TestTranslateRstMath:
     """Tests for translate_rst_math (post-render HTML math conversion)."""
 
@@ -481,9 +466,6 @@ class TestTranslateRstMath:
         assert "<span" not in result.split('class="math display"')[1].split("</p>")[0]
 
 
-# ── fix_plain_doctest_code_blocks ────────────────────────────────────────────
-
-
 class TestFixPlainDoctestCodeBlocks:
     """Tests for fix_plain_doctest_code_blocks (site 137 regression)."""
 
@@ -547,9 +529,6 @@ class TestFixPlainDoctestCodeBlocks:
         assert "<pre><code>" not in result
 
 
-# ── extract_seealso_from_html ───────────────────────────────────────────────
-
-
 class TestExtractSeeAlsoFromHtml:
     """Tests for extracting %seealso items from rendered HTML."""
 
@@ -575,9 +554,6 @@ class TestExtractSeeAlsoFromHtml:
         html = "<p>Just a normal paragraph.</p>"
         result = extract_seealso_from_html(html)
         assert result == []
-
-
-# ── extract_seealso_from_doc_section ────────────────────────────────────────
 
 
 class TestExtractSeeAlsoFromDocSection:
@@ -629,9 +605,6 @@ class TestExtractSeeAlsoFromDocSection:
         assert result == []
 
 
-# ── generate_seealso_html ───────────────────────────────────────────────────
-
-
 class TestGenerateSeeAlsoHtml:
     """Tests for generating the See Also HTML block."""
 
@@ -672,9 +645,6 @@ class TestGenerateSeeAlsoHtml:
         assert "Does stuff" in result
         assert "func_b" in result
         assert "<ul" in result
-
-
-# ── autolink_code_references ────────────────────────────────────────────────
 
 
 def _make_autolink(inventory):
@@ -812,3 +782,41 @@ class TestAutolinkCodeReferences:
         fn = _make_autolink({})
         html = "<p><code>MyClass</code></p>"
         assert fn(html) == html
+
+
+class TestFixPlainDoctestGdCodeNav:
+    """Tests that fix_plain_doctest_code_blocks emits the gd-code-nav copy button."""
+
+    def test_converted_block_has_gd_code_nav(self):
+        """Converted doctest block should contain a gd-code-nav element."""
+        html = "<pre><code>&gt;&gt;&gt; foo()\n42</code></pre>"
+        result = fix_plain_doctest_code_blocks(html)
+        assert 'class="gd-code-nav"' in result
+
+    def test_converted_block_has_gd_code_copy_button(self):
+        """Converted block should have a gd-code-copy button inside the nav."""
+        html = "<pre><code>&gt;&gt;&gt; bar(1, 2)\n3</code></pre>"
+        result = fix_plain_doctest_code_blocks(html)
+        assert 'class="gd-code-copy"' in result
+        assert 'title="Copy to clipboard"' in result
+
+    def test_no_legacy_code_copy_button(self):
+        """Converted block should NOT have the old code-copy-button class."""
+        html = "<pre><code>&gt;&gt;&gt; baz()\nNone</code></pre>"
+        result = fix_plain_doctest_code_blocks(html)
+        assert "code-copy-button" not in result
+        assert '<i class="bi">' not in result
+
+    def test_nav_is_inside_scaffold(self):
+        """gd-code-nav should be nested inside code-copy-outer-scaffold."""
+        html = "<pre><code>&gt;&gt;&gt; x = 1\n</code></pre>"
+        result = fix_plain_doctest_code_blocks(html)
+        scaffold_start = result.find('class="code-copy-outer-scaffold"')
+        nav_start = result.find('class="gd-code-nav"')
+        assert scaffold_start < nav_start
+
+    def test_no_code_with_copy_class_on_pre(self):
+        """Converted <pre> should NOT have the Quarto 'code-with-copy' class."""
+        html = "<pre><code>&gt;&gt;&gt; hello()\n'world'</code></pre>"
+        result = fix_plain_doctest_code_blocks(html)
+        assert "code-with-copy" not in result
