@@ -150,6 +150,7 @@ class GreatDocs:
             "reference-switcher.js",
             "dark-mode-toggle.js",
             "theme-init.js",
+            "copy-code.js",
         ]
         if self._config.markdown_pages_widget:
             js_files.append("copy-page.js")
@@ -7958,6 +7959,7 @@ toc: false
             "sidebar-wrap.js",
             "dark-mode-toggle.js",
             "theme-init.js",
+            "copy-code.js",
         ]
         if self._config.markdown_pages_widget:
             js_resource_files.append("copy-page.js")
@@ -7996,6 +7998,9 @@ toc: false
         config["format"]["html"]["toc"] = site_settings.get("toc", True)
         config["format"]["html"]["toc-depth"] = site_settings.get("toc-depth", 2)
         config["format"]["html"]["toc-title"] = site_settings.get("toc-title", "On this page")
+
+        # Disable Quarto's native code-copy — we supply our own via copy-code.js
+        config["format"]["html"]["code-copy"] = False
 
         if "great-docs.scss" not in config["format"]["html"]["theme"]:
             if isinstance(config["format"]["html"]["theme"], str):
@@ -8318,6 +8323,22 @@ toc: false
             )
             if not has_dark_mode:
                 config["format"]["html"]["include-after-body"].append(dark_mode_script_entry)
+
+        # Add custom copy-code button script (replaces Quarto's native code-copy)
+        if "include-after-body" not in config["format"]["html"]:
+            config["format"]["html"]["include-after-body"] = []
+        elif isinstance(config["format"]["html"]["include-after-body"], str):
+            config["format"]["html"]["include-after-body"] = [
+                config["format"]["html"]["include-after-body"]
+            ]
+
+        copy_code_entry = {"text": '<script src="copy-code.js"></script>'}
+        has_copy_code = any(
+            "copy-code.js" in str(item)
+            for item in config["format"]["html"]["include-after-body"]
+        )
+        if not has_copy_code:
+            config["format"]["html"]["include-after-body"].append(copy_code_entry)
 
             # Add early theme detection script in header to prevent flash of wrong theme
             if "include-in-header" not in config["format"]["html"]:
