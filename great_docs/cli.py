@@ -1,11 +1,64 @@
 from __future__ import annotations
 
+import re
 import sys
+from pathlib import Path
 
 import click
 
 from . import __version__
 from .core import GreatDocs
+
+
+def _detect_python_version_from_pyproject(project_root: Path) -> str | None:
+    """Detect the minimum Python version from pyproject.toml.
+
+    Parses the `requires-python` field (e.g., '>=3.12', '>=3.10,<3.13')
+    and returns a suitable Python version string for CI (e.g., '3.12').
+
+    Returns None if pyproject.toml doesn't exist or has no version requirement.
+    """
+    pyproject_path = project_root / "pyproject.toml"
+    if not pyproject_path.exists():
+        return None
+
+    try:
+        # Use tomllib (Python 3.11+) or tomli as fallback
+        try:
+            import tomllib
+        except ImportError:
+            import tomli as tomllib
+
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
+
+        requires_python = data.get("project", {}).get("requires-python")
+        if not requires_python:
+            return None
+
+        # Parse version specifier to find minimum version
+        # Common patterns: ">=3.12", ">=3.10,<3.13", "~=3.11", ">=3.9"
+        # Extract versions from specifiers
+        version_pattern = r"(\d+\.\d+)"
+        matches = re.findall(version_pattern, requires_python)
+
+        if not matches:
+            return None
+
+        # For >= specifiers, use the specified version
+        if ">=" in requires_python or "~=" in requires_python:
+            # Return the first (minimum) version found
+            return matches[0]
+
+        # For other specifiers, try to pick a reasonable version
+        # Find the highest version mentioned (likely the target)
+        versions = [tuple(map(int, v.split("."))) for v in matches]
+        max_version = max(versions)
+        return f"{max_version[0]}.{max_version[1]}"
+
+    except Exception:
+        # If parsing fails, return None to use default
+        return None
 
 
 class OrderedGroup(click.Group):
@@ -433,8 +486,8 @@ cli.add_command(scan)
 @click.option(
     "--python-version",
     type=str,
-    default="3.11",
-    help="Python version for CI (default: 3.11)",
+    default=None,
+    help="Python version for CI (default: auto-detect from pyproject.toml, or 3.11)",
 )
 @click.option(
     "--force",
@@ -442,7 +495,7 @@ cli.add_command(scan)
     help="Overwrite existing workflow file without prompting",
 )
 def setup_github_pages(
-    project_path: str | None, main_branch: str, python_version: str, force: bool
+    project_path: str | None, main_branch: str, python_version: str | None, force: bool
 ) -> None:
     """Set up automatic deployment to GitHub Pages.
 
@@ -455,21 +508,33 @@ def setup_github_pages(
     • Deploy to GitHub Pages on main branch pushes
     • Use Quarto's official GitHub Action for reliable builds
 
+    The Python version is automatically detected from your pyproject.toml's
+    `requires-python` field. Use --python-version to override.
+
     After running this command, commit the workflow file and enable GitHub
     Pages in your repository settings (Settings → Pages → Source: GitHub Actions).
 
     \b
     Examples:
-      great-docs setup-github-pages                     # Use defaults
+      great-docs setup-github-pages                     # Auto-detect Python version
       great-docs setup-github-pages --main-branch dev   # Deploy from 'dev' branch
       great-docs setup-github-pages --python-version 3.12
       great-docs setup-github-pages --force             # Overwrite existing workflow
     """
-    from pathlib import Path
 
     try:
         # Determine project root
         project_root = Path(project_path) if project_path else Path.cwd()
+
+        # Auto-detect Python version if not specified
+        if python_version is None:
+            detected_version = _detect_python_version_from_pyproject(project_root)
+            if detected_version:
+                python_version = detected_version
+                click.echo(f"📦 Detected Python {python_version} from pyproject.toml")
+            else:
+                python_version = "3.12"
+                click.echo("📦 Using default Python 3.12 (no requires-python found)")
 
         # Create .github/workflows directory
         workflow_dir = project_root / ".github" / "workflows"
