@@ -227,6 +227,7 @@ from great_docs._qrenderer.pandoc.inlines import (
 )
 from great_docs._qrenderer.typing_information import TypeInformation, TypeSections
 from great_docs.cli import (
+    _detect_python_version_from_pyproject,
     build,
     changelog,
     check_links,
@@ -602,6 +603,126 @@ def test_setup_github_pages_overwrite_protection():
 
         assert result.exit_code == 1
         assert "Aborted" in result.output
+
+
+def test_detect_python_version_from_pyproject():
+    """Test detection of Python version from pyproject.toml."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_root = Path(tmp_dir)
+
+        # Test with no pyproject.toml
+        assert _detect_python_version_from_pyproject(project_root) is None
+
+        # Test with requires-python >= 3.12
+        pyproject = project_root / "pyproject.toml"
+        pyproject.write_text("""
+[project]
+name = "test-package"
+requires-python = ">=3.12"
+""")
+        assert _detect_python_version_from_pyproject(project_root) == "3.12"
+
+        # Test with requires-python >= 3.10
+        pyproject.write_text("""
+[project]
+name = "test-package"
+requires-python = ">=3.10"
+""")
+        assert _detect_python_version_from_pyproject(project_root) == "3.10"
+
+        # Test with range specifier
+        pyproject.write_text("""
+[project]
+name = "test-package"
+requires-python = ">=3.11,<3.13"
+""")
+        assert _detect_python_version_from_pyproject(project_root) == "3.11"
+
+        # Test with ~= specifier
+        pyproject.write_text("""
+[project]
+name = "test-package"
+requires-python = "~=3.9"
+""")
+        assert _detect_python_version_from_pyproject(project_root) == "3.9"
+
+        # Test with no requires-python field
+        pyproject.write_text("""
+[project]
+name = "test-package"
+""")
+        assert _detect_python_version_from_pyproject(project_root) is None
+
+
+def test_setup_github_pages_auto_detects_python_version():
+    """Test that setup-github-pages auto-detects Python version from pyproject.toml."""
+    runner = CliRunner()
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Create pyproject.toml with requires-python
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text("""
+[project]
+name = "test-package"
+requires-python = ">=3.12"
+""")
+
+        # Run without --python-version flag
+        result = runner.invoke(setup_github_pages, ["--project-path", tmp_dir, "--force"])
+
+        assert result.exit_code == 0
+        assert "Detected Python 3.12 from pyproject.toml" in result.output
+
+        # Check the workflow file has the correct version
+        workflow_file = Path(tmp_dir) / ".github" / "workflows" / "docs.yml"
+        content = workflow_file.read_text()
+        assert "3.12" in content
+
+
+def test_setup_github_pages_falls_back_to_default():
+    """Test that setup-github-pages falls back to 3.12 when no requires-python found."""
+    runner = CliRunner()
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Run without pyproject.toml
+        result = runner.invoke(setup_github_pages, ["--project-path", tmp_dir, "--force"])
+
+        assert result.exit_code == 0
+        assert "Using default Python 3.12" in result.output
+
+        # Check the workflow file has the default version
+        workflow_file = Path(tmp_dir) / ".github" / "workflows" / "docs.yml"
+        content = workflow_file.read_text()
+        assert "3.12" in content
+
+
+def test_setup_github_pages_explicit_version_overrides_detection():
+    """Test that explicit --python-version overrides auto-detection."""
+    runner = CliRunner()
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Create pyproject.toml with requires-python = 3.12
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text("""
+[project]
+name = "test-package"
+requires-python = ">=3.12"
+""")
+
+        # Run with explicit --python-version 3.11
+        result = runner.invoke(
+            setup_github_pages,
+            ["--project-path", tmp_dir, "--python-version", "3.11", "--force"],
+        )
+
+        assert result.exit_code == 0
+        # Should NOT mention detection since explicit version was provided
+        assert "Detected Python" not in result.output
+
+        # Check the workflow file has the explicit version
+        workflow_file = Path(tmp_dir) / ".github" / "workflows" / "docs.yml"
+        content = workflow_file.read_text()
+        assert "3.11" in content
 
 
 def test_generate_llms_txt():
