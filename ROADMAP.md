@@ -80,13 +80,13 @@ Comprehensive search engine optimization features.
 
 ### Page Metadata Timestamps
 
-Display creation and modification dates in the page footer.
+Display creation and modification dates in the page footer with optional author attribution.
 
 - "Created on" / "Last updated" text from Git history or file metadata
-- Configurable date formats
-- Optional author/contributor attribution
-- "Refreshed on" for auto-generated pages (reference, changelog)
-- `site.show_dates: true` config option
+- Configurable date formats via `site.date_format` (Python strftime)
+- "Refreshed on" for auto-generated pages (reference, changelog, CLI docs)
+- `site.show_dates: true` config option to enable globally
+
 
 ### Responsive Tables
 
