@@ -60,8 +60,8 @@ Expose the rendered site as an MCP endpoint so AI agents can search and retrieve
 
 Auto-generate `<meta>` tags for social media previews.
 
-- Open Graph (`og:title`, `og:description`, `og:image`)
-- Twitter Card markup
+- Open Graph (`og:title`, `og:description`, `og:image`) — works on LinkedIn, Discord, Slack, Bluesky, Mastodon, and most other platforms
+- Twitter/X Card markup (`twitter:card`, `twitter:title`, etc.) for X-specific previews
 - Per-page and site-level defaults
 - Optional custom image template
 
