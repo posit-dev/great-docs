@@ -80,12 +80,15 @@ Comprehensive search engine optimization features.
 
 ### Page Metadata Timestamps
 
-Display creation and modification dates in the page footer with optional author attribution.
+Display creation and modification dates at the bottom of main content with optional author attribution.
 
-- "Created on" / "Last updated" text from Git history or file metadata
-- Configurable date formats via `site.date_format` (Python strftime)
-- "Refreshed on" for auto-generated pages (reference, changelog, CLI docs)
+- Horizontal layout: `[edit icon] 4 months ago  [create icon] 2 years ago  ───  [author avatars]`
+- Relative timestamps by default ("4 months ago"), configurable to absolute dates
+- Git history or file metadata as date sources
+- "Refreshed X ago" for auto-generated pages (reference, changelog, CLI docs)
+- Hover tooltips show absolute dates
 - `site.show_dates: true` config option to enable globally
+- `site.date_format: "relative"` (default) or strftime pattern
 
 ### Author Attribution & Avatars
 
