@@ -87,6 +87,17 @@ Display creation and modification dates in the page footer with optional author 
 - "Refreshed on" for auto-generated pages (reference, changelog, CLI docs)
 - `site.show_dates: true` config option to enable globally
 
+### Author Attribution & Avatars
+
+Display author information with circular GitHub-style avatars on authored pages.
+
+- Author name and image from page YAML frontmatter (`author: {name, image, url}`)
+- Circular avatar images (falls back to initials when no image)
+- Author lookup from `great-docs.yml` `authors:` list for full metadata
+- Only shown on authored pages (user guide, blog, recipes) with explicit `author:` frontmatter
+- Auto-generated pages (reference, changelog) show dates only, no author
+- Optional `team_author:` config for a catch-all team attribution (e.g., "Great Tables Team")
+- `site.show_author: true/false` to enable/disable author display
 
 ### Responsive Tables
 
