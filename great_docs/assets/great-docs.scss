@@ -3949,6 +3949,142 @@ html[data-bs-theme="dark"] .gd-skills-file-heading {
 }
 
 
+/*---------------------------------- Page Metadata Footer -----------------------------------*/
+// Displays creation/modification dates and optional author avatars at the bottom of pages.
+// Uses a horizontal layout: [edit icon] 4 months ago  [create icon] 2 years ago  ─  [avatar1] [avatar2]
+
+.gd-page-metadata {
+    border-top: 1px solid $gray-300;
+    padding-top: 1rem;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    color: $gray-600;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+
+    // Dates section with icons
+    .gd-metadata-dates {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    // Individual metadata item (icon + timestamp)
+    .gd-metadata-item {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    // Icon styling
+    .gd-icon {
+        display: inline-flex;
+        align-items: center;
+        opacity: 0.65;
+
+        svg {
+            vertical-align: middle;
+        }
+    }
+
+    // Timestamp text (hoverable for absolute date tooltip)
+    .gd-timestamp {
+        cursor: help;
+    }
+
+    // Separator between dates and authors
+    .gd-metadata-separator {
+        color: $gray-400;
+        font-weight: 300;
+    }
+
+    // Authors section with avatars
+    .gd-metadata-authors {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    // Author link wrapper
+    .gd-author-link {
+        display: inline-flex;
+        text-decoration: none;
+    }
+
+    // Circular avatar image (GitHub-style)
+    .gd-author-avatar {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex-shrink: 0;
+        border: 2px solid $gray-300;
+        cursor: help;
+        transition: border-color 0.15s ease;
+
+        &:hover {
+            border-color: $primary;
+        }
+    }
+
+    // Initials fallback when no image
+    .gd-author-initials {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: $primary;
+        color: white;
+        font-weight: 600;
+        font-size: 0.7rem;
+        flex-shrink: 0;
+        cursor: help;
+        border: 2px solid transparent;
+        transition: border-color 0.15s ease;
+
+        &:hover {
+            border-color: shade-color($primary, 20%);
+        }
+    }
+}
+
+// Dark mode adjustments
+html[data-bs-theme="dark"] .gd-page-metadata {
+    border-top-color: $gray-700;
+    color: $gray-400;
+
+    .gd-icon {
+        opacity: 0.6;
+    }
+
+    .gd-metadata-separator {
+        color: $gray-600;
+    }
+
+    .gd-author-avatar {
+        border-color: $gray-600;
+
+        &:hover {
+            border-color: tint-color($primary, 30%);
+        }
+    }
+
+    .gd-author-initials {
+        background: tint-color($primary, 20%);
+
+        &:hover {
+            border-color: tint-color($primary, 40%);
+        }
+    }
+}
+
+
 /*-- scss:functions --*/
 
 /*-- scss:uses --*/
