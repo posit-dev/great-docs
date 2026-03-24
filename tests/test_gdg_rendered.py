@@ -3329,11 +3329,14 @@ def test_md_files_exist_for_html_pages():
     html_files = sorted(site.rglob("*.html"))
     assert len(html_files) > 0, "No HTML files found"
 
+    # Pages that are intentionally excluded from .md generation
+    excluded = {"index.html", "skills.html"}
+
     missing = []
     for html_file in html_files:
         rel = html_file.relative_to(site)
-        # Homepage is intentionally excluded
-        if str(rel) == "index.html":
+        # Homepage and skills page are intentionally excluded
+        if str(rel) in excluded:
             continue
         md_file = html_file.with_suffix(".md")
         if not md_file.exists():
@@ -3750,9 +3753,12 @@ def test_md_namespace_ug_nested_dirs():
     assert (ref / "initialize.md").exists(), "reference/initialize.md missing"
     assert (ref / "shutdown.md").exists(), "reference/shutdown.md missing"
 
-    # Total .md count: 10 (all HTML pages minus homepage)
+    # Total .md count: 10 (all HTML pages minus homepage), plus skill.md files
+    # skill.md is at root and .well-known/skills/default/SKILL.md
     all_mds = list(site.rglob("*.md"))
-    assert len(all_mds) == 10, f"Expected 10 .md files, found {len(all_mds)}"
+    # Filter out skill.md files which are generated separately
+    content_mds = [m for m in all_mds if "skill" not in m.name.lower()]
+    assert len(content_mds) == 10, f"Expected 10 content .md files, found {len(content_mds)}"
 
 
 def test_md_cli_name_subcommand_pages():
@@ -3839,14 +3845,20 @@ def test_md_rst_mixed_dirs_clean_output():
 
 
 def test_md_disabled_no_md_files():
-    """gdtest_md_disabled: No .md files when markdown_pages is false."""
+    """gdtest_md_disabled: No content .md files when markdown_pages is false.
+
+    Note: skill.md files are still generated since they're part of the
+    skill/agent documentation feature, not the copy-page widget.
+    """
     pkg = "gdtest_md_disabled"
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
 
     site = _site_dir(pkg)
     md_files = list(site.rglob("*.md"))
-    assert md_files == [], f"Expected no .md files but found: {md_files}"
+    # Filter out skill.md files which are generated separately from markdown_pages
+    content_mds = [m for m in md_files if "skill" not in m.name.lower()]
+    assert content_mds == [], f"Expected no content .md files but found: {content_mds}"
 
 
 def test_md_disabled_no_copy_page_script():

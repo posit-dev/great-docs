@@ -53,7 +53,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "toc": True,
         "toc-depth": 2,
         "toc-title": "On this page",
+        # Page metadata timestamps
+        "show_dates": False,  # Display creation/modification dates in footer
+        "date_format": "%B %d, %Y",  # Python strftime format (e.g., "March 24, 2026")
+        "show_author": True,  # Show author attribution when show_dates is enabled
     },
+    # Team author (catch-all for auto-generated pages when authorship is shown)
+    # Example: {"name": "Great Tables Team", "image": "assets/team-avatar.png", "url": "https://..."}
+    "team_author": None,
     # Changelog configuration (from GitHub Releases)
     "changelog": {
         "enabled": True,
@@ -528,6 +535,42 @@ class Config:
         return self.get("site", {})
 
     @property
+    def show_dates(self) -> bool:
+        """Whether to show page metadata timestamps in the footer."""
+        return bool(self.site.get("show_dates", False))
+
+    @property
+    def date_format(self) -> str:
+        """Get the date format string (Python strftime format)."""
+        return self.site.get("date_format", "%B %d, %Y")
+
+    @property
+    def show_author(self) -> bool:
+        """Whether to show author attribution when dates are enabled."""
+        return bool(self.site.get("show_author", True))
+
+    @property
+    def team_author(self) -> dict[str, Any] | None:
+        """Get the team author configuration for auto-generated pages.
+
+        Returns
+        -------
+        dict | None
+            A dict with keys: name (str), image (str|None), url (str|None).
+            Returns None when not configured.
+        """
+        raw = self.get("team_author")
+        if raw is None:
+            return None
+        if isinstance(raw, dict) and raw.get("name"):
+            return {
+                "name": raw["name"],
+                "image": raw.get("image"),
+                "url": raw.get("url"),
+            }
+        return None
+
+    @property
     def jupyter(self) -> str:
         """Get the Jupyter kernel for executing code cells."""
         return self.get("jupyter", "python3")
@@ -967,7 +1010,7 @@ def create_default_config() -> str:
 
 # Author Information
 # ------------------
-# Author metadata for display in the landing page sidebar
+# Author metadata for display in the landing page sidebar and page attribution
 # authors:
 #   - name: Your Name
 #     email: you@example.com
@@ -976,6 +1019,15 @@ def create_default_config() -> str:
 #     github: yourusername
 #     homepage: https://yoursite.com
 #     orcid: 0000-0002-1234-5678
+#     image: https://github.com/yourusername.png  # Avatar (GitHub URL or local path)
+
+# Team Author
+# -----------
+# Optional catch-all author for auto-generated pages (reference, changelog, etc.)
+# team_author:
+#   name: "Project Team"
+#   image: "assets/team-avatar.png"
+#   url: "https://github.com/org/project"
 
 # Site Settings
 # -------------
@@ -985,6 +1037,9 @@ def create_default_config() -> str:
 #   toc: true                  # Show table of contents (default: true)
 #   toc-depth: 2               # TOC heading depth (default: 2)
 #   toc-title: On this page    # TOC title (default: "On this page")
+#   show_dates: false          # Show page timestamps in footer
+#   date_format: "%B %d, %Y"   # Date format (Python strftime)
+#   show_author: true          # Show author attribution with dates
 
 # Jupyter Kernel
 # --------------

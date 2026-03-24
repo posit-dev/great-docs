@@ -177,6 +177,9 @@ class TestScalarProperties:
             "toc": True,
             "toc-depth": 2,
             "toc-title": "On this page",
+            "show_dates": False,
+            "date_format": "%B %d, %Y",
+            "show_author": True,
         }
 
     def test_jupyter_default(self, tmp_project: Path):

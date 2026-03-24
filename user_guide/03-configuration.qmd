@@ -647,6 +647,99 @@ skill:
   enabled: false
 ```
 
+## Page Metadata
+
+Display page creation and modification dates at the bottom of documentation pages, giving readers a sense of content freshness.
+
+### Enabling Page Metadata
+
+```{.yaml filename="great-docs.yml"}
+site:
+  show_dates: true
+```
+
+When enabled, pages display timestamps in a compact horizontal format:
+
+```
+✏️ 4 months ago   📄 2 years ago
+```
+
+- **✏️ (pencil icon)**: Last modification date
+- **📄 (file icon)**: Creation date
+
+Hovering over a timestamp shows the full date (e.g., "March 24, 2026").
+
+### How Dates Are Determined
+
+Great Docs determines dates from Git history when available:
+
+| Date Type | Source |
+|-----------|--------|
+| **Created** | Date of the first Git commit that added the file |
+| **Modified** | Date of the most recent Git commit that changed the file |
+
+If Git history is unavailable (e.g., shallow clones in CI), the file system timestamps are used as a fallback.
+
+### Auto-Generated Pages
+
+Pages that Great Docs generates automatically (API reference, changelog, CLI reference) show a "Refreshed" timestamp instead:
+
+```
+🔄 Refreshed 2 hours ago
+```
+
+This indicates when the page content was last regenerated during a build, not when source code was edited.
+
+### Which Pages Show Metadata
+
+| Page Type | Shows Metadata |
+|-----------|----------------|
+| User Guide pages | ✓ Yes |
+| Recipes | ✓ Yes |
+| Roadmap, Contributing, etc. | ✓ Yes |
+| API Reference pages | ✓ Yes (as "Refreshed") |
+| Changelog | ✓ Yes (as "Refreshed") |
+| Homepage | ✗ No |
+
+### Configuration Options
+
+```{.yaml filename="great-docs.yml"}
+site:
+  show_dates: true       # Enable/disable page metadata (default: false)
+  show_author: true      # Show author attribution when enabled (default: true)
+```
+
+### Author Attribution
+
+When `show_author` is enabled and a page has author information in its frontmatter, author avatars appear alongside the timestamps:
+
+```
+✏️ 4 months ago   📄 2 years ago   —   ○ ○
+```
+
+To add author information to a page, include it in the YAML frontmatter:
+
+```{.yaml filename="guide.qmd"}
+---
+title: "Getting Started"
+author:
+  name: "Jane Developer"
+  image: "https://github.com/janedev.png"
+  url: "https://github.com/janedev"
+---
+```
+
+Great Docs automatically looks up author details from the `authors` list in `great-docs.yml`, so you can often just specify the name:
+
+```{.yaml filename="guide.qmd"}
+---
+title: "Getting Started"
+author: "Jane Developer"
+---
+```
+
+If the author is listed in `great-docs.yml` with a `github` field, their GitHub avatar is used automatically.
+
 ## Complete Example
 
 Here's a comprehensive configuration demonstrating all available options:
@@ -675,6 +768,11 @@ source:
 sidebar_filter:
   enabled: true
   min_items: 15
+
+# Site Settings
+site:
+  show_dates: true       # Show page timestamps
+  show_author: true      # Show author avatars
 
 # Markdown Pages
 markdown_pages: true

@@ -2539,6 +2539,14 @@ def fix_script_paths():
             content = content.replace(old_copy_code, new_copy_code)
             modified = True
 
+        # Fix page-metadata.js path
+        old_page_meta = '<script src="page-metadata.js"></script>'
+        new_page_meta = f'<script src="{prefix}page-metadata.js"></script>'
+
+        if old_page_meta in content:
+            content = content.replace(old_page_meta, new_page_meta)
+            modified = True
+
         if modified:
             with open(html_file, "w") as file:
                 file.write(content)
@@ -2603,6 +2611,316 @@ def inject_sidebar_body_classes():
 
 
 inject_sidebar_body_classes()
+
+
+# ============================================================================
+# Inject Page Metadata (timestamps and author information)
+# ============================================================================
+# Adds <meta> tags with page creation/modification dates and author info
+# for consumption by page-metadata.js.
+
+
+def inject_page_metadata():
+    """
+    Inject page metadata <meta> tags into HTML files.
+
+    Adds timestamps and author information for the page-metadata.js script
+    to render in the page footer. Auto-generated pages (API reference,
+    changelog) get "Refreshed on" with the build timestamp. Authored pages
+    get dates from the original source file's git history.
+    """
+    if not _gd_options.get("show_dates", False):
+        return
+
+    print("Injecting page metadata...")
+
+    build_timestamp = _gd_options.get("build_timestamp", "")
+    authors_config = _gd_options.get("authors", [])
+    team_author = _gd_options.get("team_author")
+    show_author = _gd_options.get("show_author", True)
+
+    # Project root is one directory up from great-docs/
+    project_root = os.path.abspath(os.path.join(os.getcwd(), ".."))
+
+    # Build author lookup by name for resolving page authors
+    author_lookup: dict[str, dict] = {}
+    for author in authors_config:
+        if isinstance(author, dict) and author.get("name"):
+            author_lookup[author["name"]] = author
+
+    # Identify auto-generated paths (reference, changelog, CLI)
+    auto_generated_prefixes = ("reference" + os.sep, "changelog")
+
+    def find_original_source(rel_path: str) -> str | None:
+        """Map a page path back to its original source file in project root.
+
+        Examples:
+            roadmap.html -> ROADMAP.md
+            user-guide/intro.html -> user_guide/01-intro.qmd (with numeric prefix)
+            recipes/foo.html -> recipes/foo.qmd
+        """
+        # Strip .html extension
+        base = rel_path.replace(".html", "")
+
+        # Special case: roadmap -> ROADMAP.md
+        if base == "roadmap":
+            path = os.path.join(project_root, "ROADMAP.md")
+            if os.path.exists(path):
+                return path
+
+        # Special case: contributing -> CONTRIBUTING.md
+        if base == "contributing":
+            path = os.path.join(project_root, "CONTRIBUTING.md")
+            if os.path.exists(path):
+                return path
+
+        # Special case: code-of-conduct -> CODE_OF_CONDUCT.md
+        if base == "code-of-conduct":
+            path = os.path.join(project_root, "CODE_OF_CONDUCT.md")
+            if os.path.exists(path):
+                return path
+
+        # Special case: license -> LICENSE or LICENSE.md
+        if base == "license":
+            for name in ["LICENSE.md", "LICENSE"]:
+                path = os.path.join(project_root, name)
+                if os.path.exists(path):
+                    return path
+
+        # Special case: citation -> CITATION.cff
+        if base == "citation":
+            path = os.path.join(project_root, "CITATION.cff")
+            if os.path.exists(path):
+                return path
+
+        # user-guide/ pages -> user_guide/ with potential numeric prefixes
+        if base.startswith("user-guide/"):
+            page_name = base.replace("user-guide/", "")
+            user_guide_dir = os.path.join(project_root, "user_guide")
+            if os.path.isdir(user_guide_dir):
+                # Look for file with or without numeric prefix
+                for filename in os.listdir(user_guide_dir):
+                    if filename.endswith(".qmd"):
+                        # Strip numeric prefix (e.g., "01-intro.qmd" -> "intro")
+                        name_part = filename[:-4]  # Remove .qmd
+                        if "-" in name_part and name_part.split("-", 1)[0].isdigit():
+                            name_part = name_part.split("-", 1)[1]
+                        if name_part == page_name:
+                            return os.path.join(user_guide_dir, filename)
+
+        # recipes/ pages -> recipes/ in project root
+        if base.startswith("recipes/"):
+            page_name = base.replace("recipes/", "")
+            recipes_dir = os.path.join(project_root, "recipes")
+            if os.path.isdir(recipes_dir):
+                # Look for file with or without numeric prefix
+                for filename in os.listdir(recipes_dir):
+                    if filename.endswith(".qmd"):
+                        name_part = filename[:-4]
+                        if "-" in name_part and name_part.split("-", 1)[0].isdigit():
+                            name_part = name_part.split("-", 1)[1]
+                        if name_part == page_name:
+                            return os.path.join(recipes_dir, filename)
+
+        # index.html -> README.md
+        if base == "index":
+            path = os.path.join(project_root, "README.md")
+            if os.path.exists(path):
+                return path
+
+        return None
+
+    modified_count = 0
+
+    for html_file in all_html_files:
+        rel_path = os.path.relpath(html_file, "_site")
+
+        # Skip homepage - no metadata display needed
+        if rel_path == "index.html":
+            continue
+
+        # Determine if this is an auto-generated page
+        is_auto_generated = any(
+            rel_path.startswith(prefix) for prefix in auto_generated_prefixes
+        ) or rel_path in ("changelog.html", "skills.html")
+
+        # Find the original source file in project root
+        source_file = None
+        if not is_auto_generated:
+            source_file = find_original_source(rel_path)
+
+        # Get file dates
+        modified_date = ""
+        created_date = ""
+
+        if is_auto_generated:
+            # Auto-generated: use build timestamp
+            modified_date = build_timestamp
+        elif source_file and os.path.exists(source_file):
+            # Try git dates first, fall back to mtime
+            try:
+                import subprocess
+
+                # Run git from project root
+                result = subprocess.run(
+                    ["git", "log", "-1", "--format=%aI", "--", source_file],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    modified_date = result.stdout.strip()
+
+                # Creation date (first commit)
+                result = subprocess.run(
+                    [
+                        "git",
+                        "log",
+                        "--diff-filter=A",
+                        "--follow",
+                        "--format=%aI",
+                        "--",
+                        source_file,
+                    ],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    lines = result.stdout.strip().split("\n")
+                    created_date = lines[-1].strip()
+            except Exception:
+                pass
+
+            # Fallback to mtime
+            if not modified_date:
+                from datetime import datetime
+
+                mtime = os.path.getmtime(source_file)
+                modified_date = datetime.fromtimestamp(mtime).isoformat()
+        else:
+            # No source file found - skip metadata for this page
+            continue
+
+        # Parse author from the source file frontmatter (for QMD files)
+        author_name = ""
+        author_image = ""
+        author_url = ""
+
+        if show_author and not is_auto_generated and source_file:
+            # Try to read author from source file frontmatter (QMD or MD files)
+            try:
+                with open(source_file, "r", encoding="utf-8") as f:
+                    content = f.read()
+                if content.startswith("---"):
+                    parts = content.split("---", 2)
+                    if len(parts) >= 3:
+                        import yaml
+
+                        try:
+                            fm = yaml.safe_load(parts[1])
+                            if fm:
+                                author = fm.get("author")
+                                if isinstance(author, str):
+                                    author_name = author
+                                elif isinstance(author, dict):
+                                    author_name = author.get("name", "")
+                                    author_image = author.get("image", "")
+                                    author_url = author.get("url", "")
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+            # Look up author details from config if not in frontmatter
+            if author_name and not author_image:
+                config_author = author_lookup.get(author_name, {})
+                if not author_image:
+                    author_image = config_author.get("image", "")
+                    # Try GitHub avatar if homepage is GitHub
+                    if not author_image:
+                        github = config_author.get("github", "")
+                        if github:
+                            author_image = f"https://github.com/{github}.png"
+                        elif "github.com" in config_author.get("homepage", ""):
+                            # Extract username from GitHub URL
+                            hp = config_author.get("homepage", "")
+                            match = re.search(r"github\.com/([^/]+)", hp)
+                            if match:
+                                author_image = f"https://github.com/{match.group(1)}.png"
+                if not author_url:
+                    author_url = config_author.get("homepage", "")
+
+        # Build meta tags
+        meta_tags = []
+        if modified_date:
+            meta_tags.append(f'<meta name="gd-page-modified" content="{modified_date}">')
+        if created_date:
+            meta_tags.append(f'<meta name="gd-page-created" content="{created_date}">')
+        if is_auto_generated:
+            meta_tags.append('<meta name="gd-auto-generated" content="true">')
+        if author_name:
+            meta_tags.append(f'<meta name="gd-page-author" content="{author_name}">')
+        if author_image:
+            meta_tags.append(f'<meta name="gd-page-author-image" content="{author_image}">')
+        if author_url:
+            meta_tags.append(f'<meta name="gd-page-author-url" content="{author_url}">')
+
+        if not meta_tags:
+            continue
+
+        # Inject meta tags in <head>
+        with open(html_file, "r", encoding="utf-8") as f:
+            html_content = f.read()
+
+        # Insert after <head> opening tag
+        meta_block = "\n".join(meta_tags)
+        new_content = html_content.replace("<head>", f"<head>\n{meta_block}", 1)
+
+        if new_content != html_content:
+            with open(html_file, "w", encoding="utf-8") as f:
+                f.write(new_content)
+            modified_count += 1
+
+    print(f"Injected page metadata in {modified_count} HTML files")
+
+
+inject_page_metadata()
+
+
+# Fix page-metadata.js script paths for subdirectory pages
+# (This runs after injection because inject_page_metadata runs after fix_script_paths)
+def fix_page_metadata_script_paths():
+    """Fix page-metadata.js paths in subdirectory HTML files."""
+    fixed_count = 0
+
+    for html_file in all_html_files:
+        rel_path = os.path.relpath(html_file, "_site")
+        depth = rel_path.count(os.sep)
+
+        if depth == 0:
+            continue
+
+        with open(html_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        prefix = "../" * depth
+        old_script = '<script src="page-metadata.js"></script>'
+        new_script = f'<script src="{prefix}page-metadata.js"></script>'
+
+        if old_script in content:
+            content = content.replace(old_script, new_script)
+            with open(html_file, "w", encoding="utf-8") as f:
+                f.write(content)
+            fixed_count += 1
+
+    if fixed_count > 0:
+        print(f"Fixed page-metadata.js paths in {fixed_count} subdirectory pages")
+
+
+fix_page_metadata_script_paths()
 
 
 # ============================================================================

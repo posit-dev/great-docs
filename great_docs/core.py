@@ -2,6 +2,7 @@ import json
 import os
 import re
 import shutil
+from datetime import datetime
 from importlib import resources
 from pathlib import Path
 
@@ -160,6 +161,8 @@ class GreatDocs:
             js_files.append("navbar-style.js")
         if self._config.content_style is not None:
             js_files.append("content-style.js")
+        if self._config.show_dates:
+            js_files.append("page-metadata.js")
         for js_file in js_files:
             js_src = self.assets_path / js_file
             if js_src.exists():
@@ -188,6 +191,12 @@ class GreatDocs:
         # Write options JSON for the post-render script
         gd_options = {
             "markdown_pages": self._config.markdown_pages,
+            "show_dates": self._config.show_dates,
+            "date_format": self._config.date_format,
+            "show_author": self._config.show_author,
+            "team_author": self._config.team_author,
+            "authors": self._config.authors,  # Rich author metadata with images
+            "build_timestamp": datetime.now().isoformat(),
         }
         gd_options_path = self.project_path / "_gd_options.json"
         with open(gd_options_path, "w") as f:
@@ -7986,6 +7995,8 @@ toc: false
         ]
         if self._config.markdown_pages_widget:
             js_resource_files.append("copy-page.js")
+        if self._config.show_dates:
+            js_resource_files.append("page-metadata.js")
         for js_file in js_resource_files:
             if js_file not in config["project"]["resources"]:
                 config["project"]["resources"].append(js_file)
@@ -8377,6 +8388,23 @@ toc: false
             )
             if not has_early_theme:
                 config["format"]["html"]["include-in-header"].append(early_theme_script)
+
+        # Add page metadata script (if show_dates is enabled)
+        if self._config.show_dates:
+            if "include-after-body" not in config["format"]["html"]:
+                config["format"]["html"]["include-after-body"] = []
+            elif isinstance(config["format"]["html"]["include-after-body"], str):
+                config["format"]["html"]["include-after-body"] = [
+                    config["format"]["html"]["include-after-body"]
+                ]
+
+            page_metadata_entry = {"text": '<script src="page-metadata.js"></script>'}
+            has_page_metadata = any(
+                "page-metadata.js" in str(item)
+                for item in config["format"]["html"]["include-after-body"]
+            )
+            if not has_page_metadata:
+                config["format"]["html"]["include-after-body"].append(page_metadata_entry)
 
         # Add reference switcher script (if CLI is enabled)
         cli_enabled = metadata.get("cli_enabled", False)
