@@ -1,0 +1,258 @@
+---
+title: "Proofreading"
+guide-section: "Quality & Maintenance"
+---
+
+Good documentation requires accurate spelling and grammar. Great Docs includes a proofreading command that checks your documentation for spelling mistakes, grammar issues, and common writing problems using [Harper](https://github.com/Automattic/harper), a fast, privacy-focused grammar checker that runs entirely on your machine.
+
+## Installing Harper
+
+The proofreader requires Harper to be installed separately. It's a single binary with no dependencies:
+
+::: {.panel-tabset}
+
+### macOS (Homebrew)
+
+```bash
+brew install harper
+```
+
+### Any Platform (Cargo)
+
+```bash
+cargo install harper-cli
+```
+
+### Manual Download
+
+Download pre-built binaries from the [Harper releases page](https://github.com/Automattic/harper/releases).
+
+:::
+
+Verify the installation:
+
+```bash
+harper-cli --version
+```
+
+## What Gets Checked
+
+The proofreader scans all `.qmd` and `.md` files in your documentation site directory. It automatically skips:
+
+- **Fenced code blocks** - Content between ` ``` ` markers
+- **YAML frontmatter** - Content between `---` markers at the start of files
+
+Inline code (backticked text) is checked for typos.
+
+## Basic Usage
+
+Run the proofreader from your project directory:
+
+```bash
+great-docs proofread
+```
+
+This checks all documentation files and reports any issues found. By default, rules that tend to produce false positives in technical documentation are disabled.
+
+## Filtering by File
+
+Check specific files or patterns:
+
+```bash
+# Check one file
+great-docs proofread user-guide/getting-started.qmd
+
+# Check all files in a directory
+great-docs proofread recipes/
+```
+
+## Custom Dictionary
+
+### Adding Words on the Command Line
+
+For project-specific terminology, add custom words using `-d`:
+
+```bash
+great-docs proofread -d "griffe" -d "pkgdown" -d "navbar"
+```
+
+### Built-in Technical Dictionary
+
+Great Docs includes a built-in dictionary of common technical terms (API, CLI, PyPI, navbar, docstring, etc.) that are automatically accepted. To disable this:
+
+```bash
+great-docs proofread --no-builtin-dictionary
+```
+
+## Strict Mode
+
+The default settings skip rules that often produce false positives in technical writing. To enable all Harper rules:
+
+```bash
+great-docs proofread --strict
+```
+
+This is useful for final polishing or when writing prose-heavy content like blog posts.
+
+## Spelling-Only or Grammar-Only
+
+Focus on just one type of check:
+
+```bash
+# Only spelling errors
+great-docs proofread --spelling-only
+
+# Only grammar issues
+great-docs proofread --grammar-only
+```
+
+## English Dialect
+
+Harper supports different English dialects. The default is American English:
+
+```bash
+great-docs proofread --dialect British
+```
+
+Available dialects: `American` (default), `British`, `Australian`, `Canadian`.
+
+## Output Formats
+
+### Default Output
+
+The default output groups issues by file with context:
+
+```
+user-guide/getting-started.qmd:
+  Line 12: "recieve" - Did you mean "receive"?
+  Line 45: Consider using "use" instead of "utilize"
+```
+
+### Compact Output
+
+For a condensed one-line-per-issue format:
+
+```bash
+great-docs proofread --compact
+```
+
+### JSON Output
+
+For programmatic processing or CI integration:
+
+```bash
+great-docs proofread --json-output
+```
+
+## CI/CD Integration
+
+### GitHub Actions
+
+Add proofreading to your CI workflow:
+
+```{.yaml filename=".github/workflows/docs.yml"}
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  proofread:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Harper
+        run: cargo install harper-cli
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install great-docs
+
+      - name: Proofread documentation
+        run: great-docs proofread
+```
+
+### Pre-commit Hook
+
+Add proofreading as a pre-commit hook:
+
+```{.yaml filename=".pre-commit-config.yaml"}
+repos:
+  - repo: local
+    hooks:
+      - id: proofread
+        name: Proofread Documentation
+        entry: great-docs proofread
+        language: system
+        types: [markdown]
+        pass_filenames: false
+```
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | No issues found |
+| 1 | Issues found or error occurred |
+
+## Default Ignored Rules
+
+By default, these Harper rules are disabled because they frequently trigger on valid technical documentation patterns:
+
+- **Spacing rules** - Technical docs often have unconventional spacing around operators and in code
+- **Capitalization rules** - Many technical terms have specific capitalization (macOS, iOS)
+- **Compound word rules** - Technical terms like navbar, frontend, codebase are flagged as compounds
+- **Punctuation rules** - Quote marks and dashes in code examples differ from prose conventions
+
+Use `--strict` to enable all rules.
+
+## Best Practices
+
+1. **Install Harper in CI** - Use `cargo install harper-cli` in your workflow
+2. **Run proofread in CI** to catch issues before they reach production
+3. **Use `--strict` sparingly** - Default settings are tuned for technical docs
+4. **Add project-specific terms** with `-d` for domain-specific vocabulary
+5. **Combine with link checking** for comprehensive documentation QA:
+
+```bash
+great-docs check-links && great-docs proofread
+```
+
+## Programmatic Usage
+
+You can also use the proofreader programmatically:
+
+```python
+from great_docs import GreatDocs
+
+docs = GreatDocs()
+
+# Basic proofread
+results = docs.proofread()
+for file_result in results:
+    if file_result.issues:
+        print(f"{file_result.file}: {len(file_result.issues)} issues")
+
+# With custom dictionary
+results = docs.proofread(
+    custom_words=["griffe", "pkgdown"],
+)
+
+# Strict mode (all rules enabled)
+results = docs.proofread(strict=True)
+
+# Process results
+for file_result in results:
+    for issue in file_result.issues:
+        print(f"Line {issue.line}: {issue.message}")
+        if issue.suggestions:
+            print(f"  Suggestions: {issue.suggestions[:3]}")
+```
