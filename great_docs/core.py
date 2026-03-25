@@ -11191,6 +11191,268 @@ toc: false
             "skipped_files": skipped_files,
         }
 
+    def proofread(
+        self,
+        include_docs: bool = True,
+        include_docstrings: bool = False,
+        custom_dictionary: list[str] | None = None,
+        dialect: str = "us",
+        ignore_rules: list[str] | None = None,
+        only_rules: list[str] | None = None,
+        verbose: bool = False,
+    ) -> dict:
+        """
+        Check spelling and grammar in documentation files using Harper.
+
+        ::: {.callout-note}
+        In practice, you would normally use the `great-docs proofread` CLI command
+        rather than calling this method directly. See the
+        [CLI reference](cli/proofread.qmd) for details.
+        :::
+
+        This method uses Harper, a fast privacy-first grammar checker, to scan
+        documentation files (`.qmd`, `.md`) for spelling errors, grammatical issues,
+        style problems, and more. Harper runs locally and provides comprehensive
+        English language checking.
+
+        Parameters
+        ----------
+        include_docs
+            If `True`, scan documentation files (`.qmd`, `.md`). Default is `True`.
+        include_docstrings
+            If `True`, also scan Python docstrings in the package. Default is `False`.
+        custom_dictionary
+            List of additional words to consider correct (e.g., project-specific
+            terms, library names). Default is `None`.
+        dialect
+            English dialect: "us", "uk", "au", "in", "ca". Default is `"us"`.
+        ignore_rules
+            List of Harper rule names to skip (e.g., `["SentenceCapitalization"]`).
+            Default is `None`.
+        only_rules
+            List of Harper rule names to run exclusively (e.g., `["SpellCheck"]`).
+            Default is `None`.
+        verbose
+            If `True`, print detailed progress information. Default is `False`.
+
+        Returns
+        -------
+        dict
+            A dictionary containing:
+
+            - `files_checked`: number of files checked
+            - `total_issues`: total number of issues found
+            - `by_kind`: dict mapping lint kind to count (e.g., "Spelling", "Grammar")
+            - `by_rule`: dict mapping rule name to count (e.g., "SpellCheck")
+            - `issues`: list of issue dicts with file, line, column, message, etc.
+            - `by_file`: dict mapping file paths to their issues
+
+        Raises
+        ------
+        RuntimeError
+            If harper-cli is not installed.
+
+        Examples
+        --------
+        Check all documentation:
+
+        ```python
+        from great_docs import GreatDocs
+
+        docs = GreatDocs()
+        results = docs.proofread()
+
+        print(f"Checked {results['files_checked']} files")
+        print(f"Issues: {results['total_issues']}")
+
+        for issue in results["issues"]:
+            print(f"  {issue['file']}:{issue['line']} - {issue['message']}")
+        ```
+
+        Check with custom dictionary:
+
+        ```python
+        results = docs.proofread(
+            custom_dictionary=["griffe", "quartodoc", "navbar"]
+        )
+        ```
+
+        Check only spelling:
+
+        ```python
+        results = docs.proofread(only_rules=["SpellCheck"])
+        ```
+        """
+        import tempfile
+        from collections import defaultdict
+
+        from ._harper import (
+            HarperNotFoundError,
+            HarperError,
+            HarperFileResult,
+            run_harper,
+            run_harper_on_text,
+        )
+
+        # Collect files to check
+        files_to_check: list[Path] = []
+
+        if include_docs:
+            # Scan user_guide directory if it exists
+            user_guide_dir = self.project_root / "user_guide"
+            if user_guide_dir.exists():
+                files_to_check.extend(user_guide_dir.rglob("*.qmd"))
+                files_to_check.extend(user_guide_dir.rglob("*.md"))
+
+            # Check README in project root
+            readme = self.project_root / "README.md"
+            if readme.exists():
+                files_to_check.append(readme)
+
+            # Check recipes if they exist
+            recipes_dir = self.project_root / "recipes"
+            if recipes_dir.exists():
+                files_to_check.extend(recipes_dir.rglob("*.qmd"))
+                files_to_check.extend(recipes_dir.rglob("*.md"))
+
+        # Add Python files if checking docstrings
+        py_files: list[Path] = []
+        if include_docstrings:
+            package_dir = self.project_root / self._detect_package_name()
+            if package_dir.exists():
+                py_files.extend(package_dir.rglob("*.py"))
+
+        # Build custom dictionary file if needed
+        dict_path = None
+        if custom_dictionary:
+            tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+            tmp.write("\n".join(custom_dictionary))
+            tmp.close()
+            dict_path = tmp.name
+
+        all_results: list[HarperFileResult] = []
+
+        try:
+            # Separate files by type
+            md_files = [f for f in files_to_check if f.suffix == ".md"]
+            qmd_files = [f for f in files_to_check if f.suffix == ".qmd"]
+
+            # Check .md files directly
+            if md_files:
+                if verbose:
+                    print(f"Checking {len(md_files)} Markdown file(s)...")
+
+                results = run_harper(
+                    md_files,
+                    dialect=dialect,
+                    user_dict_path=dict_path,
+                    ignore_rules=ignore_rules,
+                    only_rules=only_rules,
+                )
+                all_results.extend(results)
+
+            # Check .qmd files via stdin (Harper doesn't recognize extension)
+            for qmd_file in qmd_files:
+                if verbose:
+                    print(f"Checking {qmd_file.name}...")
+
+                try:
+                    content = qmd_file.read_text(encoding="utf-8")
+                    lints = run_harper_on_text(
+                        content,
+                        dialect=dialect,
+                        user_dict_path=dict_path,
+                        ignore_rules=ignore_rules,
+                        only_rules=only_rules,
+                    )
+
+                    rel_path = str(qmd_file.relative_to(self.project_root))
+                    for lint in lints:
+                        lint.file = rel_path
+
+                    all_results.append(
+                        HarperFileResult(
+                            file=rel_path,
+                            lint_count=len(lints),
+                            lints=lints,
+                            error=None,
+                        )
+                    )
+                except Exception as e:
+                    rel_path = str(qmd_file.relative_to(self.project_root))
+                    all_results.append(
+                        HarperFileResult(
+                            file=rel_path,
+                            lint_count=0,
+                            lints=[],
+                            error=str(e),
+                        )
+                    )
+
+            # Check Python files if requested
+            if py_files:
+                if verbose:
+                    print(f"Checking {len(py_files)} Python file(s)...")
+
+                results = run_harper(
+                    py_files,
+                    dialect=dialect,
+                    user_dict_path=dict_path,
+                    ignore_rules=ignore_rules,
+                    only_rules=only_rules,
+                )
+                all_results.extend(results)
+
+        except HarperNotFoundError as e:
+            raise RuntimeError(str(e)) from e
+        except HarperError as e:
+            raise RuntimeError(f"Harper error: {e}") from e
+        finally:
+            # Clean up temp dictionary file
+            if dict_path:
+                try:
+                    Path(dict_path).unlink()
+                except Exception:
+                    pass
+
+        # Aggregate results
+        total_issues = sum(r.lint_count for r in all_results)
+        by_kind: dict[str, int] = defaultdict(int)
+        by_rule: dict[str, int] = defaultdict(int)
+        by_file: dict[str, list[dict]] = {}
+        all_issues: list[dict] = []
+
+        for result in all_results:
+            if result.lints:
+                by_file[result.file] = []
+
+            for lint in result.lints:
+                by_kind[lint.kind] += 1
+                by_rule[lint.rule] += 1
+
+                issue = {
+                    "file": lint.file,
+                    "line": lint.line,
+                    "column": lint.column,
+                    "kind": lint.kind,
+                    "rule": lint.rule,
+                    "message": lint.message,
+                    "matched_text": lint.matched_text,
+                    "suggestions": lint.suggestions,
+                    "priority": lint.priority,
+                }
+                all_issues.append(issue)
+                by_file[result.file].append(issue)
+
+        return {
+            "files_checked": len(files_to_check) + len(py_files),
+            "total_issues": total_issues,
+            "by_kind": dict(by_kind),
+            "by_rule": dict(by_rule),
+            "issues": all_issues,
+            "by_file": by_file,
+        }
+
     def _check_docstring_spelling(
         self,
         package_name: str,
