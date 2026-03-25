@@ -1,0 +1,172 @@
+---
+title: "Proofread Your Documentation"
+description: "Catch spelling and grammar issues with the built-in proofreader."
+---
+
+# Proofread Your Documentation
+
+Great Docs includes a `proofread` command that checks your documentation for spelling mistakes, grammar issues, and common writing problems. It uses [Harper](https://github.com/Automattic/harper), a fast, privacy-focused grammar checker that runs entirely on your machine—no data leaves your computer.
+
+## Install Harper
+
+The proofreader requires Harper to be installed separately. It's a single binary with no dependencies:
+
+::: {.panel-tabset}
+
+### macOS (Homebrew)
+
+```{.bash filename="Terminal"}
+brew install harper
+```
+
+### Any Platform (Cargo)
+
+If you have Rust's package manager installed:
+
+```{.bash filename="Terminal"}
+cargo install harper-cli
+```
+
+### Manual Download
+
+Download pre-built binaries from the [Harper releases page](https://github.com/Automattic/harper/releases).
+
+:::
+
+Verify the installation:
+
+```{.bash filename="Terminal"}
+harper-cli --version
+```
+
+## Basic Usage
+
+Run the proofreader on your documentation site:
+
+```{.bash filename="Terminal"}
+great-docs proofread
+```
+
+This checks all `.qmd` and `.md` files in your site directory and reports any issues found. By default, a number of rules are disabled that tend to produce false positives in technical documentation (like flagging code terms or formatting conventions).
+
+## Filtering by File
+
+Check specific files or patterns:
+
+```{.bash filename="Terminal"}
+# Check one file
+great-docs proofread user-guide/getting-started.qmd
+
+# Check all files in a directory
+great-docs proofread recipes/
+```
+
+## Adding Custom Dictionary Words
+
+Technical documentation often includes domain-specific terms that aren't in standard dictionaries. Add them with the `-d` or `--dictionary` option:
+
+```{.bash filename="Terminal"}
+great-docs proofread -d myterm -d anotherterm
+```
+
+For persistent dictionary additions, create a file with one word per line and use shell expansion:
+
+```{.bash filename="Terminal"}
+# words.txt contains one word per line
+great-docs proofread -d $(cat words.txt | tr '\n' ' ')
+```
+
+Great Docs includes a built-in dictionary of common technical terms (like "API", "CLI", "PyPI", "navbar", etc.) that are automatically accepted.
+
+## Strict Mode
+
+The default settings skip rules that often produce false positives in technical writing. To enable all Harper rules:
+
+```{.bash filename="Terminal"}
+great-docs proofread --strict
+```
+
+This is useful for final polishing or when writing prose-heavy content like blog posts.
+
+## Spelling-Only or Grammar-Only
+
+Focus on just one type of check:
+
+```{.bash filename="Terminal"}
+# Only spelling errors
+great-docs proofread --spelling-only
+
+# Only grammar issues
+great-docs proofread --grammar-only
+```
+
+## Machine-Readable Output
+
+For CI integration or scripting, use JSON output:
+
+```{.bash filename="Terminal"}
+great-docs proofread --json-output
+```
+
+Or a compact one-line-per-issue format:
+
+```{.bash filename="Terminal"}
+great-docs proofread --compact
+```
+
+## CI Integration
+
+Add proofreading to your CI pipeline to catch issues before they reach production:
+
+```{.yaml filename=".github/workflows/docs.yml"}
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Harper
+        run: cargo install harper-cli
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install great-docs
+
+      - name: Proofread documentation
+        run: great-docs proofread
+```
+
+The command exits with a non-zero status if any issues are found, so CI will fail on spelling or grammar problems.
+
+## What Gets Checked
+
+The proofreader examines:
+
+- All `.qmd` and `.md` files in your site directory
+- Prose content only—fenced code blocks and YAML frontmatter are automatically skipped
+- Inline code (backticked text) is checked for typos
+
+## Default Ignored Rules
+
+By default, these Harper rules are disabled because they frequently trigger on valid technical documentation patterns:
+
+- **Spacing rules**: Technical docs often have unconventional spacing around operators and in code
+- **Capitalization rules**: Many technical terms have specific capitalization (e.g., "macOS", "iOS")
+- **Compound word rules**: Technical terms like "navbar", "frontend", "codebase" are flagged as compounds
+- **Punctuation rules**: Quote marks and dashes in code examples differ from prose conventions
+
+Use `--strict` to enable all rules if you want maximum coverage.
+
+## Dialect Support
+
+Harper supports different English dialects. The default is American English. To use British English:
+
+```{.bash filename="Terminal"}
+great-docs proofread --dialect British
+```
+
+Available dialects: `American` (default), `British`, `Australian`, `Canadian`.
