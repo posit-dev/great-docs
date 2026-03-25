@@ -824,8 +824,22 @@ def spell_check(
     verbose,
     json_output,
 ):
-    """Check spelling in documentation files.
+    """[DEPRECATED] Check spelling in documentation files.
 
+    ⚠️  This command is deprecated. Use 'great-docs proofread' instead.
+
+    The proofread command uses Harper, a fast grammar checker that provides:
+    - Spelling AND grammar checking in one pass
+    - Better suggestions with context
+    - More rule categories (style, punctuation, etc.)
+    - Custom dictionary support
+
+    \b
+    Migration:
+      great-docs spell-check           →  great-docs proofread --spelling-only
+      great-docs spell-check -d word   →  great-docs proofread -d word
+
+    Original description:
     This command scans documentation files (.qmd, .md) for spelling errors.
     It intelligently skips code blocks, inline code, URLs, and technical terms.
 
@@ -843,6 +857,15 @@ def spell_check(
       great-docs spell-check --json-output          # Output as JSON
     """
     import json as json_module
+
+    # Show deprecation warning
+    if not json_output:
+        click.echo(
+            "\n⚠️  DEPRECATION WARNING: 'spell-check' is deprecated.\n"
+            "   Use 'great-docs proofread' instead for better results.\n"
+            "   Migration: great-docs proofread --spelling-only\n",
+            err=True,
+        )
 
     try:
         docs = GreatDocs(project_path=project_path)
@@ -987,6 +1010,476 @@ def changelog(project_path: str | None, max_releases: int | None) -> None:
 
 
 cli.add_command(changelog)
+
+
+@click.command()
+@click.option(
+    "--project-path",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Path to your project root directory (default: current directory)",
+)
+@click.option(
+    "--docs-dir",
+    type=str,
+    help="Path to documentation directory relative to project root",
+)
+@click.option(
+    "--include-docstrings",
+    is_flag=True,
+    help="Also check Python docstrings",
+)
+@click.option(
+    "--spelling-only",
+    is_flag=True,
+    help="Only check spelling (SpellCheck rule)",
+)
+@click.option(
+    "--grammar-only",
+    is_flag=True,
+    help="Exclude spelling, check grammar/style only",
+)
+@click.option(
+    "--only",
+    "only_rules",
+    type=str,
+    help="Only run these rules (comma-separated)",
+)
+@click.option(
+    "--ignore",
+    "ignore_rules",
+    type=str,
+    help="Skip these rules (comma-separated)",
+)
+@click.option(
+    "-d",
+    "--dictionary",
+    "custom_words",
+    multiple=True,
+    help="Additional word(s) to consider correct (can be used multiple times)",
+)
+@click.option(
+    "--dictionary-file",
+    type=click.Path(exists=True),
+    help="Path to file with custom words (one per line)",
+)
+@click.option(
+    "--dialect",
+    type=click.Choice(["us", "uk", "au", "in", "ca"], case_sensitive=False),
+    default="us",
+    help="English dialect (default: us)",
+)
+@click.option(
+    "-v",
+    "--verbose",
+    is_flag=True,
+    help="Show detailed progress for each file checked",
+)
+@click.option(
+    "--json-output",
+    is_flag=True,
+    help="Output results as JSON for CI",
+)
+@click.option(
+    "--compact",
+    is_flag=True,
+    help="One line per issue (GCC-style output)",
+)
+@click.option(
+    "--max-issues",
+    type=int,
+    default=None,
+    help="Exit with error if more than N issues found",
+)
+@click.option(
+    "--strict",
+    is_flag=True,
+    help="Disable smart defaults (check everything, no builtin dictionary)",
+)
+@click.option(
+    "--no-builtin-dictionary",
+    is_flag=True,
+    help="Don't add built-in technical terms to dictionary",
+)
+@click.argument("files", nargs=-1, type=click.Path(exists=True))
+def proofread(
+    project_path,
+    docs_dir,
+    include_docstrings,
+    spelling_only,
+    grammar_only,
+    only_rules,
+    ignore_rules,
+    custom_words,
+    dictionary_file,
+    dialect,
+    verbose,
+    json_output,
+    compact,
+    max_issues,
+    strict,
+    no_builtin_dictionary,
+    files,
+):
+    """Check spelling and grammar in documentation files using Harper.
+
+    Harper is a fast, privacy-first grammar checker that runs locally.
+    It checks spelling, grammar, punctuation, and style in a single pass.
+
+    \b
+    By default, checks all documentation files (.qmd, .md) in the project.
+    Uses smart defaults to reduce noise in technical documentation:
+      - Ignores formatting rules that conflict with code/YAML (unless --strict)
+      - Includes a built-in dictionary of technical terms (unless --no-builtin-dictionary)
+
+    \b
+    Examples:
+      great-docs proofread                         # Check all docs (smart defaults)
+      great-docs proofread --strict                # Check everything (no smart defaults)
+      great-docs proofread --spelling-only         # Just spelling
+      great-docs proofread --dialect=uk            # UK English
+      great-docs proofread -d griffe -d quartodoc  # Add custom words
+      great-docs proofread --json-output           # JSON output for CI
+      great-docs proofread --ignore=SpellCheck     # Skip specific rules
+      great-docs proofread README.md user_guide/*.qmd  # Specific files
+
+    \b
+    Requires harper-cli to be installed:
+      brew install harper      # macOS
+      cargo install harper-cli # any platform
+    """
+    import json as json_module
+    import tempfile
+    from collections import defaultdict
+
+    from ._harper import (
+        HarperError,
+        HarperNotFoundError,
+        check_harper_available,
+        get_builtin_dictionary,
+        get_default_ignore_rules,
+        run_harper,
+        run_harper_on_text,
+    )
+
+    try:
+        # Check if Harper is available
+        available, harper_info = check_harper_available()
+        if not available:
+            click.echo(f"Error: {harper_info}", err=True)
+            sys.exit(3)
+
+        if verbose and not json_output and not compact:
+            click.echo(f"\n🔍 Proofreading with {harper_info}...\n")
+            if not strict:
+                click.echo("Using smart defaults for technical docs. Use --strict to disable.\n")
+
+        # Determine files to check
+        docs = GreatDocs(project_path=project_path)
+        files_to_check: list[Path] = []
+
+        if files:
+            # User specified files
+            files_to_check = [Path(f) for f in files]
+        else:
+            # Auto-discover documentation files
+            user_guide_dir = docs.project_root / "user_guide"
+            if user_guide_dir.exists():
+                files_to_check.extend(user_guide_dir.rglob("*.qmd"))
+                files_to_check.extend(user_guide_dir.rglob("*.md"))
+
+            # Check README
+            readme = docs.project_root / "README.md"
+            if readme.exists():
+                files_to_check.append(readme)
+
+            # Check recipes if they exist
+            recipes_dir = docs.project_root / "recipes"
+            if recipes_dir.exists():
+                files_to_check.extend(recipes_dir.rglob("*.qmd"))
+                files_to_check.extend(recipes_dir.rglob("*.md"))
+
+        if not files_to_check:
+            click.echo("No documentation files found to check.", err=True)
+            sys.exit(0)
+
+        # Build custom dictionary file
+        # Start with builtin dictionary unless disabled
+        dict_path = None
+        words = []
+
+        if not strict and not no_builtin_dictionary:
+            words.extend(get_builtin_dictionary())
+
+        # Add user-provided words
+        if custom_words:
+            words.extend(custom_words)
+
+        # Load from dictionary file if provided
+        if dictionary_file:
+            try:
+                with open(dictionary_file, "r", encoding="utf-8") as f:
+                    for line in f:
+                        word = line.strip()
+                        if word and not word.startswith("#"):
+                            words.append(word)
+            except Exception as e:
+                click.echo(f"Warning: Could not read dictionary file: {e}", err=True)
+
+        if words:
+            # Create temporary dictionary file
+            tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+            tmp.write("\n".join(words))
+            tmp.close()
+            dict_path = tmp.name
+
+        # Build rule filters
+        only = None
+        ignore = None
+
+        # Start with default ignores for technical docs (unless --strict)
+        if not strict:
+            ignore = get_default_ignore_rules()
+
+        if spelling_only:
+            only = ["SpellCheck"]
+        elif grammar_only:
+            ignore = (ignore or []) + ["SpellCheck"]
+
+        if only_rules:
+            only = only_rules.split(",") if only is None else only + only_rules.split(",")
+
+        if ignore_rules:
+            ignore = ignore_rules.split(",") if ignore is None else ignore + ignore_rules.split(",")
+
+        # Separate files by type (Harper doesn't recognize .qmd)
+        md_files = [f for f in files_to_check if f.suffix == ".md"]
+        qmd_files = [f for f in files_to_check if f.suffix == ".qmd"]
+        py_files = [f for f in files_to_check if f.suffix == ".py"]
+
+        all_results = []
+
+        # Check .md files directly
+        if md_files:
+            if verbose and not json_output and not compact:
+                click.echo(f"Checking {len(md_files)} Markdown file(s)...\n")
+
+            results = run_harper(
+                md_files,
+                dialect=dialect,
+                user_dict_path=dict_path,
+                ignore_rules=ignore,
+                only_rules=only,
+            )
+            all_results.extend(results)
+
+        # Check .qmd files via stdin (Harper doesn't recognize extension)
+        # We extract prose only (skip code blocks) to avoid false positives
+        for qmd_file in qmd_files:
+            if verbose and not json_output and not compact:
+                click.echo(f"Checking {qmd_file.name}...")
+
+            try:
+                from ._harper import extract_prose_from_markdown
+
+                content = qmd_file.read_text(encoding="utf-8")
+
+                # Extract prose sections, skipping fenced code blocks and frontmatter
+                prose_content, line_mapping = extract_prose_from_markdown(content)
+
+                lints = run_harper_on_text(
+                    prose_content,
+                    dialect=dialect,
+                    user_dict_path=dict_path,
+                    ignore_rules=ignore,
+                    only_rules=only,
+                )
+
+                # Convert to file result with proper path and remap line numbers
+                from ._harper import HarperFileResult
+
+                rel_path = str(qmd_file.relative_to(docs.project_root))
+                for lint in lints:
+                    lint.file = rel_path
+                    # Remap line number from prose content back to original file
+                    if lint.line in line_mapping:
+                        lint.line = line_mapping[lint.line]
+
+                all_results.append(
+                    HarperFileResult(
+                        file=rel_path,
+                        lint_count=len(lints),
+                        lints=lints,
+                        error=None,
+                    )
+                )
+            except Exception as e:
+                from ._harper import HarperFileResult
+
+                rel_path = str(qmd_file.relative_to(docs.project_root))
+                all_results.append(
+                    HarperFileResult(
+                        file=rel_path,
+                        lint_count=0,
+                        lints=[],
+                        error=str(e),
+                    )
+                )
+
+        # Check Python files if requested
+        if include_docstrings and py_files:
+            if verbose and not json_output and not compact:
+                click.echo(f"\nChecking {len(py_files)} Python file(s) for docstrings...\n")
+
+            results = run_harper(
+                py_files,
+                dialect=dialect,
+                user_dict_path=dict_path,
+                ignore_rules=ignore,
+                only_rules=only,
+            )
+            all_results.extend(results)
+
+        # Clean up temp dictionary file
+        if dict_path:
+            try:
+                Path(dict_path).unlink()
+            except Exception:
+                pass
+
+        # Aggregate results
+        total_issues = sum(r.lint_count for r in all_results)
+        files_with_issues = sum(1 for r in all_results if r.lint_count > 0)
+
+        # Group by kind and rule
+        by_kind = defaultdict(int)
+        by_rule = defaultdict(int)
+        all_lints = []
+
+        for result in all_results:
+            for lint in result.lints:
+                by_kind[lint.kind] += 1
+                by_rule[lint.rule] += 1
+                all_lints.append(lint)
+
+        # Output results
+        if json_output:
+            output = {
+                "version": "1.0.0",
+                "harper_version": harper_info.split()[-1] if harper_info else "unknown",
+                "dialect": dialect,
+                "files_checked": len(files_to_check),
+                "total_issues": total_issues,
+                "summary": {
+                    "by_kind": dict(by_kind),
+                    "by_rule": dict(by_rule),
+                },
+                "issues": [
+                    {
+                        "file": lint.file,
+                        "line": lint.line,
+                        "column": lint.column,
+                        "kind": lint.kind,
+                        "rule": lint.rule,
+                        "message": lint.message,
+                        "matched_text": lint.matched_text,
+                        "suggestions": lint.suggestions,
+                        "priority": lint.priority,
+                    }
+                    for lint in all_lints
+                ],
+            }
+            click.echo(json_module.dumps(output, indent=2))
+
+        elif compact:
+            # GCC-style output: file:line:col: kind::rule: message
+            for lint in all_lints:
+                click.echo(
+                    f"{lint.file}:{lint.line}:{lint.column}: "
+                    f"{lint.kind}::{lint.rule}: {lint.message}"
+                )
+
+        else:
+            # Human-readable output
+            if all_results:
+                for result in all_results:
+                    if result.lint_count > 0:
+                        click.echo(f"\n📄 {result.file} ({result.lint_count} issue(s))")
+                        for lint in result.lints:
+                            # Clean up suggestion format
+                            suggestion = ""
+                            if lint.suggestions:
+                                first_sugg = lint.suggestions[0]
+                                # Harper suggestions often have "Replace with: " prefix
+                                if "Replace with:" in first_sugg:
+                                    first_sugg = first_sugg.replace("Replace with:", "→").strip()
+                                    first_sugg = first_sugg.strip('"').strip('"').strip('"')
+                                suggestion = f" {first_sugg}"
+
+                            click.echo(
+                                f"   Line {lint.line}, Col {lint.column} "
+                                f'[{lint.kind}] "{lint.matched_text}"{suggestion}'
+                            )
+                            if verbose:
+                                click.echo(f"      {lint.message}")
+                    elif verbose and result.error is None:
+                        click.echo(f"✅ {result.file}")
+
+            # Print summary
+            click.echo("\n" + "═" * 66)
+            click.echo("📊 Proofread Results")
+            click.echo("═" * 66)
+
+            click.echo(f"\n   Files checked: {len(files_to_check)}")
+            click.echo(f"   Issues found: {total_issues}")
+
+            if by_kind:
+                click.echo("\n   By category:")
+                for kind, count in sorted(by_kind.items(), key=lambda x: -x[1]):
+                    click.echo(f"     {kind}: {count}")
+
+            if verbose and by_rule:
+                click.echo("\n   By rule:")
+                for rule, count in sorted(by_rule.items(), key=lambda x: -x[1]):
+                    click.echo(f"     {rule}: {count}")
+
+            click.echo("\n" + "─" * 66)
+
+            if total_issues > 0:
+                click.echo("💡 Tips:")
+                click.echo("   • Add custom words: -d word1 -d word2")
+                click.echo("   • Create dictionary: .great-docs-dictionary (one word per line)")
+                click.echo("   • Disable a rule: --ignore SentenceCapitalization")
+                click.echo("   • List all rules: harper-cli config")
+                click.echo("─" * 66)
+
+        # Determine exit code
+        if max_issues is not None and total_issues > max_issues:
+            if not json_output and not compact:
+                click.echo(
+                    f"\n⚠️  Found {total_issues} issue(s), exceeds threshold of {max_issues}."
+                )
+            sys.exit(1)
+        elif total_issues > 0:
+            if not json_output and not compact:
+                click.echo(f"\n⚠️  Found {total_issues} issue(s).")
+            sys.exit(1)
+        else:
+            if not json_output and not compact:
+                click.echo("\n✅ No issues found!")
+            sys.exit(0)
+
+    except HarperNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(3)
+    except HarperError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(2)
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
+cli.add_command(proofread)
 
 
 def main() -> None:
