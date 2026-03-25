@@ -2761,46 +2761,101 @@ def inject_page_metadata():
         modified_date = ""
         created_date = ""
 
+        # Parse frontmatter once (used for dates and author)
+        frontmatter = {}
+        if source_file and os.path.exists(source_file):
+            try:
+                with open(source_file, "r", encoding="utf-8") as f:
+                    content = f.read()
+                if content.startswith("---"):
+                    parts = content.split("---", 2)
+                    if len(parts) >= 3:
+                        import yaml
+
+                        try:
+                            frontmatter = yaml.safe_load(parts[1]) or {}
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
         if is_auto_generated:
             # Auto-generated: use build timestamp
             modified_date = build_timestamp
         elif source_file and os.path.exists(source_file):
-            # Try git dates first, fall back to mtime
-            try:
-                import subprocess
+            # Check frontmatter for last_update override (like Docusaurus)
+            # Format: last_update: {date: "2024-01-15", author: "Name"}
+            # Or: last_update: {date: "2024-01-15T10:30:00Z"}
+            last_update = frontmatter.get("last_update", {})
+            if isinstance(last_update, dict) and last_update.get("date"):
+                from datetime import datetime
 
-                # Run git from project root
-                result = subprocess.run(
-                    ["git", "log", "-1", "--format=%aI", "--", source_file],
-                    cwd=project_root,
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-                if result.returncode == 0 and result.stdout.strip():
-                    modified_date = result.stdout.strip()
+                date_str = str(last_update["date"])
+                try:
+                    # Try ISO format first
+                    if "T" in date_str:
+                        modified_date = date_str
+                    else:
+                        # Parse date-only and add time
+                        dt = datetime.fromisoformat(date_str)
+                        modified_date = dt.isoformat()
+                except Exception:
+                    pass
 
-                # Creation date (first commit)
-                result = subprocess.run(
-                    [
-                        "git",
-                        "log",
-                        "--diff-filter=A",
-                        "--follow",
-                        "--format=%aI",
-                        "--",
-                        source_file,
-                    ],
-                    cwd=project_root,
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-                if result.returncode == 0 and result.stdout.strip():
-                    lines = result.stdout.strip().split("\n")
-                    created_date = lines[-1].strip()
-            except Exception:
-                pass
+            # Check frontmatter for date_created override
+            date_created = frontmatter.get("date_created")
+            if date_created:
+                from datetime import datetime
+
+                date_str = str(date_created)
+                try:
+                    if "T" in date_str:
+                        created_date = date_str
+                    else:
+                        dt = datetime.fromisoformat(date_str)
+                        created_date = dt.isoformat()
+                except Exception:
+                    pass
+
+            # Fall back to git dates if not in frontmatter
+            if not modified_date or not created_date:
+                try:
+                    import subprocess
+
+                    if not modified_date:
+                        # Run git from project root
+                        result = subprocess.run(
+                            ["git", "log", "-1", "--format=%aI", "--", source_file],
+                            cwd=project_root,
+                            capture_output=True,
+                            text=True,
+                            timeout=5,
+                        )
+                        if result.returncode == 0 and result.stdout.strip():
+                            modified_date = result.stdout.strip()
+
+                    if not created_date:
+                        # Creation date (first commit)
+                        result = subprocess.run(
+                            [
+                                "git",
+                                "log",
+                                "--diff-filter=A",
+                                "--follow",
+                                "--format=%aI",
+                                "--",
+                                source_file,
+                            ],
+                            cwd=project_root,
+                            capture_output=True,
+                            text=True,
+                            timeout=5,
+                        )
+                        if result.returncode == 0 and result.stdout.strip():
+                            lines = result.stdout.strip().split("\n")
+                            created_date = lines[-1].strip()
+                except Exception:
+                    pass
 
             # Fallback to mtime
             if not modified_date:
@@ -2812,35 +2867,26 @@ def inject_page_metadata():
             # No source file found - skip metadata for this page
             continue
 
-        # Parse author from the source file frontmatter (for QMD files)
+        # Parse author from frontmatter (already loaded above)
         author_name = ""
         author_image = ""
         author_url = ""
 
         if show_author and not is_auto_generated and source_file:
-            # Try to read author from source file frontmatter (QMD or MD files)
-            try:
-                with open(source_file, "r", encoding="utf-8") as f:
-                    content = f.read()
-                if content.startswith("---"):
-                    parts = content.split("---", 2)
-                    if len(parts) >= 3:
-                        import yaml
+            # Check last_update for author override
+            last_update = frontmatter.get("last_update", {})
+            if isinstance(last_update, dict) and last_update.get("author"):
+                author_name = str(last_update["author"])
 
-                        try:
-                            fm = yaml.safe_load(parts[1])
-                            if fm:
-                                author = fm.get("author")
-                                if isinstance(author, str):
-                                    author_name = author
-                                elif isinstance(author, dict):
-                                    author_name = author.get("name", "")
-                                    author_image = author.get("image", "")
-                                    author_url = author.get("url", "")
-                        except Exception:
-                            pass
-            except Exception:
-                pass
+            # Fall back to regular author field
+            if not author_name:
+                author = frontmatter.get("author")
+                if isinstance(author, str):
+                    author_name = author
+                elif isinstance(author, dict):
+                    author_name = author.get("name", "")
+                    author_image = author.get("image", "")
+                    author_url = author.get("url", "")
 
             # Look up author details from config if not in frontmatter
             if author_name and not author_image:
