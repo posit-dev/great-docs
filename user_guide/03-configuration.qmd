@@ -680,6 +680,54 @@ Great Docs determines dates from Git history when available:
 
 If Git history is unavailable (e.g., shallow clones in CI), the file system timestamps are used as a fallback.
 
+### Overriding Dates in Frontmatter
+
+You can override Git-derived dates using frontmatter, which is useful when:
+
+- you want to set a specific "last updated" date
+- git history is unavailable or incorrect (shallow clones, file renames)
+- you're migrating content from another system
+
+```{.yaml filename="guide.qmd"}
+---
+title: "Getting Started"
+last_update:
+  date: "2026-01-15"
+  author: "Jane Developer"
+date_created: "2024-06-01"
+---
+```
+
+The `last_update` field follows this format:
+
+- `date`: ISO date string (with or without time/timezone)
+- `author`: optional author name override
+
+Frontmatter values take precedence over Git history. If only `last_update.date` is provided, the creation date still comes from Git.
+
+### CI/CD Considerations
+
+In CI environments like GitHub Actions, the default checkout only fetches the latest commit (shallow clone). This means all pages would show identical timestamps.
+
+The `great-docs setup-github-pages` command generates a workflow with full Git history enabled:
+
+```yaml
+- uses: actions/checkout@v6
+  with:
+    fetch-depth: 0  # Full history for accurate timestamps
+```
+
+For large repositories, you can use sparse checkout to speed up builds while still getting full history for documentation files:
+
+```yaml
+- uses: actions/checkout@v6
+  with:
+    fetch-depth: 0
+    sparse-checkout: |
+      user_guide
+      recipes
+```
+
 ### Auto-Generated Pages
 
 Pages that Great Docs generates automatically (API reference, changelog, CLI reference) show a "Refreshed" timestamp instead:

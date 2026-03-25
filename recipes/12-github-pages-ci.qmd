@@ -52,6 +52,29 @@ on:
     python-version: "3.12"  # Pin to a specific version
 ```
 
+### Full Git History for Page Timestamps
+
+Great Docs displays "Created" and "Last updated" timestamps on documentation pages using Git history. The generated workflow already includes `fetch-depth: 0` to enable this:
+
+```yaml
+- uses: actions/checkout@v6
+  with:
+    fetch-depth: 0  # Full history for accurate page timestamps
+```
+
+Without full history (the default shallow clone), all pages would show identical timestamps. If you have a very large repository and want faster builds, you can use sparse checkout to fetch full history only for documentation files:
+
+```yaml
+- uses: actions/checkout@v6
+  with:
+    fetch-depth: 0
+    sparse-checkout: |
+      user_guide
+      recipes
+      README.md
+      ROADMAP.md
+```
+
 ### Add a Changelog Token
 
 The changelog feature needs API access to fetch releases. In GitHub Actions, `GITHUB_TOKEN` is available automatically:

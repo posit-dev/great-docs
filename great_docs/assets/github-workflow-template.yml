@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0  # Full history for accurate page timestamps
+          fetch-depth: 0 # Full history for accurate page timestamps
 
       - uses: actions/setup-python@v6
         with:
