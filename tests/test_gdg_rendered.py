@@ -4205,7 +4205,10 @@ def test_R5_gradient_css_has_dark_variant(pkg, preset):
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
     css = _deployed_css(pkg)
-    assert f'[data-bs-theme="dark"] .gd-gradient-{preset}' in css
+    # CSS can have quoted or unquoted attribute values (minified removes quotes)
+    quoted = f'html[data-bs-theme="dark"] .gd-gradient-{preset}'
+    unquoted = f"html[data-bs-theme=dark] .gd-gradient-{preset}"
+    assert quoted in css or unquoted in css
 
 
 @pytest.mark.parametrize("pkg,preset", _GRADIENT_PRESETS, ids=[p for _, p in _GRADIENT_PRESETS])
