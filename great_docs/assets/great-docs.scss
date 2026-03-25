@@ -3993,7 +3993,7 @@ html[data-bs-theme="dark"] .gd-skills-file-heading {
 
     // Timestamp text (hoverable for absolute date tooltip)
     .gd-timestamp {
-        cursor: help;
+        // Native title tooltip on hover
     }
 
     // Separator between dates and authors
@@ -4023,7 +4023,6 @@ html[data-bs-theme="dark"] .gd-skills-file-heading {
         object-fit: cover;
         flex-shrink: 0;
         border: 2px solid $gray-300;
-        cursor: help;
         transition: border-color 0.15s ease;
 
         &:hover {
@@ -4044,7 +4043,6 @@ html[data-bs-theme="dark"] .gd-skills-file-heading {
         font-weight: 600;
         font-size: 0.7rem;
         flex-shrink: 0;
-        cursor: help;
         border: 2px solid transparent;
         transition: border-color 0.15s ease;
 
