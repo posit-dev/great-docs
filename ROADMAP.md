@@ -133,17 +133,6 @@ Add icon support for sidebar and navbar entries.
 - Dark mode color adaptation
 - Consistent sizing and alignment across navigation levels
 
-### Custom Tooltips
-
-Replace native browser `title` tooltips with styled, consistent tooltips.
-
-- Instant appearance (no 400ms delay)
-- Consistent styling across all browsers
-- Dark mode support
-- Smart positioning (i.e., avoids viewport edges)
-- Optional arrow pointing to element
-- Convert existing `title` attributes site-wide (copy buttons, dark mode toggle, GitHub widget, page metadata, citation links)
-
 ---
 
 ## Planned — Medium Term

@@ -2547,6 +2547,14 @@ def fix_script_paths():
             content = content.replace(old_page_meta, new_page_meta)
             modified = True
 
+        # Fix tooltips.js path
+        old_tooltips = '<script src="tooltips.js"></script>'
+        new_tooltips = f'<script src="{prefix}tooltips.js"></script>'
+
+        if old_tooltips in content:
+            content = content.replace(old_tooltips, new_tooltips)
+            modified = True
+
         if modified:
             with open(html_file, "w") as file:
                 file.write(content)

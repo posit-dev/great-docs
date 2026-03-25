@@ -152,6 +152,7 @@ class GreatDocs:
             "dark-mode-toggle.js",
             "theme-init.js",
             "copy-code.js",
+            "tooltips.js",
         ]
         if self._config.markdown_pages_widget:
             js_files.append("copy-page.js")
@@ -7992,6 +7993,7 @@ toc: false
             "dark-mode-toggle.js",
             "theme-init.js",
             "copy-code.js",
+            "tooltips.js",
         ]
         if self._config.markdown_pages_widget:
             js_resource_files.append("copy-page.js")
@@ -8423,6 +8425,21 @@ toc: false
             )
             if not has_ref_switcher:
                 config["format"]["html"]["include-after-body"].append(ref_switcher_script_entry)
+
+        # Add tooltips script (always enabled — converts title attributes to styled tooltips)
+        if "include-after-body" not in config["format"]["html"]:
+            config["format"]["html"]["include-after-body"] = []
+        elif isinstance(config["format"]["html"]["include-after-body"], str):
+            config["format"]["html"]["include-after-body"] = [
+                config["format"]["html"]["include-after-body"]
+            ]
+
+        tooltips_script_entry = {"text": '<script src="tooltips.js"></script>'}
+        has_tooltips = any(
+            "tooltips.js" in str(item) for item in config["format"]["html"]["include-after-body"]
+        )
+        if not has_tooltips:
+            config["format"]["html"]["include-after-body"].append(tooltips_script_entry)
 
         # Add sidebar navigation (reference sidebar added later by
         # _add_api_reference_config if exports are discovered)

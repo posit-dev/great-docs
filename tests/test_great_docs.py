@@ -17380,6 +17380,7 @@ def test_prepare_build_directory_copies_js_files():
         assert (docs.project_path / "dark-mode-toggle.js").exists()
         assert (docs.project_path / "theme-init.js").exists()
         assert (docs.project_path / "copy-code.js").exists()
+        assert (docs.project_path / "tooltips.js").exists()
 
 
 def test_prepare_build_directory_optional_js_copy_page():
@@ -40586,6 +40587,7 @@ def test_update_quarto_config_includes_copy_code_js_in_after_body():
 
         after_body = result["format"]["html"]["include-after-body"]
         after_body_str = str(after_body)
+
         assert "copy-code.js" in after_body_str
 
 
@@ -40606,7 +40608,62 @@ def test_update_quarto_config_copy_code_not_duplicated():
             for item in after_body
             if isinstance(item, dict) and "copy-code.js" in str(item.get("text", ""))
         )
+
         assert copy_code_count == 1
 
         resource_count = result["project"]["resources"].count("copy-code.js")
+
+        assert resource_count == 1
+
+
+def test_update_quarto_config_includes_tooltips_js_in_resources():
+    """_update_quarto_config adds tooltips.js to project resources."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        assert "tooltips.js" in result["project"]["resources"]
+
+
+def test_update_quarto_config_includes_tooltips_js_in_after_body():
+    """_update_quarto_config adds tooltips.js script to include-after-body."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        after_body = result["format"]["html"]["include-after-body"]
+        after_body_str = str(after_body)
+
+        assert "tooltips.js" in after_body_str
+
+
+def test_update_quarto_config_tooltips_not_duplicated():
+    """Running _update_quarto_config twice doesn't duplicate tooltips.js."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+        docs._update_quarto_config()
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        after_body = result["format"]["html"]["include-after-body"]
+        tooltips_count = sum(
+            1
+            for item in after_body
+            if isinstance(item, dict) and "tooltips.js" in str(item.get("text", ""))
+        )
+        assert tooltips_count == 1
+
+        resource_count = result["project"]["resources"].count("tooltips.js")
+
         assert resource_count == 1

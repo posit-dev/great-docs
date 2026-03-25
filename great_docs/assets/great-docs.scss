@@ -4085,6 +4085,192 @@ html[data-bs-theme="dark"] .gd-page-metadata {
 }
 
 
+/*---------------------------------------------------------------------------
+ * Custom Tooltips (Tippy.js) — Material Filling Effect
+ * Replaces native browser title tooltips with instant, styled tooltips.
+ *---------------------------------------------------------------------------*/
+
+/* Base Tippy.js overrides for Great Docs theming */
+.tippy-box {
+    /* Material-inspired styling */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    border-radius: 6px;
+    font-weight: 500;
+    /* Material filling effect: clip overflow for smooth fill animation */
+    overflow: hidden;
+}
+
+/* Light mode theme — Material Filling Effect */
+.tippy-box[data-theme~="gd-material"] {
+    background-color: $gray-800;
+    color: $white;
+    box-shadow:
+        0 4px 14px -2px rgba($black, 0.2),
+        0 2px 4px -1px rgba($black, 0.1);
+
+    /* Material filling effect background */
+    &::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+            135deg,
+            rgba($white, 0.12) 0%,
+            rgba($white, 0) 50%
+        );
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 150ms ease-in-out;
+    }
+
+    &[data-state="visible"]::before {
+        opacity: 1;
+    }
+
+    /* Arrow styling */
+    > .tippy-arrow {
+        color: $gray-800;
+    }
+
+    > .tippy-arrow::before {
+        /* Subtle shadow on arrow */
+        filter: drop-shadow(0 1px 2px rgba($black, 0.15));
+    }
+
+    /* Content padding */
+    > .tippy-content {
+        padding: 6px 10px;
+        position: relative;
+        z-index: 1;
+    }
+}
+
+/* Dark mode theme — Material Filling Effect */
+.tippy-box[data-theme~="gd-material-dark"] {
+    background-color: $gray-200;
+    color: $gray-900;
+    box-shadow:
+        0 4px 14px -2px rgba($black, 0.35),
+        0 2px 4px -1px rgba($black, 0.2);
+
+    /* Material filling effect background */
+    &::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+            135deg,
+            rgba($black, 0.06) 0%,
+            rgba($black, 0) 50%
+        );
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 150ms ease-in-out;
+    }
+
+    &[data-state="visible"]::before {
+        opacity: 1;
+    }
+
+    /* Arrow styling */
+    > .tippy-arrow {
+        color: $gray-200;
+    }
+
+    > .tippy-arrow::before {
+        filter: drop-shadow(0 1px 3px rgba($black, 0.25));
+    }
+
+    /* Content padding */
+    > .tippy-content {
+        padding: 6px 10px;
+        position: relative;
+        z-index: 1;
+    }
+}
+
+/* Animation: shift-away (included with Tippy but customized) */
+.tippy-box[data-animation="shift-away"][data-state="hidden"] {
+    opacity: 0;
+}
+
+.tippy-box[data-animation="shift-away"][data-state="hidden"][data-placement^="top"] {
+    transform: translateY(6px);
+}
+
+.tippy-box[data-animation="shift-away"][data-state="hidden"][data-placement^="bottom"] {
+    transform: translateY(-6px);
+}
+
+.tippy-box[data-animation="shift-away"][data-state="hidden"][data-placement^="left"] {
+    transform: translateX(6px);
+}
+
+.tippy-box[data-animation="shift-away"][data-state="hidden"][data-placement^="right"] {
+    transform: translateX(-6px);
+}
+
+/* Mounted state for material fill transition */
+.gd-tooltip-mounted .tippy-box::before {
+    animation: gd-tooltip-fill 200ms ease-out forwards;
+}
+
+@keyframes gd-tooltip-fill {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Arrow placement adjustments */
+.tippy-box[data-placement^="top"] > .tippy-arrow {
+    bottom: -5px;
+}
+
+.tippy-box[data-placement^="bottom"] > .tippy-arrow {
+    top: -5px;
+}
+
+.tippy-box[data-placement^="left"] > .tippy-arrow {
+    right: -5px;
+}
+
+.tippy-box[data-placement^="right"] > .tippy-arrow {
+    left: -5px;
+}
+
+/* Ensure tooltips appear above other elements */
+.tippy-popper,
+[data-tippy-root] {
+    z-index: 9999 !important;
+}
+
+/* Interactive tooltip styling (for tooltips with links, etc.) */
+.tippy-box[data-theme~="gd-material"] a,
+.tippy-box[data-theme~="gd-material-dark"] a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.tippy-box[data-theme~="gd-material"] a:hover,
+.tippy-box[data-theme~="gd-material-dark"] a:hover {
+    opacity: 0.85;
+}
+
+/* Disable native tooltips on elements that have Tippy */
+[data-tippy-content] {
+    /* Ensure no lingering title attribute displays */
+    title: none;
+}
+
+
 /*-- scss:functions --*/
 
 /*-- scss:uses --*/
