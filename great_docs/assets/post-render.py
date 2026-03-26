@@ -89,6 +89,382 @@ else:
     print("No objects.json found, interlinks resolution disabled")
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# SEO PROCESSING FUNCTIONS
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def inject_canonical_url(html_content: str, page_path: str) -> str:
+    """
+    Inject a canonical URL link tag into the HTML head.
+
+    Parameters
+    ----------
+    html_content
+        The HTML content to modify.
+    page_path
+        The page path relative to the site root (e.g., "reference/MyClass.html").
+
+    Returns
+    -------
+    str
+        The modified HTML with canonical URL injected.
+    """
+    if not _gd_options.get("canonical_enabled", False):
+        return html_content
+
+    base_url = _gd_options.get("canonical_base_url")
+    if not base_url:
+        return html_content
+
+    # Build the canonical URL
+    if page_path == "index.html":
+        canonical_url = base_url
+    elif page_path.endswith("/index.html"):
+        canonical_url = base_url + page_path[:-10]  # Remove /index.html
+    else:
+        canonical_url = base_url + page_path
+
+    # Check if canonical already exists
+    if 'rel="canonical"' in html_content:
+        return html_content
+
+    # Inject canonical link before </head>
+    canonical_tag = f'<link rel="canonical" href="{canonical_url}">'
+    html_content = html_content.replace("</head>", f"  {canonical_tag}\n</head>", 1)
+
+    return html_content
+
+
+def inject_meta_description(html_content: str, page_path: str) -> str:
+    """
+    Inject or update meta description tag in the HTML head.
+
+    Extracts description from:
+    1. Existing description meta tag (if present)
+    2. First paragraph of content
+    3. Default description from config
+
+    Parameters
+    ----------
+    html_content
+        The HTML content to modify.
+    page_path
+        The page path relative to the site root.
+
+    Returns
+    -------
+    str
+        The modified HTML with meta description.
+    """
+    if not _gd_options.get("seo_enabled", False):
+        return html_content
+
+    # Check if description meta already exists
+    if re.search(r'<meta\s+name="description"', html_content):
+        return html_content
+
+    # Try to extract a description from the page content
+    description = None
+
+    # Look for the first paragraph in main content
+    main_match = re.search(r"<main[^>]*>(.*?)</main>", html_content, re.DOTALL)
+    if main_match:
+        main_content = main_match.group(1)
+        # Find the first paragraph that has actual text (not just whitespace or code)
+        p_match = re.search(r"<p[^>]*>([^<]+(?:<(?!/?p)[^>]*>[^<]*)*)</p>", main_content)
+        if p_match:
+            desc_text = re.sub(r"<[^>]+>", "", p_match.group(1)).strip()
+            if len(desc_text) > 30:  # Only use if meaningful
+                # Truncate to ~155 chars for optimal SEO
+                if len(desc_text) > 155:
+                    desc_text = desc_text[:152].rsplit(" ", 1)[0] + "..."
+                description = desc_text
+
+    # Fall back to default description
+    if not description:
+        description = _gd_options.get("default_description", "")
+
+    if not description:
+        return html_content
+
+    # Escape HTML entities in description
+    description = (
+        description.replace("&", "&amp;")
+        .replace('"', "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+    # Inject meta description before </head>
+    meta_tag = f'<meta name="description" content="{description}">'
+    html_content = html_content.replace("</head>", f"  {meta_tag}\n</head>", 1)
+
+    return html_content
+
+
+# Mapping of common license identifiers to their canonical URLs
+# Uses SPDX identifiers (https://spdx.org/licenses/) as keys
+LICENSE_URL_MAP = {
+    # MIT variants
+    "mit": "https://opensource.org/licenses/MIT",
+    "mit license": "https://opensource.org/licenses/MIT",
+    # Apache variants
+    "apache-2.0": "https://opensource.org/licenses/Apache-2.0",
+    "apache 2.0": "https://opensource.org/licenses/Apache-2.0",
+    "apache license 2.0": "https://opensource.org/licenses/Apache-2.0",
+    # GPL variants
+    "gpl-3.0": "https://opensource.org/licenses/GPL-3.0",
+    "gpl-3.0-only": "https://opensource.org/licenses/GPL-3.0",
+    "gpl-3.0-or-later": "https://opensource.org/licenses/GPL-3.0",
+    "gpl-2.0": "https://opensource.org/licenses/GPL-2.0",
+    "gpl-2.0-only": "https://opensource.org/licenses/GPL-2.0",
+    "lgpl-3.0": "https://opensource.org/licenses/LGPL-3.0",
+    "lgpl-2.1": "https://opensource.org/licenses/LGPL-2.1",
+    # BSD variants
+    "bsd-3-clause": "https://opensource.org/licenses/BSD-3-Clause",
+    "bsd-2-clause": "https://opensource.org/licenses/BSD-2-Clause",
+    "bsd 3-clause": "https://opensource.org/licenses/BSD-3-Clause",
+    "bsd 2-clause": "https://opensource.org/licenses/BSD-2-Clause",
+    # ISC
+    "isc": "https://opensource.org/licenses/ISC",
+    # MPL
+    "mpl-2.0": "https://opensource.org/licenses/MPL-2.0",
+    # Unlicense
+    "unlicense": "https://opensource.org/licenses/unlicense",
+    # CC licenses
+    "cc0-1.0": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "cc-by-4.0": "https://creativecommons.org/licenses/by/4.0/",
+    "cc-by-sa-4.0": "https://creativecommons.org/licenses/by-sa/4.0/",
+}
+
+
+def _get_license_url(license_value: str) -> str:
+    """
+    Convert a license identifier to its canonical URL.
+
+    If the value is already a URL, return it as-is.
+    If it's a known license identifier, return the canonical URL.
+    Otherwise, return the original value.
+    """
+    if not license_value:
+        return ""
+
+    # If it's already a URL, use it directly
+    if license_value.startswith(("http://", "https://")):
+        return license_value
+
+    # Look up in the mapping (case-insensitive)
+    normalized = license_value.lower().strip()
+    if normalized in LICENSE_URL_MAP:
+        return LICENSE_URL_MAP[normalized]
+
+    # Fallback: return original value (better than nothing)
+    return license_value
+
+
+def inject_json_ld(html_content: str, page_path: str) -> str:
+    """
+    Inject JSON-LD structured data into the HTML head.
+
+    Parameters
+    ----------
+    html_content
+        The HTML content to modify.
+    page_path
+        The page path relative to the site root.
+
+    Returns
+    -------
+    str
+        The modified HTML with JSON-LD structured data.
+    """
+    if not _gd_options.get("structured_data_enabled", False):
+        return html_content
+
+    # Only inject on the homepage and reference pages
+    if page_path != "index.html" and not page_path.startswith("reference/"):
+        return html_content
+
+    # Check if JSON-LD already exists
+    if 'type="application/ld+json"' in html_content:
+        return html_content
+
+    schema_type = _gd_options.get("structured_data_type", "SoftwareSourceCode")
+    package_name = _gd_options.get("package_name", "")
+    package_description = _gd_options.get("package_description", "")
+    package_license = _gd_options.get("package_license", "")
+    repo_url = _gd_options.get("repo_url", "")
+    site_name = _gd_options.get("site_name", "")
+    base_url = _gd_options.get("canonical_base_url", "")
+
+    # Build JSON-LD schema
+    json_ld = {
+        "@context": "https://schema.org",
+        "@type": schema_type,
+    }
+
+    if site_name:
+        json_ld["name"] = site_name
+    if package_description:
+        json_ld["description"] = package_description
+    if repo_url:
+        json_ld["codeRepository"] = repo_url
+    if package_license:
+        json_ld["license"] = _get_license_url(package_license)
+    if base_url:
+        json_ld["url"] = base_url.rstrip("/")
+
+    # Add documentation URL
+    if base_url:
+        json_ld["documentation"] = base_url.rstrip("/")
+
+    # Add programming language
+    json_ld["programmingLanguage"] = {
+        "@type": "ComputerLanguage",
+        "name": "Python",
+    }
+
+    # For reference pages, add WebPage type as well
+    if page_path.startswith("reference/") and page_path != "reference/index.html":
+        # Extract the item name from the path
+        item_name = page_path.replace("reference/", "").replace(".html", "")
+        page_json_ld = {
+            "@context": "https://schema.org",
+            "@type": "WebPage",
+            "name": f"{item_name} - {site_name}",
+            "isPartOf": {"@type": "WebSite", "name": site_name},
+        }
+        if base_url:
+            page_json_ld["url"] = base_url + page_path
+
+        # Use an array with both schemas
+        json_ld = [json_ld, page_json_ld]
+
+    # Serialize to JSON
+    import json as json_module
+
+    json_str = json_module.dumps(json_ld, indent=2, ensure_ascii=False)
+
+    # Inject JSON-LD script before </head>
+    script_tag = f'<script type="application/ld+json">\n{json_str}\n</script>'
+    html_content = html_content.replace("</head>", f"  {script_tag}\n</head>", 1)
+
+    return html_content
+
+
+def apply_title_template(html_content: str, page_path: str) -> str:
+    """
+    Apply page title template for better SEO.
+
+    Parameters
+    ----------
+    html_content
+        The HTML content to modify.
+    page_path
+        The page path relative to the site root.
+
+    Returns
+    -------
+    str
+        The modified HTML with templated title.
+    """
+    if not _gd_options.get("seo_enabled", False):
+        return html_content
+
+    template = _gd_options.get("title_template", "{page_title} | {site_name}")
+    site_name = _gd_options.get("site_name", "")
+
+    if not site_name or not template:
+        return html_content
+
+    # Extract current page title
+    title_match = re.search(r"<title>([^<]*)</title>", html_content)
+    if not title_match:
+        return html_content
+
+    current_title = title_match.group(1).strip()
+
+    # Skip if already has a pipe (already templated)
+    if " | " in current_title or " - " in current_title:
+        # Check if it ends with site name already
+        if current_title.endswith(site_name):
+            return html_content
+
+    # Build new title from template
+    new_title = template.replace("{page_title}", current_title).replace("{site_name}", site_name)
+
+    # Replace title tag
+    html_content = html_content.replace(
+        f"<title>{title_match.group(1)}</title>", f"<title>{new_title}</title>"
+    )
+
+    return html_content
+
+
+def inject_noindex_meta(html_content: str, page_path: str) -> str:
+    """
+    Inject noindex/nofollow meta tags for internal or draft pages.
+
+    Pages that should be noindexed:
+    - Any page with `noindex: true` in frontmatter (processed earlier)
+    - Skill pages (internal/machine-readable)
+
+    Parameters
+    ----------
+    html_content
+        The HTML content to modify.
+    page_path
+        The page path relative to the site root.
+
+    Returns
+    -------
+    str
+        The modified HTML with noindex meta if applicable.
+    """
+    if not _gd_options.get("seo_enabled", False):
+        return html_content
+
+    # Check if noindex meta already exists
+    if 'name="robots"' in html_content:
+        return html_content
+
+    # Pages that should be noindexed by default
+    noindex_paths = ["skills.html"]
+
+    should_noindex = any(page_path == p or page_path.endswith("/" + p) for p in noindex_paths)
+
+    if should_noindex:
+        meta_tag = '<meta name="robots" content="noindex, nofollow">'
+        html_content = html_content.replace("</head>", f"  {meta_tag}\n</head>", 1)
+
+    return html_content
+
+
+def apply_seo_processing(html_content: str, page_path: str) -> str:
+    """
+    Apply all SEO processing to an HTML page.
+
+    Parameters
+    ----------
+    html_content
+        The HTML content to modify.
+    page_path
+        The page path relative to the site root (e.g., "reference/MyClass.html").
+
+    Returns
+    -------
+    str
+        The modified HTML with all SEO enhancements.
+    """
+    html_content = inject_canonical_url(html_content, page_path)
+    html_content = inject_meta_description(html_content, page_path)
+    html_content = inject_json_ld(html_content, page_path)
+    html_content = apply_title_template(html_content, page_path)
+    html_content = inject_noindex_meta(html_content, page_path)
+    return html_content
+
+
 def get_source_link_html(item_name):
     """Generate HTML for a source link given an item name."""
     if item_name in source_links:
@@ -3429,3 +3805,40 @@ if os.path.exists(_skills_page):
         with open(_skills_page, "w", encoding="utf-8") as f:
             f.write(_fixed)
         print("Fixed skill.md link in skills.html")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SEO PROCESSING
+# ══════════════════════════════════════════════════════════════════════════════
+# Apply SEO enhancements to all HTML files (canonical URLs, meta descriptions,
+# JSON-LD structured data, title templates, noindex for internal pages)
+
+if _gd_options.get("seo_enabled", False):
+    print("\n🔍 Applying SEO enhancements to HTML files...")
+    seo_processed = 0
+    seo_errors = 0
+
+    for html_file in glob.glob("_site/**/*.html", recursive=True):
+        try:
+            # Get relative path from _site
+            rel_path = os.path.relpath(html_file, "_site")
+
+            with open(html_file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Apply all SEO processing
+            modified_content = apply_seo_processing(content, rel_path)
+
+            # Only write if content changed
+            if modified_content != content:
+                with open(html_file, "w", encoding="utf-8") as f:
+                    f.write(modified_content)
+                seo_processed += 1
+
+        except Exception as e:
+            print(f"  SEO error for {html_file}: {e}")
+            seo_errors += 1
+
+    print(f"   SEO enhancements applied to {seo_processed} page(s) ({seo_errors} errors)")
+else:
+    print("\n🔍 SEO processing: disabled")

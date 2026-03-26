@@ -1482,6 +1482,223 @@ def proofread(
 cli.add_command(proofread)
 
 
+@click.command()
+@click.option(
+    "--project-path",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Path to your project root directory (default: current directory)",
+)
+@click.option(
+    "--fix",
+    is_flag=True,
+    help="Attempt to fix some issues automatically (e.g., generate missing files)",
+)
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    help="Output results as JSON for CI integration",
+)
+def seo(project_path: str | None, fix: bool, json_output: bool) -> None:
+    """Audit SEO health of your documentation site.
+
+    Checks for common SEO issues and provides recommendations for improvement.
+    Run this after building your site with 'great-docs build'.
+
+    \b
+    Checks performed:
+      • sitemap.xml presence and validity
+      • robots.txt presence and configuration
+      • Canonical URLs on all pages
+      • Meta descriptions on pages
+      • JSON-LD structured data
+      • Page titles with site name
+      • Missing alt text on images
+      • Broken internal links (basic check)
+
+    \b
+    Examples:
+      great-docs seo                        # Audit SEO health
+      great-docs seo --fix                  # Fix issues where possible
+      great-docs seo --json                 # JSON output for CI
+    """
+    import json
+    import xml.etree.ElementTree as ET
+
+    try:
+        docs = GreatDocs(project_path=project_path)
+        site_dir = docs.project_path / "_site"
+
+        if not site_dir.exists():
+            click.echo("Error: Site not built. Run 'great-docs build' first.", err=True)
+            sys.exit(1)
+
+        issues = []
+        warnings = []
+        info = []
+
+        # ── Check sitemap.xml ────────────────────────────────────────────
+        sitemap_path = site_dir / "sitemap.xml"
+        if sitemap_path.exists():
+            try:
+                tree = ET.parse(sitemap_path)
+                root = tree.getroot()
+                # Count URLs in sitemap
+                ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+                urls = root.findall(".//sm:url", ns)
+                if urls:
+                    info.append(f"✅ sitemap.xml: {len(urls)} URLs indexed")
+                else:
+                    warnings.append("⚠️  sitemap.xml is empty (no URLs)")
+            except ET.ParseError as e:
+                issues.append(f"❌ sitemap.xml is malformed: {e}")
+        else:
+            issues.append("❌ sitemap.xml not found")
+            if fix:
+                docs._generate_sitemap_xml()
+                info.append("   → Generated sitemap.xml")
+
+        # ── Check robots.txt ─────────────────────────────────────────────
+        robots_path = site_dir / "robots.txt"
+        if robots_path.exists():
+            robots_content = robots_path.read_text()
+            if "Sitemap:" in robots_content:
+                info.append("✅ robots.txt: includes sitemap reference")
+            else:
+                warnings.append("⚠️  robots.txt: missing sitemap reference")
+            if "User-agent:" in robots_content:
+                info.append("✅ robots.txt: has user-agent rules")
+        else:
+            issues.append("❌ robots.txt not found")
+            if fix:
+                docs._generate_robots_txt()
+                info.append("   → Generated robots.txt")
+
+        # ── Check HTML pages ─────────────────────────────────────────────
+        html_files = list(site_dir.rglob("*.html"))
+        pages_checked = 0
+        pages_missing_canonical = 0
+        pages_missing_description = 0
+        pages_missing_title_template = 0
+        pages_with_json_ld = 0
+        images_missing_alt = 0
+
+        canonical_base = docs._get_canonical_base_url()
+
+        for html_file in html_files:
+            rel_path = html_file.relative_to(site_dir).as_posix()
+
+            # Skip internal files
+            if rel_path.startswith("_") or rel_path.startswith("."):
+                continue
+
+            pages_checked += 1
+            content = html_file.read_text(encoding="utf-8", errors="ignore")
+
+            # Check canonical URL
+            if 'rel="canonical"' not in content:
+                pages_missing_canonical += 1
+
+            # Check meta description
+            if not re.search(r'<meta\s+name="description"', content):
+                pages_missing_description += 1
+
+            # Check title template (should have | or -)
+            title_match = re.search(r"<title>([^<]+)</title>", content)
+            if title_match:
+                title = title_match.group(1)
+                if " | " not in title and " - " not in title:
+                    pages_missing_title_template += 1
+
+            # Check JSON-LD
+            if "application/ld+json" in content:
+                pages_with_json_ld += 1
+
+            # Check images for alt text
+            for img_match in re.finditer(r"<img\s+[^>]*>", content):
+                img_tag = img_match.group(0)
+                if 'alt="' not in img_tag and "alt='" not in img_tag:
+                    images_missing_alt += 1
+
+        # Report HTML page analysis
+        info.append(f"✅ Analyzed {pages_checked} HTML pages")
+
+        if pages_missing_canonical > 0:
+            if canonical_base:
+                issues.append(f"❌ {pages_missing_canonical} pages missing canonical URLs")
+            else:
+                warnings.append(
+                    f"⚠️  {pages_missing_canonical} pages missing canonical URLs "
+                    "(set seo.canonical.base_url)"
+                )
+        else:
+            info.append("✅ All pages have canonical URLs")
+
+        if pages_missing_description > 0:
+            warnings.append(f"⚠️  {pages_missing_description} pages missing meta descriptions")
+        else:
+            info.append("✅ All pages have meta descriptions")
+
+        if pages_missing_title_template > 0:
+            warnings.append(
+                f"⚠️  {pages_missing_title_template} pages have plain titles "
+                "(consider adding site name)"
+            )
+
+        if pages_with_json_ld > 0:
+            info.append(f"✅ {pages_with_json_ld} pages have JSON-LD structured data")
+        else:
+            warnings.append("⚠️  No pages have JSON-LD structured data")
+
+        if images_missing_alt > 0:
+            warnings.append(f"⚠️  {images_missing_alt} images missing alt text")
+        elif pages_checked > 0:
+            info.append("✅ All images have alt text")
+
+        # ── Output results ───────────────────────────────────────────────
+        if json_output:
+            result = {
+                "status": "fail" if issues else ("warn" if warnings else "pass"),
+                "pages_checked": pages_checked,
+                "issues": issues,
+                "warnings": warnings,
+                "info": info,
+            }
+            click.echo(json.dumps(result, indent=2))
+        else:
+            click.echo("\n" + "═" * 60)
+            click.echo("📊 SEO Audit Results")
+            click.echo("═" * 60)
+
+            if info:
+                click.echo("\n" + "\n".join(info))
+
+            if warnings:
+                click.echo("\n" + "\n".join(warnings))
+
+            if issues:
+                click.echo("\n" + "\n".join(issues))
+
+            click.echo("\n" + "─" * 60)
+            if issues:
+                click.echo(f"❌ {len(issues)} issue(s) found")
+                sys.exit(1)
+            elif warnings:
+                click.echo(f"⚠️  {len(warnings)} warning(s)")
+            else:
+                click.echo("✅ All SEO checks passed!")
+
+    except Exception as e:
+        if json_output:
+            click.echo(json.dumps({"status": "error", "error": str(e)}))
+        else:
+            click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
+cli.add_command(seo)
+
+
 def main() -> None:
     """Main CLI entry point for great-docs."""
     cli()

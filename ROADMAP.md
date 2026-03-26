@@ -35,19 +35,6 @@ Auto-generate `<meta>` tags for social media previews.
 - Per-page and site-level defaults
 - Optional custom image template
 
-### SEO Optimization
-
-Comprehensive search engine optimization features.
-
-- Auto-generated `sitemap.xml` with proper priorities and change frequencies
-- Configurable `robots.txt` generation
-- Meta descriptions from docstrings or frontmatter (`description:` field)
-- Canonical URLs to prevent duplicate content issues
-- Structured data (JSON-LD) for software documentation
-- Page title templates with site name (`{page_title} | {site_name}`)
-- `noindex` / `nofollow` controls for internal or draft pages
-- `great-docs seo` CLI command to audit SEO health
-
 ### Page Metadata Timestamps
 
 Display creation and modification dates at the bottom of main content with optional author attribution.

@@ -200,6 +200,8 @@ class GreatDocs:
             "authors": self._config.authors,  # Rich author metadata with images
             "build_timestamp": datetime.now().isoformat(),
         }
+        # Add SEO options
+        gd_options.update(self._get_seo_options())
         gd_options_path = self.project_path / "_gd_options.json"
         with open(gd_options_path, "w") as f:
             json.dump(gd_options, f)
@@ -980,8 +982,42 @@ class GreatDocs:
                     # Extract relevant fields from [project] section
                     # License can be a string (PEP 639) or a dict with "text"/"file" keys
                     license_val = project.get("license", "")
-                    if isinstance(license_val, dict):
-                        metadata["license"] = license_val.get("text") or license_val.get("file", "")
+                    classifiers = project.get("classifiers", [])
+
+                    # Try to extract license identifier from classifiers first
+                    # e.g., "License :: OSI Approved :: MIT License" -> "MIT"
+                    license_from_classifiers = ""
+                    for classifier in classifiers:
+                        if classifier.startswith("License :: OSI Approved ::"):
+                            # Extract the license name from the classifier
+                            license_name = classifier.split("::")[-1].strip()
+                            # Map common patterns to SPDX identifiers
+                            license_map = {
+                                "MIT License": "MIT",
+                                "Apache Software License": "Apache-2.0",
+                                "GNU General Public License v3 (GPLv3)": "GPL-3.0",
+                                "GNU General Public License v2 (GPLv2)": "GPL-2.0",
+                                "BSD License": "BSD-3-Clause",
+                                "ISC License (ISCL)": "ISC",
+                                "Mozilla Public License 2.0 (MPL 2.0)": "MPL-2.0",
+                            }
+                            license_from_classifiers = license_map.get(license_name, license_name)
+                            break
+
+                    # Determine the license identifier
+                    if license_from_classifiers:
+                        # Prefer classifier-derived license (cleaner identifier)
+                        metadata["license"] = license_from_classifiers
+                    elif isinstance(license_val, dict):
+                        # If it's a dict with "text", use that; if "file", we need
+                        # to fall back to classifiers or leave as-is
+                        text_val = license_val.get("text", "")
+                        if text_val:
+                            metadata["license"] = text_val
+                        else:
+                            # File reference - not useful for JSON-LD, leave empty
+                            # unless we have a better source
+                            metadata["license"] = ""
                     else:
                         metadata["license"] = str(license_val) if license_val else ""
                     metadata["authors"] = project.get("authors", [])
@@ -9861,6 +9897,245 @@ toc: false
         dest = well_known_dir / "SKILL.md"
         shutil.copy2(skill_path, dest)
 
+    # ══════════════════════════════════════════════════════════════════════════
+    # SEO GENERATION METHODS
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _get_canonical_base_url(self) -> str | None:
+        """
+        Get the canonical base URL for the site.
+
+        Checks configuration first, then tries to auto-detect from GitHub Pages URL.
+
+        Returns
+        -------
+        str | None
+            The canonical base URL (with trailing slash) or None if not determined.
+        """
+        # Check config first
+        base_url = self._config.canonical_base_url
+        if base_url:
+            return base_url.rstrip("/") + "/"
+
+        # Try to auto-detect from GitHub Pages
+        owner, repo, _ = self._get_github_repo_info()
+        if owner and repo:
+            # Standard GitHub Pages URL pattern
+            return f"https://{owner}.github.io/{repo}/"
+
+        return None
+
+    def _categorize_page(self, html_path: str) -> str:
+        """
+        Categorize an HTML file by page type for SEO settings.
+
+        Parameters
+        ----------
+        html_path
+            Relative path to the HTML file within _site/.
+
+        Returns
+        -------
+        str
+            Page type: "homepage", "reference", "user_guide", "changelog", or "default".
+        """
+        # Normalize path separators
+        path = html_path.replace("\\", "/")
+
+        if path == "index.html":
+            return "homepage"
+        elif path.startswith("reference/"):
+            return "reference"
+        elif path.startswith("user-guide/"):
+            return "user_guide"
+        elif path == "changelog.html":
+            return "changelog"
+        elif path.startswith("recipes/"):
+            return "user_guide"  # Recipes are similar to user guide
+        else:
+            return "default"
+
+    def _generate_sitemap_xml(self) -> None:
+        """
+        Generate a sitemap.xml file for search engine indexing.
+
+        Creates an XML sitemap at _site/sitemap.xml with proper priorities
+        and change frequencies based on page type.
+        """
+        if not self._config.sitemap_enabled:
+            return
+
+        site_dir = self.project_path / "_site"
+        if not site_dir.exists():
+            print("   ⚠️  _site directory not found, skipping sitemap generation")
+            return
+
+        base_url = self._get_canonical_base_url()
+        if not base_url:
+            print("   ⚠️  No base URL configured, skipping sitemap generation")
+            print("      Set seo.canonical.base_url in great-docs.yml or configure a GitHub repo")
+            return
+
+        # Get change frequencies and priorities from config
+        changefreq = self._config.sitemap_changefreq
+        priority = self._config.sitemap_priority
+
+        # Find all HTML files in _site
+        html_files = list(site_dir.rglob("*.html"))
+
+        # Build sitemap entries
+        entries = []
+        for html_file in html_files:
+            rel_path = html_file.relative_to(site_dir).as_posix()
+
+            # Skip internal/system files
+            if rel_path.startswith("_") or rel_path.startswith("."):
+                continue
+
+            # Categorize the page
+            page_type = self._categorize_page(rel_path)
+
+            # Build URL (index.html becomes just the directory)
+            if rel_path == "index.html":
+                loc = base_url
+            elif rel_path.endswith("/index.html"):
+                loc = base_url + rel_path[:-10]  # Remove /index.html
+            else:
+                loc = base_url + rel_path
+
+            # Get the last modified time
+            mtime = html_file.stat().st_mtime
+            lastmod = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+
+            entry = {
+                "loc": loc,
+                "lastmod": lastmod,
+                "changefreq": changefreq.get(page_type, changefreq["default"]),
+                "priority": priority.get(page_type, priority["default"]),
+            }
+            entries.append(entry)
+
+        # Sort entries by priority (descending) then by path
+        entries.sort(key=lambda x: (-x["priority"], x["loc"]))
+
+        # Generate XML
+        xml_lines = ['<?xml version="1.0" encoding="UTF-8"?>']
+        xml_lines.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
+
+        for entry in entries:
+            xml_lines.append("  <url>")
+            xml_lines.append(f"    <loc>{entry['loc']}</loc>")
+            xml_lines.append(f"    <lastmod>{entry['lastmod']}</lastmod>")
+            xml_lines.append(f"    <changefreq>{entry['changefreq']}</changefreq>")
+            xml_lines.append(f"    <priority>{entry['priority']:.1f}</priority>")
+            xml_lines.append("  </url>")
+
+        xml_lines.append("</urlset>")
+
+        # Write sitemap.xml
+        sitemap_path = site_dir / "sitemap.xml"
+        sitemap_path.write_text("\n".join(xml_lines), encoding="utf-8")
+        print(f"   Generated sitemap.xml with {len(entries)} URLs")
+
+    def _generate_robots_txt(self) -> None:
+        """
+        Generate a robots.txt file for search engine crawlers.
+
+        Creates a robots.txt at _site/robots.txt with configurable rules.
+        """
+        if not self._config.robots_enabled:
+            return
+
+        site_dir = self.project_path / "_site"
+        if not site_dir.exists():
+            print("   ⚠️  _site directory not found, skipping robots.txt generation")
+            return
+
+        lines = []
+
+        # Default user-agent rules
+        lines.append("# Robots.txt generated by Great Docs")
+        lines.append("")
+        lines.append("User-agent: *")
+
+        if self._config.robots_allow_all:
+            lines.append("Allow: /")
+        else:
+            lines.append("Disallow: /")
+
+        # Add specific disallow rules
+        for path in self._config.robots_disallow:
+            lines.append(f"Disallow: {path}")
+
+        # Add crawl delay if configured
+        crawl_delay = self._config.robots_crawl_delay
+        if crawl_delay:
+            lines.append(f"Crawl-delay: {crawl_delay}")
+
+        lines.append("")
+
+        # Add extra rules (e.g., for AI crawlers)
+        extra_rules = self._config.robots_extra_rules
+        if extra_rules:
+            lines.append("# Additional rules")
+            for rule in extra_rules:
+                lines.append(rule)
+            lines.append("")
+
+        # Add sitemap reference if sitemap is enabled
+        if self._config.sitemap_enabled:
+            base_url = self._get_canonical_base_url()
+            if base_url:
+                lines.append(f"Sitemap: {base_url}sitemap.xml")
+                lines.append("")
+
+        # Write robots.txt
+        robots_path = site_dir / "robots.txt"
+        robots_path.write_text("\n".join(lines), encoding="utf-8")
+        print("   Generated robots.txt")
+
+    def _get_seo_options(self) -> dict:
+        """
+        Get SEO options for the post-render script.
+
+        Returns
+        -------
+        dict
+            SEO configuration to be written to _gd_options.json.
+        """
+        metadata = self._get_package_metadata()
+
+        return {
+            "seo_enabled": self._config.seo_enabled,
+            "canonical_enabled": self._config.canonical_enabled,
+            "canonical_base_url": self._get_canonical_base_url(),
+            "title_template": self._config.seo_title_template,
+            "structured_data_enabled": self._config.structured_data_enabled,
+            "structured_data_type": self._config.structured_data_type,
+            "default_description": (
+                self._config.seo_default_description or metadata.get("description", "")
+            ),
+            "package_name": self._detect_package_name() or "",
+            "package_description": metadata.get("description", ""),
+            "package_license": metadata.get("license", ""),
+            "package_version": metadata.get("version", ""),
+            "repo_url": metadata.get("urls", {}).get("Repository", ""),
+            "site_name": self._config.display_name or self._detect_package_name() or "",
+        }
+
+    def _generate_seo_files(self) -> None:
+        """
+        Generate all SEO-related files (sitemap.xml, robots.txt).
+
+        Called during the post-render phase after Quarto has built the site.
+        """
+        if not self._config.seo_enabled:
+            return
+
+        print("\n🔍 Generating SEO files...")
+        self._generate_sitemap_xml()
+        self._generate_robots_txt()
+
     def _get_cli_help_text_for_llms(self) -> str:
         """
         Get CLI help text formatted for llms-full.txt.
@@ -10319,6 +10594,13 @@ toc: false
                     sys.exit(1)
                 else:
                     print("\n✅ Site built successfully")  # pragma: no cover
+
+                    # Step 3: Generate SEO files (sitemap.xml, robots.txt)
+                    try:
+                        self._generate_seo_files()
+                    except Exception as e:
+                        print(f"   ⚠️  Error generating SEO files: {e}")
+
                     site_path = self.project_path / "_site" / "index.html"
                     if site_path.exists():
                         print(f"\n🎉 Your site is ready! Open: {site_path}")

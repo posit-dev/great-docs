@@ -141,6 +141,56 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "decision_table": [],  # Manual rows: [{"need": "...", "use": "..."}]
         "extra_body": None,  # Path to extra Markdown to append to the generated body
     },
+    # SEO configuration for search engine optimization
+    # Generates sitemap.xml, robots.txt, and adds metadata for better discoverability
+    "seo": {
+        "enabled": True,  # Master switch for all SEO features
+        # Sitemap configuration
+        "sitemap": {
+            "enabled": True,  # Generate sitemap.xml
+            "changefreq": {
+                # Change frequencies by page type (always|hourly|daily|weekly|monthly|yearly|never)
+                "homepage": "weekly",
+                "reference": "monthly",
+                "user_guide": "monthly",
+                "changelog": "weekly",
+                "default": "monthly",
+            },
+            "priority": {
+                # Priority values by page type (0.0 to 1.0)
+                "homepage": 1.0,
+                "reference": 0.8,
+                "user_guide": 0.9,
+                "changelog": 0.6,
+                "default": 0.5,
+            },
+        },
+        # Robots.txt configuration
+        "robots": {
+            "enabled": True,  # Generate robots.txt
+            "allow_all": True,  # Allow all crawlers by default
+            "disallow": [],  # List of paths to disallow (e.g., ["/drafts/", "/_internal/"])
+            "crawl_delay": None,  # Optional crawl delay in seconds
+            "extra_rules": [],  # Additional rules as strings (e.g., ["User-agent: GPTBot", "Disallow: /"])
+        },
+        # Canonical URL configuration
+        "canonical": {
+            "enabled": True,  # Add canonical URLs to pages
+            "base_url": None,  # Base URL (e.g., "https://example.github.io/pkg/")
+            # Auto-detected from GitHub Pages URL if not provided
+        },
+        # Page title template
+        # Supports {page_title} and {site_name} placeholders
+        "title_template": "{page_title} | {site_name}",
+        # JSON-LD structured data for software documentation
+        "structured_data": {
+            "enabled": True,  # Add JSON-LD to pages
+            "type": "SoftwareSourceCode",  # Schema.org type
+            # Additional fields auto-populated from package metadata
+        },
+        # Default meta description (used when page has no description)
+        "default_description": None,  # Falls back to package description
+    },
 }
 
 
@@ -834,6 +884,97 @@ class Config:
                 pages = "all"
             return {"preset": preset, "pages": pages}
         return None
+
+    # ── SEO Configuration Properties ─────────────────────────────────────────
+
+    @property
+    def seo_enabled(self) -> bool:
+        """Check if SEO features are enabled."""
+        return self.get("seo.enabled", True)
+
+    @property
+    def sitemap_enabled(self) -> bool:
+        """Check if sitemap.xml generation is enabled."""
+        return self.seo_enabled and self.get("seo.sitemap.enabled", True)
+
+    @property
+    def sitemap_changefreq(self) -> dict[str, str]:
+        """Get the sitemap change frequency by page type."""
+        defaults = {
+            "homepage": "weekly",
+            "reference": "monthly",
+            "user_guide": "monthly",
+            "changelog": "weekly",
+            "default": "monthly",
+        }
+        return {**defaults, **self.get("seo.sitemap.changefreq", {})}
+
+    @property
+    def sitemap_priority(self) -> dict[str, float]:
+        """Get the sitemap priority by page type."""
+        defaults = {
+            "homepage": 1.0,
+            "reference": 0.8,
+            "user_guide": 0.9,
+            "changelog": 0.6,
+            "default": 0.5,
+        }
+        return {**defaults, **self.get("seo.sitemap.priority", {})}
+
+    @property
+    def robots_enabled(self) -> bool:
+        """Check if robots.txt generation is enabled."""
+        return self.seo_enabled and self.get("seo.robots.enabled", True)
+
+    @property
+    def robots_allow_all(self) -> bool:
+        """Check if robots.txt should allow all crawlers."""
+        return self.get("seo.robots.allow_all", True)
+
+    @property
+    def robots_disallow(self) -> list[str]:
+        """Get the list of paths to disallow in robots.txt."""
+        return self.get("seo.robots.disallow", [])
+
+    @property
+    def robots_crawl_delay(self) -> int | None:
+        """Get the optional crawl delay in seconds."""
+        return self.get("seo.robots.crawl_delay")
+
+    @property
+    def robots_extra_rules(self) -> list[str]:
+        """Get additional robots.txt rules."""
+        return self.get("seo.robots.extra_rules", [])
+
+    @property
+    def canonical_enabled(self) -> bool:
+        """Check if canonical URLs are enabled."""
+        return self.seo_enabled and self.get("seo.canonical.enabled", True)
+
+    @property
+    def canonical_base_url(self) -> str | None:
+        """Get the canonical base URL."""
+        return self.get("seo.canonical.base_url")
+
+    @property
+    def seo_title_template(self) -> str:
+        """Get the page title template."""
+        return self.get("seo.title_template", "{page_title} | {site_name}")
+
+    @property
+    def structured_data_enabled(self) -> bool:
+        """Check if JSON-LD structured data is enabled."""
+        return self.seo_enabled and self.get("seo.structured_data.enabled", True)
+
+    @property
+    def structured_data_type(self) -> str:
+        """Get the Schema.org type for structured data."""
+        return self.get("seo.structured_data.type", "SoftwareSourceCode")
+
+    @property
+    def seo_default_description(self) -> str | None:
+        """Get the default meta description."""
+        return self.get("seo.default_description")
 
     def exists(self) -> bool:
         """Check if the configuration file exists."""
