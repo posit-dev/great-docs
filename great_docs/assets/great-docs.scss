@@ -4269,6 +4269,152 @@ html[data-bs-theme="dark"] .gd-page-metadata {
 }
 
 
+/* =====================================================
+   Mermaid Diagram Dark Mode Support
+   Adjusts the neutral theme for dark backgrounds
+   ===================================================== */
+
+/* Mermaid diagram container - center in content area */
+/* Target the cell containing mermaid diagrams */
+.cell:has(.mermaid-js),
+.cell:has(.mermaid) {
+    display: block;
+}
+
+.cell-output-display:has(.mermaid-js),
+.cell-output-display:has(.mermaid) {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+/* The figure element wrapping the diagram */
+.cell-output-display figure.figure:has(.mermaid-js),
+.cell-output-display figure.figure:has(.mermaid) {
+    display: flex;
+    justify-content: center;
+    margin: 1.5rem auto;
+    width: 100%;
+}
+
+/* The immediate parent div of the SVG */
+.cell-output-display figure.figure > div:has(> .mermaid-js),
+.cell-output-display figure.figure > div:has(> svg.mermaid-js) {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+/* The rendered SVG diagram itself */
+svg.mermaid-js {
+    display: block;
+    margin: 0 auto;
+}
+
+pre.mermaid {
+    background: transparent;
+    padding: 0.5rem;
+    border-radius: 6px;
+    text-align: center;
+}
+
+/* Light mode: add subtle border to mermaid diagrams */
+.cell-output-display:has(.mermaid-js),
+.cell-output-display:has(.mermaid) {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 0.5rem 0;
+}
+
+/* Dark mode: invert mermaid diagrams for proper contrast */
+body.quarto-dark .cell-output-display:has(.mermaid-js),
+html.quarto-dark .cell-output-display:has(.mermaid-js) {
+    background: #f8f9fa;
+    border-color: #dee2e6;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 0.5rem 0;
+}
+
+body.quarto-dark svg.mermaid-js,
+html.quarto-dark svg.mermaid-js {
+    /* No filter needed - diagram is on light background */
+}
+
+/* Dark mode: fix mermaid text colors (force dark text on light background) */
+body.quarto-dark svg.mermaid-js p,
+html.quarto-dark svg.mermaid-js p,
+body.quarto-dark svg[id^="mermaid-"] p,
+html.quarto-dark svg[id^="mermaid-"] p {
+    color: #333 !important;
+}
+
+body.quarto-dark svg.mermaid-js span,
+html.quarto-dark svg.mermaid-js span,
+body.quarto-dark svg[id^="mermaid-"] span,
+html.quarto-dark svg[id^="mermaid-"] span {
+    color: #333 !important;
+}
+
+body.quarto-dark svg.mermaid-js div,
+html.quarto-dark svg.mermaid-js div,
+body.quarto-dark svg[id^="mermaid-"] div,
+html.quarto-dark svg[id^="mermaid-"] div {
+    color: #333 !important;
+}
+
+body.quarto-dark svg.mermaid-js .nodeLabel,
+html.quarto-dark svg.mermaid-js .nodeLabel,
+body.quarto-dark svg[id^="mermaid-"] .nodeLabel,
+html.quarto-dark svg[id^="mermaid-"] .nodeLabel {
+    color: #333 !important;
+}
+
+body.quarto-dark svg.mermaid-js .edgeLabel,
+html.quarto-dark svg.mermaid-js .edgeLabel,
+body.quarto-dark svg[id^="mermaid-"] .edgeLabel,
+html.quarto-dark svg[id^="mermaid-"] .edgeLabel {
+    color: #333 !important;
+}
+
+body.quarto-dark svg.mermaid-js foreignObject *,
+html.quarto-dark svg.mermaid-js foreignObject *,
+body.quarto-dark svg[id^="mermaid-"] foreignObject *,
+html.quarto-dark svg[id^="mermaid-"] foreignObject * {
+    color: #333 !important;
+}
+
+/* Pre-rendered mermaid diagrams: theme switching */
+.mermaid-diagram {
+    text-align: center;
+    margin: 1rem 0;
+}
+
+.mermaid-diagram img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Light mode: show light image, hide dark */
+.light-mode-only {
+    display: block !important;
+}
+.dark-mode-only {
+    display: none !important;
+}
+
+/* Dark mode: show dark image, hide light */
+body.quarto-dark .light-mode-only,
+html.quarto-dark .light-mode-only {
+    display: none !important;
+}
+body.quarto-dark .dark-mode-only,
+html.quarto-dark .dark-mode-only {
+    display: block !important;
+}
+
+
 /*-- scss:functions --*/
 
 /*-- scss:uses --*/

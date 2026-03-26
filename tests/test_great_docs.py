@@ -40667,3 +40667,54 @@ def test_update_quarto_config_tooltips_not_duplicated():
         resource_count = result["project"]["resources"].count("tooltips.js")
 
         assert resource_count == 1
+
+
+def test_update_quarto_config_mermaid_theme_default():
+    """_update_quarto_config sets mermaid theme to 'default'."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        mermaid_config = result["format"]["html"].get("mermaid")
+        assert mermaid_config is not None
+        assert mermaid_config.get("theme") == "default"
+
+
+def test_update_quarto_config_includes_mermaid_renderer_js():
+    """_update_quarto_config adds mermaid-renderer.js script to include-after-body."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        after_body = result["format"]["html"]["include-after-body"]
+        after_body_str = str(after_body)
+
+        assert "mermaid-renderer.js" in after_body_str
+
+
+def test_update_quarto_config_mermaid_renderer_not_duplicated():
+    """Running _update_quarto_config twice doesn't duplicate mermaid-renderer.js."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+        docs._update_quarto_config()
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        after_body = result["format"]["html"]["include-after-body"]
+        mermaid_count = sum(
+            1
+            for item in after_body
+            if isinstance(item, dict) and "mermaid-renderer.js" in str(item.get("text", ""))
+        )
+        assert mermaid_count == 1

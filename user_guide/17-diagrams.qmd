@@ -1,0 +1,198 @@
+---
+title: "Diagrams"
+guide-section: "Site Content"
+bread-crumbs: false
+---
+
+# Diagrams
+
+Great Docs supports Mermaid diagrams directly in your documentation. Mermaid is a JavaScript-based diagramming tool that renders diagrams from text definitions. This means you can create flowcharts, sequence diagrams, class diagrams, and more without needing external image files.
+
+Diagrams work seamlessly in both light and dark mode, automatically adapting their colors for readability.
+
+## Basic Usage
+
+To add a mermaid diagram, use a fenced code block with `{mermaid}` as the language identifier:
+
+````markdown
+```{mermaid}
+graph LR
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Action]
+    B -->|No| D[End]
+```
+````
+
+This renders as:
+
+```{mermaid}
+graph LR
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Action]
+    B -->|No| D[End]
+```
+
+## Flowcharts
+
+Flowcharts are useful for documenting workflows, algorithms, or processes. Use `graph LR` for left-to-right flow or `graph TD` for top-down:
+
+```{mermaid}
+graph TD
+    A[great-docs init] --> B[Configure great-docs.yml]
+    B --> C[Write docstrings]
+    C --> D[great-docs build]
+    D --> E{Preview OK?}
+    E -->|Yes| F[Deploy to GitHub Pages]
+    E -->|No| C
+```
+
+### Flowchart Node Shapes
+
+Mermaid supports various node shapes:
+
+```{mermaid}
+graph LR
+    A[Rectangle] --> B(Rounded)
+    B --> C{Diamond}
+    C --> D([Stadium])
+    D --> E[[Subroutine]]
+    E --> F[(Database)]
+```
+
+## Sequence Diagrams
+
+Sequence diagrams show interactions between components over time. They're ideal for documenting API flows or system interactions:
+
+```{mermaid}
+sequenceDiagram
+    participant User
+    participant CLI
+    participant Core
+    participant Quarto
+
+    User->>CLI: great-docs build
+    CLI->>Core: GreatDocs.build()
+    Core->>Core: Parse docstrings
+    Core->>Core: Generate .qmd files
+    Core->>Quarto: quarto render
+    Quarto-->>Core: HTML output
+    Core-->>CLI: Build complete
+    CLI-->>User: Site ready in great-docs/_site/
+```
+
+## Class Diagrams
+
+Class diagrams are perfect for documenting object-oriented code structures:
+
+```{mermaid}
+classDiagram
+    class GreatDocs {
+        +project_root: Path
+        +config: Config
+        +install()
+        +build()
+        +preview()
+    }
+
+    class Config {
+        +package_name: str
+        +exclude: list
+        +logo: dict
+        +load()
+        +save()
+    }
+
+    GreatDocs --> Config : uses
+```
+
+## State Diagrams
+
+State diagrams help document state machines or lifecycle stages:
+
+```{mermaid}
+stateDiagram-v2
+    [*] --> Draft
+    Draft --> Review: Submit
+    Review --> Approved: Accept
+    Review --> Draft: Request changes
+    Approved --> Published: Deploy
+    Published --> [*]
+```
+
+## Gantt Charts
+
+Gantt charts can document project timelines or release schedules:
+
+```{mermaid}
+gantt
+    title Documentation Release Schedule
+    dateFormat YYYY-MM-DD
+    section Phase 1
+        API Documentation    :done, api, 2024-01-01, 2024-01-15
+        User Guide          :done, guide, 2024-01-10, 2024-01-25
+    section Phase 2
+        CLI Reference       :active, cli, 2024-01-20, 2024-02-05
+        Deployment Guide    :deploy, 2024-02-01, 2024-02-10
+```
+
+## Pie Charts
+
+Simple pie charts for showing proportions:
+
+```{mermaid}
+pie title Documentation Coverage
+    "API Reference" : 45
+    "User Guide" : 30
+    "Recipes" : 15
+    "CLI Docs" : 10
+```
+
+## Dark Mode Support
+
+Great Docs automatically adjusts mermaid diagrams for dark mode. Diagrams are displayed in a light background container when dark mode is active, ensuring text and shapes remain clearly readable. No additional configuration is required as diagrams adapt when visitors toggle between light and dark themes.
+
+## Tips for Better Diagrams
+
+### Keep Diagrams Focused
+
+Each diagram should illustrate one concept. If a diagram becomes too complex, consider breaking it into multiple smaller diagrams.
+
+### Use Descriptive Labels
+
+Node labels should be self-explanatory. Use action verbs for process steps and clear nouns for entities:
+
+```{mermaid}
+graph LR
+    A[Parse Config] --> B[Discover Exports]
+    B --> C[Generate Pages]
+    C --> D[Render HTML]
+```
+
+### Add Direction for Clarity
+
+Choose the direction that best matches the flow you're documenting:
+
+- `graph LR` (left to right): for processes, pipelines
+- `graph TD` (top down): for hierarchies, decision trees
+- `graph RL` (right to left): rarely used, but available
+- `graph BT` (bottom to top): for build-up processes
+
+### Use Subgraphs for Grouping
+
+Group related nodes using subgraphs:
+
+```{mermaid}
+graph TD
+    subgraph Build Process
+        A[Parse] --> B[Generate]
+        B --> C[Render]
+    end
+    subgraph Deploy
+        D[Upload] --> E[Verify]
+    end
+    C --> D
+```
+
+## Further Reading
+
+For the complete Mermaid syntax reference, see the [Mermaid documentation](https://mermaid.js.org/intro/). Quarto also provides additional options for diagram sizing and placement in the [Quarto Diagrams guide](https://quarto.org/docs/authoring/diagrams.html).

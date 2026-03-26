@@ -26,15 +26,6 @@ A `great-docs lint` command for documentation quality checks.
 - Family/directive consistency checks
 - Machine-readable JSON output for CI integration
 
-### Mermaid Diagram Rendering
-
-Render Mermaid.js diagrams embedded in docstrings or Markdown content.
-
-- Auto-detect ` ```mermaid ` code blocks in README, docstrings, and user guide pages
-- Render diagrams during build (static SVG or inline)
-- Dark mode variant support
-- Quarto's native mermaid support as the backend
-
 ### MCP Server for Documentation
 
 Expose the rendered site as an MCP endpoint so AI agents can search and retrieve docs programmatically.
