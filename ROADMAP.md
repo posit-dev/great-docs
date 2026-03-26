@@ -26,16 +26,6 @@ A `great-docs lint` command for documentation quality checks.
 - Family/directive consistency checks
 - Machine-readable JSON output for CI integration
 
-### MCP Server for Documentation
-
-Expose the rendered site as an MCP endpoint so AI agents can search and retrieve docs programmatically.
-
-- Serve a lightweight MCP server from the `_site/` output
-- `SearchDocs` tool for semantic or keyword search across pages
-- Return results as Markdown for direct LLM consumption
-- Integrate with the existing `llms.txt` / `llms-full.txt` pipeline
-- Optional: deploy alongside the static site on GitHub Pages via a serverless function
-
 ### Social Cards & Open Graph
 
 Auto-generate `<meta>` tags for social media previews.
