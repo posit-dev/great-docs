@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
-from tabulate import tabulate
-
 from ..pandoc.blocks import (
     BlockContent,
     DefinitionList,
@@ -13,6 +11,7 @@ from ..pandoc.blocks import (
 )
 from ..pandoc.components import Attr
 from .base import RenderBase
+from .html_table import html_table
 
 if TYPE_CHECKING:
     from typing import Literal
@@ -109,11 +108,7 @@ class __RenderReferenceSection(RenderBase):
             get_render_type(c)(c, self.renderer) for c in self.section.contents
         ]
         rows = [row for r in render_objs for row in r.render_summary()]
-        items = (
-            DefinitionList(rows)
-            if self.layout_format == "list"
-            else str(tabulate(rows, tablefmt="grid"))
-        )
+        items = DefinitionList(rows) if self.layout_format == "list" else html_table(rows)
         return items
 
 

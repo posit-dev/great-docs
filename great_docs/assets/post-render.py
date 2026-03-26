@@ -977,6 +977,21 @@ def strip_directives_from_html(html_content):
     return cleaned
 
 
+def strip_colgroup_tags(html_content):
+    """
+    Remove <colgroup> tags from tables.
+
+    Quarto/Pandoc adds <colgroup> with fixed column widths, but we want
+    the browser to determine column widths based on content.
+    """
+    # Match the entire colgroup element including its contents
+    colgroup_pattern = re.compile(
+        r"<colgroup>.*?</colgroup>\s*",
+        re.DOTALL,
+    )
+    return colgroup_pattern.sub("", html_content)
+
+
 def translate_sphinx_fields(html_content):
     """
     Convert Sphinx field-list directives into structured doc sections.
@@ -3821,6 +3836,31 @@ if os.path.exists(_skills_page):
         with open(_skills_page, "w", encoding="utf-8") as f:
             f.write(_fixed)
         print("Fixed skill.md link in skills.html")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STRIP COLGROUP TAGS FROM TABLES
+# ══════════════════════════════════════════════════════════════════════════════
+# Remove <colgroup> tags so browsers determine column widths based on content.
+
+print("\nStripping <colgroup> tags from tables...")
+colgroup_stripped = 0
+for html_file in glob.glob("_site/**/*.html", recursive=True):
+    try:
+        with open(html_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        if "<colgroup>" in content:
+            modified = strip_colgroup_tags(content)
+            if modified != content:
+                with open(html_file, "w", encoding="utf-8") as f:
+                    f.write(modified)
+                colgroup_stripped += 1
+    except Exception as e:
+        print(f"  Error processing {html_file}: {e}")
+
+if colgroup_stripped > 0:
+    print(f"   Stripped colgroup from {colgroup_stripped} file(s)")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

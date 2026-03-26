@@ -86,5 +86,5 @@ def test_contained_docstring_link():
     """
 
     qmd = render_code_variable(code, "Base")
-    # Q renderer adds parens to method references
-    assert "[meth()](#package.Base.meth)" in qmd or "[meth](#package.Base.meth)" in qmd
+    # Methods in summary tables are rendered as HTML links
+    assert '<a href="#package.Base.meth"' in qmd and ">meth()</a>" in qmd
