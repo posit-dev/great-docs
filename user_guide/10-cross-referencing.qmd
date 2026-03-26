@@ -1,6 +1,6 @@
 ---
 title: "Cross-Referencing"
-guide-section: "Configuration & Theming"
+guide-section: "Config & Theming"
 bread-crumbs: false
 ---
 
