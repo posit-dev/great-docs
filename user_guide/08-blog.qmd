@@ -97,7 +97,7 @@ This produces a listing page that:
 
 ### Custom Listing Page
 
-To customize the listing layout, provide your own `blog/index.qmd`. For example, to use a table layout (like [Great Tables' blog](https://posit-dev.github.io/great-tables/blog/)):
+To customize the listing layout, provide your own `blog/index.qmd`. For example, to use a table layout:
 
 ```{.yaml filename="blog/index.qmd"}
 ---
