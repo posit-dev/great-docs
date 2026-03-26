@@ -2931,6 +2931,22 @@ def fix_script_paths():
             content = content.replace(old_tooltips, new_tooltips)
             modified = True
 
+        # Fix responsive-tables.js path
+        old_resp_tables = '<script src="responsive-tables.js"></script>'
+        new_resp_tables = f'<script src="{prefix}responsive-tables.js"></script>'
+
+        if old_resp_tables in content:
+            content = content.replace(old_resp_tables, new_resp_tables)
+            modified = True
+
+        # Fix mermaid-renderer.js path
+        old_mermaid = '<script src="mermaid-renderer.js"></script>'
+        new_mermaid = f'<script src="{prefix}mermaid-renderer.js"></script>'
+
+        if old_mermaid in content:
+            content = content.replace(old_mermaid, new_mermaid)
+            modified = True
+
         if modified:
             with open(html_file, "w") as file:
                 file.write(content)
