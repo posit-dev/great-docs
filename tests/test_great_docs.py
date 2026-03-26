@@ -23068,7 +23068,13 @@ def test_get_package_metadata_license_dict():
 
 
 def test_get_package_metadata_license_file_dict():
-    """Test _get_package_metadata handles license dict with file key."""
+    """Test _get_package_metadata handles license dict with file key.
+
+    When license is specified as {file = "LICENSE"} without a classifier,
+    the license field is left empty since a filename isn't useful for JSON-LD.
+    Projects should add a classifier like "License :: OSI Approved :: MIT License"
+    to get proper license detection.
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text(
@@ -23077,7 +23083,25 @@ def test_get_package_metadata_license_file_dict():
         )
         docs = GreatDocs(project_path=tmp_dir)
         meta = docs._get_package_metadata()
-        assert meta["license"] == "LICENSE"
+        # Without a classifier, file references don't provide a license ID
+        assert meta["license"] == ""
+
+
+def test_get_package_metadata_license_from_classifier():
+    """Test _get_package_metadata extracts license from classifier."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            "[project]\n"
+            'name = "pkg"\n'
+            'license = {file = "LICENSE"}\n'
+            'classifiers = ["License :: OSI Approved :: MIT License"]\n',
+            encoding="utf-8",
+        )
+        docs = GreatDocs(project_path=tmp_dir)
+        meta = docs._get_package_metadata()
+        # Should extract "MIT" from classifier
+        assert meta["license"] == "MIT"
 
 
 def test_get_package_metadata_setup_cfg_urls():
@@ -40718,3 +40742,224 @@ def test_update_quarto_config_mermaid_renderer_not_duplicated():
             if isinstance(item, dict) and "mermaid-renderer.js" in str(item.get("text", ""))
         )
         assert mermaid_count == 1
+
+
+# ==============================================================================
+# SEO Configuration Tests
+# ==============================================================================
+
+
+def test_config_seo_defaults():
+    """Test that SEO configuration has sensible defaults."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        config = Config(Path(tmp_dir))
+        # Master switch
+        assert config.seo_enabled is True
+        # Sitemap
+        assert config.sitemap_enabled is True
+        assert "homepage" in config.sitemap_changefreq
+        assert config.sitemap_changefreq["homepage"] == "weekly"
+        assert config.sitemap_priority["homepage"] == 1.0
+        # Robots
+        assert config.robots_enabled is True
+        assert config.robots_allow_all is True
+        assert config.robots_disallow == []
+        assert config.robots_crawl_delay is None
+        # Canonical
+        assert config.canonical_enabled is True
+        assert config.canonical_base_url is None
+        # Title template
+        assert config.seo_title_template == "{page_title} | {site_name}"
+        # Structured data
+        assert config.structured_data_enabled is True
+        assert config.structured_data_type == "SoftwareSourceCode"
+
+
+def test_config_seo_overrides():
+    """Test that SEO config properties respect user overrides."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        config_path = Path(tmp_dir) / "great-docs.yml"
+        config_path.write_text(
+            """
+seo:
+  enabled: false
+  sitemap:
+    enabled: false
+    changefreq:
+      homepage: daily
+    priority:
+      homepage: 0.5
+  robots:
+    enabled: false
+    allow_all: false
+    disallow:
+      - /drafts/
+    crawl_delay: 10
+    extra_rules:
+      - "User-agent: GPTBot"
+      - "Disallow: /"
+  canonical:
+    enabled: false
+    base_url: https://example.com/docs/
+  title_template: "{page_title} - {site_name}"
+  structured_data:
+    enabled: false
+    type: WebSite
+  default_description: "My package documentation"
+"""
+        )
+        config = Config(Path(tmp_dir))
+        # Master switch
+        assert config.seo_enabled is False
+        # Sitemap
+        assert config.sitemap_enabled is False
+        assert config.sitemap_changefreq["homepage"] == "daily"
+        assert config.sitemap_priority["homepage"] == 0.5
+        # Robots
+        assert config.robots_enabled is False
+        assert config.robots_allow_all is False
+        assert config.robots_disallow == ["/drafts/"]
+        assert config.robots_crawl_delay == 10
+        assert config.robots_extra_rules == ["User-agent: GPTBot", "Disallow: /"]
+        # Canonical
+        assert config.canonical_enabled is False
+        assert config.canonical_base_url == "https://example.com/docs/"
+        # Title template
+        assert config.seo_title_template == "{page_title} - {site_name}"
+        # Structured data
+        assert config.structured_data_enabled is False
+        assert config.structured_data_type == "WebSite"
+        # Default description
+        assert config.seo_default_description == "My package documentation"
+
+
+def test_categorize_page():
+    """Test page categorization for SEO settings."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        # Homepage
+        assert docs._categorize_page("index.html") == "homepage"
+        # Reference pages
+        assert docs._categorize_page("reference/MyClass.html") == "reference"
+        assert docs._categorize_page("reference/index.html") == "reference"
+        # User guide
+        assert docs._categorize_page("user-guide/intro.html") == "user_guide"
+        assert docs._categorize_page("user-guide/configuration.html") == "user_guide"
+        # Changelog
+        assert docs._categorize_page("changelog.html") == "changelog"
+        # Recipes (treated as user guide)
+        assert docs._categorize_page("recipes/custom-css.html") == "user_guide"
+        # Default for other pages
+        assert docs._categorize_page("about.html") == "default"
+        assert docs._categorize_page("some/nested/page.html") == "default"
+
+
+def test_generate_sitemap_xml():
+    """Test sitemap.xml generation."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Create a mock site structure
+        site_dir = Path(tmp_dir) / "great-docs" / "_site"
+        site_dir.mkdir(parents=True)
+
+        # Create some HTML files
+        (site_dir / "index.html").write_text("<html></html>")
+        (site_dir / "reference").mkdir()
+        (site_dir / "reference" / "MyClass.html").write_text("<html></html>")
+        (site_dir / "user-guide").mkdir()
+        (site_dir / "user-guide" / "intro.html").write_text("<html></html>")
+
+        # Create config with a base URL
+        config_path = Path(tmp_dir) / "great-docs.yml"
+        config_path.write_text(
+            """
+seo:
+  canonical:
+    base_url: https://example.com/docs/
+"""
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._generate_sitemap_xml()
+
+        sitemap_path = site_dir / "sitemap.xml"
+        assert sitemap_path.exists()
+
+        content = sitemap_path.read_text()
+        assert '<?xml version="1.0" encoding="UTF-8"?>' in content
+        assert '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' in content
+        assert "<loc>https://example.com/docs/</loc>" in content
+        assert "<loc>https://example.com/docs/reference/MyClass.html</loc>" in content
+        assert "<priority>1.0</priority>" in content  # Homepage priority
+
+
+def test_generate_robots_txt():
+    """Test robots.txt generation."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Create a mock site structure
+        site_dir = Path(tmp_dir) / "great-docs" / "_site"
+        site_dir.mkdir(parents=True)
+
+        # Create config with custom robots settings
+        config_path = Path(tmp_dir) / "great-docs.yml"
+        config_path.write_text(
+            """
+seo:
+  canonical:
+    base_url: https://example.com/docs/
+  robots:
+    disallow:
+      - /drafts/
+    extra_rules:
+      - "User-agent: GPTBot"
+      - "Disallow: /"
+"""
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._generate_robots_txt()
+
+        robots_path = site_dir / "robots.txt"
+        assert robots_path.exists()
+
+        content = robots_path.read_text()
+        assert "User-agent: *" in content
+        assert "Allow: /" in content
+        assert "Disallow: /drafts/" in content
+        assert "User-agent: GPTBot" in content
+        assert "Sitemap: https://example.com/docs/sitemap.xml" in content
+
+
+def test_get_seo_options():
+    """Test _get_seo_options returns correct options dict."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            """
+[project]
+name = "test-package"
+description = "A test package"
+version = "1.0.0"
+"""
+        )
+
+        config_path = Path(tmp_dir) / "great-docs.yml"
+        config_path.write_text(
+            """
+display_name: Test Package
+seo:
+  canonical:
+    base_url: https://example.com/docs/
+  title_template: "{page_title} | {site_name}"
+"""
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        options = docs._get_seo_options()
+
+        assert options["seo_enabled"] is True
+        assert options["canonical_enabled"] is True
+        assert options["canonical_base_url"] == "https://example.com/docs/"
+        assert options["title_template"] == "{page_title} | {site_name}"
+        assert options["structured_data_enabled"] is True
+        assert options["site_name"] == "Test Package"
+        assert options["package_description"] == "A test package"
