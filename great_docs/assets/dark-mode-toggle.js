@@ -92,17 +92,26 @@
 
         const sunIcon = toggle.querySelector('.theme-icon-light');
         const moonIcon = toggle.querySelector('.theme-icon-dark');
+        const newTooltip = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
 
         if (theme === 'dark') {
             toggle.setAttribute('aria-pressed', 'true');
-            toggle.title = 'Switch to light mode';
             if (sunIcon) sunIcon.style.display = 'none';
             if (moonIcon) moonIcon.style.display = 'inline-block';
         } else {
             toggle.setAttribute('aria-pressed', 'false');
-            toggle.title = 'Switch to dark mode';
             if (sunIcon) sunIcon.style.display = 'inline-block';
             if (moonIcon) moonIcon.style.display = 'none';
+        }
+
+        // Update tooltip: use data-tippy-content to keep Tippy in sync
+        // and avoid native browser tooltips (which appear after delay)
+        toggle.setAttribute('data-tippy-content', newTooltip);
+        toggle.removeAttribute('title');
+
+        // Update existing Tippy instance content directly if present
+        if (toggle._tippy) {
+            toggle._tippy.setContent(newTooltip);
         }
     }
 
@@ -128,7 +137,7 @@
                     type="button"
                     role="switch"
                     aria-label="Toggle dark mode"
-                    title="Switch to dark mode">
+                    data-tippy-content="Switch to dark mode">
                 <span class="theme-icon-light" aria-hidden="true">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="5"></circle>
