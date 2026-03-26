@@ -153,6 +153,7 @@ class GreatDocs:
             "theme-init.js",
             "copy-code.js",
             "tooltips.js",
+            "mermaid-renderer.js",
         ]
         if self._config.markdown_pages_widget:
             js_files.append("copy-page.js")
@@ -7994,6 +7995,7 @@ toc: false
             "theme-init.js",
             "copy-code.js",
             "tooltips.js",
+            "mermaid-renderer.js",
         ]
         if self._config.markdown_pages_widget:
             js_resource_files.append("copy-page.js")
@@ -8037,6 +8039,10 @@ toc: false
 
         # Disable Quarto's native code-copy — we supply our own via copy-code.js
         config["format"]["html"]["code-copy"] = False
+
+        # Configure Mermaid diagrams - use 'default' (light) theme always
+        # We provide a light background container in dark mode via CSS
+        config["format"]["html"]["mermaid"] = {"theme": "default"}
 
         if "great-docs.scss" not in config["format"]["html"]["theme"]:
             if isinstance(config["format"]["html"]["theme"], str):
@@ -8390,6 +8396,15 @@ toc: false
             )
             if not has_early_theme:
                 config["format"]["html"]["include-in-header"].append(early_theme_script)
+
+        # Add mermaid renderer script (custom mermaid with proper theme support)
+        mermaid_renderer_entry = {"text": '<script src="mermaid-renderer.js"></script>'}
+        has_mermaid_renderer = any(
+            "mermaid-renderer.js" in str(item)
+            for item in config["format"]["html"]["include-after-body"]
+        )
+        if not has_mermaid_renderer:
+            config["format"]["html"]["include-after-body"].append(mermaid_renderer_entry)
 
         # Add page metadata script (if show_dates is enabled)
         if self._config.show_dates:
@@ -11287,9 +11302,9 @@ toc: false
         from collections import defaultdict
 
         from ._harper import (
-            HarperNotFoundError,
             HarperError,
             HarperFileResult,
+            HarperNotFoundError,
             run_harper,
             run_harper_on_text,
         )
