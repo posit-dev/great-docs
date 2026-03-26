@@ -154,6 +154,7 @@ class GreatDocs:
             "copy-code.js",
             "tooltips.js",
             "mermaid-renderer.js",
+            "responsive-tables.js",
         ]
         if self._config.markdown_pages_widget:
             js_files.append("copy-page.js")
@@ -8032,6 +8033,7 @@ toc: false
             "copy-code.js",
             "tooltips.js",
             "mermaid-renderer.js",
+            "responsive-tables.js",
         ]
         if self._config.markdown_pages_widget:
             js_resource_files.append("copy-page.js")
@@ -8491,6 +8493,15 @@ toc: false
         )
         if not has_tooltips:
             config["format"]["html"]["include-after-body"].append(tooltips_script_entry)
+
+        # Add responsive tables script (always enabled — wraps tables in scroll containers)
+        responsive_tables_script_entry = {"text": '<script src="responsive-tables.js"></script>'}
+        has_responsive_tables = any(
+            "responsive-tables.js" in str(item)
+            for item in config["format"]["html"]["include-after-body"]
+        )
+        if not has_responsive_tables:
+            config["format"]["html"]["include-after-body"].append(responsive_tables_script_entry)
 
         # Add sidebar navigation (reference sidebar added later by
         # _add_api_reference_config if exports are discovered)
