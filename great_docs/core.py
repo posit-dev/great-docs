@@ -1777,8 +1777,8 @@ class GreatDocs:
         """
         Auto-generate a blog listing index using Quarto's `listing:` directive.
 
-        Creates a page that mirrors the approach used by Great Tables and other
-        Quarto-based project blogs: a table-style listing sorted by date.
+        Creates a page that mirrors the approach used by Quarto-based project blogs: a table-style
+        listing sorted by date.
 
         Parameters
         ----------
@@ -6733,10 +6733,9 @@ jupyter: python3
         1. **Top-of-file badges** — bare ``[![alt](img)](url)`` lines right
            after the first heading.
         2. **Centered-div badges** — badges inside a
-           ``<div align="center">`` block (common in repos like Pointblank,
-           Great Tables, etc.).  When this layout is detected, the entire
+           `<div align="center">` block. When this layout is detected, the entire
            centered block (hero image, italic tagline, and badges) is
-           stripped because the hero section replaces it.  The logo image
+           stripped because the hero section replaces it. The logo image
            and tagline text are returned so the hero section can use them.
 
         Parameters
