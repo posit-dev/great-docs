@@ -215,6 +215,40 @@ dynamic: false
 
 ## GitHub Integration
 
+Several Great Docs features require knowing your GitHub repository URL:
+
+- **GitHub widget/icon** in the navbar (with star count)
+- **Source links** on API reference pages
+- **Version badge** next to the package name (from GitHub Releases)
+- **Changelog** page (from GitHub Releases)
+
+### Repository URL Detection
+
+Great Docs looks for your GitHub repository in this order:
+
+1. **`repo:` in great-docs.yml**: explicit override, takes precedence
+2. **`[project.urls]` in pyproject.toml**: looks for `Repository`, `Source`, `GitHub`, or `Homepage` keys containing a GitHub URL
+
+```{.yaml filename="great-docs.yml"}
+repo: https://github.com/your-org/your-package
+```
+
+Or via pyproject.toml:
+
+```{.toml filename="pyproject.toml"}
+[project.urls]
+Repository = "https://github.com/your-org/your-package"
+```
+
+::: {.callout-note}
+## Build Messages
+
+During `great-docs build`, you may see messages about GitHub integration:
+
+- **"No GitHub repository info available"**: no repository URL was found. Check that `repo:` is set in great-docs.yml or `[project.urls]` is configured in pyproject.toml.
+- **"No GitHub releases found"**: the repository was detected, but has no published GitHub Releases. The version badge feature requires at least one published release.
+:::
+
 ### GitHub Link Style
 
 Choose how the GitHub link appears in the navbar:
@@ -226,6 +260,17 @@ github_style: widget
 # Or use a simple GitHub icon
 github_style: icon
 ```
+
+### Version Badge
+
+When your repository has published GitHub Releases, Great Docs automatically displays a version badge next to your package name in the navbar. The badge shows the latest release version and updates automatically on each build.
+
+This feature requires:
+
+1. A detected GitHub repository URL (see above)
+2. At least one published [GitHub Release](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
+
+No configuration is needed (the badge appears automatically when these conditions are met).
 
 ### Source Links
 
@@ -804,6 +849,7 @@ exclude:
   - _InternalClass
 
 # GitHub Integration
+repo: https://github.com/your-org/your-package  # Override auto-detect
 github_style: widget
 
 # Source Links

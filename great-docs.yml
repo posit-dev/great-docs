@@ -41,6 +41,9 @@ favicon: assets/favicon.svg
 
 # GitHub Integration
 # ------------------
+# Repository URL override (auto-detected from pyproject.toml [project.urls] by default)
+# repo: https://github.com/your-org/your-package
+
 # GitHub link style: "widget" (shows stars count) or "icon" (simple icon)
 github_style: widget
 

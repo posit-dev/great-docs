@@ -191,6 +191,7 @@ announcement:
   dismissable: true
 
 # GitHub integration
+repo: https://github.com/your-org/your-package # Optional override
 github_style: widget
 
 # CLI documentation
