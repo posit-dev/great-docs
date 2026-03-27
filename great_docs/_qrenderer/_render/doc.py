@@ -538,9 +538,13 @@ class __RenderDoc(RenderBase):
         where the rendered link and text are placed.
         """
         # The page where this object will be written
+        # For contained members (e.g. methods within a class page), use the
+        # short name as anchor since Quarto generates section IDs from heading
+        # text (e.g. "get" not "package.ClassName.get").
+        anchor = self.doc.name if self.contained else self.doc.anchor
         link = Link(
             markdown_escape(self.summary_name),
-            f"{self.page_path}#{self.doc.anchor}",
+            f"{self.page_path}#{anchor}",
             attr=Attr(classes=[f"doc-{self.kind}", "doc-label", f"doc-label-{self.label}"]),
         )
         return [(str(link), self.docstring_subject)]

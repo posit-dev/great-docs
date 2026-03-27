@@ -2,13 +2,7 @@ from __future__ import annotations
 
 import html
 import re
-import secrets
 from typing import Sequence
-
-
-def _generate_table_id() -> str:
-    """Generate a unique 10-character alphanumeric ID for scoped CSS."""
-    return secrets.token_hex(5)
 
 
 def _md_link_to_html(text: str) -> str:
@@ -43,49 +37,23 @@ def html_table(
     table_class: str = "gd-summary-table",
 ) -> str:
     """
-    Render rows as an HTML table with scoped CSS.
+    Render rows as an HTML table.
+
+    Styling is handled by the .gd-summary-table class in great-docs.scss,
+    which overrides Bootstrap defaults for a cleaner appearance.
 
     Parameters
     ----------
     rows
         Sequence of (name, description) tuples. Name can contain markdown links.
     table_class
-        CSS class to apply to the table for additional styling hooks.
+        CSS class to apply to the table for styling.
 
     Returns
     -------
     str
-        HTML string with scoped styles and table markup.
+        HTML string with table markup.
     """
-    table_id = _generate_table_id()
-
-    # Build scoped CSS
-    css = f"""<style>
-#{table_id} {{
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1em 0;
-}}
-#{table_id} thead {{
-  display: none;
-}}
-#{table_id} td {{
-  padding: 0.5em 0.75em;
-  vertical-align: top;
-  border-top: 1px solid var(--bs-border-color, #dee2e6);
-}}
-#{table_id} tr:first-child td {{
-  border-top: none;
-}}
-#{table_id} td:first-child {{
-  width: 40%;
-  font-weight: 500;
-}}
-#{table_id} td:last-child {{
-  color: var(--bs-secondary-color, #6c757d);
-}}
-</style>"""
-
     # Build table rows
     body_rows = []
     for name, desc in rows:
@@ -101,9 +69,8 @@ def html_table(
 
     table_body = "\n".join(body_rows)
 
-    # Assemble full HTML
-    html = f"""{css}
-<table id="{table_id}" class="{table_class}">
+    # Assemble full HTML (no inline styles needed - SCSS handles styling)
+    html_out = f"""<table class="{table_class}">
 <thead>
   <tr>
     <th>Name</th>
@@ -115,4 +82,4 @@ def html_table(
 </tbody>
 </table>"""
 
-    return html
+    return html_out
