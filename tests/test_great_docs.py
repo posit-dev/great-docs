@@ -912,6 +912,88 @@ def test_setup_github_pages_explicit_package_manager():
         assert "pip install -e ." in content
 
 
+def test_setup_github_pages_default_installs_from_pypi():
+    """Test that setup-github-pages installs Great Docs from PyPI by default."""
+    runner = CliRunner()
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        result = runner.invoke(setup_github_pages, ["--project-path", tmp_dir, "--force"])
+
+        assert result.exit_code == 0
+        assert "Will install Great Docs from PyPI (latest release)" in result.output
+
+        # Check the workflow file installs from PyPI (just 'great-docs', not git+)
+        workflow_file = Path(tmp_dir) / ".github" / "workflows" / "docs.yml"
+        content = workflow_file.read_text()
+        assert "pip install great-docs" in content
+        assert "git+https://github.com/posit-dev/great-docs.git" not in content
+
+
+def test_setup_github_pages_install_from_main_flag():
+    """Test that --install-from-main flag installs from GitHub main branch."""
+    runner = CliRunner()
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        result = runner.invoke(
+            setup_github_pages,
+            ["--project-path", tmp_dir, "--install-from-main", "--force"],
+        )
+
+        assert result.exit_code == 0
+        assert "Will install Great Docs from GitHub main branch" in result.output
+
+        # Check the workflow file installs from GitHub
+        workflow_file = Path(tmp_dir) / ".github" / "workflows" / "docs.yml"
+        content = workflow_file.read_text()
+        assert "git+https://github.com/posit-dev/great-docs.git" in content
+
+
+def test_setup_github_pages_install_from_main_with_uv():
+    """Test that --install-from-main works correctly with uv package manager."""
+    runner = CliRunner()
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_root = Path(tmp_dir)
+        (project_root / "uv.lock").touch()
+
+        result = runner.invoke(
+            setup_github_pages,
+            ["--project-path", tmp_dir, "--install-from-main", "--force"],
+        )
+
+        assert result.exit_code == 0
+        assert "Detected uv" in result.output
+        assert "Will install Great Docs from GitHub main branch" in result.output
+
+        workflow_file = project_root / ".github" / "workflows" / "docs.yml"
+        content = workflow_file.read_text()
+        assert "uv sync" in content
+        assert "uv pip install git+https://github.com/posit-dev/great-docs.git" in content
+
+
+def test_setup_github_pages_install_from_main_with_poetry():
+    """Test that --install-from-main works correctly with poetry package manager."""
+    runner = CliRunner()
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_root = Path(tmp_dir)
+        (project_root / "poetry.lock").touch()
+
+        result = runner.invoke(
+            setup_github_pages,
+            ["--project-path", tmp_dir, "--install-from-main", "--force"],
+        )
+
+        assert result.exit_code == 0
+        assert "Detected poetry" in result.output
+        assert "Will install Great Docs from GitHub main branch" in result.output
+
+        workflow_file = project_root / ".github" / "workflows" / "docs.yml"
+        content = workflow_file.read_text()
+        assert "poetry install" in content
+        assert "poetry run pip install git+https://github.com/posit-dev/great-docs.git" in content
+
+
 def test_generate_llms_txt():
     """Test generation of llms.txt file."""
     with tempfile.TemporaryDirectory() as tmp_dir:
