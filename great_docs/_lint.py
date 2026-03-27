@@ -196,9 +196,6 @@ def run_lint(
     return result
 
 
-# ── Individual checks ────────────────────────────────────────────────────────
-
-
 def _get_docstring(obj) -> str | None:
     """Safely extract docstring text from a griffe object."""
     try:
