@@ -57,7 +57,7 @@ Creates a GitHub Actions workflow that builds and publishes your site on every p
 ## Learn More
 
 - [User Guide](user-guide/installation.qmd) — setup, configuration, theming, and deployment
-- [Recipes](recipes/01-hide-internal-symbols.qmd) — step-by-step guides for common tasks
+- [Recipes](recipes/hide-internal-symbols.qmd) — step-by-step guides for common tasks
 - [API Reference](reference/index.qmd) — Great Docs' own API documentation
 
 ## License
