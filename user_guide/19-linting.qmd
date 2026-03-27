@@ -34,16 +34,23 @@ When issues are found, they are grouped by check type with clear indicators:
 ────────────────────────────────────────────────────────────
   missing-docstring  [2 error(s), 3 warning(s)]
 ────────────────────────────────────────────────────────────
-  ❌  calculate_total: Public export 'calculate_total' has no docstring.
-  ❌  DataProcessor: Public export 'DataProcessor' has no docstring.
-  ⚠️   Widget.render: Public method 'Widget.render' has no docstring.
-  ⚠️   Widget.update: Public method 'Widget.update' has no docstring.
-  ⚠️   Widget.__repr__: Public method 'Widget.__repr__' has no docstring.
+  ❌  calculate_total: Public export 'calculate_total'
+                       has no docstring.
+  ❌  DataProcessor: Public export 'DataProcessor' has
+                     no docstring.
+  ⚠️   Widget.render: Public method 'Widget.render'
+                       has no docstring.
+  ⚠️   Widget.update: Public method 'Widget.update'
+                       has no docstring.
+  ⚠️   Widget.__repr__: Public method 'Widget.__repr__'
+                         has no docstring.
 
 ────────────────────────────────────────────────────────────
   style-mismatch  [1 warning(s)]
 ────────────────────────────────────────────────────────────
-  ⚠️   parse_config: Docstring appears to use 'google' style but project is configured for 'numpy'.
+  ⚠️   parse_config: Docstring appears to use 'google'
+                      style but project is configured
+                      for 'numpy'.
 
 ────────────────────────────────────────────────────────────
 ❌ 2 error(s), 4 warning(s)
