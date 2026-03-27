@@ -180,6 +180,7 @@ class TestScalarProperties:
             "show_dates": False,
             "date_format": "%B %d, %Y",
             "show_author": True,
+            "show_security": True,
         }
 
     def test_jupyter_default(self, tmp_project: Path):
