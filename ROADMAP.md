@@ -96,19 +96,6 @@ Include custom HTML pages with minimal or no transformation.
 - Frontmatter option: `layout: passthrough` or `layout: raw`
 - Custom pages directory (e.g., `custom/`) auto-discovered during build
 
-### Video Embedding
-
-Simple syntax for embedding videos from popular platforms.
-
-- YouTube, Vimeo, and Loom support via shortcode or directive
-- Local video files with HTML5 `<video>` element
-- Responsive containers maintaining aspect ratio
-- Lazy loading for performance
-- Configurable autoplay, loop, muted defaults
-- Thumbnail placeholders before load
-- Caption/transcript support for accessibility
-- Example: `{{< video youtube="dQw4w9WgXcQ" >}}` or `::: {.video src="demo.mp4"}`
-
 ### Enhanced CLI Reference
 
 API-reference-style rendering for CLI applications.
