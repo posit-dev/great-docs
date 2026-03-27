@@ -88,6 +88,63 @@ The changelog feature needs API access to fetch releases. In GitHub Actions, `GI
 
 The generated workflow already includes this — no extra setup needed.
 
+## Package Manager Detection
+
+Great Docs automatically detects your project's package manager and generates the appropriate install commands:
+
+| Lock File | Package Manager | Install Command |
+|-----------|-----------------|-----------------|
+| `uv.lock` | uv | `uv sync` (includes dev dependencies) |
+| `poetry.lock` | poetry | `poetry install` (includes dev dependencies) |
+| Neither | pip | `pip install -e .` with optional extras |
+
+### uv Projects
+
+If your project uses uv, the workflow installs all dependencies from your lock file:
+
+```yaml
+- name: Install package and dependencies
+  run: |
+    python -m pip install uv
+    uv sync
+    uv pip install git+https://github.com/posit-dev/great-docs.git
+```
+
+### Poetry Projects
+
+For poetry projects:
+
+```yaml
+- name: Install package and dependencies
+  run: |
+    python -m pip install poetry
+    poetry install
+    poetry run pip install git+https://github.com/posit-dev/great-docs.git
+```
+
+### pip Projects with Optional Dependencies
+
+For pip-based projects, Great Docs scans your `pyproject.toml` for optional dependency groups like `dev`, `docs`, `test`, or `notebook` and includes them automatically:
+
+```yaml
+- name: Install package and dependencies
+  run: |
+    python -m pip install --upgrade pip
+    python -m pip install -e ".[dev,docs]"
+    python -m pip install git+https://github.com/posit-dev/great-docs.git
+```
+
+This ensures that dependencies needed for documentation notebooks (like visualization libraries) are installed in CI.
+
+### Override Package Manager Detection
+
+Use the `--package-manager` flag to override auto-detection:
+
+```{.bash filename="Terminal"}
+great-docs setup-github-pages --package-manager pip  # Force pip even if uv.lock exists
+great-docs setup-github-pages --package-manager uv   # Force uv
+```
+
 ## Verifying the Deploy
 
 After the first successful run, your docs are live at:
