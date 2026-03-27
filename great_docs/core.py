@@ -276,6 +276,78 @@ class GreatDocs:
 
         return True
 
+    def _copy_readme_images(self, source_file: Path | None) -> int:
+        """
+        Copy images referenced in README.md (or similar) to the build directory.
+
+        Scans the source file for local image references (Markdown `![](path)` and
+        HTML `<img src="path">` syntax) and copies those files to the build directory.
+        Skips URLs and paths under `assets/` (which are already handled by `_copy_assets()`).
+
+        Parameters
+        ----------
+        source_file
+            Path to the source file (README.md, index.md, etc.) to scan for images.
+            If `None`, no action is taken.
+
+        Returns
+        -------
+        int
+            Number of image files copied.
+        """
+        if source_file is None or not source_file.exists():
+            return 0
+
+        with open(source_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Find all image references:
+        # 1. Markdown: ![alt](path) or ![alt](path "title")
+        # 2. HTML: <img src="path"> or <img src='path'>
+        image_paths: set[str] = set()
+
+        # Markdown image pattern: ![...](path) or ![...](path "title")
+        md_pattern = r"!\[[^\]]*\]\(([^)\s\"]+)(?:\s*\"[^\"]*\")?\)"
+        for match in re.finditer(md_pattern, content):
+            image_paths.add(match.group(1))
+
+        # HTML img pattern: <img ... src="path" ...> or src='path'
+        html_pattern = r"<img[^>]+src=[\"']([^\"']+)[\"']"
+        for match in re.finditer(html_pattern, content, re.IGNORECASE):
+            image_paths.add(match.group(1))
+
+        # Filter to local paths only (exclude URLs and assets/ which is handled separately)
+        local_images: list[tuple[str, Path]] = []
+        for path_str in image_paths:
+            # Skip URLs
+            if path_str.startswith(("http://", "https://", "data:", "//")):
+                continue
+            # Skip assets/ directory (handled by _copy_assets)
+            if path_str.startswith("assets/"):
+                continue
+            # Resolve relative to source file's directory
+            img_path = source_file.parent / path_str
+            if img_path.exists() and img_path.is_file():
+                local_images.append((path_str, img_path))
+
+        if not local_images:
+            return 0
+
+        # Copy each image to the build directory, preserving relative paths
+        copied = 0
+        for rel_path, abs_path in local_images:
+            dest_path = self.project_path / rel_path
+            # Create parent directories if needed
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            # Copy the file
+            shutil.copy2(abs_path, dest_path)
+            copied += 1
+
+        if copied > 0:
+            print(f"\n🖼️  Copied {copied} image(s) referenced in {source_file.name}")
+
+        return copied
+
     def install(self, force: bool = False) -> None:
         """
         Initialize great-docs in your project.
@@ -7633,6 +7705,9 @@ title: "Authors and Citation"
             # Convert RST to Markdown using Quarto's bundled pandoc
             if source_file.suffix.lower() == ".rst":
                 readme_content = self._convert_rst_to_markdown(source_file)
+
+            # Copy images referenced in the source file to the build directory
+            self._copy_readme_images(source_file)
 
         # Build hero section (must run before heading adjustment so badge
         # extraction works on original markdown)
