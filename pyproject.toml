@@ -1,10 +1,12 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=61.0", "wheel", "setuptools_scm>=6.2"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
 
 [project]
 name = "great-docs"
-version = "0.1.0"
+dynamic = ["version"]
 description = "An easy-to-use documentation site generator for Python packages"
 readme = "README.md"
 license = {file = "LICENSE"}
