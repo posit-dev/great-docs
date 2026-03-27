@@ -1689,6 +1689,8 @@ def lint(project_path: str | None, checks: tuple[str, ...], json_output: bool) -
       great-docs lint --json | jq '.issues[] | select(.severity == "error")'
     """
     import json
+    import shutil
+    import textwrap
 
     from ._lint import run_lint
 
@@ -1736,7 +1738,18 @@ def lint(project_path: str | None, checks: tuple[str, ...], json_output: bool) -
                     for issue in issues:
                         icon = "❌" if issue.severity == "error" else "⚠️ "
                         symbol_str = f"  {issue.symbol}" if issue.symbol else ""
-                        click.echo(f"  {icon}{symbol_str}: {issue.message}")
+                        prefix = f"  {icon}{symbol_str}: "
+                        # Wrap long messages to keep output tidy
+                        term_width = shutil.get_terminal_size((80, 24)).columns
+                        wrap_width = max(40, term_width - len(prefix))
+                        lines = textwrap.wrap(issue.message, width=wrap_width)
+                        if lines:
+                            click.echo(f"{prefix}{lines[0]}")
+                            indent = " " * len(prefix)
+                            for line in lines[1:]:
+                                click.echo(f"{indent}{line}")
+                        else:
+                            click.echo(prefix.rstrip())
 
                 click.echo(f"\n{'─' * 60}")
                 n_errors = len(result.errors)
