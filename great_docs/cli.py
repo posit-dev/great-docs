@@ -558,12 +558,18 @@ cli.add_command(scan)
     is_flag=True,
     help="Overwrite existing workflow file without prompting",
 )
+@click.option(
+    "--install-from-main",
+    is_flag=True,
+    help="Install Great Docs from GitHub main branch instead of PyPI release",
+)
 def setup_github_pages(
     project_path: str | None,
     main_branch: str,
     python_version: str | None,
     package_manager: str,
     force: bool,
+    install_from_main: bool,
 ) -> None:
     """Set up automatic deployment to GitHub Pages.
 
@@ -595,6 +601,7 @@ def setup_github_pages(
       great-docs setup-github-pages --python-version 3.12
       great-docs setup-github-pages --package-manager uv
       great-docs setup-github-pages --force             # Overwrite existing workflow
+      great-docs setup-github-pages --install-from-main # Use GitHub main branch
     """
 
     try:
@@ -621,17 +628,25 @@ def setup_github_pages(
             else:
                 click.echo("🔧 Using pip (no uv.lock or poetry.lock found)")
 
+        # Determine great-docs install source
+        if install_from_main:
+            great_docs_install = "git+https://github.com/posit-dev/great-docs.git"
+            click.echo("📥 Will install Great Docs from GitHub main branch")
+        else:
+            great_docs_install = "great-docs"
+            click.echo("📥 Will install Great Docs from PyPI (latest release)")
+
         # Generate install commands based on package manager
         if package_manager == "uv":
-            install_commands = """\
+            install_commands = f"""\
           python -m pip install uv
           uv sync
-          uv pip install git+https://github.com/posit-dev/great-docs.git"""
+          uv pip install {great_docs_install}"""
         elif package_manager == "poetry":
-            install_commands = """\
+            install_commands = f"""\
           python -m pip install poetry
           poetry install
-          poetry run pip install git+https://github.com/posit-dev/great-docs.git"""
+          poetry run pip install {great_docs_install}"""
         else:
             # pip: try to detect optional dependencies
             optional_deps = _detect_optional_dependencies(project_root)
@@ -641,12 +656,12 @@ def setup_github_pages(
                 install_commands = f"""\
           python -m pip install --upgrade pip
           python -m pip install -e ".[{extras}]"
-          python -m pip install git+https://github.com/posit-dev/great-docs.git"""
+          python -m pip install {great_docs_install}"""
             else:
-                install_commands = """\
+                install_commands = f"""\
           python -m pip install --upgrade pip
           python -m pip install -e .
-          python -m pip install git+https://github.com/posit-dev/great-docs.git"""
+          python -m pip install {great_docs_install}"""
 
         # Create .github/workflows directory
         workflow_dir = project_root / ".github" / "workflows"
