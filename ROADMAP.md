@@ -66,6 +66,16 @@ Add icon support for sidebar and navbar entries.
 - Dark mode color adaptation
 - Consistent sizing and alignment across navigation levels
 
+### SECURITY.md Support
+
+Auto-detect and render SECURITY.md files as documentation pages.
+
+- Detect `SECURITY.md` in project root during init/build
+- Generate a styled security policy page (e.g., `security.qmd`)
+- Add "Security" link to homepage sidebar alongside License, Citation, etc.
+- Support standard security policy sections (vulnerability reporting, supported versions)
+- Optional `site.show_security: true/false` config to control visibility
+
 ---
 
 ## Planned — Medium Term
