@@ -4,16 +4,6 @@
 
 High-value features that build on existing infrastructure.
 
-### Documentation Linting
-
-A `great-docs lint` command for documentation quality checks.
-
-- Missing docstrings for public exports
-- Broken internal cross-references
-- Style-guide enforcement (consistent docstring format)
-- Family/directive consistency checks
-- Machine-readable JSON output for CI integration
-
 ### Internationalization (i18n) — UI Text
 
 Translate Great Docs interface text into multiple languages.
