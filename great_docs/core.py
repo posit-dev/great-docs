@@ -7108,8 +7108,8 @@ jupyter: python3
         in five sections: Links, AI / Agents, Developers, Community, and Meta.
 
         As a side effect, creates `contributing.qmd`, `code-of-conduct.qmd`,
-        and `roadmap.qmd` in the project directory if the corresponding source
-        files exist.
+        `roadmap.qmd`, and `security.qmd` in the project directory if the
+        corresponding source files exist.
 
         Returns
         -------
@@ -7366,6 +7366,11 @@ title: "Code of Conduct"
             with open(coc_qmd, "w", encoding="utf-8") as f:
                 f.write(coc_qmd_content)
 
+        # Check for SECURITY.md in root or .github directory
+        security_path = package_root / "SECURITY.md"
+        if not security_path.exists():
+            security_path = package_root / ".github" / "SECURITY.md"
+
         # Check for ROADMAP.md in root
         roadmap_path = package_root / "ROADMAP.md"
 
@@ -7387,6 +7392,25 @@ title: "Roadmap"
 """
             with open(roadmap_qmd, "w", encoding="utf-8") as f:
                 f.write(roadmap_qmd_content)
+
+        if security_path.exists() and self._config.show_security:
+            community_items.append("[Security policy](security.qmd)<br>")
+            with open(security_path, "r", encoding="utf-8") as f:
+                security_content = f.read()
+
+            lines = security_content.split("\n")
+            if lines and lines[0].startswith("# "):
+                security_content = "\n".join(lines[1:]).lstrip()
+
+            security_qmd = self.project_path / "security.qmd"
+            security_qmd_content = f"""---
+title: "Security Policy"
+---
+
+{security_content}
+"""
+            with open(security_qmd, "w", encoding="utf-8") as f:
+                f.write(security_qmd_content)
 
         # License (folded into Community)
         if license_link:
