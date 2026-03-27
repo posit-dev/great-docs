@@ -40644,6 +40644,345 @@ def test_update_quarto_config_responsive_tables_not_duplicated():
         assert resource_count == 1
 
 
+def test_update_quarto_config_includes_video_embed_js_in_resources():
+    """_update_quarto_config adds video-embed.js to project resources."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        assert "video-embed.js" in result["project"]["resources"]
+
+
+def test_update_quarto_config_includes_video_embed_js_in_after_body():
+    """_update_quarto_config adds video-embed.js script to include-after-body."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        after_body = result["format"]["html"]["include-after-body"]
+        after_body_str = str(after_body)
+
+        assert "video-embed.js" in after_body_str
+
+
+def test_update_quarto_config_video_embed_not_duplicated():
+    """Running _update_quarto_config twice doesn't duplicate video-embed.js."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+        docs._update_quarto_config()
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        after_body = result["format"]["html"]["include-after-body"]
+        video_count = sum(
+            1
+            for item in after_body
+            if isinstance(item, dict) and "video-embed.js" in str(item.get("text", ""))
+        )
+
+        assert video_count == 1
+
+        resource_count = result["project"]["resources"].count("video-embed.js")
+
+        assert resource_count == 1
+
+
+def test_update_quarto_config_video_embed_script_tag_format():
+    """video-embed.js is included as a proper script tag in include-after-body."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        after_body = result["format"]["html"]["include-after-body"]
+
+        video_entries = [
+            item
+            for item in after_body
+            if isinstance(item, dict) and "video-embed.js" in str(item.get("text", ""))
+        ]
+
+        assert len(video_entries) == 1
+        assert video_entries[0]["text"] == '<script src="video-embed.js"></script>'
+
+
+def test_prepare_build_directory_copies_video_embed_js():
+    """_prepare_build_directory copies video-embed.js to the build directory."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        readme = Path(tmp_dir) / "README.md"
+        readme.write_text("# My Pkg\n", encoding="utf-8")
+
+        with patch.object(docs, "_add_api_reference_config"):
+            with patch.object(docs, "_update_sidebar_from_sections"):
+                with patch.object(docs, "_update_reference_index_frontmatter"):
+                    docs._prepare_build_directory()
+
+        assert (docs.project_path / "video-embed.js").exists()
+
+
+def test_video_embed_js_asset_exists():
+    """The video-embed.js asset file exists in the assets directory."""
+
+    from great_docs.core import GreatDocs
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        asset_path = docs.assets_path / "video-embed.js"
+
+        assert asset_path.exists()
+
+
+def test_video_embed_js_is_iife():
+    """video-embed.js uses the IIFE pattern like other Great Docs JS files."""
+
+    from great_docs.core import GreatDocs
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = (docs.assets_path / "video-embed.js").read_text(encoding="utf-8")
+
+        assert content.startswith("/**")
+        assert "(function () {" in content or "(function() {" in content
+        assert '"use strict";' in content
+        assert content.rstrip().endswith("})();")
+
+
+def test_video_embed_js_has_youtube_enhancement():
+    """video-embed.js contains YouTube thumbnail placeholder logic."""
+
+    from great_docs.core import GreatDocs
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = (docs.assets_path / "video-embed.js").read_text(encoding="utf-8")
+
+        assert "enhanceYouTube" in content
+        assert "getYouTubeId" in content
+        assert "gd-video-placeholder" in content
+        assert "gd-video-thumb" in content
+        assert "gd-video-play" in content
+        assert "img.youtube.com" in content
+
+
+def test_video_embed_js_has_lazy_loading():
+    """video-embed.js contains IntersectionObserver lazy-loading for non-YouTube iframes."""
+
+    from great_docs.core import GreatDocs
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = (docs.assets_path / "video-embed.js").read_text(encoding="utf-8")
+
+        assert "lazyLoadIframes" in content
+        assert "IntersectionObserver" in content
+        assert "rootMargin" in content
+
+
+def test_video_embed_js_has_video_element_enhancement():
+    """video-embed.js sets preload=metadata on local <video> elements."""
+
+    from great_docs.core import GreatDocs
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = (docs.assets_path / "video-embed.js").read_text(encoding="utf-8")
+
+        assert "enhanceVideoElements" in content
+        assert '"metadata"' in content
+        assert '"preload"' in content
+
+
+def test_video_embed_js_youtube_id_extraction():
+    """video-embed.js can extract YouTube IDs from embed URLs."""
+
+    from great_docs.core import GreatDocs
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = (docs.assets_path / "video-embed.js").read_text(encoding="utf-8")
+
+        # The regex should match both youtube.com and youtube-nocookie.com
+        assert "youtube.com" in content
+        assert "youtube-nocookie.com" in content
+
+
+def test_video_embed_js_accessibility():
+    """video-embed.js includes proper accessibility attributes."""
+
+    from great_docs.core import GreatDocs
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = (docs.assets_path / "video-embed.js").read_text(encoding="utf-8")
+
+        # Placeholder should have role="button" for screen readers
+        assert '"button"' in content
+
+        # Should support keyboard activation
+        assert '"Enter"' in content
+        assert '" "' in content  # Space key
+
+        # Should have aria-label
+        assert "aria-label" in content
+
+        # Should have tabindex for keyboard focus
+        assert "tabindex" in content
+
+
+def test_video_embed_js_autoplay_on_click():
+    """video-embed.js appends autoplay=1 when loading the player after click."""
+
+    from great_docs.core import GreatDocs
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = (docs.assets_path / "video-embed.js").read_text(encoding="utf-8")
+
+        assert "autoplay=1" in content
+
+
+def test_video_embed_js_thumbnail_fallback():
+    """video-embed.js falls back from maxresdefault to hqdefault thumbnail."""
+
+    from great_docs.core import GreatDocs
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = (docs.assets_path / "video-embed.js").read_text(encoding="utf-8")
+
+        assert "maxresdefault" in content
+        assert "hqdefault" in content
+        assert "onerror" in content
+
+
+def test_video_embed_js_play_button_svg():
+    """video-embed.js includes an inline SVG play button."""
+
+    from great_docs.core import GreatDocs
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = (docs.assets_path / "video-embed.js").read_text(encoding="utf-8")
+
+        assert "PLAY_SVG" in content
+        assert "<svg" in content
+        assert "gd-play-bg" in content
+
+
+def test_scss_has_video_styles():
+    """great-docs.scss contains styling for video containers and placeholders."""
+
+    from great_docs.core import GreatDocs
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = (docs.assets_path / "great-docs.scss").read_text(encoding="utf-8")
+
+        # Video container border
+        assert ".quarto-video" in content
+
+        # Placeholder styles
+        assert ".gd-video-placeholder" in content
+        assert ".gd-video-thumb" in content
+        assert ".gd-video-play" in content
+        assert ".gd-play-bg" in content
+
+
+def test_scss_video_container_has_border():
+    """The .quarto-video container has a border and border-radius."""
+
+    from great_docs.core import GreatDocs
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = (docs.assets_path / "great-docs.scss").read_text(encoding="utf-8")
+
+        # Find the .quarto-video block and check its properties
+        assert "border: 1px solid" in content
+        assert "border-radius: 6px" in content
+        assert "overflow: hidden" in content
+
+
+def test_scss_video_dark_mode():
+    """The video container has dark-mode-specific border color."""
+
+    from great_docs.core import GreatDocs
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = (docs.assets_path / "great-docs.scss").read_text(encoding="utf-8")
+
+        # Dark mode should override border color for .quarto-video
+        assert (
+            "quarto-dark .quarto-video" in content
+            or 'data-bs-theme="dark"] .quarto-video' in content
+        )
+
+
+def test_scss_video_placeholder_positioning():
+    """The placeholder overlay is positioned absolutely to fill the container."""
+
+    from great_docs.core import GreatDocs
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = (docs.assets_path / "great-docs.scss").read_text(encoding="utf-8")
+
+        # The placeholder must cover the entire ratio container
+        assert "position: absolute" in content
+        assert "cursor: pointer" in content
+
+
+def test_scss_video_focus_visible():
+    """The placeholder has :focus-visible styling for keyboard accessibility."""
+
+    from great_docs.core import GreatDocs
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        content = (docs.assets_path / "great-docs.scss").read_text(encoding="utf-8")
+
+        assert "focus-visible" in content
+
+
+def test_video_embed_always_included():
+    """video-embed.js is always included regardless of config settings."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Minimal config — no special settings
+        docs, quarto_yml = _make_uqc_docs(tmp_dir, gd_yml_content="")
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        assert "video-embed.js" in result["project"]["resources"]
+
+        after_body_str = str(result["format"]["html"]["include-after-body"])
+
+        assert "video-embed.js" in after_body_str
+
+
 def test_update_quarto_config_mermaid_theme_default():
     """_update_quarto_config sets mermaid theme to 'default'."""
 
@@ -40695,32 +41034,33 @@ def test_update_quarto_config_mermaid_renderer_not_duplicated():
         assert mermaid_count == 1
 
 
-# ==============================================================================
-# SEO Configuration Tests
-# ==============================================================================
-
-
 def test_config_seo_defaults():
     """Test that SEO configuration has sensible defaults."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         config = Config(Path(tmp_dir))
+
         # Master switch
         assert config.seo_enabled is True
+
         # Sitemap
         assert config.sitemap_enabled is True
         assert "homepage" in config.sitemap_changefreq
         assert config.sitemap_changefreq["homepage"] == "weekly"
         assert config.sitemap_priority["homepage"] == 1.0
+
         # Robots
         assert config.robots_enabled is True
         assert config.robots_allow_all is True
         assert config.robots_disallow == []
         assert config.robots_crawl_delay is None
+
         # Canonical
         assert config.canonical_enabled is True
         assert config.canonical_base_url is None
+
         # Title template
         assert config.seo_title_template == "{page_title} | {site_name}"
+
         # Structured data
         assert config.structured_data_enabled is True
         assert config.structured_data_type == "SoftwareSourceCode"
@@ -40760,26 +41100,33 @@ seo:
 """
         )
         config = Config(Path(tmp_dir))
+
         # Master switch
         assert config.seo_enabled is False
+
         # Sitemap
         assert config.sitemap_enabled is False
         assert config.sitemap_changefreq["homepage"] == "daily"
         assert config.sitemap_priority["homepage"] == 0.5
+
         # Robots
         assert config.robots_enabled is False
         assert config.robots_allow_all is False
         assert config.robots_disallow == ["/drafts/"]
         assert config.robots_crawl_delay == 10
         assert config.robots_extra_rules == ["User-agent: GPTBot", "Disallow: /"]
+
         # Canonical
         assert config.canonical_enabled is False
         assert config.canonical_base_url == "https://example.com/docs/"
+
         # Title template
         assert config.seo_title_template == "{page_title} - {site_name}"
+
         # Structured data
         assert config.structured_data_enabled is False
         assert config.structured_data_type == "WebSite"
+
         # Default description
         assert config.seo_default_description == "My package documentation"
 
@@ -40788,18 +41135,24 @@ def test_categorize_page():
     """Test page categorization for SEO settings."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
+
         # Homepage
         assert docs._categorize_page("index.html") == "homepage"
+
         # Reference pages
         assert docs._categorize_page("reference/MyClass.html") == "reference"
         assert docs._categorize_page("reference/index.html") == "reference"
+
         # User guide
         assert docs._categorize_page("user-guide/intro.html") == "user_guide"
         assert docs._categorize_page("user-guide/configuration.html") == "user_guide"
+
         # Changelog
         assert docs._categorize_page("changelog.html") == "changelog"
+
         # Recipes (treated as user guide)
         assert docs._categorize_page("recipes/custom-css.html") == "user_guide"
+
         # Default for other pages
         assert docs._categorize_page("about.html") == "default"
         assert docs._categorize_page("some/nested/page.html") == "default"
@@ -40833,9 +41186,11 @@ seo:
         docs._generate_sitemap_xml()
 
         sitemap_path = site_dir / "sitemap.xml"
+
         assert sitemap_path.exists()
 
         content = sitemap_path.read_text()
+
         assert '<?xml version="1.0" encoding="UTF-8"?>' in content
         assert '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' in content
         assert "<loc>https://example.com/docs/</loc>" in content
@@ -40870,9 +41225,11 @@ seo:
         docs._generate_robots_txt()
 
         robots_path = site_dir / "robots.txt"
+
         assert robots_path.exists()
 
         content = robots_path.read_text()
+
         assert "User-agent: *" in content
         assert "Allow: /" in content
         assert "Disallow: /drafts/" in content
