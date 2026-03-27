@@ -1,0 +1,147 @@
+---
+title: "Videos"
+guide-section: "Site Content"
+bread-crumbs: false
+---
+
+# Videos
+
+Videos can make tutorials, demos, and explainers far more effective than screenshots alone. Great Docs supports YouTube, Vimeo, and local video files with responsive layouts, lazy loading, and accessibility features built in.
+
+## YouTube
+
+Use the following syntax to embed a YouTube video. You can use the regular watch URL, the short URL, or the embed URL (all three work):
+
+```markdown
+{{{{< video https://www.youtube.com/watch?v=wo9vZccmqwc >}}}}
+
+{{{{< video https://youtu.be/wo9vZccmqwc >}}}}
+
+{{{{< video https://www.youtube.com/embed/wo9vZccmqwc >}}}}
+```
+
+All three produce the same result. The video is responsive by default and it scales to fill the available width while maintaining a 16:9 aspect ratio.
+
+Here's a live example:
+
+{{< video https://www.youtube.com/watch?v=d8-Jyh-NaMw >}}
+
+::: {.callout-tip}
+## Performance
+
+YouTube embeds are automatically optimized. Instead of loading the full YouTube player on page load, Great Docs displays a lightweight thumbnail image with a play button. The player loads only when a visitor clicks, which significantly improves page load times (especially on pages with multiple videos).
+:::
+
+### Start Time
+
+To start playback at a specific point, use the `start` option (in seconds):
+
+```markdown
+{{{{< video https://youtu.be/wo9vZccmqwc start="116" >}}}}
+```
+
+### Title and Accessibility
+
+Add a `title` for the iframe and an `aria-label` for screen readers:
+
+```markdown
+{{{{< video https://www.youtube.com/embed/wo9vZccmqwc
+    title="What is the CERN?"
+    aria-label="Video tour of CERN particle physics laboratory"
+>}}}}
+```
+
+## Vimeo
+
+Vimeo videos work the same way:
+
+```markdown
+{{{{< video https://vimeo.com/548291297 >}}}}
+```
+
+Vimeo embeds are lazy-loaded automatically: the iframe content is deferred until the video scrolls near the viewport.
+
+## Local Video Files
+
+To embed a video file stored alongside your documentation (e.g., a short screen recording), place the file in your project and reference it directly:
+
+```markdown
+{{{{< video demo.mp4 >}}}}
+```
+
+Local videos are rendered as HTML5 `<video>` elements. To host them alongside your `.qmd` files, place them in the `assets/` directory:
+
+```
+user_guide/
+├── 05-walkthrough.qmd
+└── assets/
+    └── demo.mp4
+```
+
+Then reference from the `.qmd` file:
+
+```markdown
+{{{{< video assets/demo.mp4 >}}}}
+```
+
+::: {.callout-note}
+Keep video files small. Git repositories aren't ideal for large binary files. For longer recordings, consider uploading to YouTube or Vimeo and embedding from there.
+:::
+
+## Aspect Ratio
+
+The default aspect ratio is 16:9. You can change it to one of the standard Bootstrap ratios:
+
+```markdown
+{{{{< video https://youtu.be/wo9vZccmqwc aspect-ratio="4x3" >}}}}
+```
+
+Available ratios: `1x1`, `4x3`, `16x9` (default), and `21x9`.
+
+## Fixed Dimensions
+
+To disable responsive sizing and set explicit pixel dimensions:
+
+```markdown
+{{{{< video https://youtu.be/wo9vZccmqwc width="400" height="225" >}}}}
+```
+
+## Cross-Referencing Videos
+
+To create a numbered, cross-referenceable video (like a figure), wrap it in a fenced div:
+
+```markdown
+::: {#fig-demo}
+
+{{{{< video https://www.youtube.com/embed/wo9vZccmqwc >}}}}
+
+A short tour of the CERN facility.
+
+:::
+
+See @fig-demo for the full walkthrough.
+```
+
+This assigns the video a figure number and caption, and `@fig-demo` creates a clickable cross-reference elsewhere on the page.
+
+## Loom
+
+Loom videos aren't recognized by the video syntax directly. Instead, use the Loom embed URL in a raw HTML `<iframe>`:
+
+```html
+<div class="quarto-video ratio ratio-16x9">
+<iframe
+  src="https://www.loom.com/embed/YOUR_VIDEO_ID"
+  frameborder="0"
+  allowfullscreen>
+</iframe>
+</div>
+```
+
+Replace `YOUR_VIDEO_ID` with the ID from your Loom share link (e.g., if the share link is `https://www.loom.com/share/abc123`, the ID is `abc123`). The `quarto-video ratio ratio-16x9` classes give it the same responsive container as other videos, and Great Docs will lazy-load the iframe automatically.
+
+## Tips
+
+- **Ads**: YouTube may show ads on monetized videos, even in embeds. To guarantee an ad-free experience, upload to a channel you control with monetization disabled.
+- **Privacy**: Consider using `youtube-nocookie.com` embed URLs (e.g., `https://www.youtube-nocookie.com/embed/VIDEO_ID`) to reduce tracking.
+- **Multiple videos**: The thumbnail placeholder optimization means pages with many YouTube embeds still load quickly (only the thumbnails are fetched initially).

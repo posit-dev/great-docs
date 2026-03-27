@@ -1,0 +1,38 @@
+---
+title: "Embed Videos"
+description: "Add YouTube, Vimeo, and local video files to your documentation pages."
+---
+
+# Embed Videos
+
+Great Docs supports embedding YouTube, Vimeo, Loom, and local video files with responsive layouts and automatic lazy loading.
+
+## Quick Example
+
+To embed a YouTube video, use the following syntax in any `.qmd` page:
+
+```markdown
+{{{{< video https://www.youtube.com/watch?v=wo9vZccmqwc >}}}}
+```
+
+Here's a live example:
+
+{{< video https://www.youtube.com/watch?v=d8-Jyh-NaMw >}}
+
+The video is responsive by default, and YouTube embeds use a lightweight thumbnail placeholder that loads the player only when clicked.
+
+## Local Video Files
+
+For short screen recordings, reference a local `.mp4` file:
+
+```markdown
+{{{{< video assets/demo.mp4 >}}}}
+```
+
+::: {.callout-note}
+Keep video files small. Git repositories aren't ideal for large binary files. For longer recordings, consider uploading to YouTube or Vimeo and embedding from there.
+:::
+
+## More Options
+
+For full details on aspect ratios, start times, accessibility labels, Vimeo, Loom, cross-referencing, and performance tips, see the [Videos](../user_guide/20-videos.qmd) page in the User Guide.

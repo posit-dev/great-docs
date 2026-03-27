@@ -4635,6 +4635,70 @@ html[data-bs-theme="dark"] {
 }
 
 
+/* ── Video embedding enhancements ────────────────────────────── */
+
+/* Subtle border around video containers so the frame edge is visible */
+.quarto-video {
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+body.quarto-dark .quarto-video,
+html[data-bs-theme="dark"] .quarto-video {
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Placeholder that replaces a YouTube iframe until the user clicks */
+.gd-video-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    background: #000;
+
+    &:focus-visible {
+        outline: 3px solid var(--bs-primary);
+        outline-offset: -3px;
+    }
+}
+
+/* Thumbnail stretches to fill the ratio container */
+.gd-video-thumb {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Centered play button overlay */
+.gd-video-play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    transition: opacity 0.15s ease;
+    opacity: 0.9;
+    line-height: 0;
+
+    .gd-video-placeholder:hover &,
+    .gd-video-placeholder:focus-visible & {
+        opacity: 1;
+    }
+
+    .gd-play-bg {
+        transition: fill 0.15s ease;
+    }
+
+    .gd-video-placeholder:hover & .gd-play-bg {
+        fill: #f00;
+        fill-opacity: 1;
+    }
+}
+
+
 /*-- scss:functions --*/
 
 /*-- scss:uses --*/

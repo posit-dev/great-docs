@@ -155,6 +155,7 @@ class GreatDocs:
             "tooltips.js",
             "mermaid-renderer.js",
             "responsive-tables.js",
+            "video-embed.js",
         ]
         if self._config.markdown_pages_widget:
             js_files.append("copy-page.js")
@@ -8132,6 +8133,7 @@ toc: false
             "tooltips.js",
             "mermaid-renderer.js",
             "responsive-tables.js",
+            "video-embed.js",
         ]
         if self._config.markdown_pages_widget:
             js_resource_files.append("copy-page.js")
@@ -8600,6 +8602,14 @@ toc: false
         )
         if not has_responsive_tables:
             config["format"]["html"]["include-after-body"].append(responsive_tables_script_entry)
+
+        # Add video embed script (always enabled — lazy loading + YouTube thumbnails)
+        video_embed_script_entry = {"text": '<script src="video-embed.js"></script>'}
+        has_video_embed = any(
+            "video-embed.js" in str(item) for item in config["format"]["html"]["include-after-body"]
+        )
+        if not has_video_embed:
+            config["format"]["html"]["include-after-body"].append(video_embed_script_entry)
 
         # Add sidebar navigation (reference sidebar added later by
         # _add_api_reference_config if exports are discovered)
