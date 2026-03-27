@@ -76,6 +76,72 @@ Auto-detect and render SECURITY.md files as documentation pages.
 - Support standard security policy sections (vulnerability reporting, supported versions)
 - Optional `site.show_security: true/false` config to control visibility
 
+### Page Tags
+
+Categorize pages with tags for improved discoverability.
+
+- Add tags via frontmatter (`tags: [Python, Testing, API]`)
+- Auto-generated tags index page listing all tags and linked pages
+- Tags rendered above page title with links to tag index
+- Nested/hierarchical tags (e.g., `Python/Testing`)
+- Shadow tags for internal organization (hidden from public view)
+- Scoped tag listings per documentation section
+- Optional tag icons
+
+### Page Status Badges
+
+Visual indicators for page lifecycle status in navigation.
+
+- `status: new` frontmatter shows "New" badge in sidebar
+- `status: deprecated` shows deprecation indicator
+- Custom status definitions in `great-docs.yml`
+- Badge icons and colors configurable per status
+- Filter/highlight pages by status
+
+### Reading Time Estimate
+
+Auto-calculate and display estimated reading time.
+
+- Word count-based calculation shown near page title
+- Configurable words-per-minute rate
+- Override via frontmatter (`readtime: 15`)
+- Show/hide globally or per-page
+- Useful for user guide articles, tutorials, and blog posts
+
+### Breadcrumb Navigation
+
+Display navigation path above page content.
+
+- Breadcrumb trail showing hierarchy (Home > User Guide > Configuration)
+- Clickable links to parent sections
+- Helps orientation in deep documentation structures
+- Hide per-page via frontmatter if desired
+- Responsive design for mobile
+
+### Custom Static Pages
+
+Include custom HTML pages with minimal or no transformation.
+
+- Drop in pre-built HTML pages that retain site navigation (navbar, footer)
+- "Pass-through" mode: page content untouched, only wrapped with site shell
+- "Raw" mode: serve file as-is without any processing
+- Useful for landing pages, interactive demos, or third-party widgets
+- Frontmatter option: `layout: passthrough` or `layout: raw`
+- Custom pages directory (e.g., `custom/`) auto-discovered during build
+
+### Video Embedding
+
+Simple syntax for embedding videos from popular platforms.
+
+- YouTube, Vimeo, and Loom support via shortcode or directive
+- Local video files with HTML5 `<video>` element
+- Responsive containers maintaining aspect ratio
+- Lazy loading for performance
+- Configurable autoplay, loop, muted defaults
+- Thumbnail placeholders before load
+- Caption/transcript support for accessibility
+- Example: `{{< video youtube="dQw4w9WgXcQ" >}}` or `::: {.video src="demo.mp4"}`
+
 ---
 
 ## Planned — Medium Term
@@ -158,6 +224,101 @@ Self-contained sites that work without an internet connection.
 - Air-gapped deployable builds for secure environments
 - Bundled search index for offline queries
 - Optional asset inlining for single-file deployment
+
+### Blog Support
+
+First-class blogging integrated with documentation.
+
+- Posts directory with date-based organization
+- Automatic archive and category index pages
+- Post excerpts with `<!-- more -->` separator
+- Author profiles with avatars and bios
+- Categories and tags per post
+- RSS feed generation
+- Reading time and publication date display
+- Pinned/featured posts
+- Pagination for post listings
+- Blog-only mode (documentation optional)
+
+### Instant Loading
+
+SPA-like navigation without full page reloads.
+
+- XHR-based page transitions preserving search state
+- Progress indicator for slow connections
+- Instant prefetching on link hover
+- Instant previews showing tooltip of linked section
+- Anchor tracking (URL updates as you scroll)
+- Significantly faster perceived navigation
+
+### Code Annotations
+
+Rich inline annotations inside code blocks.
+
+- Numbered markers in code comments pointing to explanations
+- Click/hover to reveal annotation content
+- Supports any language with comment syntax
+- Nestable annotations
+- Works inside admonitions and content tabs
+- Strip comment markers option for cleaner display
+
+### Comment System Integration
+
+Enable community discussion on documentation pages.
+
+- One-line Giscus setup (GitHub Discussions backend)
+- Theme-aware dark/light mode sync
+- Per-page enable/disable via frontmatter
+- Alternative backends: Disqus, Utterances
+- Moderation via GitHub
+
+### Document Contributors
+
+Show GitHub avatars of all page contributors.
+
+- Extract contributors from git history
+- Circular avatar images linking to GitHub profiles
+- Displayed at page footer alongside timestamps
+- Configurable: show all or top N contributors
+- Works with git-committers plugin pattern
+
+### Image Optimization
+
+Automatic compression and conversion of images.
+
+- Compress PNG, JPEG, GIF during build
+- Convert to modern formats (WebP, AVIF) where supported
+- Lazy loading attributes for below-fold images
+- Responsive image srcsets
+- Significant page load improvements
+
+### Folder-Level Metadata Defaults
+
+Set default frontmatter for entire directories.
+
+- `.meta.yml` files apply defaults to all pages in folder
+- Reduce repetition for large documentation sections
+- Inheritance: child folders can override parent defaults
+- Useful for setting authors, tags, templates per section
+
+### Content Tabs
+
+Tabbed content blocks for alternative instructions.
+
+- Show pip vs conda vs poetry installation
+- Platform-specific instructions (macOS / Linux / Windows)
+- Synced tabs across pages (user preference remembered)
+- Keyboard accessible
+- Code blocks and prose supported inside tabs
+
+### Back-to-Top Button
+
+Floating button to quickly return to page top.
+
+- Appears after scrolling down
+- Smooth scroll animation
+- Respects reduced-motion preferences
+- Customizable icon and position
 
 ---
 
@@ -244,6 +405,27 @@ LLM-powered translation workflows for multi-language documentation.
 - `hreflang` tags for SEO
 - Fallback to default language for untranslated pages
 - Shared assets and cross-language linking
+
+### Privacy & GDPR Compliance
+
+Tools for data privacy regulation compliance.
+
+- Auto-download external assets (fonts, analytics scripts) for self-hosting
+- Cookie consent banner with configurable text
+- External link rewriting to proxy through local assets
+- One-line config for privacy mode
+- Audit report of external requests
+
+### Keyboard Shortcuts
+
+Global keyboard navigation for power users.
+
+- `/` or `s` to focus search
+- `p` / `n` for previous/next page
+- `t` to toggle table of contents
+- `d` to toggle dark mode
+- Custom shortcut definitions in config
+- Shortcut help overlay (`?`)
 
 ---
 
