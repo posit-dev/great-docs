@@ -2954,6 +2954,14 @@ def fix_script_paths():
             content = content.replace(old_resp_tables, new_resp_tables)
             modified = True
 
+        # Fix back-to-top.js path
+        old_back_to_top = '<script src="back-to-top.js"></script>'
+        new_back_to_top = f'<script src="{prefix}back-to-top.js"></script>'
+
+        if old_back_to_top in content:
+            content = content.replace(old_back_to_top, new_back_to_top)
+            modified = True
+
         # Fix mermaid-renderer.js path
         old_mermaid = '<script src="mermaid-renderer.js"></script>'
         new_mermaid = f'<script src="{prefix}mermaid-renderer.js"></script>'
