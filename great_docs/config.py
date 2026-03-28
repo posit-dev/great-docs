@@ -122,6 +122,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # str: preset name (applies to all pages)
     # dict: {"preset": str, "pages": "all"|"homepage"}
     "content_style": None,
+    # Back-to-top floating button
+    # True (default): show back-to-top button on all pages
+    # False: disable back-to-top button
+    "back_to_top": True,
     # Attribution text in the footer ("Site created with Great Docs")
     # True (default): show attribution
     # False: hide attribution
@@ -408,6 +412,11 @@ class Config:
     def dark_mode_toggle(self) -> bool:
         """Check if dark mode toggle is enabled."""
         return self.get("dark_mode_toggle", True)
+
+    @property
+    def back_to_top(self) -> bool:
+        """Check if back-to-top button is enabled."""
+        return self.get("back_to_top", True)
 
     @property
     def markdown_pages(self) -> bool:

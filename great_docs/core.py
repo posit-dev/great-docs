@@ -167,6 +167,8 @@ class GreatDocs:
             js_files.append("content-style.js")
         if self._config.show_dates:
             js_files.append("page-metadata.js")
+        if self._config.back_to_top:
+            js_files.append("back-to-top.js")
         for js_file in js_files:
             js_src = self.assets_path / js_file
             if js_src.exists():
@@ -1192,6 +1194,9 @@ class GreatDocs:
 
         # Dark mode toggle
         metadata["dark_mode_toggle_enabled"] = self._config.dark_mode_toggle
+
+        # Back-to-top button
+        metadata["back_to_top_enabled"] = self._config.back_to_top
 
         # Markdown pages (.md generation + copy-page widget)
         metadata["markdown_pages"] = self._config.markdown_pages
@@ -8139,6 +8144,8 @@ toc: false
             js_resource_files.append("copy-page.js")
         if self._config.show_dates:
             js_resource_files.append("page-metadata.js")
+        if self._config.back_to_top:
+            js_resource_files.append("back-to-top.js")
         for js_file in js_resource_files:
             if js_file not in config["project"]["resources"]:
                 config["project"]["resources"].append(js_file)
@@ -8503,6 +8510,23 @@ toc: false
             )
             if not has_dark_mode:
                 config["format"]["html"]["include-after-body"].append(dark_mode_script_entry)
+
+        # Add back-to-top button script (if enabled)
+        if metadata.get("back_to_top_enabled", True):
+            if "include-after-body" not in config["format"]["html"]:
+                config["format"]["html"]["include-after-body"] = []
+            elif isinstance(config["format"]["html"]["include-after-body"], str):
+                config["format"]["html"]["include-after-body"] = [
+                    config["format"]["html"]["include-after-body"]
+                ]
+
+            back_to_top_entry = {"text": '<script src="back-to-top.js"></script>'}
+            has_back_to_top = any(
+                "back-to-top.js" in str(item)
+                for item in config["format"]["html"]["include-after-body"]
+            )
+            if not has_back_to_top:
+                config["format"]["html"]["include-after-body"].append(back_to_top_entry)
 
         # Add custom copy-code button script (replaces Quarto's native code-copy)
         if "include-after-body" not in config["format"]["html"]:
