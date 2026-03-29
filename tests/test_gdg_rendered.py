@@ -6145,3 +6145,283 @@ def test_DED_interlinks_prose_hrefs_valid():
             assert ".html" in href, (
                 f"{obj_name}.html: href {href!r} for {target!r} is not a valid page link"
             )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: Internationalization (i18n) — French, Japanese, Arabic
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── Language attribute on <html> ──────────────────────────────────────────────
+
+
+@requires_bs4
+@pytest.mark.parametrize(
+    "pkg, expected_lang",
+    [
+        ("gdtest_i18n_french", "fr"),
+        ("gdtest_i18n_japanese", "ja"),
+        ("gdtest_i18n_arabic", "ar"),
+    ],
+)
+def test_DED_i18n_html_lang_attribute(pkg, expected_lang):
+    """i18n sites set the correct lang attribute on <html>."""
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    soup = _load_html(_site_dir(pkg) / "index.html")
+    html_tag = soup.find("html")
+    assert html_tag is not None
+    assert html_tag.get("lang") == expected_lang, (
+        f"Expected lang='{expected_lang}', got '{html_tag.get('lang')}'"
+    )
+
+
+# ── i18n translation meta tag ────────────────────────────────────────────────
+
+
+@requires_bs4
+@pytest.mark.parametrize(
+    "pkg, key, expected_value",
+    [
+        ("gdtest_i18n_french", "parameters", "Paramètres"),
+        ("gdtest_i18n_french", "returns", "Retourne"),
+        ("gdtest_i18n_french", "reference", "Référence"),
+        ("gdtest_i18n_french", "user_guide", "Guide d'utilisation"),
+        ("gdtest_i18n_japanese", "parameters", "パラメータ"),
+        ("gdtest_i18n_japanese", "returns", "戻り値"),
+        ("gdtest_i18n_japanese", "reference", "リファレンス"),
+        ("gdtest_i18n_japanese", "user_guide", "ユーザーガイド"),
+        ("gdtest_i18n_arabic", "parameters", "المعلمات"),
+        ("gdtest_i18n_arabic", "returns", "القيم المُعادة"),
+        ("gdtest_i18n_arabic", "reference", "مرجع"),
+        ("gdtest_i18n_arabic", "user_guide", "دليل المستخدم"),
+    ],
+)
+def test_DED_i18n_meta_tag_translations(pkg, key, expected_value):
+    """i18n sites embed correct translations in <meta name='gd-i18n'>."""
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    import json
+
+    soup = _load_html(_site_dir(pkg) / "index.html")
+    meta = soup.find("meta", attrs={"name": "gd-i18n"})
+    assert meta is not None, "Missing <meta name='gd-i18n'> tag"
+    bundle = json.loads(meta["content"])
+    assert bundle.get(key) == expected_value, (
+        f"Expected i18n['{key}'] = '{expected_value}', got '{bundle.get(key)}'"
+    )
+
+
+# ── Translated section headings on reference pages ────────────────────────────
+
+
+@requires_bs4
+@pytest.mark.parametrize(
+    "pkg, page, heading_class, expected_text",
+    [
+        ("gdtest_i18n_french", "resumer.html", "doc-parameters", "Paramètres"),
+        ("gdtest_i18n_french", "resumer.html", "doc-returns", "Retourne"),
+        ("gdtest_i18n_japanese", "add.html", "doc-parameters", "パラメータ"),
+        ("gdtest_i18n_japanese", "add.html", "doc-returns", "戻り値"),
+        ("gdtest_i18n_arabic", "format_text.html", "doc-parameters", "المعلمات"),
+        ("gdtest_i18n_arabic", "format_text.html", "doc-returns", "القيم المُعادة"),
+    ],
+)
+def test_DED_i18n_translated_section_headings(pkg, page, heading_class, expected_text):
+    """i18n sites translate Parameters/Returns headings in reference pages."""
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ref = _ref_dir(pkg)
+    html_path = ref / page
+    if not html_path.exists():
+        pytest.skip(f"{page} not found")
+
+    soup = _load_html(html_path)
+    # There can be multiple elements with the class — one is the wrapper div
+    # containing parameters, the other is the heading itself.  Find any whose
+    # text starts with the expected translated heading.
+    matches = soup.find_all(class_=heading_class)
+    assert matches, f"No element with class '{heading_class}' found"
+    assert any(el.get_text(strip=True).startswith(expected_text) for el in matches), (
+        f"No element starting with '{expected_text}' found"
+    )
+
+
+# ── Arabic RTL support ────────────────────────────────────────────────────────
+
+
+@requires_bs4
+def test_DED_i18n_arabic_rtl_direction():
+    """Arabic site has dir='rtl' on <html> and gd-rtl meta tag."""
+    pkg = "gdtest_i18n_arabic"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    soup = _load_html(_site_dir(pkg) / "index.html")
+
+    # Check dir attribute
+    html_tag = soup.find("html")
+    assert html_tag.get("dir") == "rtl", "Arabic site should have dir='rtl'"
+
+    # Check gd-rtl meta tag
+    rtl_meta = soup.find("meta", attrs={"name": "gd-rtl"})
+    assert rtl_meta is not None, "Missing <meta name='gd-rtl'> tag"
+    assert rtl_meta["content"] == "true"
+
+
+@requires_bs4
+def test_DED_i18n_non_arabic_no_rtl():
+    """Non-RTL sites should NOT have dir='rtl' or gd-rtl meta."""
+    for pkg in ("gdtest_i18n_french", "gdtest_i18n_japanese"):
+        if not _has_rendered_site(pkg):
+            continue
+
+        soup = _load_html(_site_dir(pkg) / "index.html")
+        html_tag = soup.find("html")
+        assert html_tag.get("dir") != "rtl", f"{pkg} should not have dir='rtl'"
+        rtl_meta = soup.find("meta", attrs={"name": "gd-rtl"})
+        assert rtl_meta is None, f"{pkg} should not have gd-rtl meta"
+
+
+# ── Announcement banner translation ──────────────────────────────────────────
+
+
+@requires_bs4
+@pytest.mark.parametrize(
+    "pkg, expected_fragment",
+    [
+        ("gdtest_i18n_french", "Bienvenue"),
+        ("gdtest_i18n_japanese", "ようこそ"),
+        ("gdtest_i18n_arabic", "مرحباً"),
+    ],
+)
+def test_DED_i18n_announcement_translated(pkg, expected_fragment):
+    """i18n sites have announcement text in the target language."""
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    soup = _load_html(_site_dir(pkg) / "index.html")
+    meta = soup.find("meta", attrs={"name": "gd-announcement"})
+    assert meta is not None, "Missing gd-announcement meta tag"
+    content = meta.get("data-content", "")
+    assert expected_fragment in content, (
+        f"Expected '{expected_fragment}' in announcement, got: {content[:80]}"
+    )
+
+
+# ── Search tooltip translation ────────────────────────────────────────────────
+
+
+@requires_bs4
+@pytest.mark.parametrize(
+    "pkg",
+    ["gdtest_i18n_french", "gdtest_i18n_japanese", "gdtest_i18n_arabic"],
+)
+def test_DED_i18n_search_no_duplicate_tooltip(pkg):
+    """#quarto-search should not have a title attr (prevents double tooltip)."""
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    soup = _load_html(_site_dir(pkg) / "index.html")
+    search_div = soup.find("div", id="quarto-search")
+    assert search_div is not None, "Missing #quarto-search div"
+    assert search_div.get("title") is None, (
+        f"#quarto-search should not have title attr, found: '{search_div.get('title')}'"
+    )
+
+
+@requires_bs4
+@pytest.mark.parametrize(
+    "pkg, expected_title",
+    [
+        ("gdtest_i18n_french", "Recherche"),
+        ("gdtest_i18n_japanese", "サーチ"),
+        ("gdtest_i18n_arabic", None),  # Quarto has no Arabic; patched only when label != 'Search'
+    ],
+)
+def test_DED_i18n_search_button_title_translated(pkg, expected_title):
+    """autocomplete.umd.js search button title is translated when Quarto provides a label."""
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    import re
+
+    ac_files = list((_site_dir(pkg) / "site_libs" / "quarto-search").glob("autocomplete.umd.js"))
+    assert ac_files, "autocomplete.umd.js not found"
+
+    text = ac_files[0].read_text()
+    m = re.search(r'detachedSearchButtonTitle:"([^"]*)"', text)
+    assert m is not None, "detachedSearchButtonTitle not found in autocomplete.umd.js"
+    if expected_title is None:
+        # No translation available from Quarto; default "Search" is acceptable
+        return
+    assert m.group(1) == expected_title, (
+        f"Expected search button title '{expected_title}', got '{m.group(1)}'"
+    )
+
+
+# ── Quarto search-label in options JSON ───────────────────────────────────────
+
+
+@requires_bs4
+@pytest.mark.parametrize(
+    "pkg, expected_label",
+    [
+        ("gdtest_i18n_french", "Recherche"),
+        ("gdtest_i18n_japanese", "サーチ"),
+        ("gdtest_i18n_arabic", None),  # Quarto has no built-in Arabic; stays English
+    ],
+)
+def test_DED_i18n_search_options_label(pkg, expected_label):
+    """Quarto search-options JSON has the translated search-label."""
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    import json
+
+    soup = _load_html(_site_dir(pkg) / "index.html")
+    script = soup.find("script", id="quarto-search-options")
+    assert script is not None, "Missing quarto-search-options script"
+    opts = json.loads(script.string)
+    label = opts.get("language", {}).get("search-label")
+    if expected_label is None:
+        # No Quarto translation for this language; label may be English or absent
+        return
+    assert label == expected_label, f"Expected search-label '{expected_label}', got '{label}'"
+
+
+# ── Navbar translated link text ───────────────────────────────────────────────
+
+
+@requires_bs4
+@pytest.mark.parametrize(
+    "pkg, expected_texts",
+    [
+        ("gdtest_i18n_french", ["Guide d\u2019utilisation", "R\u00e9f\u00e9rence"]),
+        (
+            "gdtest_i18n_japanese",
+            ["\u30e6\u30fc\u30b6\u30fc\u30ac\u30a4\u30c9", "\u30ea\u30d5\u30a1\u30ec\u30f3\u30b9"],
+        ),
+        (
+            "gdtest_i18n_arabic",
+            [
+                "\u062f\u0644\u064a\u0644 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
+                "\u0645\u0631\u062c\u0639",
+            ],
+        ),
+    ],
+)
+def test_DED_i18n_navbar_translated(pkg, expected_texts):
+    """Navbar links use translated text for User Guide and Reference."""
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    soup = _load_html(_site_dir(pkg) / "index.html")
+    # Search menu-text spans (Quarto's navbar link text elements)
+    menu_texts = [sp.get_text(strip=True) for sp in soup.find_all("span", class_="menu-text")]
+    for txt in expected_texts:
+        assert any(txt in mt for mt in menu_texts), (
+            f"Expected '{txt}' in navbar menu-text spans, found: {menu_texts}"
+        )
