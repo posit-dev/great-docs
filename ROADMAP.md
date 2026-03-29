@@ -4,15 +4,6 @@
 
 High-value features that build on existing infrastructure.
 
-### Internationalization (i18n) — UI Text
-
-Translate Great Docs interface text into multiple languages.
-
-- `site.language` config key (default: `en`)
-- Translation files for navbar, sidebar, and widget labels
-- Community-contributed language packs
-- RTL (right-to-left) layout support for Arabic, Hebrew, etc.
-
 ### Social Cards & Open Graph
 
 Auto-generate `<meta>` tags for social media previews.
