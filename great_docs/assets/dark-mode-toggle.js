@@ -11,6 +11,18 @@
 (function() {
     'use strict';
 
+    // i18n helper — read translations from <meta name="gd-i18n">
+    var _i18nCache = null;
+    function _gdT(key, fallback) {
+        if (!_i18nCache) {
+            try {
+                var meta = document.querySelector('meta[name="gd-i18n"]');
+                _i18nCache = meta ? JSON.parse(meta.getAttribute('content')) : {};
+            } catch (e) { _i18nCache = {}; }
+        }
+        return _i18nCache[key] || fallback;
+    }
+
     const STORAGE_KEY = 'great-docs-theme';
     const DARK_CLASS = 'quarto-dark';
     const LIGHT_CLASS = 'quarto-light';
@@ -92,7 +104,9 @@
 
         const sunIcon = toggle.querySelector('.theme-icon-light');
         const moonIcon = toggle.querySelector('.theme-icon-dark');
-        const newTooltip = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+        const newTooltip = theme === 'dark'
+            ? _gdT('switch_to_light_mode', 'Switch to light mode')
+            : _gdT('switch_to_dark_mode', 'Switch to dark mode');
 
         if (theme === 'dark') {
             toggle.setAttribute('aria-pressed', 'true');
@@ -136,8 +150,8 @@
                     class="dark-mode-toggle"
                     type="button"
                     role="switch"
-                    aria-label="Toggle dark mode"
-                    data-tippy-content="Switch to dark mode">
+                    aria-label="${_gdT('toggle_dark_mode', 'Toggle dark mode')}"
+                    data-tippy-content="${_gdT('switch_to_dark_mode', 'Switch to dark mode')}">
                 <span class="theme-icon-light" aria-hidden="true">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="5"></circle>

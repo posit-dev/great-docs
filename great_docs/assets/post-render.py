@@ -69,6 +69,15 @@ if os.path.exists(_gd_options_path):
     with open(_gd_options_path, "r") as f:
         _gd_options = json.load(f)
 
+# i18n helper — look up a translated string from _gd_options["i18n"]
+_i18n_bundle: dict[str, str] = _gd_options.get("i18n", {})
+
+
+def _t(key: str, fallback: str | None = None) -> str:
+    """Look up a translated string, falling back to English default."""
+    return _i18n_bundle.get(key, fallback if fallback is not None else key)
+
+
 # Load objects.json inventory for resolving interlinks
 # Maps qualified names -> {uri, dispname} for cross-reference resolution
 _interlinks_inventory: dict[str, dict[str, str]] = {}
@@ -1089,7 +1098,7 @@ def translate_sphinx_fields(html_content):
                 items.append(dt + "\n" + dd)
             parts.append(
                 '<section id="parameters" class="level1 doc-section doc-section-parameters">\n'
-                '<h1 class="doc-section doc-section-parameters">Parameters</h1>\n'
+                f'<h1 class="doc-section doc-section-parameters">{_t("parameters", "Parameters")}</h1>\n'
                 "<dl>\n" + "\n".join(items) + "\n</dl>\n</section>"
             )
 
@@ -1113,7 +1122,7 @@ def translate_sphinx_fields(html_content):
                 items.append(dt + "\n" + dd)
             parts.append(
                 '<section id="returns" class="level1 doc-section doc-section-returns">\n'
-                '<h1 class="doc-section doc-section-returns">Returns</h1>\n'
+                f'<h1 class="doc-section doc-section-returns">{_t("returns", "Returns")}</h1>\n'
                 "<dl>\n" + "\n".join(items) + "\n</dl>\n</section>"
             )
 
@@ -1126,7 +1135,7 @@ def translate_sphinx_fields(html_content):
                 items.append(dt + "\n" + dd)
             parts.append(
                 '<section id="raises" class="level1 doc-section doc-section-raises">\n'
-                '<h1 class="doc-section doc-section-raises">Raises</h1>\n'
+                f'<h1 class="doc-section doc-section-raises">{_t("raises", "Raises")}</h1>\n'
                 "<dl>\n" + "\n".join(items) + "\n</dl>\n</section>"
             )
 
@@ -1261,7 +1270,7 @@ def translate_google_fields(html_content):
                 items.append(f"{dt}\n{dd}")
             return (
                 '<section id="parameters" class="level1 doc-section doc-section-parameters">\n'
-                '<h1 class="doc-section doc-section-parameters">Parameters</h1>\n'
+                f'<h1 class="doc-section doc-section-parameters">{_t("parameters", "Parameters")}</h1>\n'
                 "<dl>\n" + "\n".join(items) + "\n</dl>\n</section>"
             )
 
@@ -1275,7 +1284,7 @@ def translate_google_fields(html_content):
             content = "\n".join(parts)
             return (
                 '<section id="returns" class="level1 doc-section doc-section-returns">\n'
-                '<h1 class="doc-section doc-section-returns">Returns</h1>\n'
+                f'<h1 class="doc-section doc-section-returns">{_t("returns", "Returns")}</h1>\n'
                 f"{content}\n</section>"
             )
 
@@ -1293,7 +1302,7 @@ def translate_google_fields(html_content):
                 items.append(f"{dt}\n{dd}")
             return (
                 '<section id="raises" class="level1 doc-section doc-section-raises">\n'
-                '<h1 class="doc-section doc-section-raises">Raises</h1>\n'
+                f'<h1 class="doc-section doc-section-raises">{_t("raises", "Raises")}</h1>\n'
                 "<dl>\n" + "\n".join(items) + "\n</dl>\n</section>"
             )
 
@@ -1307,12 +1316,23 @@ def translate_google_fields(html_content):
             code = "\n".join(code_parts)
             return (
                 '<section id="examples" class="level1 doc-section doc-section-examples">\n'
-                '<h1 class="doc-section doc-section-examples">Examples</h1>\n'
+                f'<h1 class="doc-section doc-section-examples">{_t("examples", "Examples")}</h1>\n'
                 f"<pre><code>{code}</code></pre>\n</section>"
             )
 
         # ── Other sections (Note, Warning, References, See Also) ─────
+        # Map English section names to i18n keys
+        _section_i18n_key = {
+            "Note": "notes",
+            "Notes": "notes",
+            "Warning": "warnings_section",
+            "Warnings": "warnings_section",
+            "References": "references_section",
+            "See Also": "see_also",
+        }
         slug = _SECTION_MAP.get(section, section.lower().replace(" ", "-"))
+        i18n_key = _section_i18n_key.get(section)
+        display = _t(i18n_key, section) if i18n_key else section
         full = body
         if pre_body:
             full = f"{body}\n{pre_body}" if body else pre_body
@@ -1320,7 +1340,7 @@ def translate_google_fields(html_content):
         content = f"<p>{full}</p>" if full else ""
         return (
             f'<section id="{slug}" class="level1 doc-section doc-section-{slug}">\n'
-            f'<h1 class="doc-section doc-section-{slug}">{section}</h1>\n'
+            f'<h1 class="doc-section doc-section-{slug}">{display}</h1>\n'
             f"{content}\n</section>"
         )
 
@@ -1399,17 +1419,23 @@ def translate_rst_directives(html_content):
     """
 
     _DIRECTIVE_STYLES = {
-        # (icon, bg_color, border_color, label)
-        "versionadded": ("🆕", "#ECFDF5", "#059669", "Added in version"),
-        "versionchanged": ("🔄", "#EFF6FF", "#3B82F6", "Changed in version"),
-        "deprecated": ("⚠️", "#FEF2F2", "#DC2626", "Deprecated since version"),
-        "note": ("ℹ️", "#EFF6FF", "#3B82F6", "Note"),
-        "warning": ("⚠️", "#FFFBEB", "#D97706", "Warning"),
-        "caution": ("⚠️", "#FFFBEB", "#D97706", "Caution"),
-        "danger": ("🚨", "#FEF2F2", "#DC2626", "Danger"),
-        "important": ("❗", "#FFF7ED", "#EA580C", "Important"),
-        "tip": ("💡", "#ECFDF5", "#059669", "Tip"),
-        "hint": ("💡", "#ECFDF5", "#059669", "Hint"),
+        # (icon, bg_color, border_color, i18n_key, english_fallback)
+        "versionadded": ("🆕", "#ECFDF5", "#059669", "added_in_version", "Added in version"),
+        "versionchanged": ("🔄", "#EFF6FF", "#3B82F6", "changed_in_version", "Changed in version"),
+        "deprecated": (
+            "⚠️",
+            "#FEF2F2",
+            "#DC2626",
+            "deprecated_since_version",
+            "Deprecated since version",
+        ),
+        "note": ("ℹ️", "#EFF6FF", "#3B82F6", "note_callout", "Note"),
+        "warning": ("⚠️", "#FFFBEB", "#D97706", "warning_callout", "Warning"),
+        "caution": ("⚠️", "#FFFBEB", "#D97706", "caution_callout", "Caution"),
+        "danger": ("🚨", "#FEF2F2", "#DC2626", "danger_callout", "Danger"),
+        "important": ("❗", "#FFF7ED", "#EA580C", "important_callout", "Important"),
+        "tip": ("💡", "#ECFDF5", "#059669", "tip_callout", "Tip"),
+        "hint": ("💡", "#ECFDF5", "#059669", "hint_callout", "Hint"),
     }
 
     # Version directives have the version number right after ::
@@ -1423,14 +1449,20 @@ def translate_rst_directives(html_content):
         directive = m.group("directive")
         body = (m.group("body") or "").strip()
         style = _DIRECTIVE_STYLES[directive]
-        icon, bg, border, label = style
+        icon, bg, border, i18n_key, fallback = style
+        label = _t(i18n_key, fallback)
 
         if directive in _VERSION_DIRECTIVES:
             # Split version number from optional description
             parts = body.split(None, 1) if body else []
             version = parts[0] if parts else ""
             desc = parts[1] if len(parts) > 1 else ""
-            title = f"{label} {version}" if version else label
+            if "{v}" in label and version:
+                title = label.replace("{v}", version)
+            elif version:
+                title = f"{label} {version}"
+            else:
+                title = label.replace(" {v}", "").replace("{v}", "")
             content = desc
         else:
             title = label
@@ -1456,7 +1488,8 @@ def translate_rst_directives(html_content):
         directive = m.group("directive")
         pre_body = m.group("pre_body").strip()
         style = _DIRECTIVE_STYLES[directive]
-        icon, bg, border, label = style
+        icon, bg, border, i18n_key, fallback = style
+        label = _t(i18n_key, fallback)
 
         if directive in _VERSION_DIRECTIVES:
             parts = pre_body.split(None, 1) if pre_body else []
@@ -1510,7 +1543,8 @@ def translate_rst_directives(html_content):
         body = (m.group("body") or "").strip()
         dd_body = (m.group("dd_body") or "").strip()
         style = _DIRECTIVE_STYLES[directive]
-        icon, bg, border, label = style
+        icon, bg, border, i18n_key, fallback = style
+        label = _t(i18n_key, fallback)
 
         if directive in _VERSION_DIRECTIVES:
             parts = body.split(None, 1) if body else []
@@ -1579,14 +1613,28 @@ def translate_bold_section_headers(html_content):
         "See Also": "see-also",
     }
 
+    # Map English section names to i18n keys for translation
+    _BOLD_I18N_KEY = {
+        "Examples": "examples",
+        "Example": "examples",
+        "Notes": "notes",
+        "Note": "notes",
+        "References": "references_section",
+        "Warnings": "warnings_section",
+        "Warning": "warnings_section",
+        "See Also": "see_also",
+    }
+
     section_pattern = "|".join(re.escape(n) for n in _SECTION_NAMES)
 
     def _replace_header(m):
         name = m.group("name")
         slug = _SECTION_NAMES.get(name, name.lower().replace(" ", "-"))
+        i18n_key = _BOLD_I18N_KEY.get(name)
+        display = _t(i18n_key, name) if i18n_key else name
         return (
             f'<section id="{slug}" class="level1 doc-section doc-section-{slug}">\n'
-            f'<h1 class="doc-section doc-section-{slug}">{name}</h1>'
+            f'<h1 class="doc-section doc-section-{slug}">{display}</h1>'
         )
 
     html_content = re.sub(
@@ -1594,6 +1642,204 @@ def translate_bold_section_headers(html_content):
         _replace_header,
         html_content,
     )
+
+    return html_content
+
+
+def translate_qrenderer_headings(html_content):
+    """
+    Translate section headings and labels produced by the qrenderer.
+
+    The qrenderer emits headings with `doc-*` CSS classes (e.g.
+    `<h2 class="doc-parameters">Parameters</h2>`) and a `Usage` label inside
+    `<div class="doc-usage-source">`.  These are rendered at Quarto build time and pass through
+    untranslated.
+
+    This function replaces the English heading text with the corresponding i18n translation, and
+    also updates matching TOC sidebar links so the table-of-contents stays in sync.
+    """
+
+    # Map CSS class suffix → (i18n key, English fallback)
+    _HEADING_MAP = {
+        "parameters": ("parameters", "Parameters"),
+        "returns": ("returns", "Returns"),
+        "raises": ("raises", "Raises"),
+        "examples": ("examples", "Examples"),
+        "notes": ("notes", "Notes"),
+        "attributes": ("attributes", "Attributes"),
+        "methods": ("methods", "Methods"),
+        "see-also": ("see_also", "See Also"),
+        "warnings": ("warnings_section", "Warnings"),
+        "references": ("references_section", "References"),
+    }
+
+    # Map group heading text → i18n key
+    _GROUP_MAP = {
+        "Classes": "classes",
+        "Functions": "functions",
+        "Methods": "methods",
+    }
+
+    # ── Translate doc-section / doc-* headings ──────────────────────────
+    # Matches:  <h2 class="doc-parameters">Parameters</h2>
+    #           <h5 class="doc-returns anchored" ...>Returns</h5>
+    def _replace_heading(m):
+        prefix = m.group("prefix")
+        css_class = m.group("cls")
+        _english = m.group("text")
+        tag = m.group("tag")
+        entry = _HEADING_MAP.get(css_class)
+        if entry:
+            key, fallback = entry
+            translated = _t(key, fallback)
+        else:
+            translated = _english
+        return f"{prefix}{translated}</{tag}>"
+
+    html_content = re.sub(
+        r'(?P<prefix><(?P<tag>h[1-6])\s+class="doc-(?P<cls>[a-z-]+)[^"]*"[^>]*>)'
+        r"(?P<text>[^<]+)"
+        r"</(?P=tag)>",
+        _replace_heading,
+        html_content,
+    )
+
+    # ── Translate doc-group headings ────────────────────────────────────
+    # Matches:  <h2 class="doc-group">Classes</h2>
+    def _replace_group(m):
+        prefix = m.group("prefix")
+        text = m.group("text")
+        tag = m.group("tag")
+        key = _GROUP_MAP.get(text)
+        translated = _t(key, text) if key else text
+        return f"{prefix}{translated}</{tag}>"
+
+    html_content = re.sub(
+        r'(?P<prefix><(?P<tag>h[1-6])\s+class="doc-group"[^>]*>)'
+        r"(?P<text>[^<]+)"
+        r"</(?P=tag)>",
+        _replace_group,
+        html_content,
+    )
+
+    # ── Translate "Usage" label ─────────────────────────────────────────
+    # Matches:  <div class="doc-usage-source">\n<p>Usage</p>
+    html_content = re.sub(
+        r'(<div\s+class="doc-usage-source">\s*<p>)Usage(</p>)',
+        lambda m: f"{m.group(1)}{_t('usage', 'Usage')}{m.group(2)}",
+        html_content,
+    )
+
+    # ── Translate "Source" link text ─────────────────────────────────────
+    # Matches:  <a class="doc-source" ...>Source</a>
+    html_content = re.sub(
+        r'(<a\s[^>]*class="doc-source"[^>]*>)Source(</a>)',
+        lambda m: f"{m.group(1)}{_t('source', 'Source')}{m.group(2)}",
+        html_content,
+    )
+
+    # ── Update TOC sidebar links to match translated headings ───────────
+    # Matches:  <a href="#parameters" id="toc-parameters" ...>Parameters</a>
+    _TOC_SECTIONS = {
+        "parameters": ("parameters", "Parameters"),
+        "returns": ("returns", "Returns"),
+        "raises": ("raises", "Raises"),
+        "examples": ("examples", "Examples"),
+        "notes": ("notes", "Notes"),
+        "attributes": ("attributes", "Attributes"),
+        "methods": ("methods", "Methods"),
+        "see-also": ("see_also", "See Also"),
+        "warnings": ("warnings_section", "Warnings"),
+        "references": ("references_section", "References"),
+    }
+
+    def _replace_toc(m):
+        prefix = m.group("prefix")
+        slug = m.group("slug")
+        entry = _TOC_SECTIONS.get(slug)
+        if entry:
+            key, fallback = entry
+            translated = _t(key, fallback)
+        else:
+            translated = m.group("text")
+        return f"{prefix}{translated}</a>"
+
+    html_content = re.sub(
+        r'(?P<prefix><a\s[^>]*id="toc-(?P<slug>[a-z-]+)"[^>]*>)'
+        r"(?P<text>[^<]+)"
+        r"</a>",
+        _replace_toc,
+        html_content,
+    )
+
+    # ── Translate <div class="see-also"> headings ───────────────────────
+    # q renders See Also sections as:
+    #   <div class="see-also" ...><h3/h4 ...>See Also</h3/h4>
+    html_content = re.sub(
+        r'(<div\s[^>]*class="see-also"[^>]*>\s*<(?:h[1-6])[^>]*>)See Also(</(?:h[1-6])>)',
+        lambda m: f"{m.group(1)}{_t('see_also', 'See Also')}{m.group(2)}",
+        html_content,
+    )
+
+    # ── Translate Quarto callout titles ────────────────────────────────
+    # Quarto renders callouts with titles like:
+    #   <div class="callout ... callout-titled" title="Added in version 2.0">
+    #   <span class="screen-reader-only">Note</span>Added in version 2.0
+    #   or a standalone:
+    #   <div class="callout-title-container ...">Note</div>
+
+    # Version-related callout titles (versionadded, versionchanged, deprecated)
+    _CALLOUT_VERSION_MAP = {
+        "Added in version": "added_in_version",
+        "Changed in version": "changed_in_version",
+        "Deprecated since version": "deprecated_since_version",
+    }
+
+    for eng_label, i18n_key in _CALLOUT_VERSION_MAP.items():
+        translated = _t(i18n_key, eng_label)
+        if translated != eng_label:
+            if "{v}" in translated:
+                # Handle translations with {v} placeholder (e.g. ja, ko, zh)
+                # Match "Added in version 0.1.0" and insert version into {v}
+                _ver_pat = re.compile(re.escape(eng_label) + r"(\s+[\d][\d.]*)")
+                html_content = _ver_pat.sub(
+                    lambda m: translated.replace("{v}", m.group(1).strip()),
+                    html_content,
+                )
+                # Replace any remaining standalone label (no version)
+                html_content = html_content.replace(
+                    eng_label,
+                    translated.replace(" {v}", "").replace("{v}", ""),
+                )
+            else:
+                html_content = html_content.replace(eng_label, translated)
+
+    # Standalone callout type labels (Note, Warning, etc.)
+    _CALLOUT_LABEL_MAP = {
+        "Note": "note_callout",
+        "Warning": "warning_callout",
+        "Caution": "caution_callout",
+        "Danger": "danger_callout",
+        "Important": "important_callout",
+        "Tip": "tip_callout",
+        "Hint": "hint_callout",
+    }
+
+    for eng_label, i18n_key in _CALLOUT_LABEL_MAP.items():
+        translated = _t(i18n_key, eng_label)
+        if translated != eng_label:
+            # Only replace inside callout title containers and screen-reader spans
+            # to avoid affecting other content
+            html_content = re.sub(
+                rf'(<span\s+class="screen-reader-only">){re.escape(eng_label)}(</span>)',
+                rf"\g<1>{translated}\g<2>",
+                html_content,
+            )
+            html_content = re.sub(
+                rf'(<div\s+class="callout-title-container[^"]*">\s*){re.escape(eng_label)}(\s*</div>)',
+                rf"\g<1>{translated}\g<2>",
+                html_content,
+            )
 
     return html_content
 
@@ -1654,17 +1900,15 @@ def fix_doctest_blockquotes(html_content):
 
 def fix_plain_doctest_code_blocks(html_content):
     """
-    Convert plain ``<pre><code>`` blocks containing doctest ``>>>`` lines
-    into properly highlighted Python code blocks.
+    Convert plain `<pre><code>` blocks containing doctest `>>>` lines into properly highlighted
+    Python code blocks.
 
-    When the renderer renders consecutive doctest examples separated by blank
-    lines, only the first block gets a proper ```` ```python ```` fence.
-    Subsequent blocks become 4-space-indented text in the ``.qmd``, which
-    Quarto renders as plain ``<pre><code>`` without syntax highlighting.
+    When the renderer renders consecutive doctest examples separated by blank lines, only the first
+    block gets a proper ```` ```python ```` fence. Subsequent blocks become 4-space-indented text in
+    the `.qmd` file, which Quarto renders as plain ``<pre><code>`` without syntax highlighting.
 
-    This function finds those plain code blocks, re-highlights them with
-    Pygments, and wraps them in the same ``sourceCode python`` structure
-    that Quarto uses for fenced code blocks.
+    This function finds those plain code blocks, re-highlights them with Pygments, and wraps them in
+    the same `sourceCode python` structure that Quarto uses for fenced code blocks.
     """
     # Match <pre><code> blocks that contain &gt;&gt;&gt; (i.e. >>>) but
     # are NOT already inside a sourceCode div.  We look for <pre><code>
@@ -1820,7 +2064,7 @@ def translate_rst_references(html_content):
     """
     Convert RST citation references into a styled numbered list.
 
-    After rendering, RST citations like::
+    After rendering, RST citations like:
 
         .. [1] Author (Year). "Title."
         .. [2] https://example.com
@@ -1829,8 +2073,8 @@ def translate_rst_references(html_content):
 
         <p>.. [1] First ref. .. [2] Second ref.</p>
 
-    This function splits them apart and renders each as a styled list item
-    with the citation number as a label.
+    This function splits them apart and renders each as a styled list item with the citation number
+    as a label.
     """
 
     def _format_refs(m):
@@ -1884,8 +2128,8 @@ def extract_seealso_from_html(html_content):
     """
     Extract %seealso values from HTML content before stripping.
 
-    Returns a list of ``(name, description)`` tuples.  The description is an
-    empty string when no ``: description`` suffix was provided.
+    Returns a list of `(name, description)` tuples. The description is an empty string when no
+    `: description` suffix was provided.
     """
     # Match %seealso in <p> tags (most common after markdown rendering)
     # This handles both standalone %seealso and when it follows other directives
@@ -1926,7 +2170,7 @@ def extract_seealso_from_html(html_content):
 
 def extract_seealso_from_doc_section(html_content):
     """
-    Extract See Also items from rendered doc-section ``<section>`` blocks.
+    Extract See Also items from rendered doc-section `<section>` blocks.
 
     NumPy-style and Google-style docstrings produce sections like::
 
@@ -1935,7 +2179,7 @@ def extract_seealso_from_doc_section(html_content):
         <p>transform : Transform data before analysis.</p>
         </section>
 
-    Returns a list of ``(name, description)`` tuples.
+    Returns a list of `(name, description)` tuples.
     """
     # Match <section id="see-also" ...> ... </section> blocks
     section_pat = re.compile(
@@ -2000,7 +2244,7 @@ def extract_seealso_from_doc_section(html_content):
 
 def remove_seealso_doc_section(html_content):
     """
-    Remove ``<section id="see-also" ...>`` blocks from the HTML.
+    Remove `<section id="see-also" ...>` blocks from the HTML.
 
     Also removes the corresponding TOC entry.
     """
@@ -2026,8 +2270,8 @@ def generate_seealso_html(seealso_items):
     """
     Generate HTML for a "See Also" section with links to other reference pages.
 
-    Each item is a ``(name, description)`` tuple.  When description is non-empty
-    it is rendered after the link.
+    Each item is a `(name, description)` tuple. When description is non-empty, it is rendered after
+    the link.
     """
     if not seealso_items:
         return ""
@@ -2059,9 +2303,11 @@ def generate_seealso_html(seealso_items):
     else:
         body = f'<p style="margin: 0;">{", ".join(links)}</p>'
 
+    _see_also_label = _t("see_also", "See Also")
+
     return f"""
 <div class="see-also" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #dee2e6;">
-<h3 style="font-size: 0.9rem; font-weight: 600; color: #6c757d; margin-bottom: 0.5rem;">See Also</h3>
+<h3 style="font-size: 0.9rem; font-weight: 600; color: #6c757d; margin-bottom: 0.5rem;">{_see_also_label}</h3>
 {body}
 </div>
 """
@@ -2163,6 +2409,9 @@ for html_file in html_files:
 
     # Translate bold section headers (e.g. **Examples**::) into doc-sections
     content = translate_bold_section_headers(content)
+
+    # Translate qrenderer-rendered headings and Usage/Source labels
+    content = translate_qrenderer_headings(content)
 
     # Fix doctest >>> lines that Quarto rendered as nested blockquotes
     content = fix_doctest_blockquotes(content)
@@ -2531,6 +2780,9 @@ if os.path.exists(index_file):
 
         content = before + main_content + after
 
+    # Translate qrenderer-rendered headings, TOC, and sidebar on the index page
+    content = translate_qrenderer_headings(content)
+
     with open(index_file, "w") as file:
         file.write(content)
 
@@ -2544,22 +2796,70 @@ else:
 all_html_files = glob.glob("_site/**/*.html", recursive=True)
 print(f"Found {len(all_html_files)} HTML files to check for secondary nav title")
 
+# Use translated label for secondary nav if i18n is configured
+_user_guide_label = (_gd_options.get("i18n") or {}).get("user_guide", "User Guide")
+
 for html_file in all_html_files:
     with open(html_file, "r") as file:
         content = file.read()
 
+    modified = False
+
     # Replace empty h1.quarto-secondary-nav-title with h5 containing "User Guide"
     original_pattern = r'<h1 class="quarto-secondary-nav-title"></h1>'
-    replacement = '<h5 class="quarto-secondary-nav-title">User Guide</h5>'
+    replacement = f'<h5 class="quarto-secondary-nav-title">{_user_guide_label}</h5>'
 
     if original_pattern in content:
         print(f"Updating secondary nav title in: {html_file}")
         content = content.replace(original_pattern, replacement)
+        modified = True
 
+    # Remove the title attribute from #quarto-search to prevent a duplicate
+    # tooltip: Quarto sets title="<search-label>" on the parent div, but the
+    # autocomplete library also creates a child button with its own title.
+    # Stripping the parent avoids two tooltips stacking on hover.
+    _search_title_pat = r'(<div\s+id="quarto-search"\s+class="[^"]*")\s+title="[^"]*"'
+    new_content = re.sub(_search_title_pat, r"\1", content)
+    if new_content != content:
+        content = new_content
+        modified = True
+
+    if modified:
         with open(html_file, "w") as file:
             file.write(content)
 
 print("Finished processing all files")
+
+# ── Translate autocomplete search-button title ──────────────────────────────
+# The Algolia autocomplete library (autocomplete.umd.js) ships with a
+# hardcoded default  detachedSearchButtonTitle:"Search".  Quarto's search JS
+# passes  clearButtonTitle / submitButtonTitle / detachedCancelButtonText  to
+# the library but omits  detachedSearchButtonTitle, so the button always
+# shows "Search".  If the site language is not English, patch the bundled JS
+# to use the correct search-label translation instead.
+_autocomplete_js = glob.glob("_site/**/autocomplete.umd.js", recursive=True)
+if _autocomplete_js:
+    _search_label = None
+    # Read the search-label from any HTML page's search-options JSON
+    for _hf in all_html_files[:5]:
+        with open(_hf, "r") as f:
+            _hcontent = f.read()
+        _sl_m = re.search(r'"search-label"\s*:\s*"([^"]+)"', _hcontent)
+        if _sl_m:
+            _search_label = _sl_m.group(1)
+            break
+    if _search_label and _search_label != "Search":
+        for _acjs in _autocomplete_js:
+            with open(_acjs, "r") as f:
+                _ac_content = f.read()
+            _old = 'detachedSearchButtonTitle:"Search"'
+            if _old in _ac_content:
+                _ac_content = _ac_content.replace(
+                    _old, f'detachedSearchButtonTitle:"{_search_label}"'
+                )
+                with open(_acjs, "w") as f:
+                    f.write(_ac_content)
+                print(f"Patched search button title to '{_search_label}' in {_acjs}")
 
 
 # ============================================================================
@@ -3915,3 +4215,56 @@ if _gd_options.get("seo_enabled", False):
     print(f"   SEO enhancements applied to {seo_processed} page(s) ({seo_errors} errors)")
 else:
     print("\n🔍 SEO processing: disabled")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# I18N — INJECT TRANSLATION BUNDLE
+# ══════════════════════════════════════════════════════════════════════════════
+# Inject a <meta name="gd-i18n"> tag containing the JSON translations bundle
+# and, for RTL languages, set dir="rtl" on the <html> element.
+
+_i18n_bundle = _gd_options.get("i18n")
+_i18n_rtl = _gd_options.get("rtl", False)
+_i18n_language = _gd_options.get("language", "en")
+
+if _i18n_bundle and _i18n_language != "en":
+    import html as _html_mod
+
+    _i18n_json = json.dumps(_i18n_bundle, ensure_ascii=False, separators=(",", ":"))
+    # Escape for safe embedding in an HTML attribute
+    _i18n_escaped = _html_mod.escape(_i18n_json, quote=True)
+    _i18n_meta = f'<meta name="gd-i18n" content="{_i18n_escaped}">'
+    if _i18n_rtl:
+        _i18n_meta += '\n<meta name="gd-rtl" content="true">'
+
+    print(f"\n🌐 Injecting i18n translations (language={_i18n_language}, rtl={_i18n_rtl})...")
+    _i18n_count = 0
+    for html_file in glob.glob("_site/**/*.html", recursive=True):
+        try:
+            with open(html_file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            modified = content.replace("<head>", f"<head>\n{_i18n_meta}", 1)
+
+            # Set dir="rtl" on <html> element for RTL languages
+            if _i18n_rtl:
+                modified = re.sub(
+                    r"<html\b([^>]*)>",
+                    r'<html\1 dir="rtl">',
+                    modified,
+                    count=1,
+                )
+
+            if modified != content:
+                with open(html_file, "w", encoding="utf-8") as f:
+                    f.write(modified)
+                _i18n_count += 1
+        except Exception as e:
+            print(f"  i18n error for {html_file}: {e}")
+
+    print(f"   Injected i18n meta in {_i18n_count} page(s)")
+else:
+    if _i18n_language != "en":
+        print(f"\n🌐 i18n: language={_i18n_language} but no translation bundle found")
+    else:
+        print("\n🌐 i18n: using default language (en)")

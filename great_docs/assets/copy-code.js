@@ -11,6 +11,18 @@
 (function () {
   "use strict";
 
+  // i18n helper — read translations from <meta name="gd-i18n">
+  var _i18nCache = null;
+  function _gdT(key, fallback) {
+    if (!_i18nCache) {
+      try {
+        var meta = document.querySelector('meta[name="gd-i18n"]');
+        _i18nCache = meta ? JSON.parse(meta.getAttribute('content')) : {};
+      } catch (e) { _i18nCache = {}; }
+    }
+    return _i18nCache[key] || fallback;
+  }
+
   // Inline SVG icons — no external dependency
   var COPY_ICON =
     '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" ' +
@@ -59,12 +71,12 @@
     navigator.clipboard.writeText(text).then(function () {
       button.innerHTML = CHECK_ICON;
       button.classList.add("gd-code-copied");
-      button.setAttribute("title", "Copied!");
+      button.setAttribute("title", _gdT("copied", "Copied!"));
 
       setTimeout(function () {
         button.innerHTML = COPY_ICON;
         button.classList.remove("gd-code-copied");
-        button.setAttribute("title", "Copy to clipboard");
+        button.setAttribute("title", _gdT("copy_to_clipboard", "Copy to clipboard"));
       }, 2000);
     });
   }
@@ -77,7 +89,7 @@
     nav.className = "gd-code-nav";
     var btn = document.createElement("button");
     btn.className = "gd-code-copy";
-    btn.title = "Copy to clipboard";
+    btn.title = _gdT("copy_to_clipboard", "Copy to clipboard");
     btn.innerHTML = COPY_ICON;
     btn.addEventListener("click", handleCopy);
     nav.appendChild(btn);
