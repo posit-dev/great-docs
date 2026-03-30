@@ -2958,11 +2958,32 @@ def inject_version_badge():
 
     badge_html = f'<span class="version-badge"{title_attr}>v{version}</span>'
 
+    # Build a Tippy.js tooltip for the logo (used when navbar has a logo
+    # instead of a text title).  The tooltip shows version tag + release date.
+    # Uses HTML content: <code> for the version, <br> for the line break.
+    import html as _html_esc
+
+    version_html = f"<code>v{_html_esc.escape(version)}</code>"
+    if published_at:
+        date_str = published_at[:10]
+        released_line = _t("logo_tooltip_released", "Released {date}").replace(
+            "{date}", _html_esc.escape(date_str)
+        )
+        logo_tooltip_html = f"{version_html}<br>{_html_esc.escape(released_line)}"
+    else:
+        logo_tooltip_html = version_html
+
+    # Pattern to match the <a> navbar-brand-logo link wrapping logo images
+    logo_brand_pattern = re.compile(r'(<a\b[^>]*class="navbar-brand navbar-brand-logo"[^>]*)>')
+
     badge_count = 0
+    logo_count = 0
 
     for html_file in all_html_files:
         with open(html_file, "r") as file:
             content = file.read()
+
+        modified = False
 
         match = navbar_title_pattern.search(content)
         if match:
@@ -2970,16 +2991,29 @@ def inject_version_badge():
             if "version-badge" not in content:
                 replacement = f"{match.group(1)}{match.group(2)} {badge_html}{match.group(3)}"
                 content = navbar_title_pattern.sub(replacement, content)
-
-                with open(html_file, "w") as file:
-                    file.write(content)
-
+                modified = True
                 badge_count += 1
+
+        # When there's a logo but no text title, add a tooltip to the logo link
+        if not match:
+            logo_match = logo_brand_pattern.search(content)
+            if logo_match and 'data-tippy-content="' not in logo_match.group(0):
+                escaped_tooltip = logo_tooltip_html.replace('"', "&quot;")
+                replacement = f'{logo_match.group(1)} data-tippy-content="{escaped_tooltip}">'
+                content = logo_brand_pattern.sub(replacement, content, count=1)
+                modified = True
+                logo_count += 1
+
+        if modified:
+            with open(html_file, "w") as file:
+                file.write(content)
 
     if badge_count > 0:
         print(f"Injected version badge into {badge_count} HTML files")
-    else:
-        print("No navbar titles found for version badge injection")
+    if logo_count > 0:
+        print(f"Added version tooltip to navbar logo in {logo_count} HTML files")
+    if badge_count == 0 and logo_count == 0:
+        print("No navbar titles or logos found for version badge injection")
 
 
 inject_version_badge()

@@ -198,6 +198,11 @@
     // Create options with current theme
     var options = Object.assign({}, CONFIG.defaultOptions, {
       theme: getThemeName(),
+      allowHTML: true,
+      // Read content from data-tippy-content so HTML tags are rendered
+      content: function (el) {
+        return el.getAttribute("data-tippy-content") || "";
+      },
       // Material filling effect via CSS
       onMount: function (instance) {
         instance.popper.classList.add("gd-tooltip-mounted");
