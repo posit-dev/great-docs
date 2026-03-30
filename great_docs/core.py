@@ -7481,13 +7481,15 @@ title: "Security Policy"
             else:
                 community_items.append(f"[{_full_license}]({license_link})<br>")
         elif license_id:
+            _full_license = get_translation("full_license", lang)
             if license_info is not None:
                 community_items.append(
+                    f"{_full_license} "
                     f'<span title="{license_info.full_name}" '
                     f'class="gd-spdx-badge">{license_info.spdx_id}</span><br>'
                 )
             else:
-                community_items.append(f"{license_id}<br>")
+                community_items.append(f"{_full_license}: {license_id}<br>")
 
         # Citation (folded into Community)
         if citation_link:
