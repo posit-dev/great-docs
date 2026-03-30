@@ -54,6 +54,9 @@
         // Skip the Skills page (has its own layout)
         if (document.querySelector('.gd-skills-install')) return;
 
+        // Skip the License page (has its own layout)
+        if (document.querySelector('.license-container')) return;
+
         // Create the widget container
         var widget = document.createElement('div');
         widget.className = 'gd-copy-page';
