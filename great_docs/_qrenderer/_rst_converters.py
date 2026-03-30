@@ -139,10 +139,6 @@ def _convert_rst_text(text: str) -> str:
     # proper margin detection).
     text = _smart_dedent(text)
 
-    # Quarto executable cell syntax -> regular fenced code blocks
-    # e.g. ```{python} -> ```python so Quarto doesn't treat them as cells
-    text = re.sub(r"```\{\s*(\w+)\s*\}", r"```\1", text)
-
     # RST `::` code blocks -> fenced code blocks (includes `.. math::`)
     text = _RST_CODE_BLOCK_RE.sub(_replace_rst_code_block, text)
 
