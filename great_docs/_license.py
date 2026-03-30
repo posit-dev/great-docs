@@ -37,6 +37,7 @@ COND_LICENSE_NOTICE = "License and copyright notice"
 COND_STATE_CHANGES = "State changes"
 COND_DISCLOSE_SOURCE = "Disclose source"
 COND_SAME_LICENSE = "Same license"
+COND_LICENSE_NOTICE_SOURCE = "License and copyright notice for source"
 COND_SAME_LICENSE_FILE = "Same license (file)"
 COND_SAME_LICENSE_LIBRARY = "Same license (library)"
 COND_NETWORK_USE = "Network use is distribution"
@@ -44,6 +45,7 @@ COND_NETWORK_USE = "Network use is distribution"
 LIM_LIABILITY = "Liability"
 LIM_WARRANTY = "Warranty"
 LIM_TRADEMARK = "Trademark use"
+LIM_PATENT = "Patent use"
 
 # ── License database ───────────────────────────────────────────────────
 
@@ -269,7 +271,7 @@ _register(
         full_name="Creative Commons Zero v1.0 Universal",
         permissions=[PERM_COMMERCIAL, PERM_MODIFICATION, PERM_DISTRIBUTION, PERM_PRIVATE],
         conditions=[],
-        limitations=[LIM_LIABILITY, LIM_WARRANTY, LIM_TRADEMARK],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY, LIM_TRADEMARK, LIM_PATENT],
     ),
 )
 
@@ -279,7 +281,7 @@ _register(
         spdx_id="BSL-1.0",
         full_name="Boost Software License 1.0",
         permissions=[PERM_COMMERCIAL, PERM_MODIFICATION, PERM_DISTRIBUTION, PERM_PRIVATE],
-        conditions=[COND_LICENSE_NOTICE],
+        conditions=[COND_LICENSE_NOTICE_SOURCE],
         limitations=[LIM_LIABILITY, LIM_WARRANTY],
     ),
 )
@@ -298,6 +300,464 @@ _register(
         ],
         conditions=[COND_LICENSE_NOTICE, COND_STATE_CHANGES],
         limitations=[LIM_LIABILITY, LIM_WARRANTY, LIM_TRADEMARK],
+    ),
+)
+
+
+# -- AFL-3.0 --------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="AFL-3.0",
+        full_name="Academic Free License v3.0",
+        permissions=[
+            PERM_COMMERCIAL,
+            PERM_MODIFICATION,
+            PERM_DISTRIBUTION,
+            PERM_PATENT,
+            PERM_PRIVATE,
+        ],
+        conditions=[COND_LICENSE_NOTICE, COND_STATE_CHANGES],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY, LIM_TRADEMARK],
+    ),
+)
+
+# -- BSD-2-Clause-Patent --------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="BSD-2-Clause-Patent",
+        full_name="BSD-2-Clause Plus Patent License",
+        permissions=[
+            PERM_COMMERCIAL,
+            PERM_MODIFICATION,
+            PERM_DISTRIBUTION,
+            PERM_PATENT,
+            PERM_PRIVATE,
+        ],
+        conditions=[COND_LICENSE_NOTICE],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY],
+    ),
+)
+
+# -- BSD-3-Clause-Clear ---------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="BSD-3-Clause-Clear",
+        full_name="BSD 3-Clause Clear License",
+        permissions=[PERM_COMMERCIAL, PERM_MODIFICATION, PERM_DISTRIBUTION, PERM_PRIVATE],
+        conditions=[COND_LICENSE_NOTICE],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY, LIM_PATENT],
+    ),
+)
+
+# -- BSD-4-Clause ---------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="BSD-4-Clause",
+        full_name='BSD 4-Clause "Original" or "Old" License',
+        permissions=[PERM_COMMERCIAL, PERM_MODIFICATION, PERM_DISTRIBUTION, PERM_PRIVATE],
+        conditions=[COND_LICENSE_NOTICE],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY],
+    ),
+)
+
+# -- CC-BY-4.0 ------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="CC-BY-4.0",
+        full_name="Creative Commons Attribution 4.0 International",
+        permissions=[PERM_COMMERCIAL, PERM_MODIFICATION, PERM_DISTRIBUTION, PERM_PRIVATE],
+        conditions=[COND_LICENSE_NOTICE, COND_STATE_CHANGES],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY, LIM_TRADEMARK, LIM_PATENT],
+    ),
+)
+
+# -- CC-BY-SA-4.0 ---------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="CC-BY-SA-4.0",
+        full_name="Creative Commons Attribution Share Alike 4.0 International",
+        permissions=[PERM_COMMERCIAL, PERM_MODIFICATION, PERM_DISTRIBUTION, PERM_PRIVATE],
+        conditions=[COND_LICENSE_NOTICE, COND_SAME_LICENSE, COND_STATE_CHANGES],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY, LIM_TRADEMARK, LIM_PATENT],
+    ),
+)
+
+# -- CECILL-2.1 -----------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="CECILL-2.1",
+        full_name="CeCILL Free Software License Agreement v2.1",
+        permissions=[
+            PERM_COMMERCIAL,
+            PERM_MODIFICATION,
+            PERM_DISTRIBUTION,
+            PERM_PATENT,
+            PERM_PRIVATE,
+        ],
+        conditions=[
+            COND_DISCLOSE_SOURCE,
+            COND_LICENSE_NOTICE,
+            COND_NETWORK_USE,
+            COND_SAME_LICENSE,
+        ],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY],
+    ),
+)
+
+# -- CERN-OHL-P-2.0 ------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="CERN-OHL-P-2.0",
+        full_name="CERN Open Hardware Licence Version 2 - Permissive",
+        permissions=[
+            PERM_COMMERCIAL,
+            PERM_MODIFICATION,
+            PERM_DISTRIBUTION,
+            PERM_PATENT,
+            PERM_PRIVATE,
+        ],
+        conditions=[COND_LICENSE_NOTICE, COND_STATE_CHANGES],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY],
+    ),
+)
+
+# -- CERN-OHL-S-2.0 ------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="CERN-OHL-S-2.0",
+        full_name="CERN Open Hardware Licence Version 2 - Strongly Reciprocal",
+        permissions=[
+            PERM_COMMERCIAL,
+            PERM_MODIFICATION,
+            PERM_DISTRIBUTION,
+            PERM_PATENT,
+            PERM_PRIVATE,
+        ],
+        conditions=[
+            COND_DISCLOSE_SOURCE,
+            COND_LICENSE_NOTICE,
+            COND_SAME_LICENSE,
+            COND_STATE_CHANGES,
+        ],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY],
+    ),
+)
+
+# -- CERN-OHL-W-2.0 ------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="CERN-OHL-W-2.0",
+        full_name="CERN Open Hardware Licence Version 2 - Weakly Reciprocal",
+        permissions=[
+            PERM_COMMERCIAL,
+            PERM_MODIFICATION,
+            PERM_DISTRIBUTION,
+            PERM_PATENT,
+            PERM_PRIVATE,
+        ],
+        conditions=[
+            COND_DISCLOSE_SOURCE,
+            COND_LICENSE_NOTICE,
+            COND_SAME_LICENSE_LIBRARY,
+            COND_STATE_CHANGES,
+        ],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY],
+    ),
+)
+
+# -- ECL-2.0 --------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="ECL-2.0",
+        full_name="Educational Community License v2.0",
+        permissions=[
+            PERM_COMMERCIAL,
+            PERM_MODIFICATION,
+            PERM_DISTRIBUTION,
+            PERM_PATENT,
+            PERM_PRIVATE,
+        ],
+        conditions=[COND_LICENSE_NOTICE, COND_STATE_CHANGES],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY, LIM_TRADEMARK],
+    ),
+)
+
+# -- EPL-1.0 --------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="EPL-1.0",
+        full_name="Eclipse Public License 1.0",
+        permissions=[
+            PERM_COMMERCIAL,
+            PERM_MODIFICATION,
+            PERM_DISTRIBUTION,
+            PERM_PATENT,
+            PERM_PRIVATE,
+        ],
+        conditions=[COND_DISCLOSE_SOURCE, COND_LICENSE_NOTICE, COND_SAME_LICENSE],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY],
+    ),
+)
+
+# -- EPL-2.0 --------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="EPL-2.0",
+        full_name="Eclipse Public License 2.0",
+        permissions=[
+            PERM_COMMERCIAL,
+            PERM_MODIFICATION,
+            PERM_DISTRIBUTION,
+            PERM_PATENT,
+            PERM_PRIVATE,
+        ],
+        conditions=[COND_DISCLOSE_SOURCE, COND_LICENSE_NOTICE, COND_SAME_LICENSE],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY],
+    ),
+)
+
+# -- EUPL-1.1 -------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="EUPL-1.1",
+        full_name="European Union Public License 1.1",
+        permissions=[
+            PERM_COMMERCIAL,
+            PERM_MODIFICATION,
+            PERM_DISTRIBUTION,
+            PERM_PATENT,
+            PERM_PRIVATE,
+        ],
+        conditions=[
+            COND_DISCLOSE_SOURCE,
+            COND_LICENSE_NOTICE,
+            COND_NETWORK_USE,
+            COND_SAME_LICENSE,
+            COND_STATE_CHANGES,
+        ],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY, LIM_TRADEMARK],
+    ),
+)
+
+# -- EUPL-1.2 -------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="EUPL-1.2",
+        full_name="European Union Public License 1.2",
+        permissions=[
+            PERM_COMMERCIAL,
+            PERM_MODIFICATION,
+            PERM_DISTRIBUTION,
+            PERM_PATENT,
+            PERM_PRIVATE,
+        ],
+        conditions=[
+            COND_DISCLOSE_SOURCE,
+            COND_LICENSE_NOTICE,
+            COND_NETWORK_USE,
+            COND_SAME_LICENSE,
+            COND_STATE_CHANGES,
+        ],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY, LIM_TRADEMARK],
+    ),
+)
+
+# -- GFDL-1.3 -------------------------------------------------------------
+_gfdl13 = LicenseInfo(
+    spdx_id="GFDL-1.3-only",
+    full_name="GNU Free Documentation License v1.3",
+    permissions=[PERM_COMMERCIAL, PERM_MODIFICATION, PERM_DISTRIBUTION, PERM_PRIVATE],
+    conditions=[
+        COND_DISCLOSE_SOURCE,
+        COND_LICENSE_NOTICE,
+        COND_SAME_LICENSE,
+        COND_STATE_CHANGES,
+    ],
+    limitations=[LIM_LIABILITY, LIM_WARRANTY],
+)
+_register(_gfdl13, "GFDL-1.3", "GFDL-1.3-or-later")
+
+# -- LPPL-1.3c ------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="LPPL-1.3c",
+        full_name="LaTeX Project Public License v1.3c",
+        permissions=[PERM_COMMERCIAL, PERM_MODIFICATION, PERM_DISTRIBUTION, PERM_PRIVATE],
+        conditions=[COND_DISCLOSE_SOURCE, COND_LICENSE_NOTICE, COND_STATE_CHANGES],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY],
+    ),
+)
+
+# -- MS-PL ----------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="MS-PL",
+        full_name="Microsoft Public License",
+        permissions=[
+            PERM_COMMERCIAL,
+            PERM_MODIFICATION,
+            PERM_DISTRIBUTION,
+            PERM_PATENT,
+            PERM_PRIVATE,
+        ],
+        conditions=[COND_LICENSE_NOTICE],
+        limitations=[LIM_WARRANTY, LIM_TRADEMARK],
+    ),
+)
+
+# -- MS-RL ----------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="MS-RL",
+        full_name="Microsoft Reciprocal License",
+        permissions=[
+            PERM_COMMERCIAL,
+            PERM_MODIFICATION,
+            PERM_DISTRIBUTION,
+            PERM_PATENT,
+            PERM_PRIVATE,
+        ],
+        conditions=[COND_DISCLOSE_SOURCE, COND_LICENSE_NOTICE, COND_SAME_LICENSE_FILE],
+        limitations=[LIM_WARRANTY, LIM_TRADEMARK],
+    ),
+)
+
+# -- MulanPSL-2.0 ---------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="MulanPSL-2.0",
+        full_name="Mulan Permissive Software License, Version 2",
+        permissions=[
+            PERM_COMMERCIAL,
+            PERM_MODIFICATION,
+            PERM_DISTRIBUTION,
+            PERM_PATENT,
+            PERM_PRIVATE,
+        ],
+        conditions=[COND_LICENSE_NOTICE],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY, LIM_TRADEMARK],
+    ),
+)
+
+# -- NCSA -----------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="NCSA",
+        full_name="University of Illinois/NCSA Open Source License",
+        permissions=[PERM_COMMERCIAL, PERM_MODIFICATION, PERM_DISTRIBUTION, PERM_PRIVATE],
+        conditions=[COND_LICENSE_NOTICE],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY],
+    ),
+)
+
+# -- ODbL-1.0 -------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="ODbL-1.0",
+        full_name="Open Data Commons Open Database License v1.0",
+        permissions=[PERM_COMMERCIAL, PERM_MODIFICATION, PERM_DISTRIBUTION, PERM_PRIVATE],
+        conditions=[COND_DISCLOSE_SOURCE, COND_LICENSE_NOTICE, COND_SAME_LICENSE],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY, LIM_TRADEMARK, LIM_PATENT],
+    ),
+)
+
+# -- OFL-1.1 --------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="OFL-1.1",
+        full_name="SIL Open Font License 1.1",
+        permissions=[PERM_COMMERCIAL, PERM_MODIFICATION, PERM_DISTRIBUTION, PERM_PRIVATE],
+        conditions=[COND_LICENSE_NOTICE, COND_SAME_LICENSE],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY],
+    ),
+)
+
+# -- OSL-3.0 --------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="OSL-3.0",
+        full_name="Open Software License 3.0",
+        permissions=[
+            PERM_COMMERCIAL,
+            PERM_MODIFICATION,
+            PERM_DISTRIBUTION,
+            PERM_PATENT,
+            PERM_PRIVATE,
+        ],
+        conditions=[
+            COND_DISCLOSE_SOURCE,
+            COND_LICENSE_NOTICE,
+            COND_NETWORK_USE,
+            COND_SAME_LICENSE,
+            COND_STATE_CHANGES,
+        ],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY, LIM_TRADEMARK],
+    ),
+)
+
+# -- PostgreSQL -----------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="PostgreSQL",
+        full_name="PostgreSQL License",
+        permissions=[PERM_COMMERCIAL, PERM_MODIFICATION, PERM_DISTRIBUTION, PERM_PRIVATE],
+        conditions=[COND_LICENSE_NOTICE],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY],
+    ),
+)
+
+# -- UPL-1.0 --------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="UPL-1.0",
+        full_name="Universal Permissive License v1.0",
+        permissions=[
+            PERM_COMMERCIAL,
+            PERM_MODIFICATION,
+            PERM_DISTRIBUTION,
+            PERM_PATENT,
+            PERM_PRIVATE,
+        ],
+        conditions=[COND_LICENSE_NOTICE],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY],
+    ),
+)
+
+# -- Vim ------------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="Vim",
+        full_name="Vim License",
+        permissions=[PERM_COMMERCIAL, PERM_MODIFICATION, PERM_DISTRIBUTION, PERM_PRIVATE],
+        conditions=[
+            COND_DISCLOSE_SOURCE,
+            COND_LICENSE_NOTICE,
+            COND_SAME_LICENSE,
+            COND_STATE_CHANGES,
+        ],
+        limitations=[],
+    ),
+)
+
+# -- WTFPL ----------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="WTFPL",
+        full_name="Do What The F*ck You Want To Public License",
+        permissions=[PERM_COMMERCIAL, PERM_MODIFICATION, PERM_DISTRIBUTION, PERM_PRIVATE],
+        conditions=[],
+        limitations=[],
+    ),
+)
+
+# -- Zlib -----------------------------------------------------------------
+_register(
+    LicenseInfo(
+        spdx_id="Zlib",
+        full_name="zlib License",
+        permissions=[PERM_COMMERCIAL, PERM_MODIFICATION, PERM_DISTRIBUTION, PERM_PRIVATE],
+        conditions=[COND_LICENSE_NOTICE_SOURCE, COND_STATE_CHANGES],
+        limitations=[LIM_LIABILITY, LIM_WARRANTY],
     ),
 )
 

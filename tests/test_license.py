@@ -63,7 +63,7 @@ class TestGetLicenseInfo:
             seen_ids.add(info.spdx_id)
 
         # Verify we have a reasonable number of distinct licenses
-        assert len(seen_ids) >= 15
+        assert len(seen_ids) >= 46
 
 
 # ── LicenseInfo features ───────────────────────────────────────────────
@@ -119,6 +119,44 @@ class TestLicenseInfoFeatures:
     def test_mpl_has_file_level_copyleft(self):
         info = get_license_info("MPL-2.0")
         assert "Same license (file)" in info.conditions
+
+    def test_bsl1_uses_source_only_notice(self):
+        info = get_license_info("BSL-1.0")
+        assert "License and copyright notice for source" in info.conditions
+
+    def test_cc0_has_patent_limitation(self):
+        info = get_license_info("CC0-1.0")
+        assert "Patent use" in info.limitations
+
+    def test_bsd3_clear_has_patent_limitation(self):
+        info = get_license_info("BSD-3-Clause-Clear")
+        assert "Patent use" in info.limitations
+        assert "Patent use" not in info.permissions
+
+    def test_epl2_lookup(self):
+        info = get_license_info("EPL-2.0")
+        assert info is not None
+        assert info.full_name == "Eclipse Public License 2.0"
+
+    def test_gfdl_alias(self):
+        info = get_license_info("GFDL-1.3")
+        assert info is not None
+        assert info.spdx_id == "GFDL-1.3-only"
+
+    def test_wtfpl_no_conditions_or_limitations(self):
+        info = get_license_info("WTFPL")
+        assert info.conditions == []
+        assert info.limitations == []
+
+    def test_vim_no_limitations(self):
+        info = get_license_info("Vim")
+        assert info.limitations == []
+        assert len(info.conditions) > 0
+
+    def test_zlib_uses_source_only_notice(self):
+        info = get_license_info("Zlib")
+        assert "License and copyright notice for source" in info.conditions
+        assert "State changes" in info.conditions
 
 
 # ── build_license_features_html ─────────────────────────────────────────
