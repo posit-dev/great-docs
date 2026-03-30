@@ -314,6 +314,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_i18n_french",  # 157
     "gdtest_i18n_japanese",  # 158
     "gdtest_i18n_arabic",  # 159
+    # 160: Code cell behavior
+    "gdtest_code_cells",  # 160
 ]
 
 
@@ -1781,6 +1783,11 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "every translatable widget. Verifies dir=rtl on the HTML element, "
         "right-to-left layout mirroring, flipped sidebar, repositioned buttons, "
         "and all UI strings in Arabic."
+    ),
+    "gdtest_code_cells": (
+        "Executable code cells in docstring examples. Tests that ```{python} "
+        "blocks are preserved as executable Quarto cells, #| directives like "
+        "eval: false are honored, and static ```python blocks remain static."
     ),
 }
 
