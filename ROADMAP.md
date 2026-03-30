@@ -27,16 +27,6 @@ Display author information with circular GitHub-style avatars on authored pages.
 - Optional `team_author:` config for a catch-all team attribution (e.g., "Great Tables Team")
 - `site.show_author: true/false` to enable/disable author display
 
-### License Details & SPDX Short Codes
-
-Enrich the generated license page with structured license metadata and improve license display across the site.
-
-- **License features dropdown**: Collapsible section on `license.qmd` showing permissions, conditions, and limitations for the detected license (e.g., "Commercial use", "Modification", "Distribution", "Patent use", "Private use" for permissions; "License and copyright notice" for conditions; "Liability", "Warranty" for limitations)
-- **SPDX short codes in metadata**: Display the precise SPDX identifier (e.g., `MIT-0` for MIT No Attribution, `Apache-2.0`, `GPL-3.0-only`) in the homepage sidebar metadata instead of longer display names
-- **Short code tooltip**: Hover tooltip on the SPDX identifier showing the full license name
-- **Styled feature badges**: Color-coded badges for permissions (green), conditions (blue), and limitations (red)
-- **Fallback**: Graceful degradation for unrecognized or custom licenses (show raw license text without feature breakdown)
-
 ### Navigation Icons
 
 Add icon support for sidebar and navbar entries.
