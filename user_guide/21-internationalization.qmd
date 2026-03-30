@@ -21,7 +21,7 @@ If you don't set a language, Great Docs defaults to English (`en`).
 
 ## Supported Languages
 
-Great Docs ships with translations for 14 languages:
+Great Docs ships with translations for 23 languages:
 
 | Code | Language |
 |------|----------|
@@ -32,13 +32,22 @@ Great Docs ships with translations for 14 languages:
 | `pt` | Portuguese |
 | `it` | Italian |
 | `nl` | Dutch |
+| `sv` | Swedish |
+| `da` | Danish |
+| `nb` | Norwegian Bokmål |
+| `is` | Icelandic |
+| `fi` | Finnish |
 | `ja` | Japanese |
 | `ko` | Korean |
 | `zh-Hans` | Chinese (Simplified) |
 | `zh-Hant` | Chinese (Traditional) |
 | `ru` | Russian |
 | `pl` | Polish |
+| `cs` | Czech |
+| `ro` | Romanian |
 | `tr` | Turkish |
+| `el` | Greek |
+| `hi` | Hindi |
 
 ## What Gets Translated
 
