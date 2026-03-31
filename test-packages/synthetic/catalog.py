@@ -316,6 +316,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_i18n_arabic",  # 159
     # 160: Code cell behavior
     "gdtest_code_cells",  # 160
+    # 161: Navigation icons
+    "gdtest_nav_icons",  # 161
 ]
 
 
@@ -529,6 +531,7 @@ DIMENSIONS: dict[str, dict[str, str]] = {
     "K50": {"axis": "config", "label": "i18n: French (Latin)"},
     "K51": {"axis": "config", "label": "i18n: Japanese (CJK)"},
     "K52": {"axis": "config", "label": "i18n: Arabic (RTL)"},
+    "K53": {"axis": "config", "label": "nav_icons config"},
 }
 
 
@@ -1788,6 +1791,14 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "Executable code cells in docstring examples. Tests that ```{python} "
         "blocks are preserved as executable Quarto cells, #| directives like "
         "eval: false are honored, and static ```python blocks remain static."
+    ),
+    "gdtest_nav_icons": (
+        "Showcases Lucide navigation icons on both the navbar (User Guide, "
+        "Recipes, Reference) and sidebar section headings (Getting Started, "
+        "Configuration, Visualization, Advanced Topics, Functions, Classes). "
+        "Each entry should have a small inline SVG icon prepended to its label "
+        "for quick visual scanning. The site also uses the 'sky' gradient and "
+        "an announcement banner."
     ),
 }
 
