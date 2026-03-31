@@ -147,7 +147,7 @@ sections:
 
 ### Custom Index
 
-If you provide your own `index.qmd` in the directory, Great Docs uses it as-is — regardless of the `index` setting. This gives you full control over the landing page layout — you can write custom HTML, use Quarto grid layouts, or embed interactive content.
+If you provide your own `index.qmd` in the directory, Great Docs uses it as-is — regardless of the `index` setting. This gives you full control over the landing page layout as you can write custom HTML, use Quarto grid layouts, or embed interactive content.
 
 ```
 examples/
