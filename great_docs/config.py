@@ -124,6 +124,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # str: preset name (applies to all pages)
     # dict: {"preset": str, "pages": "all"|"homepage"}
     "content_style": None,
+    # Navigation icons (Lucide icon set)
+    # Prepend icons to sidebar and navbar navigation entries.
+    # None/False: disabled (default)
+    # dict: {"navbar": {"Label": "icon-name"}, "sidebar": {"Label": "icon-name"}}
+    "nav_icons": None,
     # Back-to-top floating button
     # True (default): show back-to-top button on all pages
     # False: disable back-to-top button
@@ -510,8 +515,7 @@ class Config:
     def reference_enabled(self) -> bool:
         """Whether API reference generation is enabled.
 
-        Returns ``False`` when the config contains ``reference: false``.
-        Defaults to ``True``.
+        Returns `False` when the config contains `reference: false`. Defaults to `True`.
         """
         val = self.get("reference", [])
         if val is False:
@@ -555,8 +559,8 @@ class Config:
     def reference_title(self) -> str | None:
         """Get the custom API reference title, if set.
 
-        Supports ``reference: {title: "Custom Title"}`` in great-docs.yml.
-        Returns ``None`` when no custom title is configured.
+        Supports `reference: {title: "Custom Title"}` in great-docs.yml. Returns `None` when no
+        custom title is configured.
         """
         val = self.get("reference", [])
         if isinstance(val, dict):
@@ -567,9 +571,8 @@ class Config:
     def reference_desc(self) -> str | None:
         """Get the custom API reference description, if set.
 
-        Supports ``reference: {desc: "Description text..."}`` in great-docs.yml.
-        The description appears below the reference page heading.
-        Returns ``None`` when no description is configured.
+        Supports `reference: {desc: "Description text..."}` in great-docs.yml. Returns `None` when
+        no description is configured.
         """
         val = self.get("reference", [])
         if isinstance(val, dict):
@@ -654,9 +657,8 @@ class Config:
         Returns
         -------
         dict | None
-            Normalized logo dict with at least ``light`` key, or ``None`` if
-            no logo is configured.  A bare string in ``great-docs.yml`` is
-            expanded to ``{"light": "<path>", "dark": "<path>"}``.
+            Normalized logo dict with at least `light` key, or `None` if no logo is configured.  A
+            bare string in `great-docs.yml` is expanded to `{"light": "<path>", "dark": "<path>"}`.
         """
         raw = self.get("logo")
         if raw is None:
@@ -679,8 +681,7 @@ class Config:
     def hero_enabled(self) -> bool:
         """Whether the hero section is enabled.
 
-        Auto-enables when a logo is configured and ``hero`` is not
-        explicitly set to ``False``.
+        Auto-enables when a logo is configured and `hero` is not explicitly set to `False`.
         """
         raw = self.get("hero")
         if raw is False:
@@ -718,10 +719,9 @@ class Config:
     def hero_logo(self) -> str | dict | None | bool:
         """Get the explicit hero logo config.
 
-        Returns the hero-specific logo value only.  Returns ``False``
-        when explicitly suppressed, ``None`` when not configured.
-        The full fallback chain (auto-detected hero logos, navbar logo)
-        is handled in ``core._build_hero_section``.
+        Returns the hero-specific logo value only.  Returns `False` when explicitly suppressed,
+        `None` when not configured. The full fallback chain (auto-detected hero logos, navbar logo)
+        is handled in `core._build_hero_section`.
         """
         hero = self.hero
         val = hero.get("logo") if hero else None
@@ -741,7 +741,7 @@ class Config:
     def hero_name(self) -> str | None:
         """Get the hero name, falling back to display_name.
 
-        Returns ``None`` when explicitly suppressed (``false``).
+        Returns `None` when explicitly suppressed (`false`).
         """
         hero = self.hero
         val = hero.get("name") if hero else None
@@ -755,8 +755,8 @@ class Config:
     def hero_tagline(self) -> str | None:
         """Get the hero tagline.
 
-        Returns ``None`` when explicitly suppressed (``false``).
-        Auto-resolved from package metadata in core.py.
+        Returns `None` when explicitly suppressed (`false`). Auto-resolved from package metadata in
+        core.py.
         """
         hero = self.hero
         val = hero.get("tagline") if hero else None
@@ -768,8 +768,8 @@ class Config:
     def hero_badges(self) -> str | list | None:
         """Get the hero badges config.
 
-        Returns ``"auto"`` (default, extract from README), an explicit list
-        of badge dicts, or ``None`` (disabled).
+        Returns `"auto"` (default, extract from README), an explicit list of badge dicts, or `None`
+        (disabled).
         """
         hero = self.hero
         val = hero.get("badges") if hero else None
@@ -787,9 +787,8 @@ class Config:
         Returns
         -------
         dict | None
-            Normalized favicon dict with at least ``icon`` key, or ``None``
-            if no favicon is explicitly configured (auto-generation may still
-            produce one from the logo).
+            Normalized favicon dict with at least `icon` key, or `None` if no favicon is explicitly
+            configured (auto-generation may still produce one from the logo).
         """
         raw = self.get("favicon")
         if raw is None:
@@ -807,8 +806,8 @@ class Config:
         Returns
         -------
         dict | None
-            Normalized dict with keys: content, type, dismissable, url.
-            Returns None if no announcement is configured.
+            Normalized dict with keys: content, type, dismissable, url. Returns `None` if no
+            announcement is configured.
         """
         raw = self.get("announcement")
         if raw is None or raw is False:
@@ -832,8 +831,8 @@ class Config:
     def include_in_header(self) -> list[dict[str, str]]:
         """Get the normalized include-in-header entries.
 
-        Returns a list of Quarto-compatible include-in-header items
-        (each a dict with either a "text" or "file" key).
+        Returns a list of Quarto-compatible include-in-header items (each a dict with either a
+        "text" or "file" key).
         """
         raw = self.get("include_in_header", [])
         if raw is None:
@@ -849,6 +848,44 @@ class Config:
                     result.append(item)
             return result
         return []
+
+    @property
+    def nav_icons(self) -> dict[str, dict[str, str]] | None:
+        """Get the normalized navigation icons configuration.
+
+        Returns
+        -------
+        dict | None
+            A dict with optional `navbar` and `sidebar` keys, each mapping navigation label text to
+            a Lucide icon name. Returns `None` when not configured.
+        """
+        raw = self.get("nav_icons")
+        if raw is None or raw is False:
+            return None
+        if isinstance(raw, dict):
+            result: dict[str, dict[str, str]] = {}
+            for scope in ("navbar", "sidebar"):
+                mapping = raw.get(scope)
+                if isinstance(mapping, dict):
+                    result[scope] = {str(k): str(v) for k, v in mapping.items()}
+            return result if result else None
+        return None
+
+    @property
+    def nav_icons_navbar(self) -> dict[str, str]:
+        """Get the navbar icon mapping (label -> icon name)."""
+        icons = self.nav_icons
+        if icons is None:
+            return {}
+        return icons.get("navbar", {})
+
+    @property
+    def nav_icons_sidebar(self) -> dict[str, str]:
+        """Get the sidebar icon mapping (label -> icon name)."""
+        icons = self.nav_icons
+        if icons is None:
+            return {}
+        return icons.get("sidebar", {})
 
     @property
     def attribution(self) -> bool:

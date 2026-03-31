@@ -6425,3 +6425,261 @@ def test_DED_i18n_navbar_translated(pkg, expected_texts):
         assert any(txt in mt for mt in menu_texts), (
             f"Expected '{txt}' in navbar menu-text spans, found: {menu_texts}"
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: Navigation Icons (gdtest_nav_icons)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_NAV_ICONS_PKG = "gdtest_nav_icons"
+
+
+@requires_bs4
+def test_DED_nav_icons_inline_data_on_homepage():
+    """Homepage should contain the inline JSON icon-map script element."""
+    if not _has_rendered_site(_NAV_ICONS_PKG):
+        pytest.skip(f"{_NAV_ICONS_PKG} not rendered")
+
+    soup = _load_html(_site_dir(_NAV_ICONS_PKG) / "index.html")
+    data_el = soup.find("script", id="gd-nav-icons-data")
+    assert data_el is not None, "Missing <script id='gd-nav-icons-data'> on homepage"
+
+
+@requires_bs4
+def test_DED_nav_icons_inline_data_on_subpage():
+    """User-guide subpage should contain the inline JSON icon-map (not just homepage)."""
+    if not _has_rendered_site(_NAV_ICONS_PKG):
+        pytest.skip(f"{_NAV_ICONS_PKG} not rendered")
+
+    ug_page = _site_dir(_NAV_ICONS_PKG) / "user-guide" / "getting-started.html"
+    if not ug_page.exists():
+        pytest.skip("getting-started.html not found")
+
+    soup = _load_html(ug_page)
+    data_el = soup.find("script", id="gd-nav-icons-data")
+    assert data_el is not None, "Missing <script id='gd-nav-icons-data'> on subpage"
+
+
+@requires_bs4
+def test_DED_nav_icons_inline_data_on_reference_page():
+    """Reference subpage should also have the inline icon-map."""
+    if not _has_rendered_site(_NAV_ICONS_PKG):
+        pytest.skip(f"{_NAV_ICONS_PKG} not rendered")
+
+    ref_page = _ref_dir(_NAV_ICONS_PKG) / "index.html"
+    if not ref_page.exists():
+        pytest.skip("reference/index.html not found")
+
+    soup = _load_html(ref_page)
+    data_el = soup.find("script", id="gd-nav-icons-data")
+    assert data_el is not None, "Missing <script id='gd-nav-icons-data'> on reference page"
+
+
+@requires_bs4
+def test_DED_nav_icons_navbar_labels_in_data():
+    """The inline JSON should contain SVG mappings for all configured navbar labels."""
+    if not _has_rendered_site(_NAV_ICONS_PKG):
+        pytest.skip(f"{_NAV_ICONS_PKG} not rendered")
+
+    import json
+
+    soup = _load_html(_site_dir(_NAV_ICONS_PKG) / "index.html")
+    data_el = soup.find("script", id="gd-nav-icons-data")
+    assert data_el is not None
+    icon_map = json.loads(data_el.string)
+
+    navbar = icon_map.get("navbar", {})
+    for label in ("User Guide", "Recipes", "Reference"):
+        assert label in navbar, f"Navbar label '{label}' missing from icon map"
+        assert "<svg" in navbar[label], f"Navbar icon for '{label}' is not an SVG"
+
+
+@requires_bs4
+def test_DED_nav_icons_sidebar_labels_in_data():
+    """The inline JSON should contain SVG mappings for all configured sidebar labels."""
+    if not _has_rendered_site(_NAV_ICONS_PKG):
+        pytest.skip(f"{_NAV_ICONS_PKG} not rendered")
+
+    import json
+
+    soup = _load_html(_site_dir(_NAV_ICONS_PKG) / "index.html")
+    data_el = soup.find("script", id="gd-nav-icons-data")
+    assert data_el is not None
+    icon_map = json.loads(data_el.string)
+
+    sidebar = icon_map.get("sidebar", {})
+    for label in (
+        "Getting Started",
+        "Configuration",
+        "Visualization",
+        "Advanced Topics",
+        "Basics",
+        "Advanced",
+        "Fundamentals",
+        "Pipelines",
+        "Exporting",
+    ):
+        assert label in sidebar, f"Sidebar label '{label}' missing from icon map"
+        assert "<svg" in sidebar[label], f"Sidebar icon for '{label}' is not an SVG"
+
+
+@requires_bs4
+def test_DED_nav_icons_svgs_have_gd_nav_icon_class():
+    """All SVGs in the icon map should have the gd-nav-icon CSS class."""
+    if not _has_rendered_site(_NAV_ICONS_PKG):
+        pytest.skip(f"{_NAV_ICONS_PKG} not rendered")
+
+    import json
+
+    soup = _load_html(_site_dir(_NAV_ICONS_PKG) / "index.html")
+    data_el = soup.find("script", id="gd-nav-icons-data")
+    assert data_el is not None
+    icon_map = json.loads(data_el.string)
+
+    for scope in ("navbar", "sidebar"):
+        for label, svg_html in icon_map.get(scope, {}).items():
+            assert 'class="gd-nav-icon"' in svg_html, (
+                f"{scope}/{label}: SVG missing 'gd-nav-icon' class"
+            )
+
+
+@requires_bs4
+def test_DED_nav_icons_inline_js_present():
+    """The inline script should contain the processNavItems JS logic."""
+    if not _has_rendered_site(_NAV_ICONS_PKG):
+        pytest.skip(f"{_NAV_ICONS_PKG} not rendered")
+
+    html = (_site_dir(_NAV_ICONS_PKG) / "index.html").read_text(encoding="utf-8")
+    assert "processNavItems" in html, "Inline nav-icons JS not found in page HTML"
+    assert "gd-nav-icons-data" in html, "Reference to gd-nav-icons-data not in JS"
+
+
+def test_DED_nav_icons_no_external_js_file():
+    """nav-icons.js should NOT exist as an external file (it's inlined)."""
+    if not _has_rendered_site(_NAV_ICONS_PKG):
+        pytest.skip(f"{_NAV_ICONS_PKG} not rendered")
+
+    external_js = _site_dir(_NAV_ICONS_PKG) / "nav-icons.js"
+    assert not external_js.exists(), "nav-icons.js should be inlined, not an external file"
+
+
+@requires_bs4
+def test_DED_nav_icons_no_external_script_src():
+    """No page should reference nav-icons.js as an external script src."""
+    if not _has_rendered_site(_NAV_ICONS_PKG):
+        pytest.skip(f"{_NAV_ICONS_PKG} not rendered")
+
+    soup = _load_html(_site_dir(_NAV_ICONS_PKG) / "index.html")
+    scripts = soup.find_all("script", src=True)
+    for s in scripts:
+        assert "nav-icons" not in s["src"], (
+            f"Found external <script src='{s['src']}'> — should be inlined"
+        )
+
+
+@requires_bs4
+def test_DED_nav_icons_tutorials_section_exists():
+    """Tutorials section pages should be rendered in tutorials/ subdirectories."""
+    if not _has_rendered_site(_NAV_ICONS_PKG):
+        pytest.skip(f"{_NAV_ICONS_PKG} not rendered")
+
+    site = _site_dir(_NAV_ICONS_PKG) / "tutorials"
+    for subdir, page in [
+        ("basics", "fundamentals.html"),
+        ("basics", "data-loading.html"),
+        ("basics", "pipelines.html"),
+        ("advanced", "chart-basics.html"),
+        ("advanced", "exporting.html"),
+        ("advanced", "summary-reports.html"),
+    ]:
+        assert (site / subdir / page).exists(), f"Missing tutorials/{subdir}/{page}"
+
+
+@requires_bs4
+def test_DED_nav_icons_tutorials_section_headers_in_sidebar():
+    """Tutorials sidebar should have 'Basics' and 'Advanced' section headers."""
+    if not _has_rendered_site(_NAV_ICONS_PKG):
+        pytest.skip(f"{_NAV_ICONS_PKG} not rendered")
+
+    page = _site_dir(_NAV_ICONS_PKG) / "tutorials" / "basics" / "fundamentals.html"
+    if not page.exists():
+        pytest.skip("tutorials/basics/fundamentals.html not found")
+
+    soup = _load_html(page)
+    sidebar = soup.find("nav", id="quarto-sidebar")
+    assert sidebar is not None, "No #quarto-sidebar found"
+
+    # Section headers use the sidebar-item-text class
+    header_texts = [el.get_text(strip=True) for el in sidebar.find_all(class_="sidebar-item-text")]
+    for expected in ("Basics", "Advanced"):
+        assert expected in header_texts, (
+            f"Section header '{expected}' not found in sidebar; found: {header_texts}"
+        )
+
+
+@requires_bs4
+def test_DED_nav_icons_tutorials_section_headers_have_icons():
+    """Section headers 'Basics' and 'Advanced' should have icon mappings."""
+    if not _has_rendered_site(_NAV_ICONS_PKG):
+        pytest.skip(f"{_NAV_ICONS_PKG} not rendered")
+
+    import json
+
+    page = _site_dir(_NAV_ICONS_PKG) / "tutorials" / "basics" / "fundamentals.html"
+    if not page.exists():
+        pytest.skip("tutorials/basics/fundamentals.html not found")
+
+    soup = _load_html(page)
+    data_el = soup.find("script", id="gd-nav-icons-data")
+    assert data_el is not None
+    icon_map = json.loads(data_el.string)
+    sidebar = icon_map.get("sidebar", {})
+
+    for header in ("Basics", "Advanced"):
+        assert header in sidebar, f"Section header '{header}' missing from icon map"
+        assert 'class="gd-nav-icon"' in sidebar[header], (
+            f"Section header '{header}' icon missing gd-nav-icon class"
+        )
+
+
+@requires_bs4
+def test_DED_nav_icons_incomplete_coverage():
+    """Some tutorial items should have icons and others should not (partial coverage)."""
+    if not _has_rendered_site(_NAV_ICONS_PKG):
+        pytest.skip(f"{_NAV_ICONS_PKG} not rendered")
+
+    import json
+
+    soup = _load_html(_site_dir(_NAV_ICONS_PKG) / "index.html")
+    data_el = soup.find("script", id="gd-nav-icons-data")
+    assert data_el is not None
+    icon_map = json.loads(data_el.string)
+    sidebar = icon_map.get("sidebar", {})
+
+    # These items should have icons
+    for label in ("Fundamentals", "Pipelines", "Exporting"):
+        assert label in sidebar, f"'{label}' should have an icon but is missing"
+
+    # These items should NOT have icons (incomplete coverage)
+    for label in ("Data Loading", "Chart Basics", "Summary Reports"):
+        assert label not in sidebar, (
+            f"'{label}' should NOT have an icon (testing incomplete coverage)"
+        )
+
+
+@requires_bs4
+def test_DED_nav_icons_tutorials_navbar_icon():
+    """The Tutorials navbar entry should have an icon."""
+    if not _has_rendered_site(_NAV_ICONS_PKG):
+        pytest.skip(f"{_NAV_ICONS_PKG} not rendered")
+
+    import json
+
+    soup = _load_html(_site_dir(_NAV_ICONS_PKG) / "index.html")
+    data_el = soup.find("script", id="gd-nav-icons-data")
+    assert data_el is not None
+    icon_map = json.loads(data_el.string)
+
+    navbar = icon_map.get("navbar", {})
+    assert "Tutorials" in navbar, "Tutorials navbar entry should have an icon"
+    assert "<svg" in navbar["Tutorials"], "Tutorials navbar icon should be an SVG"

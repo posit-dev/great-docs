@@ -430,6 +430,85 @@ hero:
 | `hero.logo_height` | `str` | `200px` | CSS max-height for the hero logo |
 | `hero.badges` | `list` / `false` | `auto` | Explicit badge list or `false` to suppress |
 
+## Navigation Icons
+
+Add [Lucide](https://lucide.dev/) icons to navbar and sidebar entries for quick visual identification. Great Docs ships with the complete Lucide icon set (1,900+ icons) and resolves them to lightweight inline SVGs at build time.
+
+### Basic Setup
+
+Map navigation labels to Lucide icon names under `nav_icons`. Use `navbar` for the top navigation bar and `sidebar` for left-sidebar items:
+
+```{.yaml filename="great-docs.yml"}
+nav_icons:
+  navbar:
+    User Guide: book-open
+    Reference: code-2
+  sidebar:
+    Getting Started: rocket
+    Configuration: settings
+```
+
+Each key is the **exact text** of the navigation label as it appears in the rendered site. The value is any [Lucide icon name](https://lucide.dev/icons/) (lowercase, hyphenated).
+
+### Navbar Icons
+
+Icons in the navbar appear next to the top-level links (User Guide, Reference, Recipes, etc.):
+
+```{.yaml filename="great-docs.yml"}
+nav_icons:
+  navbar:
+    User Guide: book-open
+    Recipes: chef-hat
+    Reference: code-2
+```
+
+### Sidebar Icons
+
+Sidebar icons appear next to items and section headers in the left navigation panel. These work for User Guide pages, custom sections, and Reference section headings:
+
+```{.yaml filename="great-docs.yml"}
+nav_icons:
+  sidebar:
+    # User Guide pages
+    Getting Started: rocket
+    Configuration: settings
+    Advanced Topics: graduation-cap
+    # Reference sections
+    Functions: zap
+    Classes: layers
+    # Custom section headers
+    Tutorials: lightbulb
+```
+
+You don't need to assign an icon to every item, entries without a mapping simply display as normal text.
+
+### Finding Icon Names
+
+Browse the full icon set at [lucide.dev/icons](https://lucide.dev/icons/). Use the search bar to find icons by concept: search "chart" for data visualization icons, "file" for document icons, "settings" for configuration icons, etc.
+
+To list all available icon names programmatically:
+
+```python
+from great_docs._icons import list_icons
+
+print(list_icons())  # sorted list of 1,900+ names
+```
+
+::: {.callout-tip}
+### Icon Naming Tips
+
+Lucide names are lowercase and hyphen-separated. Common patterns:
+
+- **Actions**: `download`, `upload`, `copy`, `trash-2`
+- **Objects**: `file`, `folder`, `database`, `cloud`
+- **Concepts**: `settings`, `search`, `bell`, `heart`
+- **Numbered variants**: `code-2`, `trash-2` (alternate designs of the same concept)
+:::
+
+### Dark Mode
+
+Icons automatically adapt to dark mode. They use `stroke="currentColor"`, so they inherit the text color of their navigation context (no additional configuration is needed).
+
 ## Next Steps
 
 - [Configuration](configuration.qmd) covers the functional settings (API discovery, parsers, GitHub integration)

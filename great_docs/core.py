@@ -2025,16 +2025,45 @@ class GreatDocs:
             # Add index as the first item when one exists
             contents.append({"text": title, "href": f"{slug}/index.qmd"})
 
-        # Add each page (except index.qmd)
+        # Add each page (except index.qmd), grouping by subdirectory
+        # into sidebar section headers when subdirectories are present.
+        from pathlib import PurePosixPath
+
+        subdir_groups: dict[str, list[dict]] = {}
+        top_level_pages: list[dict] = []
+
         for page in pages:
             if page["filename"] == "index.qmd":
                 continue
+            parts = PurePosixPath(page["filename"]).parts
+            if len(parts) > 1:
+                # Page is in a subdirectory — group by parent dir
+                subdir = parts[0]
+                subdir_groups.setdefault(subdir, []).append(page)
+            else:
+                top_level_pages.append(page)
+
+        # Add top-level pages first
+        for page in top_level_pages:
             contents.append(
                 {
                     "text": page["title"],
                     "href": f"{slug}/{page['filename']}",
                 }
             )
+
+        # Add subdirectory groups as section headers
+        for subdir in sorted(subdir_groups.keys()):
+            section_title = subdir.replace("-", " ").replace("_", " ").title()
+            section_contents = []
+            for page in subdir_groups[subdir]:
+                section_contents.append(
+                    {
+                        "text": page["title"],
+                        "href": f"{slug}/{page['filename']}",
+                    }
+                )
+            contents.append({"section": section_title, "contents": section_contents})
 
         # Skip sidebar when a section has only a single page — the lone item
         # provides no navigation value and wastes horizontal space.  Without a
@@ -8222,6 +8251,75 @@ toc: false
                     key = label_map[item["text"]]
                     item["text"] = get_translation(key, lang)
 
+    def _inject_nav_icons(self, config: dict) -> None:
+        """Inject navigation icon data and script into the Quarto config.
+
+        Resolves configured icon names to inline SVG strings and emits a
+        self-contained ``<script>`` block in ``include-after-body`` that
+        prepends icons to matching navigation entries at runtime.
+
+        Everything is inlined into a single script tag to avoid relative-path
+        issues with external JS files on subpages.
+        """
+        from ._icons import get_icon_svg
+
+        nav_icons = self._config.nav_icons
+        if not nav_icons:
+            return
+
+        # Resolve icon names to SVG markup
+        resolved: dict[str, dict[str, str]] = {}
+        for scope in ("navbar", "sidebar"):
+            mapping = nav_icons.get(scope, {})
+            if not mapping:
+                continue
+            scope_resolved: dict[str, str] = {}
+            for label, icon_name in mapping.items():
+                svg = get_icon_svg(icon_name)
+                if svg:
+                    scope_resolved[label] = svg
+                else:
+                    print(f"Warning: Unknown nav icon '{icon_name}' for '{label}'")
+            if scope_resolved:
+                resolved[scope] = scope_resolved
+
+        if not resolved:
+            return
+
+        # Serialize to JSON
+        import json
+
+        icon_json = json.dumps(resolved, separators=(",", ":"))
+
+        # Read the nav-icons.js source and build a self-contained inline script
+        nav_icons_js = self.assets_path / "nav-icons.js"
+        if nav_icons_js.exists():
+            js_source = nav_icons_js.read_text(encoding="utf-8")
+        else:
+            return
+
+        if "include-after-body" not in config["format"]["html"]:
+            config["format"]["html"]["include-after-body"] = []
+        elif isinstance(config["format"]["html"]["include-after-body"], str):
+            config["format"]["html"]["include-after-body"] = [
+                config["format"]["html"]["include-after-body"]
+            ]
+
+        # Emit a single self-contained <script> with the data + logic inlined
+        inline_script = (
+            f'<script id="gd-nav-icons-data" type="application/json">'
+            f"{icon_json}</script>\n"
+            f"<script>{js_source}</script>"
+        )
+
+        entry = {"text": inline_script}
+        has_nav_icons = any(
+            "gd-nav-icons-data" in str(item)
+            for item in config["format"]["html"]["include-after-body"]
+        )
+        if not has_nav_icons:
+            config["format"]["html"]["include-after-body"].append(entry)
+
     def _update_quarto_config(self) -> None:
         """
         Update _quarto.yml with great-docs configuration.
@@ -8782,6 +8880,10 @@ toc: false
         )
         if not has_video_embed:
             config["format"]["html"]["include-after-body"].append(video_embed_script_entry)
+
+        # Add navigation icons (Lucide SVG) if configured
+        if self._config.nav_icons:
+            self._inject_nav_icons(config)
 
         # Add sidebar navigation (reference sidebar added later by
         # _add_api_reference_config if exports are discovered)
