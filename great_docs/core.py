@@ -2622,14 +2622,17 @@ class GreatDocs:
                 # Check if API link already exists at the top
                 has_api_link = False
                 if contents and isinstance(contents[0], dict):
-                    if contents[0].get("text") == "API" or contents[0].get("href", "").endswith(
-                        "reference/index.qmd"
-                    ):
+                    if contents[0].get("text") in ("API", "API Index") or contents[0].get(
+                        "href", ""
+                    ).endswith("reference/index.qmd"):
                         has_api_link = True
                 if not has_api_link:
                     # Add API link at the top
+                    from ._translations import get_translation
+
+                    api_index_label = get_translation("api_index", self._config.language)
                     section["contents"] = [
-                        {"text": "API", "href": "reference/index.qmd"},
+                        {"text": api_index_label, "href": "reference/index.qmd"},
                     ] + contents
                 break
 
@@ -9408,8 +9411,11 @@ toc: false
 
         # Build sidebar with API link at top (not subject to filtering)
         # followed by the sectioned contents
+        from ._translations import get_translation
+
+        api_index_label = get_translation("api_index", self._config.language)
         full_contents = [
-            {"text": "API", "href": "reference/index.qmd"},
+            {"text": api_index_label, "href": "reference/index.qmd"},
         ] + sidebar_contents
 
         config["website"]["sidebar"] = [

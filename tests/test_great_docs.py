@@ -12219,7 +12219,7 @@ def test_update_sidebar_with_cli_adds_api_link():
             if isinstance(s, dict) and s.get("id") == "reference"
         )
 
-        assert ref["contents"][0]["text"] == "API"
+        assert ref["contents"][0]["text"] == "API Index"
 
 
 def test_format_preserved_extras_yaml_display_name():
@@ -16227,7 +16227,7 @@ def test_update_sidebar_from_sections_basic():
         contents = sidebar[0]["contents"]
 
         # First entry is API link
-        assert contents[0] == {"text": "API", "href": "reference/index.qmd"}
+        assert contents[0] == {"text": "API Index", "href": "reference/index.qmd"}
 
         # Then section entries
         assert contents[1]["section"] == "Classes"
@@ -36507,7 +36507,7 @@ class TestUpdateSidebarWithCli:
             ref_section = next(
                 s for s in result["website"]["sidebar"] if s.get("id") == "reference"
             )
-            assert ref_section["contents"][0]["text"] == "API"
+            assert ref_section["contents"][0]["text"] == "API Index"
 
     def test_empty_cli_files_returns_early(self):
         """Returns early for empty cli_files list."""

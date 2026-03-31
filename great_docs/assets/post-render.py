@@ -3370,6 +3370,68 @@ def inject_sidebar_body_classes():
 inject_sidebar_body_classes()
 
 
+def style_api_index_sidebar_item():
+    """
+    Apply inline styles to the 'API Index' sidebar link so it visually
+    separates from the monospace reference entries.
+
+    Targets the <a> whose href ends with 'reference/index.html' and its
+    parent <div class="sidebar-item-container">.
+    """
+    import re
+
+    print("Styling API Index sidebar item...")
+    count = 0
+    font = (
+        "&quot;Open Sans&quot;, -apple-system, BlinkMacSystemFont, "
+        "&quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, sans-serif"
+    )
+
+    for html_file in all_html_files:
+        rel_path = os.path.relpath(html_file, "_site")
+        if not rel_path.startswith("reference" + os.sep) and rel_path != "reference":
+            continue
+
+        with open(html_file, "r") as f:
+            content = f.read()
+
+        # Find the sidebar-item-container div immediately followed by the
+        # API Index link (href ending in reference/index.html)
+        match = re.search(
+            r'(<div class="sidebar-item-container")(>\s*'
+            r'<a )([^>]*href="[^"]*reference/index\.html"[^>]*>)',
+            content,
+        )
+        if not match:
+            continue
+
+        div_open = match.group(1)
+        between = match.group(2)
+        a_tag = match.group(3)
+
+        styled_div = div_open + ' style="padding-bottom: 0.5rem; padding-top: 0.25rem;"'
+        styled_a = a_tag.replace(
+            'class="',
+            f'style="font-family: {font};" class="',
+            1,
+        )
+
+        new_content = content.replace(
+            match.group(0),
+            styled_div + between + styled_a,
+        )
+
+        if new_content != content:
+            with open(html_file, "w") as f:
+                f.write(new_content)
+            count += 1
+
+    print(f"Styled API Index sidebar item in {count} reference HTML files")
+
+
+style_api_index_sidebar_item()
+
+
 # ============================================================================
 # Inject Page Metadata (timestamps and author information)
 # ============================================================================
