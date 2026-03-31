@@ -4968,6 +4968,53 @@ html[data-bs-theme="dark"] {
     }
 }
 
+/* ── Navigation Icons (Lucide SVG) ──────────────────────────────────────── */
+
+/* Shared icon base — applies to both navbar and sidebar icons */
+.gd-nav-icon {
+    flex-shrink: 0;
+    margin-right: 0.4em;
+    vertical-align: -0.15em; /* optical alignment with text baseline */
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+}
+
+/* Navbar icons */
+.navbar .nav-link > .menu-text > .gd-nav-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.navbar .nav-link:hover > .menu-text > .gd-nav-icon {
+    opacity: 1;
+}
+
+/* Sidebar icons */
+#quarto-sidebar .menu-text > .gd-nav-icon,
+#quarto-sidebar .sidebar-item-text > .gd-nav-icon {
+    width: 15px;
+    height: 15px;
+}
+
+#quarto-sidebar .sidebar-item:hover .gd-nav-icon {
+    opacity: 1;
+}
+
+/* Active sidebar item — full opacity */
+#quarto-sidebar .sidebar-link.active > .menu-text > .gd-nav-icon,
+#quarto-sidebar a.sidebar-item-text.sidebar-link.active > .gd-nav-icon {
+    opacity: 1;
+}
+
+/* Section header icons — slightly larger */
+#quarto-sidebar .sidebar-item-section > .sidebar-item-container .gd-nav-icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* Dark mode — icon color inherits from text (stroke: currentColor) */
+/* No extra rules needed because Lucide uses stroke="currentColor" */
+
 
 /*-- scss:functions --*/
 
