@@ -184,7 +184,7 @@ For `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `SECURITY.md`, Great Docs also 
 
 ## Fallback Behavior
 
-If a community file doesn't exist, the build continues without error. The corresponding link simply won't appear in the sidebar. You can add community files at any time — they'll be automatically detected on the next build.
+If a community file doesn't exist, the build continues without error. The corresponding link simply won't appear in the sidebar. You can add community files at any time (they'll be automatically detected on the next build).
 
 ## Combining with Citation
 
