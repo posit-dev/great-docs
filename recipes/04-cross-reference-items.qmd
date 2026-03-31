@@ -97,7 +97,7 @@ Each reference becomes a clickable link to the target's reference page.
 
 ## Code Autolinks
 
-Inline code matching a documented symbol is automatically linked — no special syntax needed:
+Inline code matching a documented symbol is automatically linked (no special syntax needed):
 
 ```python
 class Engine:
