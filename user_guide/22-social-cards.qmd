@@ -1,0 +1,217 @@
+---
+title: "Social Cards"
+guide-section: "Build & Deploy"
+bread-crumbs: false
+---
+
+# Social Cards
+
+When someone shares a link to your documentation on LinkedIn, Discord, Slack, Bluesky, Mastodon, X (Twitter), or other platforms, social card meta tags control the preview that appears. Great Docs automatically generates Open Graph and Twitter Card meta tags for every page so your links look polished rather than bare URLs.
+
+## What's Generated
+
+For every page in your site, Great Docs injects two sets of `<meta>` tags into `<head>`:
+
+**Open Graph** (used by LinkedIn, Discord, Slack, Bluesky, Mastodon, Facebook, and most other platforms):
+
+```html
+<meta property="og:type" content="website">
+<meta property="og:title" content="Configuration | My Package">
+<meta property="og:description" content="How to configure My Package...">
+<meta property="og:url" content="https://user.github.io/pkg/user-guide/config.html">
+<meta property="og:site_name" content="My Package">
+<meta property="og:image" content="https://user.github.io/pkg/social-card.png">
+```
+
+**Twitter/X Card** (used by X for its own preview cards):
+
+```html
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Configuration | My Package">
+<meta name="twitter:description" content="How to configure My Package...">
+<meta name="twitter:image" content="https://user.github.io/pkg/social-card.png">
+<meta name="twitter:site" content="@myhandle">
+```
+
+These tags are generated per-page with the correct title, description, and URL for each page.
+
+## Zero-Config Defaults
+
+Social card tags are enabled by default. With no configuration at all, Great Docs will:
+
+- use the page `<title>` for `og:title` and `twitter:title`
+- extract a description from the page's meta description or first paragraph
+- fall back to the package description from `pyproject.toml` when no page-level description is available
+- build the `og:url` from your canonical base URL (auto-detected from GitHub Pages)
+- set `twitter:card` to `"summary"` (no image) or `"summary_large_image"` (when an image is configured)
+
+No changes to `great-docs.yml` are needed for basic social card previews.
+
+## Adding a Social Card Image
+
+An image makes a dramatic difference in how your links appear. Without one, most platforms show a plain text card. With a well-designed image, your link gets a large visual preview that stands out in feeds and chat messages.
+
+### Recommended Image Specifications
+
+| Property | Recommendation |
+|----------|---------------|
+| **Dimensions** | 1200 × 630 pixels (1.91:1 aspect ratio) |
+| **Minimum size** | 600 × 315 pixels |
+| **Maximum file size** | Under 1 MB (ideally under 300 KB) |
+| **Format** | PNG for graphics/text, JPEG for photos |
+| **Safe area** | Keep important content within the center 1080 × 565 pixels |
+
+The 1200 × 630 size is the universal sweet spot: it works well as a `summary_large_image` on X, fills the preview area on LinkedIn and Discord, and renders crisply on high-DPI screens.
+
+### Configuring the Default Image
+
+Place your image in the `assets/` directory and reference it in `great-docs.yml`:
+
+```{.yaml filename="great-docs.yml"}
+social_cards:
+  image: assets/social-card.png
+```
+
+This single image is used as the default `og:image` and `twitter:image` for **every page** on your site. It's copied to the site root during build and referenced with an absolute URL.
+
+### What to Put in the Image
+
+A good social card image typically includes:
+
+- your package logo or wordmark
+- the package name in large, readable text
+- a short tagline or description
+- a subtle background color or pattern that matches your brand
+
+Avoid putting page-specific information in the image since it's shared across all pages. Focus on making the package itself recognizable.
+
+### Design Tips
+
+- **High contrast text**: white or light text on a dark background (or vice versa) ensures readability at small sizes
+- **Large text**: the image is often shown at 300-400 pixels wide in feeds; small text becomes unreadable
+- **Simple composition**: one logo, one title, one line of description is enough
+- **Test at small sizes**: preview your image at 300 × 157 pixels to see how it looks in a typical feed
+
+## Configuration Reference
+
+The full `social_cards` configuration with all options:
+
+```{.yaml filename="great-docs.yml"}
+social_cards:
+  enabled: true                          # Master switch (default: true)
+  image: assets/social-card.png          # Default og:image path or URL
+  twitter_site: "@myhandle"              # Twitter/X site @handle
+  twitter_card: summary_large_image      # Card type override
+```
+
+### Options
+
+You can enable or disable social card meta tag generation. The default is `true`.
+
+```{.yaml filename="great-docs.yml"}
+# Disable social cards entirely
+social_cards:
+  enabled: false
+```
+
+You can also use the shorthand form:
+
+```{.yaml filename="great-docs.yml"}
+social_cards: false
+```
+
+The `image` key needs a path to a default image file (relative to the project root) or an absolute URL. This image is used as `og:image` and `twitter:image` for all pages.
+
+```{.yaml filename="great-docs.yml"}
+# Local file (copied to site root during build)
+social_cards:
+  image: assets/social-card.png
+
+# External URL (used as-is)
+social_cards:
+  image: https://cdn.example.com/my-package-card.png
+```
+
+When an image is provided, the `twitter:card` type automatically switches from `"summary"` to `"summary_large_image"` for a bigger preview on X.
+
+The `twitter_site` key refers to the Twitter/X `@handle` for the site or organization. This appears in the card footer on X.
+
+```{.yaml filename="great-docs.yml"}
+social_cards:
+  twitter_site: "@posaboron"
+```
+
+The `@` prefix is optional (Great Docs will add it if missing).
+
+Regarding `twitter_card`, this overrides the Twitter card type. By default, Great Docs chooses automatically:
+
+- `"summary"` when no image is configured
+- `"summary_large_image"` when an image is configured
+
+Set this to force a specific type regardless of image presence:
+
+```{.yaml filename="great-docs.yml"}
+social_cards:
+  image: assets/social-card.png
+  twitter_card: summary  # Use small card even though an image exists
+```
+
+## How Descriptions Are Extracted
+
+Social card descriptions are extracted automatically with this priority:
+
+1. **Existing meta description** — if the page already has a `<meta name="description">` tag (from SEO processing or manual frontmatter), that text is reused
+2. **First paragraph** — the first `<p>` in the page's `<main>` content with at least 30 characters of meaningful text
+3. **Default description** — the `seo.default_description` value from `great-docs.yml`, or the package description from `pyproject.toml`
+
+For the best previews, add a `description` to important pages' frontmatter:
+
+```{.yaml filename="user_guide/03-configuration.qmd"}
+---
+title: "Configuration"
+description: "Complete guide to configuring Great Docs, including theming, navbar styles, and SEO settings."
+---
+```
+
+## Testing Your Social Cards
+
+After building your site, you can verify the meta tags are present by inspecting any HTML file:
+
+```{.bash filename="Terminal"}
+grep -E 'og:|twitter:' great-docs/_site/index.html
+```
+
+To see how your links will actually appear on each platform, use these free preview tools:
+
+- **LinkedIn**: [LinkedIn Post Inspector](https://www.linkedin.com/post-inspector/)
+- **X (Twitter)**: [Twitter Card Validator](https://cards-dev.twitter.com/validator)
+- **Facebook**: [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/)
+- **General**: [Open Graph Debugger](https://opengraph.dev) (this shows previews for multiple platforms at once)
+
+These tools fetch your live URL, so you'll need to deploy your site first (or use a tunnel for local testing).
+
+## Relationship to SEO
+
+Social cards work alongside the [SEO features](seo.qmd) but serve a different purpose:
+
+- **SEO** optimizes how your pages appear in search engine results (Google, Bing)
+- **Social cards** control how your links appear when shared on social platforms
+
+Both features can be enabled independently. Social cards use some of the same underlying data (canonical URLs, meta descriptions) but generate separate meta tags (`og:*` and `twitter:*`).
+
+## Disabling Social Cards
+
+To turn off social card meta tags entirely you can use:
+
+```{.yaml filename="great-docs.yml"}
+social_cards: false
+```
+
+Or equivalently:
+
+```{.yaml filename="great-docs.yml"}
+social_cards:
+  enabled: false
+```
+
+With either of these settings, the Open Graph and Twitter Card meta tags will not be injected into any pages.
