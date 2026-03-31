@@ -27,16 +27,6 @@ Display author information with circular GitHub-style avatars on authored pages.
 - Optional `team_author:` config for a catch-all team attribution (e.g., "Great Tables Team")
 - `site.show_author: true/false` to enable/disable author display
 
-### Navigation Icons
-
-Add icon support for sidebar and navbar entries.
-
-- Prepend icons to navigation titles (`icon: book` in YAML)
-- [Lucide](https://lucide.dev/) icon set (lightweight, 1500+ icons)
-- SVG inlining for crisp rendering at any size
-- Dark mode color adaptation
-- Consistent sizing and alignment across navigation levels
-
 ### Page Status Badges
 
 Visual indicators for page lifecycle status in navigation.
