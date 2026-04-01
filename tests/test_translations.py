@@ -46,6 +46,30 @@ class TestGetTranslation:
     def test_unknown_language_falls_back_to_english(self):
         assert get_translation("back_to_top", "xx") == "Back to top"
 
+    def test_keyboard_overlay_title_english(self):
+        assert get_translation("kb_overlay_title") == "Keyboard shortcuts"
+
+    def test_keyboard_overlay_title_french(self):
+        assert get_translation("kb_overlay_title", "fr") == "Raccourcis clavier"
+
+    def test_keyboard_nav_group(self):
+        assert get_translation("kb_group_navigation") == "Navigation"
+
+    def test_keyboard_focus_search(self):
+        assert get_translation("kb_focus_search") == "Focus search"
+
+    def test_keyboard_show_menu(self):
+        assert get_translation("kb_show_menu") == "Show menu"
+
+    def test_keyboard_menu_title_site(self):
+        assert get_translation("kb_menu_title_site") == "Site Navigation"
+
+    def test_keyboard_menu_title_section(self):
+        assert get_translation("kb_menu_title_section", "fr") == "Navigation de la section"
+
+    def test_keyboard_or(self):
+        assert get_translation("kb_or", "de") == "oder"
+
     def test_placeholder_preserved(self):
         result = get_translation("refreshed_time_ago", "en")
         assert "{time}" in result
