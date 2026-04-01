@@ -2208,6 +2208,169 @@ class GreatDocs:
         return config
 
     # =========================================================================
+    # Custom Static Pages Methods
+    # =========================================================================
+
+    def _find_custom_pages_dir(self) -> Path | None:
+        """Return the conventional custom pages directory if it exists."""
+        custom_dir = self.project_root / "custom"
+        if custom_dir.exists() and custom_dir.is_dir():
+            return custom_dir
+        return None
+
+    def _split_frontmatter(self, content: str) -> tuple[dict, str]:
+        """Split YAML frontmatter from file content when present."""
+        normalized = content.lstrip()
+
+        if not normalized.startswith("---"):
+            return {}, content
+
+        parts = normalized.split("---", 2)
+        if len(parts) < 3:
+            return {}, content
+
+        try:
+            frontmatter = parse_yaml(parts[1]) or {}
+        except ValueError:
+            return {}, content
+
+        if not isinstance(frontmatter, dict):
+            return {}, content
+
+        return frontmatter, parts[2].lstrip("\n")
+
+    def _derive_page_title(self, path: Path) -> str:
+        """Derive a human-readable title from a source filename."""
+        name = path.stem.replace("-", " ").replace("_", " ")
+        return name.title()
+
+    def _get_custom_page_navbar_config(
+        self,
+        frontmatter: dict,
+        default_title: str,
+    ) -> tuple[str, str | None] | None:
+        """Resolve optional navbar configuration for a custom page."""
+        navbar = frontmatter.get("navbar")
+
+        if navbar in (None, False):
+            return None
+
+        if navbar is True:
+            return default_title, frontmatter.get("navbar_after")
+
+        if isinstance(navbar, str):
+            return navbar, frontmatter.get("navbar_after")
+
+        if isinstance(navbar, dict):
+            text = navbar.get("text", default_title)
+            after = navbar.get("after", frontmatter.get("navbar_after"))
+            if isinstance(text, str) and text:
+                return text, after if isinstance(after, str) else None
+
+        return None
+
+    def _add_project_resources(
+        self,
+        resources_to_add: list[str],
+        render_excludes: list[str] | None = None,
+    ) -> None:
+        """Add resource paths and render exclusions to _quarto.yml."""
+        if not resources_to_add and not render_excludes:
+            return
+
+        quarto_yml = self.project_path / "_quarto.yml"
+        config = self._read_quarto_config(quarto_yml)
+        project = config.setdefault("project", {})
+
+        resources = project.setdefault("resources", [])
+        if isinstance(resources, str):
+            resources = [resources]
+            project["resources"] = resources
+
+        for resource in resources_to_add:
+            if resource not in resources:
+                resources.append(resource)
+
+        if render_excludes:
+            if "render" not in project:
+                project["render"] = ["**"]
+            render = project["render"]
+            if isinstance(render, str):
+                render = [render]
+                project["render"] = render
+            for path in render_excludes:
+                exclude = f"!{path}"
+                if exclude not in render:
+                    render.append(exclude)
+
+        self._write_quarto_yml(quarto_yml, config)
+
+    def _process_custom_pages(self) -> int:
+        """Process auto-discovered custom HTML pages under custom/."""
+        source_dir = self._find_custom_pages_dir()
+        if source_dir is None:
+            return 0
+
+        dest_dir = self.project_path / "custom"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        resources_to_add: list[str] = []
+        raw_render_excludes: list[str] = []
+        processed = 0
+
+        for src_path in sorted(source_dir.rglob("*")):
+            if not src_path.is_file():
+                continue
+
+            rel_path = src_path.relative_to(source_dir)
+            dest_path = dest_dir / rel_path
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+
+            if src_path.suffix.lower() not in (".html", ".htm"):
+                shutil.copy2(src_path, dest_path)
+                resources_to_add.append((Path("custom") / rel_path).as_posix())
+                continue
+
+            content = src_path.read_text(encoding="utf-8")
+            frontmatter, body = self._split_frontmatter(content)
+            layout = str(frontmatter.get("layout", "passthrough")).lower()
+            page_title = str(frontmatter.get("title") or self._derive_page_title(src_path))
+
+            if layout not in {"passthrough", "raw"}:
+                print(
+                    f"   ⚠️  Unsupported custom page layout '{layout}' in {rel_path}; "
+                    "defaulting to passthrough"
+                )
+                layout = "passthrough"
+
+            if layout == "raw":
+                dest_path.write_text(body, encoding="utf-8")
+                raw_resource = (Path("custom") / rel_path).as_posix()
+                resources_to_add.append(raw_resource)
+                raw_render_excludes.append(raw_resource)
+                nav_href = raw_resource
+            else:
+                qmd_path = dest_path.with_suffix(".qmd")
+                qmd_frontmatter = dict(frontmatter)
+                qmd_frontmatter.pop("layout", None)
+                qmd_frontmatter.setdefault("title", page_title)
+                qmd_frontmatter.setdefault("bread-crumbs", False)
+                qmd_body = body if body.endswith("\n") else f"{body}\n"
+                qmd_content = f"---\n{format_yaml(qmd_frontmatter)}\n---\n\n{qmd_body}"
+                qmd_path.write_text(qmd_content, encoding="utf-8")
+                nav_href = (Path("custom") / rel_path.with_suffix(".qmd")).as_posix()
+
+            navbar_cfg = self._get_custom_page_navbar_config(frontmatter, page_title)
+            if navbar_cfg is not None:
+                nav_text, navbar_after = navbar_cfg
+                self._add_section_to_navbar(nav_text, nav_href, navbar_after)
+
+            processed += 1
+
+        self._add_project_resources(resources_to_add, raw_render_excludes)
+        return processed
+
+    # =========================================================================
     # CLI Documentation Methods
     # =========================================================================
 
@@ -11027,6 +11190,17 @@ toc: false
                     import traceback
 
                     traceback.print_exc()
+
+            # Step 0.9: Process auto-discovered custom HTML pages
+            try:
+                n_custom_pages = self._process_custom_pages()
+                if n_custom_pages:
+                    print(f"✅ {n_custom_pages} custom page(s) processed")
+            except Exception as e:
+                print(f"   ⚠️  Error processing custom pages: {e}")
+                import traceback
+
+                traceback.print_exc()
 
             # Step 0.95: Copy assets directory if present
             try:
