@@ -60,6 +60,27 @@ h2, .h2 {
    padding-bottom: 0;
 }
 
+// Changelog version headings: add a Lucide-style tag glyph and code-like type.
+h1.changelog-version,
+h2.changelog-version {
+    display: flex;
+    align-items: center;
+    font-family: $font-family-monospace;
+    font-size: 1.6rem;
+}
+
+h1.changelog-version::before,
+h2.changelog-version::before {
+    content: "";
+    width: 1.15em;
+    height: 1.15em;
+    flex: 0 0 1.15em;
+    transform: translateY(0.08em);
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20.59 13.41 11 3H4v7l9.59 9.59a2 2 0 0 0 2.82 0l4.18-4.18a2 2 0 0 0 0-2.82Z'/%3E%3Cline x1='7' y1='7' x2='7.01' y2='7'/%3E%3C/svg%3E") no-repeat center / contain;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20.59 13.41 11 3H4v7l9.59 9.59a2 2 0 0 0 2.82 0l4.18-4.18a2 2 0 0 0 0-2.82Z'/%3E%3Cline x1='7' y1='7' x2='7.01' y2='7'/%3E%3C/svg%3E") no-repeat center / contain;
+}
+
 h5, .h5 {
    @extend .mt-3;
 }
