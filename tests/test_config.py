@@ -160,6 +160,13 @@ class TestScalarProperties:
         cfg = _make_config(tmp_project, "back_to_top: false\n")
         assert cfg.back_to_top is False
 
+    def test_keyboard_nav_default(self, tmp_project: Path):
+        assert Config(tmp_project).keyboard_nav is True
+
+    def test_keyboard_nav_false(self, tmp_project: Path):
+        cfg = _make_config(tmp_project, "keyboard_nav: false\n")
+        assert cfg.keyboard_nav is False
+
     def test_parser_default(self, tmp_project: Path):
         assert Config(tmp_project).parser == "numpy"
 
