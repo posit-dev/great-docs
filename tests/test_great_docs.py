@@ -41457,6 +41457,211 @@ def test_back_to_top_scss_styles_exist():
     assert "prefers-reduced-motion" in content
 
 
+# Keyboard navigation tests ----------------------------------------------------
+
+
+def test_keyboard_nav_enabled_by_default():
+    """keyboard-nav.js is in resources and include-after-body by default."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        resources = result["project"].get("resources", [])
+        assert "keyboard-nav.js" in resources
+
+        after_body = result["format"]["html"].get("include-after-body", [])
+        has_keyboard_nav = any("keyboard-nav.js" in str(item) for item in after_body)
+        assert has_keyboard_nav
+
+
+def test_keyboard_nav_disabled_via_config():
+    """keyboard-nav.js is excluded when keyboard_nav is false."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="keyboard_nav: false\n",
+        )
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        resources = result["project"].get("resources", [])
+        assert "keyboard-nav.js" not in resources
+
+        after_body = result["format"]["html"].get("include-after-body", [])
+        has_keyboard_nav = any("keyboard-nav.js" in str(item) for item in after_body)
+        assert not has_keyboard_nav
+
+
+def test_keyboard_nav_script_tag_content():
+    """The keyboard-nav include-after-body entry has the expected script tag."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        after_body = result["format"]["html"]["include-after-body"]
+        kb_entries = [item for item in after_body if "keyboard-nav.js" in str(item)]
+        assert len(kb_entries) == 1
+        assert kb_entries[0] == {"text": '<script src="keyboard-nav.js"></script>'}
+
+
+def test_keyboard_nav_not_duplicated():
+    """Running _update_quarto_config twice does not duplicate the script tag."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+
+        docs._update_quarto_config()
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        after_body = result["format"]["html"]["include-after-body"]
+        kb_count = sum(1 for item in after_body if "keyboard-nav.js" in str(item))
+        assert kb_count == 1
+
+
+def test_keyboard_nav_metadata_flag():
+    """_get_package_metadata sets keyboard_nav_enabled in metadata."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+        metadata = docs._get_package_metadata()
+        assert metadata["keyboard_nav_enabled"] is True
+
+
+def test_keyboard_nav_metadata_flag_disabled():
+    """_get_package_metadata reflects keyboard_nav: false."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="keyboard_nav: false\n",
+        )
+        metadata = docs._get_package_metadata()
+        assert metadata["keyboard_nav_enabled"] is False
+
+
+def test_keyboard_nav_js_copied_to_project():
+    """keyboard-nav.js is copied from assets to the project directory."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, _ = _make_uqc_docs(tmp_dir)
+        docs._prepare_build_directory()
+
+        js_file = docs.project_path / "keyboard-nav.js"
+        assert js_file.exists()
+
+
+def test_keyboard_nav_js_not_copied_when_disabled():
+    """keyboard-nav.js is not copied when feature is disabled."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, _ = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="keyboard_nav: false\n",
+        )
+        docs._prepare_build_directory()
+
+        js_file = docs.project_path / "keyboard-nav.js"
+        assert not js_file.exists()
+
+
+def test_keyboard_nav_js_file_has_expected_content():
+    """The keyboard-nav.js asset exists and contains the expected patterns."""
+
+    js_path = Path(__file__).parent.parent / "great_docs" / "assets" / "keyboard-nav.js"
+    assert js_path.exists()
+    content = js_path.read_text()
+
+    # Verify IIFE wrapping
+    assert content.startswith("/**")
+    assert "(function()" in content
+    assert "})();" in content
+
+    # Verify shortcut handlers
+    assert "focusSearch" in content
+    assert "navigatePrev" in content
+    assert "navigateNext" in content
+    assert "showMenu" in content
+    assert "toggleDarkMode" in content
+
+    # Verify menu keyboard navigation
+    assert "handleMenuKeydown" in content
+    assert "menuSelectedIndex" in content
+    assert "gd-menu-item-focused" in content
+
+    # Verify menu overlay
+    assert "gd-menu-overlay" in content
+    assert "showMenu" in content
+    assert "hideMenu" in content
+    assert "getNavbarItems" in content
+    assert "getSidebarItems" in content
+
+    # Verify keyboard shortcuts overlay
+    assert "gd-keyboard-overlay" in content
+    assert "showOverlay" in content
+    assert "hideOverlay" in content
+
+    # Verify accessibility
+    assert 'role", "dialog"' in content or "role" in content
+    assert "aria-modal" in content
+    assert "aria-label" in content
+
+    # Verify input guard
+    assert "isTyping" in content
+
+    # Verify reduced motion support
+    assert "prefers-reduced-motion" in content
+
+
+def test_keyboard_nav_scss_styles_exist():
+    """The SCSS file contains keyboard navigation overlay styles."""
+
+    scss_path = Path(__file__).parent.parent / "great_docs" / "assets" / "great-docs.scss"
+    content = scss_path.read_text()
+
+    assert ".gd-keyboard-overlay {" in content
+    assert ".gd-keyboard-overlay-visible {" in content
+    assert ".gd-keyboard-overlay-inner {" in content
+    assert ".gd-keyboard-row {" in content
+    assert "kbd {" in content
+
+    # Menu overlay
+    assert ".gd-menu-overlay {" in content
+    assert ".gd-menu-overlay-visible {" in content
+    assert ".gd-menu-overlay-inner {" in content
+    assert ".gd-menu-item {" in content
+    assert ".gd-menu-section {" in content
+    assert ".gd-menu-item-focused {" in content
+
+    # Keyboard navbar button
+    assert ".gd-keyboard-btn {" in content
+    assert "#gd-keyboard-btn-container {" in content
+
+    # Dark mode
+    assert ".gd-keyboard-overlay-inner" in content
+    assert ".gd-menu-overlay-inner" in content
+
+    # Reduced motion
+    assert ".gd-keyboard-overlay," in content
+    assert ".gd-menu-overlay," in content
+
+
 # Quarto executable cell preservation tests ------------------------------------
 
 
