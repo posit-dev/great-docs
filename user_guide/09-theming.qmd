@@ -40,6 +40,57 @@ back_to_top: false   # Disable the button
 
 The button respects the visitor's `prefers-reduced-motion` setting: when reduced motion is preferred, scrolling is instant rather than animated.
 
+## Keyboard Navigation
+
+Great Docs includes built-in keyboard shortcuts that let visitors navigate the site and access common actions without reaching for the mouse. A small keyboard icon appears in the navbar; clicking it (or pressing `h` / `?`) opens an overlay listing every shortcut.
+
+### Available Shortcuts
+
+The shortcuts are organized into three groups:
+
+#### Navigation
+
+Move between pages and jump to common destinations without leaving the keyboard.
+
+| Key | Action |
+|-----|--------|
+| `s` or `/` | Focus the search input |
+| `[` | Go to the previous page |
+| `]` | Go to the next page |
+| `m` or `n` | Show/hide the floating menu overlay |
+
+The floating menu shows the sidebar navigation on documentation pages and the navbar links on the homepage, giving quick access to any section without scrolling.
+
+#### Display
+
+Control how the page looks and capture its content.
+
+| Key | Action |
+|-----|--------|
+| `d` | Toggle dark mode |
+| `c` | Copy the current page as Markdown (when available) |
+
+#### General
+
+Access help and dismiss any open overlay.
+
+| Key | Action |
+|-----|--------|
+| `h` or `?` | Show/hide the keyboard shortcuts help overlay |
+| `Escape` | Close the active overlay or unfocus the current element |
+
+### Configuration
+
+Keyboard navigation is enabled by default. To disable it:
+
+```{.yaml filename="great-docs.yml"}
+keyboard_nav: false
+```
+
+### Accessibility
+
+Keyboard shortcuts are automatically skipped when the visitor is typing in an input field, textarea, or content-editable element, so they never interfere with form entry or search. The help overlay uses ARIA attributes for screen reader compatibility, and animations respect the visitor's `prefers-reduced-motion` system setting.
+
 ## Announcement Banner
 
 A site-wide banner can be displayed above the navbar to highlight important news, releases, or alerts. The banner appears on every page and can optionally be dismissed by the visitor.
