@@ -1,5 +1,5 @@
 # Great Docs Configuration
-# See https://rich-iannone.github.io/great-docs/user-guide/03-configuration.html
+# See https://posit-dev.github.io/great-docs/user-guide/configuration.html
 
 # Announcement Banner
 # -------------------
@@ -161,15 +161,6 @@ funding:
     - funder
   homepage: https://posit.co
   ror: https://ror.org/03wc8by49
-
-# Site Settings
-# -------------
-# These settings are forwarded to _quarto.yml (format.html section)
-# site:
-#   theme: flatly
-#   toc: true
-#   toc-depth: 2
-#   toc-title: On this page
 
 # Jupyter Kernel
 # --------------
