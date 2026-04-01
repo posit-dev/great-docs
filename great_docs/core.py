@@ -1490,6 +1490,16 @@ class GreatDocs:
             text,
         )
 
+        # 4. Bare GitHub compare URLs (e.g., "Full Changelog: https://...")
+        #    are not always auto-linked by downstream Markdown renderers.
+        #    Wrap them explicitly as Markdown links when not already linked.
+        compare_url_pattern = re.escape(base) + r"/compare/[^\s)]+"
+        text = re.sub(
+            rf"(?<!\[)(?<!\(){compare_url_pattern}",
+            lambda m: f"[{m.group(0)}]({m.group(0)})",
+            text,
+        )
+
         return text
 
     def _generate_changelog_page(self) -> str | None:
@@ -1534,9 +1544,7 @@ class GreatDocs:
             published = rel["published_at"][:10] if rel["published_at"] else ""
             gh_url = rel["html_url"]
 
-            heading = f"## {name}"
-            if published:
-                heading += f"  {{.changelog-version}}"  # noqa: F541
+            heading = f"## {name}  {{.changelog-version}}"  # noqa: F541
 
             lines.append(heading)
             lines.append("")
