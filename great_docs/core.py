@@ -9230,9 +9230,9 @@ toc: false
                     toggler_stroke = "rgba(0,0,0,0.65)"
 
                 if mode == "light":
-                    selector = "body.quarto-light"
+                    selector = "html.quarto-light, :root[data-bs-theme='light']"
                 else:
-                    selector = ":is(html, body).quarto-dark"
+                    selector = "html.quarto-dark, :root[data-bs-theme='dark']"
 
                 css_parts.append(f"""{selector} {{
     --gd-navbar-bg: {bg_hex};
@@ -9303,8 +9303,12 @@ toc: false
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='{toggler_stroke}' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") !important;
 }}
 {selector} .navbar .bi,
-{selector} .navbar .aa-SubmitIcon {{
+{selector} .navbar .aa-SubmitIcon,
+{selector} .navbar .aa-SearchIcon,
+{selector} .navbar .aa-DetachedSearchButtonIcon,
+{selector} .navbar .aa-DetachedSearchButtonIcon svg {{
     color: {text_hex} !important;
+    fill: {text_hex} !important;
 }}
 {selector} .navbar .version-badge {{
     color: {text_hex};

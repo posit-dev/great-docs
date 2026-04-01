@@ -1219,6 +1219,17 @@ body.quarto-light .navbar .navbar-toggler-icon {
 }
 
 body.quarto-light .navbar .aa-DetachedSearchButton svg,
+body.quarto-light .navbar .aa-DetachedSearchButton .aa-DetachedSearchButtonIcon,
+body.quarto-light .navbar .aa-DetachedSearchButton .aa-DetachedSearchButtonIcon svg,
+body.quarto-light .navbar .aa-DetachedSearchButton .aa-SearchIcon,
+html.quarto-light .navbar .aa-DetachedSearchButton svg,
+html.quarto-light .navbar .aa-DetachedSearchButton .aa-DetachedSearchButtonIcon,
+html.quarto-light .navbar .aa-DetachedSearchButton .aa-DetachedSearchButtonIcon svg,
+html.quarto-light .navbar .aa-DetachedSearchButton .aa-SearchIcon,
+:root[data-bs-theme="light"] .navbar .aa-DetachedSearchButton svg,
+:root[data-bs-theme="light"] .navbar .aa-DetachedSearchButton .aa-DetachedSearchButtonIcon,
+:root[data-bs-theme="light"] .navbar .aa-DetachedSearchButton .aa-DetachedSearchButtonIcon svg,
+:root[data-bs-theme="light"] .navbar .aa-DetachedSearchButton .aa-SearchIcon,
 body.quarto-light .navbar .aa-SubmitButton,
 body.quarto-light .navbar .aa-SubmitButton svg {
     color: var(--gd-navbar-text) !important;
@@ -2901,13 +2912,13 @@ body.quarto-dark input::placeholder {
 
 body.quarto-dark #quarto-search,
 html.quarto-dark #quarto-search,
-[data-bs-theme="dark"] #quarto-search {
+:root[data-bs-theme="dark"] #quarto-search {
     background-color: transparent;
 }
 
 body.quarto-dark #quarto-search input,
 html.quarto-dark #quarto-search input,
-[data-bs-theme="dark"] #quarto-search input {
+:root[data-bs-theme="dark"] #quarto-search input {
     background-color: var(--gd-bg-tertiary);
     border-color: var(--gd-border-color);
     color: var(--gd-text-primary) !important;
@@ -2915,7 +2926,7 @@ html.quarto-dark #quarto-search input,
 
 body.quarto-dark #quarto-search .aa-SubmitButton,
 html.quarto-dark #quarto-search .aa-SubmitButton,
-[data-bs-theme="dark"] #quarto-search .aa-SubmitButton {
+:root[data-bs-theme="dark"] #quarto-search .aa-SubmitButton {
     background-color: transparent;
     color: var(--gd-text-muted) !important;
 }
@@ -2924,6 +2935,19 @@ body.quarto-dark #quarto-search .aa-DetachedSearchButton {
     background: rgba(255, 255, 255, 0.08);
     border-color: rgba(255, 255, 255, 0.15);
     color: #e0e0e0;
+}
+
+body.quarto-dark #quarto-search .aa-DetachedSearchButton .aa-DetachedSearchButtonIcon,
+body.quarto-dark #quarto-search .aa-DetachedSearchButton .aa-DetachedSearchButtonIcon svg,
+body.quarto-dark #quarto-search .aa-DetachedSearchButton .aa-SearchIcon,
+html.quarto-dark #quarto-search .aa-DetachedSearchButton .aa-DetachedSearchButtonIcon,
+html.quarto-dark #quarto-search .aa-DetachedSearchButton .aa-DetachedSearchButtonIcon svg,
+html.quarto-dark #quarto-search .aa-DetachedSearchButton .aa-SearchIcon,
+:root[data-bs-theme="dark"] #quarto-search .aa-DetachedSearchButton .aa-DetachedSearchButtonIcon,
+:root[data-bs-theme="dark"] #quarto-search .aa-DetachedSearchButton .aa-DetachedSearchButtonIcon svg,
+:root[data-bs-theme="dark"] #quarto-search .aa-DetachedSearchButton .aa-SearchIcon {
+    color: #e0e0e0 !important;
+    fill: #e0e0e0 !important;
 }
 
 body.quarto-dark #quarto-search .aa-DetachedSearchButton:hover {
@@ -3068,14 +3092,14 @@ body.quarto-dark .aa-Autocomplete {
 
 body.quarto-dark .aa-Form,
 html.quarto-dark .aa-Form,
-[data-bs-theme="dark"] .aa-Form {
+:root[data-bs-theme="dark"] .aa-Form {
     background-color: var(--gd-bg-tertiary);
     border-color: var(--gd-border-color);
 }
 
 body.quarto-dark .aa-Input,
 html.quarto-dark .aa-Input,
-[data-bs-theme="dark"] .aa-Input {
+:root[data-bs-theme="dark"] .aa-Input {
     color: var(--gd-text-primary) !important;
     background-color: transparent;
 }
@@ -3084,43 +3108,43 @@ body.quarto-dark .aa-InputWrapperPrefix,
 body.quarto-dark .aa-InputWrapperSuffix,
 html.quarto-dark .aa-InputWrapperPrefix,
 html.quarto-dark .aa-InputWrapperSuffix,
-[data-bs-theme="dark"] .aa-InputWrapperPrefix,
-[data-bs-theme="dark"] .aa-InputWrapperSuffix {
+:root[data-bs-theme="dark"] .aa-InputWrapperPrefix,
+:root[data-bs-theme="dark"] .aa-InputWrapperSuffix {
     color: var(--gd-text-muted);
 }
 
 body.quarto-dark .aa-SubmitButton,
 html.quarto-dark .aa-SubmitButton,
-[data-bs-theme="dark"] .aa-SubmitButton,
+:root[data-bs-theme="dark"] .aa-SubmitButton,
 body.quarto-dark .aa-SubmitIcon,
 html.quarto-dark .aa-SubmitIcon,
-[data-bs-theme="dark"] .aa-SubmitIcon,
+:root[data-bs-theme="dark"] .aa-SubmitIcon,
 body.quarto-dark svg.aa-SubmitIcon,
 html.quarto-dark svg.aa-SubmitIcon,
-[data-bs-theme="dark"] svg.aa-SubmitIcon {
+:root[data-bs-theme="dark"] svg.aa-SubmitIcon {
     color: var(--gd-text-muted) !important;
     fill: var(--gd-text-muted) !important;
 }
 
 body.quarto-dark .aa-ClearButton,
 html.quarto-dark .aa-ClearButton,
-[data-bs-theme="dark"] .aa-ClearButton,
+:root[data-bs-theme="dark"] .aa-ClearButton,
 body.quarto-dark .aa-ClearIcon,
 html.quarto-dark .aa-ClearIcon,
-[data-bs-theme="dark"] .aa-ClearIcon,
+:root[data-bs-theme="dark"] .aa-ClearIcon,
 body.quarto-dark svg.aa-ClearIcon,
 html.quarto-dark svg.aa-ClearIcon,
-[data-bs-theme="dark"] svg.aa-ClearIcon {
+:root[data-bs-theme="dark"] svg.aa-ClearIcon {
     color: var(--gd-text-muted) !important;
     fill: var(--gd-text-muted) !important;
 }
 
 body.quarto-dark .aa-ClearButton:hover,
 html.quarto-dark .aa-ClearButton:hover,
-[data-bs-theme="dark"] .aa-ClearButton:hover,
+:root[data-bs-theme="dark"] .aa-ClearButton:hover,
 body.quarto-dark .aa-ClearButton:hover svg.aa-ClearIcon,
 html.quarto-dark .aa-ClearButton:hover svg.aa-ClearIcon,
-[data-bs-theme="dark"] .aa-ClearButton:hover svg.aa-ClearIcon {
+:root[data-bs-theme="dark"] .aa-ClearButton:hover svg.aa-ClearIcon {
     color: var(--gd-text-primary) !important;
     fill: var(--gd-text-primary) !important;
 }
