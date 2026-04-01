@@ -1,4 +1,5 @@
 import glob
+import html
 import json
 import os
 import re
@@ -3922,6 +3923,156 @@ fix_page_metadata_script_paths()
 # widget (copy to clipboard / view as plain Markdown).
 
 
+def _postprocess_markdown_content(md_content: str, rel: str) -> str:
+    """Apply markdown cleanup and link normalization after pandoc conversion."""
+
+    # Decode HTML entities that may have been double-encoded or improperly handled.
+    # This fixes issues like: &rsquo; -> ', &ldquo; -> ", etc.
+    md_content = html.unescape(md_content)
+
+    # Fix common UTF-8 mojibake sequences (UTF-8 bytes interpreted as Latin-1).
+    # When UTF-8 bytes are incorrectly decoded as Latin-1, we get mojibake patterns.
+    # E.g., U+2019 (') is bytes E2 80 99 in UTF-8, but decoded as Latin-1 becomes
+    # the three characters U+00E2 U+20AC U+2122, which looks like: â€™
+    mojibake_fixes = {
+        "\u00e2\u20ac\u2122": "\u2019",  # Right single quotation mark
+        "\u00e2\u20ac\u009c": "\u201c",  # Left double quotation mark
+        "\u00e2\u20ac\u009d": "\u201d",  # Right double quotation mark
+        "\u00e2\u20ac\u0093": "\u2013",  # En dash
+        "\u00e2\u20ac\u0094": "\u2014",  # Em dash
+        # Alternate mojibake form with C1 control characters.
+        "\u00e2\u0080\u0099": "\u2019",
+        "\u00e2\u0080\u009c": "\u201c",
+        "\u00e2\u0080\u009d": "\u201d",
+        "\u00e2\u0080\u0093": "\u2013",
+        "\u00e2\u0080\u0094": "\u2014",
+    }
+    for mojibake, correct in mojibake_fixes.items():
+        md_content = md_content.replace(mojibake, correct)
+
+    # Normalize typography to plain ASCII for robust display/copy across
+    # environments that may not preserve UTF-8 metadata for raw .md files.
+    typography_fixes = {
+        "\u2018": "'",  # Left single quotation mark
+        "\u2019": "'",  # Right single quotation mark
+        "\u201c": '"',  # Left double quotation mark
+        "\u201d": '"',  # Right double quotation mark
+        "\u2013": "-",  # En dash
+        "\u2014": "--",  # Em dash
+    }
+    for src, dst in typography_fixes.items():
+        md_content = md_content.replace(src, dst)
+
+    # Remove standalone Source links (HTML and markdown forms).
+    md_content = re.sub(
+        r"^\s*<a\s+[^>]*>\s*source\s*</a>\s*\n?",
+        "",
+        md_content,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    md_content = re.sub(
+        r"^\s*\[source\]\([^\n)]+\)\s*\n?",
+        "",
+        md_content,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+
+    # Convert simple HTML anchors to markdown links.
+    # Keep this conservative: only convert when anchor text has no nested tags.
+    def _anchor_to_md(m):
+        href = m.group("href").strip()
+        text = m.group("text")
+        if "<" in text or ">" in text:
+            return m.group(0)
+        text = html.unescape(text).strip()
+        if not text:
+            return m.group(0)
+        return f"[{text}]({href})"
+
+    md_content = re.sub(
+        r'<a\s+[^>]*href="(?P<href>[^"]+)"[^>]*>(?P<text>.*?)</a>',
+        _anchor_to_md,
+        md_content,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    # Normalize parameter signature artifacts created by adjacent code spans.
+    # These can appear in various formats depending on how pandoc combined the spans.
+    # Pattern 1: `name``:`` ``type`` ``=`` ``default`` - full three-part with optional closing backtick
+    md_content = re.sub(
+        r"`([^`\n]+)``:``\s*``([^`\n]+)``\s*``=``\s*``([^`]+?)``?",
+        r"`\1`: `\2` = `\3`",
+        md_content,
+    )
+    # Pattern 2: `name``:`` ``type`` - just name and type
+    md_content = re.sub(
+        r"`([^`\n]+)``:``\s*``([^`\n]+)``",
+        r"`\1`: `\2`",
+        md_content,
+    )
+
+    # Remove leftover HTML div wrappers that pandoc preserved.
+    md_content = re.sub(
+        r"^<div[^>]*>\s*$",
+        "",
+        md_content,
+        flags=re.MULTILINE,
+    )
+    md_content = re.sub(
+        r"^</div>\s*$",
+        "",
+        md_content,
+        flags=re.MULTILINE,
+    )
+
+    # Remove leftover <span> tags with parameter/annotation classes.
+    md_content = re.sub(
+        r'<span\s+class="parameter-[^"]*"[^>]*>(.*?)</span>',
+        r"\1",
+        md_content,
+    )
+
+    # Rewrite internal .html links to .md (relative paths only).
+    md_content = re.sub(
+        r"\]\((\.\./[^)]*?)\.html(\)?)",
+        r"](\1.md\2",
+        md_content,
+    )
+    # Also in the same directory.
+    md_content = re.sub(
+        r"\]\(([A-Za-z0-9_][^):/]*?)\.html(\)?)",
+        r"](\1.md\2",
+        md_content,
+    )
+
+    # Simplify redundant ../current_dir/ paths to ./
+    file_dir = os.path.dirname(rel)
+    if file_dir:
+        escaped = re.escape("../" + file_dir + "/")
+        md_content = re.sub(
+            r"\]\(" + escaped + r"([^)]+)\)",
+            r"](\1)",
+            md_content,
+        )
+
+    # Remove leftover <span> tags (screen-reader, callout-icon, etc.)
+    md_content = re.sub(
+        r'<span\s+class="[^"]*">(.*?)</span>',
+        r"\1",
+        md_content,
+    )
+    # Remove empty <i> tags (callout icons)
+    md_content = re.sub(r"<i[^>]*></i>", "", md_content)
+
+    # Clean up excessive blank lines (3+ → 2)
+    md_content = re.sub(r"\n{4,}", "\n\n\n", md_content)
+
+    # Strip trailing whitespace
+    md_content = md_content.strip() + "\n"
+
+    return md_content
+
+
 def generate_markdown_pages():
     """
     Create a .md companion for every .html page in _site/.
@@ -4174,9 +4325,9 @@ def generate_markdown_pages():
                 dl_html = m.group(0)
                 items = []
                 dt_dd_pattern = re.compile(
-                    r'<dt>.*?<span class="parameter-name">\s*<strong>(.*?)</strong>\s*</span>'
-                    r'(?:.*?<span class="parameter-annotation">(.*?)</span>)?'
-                    r'(?:.*?<span class="parameter-default">(.*?)</span>)?'
+                    r'<dt>.*?<span class="(?:parameter-name|doc-parameter-name)">\s*<strong>(.*?)</strong>\s*</span>'
+                    r'(?:.*?<span class="(?:parameter-annotation|doc-parameter-annotation)">(.*?)</span>)?'
+                    r'(?:.*?<span class="(?:parameter-default|doc-parameter-default)">(.*?)</span>)?'
                     r".*?</dt>\s*<dd>\s*(.*?)\s*</dd>",
                     re.DOTALL,
                 )
@@ -4232,9 +4383,10 @@ def generate_markdown_pages():
                 main_html,
             )
 
-            # Remove parameter-* spans (parameter-name, parameter-annotation, etc.)
+            # Remove parameter-* spans (parameter-name, doc-parameter-name, parameter-annotation, etc.)
+            # Note: The HTML may have either 'parameter-*' or 'doc-parameter-*' class names
             main_html = re.sub(
-                r'<span\s+class="parameter-[^"]*"[^>]*>(.*?)</span>',
+                r'<span\s+class="(?:parameter-|doc-parameter-)[^"]*"[^>]*>(.*?)</span>',
                 r"\1",
                 main_html,
             )
@@ -4261,68 +4413,24 @@ def generate_markdown_pages():
                 continue
 
             md_content = result.stdout
-
-            # ── 4b. Post-pandoc cleanup ──────────────────────────────────
-            # Remove leftover HTML div wrappers that pandoc preserved
-            md_content = re.sub(
-                r"^<div[^>]*>\s*$",
-                "",
-                md_content,
-                flags=re.MULTILINE,
-            )
-            md_content = re.sub(
-                r"^</div>\s*$",
-                "",
-                md_content,
-                flags=re.MULTILINE,
-            )
-
-            # Remove leftover <span> tags with parameter/annotation classes
-            md_content = re.sub(
-                r'<span\s+class="parameter-[^"]*"[^>]*>(.*?)</span>',
-                r"\1",
-                md_content,
-            )
-
-            # Rewrite internal .html links to .md (relative paths only)
-            md_content = re.sub(
-                r"\]\((\.\./[^)]*?)\.html(\)?)",
-                r"](\1.md\2",
-                md_content,
-            )
-            # Also in the same directory
-            md_content = re.sub(
-                r"\]\(([A-Za-z0-9_][^):/]*?)\.html(\)?)",
-                r"](\1.md\2",
-                md_content,
-            )
-
-            # Simplify redundant ../current_dir/ paths to ./
-            file_dir = os.path.dirname(rel)
-            if file_dir:
-                # e.g. for user-guide/changelog.md, rewrite
-                # ../user-guide/foo.md → foo.md
-                escaped = re.escape("../" + file_dir + "/")
-                md_content = re.sub(
-                    r"\]\(" + escaped + r"([^)]+)\)",
-                    r"](\1)",
-                    md_content,
-                )
-
-            # Remove leftover <span> tags (screen-reader, callout-icon, etc.)
-            md_content = re.sub(
-                r'<span\s+class="[^"]*">(.*?)</span>',
-                r"\1",
-                md_content,
-            )
-            # Remove empty <i> tags (callout icons)
-            md_content = re.sub(r"<i[^>]*></i>", "", md_content)
-
-            # Clean up excessive blank lines (3+ → 2)
-            md_content = re.sub(r"\n{4,}", "\n\n\n", md_content)
-
-            # Strip trailing whitespace
-            md_content = md_content.strip() + "\n"
+            # Debug: Check if post-processing is needed
+            found_artifact = False
+            if "``:``" in md_content:
+                # Find the context around the artifact
+                lines = md_content.split("\n")
+                for i, line in enumerate(lines):
+                    if "``:``" in line:
+                        print(f"  DEBUG [{rel}:{i}]: Line with artifact = {repr(line[:150])}")
+                        found_artifact = True
+                        break
+            md_content = _postprocess_markdown_content(md_content, rel)
+            # Debug: Verify post-processing worked
+            if "``:``" in md_content and found_artifact:
+                lines = md_content.split("\n")
+                for i, line in enumerate(lines):
+                    if "``:``" in line:
+                        print(f"  WARNING [{rel}:{i}]: After post-processing = {repr(line[:150])}")
+                        break
 
             # ── 5. Write .md file ────────────────────────────────────────
             md_file = html_file.rsplit(".", 1)[0] + ".md"
