@@ -169,11 +169,19 @@
     var search = document.getElementById("quarto-search");
     if (search) wrapper.appendChild(search);
 
-    // Remove the now-empty ul.ms-auto if it has no remaining children
+    // Remove the now-empty ul.ms-auto (or one left with only empty items)
     var msAuto = containerFluid.querySelector(
       "#navbarCollapse .navbar-nav.ms-auto"
     );
-    if (msAuto && msAuto.children.length === 0) msAuto.remove();
+    if (msAuto) {
+      // Remove child <li> items that have no meaningful content
+      Array.prototype.forEach.call(msAuto.querySelectorAll('li.nav-item'), function (li) {
+        if (!li.textContent.trim() && !li.querySelector('button, input, img, svg')) {
+          li.remove();
+        }
+      });
+      if (msAuto.children.length === 0) msAuto.remove();
+    }
 
     // Place inside .quarto-navbar-tools (the rightmost navbar slot)
     var tools = containerFluid.querySelector(".quarto-navbar-tools");

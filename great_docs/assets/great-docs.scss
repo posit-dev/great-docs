@@ -1690,12 +1690,16 @@ div.sourceCode:hover > .gd-code-nav .gd-code-copy,
 #quarto-header nav,
 #quarto-header .navbar,
 #quarto-header .container-fluid,
-#navbarCollapse,
-.navbar-nav,
 .navbar-nav.ms-auto,
 .navbar-nav.ms-auto > li,
 .navbar-nav.ms-auto > li > .nav-link {
     overflow: visible !important;
+}
+
+/* Allow horizontal scrolling for navbars with many items */
+#navbarCollapse > ul.navbar-nav.navbar-nav-scroll.me-auto {
+    text-wrap: nowrap;
+    overflow-x: auto !important;
 }
 
 /* Print styles - hide widget */
