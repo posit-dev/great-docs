@@ -250,15 +250,15 @@
       var needsReinit = false;
 
       mutations.forEach(function (mutation) {
-        // Check added nodes for title attributes
+        // Check added nodes for title or data-tippy-content attributes
         mutation.addedNodes.forEach(function (node) {
           if (node.nodeType === Node.ELEMENT_NODE) {
-            if (node.hasAttribute && node.hasAttribute("title")) {
+            if (node.hasAttribute && (node.hasAttribute("title") || node.hasAttribute("data-tippy-content"))) {
               needsReinit = true;
             }
             // Also check descendants
             if (node.querySelectorAll) {
-              var withTitle = node.querySelectorAll("[title]");
+              var withTitle = node.querySelectorAll("[title], [data-tippy-content]");
               if (withTitle.length > 0) {
                 needsReinit = true;
               }
@@ -266,8 +266,9 @@
           }
         });
 
-        // Check for attribute changes (title being set)
-        if (mutation.type === "attributes" && mutation.attributeName === "title") {
+        // Check for attribute changes (title or data-tippy-content being set)
+        if (mutation.type === "attributes" &&
+            (mutation.attributeName === "title" || mutation.attributeName === "data-tippy-content")) {
           needsReinit = true;
         }
       });
@@ -283,7 +284,7 @@
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["title"],
+      attributeFilter: ["title", "data-tippy-content"],
     });
   }
 

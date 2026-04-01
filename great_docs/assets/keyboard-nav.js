@@ -589,6 +589,8 @@
         btn.type = 'button';
         btn.setAttribute('aria-label',
             _gdT('kb_show_help', 'Show keyboard shortcuts'));
+        btn.setAttribute('data-tippy-content',
+            _gdT('kb_show_help', 'Show keyboard shortcuts'));
         btn.innerHTML =
             '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" ' +
             'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
@@ -631,6 +633,19 @@
                     showOverlay();
                 }
             });
+
+            // Initialize tooltip directly — window.tippy is available from
+            // Quarto's bundle before any include-after-body scripts run.
+            if (window.tippy) {
+                window.tippy(btn, {
+                    content: btn.getAttribute('data-tippy-content'),
+                    placement: 'bottom',
+                    animation: 'shift-away',
+                    duration: [200, 150],
+                    delay: [0, 0],
+                    arrow: true,
+                });
+            }
         }
     }
 
