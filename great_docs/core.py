@@ -169,6 +169,8 @@ class GreatDocs:
             js_files.append("page-metadata.js")
         if self._config.back_to_top:
             js_files.append("back-to-top.js")
+        if self._config.keyboard_nav:
+            js_files.append("keyboard-nav.js")
         for js_file in js_files:
             js_src = self.assets_path / js_file
             if js_src.exists():
@@ -1203,6 +1205,9 @@ class GreatDocs:
 
         # Back-to-top button
         metadata["back_to_top_enabled"] = self._config.back_to_top
+
+        # Keyboard navigation
+        metadata["keyboard_nav_enabled"] = self._config.keyboard_nav
 
         # Markdown pages (.md generation + copy-page widget)
         metadata["markdown_pages"] = self._config.markdown_pages
@@ -8382,6 +8387,8 @@ toc: false
             js_resource_files.append("page-metadata.js")
         if self._config.back_to_top:
             js_resource_files.append("back-to-top.js")
+        if self._config.keyboard_nav:
+            js_resource_files.append("keyboard-nav.js")
         for js_file in js_resource_files:
             if js_file not in config["project"]["resources"]:
                 config["project"]["resources"].append(js_file)
@@ -8776,6 +8783,23 @@ toc: false
             )
             if not has_back_to_top:
                 config["format"]["html"]["include-after-body"].append(back_to_top_entry)
+
+        # Add keyboard navigation script (if enabled)
+        if metadata.get("keyboard_nav_enabled", True):
+            if "include-after-body" not in config["format"]["html"]:
+                config["format"]["html"]["include-after-body"] = []
+            elif isinstance(config["format"]["html"]["include-after-body"], str):
+                config["format"]["html"]["include-after-body"] = [
+                    config["format"]["html"]["include-after-body"]
+                ]
+
+            keyboard_nav_entry = {"text": '<script src="keyboard-nav.js"></script>'}
+            has_keyboard_nav = any(
+                "keyboard-nav.js" in str(item)
+                for item in config["format"]["html"]["include-after-body"]
+            )
+            if not has_keyboard_nav:
+                config["format"]["html"]["include-after-body"].append(keyboard_nav_entry)
 
         # Add custom copy-code button script (replaces Quarto's native code-copy)
         if "include-after-body" not in config["format"]["html"]:
