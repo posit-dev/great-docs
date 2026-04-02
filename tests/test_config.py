@@ -150,6 +150,34 @@ class TestScalarProperties:
     def test_sections_default(self, tmp_project: Path):
         assert Config(tmp_project).sections == []
 
+    def test_custom_pages_default(self, tmp_project: Path):
+        assert Config(tmp_project).custom_pages == [{"dir": "custom", "output": "custom"}]
+
+    def test_custom_pages_false_disables_processing(self, tmp_project: Path):
+        cfg = _make_config(tmp_project, "custom_pages: false\n")
+        assert cfg.custom_pages == []
+
+    def test_custom_pages_string_uses_basename_for_output(self, tmp_project: Path):
+        cfg = _make_config(tmp_project, "custom_pages: marketing/pages\n")
+        assert cfg.custom_pages == [{"dir": "marketing/pages", "output": "pages"}]
+
+    def test_custom_pages_dict_supports_output_override(self, tmp_project: Path):
+        cfg = _make_config(
+            tmp_project,
+            "custom_pages:\n  dir: marketing\n  output: py\n",
+        )
+        assert cfg.custom_pages == [{"dir": "marketing", "output": "py"}]
+
+    def test_custom_pages_list_normalizes_multiple_entries(self, tmp_project: Path):
+        cfg = _make_config(
+            tmp_project,
+            "custom_pages:\n  - marketing\n  - dir: playgrounds/raw\n    output: demos\n",
+        )
+        assert cfg.custom_pages == [
+            {"dir": "marketing", "output": "marketing"},
+            {"dir": "playgrounds/raw", "output": "demos"},
+        ]
+
     def test_dark_mode_toggle_default(self, tmp_project: Path):
         assert Config(tmp_project).dark_mode_toggle is True
 
