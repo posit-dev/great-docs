@@ -238,6 +238,44 @@ class TestBuildTagHierarchy:
         assert "Python/Testing" in tree
         assert "Python" not in tree
 
+    def test_escaped_slash_stays_flat(self, tmp_path: Path):
+        """A backslash-escaped slash should NOT create hierarchy."""
+        gd = _bootstrap_project(tmp_path)
+        pages = [{"title": "P1", "href": "p1.qmd", "section": "UG"}]
+        tag_index = {"AI\\/LLM": pages}
+        tree = gd._build_tag_hierarchy(tag_index)
+
+        # "AI/LLM" is a single flat node (slash unescaped in display)
+        assert "AI/LLM" in tree
+        assert "AI" not in tree
+        assert tree["AI/LLM"]["__pages__"] == pages
+
+    def test_mixed_escaped_and_hierarchical(self, tmp_path: Path):
+        """Escaped slashes and real hierarchy separators can coexist."""
+        gd = _bootstrap_project(tmp_path)
+        pages = [{"title": "P1", "href": "p1.qmd", "section": "UG"}]
+        # "Tools/CI\/CD" → parent "Tools", child "CI/CD"
+        tag_index = {"Tools/CI\\/CD": pages}
+        tree = gd._build_tag_hierarchy(tag_index)
+
+        assert "Tools" in tree
+        assert "CI/CD" in tree["Tools"]
+        assert tree["Tools"]["CI/CD"]["__pages__"] == pages
+
+
+class TestSplitTagParts:
+    def test_simple_split(self):
+        assert GreatDocs._split_tag_parts("Python/Testing") == ["Python", "Testing"]
+
+    def test_escaped_slash_no_split(self):
+        assert GreatDocs._split_tag_parts("AI\\/LLM") == ["AI/LLM"]
+
+    def test_mixed_escaped_and_real(self):
+        assert GreatDocs._split_tag_parts("Tools/CI\\/CD") == ["Tools", "CI/CD"]
+
+    def test_no_slash(self):
+        assert GreatDocs._split_tag_parts("Python") == ["Python"]
+
 
 # ── Tags Index Page Generation Tests ─────────────────────────────────────────
 
