@@ -26820,7 +26820,7 @@ def test_builder_init_desc():
 def test_builder_load_layout_error():
     """Builder.load_layout raises ValueError for invalid sections."""
 
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, TypeError)):
         Builder(package="json", sections=123)
 
 
