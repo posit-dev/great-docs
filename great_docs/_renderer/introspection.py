@@ -18,7 +18,6 @@ from ._griffe import (
     Parser,
 )
 from ._griffe import dataclasses as dc
-from ._md_renderer import Renderer
 from .inventory import convert_inventory, create_inventory
 
 _log = logging.getLogger(__name__)
@@ -365,8 +364,8 @@ class Builder:
         Name of API directory.
     title:
         Title of the API index page.
-    renderer:
-        The renderer used to convert docstrings (e.g. to markdown).
+    render_config:
+        Configuration for the rendering system.
     options:
         Default options to set for all pieces of content.
     out_index:
@@ -379,15 +378,10 @@ class Builder:
         A directory where source files to be documented live.
     dynamic:
         Whether to dynamically load all python objects.
-    render_interlinks:
-        Whether to render interlinks syntax inside documented objects.
     parser:
         Docstring parser to use. One of "google", "sphinx", "numpy".
 
     """
-
-    style: str
-    _registry: "dict[str, Builder]" = {}
 
     out_inventory: str = "objects.json"
     out_index: str = "index.qmd"
@@ -398,17 +392,9 @@ class Builder:
     dir: str
     title: str
 
-    renderer: Renderer
+    header_level: int
+    typing_module_paths: list[str]
     items: list[layout.Item]
-
-    def __init_subclass__(cls, **kwargs: object) -> None:
-        super().__init_subclass__(**kwargs)
-
-        if hasattr(cls, "style") and cls.style in cls._registry:
-            raise KeyError(f"A builder for style {cls.style} already exists")
-
-        if hasattr(cls, "style"):
-            cls._registry[cls.style] = cls
 
     def __init__(
         self,
@@ -419,7 +405,8 @@ class Builder:
         dir: str = "reference",
         title: str = "Function reference",
         desc: "str | None" = None,
-        renderer: "dict | Renderer | str" = "markdown",
+        header_level: int = 1,
+        typing_module_paths: "list[str] | None" = None,
         out_index: str = None,
         sidebar: "str | dict[str, Any] | None" = None,
         css: "str | None" = None,
@@ -427,12 +414,9 @@ class Builder:
         source_dir: "str | None" = None,
         dynamic: bool | None = None,
         parser: str = "numpy",
-        render_interlinks: bool = False,
         _fast_inventory: bool = False,
     ) -> None:
-        self.layout = self.load_layout(
-            title, desc=desc, sections=sections, package=package, options=options
-        )
+        self.layout = layout.Layout(title, desc, sections=sections, package=package, options=options)
 
         self.package = package
         self.version = None
@@ -449,9 +433,8 @@ class Builder:
         self.css = css
         self.parser = parser
 
-        self.renderer = Renderer.from_config(renderer)
-        if render_interlinks:
-            self.renderer.render_interlinks = render_interlinks
+        self.header_level = header_level
+        self.typing_module_paths = typing_module_paths if typing_module_paths is not None else []
 
         if out_index is not None:
             self.out_index = out_index
@@ -461,14 +444,6 @@ class Builder:
         self.dynamic = dynamic
 
         self._fast_inventory = _fast_inventory
-
-    def load_layout(
-        self, title: str, desc: str, sections: dict, package: str, options: "dict | None" = None
-    ) -> layout.Layout:
-        try:
-            return layout.Layout(title, desc, sections=sections, package=package, options=options)
-        except (ValueError, TypeError) as e:
-            raise ValueError(str(e)) from None
 
     # building ----------------------------------------------------------------
 
@@ -494,7 +469,7 @@ class Builder:
 
         _log.info("Writing docs pages")
         self.write_doc_pages(pages, filter)
-        self.renderer._pages_written(self)
+        self._write_typing_information()
 
         _log.info("Creating inventory file")
         inv = self.create_inventory(self.items)
@@ -506,9 +481,12 @@ class Builder:
 
     def write_index(self, blueprint_layout: layout.Layout) -> str:
         """Write API index page."""
+        from ._render.reference_page import RenderReferencePage
 
         _log.info("Summarizing docs for index page.")
-        content = self.renderer.summarize(blueprint_layout)
+        content = str(
+            RenderReferencePage(blueprint_layout, self.header_level)
+        )
         _log.info(f"Writing index to directory: {self.dir}")
 
         p_index = Path(self.dir) / self.out_index
@@ -519,10 +497,13 @@ class Builder:
 
     def write_doc_pages(self, pages: list[layout.Page], filter: str) -> None:
         """Write individual function documentation pages."""
+        from ._render.api_page import RenderAPIPage
 
         for page in pages:
             _log.info(f"Rendering {page.path}")
-            rendered = self.renderer.render(page)
+            rendered = str(
+                RenderAPIPage(page, self.header_level)
+            )
 
             # Merge page-navigation into existing frontmatter
             rendered = _merge_frontmatter(rendered, {"page-navigation": False})
@@ -547,6 +528,13 @@ class Builder:
                 html_path.write_text(rendered)
             else:
                 _log.info("Skipping write (content unchanged)")
+
+    def _write_typing_information(self) -> None:
+        """Write typing information pages."""
+        from .typing_information import TypeInformation
+
+        for module_path in self.typing_module_paths:
+            TypeInformation(module_path, self).write()
 
     def create_inventory(self, items: list[layout.Item]) -> dict:
         """Generate inventory object."""
@@ -627,34 +615,10 @@ class Builder:
         cfg = quarto_cfg.get("api-reference") or quarto_cfg.get("quartodoc")
         if cfg is None:
             raise KeyError("No `api-reference:` section found in your _quarto.yml.")
-        style = cfg.get("style", "pkgdown")
-        cls_builder = cls._registry[style]
-
         _fast_inventory = quarto_cfg.get("interlinks", {}).get("fast", False)
 
-        return cls_builder(
-            **{k: v for k, v in cfg.items() if k != "style"},
+        _removed_keys = {"style", "renderer", "render_interlinks"}
+        return cls(
+            **{k: v for k, v in cfg.items() if k not in _removed_keys},
             _fast_inventory=_fast_inventory,
         )
-
-
-class BuilderPkgdown(Builder):
-    """Build an API in R pkgdown style."""
-
-    style = "pkgdown"
-
-
-class BuilderSinglePage(Builder):
-    """Build an API with all docs embedded on a single page."""
-
-    style = "single-page"
-
-    def load_layout(self, *args, **kwargs):
-        el = super().load_layout(*args, **kwargs)
-
-        el.sections = [layout.Page(path=self.out_index, contents=el.sections)]
-
-        return el
-
-    def write_index(self, *args, **kwargs):
-        pass

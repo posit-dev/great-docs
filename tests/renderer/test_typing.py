@@ -1,19 +1,19 @@
 # pyright: reportPrivateUsage=false
-"""Tests for _qrenderer/typing.py type alias definitions."""
+"""Tests for _renderer/typing.py type alias definitions."""
 
 from typing import get_args
 
 
 def test_module_imports_successfully():
     """The typing module loads without errors."""
-    from great_docs._qrenderer import typing as qr_typing
+    from great_docs._renderer import typing as qr_typing
 
     assert qr_typing is not None
 
 
 def test_display_name_format_literals():
     """DisplayNameFormat contains expected literal values."""
-    from great_docs._qrenderer.typing import DisplayNameFormat
+    from great_docs._renderer.typing import DisplayNameFormat
 
     args = get_args(DisplayNameFormat)
     assert "doc" in args
@@ -26,7 +26,7 @@ def test_display_name_format_literals():
 
 def test_doc_object_kind_literals():
     """DocObjectKind contains all expected object kinds."""
-    from great_docs._qrenderer.typing import DocObjectKind
+    from great_docs._renderer.typing import DocObjectKind
 
     args = get_args(DocObjectKind)
     expected = {
@@ -46,7 +46,7 @@ def test_doc_object_kind_literals():
 
 def test_documentable_union_members():
     """Documentable includes Doc, Page, Section, and Layout types."""
-    from great_docs._qrenderer.typing import Documentable
+    from great_docs._renderer.typing import Documentable
 
     args = get_args(Documentable)
     type_names = {t.__name__ for t in args}
@@ -61,7 +61,7 @@ def test_documentable_union_members():
 
 def test_render_obj_type_union_members():
     """RenderObjType includes all Render class types."""
-    from great_docs._qrenderer.typing import RenderObjType
+    from great_docs._renderer.typing import RenderObjType
 
     args = get_args(RenderObjType)
     type_names = {t.__name__ for t in args}
@@ -77,7 +77,7 @@ def test_render_obj_type_union_members():
 
 def test_any_docstring_section_union():
     """AnyDocstringSection includes griffe and custom section types."""
-    from great_docs._qrenderer.typing import AnyDocstringSection
+    from great_docs._renderer.typing import AnyDocstringSection
 
     args = get_args(AnyDocstringSection)
     type_names = {t.__name__ for t in args}
@@ -87,7 +87,7 @@ def test_any_docstring_section_union():
 
 def test_doc_type_union():
     """DocType includes the four core Doc types."""
-    from great_docs._qrenderer.typing import DocType
+    from great_docs._renderer.typing import DocType
 
     args = get_args(DocType)
     type_names = {t.__name__ for t in args}
@@ -96,7 +96,7 @@ def test_doc_type_union():
 
 def test_doc_member_type_union():
     """DocMemberType includes MemberPage and Doc."""
-    from great_docs._qrenderer.typing import DocMemberType
+    from great_docs._renderer.typing import DocMemberType
 
     args = get_args(DocMemberType)
     type_names = {t.__name__ for t in args}
