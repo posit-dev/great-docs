@@ -18,7 +18,6 @@ from ._griffe import (
     Parser,
 )
 from ._griffe import dataclasses as dc
-from ._render_config import RenderConfig
 from .inventory import convert_inventory, create_inventory
 
 _log = logging.getLogger(__name__)
@@ -396,7 +395,8 @@ class Builder:
     dir: str
     title: str
 
-    render_config: RenderConfig
+    header_level: int
+    typing_module_paths: list[str]
     items: list[layout.Item]
 
     def __init_subclass__(cls, **kwargs: object) -> None:
@@ -417,7 +417,8 @@ class Builder:
         dir: str = "reference",
         title: str = "Function reference",
         desc: "str | None" = None,
-        render_config: "RenderConfig | None" = None,
+        header_level: int = 1,
+        typing_module_paths: "list[str] | None" = None,
         out_index: str = None,
         sidebar: "str | dict[str, Any] | None" = None,
         css: "str | None" = None,
@@ -446,7 +447,8 @@ class Builder:
         self.css = css
         self.parser = parser
 
-        self.render_config = render_config if render_config is not None else RenderConfig()
+        self.header_level = header_level
+        self.typing_module_paths = typing_module_paths if typing_module_paths is not None else []
 
         if out_index is not None:
             self.out_index = out_index
@@ -505,7 +507,7 @@ class Builder:
 
         _log.info("Summarizing docs for index page.")
         content = str(
-            RenderReferencePage(blueprint_layout, self.render_config, self.render_config.header_level)
+            RenderReferencePage(blueprint_layout, self.header_level)
         )
         _log.info(f"Writing index to directory: {self.dir}")
 
@@ -522,7 +524,7 @@ class Builder:
         for page in pages:
             _log.info(f"Rendering {page.path}")
             rendered = str(
-                RenderAPIPage(page, self.render_config, self.render_config.header_level)
+                RenderAPIPage(page, self.header_level)
             )
 
             # Merge page-navigation into existing frontmatter
@@ -553,8 +555,8 @@ class Builder:
         """Write typing information pages."""
         from .typing_information import TypeInformation
 
-        for module_path in self.render_config.typing_module_paths:
-            TypeInformation(module_path, self.render_config, self).write()
+        for module_path in self.typing_module_paths:
+            TypeInformation(module_path, self).write()
 
     def create_inventory(self, items: list[layout.Item]) -> dict:
         """Generate inventory object."""

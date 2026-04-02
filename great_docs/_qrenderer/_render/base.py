@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from .. import layout
-    from .._render_config import RenderConfig
     from ..pandoc.blocks import DefinitionItem
 
 
@@ -36,9 +35,6 @@ class __RenderBase(Block):
         | layout.Layout
     )
     """Layout object to be documented"""
-
-    config: RenderConfig
-    """Configuration for the rendering system"""
 
     level: int = 1
     """The depth of the object in the documentation"""

@@ -24,15 +24,12 @@ from .pandoc.blocks import (
 if TYPE_CHECKING:
     import griffe as gf
 
-    from ._render_config import RenderConfig
-
 
 @dataclass
 class TypeSections(Block):
     protocols_items: list[layout.Item]
     typevars_items: list[layout.Item]
     typealiases_items: list[layout.Item]
-    renderer: RenderConfig
 
     def __post_init__(self) -> None:
         def make_render(item: layout.Item):
@@ -40,7 +37,7 @@ class TypeSections(Block):
             Create RenderDoc object
             """
             docable = griffe_to_doc(item.obj)
-            return get_render_type(docable)(docable, self.renderer, 3)
+            return get_render_type(docable)(docable, 3)
 
         self.typevars_renders = cast(
             "list[RenderDocAttribute]",
@@ -113,7 +110,6 @@ class TypeSections(Block):
 @dataclass
 class TypeInformation(Block):
     module_path: str
-    renderer: RenderConfig
     builder: Builder
 
     def __post_init__(self) -> None:
@@ -157,7 +153,6 @@ class TypeInformation(Block):
             protocols_items=[make_item(m) for m in members if is_protocol(m)],
             typevars_items=[make_item(m) for m in members if is_typevar(m)],
             typealiases_items=[make_item(m) for m in members if is_typealias(m)],
-            renderer=self.renderer,
         )
 
     @cached_property

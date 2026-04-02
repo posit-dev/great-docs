@@ -46,6 +46,7 @@ if TYPE_CHECKING:
     from ..typing import (
         Annotation,
         AnyDocstringSection,
+        DisplayNameFormat,
         DocObjectKind,
     )
 
@@ -135,6 +136,12 @@ class __RenderDoc(RenderBase):
     show_source_link: bool = True
     """Whether to show a link to the source code"""
 
+    display_name_format: DisplayNameFormat = "doc"
+    """Format for the display name"""
+
+    signature_name_format: DisplayNameFormat = "doc"
+    """Format for the signature name"""
+
     def __post_init__(self):
         # The layout_obj is too general. It is typed to include all
         # classes of documentable objects. And for layout.Doc objects,
@@ -147,8 +154,6 @@ class __RenderDoc(RenderBase):
 
         self.obj = cast("gf.Object | gf.Alias", self.doc.obj)
         """Griffe object (or alias)"""
-
-        self.show_signature = self.config.show_signature
 
     @cached_property
     def kind(self) -> DocObjectKind:
@@ -168,7 +173,7 @@ class __RenderDoc(RenderBase):
 
     @cached_property
     def display_name(self) -> str:
-        format = self.config.display_name_format
+        format = self.display_name_format
         if format == "relative" and self.level > 1:
             format = "name"
         name = format_name(self.doc, format)
@@ -182,7 +187,7 @@ class __RenderDoc(RenderBase):
 
     @cached_property
     def signature_name(self) -> str:
-        return format_name(self.doc, self.config.signature_name_format)
+        return format_name(self.doc, self.signature_name_format)
 
     def render_description(self) -> BlockContent:
         """

@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 import griffe as gf
 
 from . import (
-    RenderConfig,
     RenderDocAttribute,
     RenderDocClass,
     RenderDocFunction,
@@ -67,7 +66,7 @@ def _render(obj: gf.Object) -> str:
         case layout.DocModule():
             _Render = RenderDocModule
 
-    return str(_Render(layout_obj, RenderConfig()))
+    return str(_Render(layout_obj))
 
 
 def render_code_variable(code: str, name: str | None = None) -> str:

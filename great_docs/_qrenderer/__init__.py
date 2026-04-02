@@ -14,7 +14,6 @@ from ._render.mixin_call import RenderDocCallMixin
 from ._render.mixin_members import RenderDocMembersMixin
 from ._render.reference_page import RenderReferencePage
 from ._render.reference_section import RenderReferenceSection
-from ._render_config import RenderConfig
 from .blueprint import blueprint, collect, strip_package_name
 
 # Re-exports from consolidated _renderer module
@@ -23,7 +22,6 @@ from .inventory import convert_inventory, create_inventory
 from .layout import Auto, Layout
 
 __all__ = (
-    "RenderConfig",
     "RenderDoc",
     "RenderDocClass",
     "RenderDocFunction",

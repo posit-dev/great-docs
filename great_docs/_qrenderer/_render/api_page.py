@@ -49,7 +49,6 @@ class __RenderAPIPage(RenderPageMixin, RenderBase):
         render_objs: list[RenderDoc] = [
             get_render_type(c)(
                 c,
-                self.config,
                 level,
                 page_path=self.path,
             )
