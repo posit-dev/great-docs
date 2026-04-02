@@ -6,7 +6,7 @@ bread-crumbs: false
 
 # Custom Sections
 
-Great Docs lets you add any number of custom page groups to your documentation site — examples, tutorials, demos, or anything else. Each section gets its own navbar link and sidebar navigation. By default, the navbar links directly to the first page in the section. Set `index: true` to generate a card-based index page instead. For blog-style content, there's a dedicated `type: blog` mode that uses Quarto's native listing directive.
+Great Docs lets you add any number of custom page groups to your documentation site (examples, tutorials, demos, or anything else). Each section gets its own navbar link and sidebar navigation. By default, the navbar links directly to the first page in the section. Set `index: true` to generate a card-based index page instead. For blog-style content, there's a dedicated `type: blog` mode that uses Quarto's native listing directive.
 
 If you need a single hand-written HTML page rather than a section of `.qmd` files, see [Custom Static Pages](custom-pages.qmd). Custom sections and custom static pages are complementary features.
 
@@ -32,7 +32,7 @@ sections:
     dir: examples
 ```
 
-3. Run `great-docs build` — the Examples link appears in the navbar and the pages are rendered with a sidebar.
+3. Run `great-docs build`: the Examples link appears in the navbar and the pages are rendered with a sidebar.
 
 ## Configuration
 
@@ -149,7 +149,7 @@ sections:
 
 ### Custom Index
 
-If you provide your own `index.qmd` in the directory, Great Docs uses it as-is — regardless of the `index` setting. This gives you full control over the landing page layout as you can write custom HTML, use Quarto grid layouts, or embed interactive content.
+If you provide your own `index.qmd` in the directory, Great Docs uses it as-is (regardless of the `index` setting). This gives you full control over the landing page layout as you can write custom HTML, use Quarto grid layouts, or embed interactive content.
 
 ```
 examples/
