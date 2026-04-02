@@ -181,6 +181,23 @@ class TestCollectPageTags:
         result = gd._collect_page_tags()
         assert len(result) == 0
 
+    def test_custom_section_does_not_duplicate_recipes(self, tmp_path: Path):
+        """A custom section whose slug matches 'recipes' must not double-count pages."""
+        gd = _bootstrap_project(
+            tmp_path,
+            "tags:\n  enabled: true\nsections:\n  - title: Recipes\n    dir: recipes\n",
+        )
+        recipes_dir = gd.project_path / "recipes"
+        _make_qmd(recipes_dir / "recipe1.qmd", "My Recipe", tags=["Cooking"])
+
+        result = gd._collect_page_tags()
+
+        assert "Cooking" in result
+        assert len(result["Cooking"]) == 1, (
+            "Recipe page should appear exactly once even when a custom section "
+            "overlaps the built-in recipes directory"
+        )
+
 
 # ── Tag Hierarchy Tests ──────────────────────────────────────────────────────
 

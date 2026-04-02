@@ -1619,19 +1619,23 @@ class GreatDocs:
 
         # Directories to scan for tagged pages
         scan_dirs: list[tuple[Path, str]] = []
+        seen_dirs: set[Path] = set()
         ug_dir = self.project_path / "user-guide"
         if ug_dir.is_dir():
             scan_dirs.append((ug_dir, "User Guide"))
+            seen_dirs.add(ug_dir.resolve())
         recipes_dir = self.project_path / "recipes"
         if recipes_dir.is_dir():
             scan_dirs.append((recipes_dir, "Recipes"))
-        # Also scan custom sections
+            seen_dirs.add(recipes_dir.resolve())
+        # Also scan custom sections (skip if already covered above)
         for section_cfg in self._config.sections:
             title = section_cfg.get("title", "")
             slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") if title else ""
             section_dir = self.project_path / slug
-            if section_dir.is_dir():
+            if section_dir.is_dir() and section_dir.resolve() not in seen_dirs:
                 scan_dirs.append((section_dir, title))
+                seen_dirs.add(section_dir.resolve())
 
         for scan_dir, section_name in scan_dirs:
             for qmd_file in sorted(scan_dir.rglob("*.qmd")):
