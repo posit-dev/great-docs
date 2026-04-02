@@ -1,4 +1,3 @@
-from ._md_renderer import MdRenderer
 from ._render.api_page import RenderAPIPage
 from ._render.doc import RenderDoc
 from ._render.docattribute import RenderDocAttribute
@@ -15,7 +14,7 @@ from ._render.mixin_call import RenderDocCallMixin
 from ._render.mixin_members import RenderDocMembersMixin
 from ._render.reference_page import RenderReferencePage
 from ._render.reference_section import RenderReferenceSection
-from ._renderer import Renderer
+from ._render_config import RenderConfig
 from .blueprint import blueprint, collect, strip_package_name
 
 # Re-exports from consolidated _renderer module
@@ -24,7 +23,7 @@ from .inventory import convert_inventory, create_inventory
 from .layout import Auto, Layout
 
 __all__ = (
-    "Renderer",
+    "RenderConfig",
     "RenderDoc",
     "RenderDocClass",
     "RenderDocFunction",
@@ -45,7 +44,6 @@ __all__ = (
     "blueprint",
     "strip_package_name",
     "collect",
-    "MdRenderer",
     "create_inventory",
     "convert_inventory",
     "Auto",

@@ -14,7 +14,8 @@ from .extending import extend_base_class
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from .. import Renderer, layout
+    from .. import layout
+    from .._render_config import RenderConfig
     from ..pandoc.blocks import DefinitionItem
 
 
@@ -36,8 +37,8 @@ class __RenderBase(Block):
     )
     """Layout object to be documented"""
 
-    renderer: Renderer
-    """Renderer that holds the configured values"""
+    config: RenderConfig
+    """Configuration for the rendering system"""
 
     level: int = 1
     """The depth of the object in the documentation"""

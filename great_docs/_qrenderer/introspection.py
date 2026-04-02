@@ -18,7 +18,7 @@ from ._griffe import (
     Parser,
 )
 from ._griffe import dataclasses as dc
-from ._md_renderer import Renderer
+from ._render_config import RenderConfig
 from .inventory import convert_inventory, create_inventory
 
 _log = logging.getLogger(__name__)
@@ -365,8 +365,8 @@ class Builder:
         Name of API directory.
     title:
         Title of the API index page.
-    renderer:
-        The renderer used to convert docstrings (e.g. to markdown).
+    render_config:
+        Configuration for the rendering system.
     options:
         Default options to set for all pieces of content.
     out_index:
@@ -379,8 +379,6 @@ class Builder:
         A directory where source files to be documented live.
     dynamic:
         Whether to dynamically load all python objects.
-    render_interlinks:
-        Whether to render interlinks syntax inside documented objects.
     parser:
         Docstring parser to use. One of "google", "sphinx", "numpy".
 
@@ -398,7 +396,7 @@ class Builder:
     dir: str
     title: str
 
-    renderer: Renderer
+    render_config: RenderConfig
     items: list[layout.Item]
 
     def __init_subclass__(cls, **kwargs: object) -> None:
@@ -419,7 +417,7 @@ class Builder:
         dir: str = "reference",
         title: str = "Function reference",
         desc: "str | None" = None,
-        renderer: "dict | Renderer | str" = "markdown",
+        render_config: "RenderConfig | None" = None,
         out_index: str = None,
         sidebar: "str | dict[str, Any] | None" = None,
         css: "str | None" = None,
@@ -427,7 +425,6 @@ class Builder:
         source_dir: "str | None" = None,
         dynamic: bool | None = None,
         parser: str = "numpy",
-        render_interlinks: bool = False,
         _fast_inventory: bool = False,
     ) -> None:
         self.layout = self.load_layout(
@@ -449,9 +446,7 @@ class Builder:
         self.css = css
         self.parser = parser
 
-        self.renderer = Renderer.from_config(renderer)
-        if render_interlinks:
-            self.renderer.render_interlinks = render_interlinks
+        self.render_config = render_config if render_config is not None else RenderConfig()
 
         if out_index is not None:
             self.out_index = out_index
@@ -494,7 +489,7 @@ class Builder:
 
         _log.info("Writing docs pages")
         self.write_doc_pages(pages, filter)
-        self.renderer._pages_written(self)
+        self._write_typing_information()
 
         _log.info("Creating inventory file")
         inv = self.create_inventory(self.items)
@@ -506,9 +501,12 @@ class Builder:
 
     def write_index(self, blueprint_layout: layout.Layout) -> str:
         """Write API index page."""
+        from ._render.reference_page import RenderReferencePage
 
         _log.info("Summarizing docs for index page.")
-        content = self.renderer.summarize(blueprint_layout)
+        content = str(
+            RenderReferencePage(blueprint_layout, self.render_config, self.render_config.header_level)
+        )
         _log.info(f"Writing index to directory: {self.dir}")
 
         p_index = Path(self.dir) / self.out_index
@@ -519,10 +517,13 @@ class Builder:
 
     def write_doc_pages(self, pages: list[layout.Page], filter: str) -> None:
         """Write individual function documentation pages."""
+        from ._render.api_page import RenderAPIPage
 
         for page in pages:
             _log.info(f"Rendering {page.path}")
-            rendered = self.renderer.render(page)
+            rendered = str(
+                RenderAPIPage(page, self.render_config, self.render_config.header_level)
+            )
 
             # Merge page-navigation into existing frontmatter
             rendered = _merge_frontmatter(rendered, {"page-navigation": False})
@@ -547,6 +548,13 @@ class Builder:
                 html_path.write_text(rendered)
             else:
                 _log.info("Skipping write (content unchanged)")
+
+    def _write_typing_information(self) -> None:
+        """Write typing information pages."""
+        from .typing_information import TypeInformation
+
+        for module_path in self.render_config.typing_module_paths:
+            TypeInformation(module_path, self.render_config, self).write()
 
     def create_inventory(self, items: list[layout.Item]) -> dict:
         """Generate inventory object."""
@@ -632,8 +640,9 @@ class Builder:
 
         _fast_inventory = quarto_cfg.get("interlinks", {}).get("fast", False)
 
+        _removed_keys = {"style", "renderer", "render_interlinks"}
         return cls_builder(
-            **{k: v for k, v in cfg.items() if k != "style"},
+            **{k: v for k, v in cfg.items() if k not in _removed_keys},
             _fast_inventory=_fast_inventory,
         )
 

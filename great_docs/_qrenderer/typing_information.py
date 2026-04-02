@@ -24,7 +24,7 @@ from .pandoc.blocks import (
 if TYPE_CHECKING:
     import griffe as gf
 
-    from ._renderer import Renderer
+    from ._render_config import RenderConfig
 
 
 @dataclass
@@ -32,7 +32,7 @@ class TypeSections(Block):
     protocols_items: list[layout.Item]
     typevars_items: list[layout.Item]
     typealiases_items: list[layout.Item]
-    renderer: Renderer
+    renderer: RenderConfig
 
     def __post_init__(self) -> None:
         def make_render(item: layout.Item):
@@ -113,7 +113,7 @@ class TypeSections(Block):
 @dataclass
 class TypeInformation(Block):
     module_path: str
-    renderer: Renderer
+    renderer: RenderConfig
     builder: Builder
 
     def __post_init__(self) -> None:

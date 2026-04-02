@@ -148,7 +148,7 @@ class __RenderDoc(RenderBase):
         self.obj = cast("gf.Object | gf.Alias", self.doc.obj)
         """Griffe object (or alias)"""
 
-        self.show_signature = self.renderer.show_signature
+        self.show_signature = self.config.show_signature
 
     @cached_property
     def kind(self) -> DocObjectKind:
@@ -168,7 +168,7 @@ class __RenderDoc(RenderBase):
 
     @cached_property
     def display_name(self) -> str:
-        format = self.renderer.display_name_format
+        format = self.config.display_name_format
         if format == "relative" and self.level > 1:
             format = "name"
         name = format_name(self.doc, format)
@@ -182,7 +182,7 @@ class __RenderDoc(RenderBase):
 
     @cached_property
     def signature_name(self) -> str:
-        return format_name(self.doc, self.renderer.signature_name_format)
+        return format_name(self.doc, self.config.signature_name_format)
 
     def render_description(self) -> BlockContent:
         """
