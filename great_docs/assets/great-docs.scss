@@ -5600,6 +5600,15 @@ html[data-bs-theme="dark"] {
 .gd-tag-page-link {
     padding: 0.15rem 0;
     padding-left: 1.25rem;
+
+    a {
+        color: $body-color;
+        text-decoration: underline;
+
+        &:hover {
+            color: $primary;
+        }
+    }
 }
 
 // Segmented pills for hierarchical tags (e.g. Python | Advanced)
@@ -5672,6 +5681,10 @@ body.quarto-dark {
 
     .gd-tag-pill-segmented .gd-tag-pill-segment:not(.gd-tag-pill-parent) {
         background-color: rgba($primary, 0.08);
+    }
+
+    .gd-tag-page-link a {
+        color: $gray-300;
     }
 }
 
