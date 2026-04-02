@@ -48,17 +48,6 @@ Display navigation path above page content.
 - Hide per-page via frontmatter if desired
 - Responsive design for mobile
 
-### Custom Static Pages
-
-Include custom HTML pages with minimal or no transformation.
-
-- Drop in pre-built HTML pages that retain site navigation (navbar, footer)
-- "Pass-through" mode: page content untouched, only wrapped with site shell
-- "Raw" mode: serve file as-is without any processing
-- Useful for landing pages, interactive demos, or third-party widgets
-- Frontmatter option: `layout: passthrough` or `layout: raw`
-- Custom pages directory (e.g., `custom/`) auto-discovered during build
-
 ### Enhanced CLI Reference
 
 API-reference-style rendering for CLI applications.
