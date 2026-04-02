@@ -66,16 +66,16 @@ The top-level navigation links are translated automatically. For example, with `
 
 All interactive widgets use the configured language:
 
-- **Back-to-top button** — tooltip text
-- **Copy code button** — "Copy to clipboard" / "Copied!" labels
-- **Copy page menu** — all menu items and status messages
-- **Dark mode toggle** — "Switch to dark mode" / "Switch to light mode" tooltips
-- **Sidebar filter** — placeholder text and result counts
-- **Reference switcher** — "API Reference" / "CLI Reference" labels
-- **GitHub widget** — "Stars", "Forks", "Issues", "Pull Requests" labels
-- **Announcement banner** — dismiss button accessibility label
-- **Responsive tables** — scrollable table indicator
-- **Video embed** — play button and video labels
+- **Back-to-top button**: tooltip text
+- **Copy code button**: "Copy to clipboard" / "Copied!" labels
+- **Copy page menu**: all menu items and status messages
+- **Dark mode toggle**: "Switch to dark mode" / "Switch to light mode" tooltips
+- **Sidebar filter**: placeholder text and result counts
+- **Reference switcher**: "API Reference" / "CLI Reference" labels
+- **GitHub widget**: "Stars", "Forks", "Issues", "Pull Requests" labels
+- **Announcement banner**: dismiss button accessibility label
+- **Responsive tables**: scrollable table indicator
+- **Video embed**: play button and video labels
 
 ### Page Metadata
 
@@ -95,8 +95,8 @@ RTL layout support for languages like Arabic and Hebrew is under active developm
 
 Some translation strings include placeholders and plural forms. These are handled automatically by the widgets at runtime:
 
-- **Placeholders** use `{name}` syntax — for example, `"Refreshed {time}"` becomes `"Actualisé {time}"` in French, where `{time}` is filled in with the relative timestamp.
-- **Plurals** use a `singular|plural` pipe format — for example, `"{n} day ago|{n} days ago"` becomes `"il y a {n} jour|il y a {n} jours"` in French, with the correct form selected based on the count.
+- **Placeholders** use `{name}` syntax: for example, `"Refreshed {time}"` becomes `"Actualisé {time}"` in French, where `{time}` is filled in with the relative timestamp.
+- **Plurals** use a `singular|plural` pipe format: for example, `"{n} day ago|{n} days ago"` becomes `"il y a {n} jour|il y a {n} jours"` in French, with the correct form selected based on the count.
 
 ## How It Works
 
