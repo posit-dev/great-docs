@@ -99,7 +99,10 @@
       pill.href = prefix + "tags/index.html#" + slug;
 
       // Icon (if configured) – expects pre-resolved Lucide SVG markup
-      var iconSvg = icons[tag];
+      // Tag names may contain escaped slashes ("\\/") for literal "/" display;
+      // look up icons using the unescaped (display) form.
+      var displayTag = tag.replace(/\\\//g, '/');
+      var iconSvg = icons[displayTag] || icons[tag];
       var iconHtml = '';
       if (iconSvg) {
         iconHtml =
@@ -124,10 +127,14 @@
       }
 
       // Segmented pill for hierarchical tags (e.g. Python/Advanced)
-      if (tag.indexOf("/") !== -1) {
-        var parts = tag.split("/");
-        var leaf = parts[parts.length - 1];
-        var parent = parts.slice(0, -1).join("/");
+      // Only split on unescaped "/" — escaped "\\/" is a literal slash in the tag name
+      // Use a sentinel to protect escaped slashes during splitting
+      var sentinel = '\x00';
+      var safeSplit = tag.replace(/\\\//g, sentinel).split('/');
+      var hasHierarchy = safeSplit.length > 1;
+      if (hasHierarchy) {
+        var parts = safeSplit.map(function(p) { return p.replace(new RegExp(sentinel, 'g'), '/'); });        var leaf = parts[parts.length - 1].replace(/\\\//g, '/');
+        var parent = parts.slice(0, -1).join("/").replace(/\\\//g, '/');
         // Icon goes on the parent (LHS), never on the child (RHS)
         var parentIcon = icons[parent]
           ? '<span style="margin-right:0.3em;display:inline-flex;vertical-align:middle">' + icons[parent] + '</span>'
@@ -138,7 +145,7 @@
           '<span class="gd-tag-pill-sep"></span>' +
           '<span class="gd-tag-pill-segment">' + leaf + "</span>";
       } else {
-        pill.innerHTML = iconHtml + "<span>" + tag + "</span>";
+        pill.innerHTML = iconHtml + "<span>" + displayTag + "</span>";
       }
 
       container.appendChild(pill);
