@@ -4984,6 +4984,221 @@ def test_DED_sec_navbar_after_cookbook():
     assert (_site_dir(pkg) / "cookbook").exists(), "Cookbook section dir missing"
 
 
+@requires_bs4
+def test_DED_custom_passthrough_navbar_link():
+    """gdtest_custom_passthrough_navbar: custom passthrough page appears in navbar HTML."""
+    pkg = "gdtest_custom_passthrough_navbar"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    index = _site_dir(pkg) / "index.html"
+    soup = _load_html(index)
+    navbar = soup.select_one("nav.navbar")
+    if navbar is None:
+        pytest.skip("No navbar found")
+
+    links = navbar.select("a")
+    shiny_link = next(
+        (
+            link
+            for link in links
+            if "Shiny for Python" in link.get_text(" ", strip=True)
+            and "py/index.html" in (link.get("href") or "")
+        ),
+        None,
+    )
+
+    assert shiny_link is not None, "Navbar should contain a link to the passthrough custom page"
+
+
+@requires_bs4
+def test_DED_custom_raw_navbar_after_order_and_output():
+    """gdtest_custom_raw_navbar_after: raw custom page is linked after User Guide and served raw."""
+    pkg = "gdtest_custom_raw_navbar_after"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    cfg = _load_quarto_yml(pkg)
+    navbar_left = cfg.get("website", {}).get("navbar", {}).get("left", [])
+    texts = [item.get("text") for item in navbar_left if isinstance(item, dict)]
+    assert texts.index("User Guide") < texts.index("Playground") < texts.index("Reference")
+
+    project = cfg.get("project", {})
+    resources = project.get("resources", [])
+    render = project.get("render", [])
+    assert "experiments/playground.html" in resources
+    assert "!experiments/playground.html" in render
+
+    raw_page = _site_dir(pkg) / "experiments" / "playground.html"
+    assert raw_page.exists(), (
+        "Raw custom page should be copied to _site/experiments/playground.html"
+    )
+    content = raw_page.read_text(encoding="utf-8")
+    assert '<main id="playground-root">Raw playground content</main>' in content
+    assert "quarto-header" not in content, (
+        "Raw custom page should not be wrapped with the site shell"
+    )
+
+
+@requires_bs4
+def test_DED_custom_mixed_modes_outputs_and_navbar():
+    """gdtest_custom_mixed_modes: mixed custom pages deploy correctly and only opted-in pages appear in navbar."""
+    pkg = "gdtest_custom_mixed_modes"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    site = _site_dir(pkg)
+    launchpad = site / "py" / "launchpad.html"
+    widget = site / "demos" / "widget.html"
+    hidden = site / "py" / "hidden.html"
+    asset = site / "demos" / "assets" / "chart.js"
+
+    assert launchpad.exists(), "Passthrough custom page should render to py/launchpad.html"
+    assert widget.exists(), "Raw custom page should be copied to demos/widget.html"
+    assert hidden.exists(), "Hidden passthrough custom page should still render to HTML"
+    assert asset.exists(), "Custom assets under configured directories should be copied to _site"
+
+    launchpad_html = launchpad.read_text(encoding="utf-8")
+    widget_html = widget.read_text(encoding="utf-8")
+    assert "quarto-header" in launchpad_html, "Passthrough page should include the Great Docs shell"
+    assert "Launchpad" in launchpad_html
+    assert "quarto-header" not in widget_html, "Raw page should not include the Great Docs shell"
+    assert "Raw widget lab" in widget_html
+
+    index = _site_dir(pkg) / "index.html"
+    soup = _load_html(index)
+    navbar = soup.select_one("nav.navbar")
+    if navbar is None:
+        pytest.skip("No navbar found")
+    nav_text = navbar.get_text(" ", strip=True)
+    assert "Launchpad" in nav_text
+    assert "Widget Lab" in nav_text
+    assert "Hidden Canvas" not in nav_text
+
+    cfg = _load_quarto_yml(pkg)
+    resources = cfg.get("project", {}).get("resources", [])
+    render = cfg.get("project", {}).get("render", [])
+    assert "demos/assets/chart.js" in resources
+    assert "demos/widget.html" in resources
+    assert "!demos/widget.html" in render
+
+
+@requires_bs4
+def test_DED_custom_nested_combo_navbar_order_and_path():
+    """gdtest_custom_nested_combo: nested custom page path and navbar order coexist with user guide and sections."""
+    pkg = "gdtest_custom_nested_combo"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    cfg = _load_quarto_yml(pkg)
+    navbar_left = cfg.get("website", {}).get("navbar", {}).get("left", [])
+    texts = [item.get("text") for item in navbar_left if isinstance(item, dict)]
+    assert (
+        texts.index("User Guide")
+        < texts.index("Tutorials")
+        < texts.index("API Lab")
+        < texts.index("Reference")
+    )
+
+    api_lab_nav = next(
+        item for item in navbar_left if isinstance(item, dict) and item.get("text") == "API Lab"
+    )
+    assert api_lab_nav.get("href") == "py/tools/lab.qmd"
+
+    rendered_page = _site_dir(pkg) / "py" / "tools" / "lab.html"
+    assert rendered_page.exists(), (
+        "Nested passthrough custom page should render to py/tools/lab.html"
+    )
+    html = rendered_page.read_text(encoding="utf-8")
+    assert "Nested custom passthrough page." in html
+    assert "quarto-header" in html, "Nested passthrough page should include the Great Docs shell"
+
+
+@requires_bs4
+def test_DED_custom_basename_output_uses_nested_string_basename():
+    """gdtest_custom_basename_output: nested string config uses the source basename as output."""
+    pkg = "gdtest_custom_basename_output"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    cfg = _load_quarto_yml(pkg)
+    resources = cfg.get("project", {}).get("resources", [])
+    assert "pages/assets/site.css" in resources
+
+    page = _site_dir(pkg) / "pages" / "launch.html"
+    assert page.exists(), "Passthrough .htm source should render to pages/launch.html"
+    soup = _load_html(page)
+    text = soup.get_text(" ", strip=True)
+    assert "Passthrough page sourced from a nested .htm file." in text
+    assert soup.select_one("#quarto-header") is not None, (
+        "Passthrough page should include the Great Docs shell"
+    )
+
+    index = _site_dir(pkg) / "index.html"
+    soup = _load_html(index)
+    navbar = soup.select_one("nav.navbar")
+    if navbar is None:
+        pytest.skip("No navbar found")
+
+    link = next(
+        (
+            item
+            for item in navbar.select("a")
+            if "Launch Home" in item.get_text(" ", strip=True)
+            and "pages/launch.html" in (item.get("href") or "")
+        ),
+        None,
+    )
+    assert link is not None, "Navbar should point to the basename-derived output path"
+
+
+@requires_bs4
+def test_DED_custom_nested_output_prefix_deploys_under_nested_path():
+    """gdtest_custom_nested_output: nested output prefixes are preserved in config and rendered files."""
+    pkg = "gdtest_custom_nested_output"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    cfg = _load_quarto_yml(pkg)
+    resources = cfg.get("project", {}).get("resources", [])
+    navbar_left = cfg.get("website", {}).get("navbar", {}).get("left", [])
+
+    assert "products/python/assets/widget.js" in resources
+    nav_item = next(
+        item for item in navbar_left if isinstance(item, dict) and item.get("text") == "Python Apps"
+    )
+    assert nav_item.get("href") == "products/python/start.qmd"
+
+    page = _site_dir(pkg) / "products" / "python" / "start.html"
+    asset = _site_dir(pkg) / "products" / "python" / "assets" / "widget.js"
+    assert page.exists(), "Passthrough page should render under the nested output prefix"
+    assert asset.exists(), "Assets should be copied under the nested output prefix"
+
+
+@requires_bs4
+def test_DED_custom_missing_dir_combo_skips_absent_source():
+    """gdtest_custom_missing_dir_combo: missing source dirs are skipped without affecting valid outputs."""
+    pkg = "gdtest_custom_missing_dir_combo"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    cfg = _load_quarto_yml(pkg)
+    resources = cfg.get("project", {}).get("resources", [])
+    render = cfg.get("project", {}).get("render", [])
+
+    assert "demos/widget.html" in resources
+    assert "!demos/widget.html" in render
+    assert all(not resource.startswith("ghost/") for resource in resources)
+    assert not (_site_dir(pkg) / "ghost").exists(), (
+        "Missing configured output prefix should not be created"
+    )
+
+    page = _site_dir(pkg) / "demos" / "widget.html"
+    assert page.exists(), "Valid custom page should still render when another source dir is missing"
+    html = page.read_text(encoding="utf-8")
+    assert "Only the existing custom dir should render." in html
+
+
 def test_DED_sec_recipes_dir():
     """gdtest_sec_recipes: recipes section directory exists."""
     pkg = "gdtest_sec_recipes"
