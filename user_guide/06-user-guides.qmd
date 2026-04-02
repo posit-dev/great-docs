@@ -330,9 +330,9 @@ If both a `user_guide` config option **and** a conventional `user_guide/` direct
 
 Great Docs warns you if the resolved directory:
 
-- **Doesn't exist** — the path specified in `user_guide` couldn't be found
-- **Is empty** — the directory exists but contains no files at all
-- **Has no `.qmd` files** — the directory exists but doesn't contain any Quarto Markdown files
+- **Doesn't exist**: the path specified in `user_guide` couldn't be found
+- **Is empty**: the directory exists but contains no files at all
+- **Has no `.qmd` files**: the directory exists but doesn't contain any Quarto Markdown files
 
 In all three cases, the User Guide is skipped and processing continues normally.
 
