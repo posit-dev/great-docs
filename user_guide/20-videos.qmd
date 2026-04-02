@@ -2,6 +2,7 @@
 title: "Videos"
 guide-section: "Site Content"
 bread-crumbs: false
+tags: [Content, Multimedia]
 ---
 
 # Videos

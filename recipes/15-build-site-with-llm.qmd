@@ -1,6 +1,7 @@
 ---
 title: "Build a Docs Site with an LLM"
 description: "Use an AI coding agent to go from zero to a published Great Docs site in a single session."
+tags: [AI\/LLM, Getting Started]
 ---
 
 # Build a Docs Site with an LLM

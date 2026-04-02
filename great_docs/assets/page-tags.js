@@ -98,12 +98,15 @@
       }
       pill.href = prefix + "tags/index.html#" + slug;
 
-      // Icon (if configured)
-      var iconName = icons[tag];
+      // Icon (if configured) – expects pre-resolved Lucide SVG markup
+      // Tag names may contain escaped slashes ("\\/") for literal "/" display;
+      // look up icons using the unescaped (display) form.
+      var displayTag = tag.replace(/\\\//g, '/');
+      var iconSvg = icons[displayTag] || icons[tag];
       var iconHtml = '';
-      if (iconName) {
+      if (iconSvg) {
         iconHtml =
-          '<i class="fa-solid fa-' + iconName + '" style="margin-right:0.3em"></i>';
+          '<span style="margin-right:0.3em;display:inline-flex;vertical-align:middle">' + iconSvg + '</span>';
       } else {
         iconHtml = '<span class="gd-tag-icon">' + TAG_ICON + "</span>";
       }
@@ -124,13 +127,17 @@
       }
 
       // Segmented pill for hierarchical tags (e.g. Python/Advanced)
-      if (tag.indexOf("/") !== -1) {
-        var parts = tag.split("/");
-        var leaf = parts[parts.length - 1];
-        var parent = parts.slice(0, -1).join("/");
+      // Only split on unescaped "/" — escaped "\\/" is a literal slash in the tag name
+      // Use a sentinel to protect escaped slashes during splitting
+      var sentinel = '\x00';
+      var safeSplit = tag.replace(/\\\//g, sentinel).split('/');
+      var hasHierarchy = safeSplit.length > 1;
+      if (hasHierarchy) {
+        var parts = safeSplit.map(function(p) { return p.replace(new RegExp(sentinel, 'g'), '/'); });        var leaf = parts[parts.length - 1].replace(/\\\//g, '/');
+        var parent = parts.slice(0, -1).join("/").replace(/\\\//g, '/');
         // Icon goes on the parent (LHS), never on the child (RHS)
         var parentIcon = icons[parent]
-          ? '<i class="fa-solid fa-' + icons[parent] + '" style="margin-right:0.3em"></i>'
+          ? '<span style="margin-right:0.3em;display:inline-flex;vertical-align:middle">' + icons[parent] + '</span>'
           : '';
         pill.classList.add("gd-tag-pill-segmented");
         pill.innerHTML =
@@ -138,7 +145,7 @@
           '<span class="gd-tag-pill-sep"></span>' +
           '<span class="gd-tag-pill-segment">' + leaf + "</span>";
       } else {
-        pill.innerHTML = iconHtml + "<span>" + tag + "</span>";
+        pill.innerHTML = iconHtml + "<span>" + displayTag + "</span>";
       }
 
       container.appendChild(pill);

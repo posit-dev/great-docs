@@ -2,6 +2,7 @@
 title: "Blog"
 guide-section: "Site Content"
 bread-crumbs: false
+tags: [Content]
 ---
 
 # Blog

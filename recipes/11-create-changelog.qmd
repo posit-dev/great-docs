@@ -1,6 +1,7 @@
 ---
 title: "Create a Version Changelog"
 description: "Auto-generate a changelog page from your GitHub Releases."
+tags: [Quality, GitHub]
 ---
 
 # Create a Version Changelog

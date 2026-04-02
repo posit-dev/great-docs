@@ -1,6 +1,7 @@
 ---
 title: "Installation"
 guide-section: "Getting Started"
+tags: [Getting Started, Setup]
 ---
 
 # Installation

@@ -1619,19 +1619,23 @@ class GreatDocs:
 
         # Directories to scan for tagged pages
         scan_dirs: list[tuple[Path, str]] = []
+        seen_dirs: set[Path] = set()
         ug_dir = self.project_path / "user-guide"
         if ug_dir.is_dir():
             scan_dirs.append((ug_dir, "User Guide"))
+            seen_dirs.add(ug_dir.resolve())
         recipes_dir = self.project_path / "recipes"
         if recipes_dir.is_dir():
             scan_dirs.append((recipes_dir, "Recipes"))
-        # Also scan custom sections
+            seen_dirs.add(recipes_dir.resolve())
+        # Also scan custom sections (skip if already covered above)
         for section_cfg in self._config.sections:
             title = section_cfg.get("title", "")
             slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") if title else ""
             section_dir = self.project_path / slug
-            if section_dir.is_dir():
+            if section_dir.is_dir() and section_dir.resolve() not in seen_dirs:
                 scan_dirs.append((section_dir, title))
+                seen_dirs.add(section_dir.resolve())
 
         for scan_dir, section_name in scan_dirs:
             for qmd_file in sorted(scan_dir.rglob("*.qmd")):
@@ -1663,6 +1667,18 @@ class GreatDocs:
 
         return tag_index
 
+    @staticmethod
+    def _split_tag_parts(tag: str) -> list[str]:
+        """Split a tag on unescaped ``/`` separators.
+
+        A backslash-escaped slash (``\\/``) is treated as a literal ``/``
+        character and does **not** create a hierarchy level.  After splitting,
+        each part has ``\\/`` replaced with ``/``.
+        """
+        # Split on "/" that is NOT preceded by "\"
+        parts = re.split(r"(?<!\\)/", tag)
+        return [p.replace("\\/", "/").strip() for p in parts if p.replace("\\/", "/").strip()]
+
     def _build_tag_hierarchy(self, tag_index: dict[str, list[dict[str, str]]]) -> dict:
         """
         Build a hierarchical tree from slash-separated tags.
@@ -1679,7 +1695,11 @@ class GreatDocs:
         """
         tree: dict = {}
         for tag, pages in sorted(tag_index.items()):
-            parts = tag.split("/") if self._config.tags_hierarchical else [tag]
+            parts = (
+                self._split_tag_parts(tag)
+                if self._config.tags_hierarchical
+                else [tag.replace("\\/", "/")]
+            )
             node = tree
             for part in parts:
                 part = part.strip()
@@ -1729,9 +1749,10 @@ class GreatDocs:
             # Flat listing
             for tag_name in sorted(tag_index.keys(), key=str.lower):
                 pages = tag_index[tag_name]
+                display_name = tag_name.replace("\\/", "/")
                 icon_html = self._get_tag_icon_html(tag_name, tag_icons)
                 tooltip = self._tag_tooltip(pages, lang=lang)
-                pill_html = self._tag_heading_pill(tag_name, icon_html, tooltip=tooltip)
+                pill_html = self._tag_heading_pill(display_name, icon_html, tooltip=tooltip)
                 lines.append(f'<div class="gd-tag-heading">{pill_html}</div>')
                 lines.append("")
                 lines.append('<div class="gd-tag-pages">')
@@ -1775,13 +1796,16 @@ class GreatDocs:
                 icon_html = self._get_tag_icon_html(node_name, tag_icons)
             parent_label = prefix if prefix else ""
             indent_class = f" gd-tag-indent-{min(depth, 2)}" if depth > 0 else ""
+
+            # Collect pages for tooltip — use __pages__ from the tree node since
+            # tag_index keys may be escaped (e.g. "AI\/LLM") while full_tag is
+            # the unescaped display form.
+            node_pages = subtree.get("__pages__", [])
+
             # For segmented pills, icon goes on the parent (LHS)
             if parent_label:
                 parent_icon = self._get_tag_icon_html(parent_label, tag_icons)
-                tooltip = self._tag_tooltip(
-                    tag_index.get(full_tag, []) if tag_index else [],
-                    lang=self._config.language,
-                )
+                tooltip = self._tag_tooltip(node_pages, lang=self._config.language)
                 pill_html = self._tag_heading_pill(
                     node_name,
                     "",
@@ -1790,10 +1814,7 @@ class GreatDocs:
                     tooltip=tooltip,
                 )
             else:
-                tooltip = self._tag_tooltip(
-                    tag_index.get(full_tag, []) if tag_index else [],
-                    lang=self._config.language,
-                )
+                tooltip = self._tag_tooltip(node_pages, lang=self._config.language)
                 pill_html = self._tag_heading_pill(node_name, icon_html, tooltip=tooltip)
             lines.append(f'<div class="gd-tag-heading{indent_class}">{pill_html}</div>')
             lines.append("")
@@ -1885,11 +1906,22 @@ class GreatDocs:
         }
 
         # Write the JSON
+        # Resolve icon names to inline Lucide SVGs for client-side rendering
+        from ._icons import get_icon_svg
+
+        resolved_icons: dict[str, str] = {}
+        for tag_label, icon_name in self._config.tags_icons.items():
+            svg = get_icon_svg(icon_name, size=14, css_class="gd-tag-icon-svg")
+            if svg:
+                resolved_icons[tag_label] = svg
+            else:
+                print(f"Warning: Unknown tag icon '{icon_name}' for tag '{tag_label}'")
+
         tags_json = {
             "page_tags": page_tags,
             "tag_meta": tag_meta,
             "tooltip_templates": tooltip_templates,
-            "icons": self._config.tags_icons,
+            "icons": resolved_icons,
             "shadow": list(shadow_tags),
             "hierarchical": self._config.tags_hierarchical,
         }
@@ -1991,6 +2023,9 @@ class GreatDocs:
             return
 
         tags_json_content = tags_json_path.read_text(encoding="utf-8")
+        # Escape "</" sequences so the HTML parser doesn't treat them as
+        # closing tags inside the <script> block (e.g. "</svg>" in icon SVGs).
+        tags_json_content = tags_json_content.replace("</", r"<\/")
         inline_entry = {
             "text": ("<script>window.__GD_TAGS_DATA__=" + tags_json_content + ";</script>")
         }
@@ -2013,15 +2048,23 @@ class GreatDocs:
     @staticmethod
     def _tag_slug(tag_name: str) -> str:
         """Convert a tag name to a URL-friendly slug."""
-        return re.sub(r"[^a-z0-9]+", "-", tag_name.lower()).strip("-")
+        # Unescape literal slashes first so "AI\/LLM" → "AI/LLM" → "ai-llm"
+        clean = tag_name.replace("\\/", "/")
+        return re.sub(r"[^a-z0-9]+", "-", clean.lower()).strip("-")
 
     @staticmethod
     def _get_tag_icon_html(tag_name: str, tag_icons: dict[str, str]) -> str:
-        """Return an inline Lucide icon ``<i>`` element for a tag, or empty string."""
-        icon_name = tag_icons.get(tag_name)
+        """Return an inline Lucide SVG icon for a tag, or empty string."""
+        from ._icons import get_icon_svg
+
+        # Try the raw key first, then the unescaped form (e.g. "AI\/LLM" → "AI/LLM")
+        icon_name = tag_icons.get(tag_name) or tag_icons.get(tag_name.replace("\\/", "/"))
         if not icon_name:
             return ""
-        return f'<i class="fa-solid fa-{icon_name}" style="margin-right:0.4em"></i>'
+        svg = get_icon_svg(icon_name, size=14, css_class="gd-tag-icon-svg")
+        if not svg:
+            return ""
+        return f'<span style="margin-right:0.4em;display:inline-flex;vertical-align:middle">{svg}</span>'
 
     @staticmethod
     def _tag_tooltip(pages: list[dict[str, str]], lang: str = "en") -> str:

@@ -1,6 +1,7 @@
 ---
 title: "User Guides"
 guide-section: "Site Content"
+tags: [Content]
 ---
 
 # User Guides

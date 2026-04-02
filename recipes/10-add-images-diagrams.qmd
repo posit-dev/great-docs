@@ -1,6 +1,7 @@
 ---
 title: "Add Images and Diagrams"
 description: "Include screenshots, figures, and Mermaid diagrams in your user guide and recipes."
+tags: [Content, Multimedia]
 ---
 
 # Add Images and Diagrams

@@ -2,6 +2,7 @@
 title: "Welcome to Great Docs"
 guide-section: "Getting Started"
 bread-crumbs: false
+tags: [Getting Started]
 ---
 
 # Welcome to Great Docs

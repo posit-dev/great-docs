@@ -2,6 +2,7 @@
 title: "Theming & Appearance"
 guide-section: "Config & Theming"
 bread-crumbs: false
+tags: [Theming, Customization]
 ---
 
 # Theming & Appearance

@@ -1,6 +1,7 @@
 ---
 title: "Write Effective Docstrings"
 description: "Write docstrings that render clearly in Great Docs, with examples for NumPy and Google styles."
+tags: [API, Content]
 ---
 
 # Write Effective Docstrings

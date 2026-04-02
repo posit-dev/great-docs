@@ -2,6 +2,7 @@
 title: "Custom Sections"
 guide-section: "Site Content"
 bread-crumbs: false
+tags: [Content, Customization]
 ---
 
 # Custom Sections

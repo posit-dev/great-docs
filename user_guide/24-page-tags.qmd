@@ -2,6 +2,7 @@
 title: "Page Tags"
 guide-section: "Site Content"
 bread-crumbs: false
+tags: [Content, Configuration]
 ---
 
 # Page Tags
@@ -88,7 +89,22 @@ This produces an index page structure like:
 
 On the page itself, hierarchical tag pills display the leaf name (e.g., "Testing") with the full path shown as a tooltip on hover.
 
-To disable hierarchical tag support and treat `/` as a literal character:
+### Literal Slashes in Tag Names
+
+If a tag name contains a literal `/` that should **not** be treated as a hierarchy separator, escape it with a backslash: `\/`. For example, `AI\/LLM` displays as "AI/LLM" without creating a hierarchy.
+
+```yaml
+---
+title: "Working with LLMs"
+tags: [AI\/LLM, Getting Started]
+---
+```
+
+::: {.callout-note}
+In YAML, leave the tag unquoted (e.g., `AI\/LLM`) so the backslash is preserved. Double-quoted YAML strings will consume the backslash as an escape character.
+:::
+
+To disable hierarchical tag support entirely and treat all `/` characters as literal:
 
 ```{.yaml filename="great-docs.yml"}
 tags:
@@ -124,7 +140,7 @@ In this example, "Configuration" and "API" appear as pills and on the index page
 
 ## Tag Icons
 
-You can associate tags with icons from the [Font Awesome](https://fontawesome.com/icons) set. Icons appear inside the tag pill and next to the tag heading on the index page.
+You can associate tags with icons from the [Lucide](https://lucide.dev/icons/) icon set (the same icon set used by `nav_icons`). Icons appear inside the tag pill and next to the tag heading on the index page.
 
 ```{.yaml filename="great-docs.yml"}
 tags:
@@ -132,11 +148,11 @@ tags:
   icons:
     Python: code
     Tutorial: book-open
-    API: plug
-    Testing: flask-vial
+    API: file-code
+    Testing: flask-conical
 ```
 
-The icon names correspond to Font Awesome solid icon names (without the `fa-` prefix).
+The icon names are Lucide icon names (lowercase, hyphenated). Browse the full catalogue at [lucide.dev/icons](https://lucide.dev/icons/).
 
 ## Full Configuration Reference
 

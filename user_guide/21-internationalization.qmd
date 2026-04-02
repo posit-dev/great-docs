@@ -2,6 +2,7 @@
 title: "Internationalization"
 guide-section: "Config & Theming"
 bread-crumbs: false
+tags: [Configuration, Internationalization]
 ---
 
 # Internationalization

@@ -1,6 +1,7 @@
 ---
 title: "Cross-Reference Related Items"
 description: "Link related classes, functions, and methods using the Great Docs Linking System (GDLS)."
+tags: [Content, API]
 ---
 
 # Cross-Reference Related Items

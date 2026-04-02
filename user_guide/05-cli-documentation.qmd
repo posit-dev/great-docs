@@ -2,6 +2,7 @@
 title: "CLI Documentation"
 guide-section: "Site Content"
 bread-crumbs: false
+tags: [CLI, Content]
 ---
 
 # CLI Documentation

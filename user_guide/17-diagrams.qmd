@@ -2,6 +2,7 @@
 title: "Diagrams"
 guide-section: "Site Content"
 bread-crumbs: false
+tags: [Content, Multimedia]
 ---
 
 # Diagrams

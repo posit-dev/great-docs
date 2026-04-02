@@ -1,6 +1,7 @@
 ---
 title: "The Announcement Banner"
 description: "Add a site-wide banner for release announcements, migration notices, or other important news."
+tags: [Theming, Customization]
 ---
 
 # The Announcement Banner

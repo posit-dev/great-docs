@@ -96,6 +96,32 @@ cli:
   module: great_docs.cli
   name: cli
 
+# Page Tags
+# ---------
+# Enable page tags for content discoverability
+tags:
+  enabled: true
+  icons:
+    Getting Started: rocket
+    Configuration: cog
+    Theming: palette
+    API: file-code
+    CLI: terminal
+    Content: pen-line
+    Build: hammer
+    Deployment: cloud-upload
+    Quality: list-checks
+    SEO: search
+    Multimedia: image
+    AI/LLM: wand-sparkles
+    GitHub: git-branch
+    Customization: sliders
+    Troubleshooting: wrench
+    Branding: paintbrush
+    Internationalization: globe
+    CI/CD: repeat
+    Setup: download
+
 # Dark Mode Toggle
 # ----------------
 # Enable/disable the dark mode toggle in navbar (default: true)

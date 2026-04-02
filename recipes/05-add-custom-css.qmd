@@ -1,6 +1,7 @@
 ---
 title: "Add Custom CSS"
 description: "Override default styles or add your own design touches to the rendered site."
+tags: [Theming, Customization]
 ---
 
 # Add Custom CSS

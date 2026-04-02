@@ -2,6 +2,7 @@
 title: "Changelog"
 guide-section: "Quality & Maintenance"
 bread-crumbs: false
+tags: [Quality, GitHub]
 ---
 
 # Changelog
