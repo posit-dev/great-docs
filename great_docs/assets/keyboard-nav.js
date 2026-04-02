@@ -4,6 +4,7 @@
  * Features:
  * - `/` or `s` to focus search
  * - `[` / `]` for previous/next page navigation
+ * - `q` to navigate to homepage
  * - `m` or `n` to show/hide floating menu overlay (sidebar nav or navbar links)
  * - `d` to toggle dark mode
  * - `c` to copy page as Markdown (when available)
@@ -94,6 +95,17 @@
         if (link) {
             link.click();
         }
+    }
+
+    function navigateHome() {
+        // Use the navbar brand link (always points to site root)
+        var brand = document.querySelector('.navbar-brand');
+        if (brand && brand.href) {
+            window.location.href = brand.href;
+            return;
+        }
+        // Fallback: navigate to site root
+        window.location.href = './';
     }
 
     // ── Show Menu Overlay ──────────────────────────────────────────────
@@ -368,6 +380,7 @@
                 { keys: ['['], descKey: 'kb_prev_page', descFallback: 'Previous page' },
                 { keys: [']'], descKey: 'kb_next_page', descFallback: 'Next page' },
                 { keys: ['m', 'n'], descKey: 'kb_show_menu', descFallback: 'Show menu' },
+                { keys: ['q'], descKey: 'kb_home', descFallback: 'Go to homepage' },
             ]
         },
         {
@@ -552,6 +565,11 @@
             case 'n':
                 e.preventDefault();
                 showMenu();
+                break;
+
+            case 'q':
+                e.preventDefault();
+                navigateHome();
                 break;
 
             case 'd':
