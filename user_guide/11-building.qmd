@@ -24,15 +24,17 @@ When you run `great-docs build`, the following steps execute in order:
 
 6. Custom sections defined in `great-docs.yml` (examples, tutorials, blog posts, etc.) are processed and copied to the output directory.
 
-7. If the changelog is enabled and a GitHub repository URL exists in `pyproject.toml`, GitHub Releases are fetched and a `changelog.qmd` file is generated.
+7. If `custom_pages` is configured, or if the fallback `custom/` directory exists, custom HTML pages are discovered. Passthrough pages are converted into generated `.qmd` files and raw pages are copied through unchanged.
 
-8. The Agent Skills file (`skill.md`) is generated or copied. If you have a curated `SKILL.md` in `skills/<package-name>/`, it is used directly. Otherwise, a skill file is auto-generated from your package metadata.
+8. If the changelog is enabled and a GitHub repository URL exists in `pyproject.toml`, GitHub Releases are fetched and a `changelog.qmd` file is generated.
 
-9. `llms.txt` and `llms-full.txt` files are generated. These provide AI-friendly summaries of your package documentation.
+9. The Agent Skills file (`skill.md`) is generated or copied. If you have a curated `SKILL.md` in `skills/<package-name>/`, it is used directly. Otherwise, a skill file is auto-generated from your package metadata.
 
-10. Source link metadata (`_source_links.json`) is generated, mapping each documented symbol to its file and line numbers on GitHub.
+10. `llms.txt` and `llms-full.txt` files are generated. These provide AI-friendly summaries of your package documentation.
 
-11. Quarto renders all the source files into HTML. A post-render script runs to apply final transformations: injecting source links, processing cross-references (GDLS), cleaning up Sphinx/RST artifacts, and generating companion Markdown (`.md`) files for each page.
+11. Source link metadata (`_source_links.json`) is generated, mapping each documented symbol to its file and line numbers on GitHub.
+
+12. Quarto renders all the source files into HTML. A post-render script runs to apply final transformations: injecting source links, processing cross-references (GDLS), cleaning up Sphinx/RST artifacts, and generating companion Markdown (`.md`) files for each page.
 
 After all steps complete, the finished site is in `great-docs/_site/`.
 
