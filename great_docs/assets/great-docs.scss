@@ -91,6 +91,10 @@ header p {
 
 .description {
    font-style: italic;
+
+   @media (max-width: 767.98px) {
+      padding-bottom: 1em;
+   }
 }
 
 table {
@@ -5524,6 +5528,154 @@ html[data-bs-theme="dark"] {
 
 /* Dark mode — icon color inherits from text (stroke: currentColor) */
 /* No extra rules needed because Lucide uses stroke="currentColor" */
+
+// ── Page Tags ───────────────────────────────────────────────────────────────
+
+// Tag pills displayed below page titles
+.gd-page-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.35rem;
+    margin-bottom: 0.8rem;
+}
+
+.gd-tag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.4;
+    color: mix($primary, $body-color, 60%);
+    background-color: tint-color($primary, 90%);
+    border: 1px solid tint-color($primary, 75%);
+    border-radius: 1rem;
+    text-decoration: none;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+    white-space: nowrap;
+
+    &:hover,
+    &:focus-visible {
+        background-color: tint-color($primary, 80%);
+        border-color: tint-color($primary, 60%);
+        color: shade-color($primary, 10%);
+        text-decoration: none;
+    }
+
+    .gd-tag-icon {
+        display: inline-flex;
+        align-items: center;
+        margin-right: 0.15rem;
+        opacity: 0.7;
+    }
+}
+
+// Tags index page — headings styled as pills
+.gd-tag-heading {
+    border-bottom: none;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+
+    .gd-tag-pill {
+        font-size: 1rem;
+        padding: 0.3rem 0.85rem;
+        cursor: default;
+        pointer-events: none;
+    }
+}
+
+h3.gd-tag-heading .gd-tag-pill {
+    font-size: 0.85rem;
+    padding: 0.2rem 0.7rem;
+}
+
+// Segmented pills for hierarchical tags (e.g. Python | Advanced)
+.gd-tag-pill-segmented {
+    padding: 0;
+    overflow: hidden;
+    gap: 0;
+
+    .gd-tag-pill-segment {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.15rem 0.55rem;
+    }
+
+    .gd-tag-pill-parent {
+        background-color: tint-color($primary, 90%);
+    }
+
+    .gd-tag-pill-segment:not(.gd-tag-pill-parent) {
+        background-color: tint-color($primary, 95%);
+    }
+
+    .gd-tag-pill-sep {
+        display: inline-block;
+        width: 1px;
+        align-self: stretch;
+        background-color: tint-color($primary, 60%);
+    }
+}
+
+// Heading-sized segmented pills
+.gd-tag-heading .gd-tag-pill-segmented {
+    .gd-tag-pill-segment {
+        padding: 0.3rem 0.85rem;
+    }
+}
+
+h3.gd-tag-heading .gd-tag-pill-segmented {
+    .gd-tag-pill-segment {
+        padding: 0.2rem 0.7rem;
+    }
+}
+
+.gd-tag-section {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: $text-muted;
+    background-color: $gray-100;
+    padding: 0.05rem 0.4rem;
+    border-radius: 0.25rem;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+}
+
+// Dark mode overrides for tag pills
+body.quarto-dark {
+    .gd-tag-pill {
+        color: tint-color($primary, 70%);
+        background-color: rgba($primary, 0.15);
+        border-color: rgba($primary, 0.3);
+
+        &:hover,
+        &:focus-visible {
+            background-color: rgba($primary, 0.25);
+            border-color: rgba($primary, 0.5);
+            color: tint-color($primary, 85%);
+        }
+    }
+
+    .gd-tag-section {
+        color: $gray-400;
+        background-color: $gray-800;
+    }
+
+    .gd-tag-pill-sep {
+        background-color: rgba($primary, 0.4);
+    }
+
+    .gd-tag-pill-segmented .gd-tag-pill-parent {
+        background-color: rgba($primary, 0.15);
+    }
+
+    .gd-tag-pill-segmented .gd-tag-pill-segment:not(.gd-tag-pill-parent) {
+        background-color: rgba($primary, 0.08);
+    }
+}
 
 
 /*-- scss:functions --*/
