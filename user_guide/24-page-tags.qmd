@@ -1,0 +1,171 @@
+---
+title: "Page Tags"
+guide-section: "Site Content"
+bread-crumbs: false
+---
+
+# Page Tags
+
+Great Docs lets you categorize pages with tags for improved discoverability. Add tags to any user guide, recipe, or custom section page via frontmatter, and Great Docs will generate a tags index page, render tag pills above page titles, and support hierarchical tag organization.
+
+Tags are disabled by default. To enable them, add a `tags` section to `great-docs.yml`:
+
+```{.yaml filename="great-docs.yml"}
+tags:
+  enabled: true
+```
+
+Or use the shorthand:
+
+```{.yaml filename="great-docs.yml"}
+tags: true
+```
+
+## Adding Tags to Pages
+
+Add tags to any `.qmd` page using the `tags` key in YAML frontmatter:
+
+```{.yaml filename="user_guide/03-configuration.qmd"}
+---
+title: "Configuration"
+tags: [Python, Configuration, Getting Started]
+---
+```
+
+Tags can be any string. They are case-sensitive, so `Python` and `python` are treated as different tags.
+
+## Tags Index Page
+
+When tags are enabled, Great Docs automatically generates a `tags/index.qmd` page that lists every tag and the pages associated with it. A "Tags" link is added to the site's top navigation bar (positioned before "Reference").
+
+Each tag becomes a heading on the index page, with links to all pages that use that tag. Section badges (e.g., "User Guide", "Recipes") appear next to each page link so readers can see where the page lives.
+
+### Disabling the Index Page
+
+If you want tag pills on pages but don't want a dedicated index page:
+
+```{.yaml filename="great-docs.yml"}
+tags:
+  enabled: true
+  index_page: false
+```
+
+## Tag Pills on Pages
+
+By default, tagged pages display small pill-shaped links above the page title. Each pill links to the corresponding tag's section on the tags index page. This helps readers discover related content.
+
+To disable the pills while keeping the tags index page:
+
+```{.yaml filename="great-docs.yml"}
+tags:
+  enabled: true
+  show_on_pages: false
+```
+
+## Hierarchical Tags
+
+Tags support a hierarchy using the `/` separator. For example, `Python/Testing` creates a parent "Python" group with a "Testing" child. On the tags index page, hierarchical tags are rendered with nested headings:
+
+```yaml
+---
+title: "Unit Testing Guide"
+tags: [Python/Testing, Python/pytest, Best Practices]
+---
+```
+
+This produces an index page structure like:
+
+```
+## Best Practices
+  - Unit Testing Guide
+
+## Python
+  ### Testing
+    - Unit Testing Guide
+  ### pytest
+    - Unit Testing Guide
+```
+
+On the page itself, hierarchical tag pills display the leaf name (e.g., "Testing") with the full path shown as a tooltip on hover.
+
+To disable hierarchical tag support and treat `/` as a literal character:
+
+```{.yaml filename="great-docs.yml"}
+tags:
+  enabled: true
+  hierarchical: false
+```
+
+## Shadow Tags
+
+Shadow tags are tags used for internal organization that are hidden from public view. Pages with shadow tags are still indexed internally, but the tags themselves are not rendered as pills on pages or shown on the tags index page.
+
+This is useful for editorial workflows. For example one can tag pages as `needs-review` or `draft` without exposing those labels to readers.
+
+```{.yaml filename="great-docs.yml"}
+tags:
+  enabled: true
+  shadow:
+    - needs-review
+    - draft
+    - internal
+```
+
+A page can have both visible and shadow tags:
+
+```yaml
+---
+title: "Advanced Configuration"
+tags: [Configuration, API, needs-review]
+---
+```
+
+In this example, "Configuration" and "API" appear as pills and on the index page, while "needs-review" is silently ignored in the public output.
+
+## Tag Icons
+
+You can associate tags with icons from the [Font Awesome](https://fontawesome.com/icons) set. Icons appear inside the tag pill and next to the tag heading on the index page.
+
+```{.yaml filename="great-docs.yml"}
+tags:
+  enabled: true
+  icons:
+    Python: code
+    Tutorial: book-open
+    API: plug
+    Testing: flask-vial
+```
+
+The icon names correspond to Font Awesome solid icon names (without the `fa-` prefix).
+
+## Full Configuration Reference
+
+Here is the complete `tags` configuration with all options and their defaults:
+
+```{.yaml filename="great-docs.yml"}
+tags:
+  enabled: false          # Master switch (default: false)
+  index_page: true        # Generate a tags index page (default: true)
+  show_on_pages: true     # Show tag pills above page titles (default: true)
+  hierarchical: true      # Support "/" as tag hierarchy separator (default: true)
+  icons: {}               # Tag → icon name mapping (default: empty)
+  shadow: []              # Tags hidden from public view (default: empty)
+  scoped: false           # Scoped tag listings per section (default: false)
+```
+
+## Which Pages Are Scanned?
+
+Great Docs scans for tags in `.qmd` files found in:
+
+- **User guide** pages (`user-guide/`)
+- **Recipes** pages (`recipes/`)
+- **Custom sections** (any section defined in `sections:` config)
+
+Index pages (`index.qmd`) in these directories are skipped. API reference pages and the changelog are not scanned for tags.
+
+## Tips
+
+- **Start simple**: begin with a flat list of 5–10 tags and add hierarchy later as your documentation grows.
+- **Be consistent**: establish a tag naming convention early (e.g., always use title case).
+- **Use shadow tags for workflow**: tags like `needs-update` or `v2-migration` help you track editorial tasks without cluttering the reader experience.
+- **Combine with search**: tags improve discoverability today, and will integrate with enhanced search in a future release.
