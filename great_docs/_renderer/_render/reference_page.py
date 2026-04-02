@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from great_docs._qrenderer._render.mixin_page import RenderPageMixin
+from great_docs._renderer._render.mixin_page import RenderPageMixin
 
 from ..pandoc.blocks import (
     Blocks,

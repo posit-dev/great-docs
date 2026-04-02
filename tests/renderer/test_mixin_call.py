@@ -1,12 +1,12 @@
 # pyright: reportPrivateUsage=false
-"""Tests for _qrenderer/_render/mixin_call.py — covering docstring section merging,
+"""Tests for _renderer/_render/mixin_call.py — covering docstring section merging,
 RST directive handling, overload signatures, parameter exclusion, and **kwargs rendering."""
 
 from __future__ import annotations
 
 import griffe as gf
 
-from great_docs._qrenderer._tools import render_code_variable
+from great_docs._renderer._tools import render_code_variable
 
 
 def test_merges_unnamed_returns_with_same_annotation():
@@ -168,7 +168,7 @@ def test_exclude_single_parameter_as_string():
         """
         pass
     '''
-    from great_docs._qrenderer import _globals
+    from great_docs._renderer import _globals
 
     original = _globals.EXCLUDE_PARAMETERS.copy()
     try:
@@ -201,7 +201,7 @@ def test_exclude_multiple_parameters_as_tuple():
         """
         pass
     '''
-    from great_docs._qrenderer import _globals
+    from great_docs._renderer import _globals
 
     original = _globals.EXCLUDE_PARAMETERS.copy()
     try:
@@ -611,7 +611,7 @@ def test_parameter_default_only():
 
 def test_annotation_in_signature():
     """When show_signature_annotation=True, annotations appear in the signature."""
-    from great_docs._qrenderer import RenderDocFunction, layout
+    from great_docs._renderer import RenderDocFunction, layout
 
     code = '''
     def func(x: int, y: str = "hello"):

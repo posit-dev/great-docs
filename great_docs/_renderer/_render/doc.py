@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, cast
 
 import griffe as gf
 
-from great_docs._qrenderer._render._label import get_label
+from great_docs._renderer._render._label import get_label
 
 from .. import _ast as qast
 from .. import layout

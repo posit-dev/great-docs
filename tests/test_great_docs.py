@@ -29,8 +29,8 @@ from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
 
 from great_docs import Config, create_default_config, GreatDocs, load_config
 from great_docs._directives import DocDirectives, extract_directives
-from great_docs._qrenderer import layout, _globals
-from great_docs._qrenderer._ast import (
+from great_docs._renderer import layout, _globals
+from great_docs._renderer._ast import (
     DocstringSectionKindPatched,
     DocstringSectionNotes,
     DocstringSectionSeeAlso,
@@ -42,7 +42,7 @@ from great_docs._qrenderer._ast import (
     tuple_to_data,
     _DocstringSectionPatched,
 )
-from great_docs._qrenderer._format import (
+from great_docs._renderer._format import (
     format_name,
     format_see_also,
     format_str,
@@ -51,13 +51,13 @@ from great_docs._qrenderer._format import (
     HAS_RUFF,
     repr_obj,
 )
-from great_docs._qrenderer._globals import (
+from great_docs._renderer._globals import (
     EXCLUDE_ATTRIBUTES,
     EXCLUDE_CLASSES,
     EXCLUDE_FUNCTIONS,
     EXCLUDE_PARAMETERS,
 )
-from great_docs._qrenderer._griffe import (
+from great_docs._renderer._griffe import (
     AliasResolutionError,
     dataclasses as dc,
     dataclasses as gdc,
@@ -65,23 +65,23 @@ from great_docs._qrenderer._griffe import (
     docstrings as gds,
     expressions as expr,
 )
-from great_docs._qrenderer._griffe.docstrings import DCDocstringSection
-from great_docs._qrenderer._render import (
+from great_docs._renderer._griffe.docstrings import DCDocstringSection
+from great_docs._renderer._render import (
     get_render_type,
     RenderDocAttribute,
     RenderDocClass,
     RenderDocFunction,
     RenderDocModule,
 )
-from great_docs._qrenderer._render._label import (
+from great_docs._renderer._render._label import (
     get_label,
     _attribute_label,
     _class_label,
     _function_label,
 )
-from great_docs._qrenderer._render.api_page import RenderAPIPage
-from great_docs._qrenderer._render.base import RenderBase
-from great_docs._qrenderer._render.extending import (
+from great_docs._renderer._render.api_page import RenderAPIPage
+from great_docs._renderer._render.base import RenderBase
+from great_docs._renderer._render.extending import (
     exclude_attributes,
     exclude_classes,
     exclude_functions,
@@ -89,14 +89,14 @@ from great_docs._qrenderer._render.extending import (
     extend_base_class,
     set_class_attr,
 )
-from great_docs._qrenderer._render.mixin_members import (
+from great_docs._renderer._render.mixin_members import (
     RenderedMemberPagesGroup,
     RenderedMembersGroup,
 )
-from great_docs._qrenderer._render.mixin_page import RenderPageMixin
-from great_docs._qrenderer._render.reference_page import RenderReferencePage
-from great_docs._qrenderer._render.reference_section import RenderReferenceSection
-from great_docs._qrenderer._rst_converters import (
+from great_docs._renderer._render.mixin_page import RenderPageMixin
+from great_docs._renderer._render.reference_page import RenderReferencePage
+from great_docs._renderer._render.reference_section import RenderReferenceSection
+from great_docs._renderer._rst_converters import (
     escape,
     sanitize,
     _convert_bold_section_headers,
@@ -118,9 +118,9 @@ from great_docs._qrenderer._rst_converters import (
     _rst_simple_table_to_md,
     _smart_dedent,
 )
-from great_docs._qrenderer._tools import render_code_variable, render_type_object
-from great_docs._qrenderer._transformers import ctx_node, Node, WorkaroundKeyError
-from great_docs._qrenderer._type_checks import (
+from great_docs._renderer._tools import render_code_variable, render_type_object
+from great_docs._renderer._transformers import ctx_node, Node, WorkaroundKeyError
+from great_docs._renderer._type_checks import (
     griffe_to_doc,
     is_field_init_false,
     is_initvar,
@@ -130,7 +130,7 @@ from great_docs._qrenderer._type_checks import (
     isDoc,
     no_init,
 )
-from great_docs._qrenderer.blueprint import (
+from great_docs._renderer.blueprint import (
     blueprint as _blueprint,
     blueprint as blueprint_func,
     BlueprintTransformer,
@@ -144,7 +144,7 @@ from great_docs._qrenderer.blueprint import (
     _resolve_alias,
     _to_simple_dict,
 )
-from great_docs._qrenderer.introspection import (
+from great_docs._renderer.introspection import (
     Builder,
     BuilderPkgdown,
     BuilderSinglePage,
@@ -157,13 +157,13 @@ from great_docs._qrenderer.introspection import (
     _merge_frontmatter,
     _resolve_target,
 )
-from great_docs._qrenderer.inventory import (
+from great_docs._renderer.inventory import (
     convert_inventory,
     create_inventory,
     _create_inventory_item,
     _maybe_call,
 )
-from great_docs._qrenderer.layout import (
+from great_docs._renderer.layout import (
     Auto,
     AutoOptions,
     ChoicesChildren,
@@ -182,7 +182,7 @@ from great_docs._qrenderer.layout import (
     SummaryDetails,
     _Base,
 )
-from great_docs._qrenderer.pandoc.blocks import (
+from great_docs._renderer.pandoc.blocks import (
     Block,
     blockcontent_to_str,
     blockcontent_to_str_items,
@@ -199,8 +199,8 @@ from great_docs._qrenderer.pandoc.blocks import (
     RawHTMLBlockTag,
     RenderedDocObject,
 )
-from great_docs._qrenderer.pandoc.components import Attr
-from great_docs._qrenderer.pandoc.inlines import (
+from great_docs._renderer.pandoc.components import Attr
+from great_docs._renderer.pandoc.inlines import (
     Code,
     Emph,
     inlinecontent_to_str,
@@ -210,7 +210,7 @@ from great_docs._qrenderer.pandoc.inlines import (
     Str,
     Strong,
 )
-from great_docs._qrenderer.typing_information import TypeInformation, TypeSections
+from great_docs._renderer.typing_information import TypeInformation, TypeSections
 from great_docs.cli import (
     _detect_optional_dependencies,
     _detect_package_manager,
@@ -19715,7 +19715,7 @@ def test_detect_dynamic_mode_with_cyclic_error():
 
         with (
             patch("griffe.load", return_value=mock_pkg),
-            patch("great_docs._qrenderer.introspection.get_object", side_effect=fake_get_object),
+            patch("great_docs._renderer.introspection.get_object", side_effect=fake_get_object),
         ):
             result = docs._detect_dynamic_mode("mypkg")
 
@@ -22344,7 +22344,7 @@ def test_build_prepare_and_render_flow():
             patch.object(docs, "_copy_assets", return_value=False),
             patch.object(docs, "_get_quarto_env", return_value={}),
             patch(
-                "great_docs._qrenderer.introspection.Builder",
+                "great_docs._renderer.introspection.Builder",
                 mock_builder_class,
             ),
             patch("subprocess.Popen") as mock_popen,
@@ -22444,7 +22444,7 @@ def test_build_dynamic_fallback_to_static():
             patch.object(docs, "_copy_assets", return_value=False),
             patch.object(docs, "_get_quarto_env", return_value={}),
             patch(
-                "great_docs._qrenderer.introspection.Builder",
+                "great_docs._renderer.introspection.Builder",
                 mock_builder_class,
             ),
             patch("subprocess.Popen") as mock_popen,
@@ -22497,7 +22497,7 @@ def test_build_static_mode_failure_exits():
             patch.object(docs, "_copy_assets", return_value=False),
             patch.object(docs, "_get_quarto_env", return_value={}),
             patch(
-                "great_docs._qrenderer.introspection.Builder",
+                "great_docs._renderer.introspection.Builder",
                 mock_builder_class,
             ),
         ):
@@ -22541,7 +22541,7 @@ def test_build_non_dynamic_failure_exits():
             patch.object(docs, "_copy_assets", return_value=False),
             patch.object(docs, "_get_quarto_env", return_value={}),
             patch(
-                "great_docs._qrenderer.introspection.Builder",
+                "great_docs._renderer.introspection.Builder",
                 mock_builder_class,
             ),
         ):
@@ -26214,7 +26214,7 @@ def test_get_object_deprecated_object_name_warns():
 
 def test_get_object_with_shared_loader():
     """get_object reuses a loader if provided."""
-    from great_docs._qrenderer.introspection import (
+    from great_docs._renderer.introspection import (
         GriffeLoader,
         LinesCollection,
         ModulesCollection,
@@ -26392,7 +26392,7 @@ def test_replace_docstring_alias():
 
 def test_canonical_path_module():
     """_canonical_path for a module returns module name."""
-    from great_docs._qrenderer.introspection import _canonical_path
+    from great_docs._renderer.introspection import _canonical_path
 
     result = _canonical_path(json, "")
 
@@ -26401,7 +26401,7 @@ def test_canonical_path_module():
 
 def test_canonical_path_module_with_qualname():
     """_canonical_path for a module with qualname appends suffix."""
-    from great_docs._qrenderer.introspection import _canonical_path
+    from great_docs._renderer.introspection import _canonical_path
 
     result = _canonical_path(json, "dumps")
 
@@ -26410,7 +26410,7 @@ def test_canonical_path_module_with_qualname():
 
 def test_canonical_path_function():
     """_canonical_path for a function returns module:qualname."""
-    from great_docs._qrenderer.introspection import _canonical_path
+    from great_docs._renderer.introspection import _canonical_path
 
     result = _canonical_path(json.dumps, "")
     assert result == "json:dumps"
@@ -26418,7 +26418,7 @@ def test_canonical_path_function():
 
 def test_canonical_path_function_with_qualname():
     """_canonical_path for a function with extra qualname appends it."""
-    from great_docs._qrenderer.introspection import _canonical_path
+    from great_docs._renderer.introspection import _canonical_path
 
     result = _canonical_path(json.dumps, "extra")
     assert result == "json:dumps.extra"
@@ -26426,7 +26426,7 @@ def test_canonical_path_function_with_qualname():
 
 def test_canonical_path_class():
     """_canonical_path for a class returns module:qualname."""
-    from great_docs._qrenderer.introspection import _canonical_path
+    from great_docs._renderer.introspection import _canonical_path
 
     result = _canonical_path(json.JSONEncoder, "")
     assert result == "json.encoder:JSONEncoder"
@@ -26434,7 +26434,7 @@ def test_canonical_path_class():
 
 def test_canonical_path_plain_object():
     """_canonical_path for a plain object (not module/class/function) returns None."""
-    from great_docs._qrenderer.introspection import _canonical_path
+    from great_docs._renderer.introspection import _canonical_path
 
     result = _canonical_path(42, "")
     assert result is None
@@ -26442,7 +26442,7 @@ def test_canonical_path_plain_object():
 
 def test_canonical_path_no_module_attr():
     """_canonical_path returns None when __module__ is missing."""
-    from great_docs._qrenderer.introspection import _canonical_path
+    from great_docs._renderer.introspection import _canonical_path
 
     class NoModule:
         pass
@@ -26455,7 +26455,7 @@ def test_canonical_path_no_module_attr():
 
 def test_canonical_path_class_no_module():
     """_canonical_path returns None when class has no __module__."""
-    from great_docs._qrenderer.introspection import _canonical_path
+    from great_docs._renderer.introspection import _canonical_path
 
     cls = type("DynClass", (), {})
     cls.__module__ = None
@@ -26641,7 +26641,7 @@ def test_dynamic_alias_nonexistent_attr_raises():
 
 def test_dynamic_alias_with_loader():
     """dynamic_alias accepts a shared loader."""
-    from great_docs._qrenderer.introspection import (
+    from great_docs._renderer.introspection import (
         GriffeLoader,
         LinesCollection,
         ModulesCollection,
@@ -28242,7 +28242,7 @@ def test_ast_transform_all():
 
 def test_ast_fields_example_code():
     """fields() returns dataclass field names for ExampleCode."""
-    from great_docs._qrenderer._ast import ExampleCode, fields
+    from great_docs._renderer._ast import ExampleCode, fields
 
     ec = ExampleCode("print(1)")
     result = fields(ec)
@@ -28251,7 +28251,7 @@ def test_ast_fields_example_code():
 
 def test_ast_fields_example_text():
     """fields() returns dataclass field names for ExampleText."""
-    from great_docs._qrenderer._ast import ExampleText, fields
+    from great_docs._renderer._ast import ExampleText, fields
 
     et = ExampleText("description")
     result = fields(et)
@@ -28260,7 +28260,7 @@ def test_ast_fields_example_text():
 
 def test_ast_fields_function():
     """fields() returns expected fields for dc.Function."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     func = dc.Function(name="my_func", lineno=1)
     result = fields(func)
@@ -28270,7 +28270,7 @@ def test_ast_fields_function():
 
 def test_ast_fields_attribute():
     """fields() returns expected fields for dc.Attribute."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     attr = dc.Attribute(name="x", lineno=1)
     result = fields(attr)
@@ -28280,7 +28280,7 @@ def test_ast_fields_attribute():
 
 def test_ast_fields_docstring():
     """fields() returns expected fields for dc.Docstring."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     ds_obj = dc.Docstring("Hello", parser="numpy")
     result = fields(ds_obj)
@@ -28290,7 +28290,7 @@ def test_ast_fields_docstring():
 
 def test_ast_fields_parameter():
     """fields() returns expected fields for dc.Parameter."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     param = dc.Parameter(name="x")
     result = fields(param)
@@ -28300,7 +28300,7 @@ def test_ast_fields_parameter():
 
 def test_ast_fields_docstring_parameter():
     """fields() returns expected fields for ds.DocstringParameter."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     dp = ds.DocstringParameter(name="x", description="a number", annotation="int")
     result = fields(dp)
@@ -28310,7 +28310,7 @@ def test_ast_fields_docstring_parameter():
 
 def test_ast_fields_docstring_named_element():
     """fields() returns expected fields for ds.DocstringNamedElement."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     ne = ds.DocstringNamedElement(name="x", description="desc")
     result = fields(ne)
@@ -28320,7 +28320,7 @@ def test_ast_fields_docstring_named_element():
 
 def test_ast_fields_docstring_section():
     """fields() returns expected fields for ds.DocstringSection."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     sec = ds.DocstringSectionText("hello")
     result = fields(sec)
@@ -28330,7 +28330,7 @@ def test_ast_fields_docstring_section():
 
 def test_ast_fields_alias():
     """fields() follows alias target for dc.Alias."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     mod = dc.Module(name="testmod")
     func = dc.Function(name="f", lineno=1)
@@ -28347,7 +28347,7 @@ def test_ast_fields_alias_unresolvable():
 
     from griffe import ModulesCollection
 
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     mc = ModulesCollection()
     mod = dc.Module(name="testmod")
@@ -28365,7 +28365,7 @@ def test_ast_fields_alias_unresolvable():
 
 def test_ast_fields_object():
     """fields() returns discovered attributes for dc.Object (Module)."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     mod = dc.Module(name="mymod")
     result = fields(mod)
@@ -28377,7 +28377,7 @@ def test_ast_fields_object():
 
 def test_ast_fields_layout_base():
     """fields() returns non-default fields for a LayoutBase subclass."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     auto = Auto(name="my_func")
     result = fields(auto)
@@ -28386,7 +28386,7 @@ def test_ast_fields_layout_base():
 
 def test_ast_fields_dict():
     """fields() returns dict keys."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     result = fields({"a": 1, "b": 2})
     assert result == ["a", "b"]
@@ -28394,7 +28394,7 @@ def test_ast_fields_dict():
 
 def test_ast_fields_list():
     """fields() returns list indices."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     result = fields([10, 20, 30])
     assert result == [0, 1, 2]
@@ -28402,7 +28402,7 @@ def test_ast_fields_list():
 
 def test_ast_fields_parameters():
     """fields() returns indices for dc.Parameters."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     params = dc.Parameters(dc.Parameter(name="a"), dc.Parameter(name="b"))
     result = fields(params)
@@ -28412,7 +28412,7 @@ def test_ast_fields_parameters():
 
 def test_ast_fields_none_for_unknown():
     """fields() returns None for unrecognized types."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     assert fields(42) is None
     assert fields("hello") is None
@@ -28551,7 +28551,7 @@ def test_ast_formatter_format_nested():
 
 def test_ast_preview_print(capsys):
     """preview() prints the formatted tree."""
-    from great_docs._qrenderer._ast import ExampleCode, preview
+    from great_docs._renderer._ast import ExampleCode, preview
 
     preview(ExampleCode("x = 1"))
     captured = capsys.readouterr()
@@ -28560,7 +28560,7 @@ def test_ast_preview_print(capsys):
 
 def test_ast_preview_as_string():
     """preview(as_string=True) returns the tree as a string."""
-    from great_docs._qrenderer._ast import ExampleCode, preview
+    from great_docs._renderer._ast import ExampleCode, preview
 
     result = preview(ExampleCode("x = 1"), as_string=True)
     assert isinstance(result, str)
@@ -28569,7 +28569,7 @@ def test_ast_preview_as_string():
 
 def test_ast_preview_max_depth():
     """preview() respects max_depth parameter."""
-    from great_docs._qrenderer._ast import ExampleCode, preview
+    from great_docs._renderer._ast import ExampleCode, preview
 
     result = preview(ExampleCode("x = 1"), max_depth=0, as_string=True)
     assert "ExampleCode" in result
@@ -28578,7 +28578,7 @@ def test_ast_preview_max_depth():
 
 def test_ast_preview_compact():
     """preview() respects compact parameter."""
-    from great_docs._qrenderer._ast import ExampleCode, preview
+    from great_docs._renderer._ast import ExampleCode, preview
 
     result = preview(ExampleCode("x = 1"), compact=True, as_string=True)
     assert "ExampleCode" in result
@@ -28609,7 +28609,7 @@ def test_ast_docstring_section_warnings():
 
 def test_ast_fields_docstring_element():
     """fields() returns expected fields for ds.DocstringElement."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     # DocstringElement is the base; DocstringReturn is a subclass not matching
     # DocstringNamedElement or DocstringParameter
@@ -31425,7 +31425,7 @@ def test_emph_str():
 
 def test_image_str():
     """Image.__str__ renders markdown image syntax."""
-    from great_docs._qrenderer.pandoc.inlines import Image
+    from great_docs._renderer.pandoc.inlines import Image
 
     img = Image(caption="Logo", src="img.png")
     assert str(img) == "![Logo](img.png)"
@@ -31615,7 +31615,7 @@ def test_is_field_init_false_no_field():
 
 def test_canonical_path_with_type():
     """_canonical_path returns module.qualname for a type."""
-    from great_docs._qrenderer._tools import _canonical_path
+    from great_docs._renderer._tools import _canonical_path
 
     result = _canonical_path(int)
     assert result == "int"  # builtins returns just qualname
@@ -31626,7 +31626,7 @@ def test_canonical_path_with_type():
 
 def test_canonical_path_with_class():
     """_canonical_path returns full path for non-builtin type."""
-    from great_docs._qrenderer._tools import _canonical_path
+    from great_docs._renderer._tools import _canonical_path
 
     result = _canonical_path(Attr)
     assert "Attr" in result
@@ -31635,7 +31635,7 @@ def test_canonical_path_with_class():
 
 def test_canonical_path_with_instance():
     """_canonical_path handles non-type by using __class__."""
-    from great_docs._qrenderer._tools import _canonical_path
+    from great_docs._renderer._tools import _canonical_path
 
     result = _canonical_path("hello")
     assert result == "str"  # builtins
@@ -31661,7 +31661,7 @@ def test_render_type_object_with_type():
     """render_type_object renders a python type."""
 
     # Use a type from the package itself that griffe can find
-    result = render_type_object("great_docs._qrenderer.pandoc.components.Attr")
+    result = render_type_object("great_docs._renderer.pandoc.components.Attr")
     assert isinstance(result, str)
 
 
@@ -32893,7 +32893,7 @@ def test_renderdoc_source_link_with_github_url():
 
     # Patch package_info directly so we don't depend on os.environ ordering
     with patch(
-        "great_docs._qrenderer._render.doc.package_info",
+        "great_docs._renderer._render.doc.package_info",
         side_effect=lambda key: {
             "GITHUB_REPO_URL": "https://github.com/test/repo",
             "GIT_REF": "main",
@@ -33380,9 +33380,9 @@ def test_type_sections_items_combines_all():
     mock_render_cls = MagicMock(return_value=mock_render)
 
     with (
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc") as mock_g2d,
+        patch("great_docs._renderer.typing_information.griffe_to_doc") as mock_g2d,
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         mock_g2d.return_value = MagicMock()
@@ -33409,9 +33409,9 @@ def test_type_sections_post_init_protocols_no_summary():
 
 
     with (
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         ts = TypeSections(
@@ -33434,9 +33434,9 @@ def test_type_sections_post_init_typevars_no_sig_name():
 
 
     with (
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         ts = TypeSections(
@@ -33459,9 +33459,9 @@ def test_type_sections_post_init_typealiases_settings():
 
 
     with (
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         ts = TypeSections(
@@ -33486,9 +33486,9 @@ def test_type_sections_render_body_protocols_section():
 
 
     with (
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         ts = TypeSections(
@@ -33516,9 +33516,9 @@ def test_type_sections_render_body_typevars_section():
 
 
     with (
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         ts = TypeSections(
@@ -33544,9 +33544,9 @@ def test_type_sections_render_body_typealiases_section():
 
 
     with (
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         ts = TypeSections(
@@ -33574,9 +33574,9 @@ def test_type_sections_render_body_all_sections():
 
 
     with (
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         ts = TypeSections(
@@ -33652,22 +33652,22 @@ def test_type_information_sections_calls_get_object():
     mock_render_cls = MagicMock(return_value=mock_render_obj)
 
     with (
-        patch("great_docs._qrenderer.typing_information.get_object", return_value=mock_module),
+        patch("great_docs._renderer.typing_information.get_object", return_value=mock_module),
         patch(
-            "great_docs._qrenderer.typing_information.is_protocol",
+            "great_docs._renderer.typing_information.is_protocol",
             side_effect=lambda m: m is mock_proto,
         ),
         patch(
-            "great_docs._qrenderer.typing_information.is_typevar",
+            "great_docs._renderer.typing_information.is_typevar",
             side_effect=lambda m: m is mock_tv,
         ),
         patch(
-            "great_docs._qrenderer.typing_information.is_typealias",
+            "great_docs._renderer.typing_information.is_typealias",
             side_effect=lambda m: m is mock_alias,
         ),
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         ti = TypeInformation(module_path="mypkg.types", builder=mock_builder)
@@ -33699,13 +33699,13 @@ def test_type_information_sections_item_uris():
     mock_render_cls = MagicMock(return_value=mock_render_obj)
 
     with (
-        patch("great_docs._qrenderer.typing_information.get_object", return_value=mock_module),
-        patch("great_docs._qrenderer.typing_information.is_protocol", return_value=False),
-        patch("great_docs._qrenderer.typing_information.is_typevar", return_value=False),
-        patch("great_docs._qrenderer.typing_information.is_typealias", return_value=True),
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.get_object", return_value=mock_module),
+        patch("great_docs._renderer.typing_information.is_protocol", return_value=False),
+        patch("great_docs._renderer.typing_information.is_typevar", return_value=False),
+        patch("great_docs._renderer.typing_information.is_typealias", return_value=True),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         ti = TypeInformation(module_path="mypkg.sub", builder=mock_builder)
@@ -33727,7 +33727,7 @@ def test_type_information_content_has_meta_and_sections():
     mock_module = MagicMock()
     mock_module.members = {}
 
-    with patch("great_docs._qrenderer.typing_information.get_object", return_value=mock_module):
+    with patch("great_docs._renderer.typing_information.get_object", return_value=mock_module):
         ti = TypeInformation(module_path="mypkg.types", builder=mock_builder)
         content = ti.content
 
@@ -33746,7 +33746,7 @@ def test_type_information_str_delegates_to_content():
     mock_module = MagicMock()
     mock_module.members = {}
 
-    with patch("great_docs._qrenderer.typing_information.get_object", return_value=mock_module):
+    with patch("great_docs._renderer.typing_information.get_object", return_value=mock_module):
         ti = TypeInformation(module_path="mypkg.types", builder=mock_builder)
         result = str(ti)
 
@@ -33767,7 +33767,7 @@ def test_type_information_write_creates_file():
         mock_module = MagicMock()
         mock_module.members = {}
 
-        with patch("great_docs._qrenderer.typing_information.get_object", return_value=mock_module):
+        with patch("great_docs._renderer.typing_information.get_object", return_value=mock_module):
             ti = TypeInformation(module_path="mypkg.types", builder=mock_builder)
 
             # Ensure the output directory exists
@@ -33803,13 +33803,13 @@ def test_type_information_write_extends_builder_items():
         mock_render_cls = MagicMock(return_value=mock_render_obj)
 
         with (
-            patch("great_docs._qrenderer.typing_information.get_object", return_value=mock_module),
-            patch("great_docs._qrenderer.typing_information.is_protocol", return_value=False),
-            patch("great_docs._qrenderer.typing_information.is_typevar", return_value=True),
-            patch("great_docs._qrenderer.typing_information.is_typealias", return_value=False),
-            patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+            patch("great_docs._renderer.typing_information.get_object", return_value=mock_module),
+            patch("great_docs._renderer.typing_information.is_protocol", return_value=False),
+            patch("great_docs._renderer.typing_information.is_typevar", return_value=True),
+            patch("great_docs._renderer.typing_information.is_typealias", return_value=False),
+            patch("great_docs._renderer.typing_information.griffe_to_doc"),
             patch(
-                "great_docs._qrenderer.typing_information.get_render_type",
+                "great_docs._renderer.typing_information.get_render_type",
                 return_value=mock_render_cls,
             ),
         ):

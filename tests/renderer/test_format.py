@@ -2,7 +2,7 @@
 
 import pytest
 
-from great_docs._qrenderer._format import render_formatted_expr
+from great_docs._renderer._format import render_formatted_expr
 
 
 class TestRenderFormattedExpr:
@@ -39,7 +39,7 @@ class TestRenderFormattedExpr:
 
     def test_whitespace_encoded(self):
         """Spaces and newlines should be encoded for HTML inline display."""
-        from great_docs._qrenderer._format import pretty_code
+        from great_docs._renderer._format import pretty_code
 
         # pretty_code converts 4-space indents to &nbsp; and newlines to <br>
         result = pretty_code("(\n    Foo\n    | Bar\n)")
