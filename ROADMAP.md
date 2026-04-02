@@ -236,18 +236,6 @@ Tabbed content blocks for alternative instructions.
 - Keyboard accessible
 - Code blocks and prose supported inside tabs
 
-### Page Tags
-
-Categorize pages with tags for improved discoverability.
-
-- Add tags via frontmatter (`tags: [Python, Testing, API]`)
-- Auto-generated tags index page listing all tags and linked pages
-- Tags rendered above page title with links to tag index
-- Nested/hierarchical tags (e.g., `Python/Testing`)
-- Shadow tags for internal organization (hidden from public view)
-- Scoped tag listings per documentation section
-- Optional tag icons
-
 ### Enhanced Search
 
 Improve the built-in search with modern capabilities.
