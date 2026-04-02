@@ -3422,6 +3422,14 @@ def fix_script_paths():
             content = content.replace(old_mermaid, new_mermaid)
             modified = True
 
+        # Fix page-tags.js path
+        old_page_tags = '<script src="page-tags.js"></script>'
+        new_page_tags = f'<script src="{prefix}page-tags.js"></script>'
+
+        if old_page_tags in content:
+            content = content.replace(old_page_tags, new_page_tags)
+            modified = True
+
         if modified:
             with open(html_file, "w") as file:
                 file.write(content)
