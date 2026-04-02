@@ -210,6 +210,13 @@ ALL_PACKAGES: list[str] = [
     "gdtest_sec_deep",  # 75
     "gdtest_sec_index_opt",  # 75b
     "gdtest_sec_sidebar_single",  # 75c
+    "gdtest_custom_passthrough_navbar",  # 75d
+    "gdtest_custom_raw_navbar_after",  # 75e
+    "gdtest_custom_mixed_modes",  # 75f
+    "gdtest_custom_nested_combo",  # 75g
+    "gdtest_custom_basename_output",  # 75h
+    "gdtest_custom_nested_output",  # 75i
+    "gdtest_custom_missing_dir_combo",  # 75j
     # 76–85: Reference config
     "gdtest_ref_explicit",  # 76
     "gdtest_ref_members_false",  # 77
@@ -1492,6 +1499,41 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "Section sidebar for single-page sections. Has a 2-page Guides "
         "section (sidebar visible) and a 1-page FAQ section (sidebar "
         "should be hidden, content takes full width)."
+    ),
+    "gdtest_custom_passthrough_navbar": (
+        "Configured custom pages using a passthrough landing page under a "
+        "non-default output prefix. The navbar should link to the rendered "
+        "landing page rather than the conventional custom/ path."
+    ),
+    "gdtest_custom_raw_navbar_after": (
+        "Configured custom pages using a raw HTML page published under a "
+        "custom output prefix. The page should be served unchanged and "
+        "inserted after the User Guide navbar item."
+    ),
+    "gdtest_custom_mixed_modes": (
+        "Multiple configured custom page directories mixing passthrough and "
+        "raw pages, plus copied assets and a hidden page that should not "
+        "appear in the navbar."
+    ),
+    "gdtest_custom_nested_combo": (
+        "Nested configured custom pages combined with a user guide and a "
+        "custom section. Navbar ordering and nested deployed paths should "
+        "all coexist cleanly."
+    ),
+    "gdtest_custom_basename_output": (
+        "String-form custom_pages config pointing at a nested source dir. "
+        "The deployed path should default to the source basename, and a "
+        "source .htm file should still render correctly."
+    ),
+    "gdtest_custom_nested_output": (
+        "Custom pages published under a nested output prefix like "
+        "products/python/. Both the page and copied assets should deploy "
+        "under that nested path."
+    ),
+    "gdtest_custom_missing_dir_combo": (
+        "Multi-entry custom_pages config where one source directory is "
+        "missing. The missing entry should be skipped while the valid one "
+        "still renders and registers resources correctly."
     ),
     # ── 76–85: Reference config ───────────────────────────────────────────
     "gdtest_ref_explicit": (
