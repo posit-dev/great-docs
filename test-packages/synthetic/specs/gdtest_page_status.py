@@ -191,6 +191,46 @@ SPEC = {
             This page has no status and should NOT display any
             status badge.
         """,
+        "user_guide/08-subtitle-only.qmd": """\
+            ---
+            title: Subtitle Only
+            subtitle: A page with a subtitle but no description
+            status: new
+            ---
+
+            This page tests the badge layout when a subtitle is present
+            but there is no description.
+        """,
+        "user_guide/09-description-only.qmd": """\
+            ---
+            title: Description Only
+            description: A page with a description but no subtitle
+            status: beta
+            ---
+
+            This page tests the badge layout when a description is present
+            but there is no subtitle.
+        """,
+        "user_guide/10-subtitle-and-description.qmd": """\
+            ---
+            title: Subtitle and Description
+            subtitle: Both subtitle and description present
+            description: This page has both a subtitle and a description alongside a status badge.
+            status: updated
+            ---
+
+            This page tests the badge layout when both a subtitle and a
+            description are present.
+        """,
+        "user_guide/11-neither.qmd": """\
+            ---
+            title: Title Only
+            status: deprecated
+            ---
+
+            This page has only a title (no subtitle, no description)
+            with a status badge. The simplest layout case.
+        """,
         "README.md": """\
             # gdtest-page-status
 
@@ -220,6 +260,10 @@ SPEC = {
             "05-experimental.qmd",
             "06-draft-notes.qmd",
             "07-stable.qmd",
+            "08-subtitle-only.qmd",
+            "09-description-only.qmd",
+            "10-subtitle-and-description.qmd",
+            "11-neither.qmd",
         ],
     },
 }
