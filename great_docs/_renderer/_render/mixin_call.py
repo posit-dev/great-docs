@@ -11,7 +11,7 @@ from .._griffe.docstrings import (
     DCDocstringSectionInitParameters,
     DCDocstringSectionParameterAttributes,
 )
-from .._rst_converters import _convert_rst_text
+from .._rst_converters import _convert_rst_text  # pyright: ignore[reportPrivateUsage]
 from ..pandoc.blocks import (
     BlockContent,
     Blocks,
@@ -107,7 +107,12 @@ class __RenderDocCallMixin(RenderDoc):
         if isinstance(
             el, (gf.DocstringSectionReturns, gf.DocstringSectionYields, gf.DocstringSectionReceives)
         ):
-            merged: list[gf.DocstringReturn] = []
+            items_to_render = cast(
+                "list[gf.DocstringReturn | gf.DocstringYield | gf.DocstringReceive]",
+                items_to_render,
+            )
+            merged: list[gf.DocstringReturn | gf.DocstringYield | gf.DocstringReceive] = []
+            merged = []
             for item in items_to_render:
                 name = getattr(item, "name", None) or ""
                 ann = getattr(item, "annotation", None)
@@ -132,7 +137,7 @@ class __RenderDocCallMixin(RenderDoc):
                 # Reconstruct the RST directive text and convert it
                 # (griffe's numpy parser rejects RST directives at parse time,
                 # so this branch is only reachable with manually constructed objects)
-                ann = item.annotation.strip()
+                ann = str(item.annotation).strip() if item.annotation else ""
                 desc = getattr(item, "description", "") or ""
                 if desc:
                     lines = desc.splitlines()
@@ -190,7 +195,7 @@ class __RenderDocCallMixin(RenderDoc):
         name = self.signature_name if self.show_signature_name else ""
 
         # Check for @overload variants
-        overloads = getattr(self.obj, "overloads", None)
+        overloads: list[gf.Function] = getattr(self.obj, "overloads", [])
         if overloads:
             return self._render_overload_signatures(name, overloads)
 
@@ -200,7 +205,7 @@ class __RenderDocCallMixin(RenderDoc):
             Attr(classes=["doc-signature", f"doc-{self.obj.kind}"]),
         )
 
-    def _render_overload_signatures(self, name: str, overloads: list) -> BlockContent:
+    def _render_overload_signatures(self, name: str, overloads: list[gf.Function]) -> BlockContent:
         """Render multiple @overload signatures as a single code block."""
         sig_lines: list[str] = []
         for ov in overloads:

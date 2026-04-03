@@ -21,7 +21,7 @@ from .._format import (
     render_formatted_expr,
     repr_obj,
 )
-from .._rst_converters import _convert_rst_text
+from .._rst_converters import _convert_rst_text  # pyright: ignore[reportPrivateUsage]
 from .._type_checks import package_info
 from ..pandoc.blocks import (
     Block,
@@ -389,7 +389,7 @@ class __RenderDoc(RenderBase):
 
         sections = cast(
             "list[gf.DocstringSection]",
-            qast.transform(self.obj.docstring.parsed),  # pyright: ignore[reportUnknownMemberType]
+            qast.transform(self.obj.docstring.parsed),
         )
 
         # Remove the docstring subject from the top of the docstring
@@ -460,14 +460,14 @@ class __RenderDoc(RenderBase):
         [](`~functools.singledispatchmethod`) method for that type
         of section.
         """
-        new_el = qast.transform(el)  # pyright: ignore[reportUnknownMemberType]
+        new_el = qast.transform(el)
         if isinstance(new_el, qast.ExampleCode):
             return CodeBlock(el.value, Attr(classes=["python"]))
         return _convert_rst_text(el.value)
 
     @render_docstring_section.register
     def _(self, el: gf.DocstringSectionExamples):
-        return Blocks([self.render_docstring_section(qast.transform(c)) for c in el.value])  # pyright: ignore[reportUnknownMemberType]
+        return Blocks([self.render_docstring_section(qast.transform(c)) for c in el.value])
 
     @render_docstring_section.register
     def _(self, el: gf.DocstringSectionDeprecated):
