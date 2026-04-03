@@ -327,6 +327,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_nav_icons",  # 161
     # 162: Page tags
     "gdtest_page_tags",  # 162
+    # 163: Page status badges
+    "gdtest_page_status",  # 163
 ]
 
 
@@ -543,6 +545,8 @@ DIMENSIONS: dict[str, dict[str, str]] = {
     "K53": {"axis": "config", "label": "nav_icons config"},
     # Page tags axes
     "T1": {"axis": "tags", "label": "Page tags with hierarchy + shadow"},
+    # Page status axes
+    "T2": {"axis": "status", "label": "Page status badges in sidebar + pages"},
 }
 
 
@@ -1854,6 +1858,16 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "and that hierarchical tags like Python/Configuration create nested "
         "headings on the tags page. Tag icons are configured for Python, "
         "Tutorial, and API."
+    ),
+    "gdtest_page_status": (
+        "Seven user-guide pages exercising page status badges. Six pages carry "
+        "a status frontmatter value (new, updated, beta, deprecated, experimental, "
+        "and a custom draft status) while one page has no status. Tests that "
+        "_page_status.json is generated with the correct page-to-status mapping, "
+        "that page-status-badges.js is included for client-side rendering, that "
+        "sidebar links display compact status badges, and that page titles show "
+        "a styled status indicator with icon and description. The custom draft "
+        "status (defined in great-docs.yml) verifies user-defined status extensions."
     ),
 }
 
