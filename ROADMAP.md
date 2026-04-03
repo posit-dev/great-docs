@@ -18,16 +18,6 @@ Display author information with circular GitHub-style avatars on authored pages.
 - Optional `team_author:` config for a catch-all team attribution (e.g., "Great Tables Team")
 - `site.show_author: true/false` to enable/disable author display
 
-### Page Status Badges
-
-Visual indicators for page lifecycle status in navigation.
-
-- `status: new` frontmatter shows "New" badge in sidebar
-- `status: deprecated` shows deprecation indicator
-- Custom status definitions in `great-docs.yml`
-- Badge icons and colors configurable per status
-- Filter/highlight pages by status
-
 ### Reading Time Estimate
 
 Auto-calculate and display estimated reading time.
