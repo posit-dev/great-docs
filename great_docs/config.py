@@ -181,6 +181,53 @@ DEFAULT_CONFIG: dict[str, Any] = {
         # Twitter/X @handle for the site (e.g., "@posaboron")
         "twitter_site": None,
     },
+    # Page Status Badges
+    # Visual indicators for page lifecycle status in sidebar navigation.
+    # Pages set `status: new` (or `deprecated`, etc.) in frontmatter.
+    # True: enable with defaults
+    # False: disable
+    # dict: fine-grained control
+    "page_status": {
+        "enabled": False,  # Master switch for page status badges
+        # Show status badges next to sidebar navigation links
+        "show_in_sidebar": True,
+        # Show status indicator below page titles (like tags)
+        "show_on_pages": True,
+        # Built-in status definitions (can be extended/overridden)
+        # Each status: {label, icon, color, description}
+        "statuses": {
+            "new": {
+                "label": "New",
+                "icon": "sparkles",
+                "color": "#10b981",  # Emerald green
+                "description": "Recently added",
+            },
+            "updated": {
+                "label": "Updated",
+                "icon": "refresh-cw",
+                "color": "#3b82f6",  # Blue
+                "description": "Recently updated",
+            },
+            "beta": {
+                "label": "Beta",
+                "icon": "flask-conical",
+                "color": "#f59e0b",  # Amber
+                "description": "Beta feature",
+            },
+            "deprecated": {
+                "label": "Deprecated",
+                "icon": "triangle-alert",
+                "color": "#ef4444",  # Red
+                "description": "May be removed in a future release",
+            },
+            "experimental": {
+                "label": "Experimental",
+                "icon": "beaker",
+                "color": "#8b5cf6",  # Purple
+                "description": "API may change without notice",
+            },
+        },
+    },
     # Page Tags
     # Categorize pages with tags for improved discoverability.
     # Tags are added via frontmatter (`tags: [Python, Testing, API]`).
@@ -1088,6 +1135,35 @@ class Config:
         if isinstance(raw, dict):
             return raw.get("twitter_site")
         return None
+
+    # ── Page Status Properties ────────────────────────────────────────────
+
+    @property
+    def page_status_enabled(self) -> bool:
+        """Check if page status badges are enabled."""
+        raw = self.get("page_status")
+        if raw is None or raw is False:
+            return False
+        if raw is True:
+            return True
+        if isinstance(raw, dict):
+            return raw.get("enabled", False)
+        return False
+
+    @property
+    def page_status_show_in_sidebar(self) -> bool:
+        """Check if status badges should appear in the sidebar."""
+        return self.page_status_enabled and self.get("page_status.show_in_sidebar", True)
+
+    @property
+    def page_status_show_on_pages(self) -> bool:
+        """Check if status indicators should appear below page titles."""
+        return self.page_status_enabled and self.get("page_status.show_on_pages", True)
+
+    @property
+    def page_status_definitions(self) -> dict[str, dict[str, str]]:
+        """Get the status definitions (built-in + custom overrides)."""
+        return self.get("page_status.statuses", {})
 
     # ── Page Tags Properties ─────────────────────────────────────────────
 
