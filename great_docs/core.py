@@ -5093,7 +5093,7 @@ class GreatDocs:
             try:
                 from functools import partial
 
-                from great_docs._qrenderer.introspection import get_object as qd_get_object
+                from great_docs._renderer.introspection import get_object as qd_get_object
 
                 # uses `parser="numpy"` by default which affects alias resolution
                 gd_get_object = partial(qd_get_object, dynamic=True, parser="numpy")
@@ -5371,7 +5371,7 @@ class GreatDocs:
         try:
             import griffe
 
-            from great_docs._qrenderer.introspection import get_object as qd_get_object
+            from great_docs._renderer.introspection import get_object as qd_get_object
         except ImportError:  # pragma: no cover
             # If renderer isn't available, default to True (will fail at build time anyway)
             return True  # pragma: no cover
@@ -5850,7 +5850,7 @@ class GreatDocs:
             try:
                 from functools import partial
 
-                from great_docs._qrenderer.introspection import get_object as qd_get_object
+                from great_docs._renderer.introspection import get_object as qd_get_object
 
                 gd_get_object = partial(qd_get_object, dynamic=True, parser="numpy")
             except ImportError:  # pragma: no cover
@@ -6063,7 +6063,7 @@ class GreatDocs:
                                     except Exception:  # pragma: no cover
                                         # Dynamic mode failed; try static (no dynamic=True)
                                         try:
-                                            from great_docs._qrenderer.introspection import (
+                                            from great_docs._renderer.introspection import (
                                                 get_object as qd_get,
                                             )
 
@@ -6124,7 +6124,7 @@ class GreatDocs:
                                                         except Exception:  # pragma: no cover
                                                             # Dynamic failed; try static
                                                             try:
-                                                                from great_docs._qrenderer.introspection import (
+                                                                from great_docs._renderer.introspection import (
                                                                     get_object as qd_get,
                                                                 )
 
@@ -12029,7 +12029,7 @@ toc: false
                         sys.path.insert(0, p)  # pragma: no cover
 
                 try:
-                    from great_docs._qrenderer.introspection import Builder
+                    from great_docs._renderer.introspection import Builder
 
                     quarto_yml = self.project_path / "_quarto.yml"
                     builder = Builder.from_quarto_config(str(quarto_yml))

@@ -64,7 +64,7 @@ type-check: ## Run type checking with mypy
 
 .PHONY: type-check-renderer
 type-check-renderer: ## Run type checking with pyright on the renderer
-	@$(PYTHON) -m pyright
+	@$(PYTHON) -m pyright great_docs/_renderer/_render
 
 .PHONY: check
 check: lint test ## Run all checks (lint and test)

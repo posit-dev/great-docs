@@ -162,7 +162,7 @@ reportMissingImports = true
 reportMissingTypeStubs = false
 reportUnusedImport = true
 reportUnusedVariable = true
-# Additional strict checks from qrenderer
+# Additional strict checks from renderer
 reportUnnecessaryTypeIgnoreComment = true
 reportCallInDefaultInitializer = true
 reportPropertyTypeMismatch = true

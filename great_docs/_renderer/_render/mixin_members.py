@@ -326,7 +326,7 @@ class __RenderDocMembersMixin(RenderDoc):
         )
 
         render_objs = [
-            Render(obj, self.renderer, self.level + 2, contained=True) for obj in docables
+            Render(obj, self.level + 2, contained=True) for obj in docables
         ]
 
         if self.show_members_summary and show_summary:
@@ -381,7 +381,6 @@ class __RenderDocMembersMixin(RenderDoc):
         render_objs = [
             Render(
                 griffe_to_doc(page.obj, deep=False),
-                self.renderer,
                 contained=False,
                 page_path=f"{page.path}.qmd",
             )

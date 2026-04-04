@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from great_docs._qrenderer._render.base import RenderBase
+from great_docs._renderer._render.base import RenderBase
 
 if TYPE_CHECKING:
     from ..pandoc.blocks import BlockContent
