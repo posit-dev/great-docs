@@ -70,7 +70,7 @@ great-docs api-diff v0.1.0 v1.0.0 --symbol build --changes-only
 
 ## Evolution Table
 
-The `--table` flag renders a positional parameter grid that shows exactly how a signature evolved. Each column is a version (where a change occurred), and each row is a positional parameter slot. Every cell is self-contained — it shows the parameter name, type, and default at that position — so insertions, reorderings, and removals are immediately visible.
+The `--table` flag renders a positional parameter grid that shows exactly how a signature evolved. Each column is a version (where a change occurred), and each row is a positional parameter slot. Every cell is self-contained (it shows the parameter name, type, and default at that position) so insertions, reorderings, and removals are immediately visible.
 
 ```{.bash filename="Terminal"}
 # Plain-text table (for terminal)
@@ -92,12 +92,12 @@ Below is a demonstration of how a `build()` function might evolve over four rele
 
 Reading this table left-to-right tells the story:
 
-- **v0.1.0** — Two parameters: `project_path` (required `str`) and `output_dir` (with a string default).
-- **v0.3.0** — `project_path` widens to `str | Path`. A new `watch` parameter is appended. `output_dir` changes its default to a `Path` object.
-- **v0.6.0** — `watch` moves to position 2 (before `output_dir`), and a new `clean` parameter is added. The return type changes from `None` to `int`.
-- **v1.0.0** — `project_path` gets a default (`None`), `output_dir`'s default changes to `"_site"`, and a new `verbose` parameter is appended.
+- `v0.1.0`: there are two parameters, `project_path=` (required `str`) and `output_dir=` (with a string default).
+- `v0.3.0`: `project_path=` widens to `str | Path`. A new `watch=` parameter is appended. `output_dir=` changes its default to a `Path` object.
+- `v0.6.0`: `watch=` moves to position 2 (before `output_dir`), and a new `clean=` parameter is added. The return type changes from `None` to `int`.
+- `v1.0.0`: `project_path=` gets a default (`None`), `output_dir=`'s default changes to `"_site"`, and a new `verbose=` parameter is appended.
 
-Notice how this layout makes insertions and reorderings visible — in v0.6.0 you can see that `watch` moved up and `output_dir` moved down, which would be invisible in a row-per-parameter-name layout.
+Notice how this layout makes insertions and reorderings visible. In v0.6.0 you can see that `watch=` moved up and `output_dir=` moved down, which would be invisible in a row-per-parameter-name layout.
 
 ### Embedding in Pages
 
