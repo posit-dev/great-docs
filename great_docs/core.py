@@ -143,6 +143,17 @@ class GreatDocs:
         scss_src = self.assets_path / "great-docs.scss"
         shutil.copy2(scss_src, self.project_path / "great-docs.scss")
 
+        # Copy the evolution demo data file
+        demo_json_src = self.assets_path / "api-evolution-demo.json"
+        if demo_json_src.exists():
+            shutil.copy2(demo_json_src, self.project_path / "api-evolution-demo.json")
+
+        # Copy the evolution shortcode extension (auto-discovered by Quarto)
+        extensions_src = self.assets_path / "_extensions"
+        if extensions_src.exists():
+            extensions_dst = self.project_path / "_extensions"
+            shutil.copytree(extensions_src, extensions_dst, dirs_exist_ok=True)
+
         # Copy JavaScript files
         js_files = [
             "github-widget.js",
