@@ -107,29 +107,31 @@
       var href = link.getAttribute("href");
       if (!href) return;
 
-      // Strip absolute URL origin if present (e.g. from resolved hrefs)
+      // Extract pathname (handles both raw attributes and resolved URLs)
       var path = href;
       try {
         var url = new URL(href, window.location.href);
         path = url.pathname;
       } catch (_) {}
 
-      // Normalize path to match page_statuses keys
+      // Normalize path to match page_statuses keys:
+      // strip leading slash, replace .html → .qmd
       var normalized = path
-        .replace(/^\.\//, "")
         .replace(/^\//, "")
         .replace(/\.html$/, ".qmd")
         .replace(/\/index\.html$/, "/index.qmd");
 
-      // Try matching (may need to strip leading segments for deep paths)
+      // Try direct match first
       var status = pageStatuses[normalized];
+
+      // If no match, try progressively shorter subpaths to handle
+      // subdirectory deployments (e.g. /great-docs/user-guide/foo.qmd → user-guide/foo.qmd)
       if (!status) {
-        // Try matching with just the path after stripping leading ../
-        var cleaned = href.replace(/\.\.\//g, "").replace(/^\//, "");
-        cleaned = cleaned
-          .replace(/\.html$/, ".qmd")
-          .replace(/\/index\.html$/, "/index.qmd");
-        status = pageStatuses[cleaned];
+        var segments = normalized.split("/");
+        for (var i = 1; i < segments.length && !status; i++) {
+          var subPath = segments.slice(i).join("/");
+          status = pageStatuses[subPath];
+        }
       }
 
       if (!status) return;

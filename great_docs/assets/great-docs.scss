@@ -5763,7 +5763,9 @@ body.quarto-dark {
 }
 
 // Make sidebar links flex so badges align right
-#quarto-sidebar .sidebar-navigation .sidebar-item .sidebar-link {
+// #quarto-sidebar has .sidebar-navigation on itself (not a descendant),
+// so use #quarto-sidebar.sidebar-navigation for correct matching.
+#quarto-sidebar.sidebar-navigation .sidebar-item .sidebar-link {
     display: flex;
     align-items: center;
 }
