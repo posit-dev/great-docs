@@ -110,6 +110,17 @@ Generate a downloadable PDF of the entire documentation site.
 - Auto-generated link on homepage or configurable placement
 - Optional per-build regeneration or manual `great-docs pdf` command
 
+### Multi-Language API Documentation (Python + R + Rust + JS)
+
+Unified documentation sites spanning multiple programming languages.
+
+- Language adapters consume output from each language's canonical toolchain (griffe for Python, pkgdown/Rd for R, rustdoc for Rust, TypeDoc for JS/TS) and normalize into a common intermediate representation
+- Single site, single build: one navbar, sidebar, search index, and theme across all languages (replacing hand-wired splash pages that link to separate sub-sites)
+- Uses a language selector widget in the navbar for switching the displayed API language; preference persisted in `localStorage`
+- User guide with language tabs enable parallel code examples rendered as tabsets (`{.panel-tabset}`)
+- Cross-repo source resolution for pulling R/Rust/JS packages from local paths or Git URLs (shallow-cloned into `.great-docs-cache/`)
+- Python-only projects should pay zero cost; `languages:` key activates multi-language mode
+
 ### Monorepo / Multi-Project Support
 
 Unified documentation across multiple packages or subprojects.
