@@ -109,6 +109,22 @@ class TestTagsConfig:
         cfg = _make_config(tmp_path, "tags:\n  enabled: true\n")
         assert cfg.tags_scoped is False
 
+    def test_tags_location_default(self, tmp_path: Path):
+        cfg = _make_config(tmp_path, "tags:\n  enabled: true\n")
+        assert cfg.tags_location == "top"
+
+    def test_tags_location_bottom(self, tmp_path: Path):
+        cfg = _make_config(tmp_path, "tags:\n  enabled: true\n  location: bottom\n")
+        assert cfg.tags_location == "bottom"
+
+    def test_tags_location_top_explicit(self, tmp_path: Path):
+        cfg = _make_config(tmp_path, "tags:\n  enabled: true\n  location: top\n")
+        assert cfg.tags_location == "top"
+
+    def test_tags_location_invalid_falls_back_to_top(self, tmp_path: Path):
+        cfg = _make_config(tmp_path, "tags:\n  enabled: true\n  location: middle\n")
+        assert cfg.tags_location == "top"
+
     def test_tags_not_enabled_disables_subordinates(self, tmp_path: Path):
         cfg = Config(tmp_path)
         assert cfg.tags_index_page is False
@@ -347,6 +363,52 @@ class TestGenerateTagsJson:
 
         data = json.loads((gd.project_path / "_tags.json").read_text())
         assert "internal" in data["shadow"]
+
+    def test_default_location_in_json(self, tmp_path: Path):
+        gd = _bootstrap_project(tmp_path, "tags:\n  enabled: true\n  location: bottom\n")
+        tag_index = {
+            "Python": [{"title": "Intro", "href": "user-guide/intro.qmd", "section": "User Guide"}],
+        }
+        gd._generate_tags_json(tag_index)
+
+        data = json.loads((gd.project_path / "_tags.json").read_text())
+        assert data["default_location"] == "bottom"
+
+    def test_default_location_top_in_json(self, tmp_path: Path):
+        gd = _bootstrap_project(tmp_path)
+        tag_index = {
+            "Python": [{"title": "Intro", "href": "user-guide/intro.qmd", "section": "User Guide"}],
+        }
+        gd._generate_tags_json(tag_index)
+
+        data = json.loads((gd.project_path / "_tags.json").read_text())
+        assert data["default_location"] == "top"
+
+    def test_per_page_tag_location_in_json(self, tmp_path: Path):
+        gd = _bootstrap_project(tmp_path)
+        ug_dir = gd.project_path / "user-guide"
+        _make_qmd(
+            ug_dir / "intro.qmd", "Introduction", tags=["Python"], extra="tag-location: bottom"
+        )
+        _make_qmd(ug_dir / "advanced.qmd", "Advanced", tags=["Python"])
+
+        tag_index = gd._collect_page_tags()
+        gd._generate_tags_json(tag_index)
+
+        data = json.loads((gd.project_path / "_tags.json").read_text())
+        assert data["page_tag_locations"]["user-guide/intro.qmd"] == "bottom"
+        assert "user-guide/advanced.qmd" not in data["page_tag_locations"]
+
+    def test_per_page_tag_location_invalid_ignored(self, tmp_path: Path):
+        gd = _bootstrap_project(tmp_path)
+        ug_dir = gd.project_path / "user-guide"
+        _make_qmd(ug_dir / "page.qmd", "Page", tags=["Python"], extra="tag-location: middle")
+
+        tag_index = gd._collect_page_tags()
+        gd._generate_tags_json(tag_index)
+
+        data = json.loads((gd.project_path / "_tags.json").read_text())
+        assert "user-guide/page.qmd" not in data["page_tag_locations"]
 
 
 # ── Tag Slug Tests ───────────────────────────────────────────────────────────
