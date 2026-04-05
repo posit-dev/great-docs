@@ -63,6 +63,38 @@ tags:
   show_on_pages: false
 ```
 
+## Tag Location
+
+By default, tag pills appear at the **top** of the page, just below the title (and subtitle, if present). You can move them to the **bottom** of the page instead, where they appear after the page metadata block (dates and author info) or under a horizontal rule if no metadata is present.
+
+Set the default location globally in `great-docs.yml`:
+
+```{.yaml filename="great-docs.yml"}
+tags:
+  enabled: true
+  location: bottom
+```
+
+Valid values are `top` (default) and `bottom`.
+
+### Per-Page Overrides
+
+Individual pages can override the global setting using `tag-location` in their YAML frontmatter:
+
+```{.yaml filename="user_guide/05-tips.qmd"}
+---
+title: "Tips and Tricks"
+tags: [Python, Setup]
+tag-location: top
+---
+```
+
+This is useful when most pages use bottom placement but a few key pages benefit from prominent top placement (or vice versa).
+
+::: {.callout-tip}
+When tags are placed at the bottom, they are rendered *after* the page metadata (creation/modification dates and author info). If page metadata is not enabled, tags appear at the end of the main content under a horizontal rule.
+:::
+
 ## Hierarchical Tags
 
 Tags support a hierarchy using the `/` separator. For example, `Python/Testing` creates a parent "Python" group with a "Testing" child. On the tags index page, hierarchical tags are rendered with nested headings:
@@ -163,11 +195,14 @@ tags:
   enabled: false          # Master switch (default: false)
   index_page: true        # Generate a tags index page (default: true)
   show_on_pages: true     # Show tag pills above page titles (default: true)
+  location: top           # Pill placement: "top" or "bottom" (default: "top")
   hierarchical: true      # Support "/" as tag hierarchy separator (default: true)
   icons: {}               # Tag → icon name mapping (default: empty)
   shadow: []              # Tags hidden from public view (default: empty)
   scoped: false           # Scoped tag listings per section (default: false)
 ```
+
+Individual pages can override `location` via `tag-location` in their YAML frontmatter.
 
 ## Which Pages Are Scanned?
 

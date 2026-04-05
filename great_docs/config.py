@@ -1195,6 +1195,14 @@ class Config:
         return self.tags_enabled and self.get("tags.show_on_pages", True)
 
     @property
+    def tags_location(self) -> str:
+        """Get the default tag pill placement: ``"top"`` or ``"bottom"``."""
+        val = self.get("tags.location", "top")
+        if val in ("top", "bottom"):
+            return val
+        return "top"
+
+    @property
     def tags_hierarchical(self) -> bool:
         """Check if hierarchical tags (using '/') are supported."""
         return self.get("tags.hierarchical", True)

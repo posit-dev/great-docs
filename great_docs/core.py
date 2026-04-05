@@ -1878,8 +1878,17 @@ class GreatDocs:
                 page_tags.setdefault(page["href"], []).append(tag_name)
 
         # Also collect shadow tags per page (so they get meta tags but no pills)
-        # Re-scan for shadow-tagged pages separately
-        for scan_dir_name in ("user-guide", "recipes"):
+        # and per-page tag_location overrides from frontmatter
+        # Re-scan tagged directories
+        page_tag_locations: dict[str, str] = {}
+        scan_dir_names = ["user-guide", "recipes"]
+        # Include custom section directories
+        for section_cfg in self._config.sections:
+            title = section_cfg.get("title", "")
+            slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") if title else ""
+            if slug and slug not in scan_dir_names:
+                scan_dir_names.append(slug)
+        for scan_dir_name in scan_dir_names:
             scan_dir = self.project_path / scan_dir_name
             if not scan_dir.is_dir():
                 continue
@@ -1900,6 +1909,11 @@ class GreatDocs:
                     if tag_str and tag_str in shadow_tags:
                         page_tags.setdefault(href, [])
                         # Shadow tags are NOT added to the visible list
+
+                # Collect per-page tag-location override
+                tag_loc = fm.get("tag-location")
+                if tag_loc in ("top", "bottom"):
+                    page_tag_locations[href] = tag_loc
 
         # Build per-tag metadata (page count + sections) for tooltips
         tag_meta: dict[str, dict] = {}
@@ -1937,6 +1951,8 @@ class GreatDocs:
             "icons": resolved_icons,
             "shadow": list(shadow_tags),
             "hierarchical": self._config.tags_hierarchical,
+            "default_location": self._config.tags_location,
+            "page_tag_locations": page_tag_locations,
         }
         tags_path = self.project_path / "_tags.json"
         with open(tags_path, "w", encoding="utf-8") as f:
