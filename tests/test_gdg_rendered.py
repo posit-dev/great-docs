@@ -6898,3 +6898,135 @@ def test_DED_nav_icons_tutorials_navbar_icon():
     navbar = icon_map.get("navbar", {})
     assert "Tutorials" in navbar, "Tutorials navbar entry should have an icon"
     assert "<svg" in navbar["Tutorials"], "Tutorials navbar icon should be an SVG"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Dedicated: tag location (gdtest_tag_location)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_TAG_LOC_PKG = "gdtest_tag_location"
+
+
+@requires_bs4
+def test_DED_tag_location_tags_json_has_default_location():
+    """_tags.json should contain default_location set to 'bottom'."""
+    if not _has_rendered_site(_TAG_LOC_PKG):
+        pytest.skip(f"{_TAG_LOC_PKG} not rendered")
+
+    import json
+
+    tags_json = _RENDERED_DIR / _TAG_LOC_PKG / "great-docs" / "_tags.json"
+    assert tags_json.exists(), "_tags.json not generated"
+    data = json.loads(tags_json.read_text(encoding="utf-8"))
+    assert data["default_location"] == "bottom", "Global default_location should be 'bottom'"
+
+
+@requires_bs4
+def test_DED_tag_location_tags_json_has_page_overrides():
+    """_tags.json should include per-page tag-location overrides."""
+    if not _has_rendered_site(_TAG_LOC_PKG):
+        pytest.skip(f"{_TAG_LOC_PKG} not rendered")
+
+    import json
+
+    tags_json = _RENDERED_DIR / _TAG_LOC_PKG / "great-docs" / "_tags.json"
+    data = json.loads(tags_json.read_text(encoding="utf-8"))
+    locs = data.get("page_tag_locations", {})
+
+    # api-guide.qmd and tips.qmd override to "top"
+    assert locs.get("user-guide/api-guide.qmd") == "top", "api-guide.qmd should override to 'top'"
+    assert locs.get("user-guide/tips.qmd") == "top", "tips.qmd should override to 'top'"
+
+    # setup.qmd explicitly sets "bottom"
+    assert locs.get("user-guide/setup.qmd") == "bottom", "setup.qmd should explicitly set 'bottom'"
+
+    # intro.qmd and advanced.qmd have no override (inherit global)
+    assert "user-guide/intro.qmd" not in locs, "intro.qmd should not have a per-page override"
+    assert "user-guide/advanced.qmd" not in locs, "advanced.qmd should not have a per-page override"
+
+
+@requires_bs4
+def test_DED_tag_location_inline_data_in_html():
+    """Rendered pages should have __GD_TAGS_DATA__ with location fields."""
+    if not _has_rendered_site(_TAG_LOC_PKG):
+        pytest.skip(f"{_TAG_LOC_PKG} not rendered")
+
+    import json
+
+    site = _site_dir(_TAG_LOC_PKG)
+    intro_html = site / "user-guide" / "intro.html"
+    assert intro_html.exists(), "intro.html not found"
+
+    soup = _load_html(intro_html)
+    scripts = soup.find_all("script")
+    tags_script = None
+    for s in scripts:
+        if s.string and "__GD_TAGS_DATA__" in s.string:
+            tags_script = s
+            break
+
+    assert tags_script is not None, "Inline __GD_TAGS_DATA__ script not found"
+
+    # Extract the JSON from "window.__GD_TAGS_DATA__={...};"
+    text = tags_script.string
+    start = text.index("{")
+    end = text.rindex("}") + 1
+    # Unescape the "<\/" sequences used to protect inline script
+    raw = text[start:end].replace(r"<\/", "</")
+    data = json.loads(raw)
+
+    assert "default_location" in data, "default_location missing from inline data"
+    assert data["default_location"] == "bottom"
+    assert "page_tag_locations" in data, "page_tag_locations missing from inline data"
+
+
+@requires_bs4
+def test_DED_tag_location_page_tags_js_included():
+    """Every tagged page should include page-tags.js."""
+    if not _has_rendered_site(_TAG_LOC_PKG):
+        pytest.skip(f"{_TAG_LOC_PKG} not rendered")
+
+    site = _site_dir(_TAG_LOC_PKG)
+    for page_name in ("intro", "api-guide", "advanced", "tips", "setup"):
+        html_path = site / "user-guide" / f"{page_name}.html"
+        if not html_path.exists():
+            continue
+        soup = _load_html(html_path)
+        scripts = [s.get("src", "") for s in soup.find_all("script")]
+        has_tags_js = any("page-tags.js" in src for src in scripts)
+        assert has_tags_js, f"{page_name}.html should include page-tags.js"
+
+
+@requires_bs4
+def test_DED_tag_location_untagged_page_still_has_data():
+    """Even pages without tags should have __GD_TAGS_DATA__ (global injection)."""
+    if not _has_rendered_site(_TAG_LOC_PKG):
+        pytest.skip(f"{_TAG_LOC_PKG} not rendered")
+
+    site = _site_dir(_TAG_LOC_PKG)
+    faq_html = site / "user-guide" / "faq.html"
+    if not faq_html.exists():
+        pytest.skip("faq.html not found")
+
+    soup = _load_html(faq_html)
+    scripts = soup.find_all("script")
+    has_data = any(s.string and "__GD_TAGS_DATA__" in s.string for s in scripts)
+    assert has_data, (
+        "faq.html (untagged) should still have __GD_TAGS_DATA__ (it is injected globally)"
+    )
+
+
+@requires_bs4
+def test_DED_tag_location_tags_index_page_generated():
+    """A tags/index.html should be generated listing all tags."""
+    if not _has_rendered_site(_TAG_LOC_PKG):
+        pytest.skip(f"{_TAG_LOC_PKG} not rendered")
+
+    site = _site_dir(_TAG_LOC_PKG)
+    tags_index = site / "tags" / "index.html"
+    assert tags_index.exists(), "tags/index.html not generated"
+
+    soup = _load_html(tags_index)
+    text = soup.get_text()
+    for tag in ("Python", "API", "Setup"):
+        assert tag in text, f"Tag '{tag}' missing from tags index page"
