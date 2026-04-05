@@ -329,6 +329,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_page_tags",  # 162
     # 163: Page status badges
     "gdtest_page_status",  # 163
+    # 164: Tag location (top vs. bottom)
+    "gdtest_tag_location",  # 164
 ]
 
 
@@ -545,6 +547,7 @@ DIMENSIONS: dict[str, dict[str, str]] = {
     "K53": {"axis": "config", "label": "nav_icons config"},
     # Page tags axes
     "T1": {"axis": "tags", "label": "Page tags with hierarchy + shadow"},
+    "T3": {"axis": "tags", "label": "Tag location top vs. bottom with per-page overrides"},
     # Page status axes
     "T2": {"axis": "status", "label": "Page status badges in sidebar + pages"},
 }
@@ -1858,6 +1861,15 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "and that hierarchical tags like Python/Configuration create nested "
         "headings on the tags page. Tag icons are configured for Python, "
         "Tutorial, and API."
+    ),
+    "gdtest_tag_location": (
+        "Six user-guide pages testing tag_location placement. The global default "
+        "is set to 'bottom' so tags appear after page metadata. Three pages have "
+        "frontmatter dates (date_created, last_update) with show_dates enabled "
+        "to test bottom-placed tags appearing after the metadata block. Two "
+        "pages override to 'top' via tag-location frontmatter, one page "
+        "explicitly sets 'bottom', one page has no dates (tags under <hr>), "
+        "and one page has no tags at all."
     ),
     "gdtest_page_status": (
         "Seven user-guide pages exercising page status badges. Six pages carry "
