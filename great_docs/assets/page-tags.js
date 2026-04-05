@@ -56,6 +56,36 @@
   }
 
   /**
+   * Insert the tag container at the bottom of the page, after page metadata
+   * (if present) or at the end of main content under a horizontal rule.
+   * @param {HTMLElement} container - The tag pills container element
+   */
+  function insertTagsBottom(container) {
+    // Look for existing page metadata element
+    var metadataEl = document.querySelector(".gd-page-metadata");
+    if (metadataEl) {
+      // Insert tags after the metadata block
+      if (metadataEl.nextSibling) {
+        metadataEl.parentNode.insertBefore(container, metadataEl.nextSibling);
+      } else {
+        metadataEl.parentNode.appendChild(container);
+      }
+    } else {
+      // No page metadata: append to end of main content with a horizontal rule
+      var mainContent = document.querySelector("#quarto-content > main");
+      if (!mainContent) {
+        mainContent = document.querySelector("main");
+      }
+      if (mainContent) {
+        var hr = document.createElement("hr");
+        hr.className = "gd-tags-rule";
+        mainContent.appendChild(hr);
+        mainContent.appendChild(container);
+      }
+    }
+  }
+
+  /**
    * Render tag pills into the DOM, below the page title and subtitle.
    * @param {string[]} tags - List of tag names
    * @param {object} tagsData - Full tags data object
@@ -151,7 +181,16 @@
       container.appendChild(pill);
     });
 
-    // Insert after the title and subtitle (if present), but before description
+    // Determine placement: per-page override → global default → "top"
+    var pageLocations = tagsData.page_tag_locations || {};
+    var location = pageLocations[matchedKey] || tagsData.default_location || "top";
+
+    if (location === "bottom") {
+      insertTagsBottom(container);
+      return;
+    }
+
+    // Default "top" placement: after the title and subtitle, before description
     // Structure: .quarto-title contains h1 + optional p.subtitle
     // Description is in a sibling div outside .quarto-title
     var insertAfter = titleEl;
@@ -177,7 +216,18 @@
     if (!data || !data.page_tags) return;
 
     var result = findPageTags(data.page_tags);
-    if (result && result.tags.length > 0) {
+    if (!result || result.tags.length === 0) return;
+
+    // Determine if this page uses bottom placement
+    var pageLocations = data.page_tag_locations || {};
+    var location = pageLocations[result.key] || data.default_location || "top";
+
+    if (location === "bottom") {
+      // Defer so page-metadata.js (also on DOMContentLoaded) inserts first
+      requestAnimationFrame(function () {
+        renderTagPills(result.tags, data, result.key);
+      });
+    } else {
       renderTagPills(result.tags, data, result.key);
     }
   }
