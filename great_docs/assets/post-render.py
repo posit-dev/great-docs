@@ -23,7 +23,7 @@ source_links = {}
 source_links_path = "_source_links.json"
 if os.path.exists(source_links_path):
     print(f"Loading source links from {source_links_path}")
-    with open(source_links_path, "r") as f:
+    with open(source_links_path, "r", encoding="utf-8") as f:
         source_links = json.load(f)
     print(f"Loaded {len(source_links)} source links")
 else:
@@ -36,7 +36,7 @@ object_types = {}
 object_types_path = "_object_types.json"
 if os.path.exists(object_types_path):
     print(f"Loading object types from {object_types_path}")
-    with open(object_types_path, "r") as f:
+    with open(object_types_path, "r", encoding="utf-8") as f:
         object_types = json.load(f)
     print(f"Loaded {len(object_types)} object type entries")
 else:
@@ -47,7 +47,7 @@ else:
 constant_values: dict[str, dict[str, str]] = {}
 constant_values_path = "_constant_values.json"
 if os.path.exists(constant_values_path):
-    with open(constant_values_path, "r") as f:
+    with open(constant_values_path, "r", encoding="utf-8") as f:
         constant_values = json.load(f)
     print(f"Loaded {len(constant_values)} constant value entries")
 
@@ -58,7 +58,7 @@ if os.path.exists(constant_values_path):
 dataclass_attrs_metadata: dict[str, dict[str, str]] = {}
 dataclass_attrs_path = "_dataclass_attrs.json"
 if os.path.exists(dataclass_attrs_path):
-    with open(dataclass_attrs_path, "r") as f:
+    with open(dataclass_attrs_path, "r", encoding="utf-8") as f:
         dataclass_attrs_metadata = json.load(f)
     if dataclass_attrs_metadata:
         print(f"Loaded dataclass attribute metadata for {len(dataclass_attrs_metadata)} class(es)")
@@ -67,7 +67,7 @@ if os.path.exists(dataclass_attrs_path):
 _gd_options: dict[str, object] = {}
 _gd_options_path = "_gd_options.json"
 if os.path.exists(_gd_options_path):
-    with open(_gd_options_path, "r") as f:
+    with open(_gd_options_path, "r", encoding="utf-8") as f:
         _gd_options = json.load(f)
 
 # i18n helper — look up a translated string from _gd_options["i18n"]
@@ -84,7 +84,7 @@ def _t(key: str, fallback: str | None = None) -> str:
 _interlinks_inventory: dict[str, dict[str, str]] = {}
 _objects_json_path = "objects.json"
 if os.path.exists(_objects_json_path):
-    with open(_objects_json_path, "r") as f:
+    with open(_objects_json_path, "r", encoding="utf-8") as f:
         _inv_data = json.load(f)
     for item in _inv_data.get("items", []):
         name = item.get("name", "")
@@ -2498,7 +2498,7 @@ for html_file in html_files:
     # Extract the item name from the filename (e.g., "GreatDocs.html" -> "GreatDocs")
     item_name_from_file = os.path.basename(html_file).replace(".html", "")
 
-    with open(html_file, "r") as file:
+    with open(html_file, "r", encoding="utf-8") as file:
         content = file.read()
 
     # Extract %seealso before stripping directives
@@ -2807,7 +2807,7 @@ for html_file in html_files:
 
     content = content_str.splitlines(keepends=True)
 
-    with open(html_file, "w") as file:
+    with open(html_file, "w", encoding="utf-8") as file:
         file.writelines(content)
 
 
@@ -2817,7 +2817,7 @@ index_file = "_site/reference/index.html"
 if os.path.exists(index_file):
     print(f"Processing index file: {index_file}")
 
-    with open(index_file, "r") as file:
+    with open(index_file, "r", encoding="utf-8") as file:
         content = file.read()
 
     # Convert tables to dl/dt/dd format
@@ -2895,7 +2895,7 @@ if os.path.exists(index_file):
     # Translate qrenderer-rendered headings, TOC, and sidebar on the index page
     content = translate_qrenderer_headings(content)
 
-    with open(index_file, "w") as file:
+    with open(index_file, "w", encoding="utf-8") as file:
         file.write(content)
 
     print("Index file processing complete")
@@ -2912,7 +2912,7 @@ print(f"Found {len(all_html_files)} HTML files to check for secondary nav title"
 _user_guide_label = (_gd_options.get("i18n") or {}).get("user_guide", "User Guide")
 
 for html_file in all_html_files:
-    with open(html_file, "r") as file:
+    with open(html_file, "r", encoding="utf-8") as file:
         content = file.read()
 
     modified = False
@@ -2937,7 +2937,7 @@ for html_file in all_html_files:
         modified = True
 
     if modified:
-        with open(html_file, "w") as file:
+        with open(html_file, "w", encoding="utf-8") as file:
             file.write(content)
 
 print("Finished processing all files")
@@ -2954,7 +2954,7 @@ if _autocomplete_js:
     _search_label = None
     # Read the search-label from any HTML page's search-options JSON
     for _hf in all_html_files[:5]:
-        with open(_hf, "r") as f:
+        with open(_hf, "r", encoding="utf-8") as f:
             _hcontent = f.read()
         _sl_m = re.search(r'"search-label"\s*:\s*"([^"]+)"', _hcontent)
         if _sl_m:
@@ -2962,14 +2962,14 @@ if _autocomplete_js:
             break
     if _search_label and _search_label != "Search":
         for _acjs in _autocomplete_js:
-            with open(_acjs, "r") as f:
+            with open(_acjs, "r", encoding="utf-8") as f:
                 _ac_content = f.read()
             _old = 'detachedSearchButtonTitle:"Search"'
             if _old in _ac_content:
                 _ac_content = _ac_content.replace(
                     _old, f'detachedSearchButtonTitle:"{_search_label}"'
                 )
-                with open(_acjs, "w") as f:
+                with open(_acjs, "w", encoding="utf-8") as f:
                     f.write(_ac_content)
                 print(f"Patched search button title to '{_search_label}' in {_acjs}")
 
@@ -2998,7 +2998,7 @@ def inject_github_widget():
     widget_count = 0
 
     for html_file in all_html_files:
-        with open(html_file, "r") as file:
+        with open(html_file, "r", encoding="utf-8") as file:
             content = file.read()
 
         # Check if this file has an escaped widget placeholder
@@ -3011,7 +3011,7 @@ def inject_github_widget():
             replacement = f'<div id="github-widget" data-owner="{owner}" data-repo="{repo}"></div>'
             content = widget_escaped_pattern.sub(replacement, content)
 
-            with open(html_file, "w") as file:
+            with open(html_file, "w", encoding="utf-8") as file:
                 file.write(content)
 
             widget_count += 1
@@ -3045,7 +3045,7 @@ def inject_version_badge():
         print("No _package_meta.json found, skipping version badge injection")
         return
 
-    with open(meta_path, "r") as f:
+    with open(meta_path, "r", encoding="utf-8") as f:
         meta = json.load(f)
 
     version = meta.get("version", "")
@@ -3090,7 +3090,7 @@ def inject_version_badge():
     logo_count = 0
 
     for html_file in all_html_files:
-        with open(html_file, "r") as file:
+        with open(html_file, "r", encoding="utf-8") as file:
             content = file.read()
 
         modified = False
@@ -3115,7 +3115,7 @@ def inject_version_badge():
                 logo_count += 1
 
         if modified:
-            with open(html_file, "w") as file:
+            with open(html_file, "w", encoding="utf-8") as file:
                 file.write(content)
 
     if badge_count > 0:
@@ -3148,14 +3148,14 @@ def process_cli_reference_pages():
     print(f"Processing {len(cli_html_files)} CLI reference pages...")
 
     for html_file in cli_html_files:
-        with open(html_file, "r") as file:
+        with open(html_file, "r", encoding="utf-8") as file:
             content = file.read()
 
         # Add 'cli-title' class to h1.title elements
         # This matches the pattern: <h1 class="title">
         content = content.replace('<h1 class="title">', '<h1 class="title cli-title">')
 
-        with open(html_file, "w") as file:
+        with open(html_file, "w", encoding="utf-8") as file:
             file.write(content)
 
     print(f"Styled {len(cli_html_files)} CLI reference page titles")
@@ -3177,7 +3177,7 @@ def disable_sidebar_collapse():
     modified_count = 0
 
     for html_file in html_files:
-        with open(html_file, "r") as f:
+        with open(html_file, "r", encoding="utf-8") as f:
             content = f.read()
 
         original = content
@@ -3211,7 +3211,7 @@ def disable_sidebar_collapse():
         )
 
         if content != original:
-            with open(html_file, "w") as f:
+            with open(html_file, "w", encoding="utf-8") as f:
                 f.write(content)
             modified_count += 1
 
@@ -3240,14 +3240,14 @@ def remove_empty_footer_divs():
     )
 
     for html_file in html_files:
-        with open(html_file, "r") as f:
+        with open(html_file, "r", encoding="utf-8") as f:
             content = f.read()
 
         original = content
         content = empty_div_pattern.sub("\n", content)
 
         if content != original:
-            with open(html_file, "w") as f:
+            with open(html_file, "w", encoding="utf-8") as f:
                 f.write(content)
             modified_count += 1
 
@@ -3278,7 +3278,7 @@ def fix_script_paths():
         if depth == 0:
             continue
 
-        with open(html_file, "r") as file:
+        with open(html_file, "r", encoding="utf-8") as file:
             content = file.read()
 
         # Build the relative path prefix (e.g., "../" for depth 1, "../../" for depth 2)
@@ -3431,7 +3431,7 @@ def fix_script_paths():
             modified = True
 
         if modified:
-            with open(html_file, "w") as file:
+            with open(html_file, "w", encoding="utf-8") as file:
                 file.write(content)
             fixed_count += 1
 
@@ -3481,12 +3481,12 @@ def inject_sidebar_body_classes():
         if not rel_path.startswith("reference" + os.sep) and rel_path != "reference":
             continue
 
-        with open(html_file, "r") as f:
+        with open(html_file, "r", encoding="utf-8") as f:
             content = f.read()
 
         new_content = content.replace('<body class="', '<body class="gd-ref-sidebar ', 1)
         if new_content != content:
-            with open(html_file, "w") as f:
+            with open(html_file, "w", encoding="utf-8") as f:
                 f.write(new_content)
             count += 1
 
@@ -3518,7 +3518,7 @@ def style_api_index_sidebar_item():
         if not rel_path.startswith("reference" + os.sep) and rel_path != "reference":
             continue
 
-        with open(html_file, "r") as f:
+        with open(html_file, "r", encoding="utf-8") as f:
             content = f.read()
 
         # Find the sidebar-item-container div immediately followed by the
@@ -3548,7 +3548,7 @@ def style_api_index_sidebar_item():
         )
 
         if new_content != content:
-            with open(html_file, "w") as f:
+            with open(html_file, "w", encoding="utf-8") as f:
                 f.write(new_content)
             count += 1
 
