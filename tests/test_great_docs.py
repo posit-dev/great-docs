@@ -42769,9 +42769,7 @@ def test_add_tags_to_navbar_already_present():
         gd.project_path = project
 
         quarto_config = {
-            "website": {
-                "navbar": {"left": [{"text": "Tags", "href": "tags/index.qmd"}]}
-            }
+            "website": {"navbar": {"left": [{"text": "Tags", "href": "tags/index.qmd"}]}}
         }
         quarto_yml = project / "_quarto.yml"
         quarto_yml.write_text(format_yaml(quarto_config))
@@ -42780,7 +42778,8 @@ def test_add_tags_to_navbar_already_present():
 
         result = read_yaml(quarto_yml)
         tags_count = sum(
-            1 for item in result["website"]["navbar"]["left"]
+            1
+            for item in result["website"]["navbar"]["left"]
             if isinstance(item, dict) and item.get("text") == "Tags"
         )
         assert tags_count == 1
@@ -43067,9 +43066,7 @@ def test_collect_page_tags_from_recipes():
 
         rec = project / "recipes"
         rec.mkdir()
-        (rec / "01-setup.qmd").write_text(
-            "---\ntitle: Setup\ntags:\n  - Config\n---\nContent."
-        )
+        (rec / "01-setup.qmd").write_text("---\ntitle: Setup\ntags:\n  - Config\n---\nContent.")
 
         tag_index = gd._collect_page_tags()
         assert "Config" in tag_index
