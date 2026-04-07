@@ -331,6 +331,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_page_status",  # 163
     # 164: Tag location (top vs. bottom)
     "gdtest_tag_location",  # 164
+    # 165: Icon shortcode in content contexts
+    "gdtest_icon_shortcode",  # 165
 ]
 
 
@@ -1880,6 +1882,15 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "sidebar links display compact status badges, and that page titles show "
         "a styled status indicator with icon and description. The custom draft "
         "status (defined in great-docs.yml) verifies user-defined status extensions."
+    ),
+    "gdtest_icon_shortcode": (
+        "Two user-guide pages exercising the Lucide icon Quarto shortcode in "
+        "many content contexts: section headings, inline prose, Markdown tables, "
+        "callouts (note, tip, warning), ordered and unordered lists, blockquotes, "
+        "and definition lists. A second page provides an icon gallery with "
+        "navigation, status, and file/code icon groups plus a size comparison. "
+        "Tests that the shortcode bridge produces inline SVG elements with the "
+        "correct Lucide path data, custom sizes, and accessible labels."
     ),
 }
 
