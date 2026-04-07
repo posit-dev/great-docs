@@ -7196,7 +7196,7 @@ def test_ICON_accessible_label():
 
 @requires_bs4
 def test_ICON_custom_size():
-    """Icons with size= should have the specified width/height."""
+    """Icons with size= should use em-based sizing in inline style."""
     if not _has_rendered_site(_ICON_PKG):
         pytest.skip(f"{_ICON_PKG} not rendered")
 
@@ -7205,13 +7205,14 @@ def test_ICON_custom_size():
         pytest.skip("icon-showcase.html not found")
 
     soup = _load_html(html_path)
-    large = soup.find("svg", attrs={"width": "24", "height": "24", "class": "gd-icon"})
-    assert large is not None, "No 24px icon found"
+    # Look for an icon with a non-default size (24px → 1.5em)
+    large = soup.find("svg", class_="gd-icon", style=re.compile(r"height:1\.5em"))
+    assert large is not None, "No 1.5em (24px) icon found"
 
 
 @requires_bs4
 def test_ICON_gallery_sized_icons():
-    """The gallery page should have icons at varying sizes (12, 20, 24, 32)."""
+    """The gallery page should have icons at varying sizes."""
     if not _has_rendered_site(_ICON_PKG):
         pytest.skip(f"{_ICON_PKG} not rendered")
 
@@ -7220,9 +7221,10 @@ def test_ICON_gallery_sized_icons():
         pytest.skip("icon-gallery.html not found")
 
     soup = _load_html(html_path)
-    for size in ("12", "20", "24", "32"):
-        icon = soup.find("svg", attrs={"width": size, "class": "gd-icon"})
-        assert icon is not None, f"No icon with size={size} found in gallery"
+    # 12px→0.75em, 20px→1.25em, 24px→1.5em, 32px→2em
+    for em_val in ("0.75em", "1.25em", "1.5em", "2"):
+        icon = soup.find("svg", class_="gd-icon", style=re.compile(re.escape(f"height:{em_val}")))
+        assert icon is not None, f"No icon with height:{em_val} found in gallery"
 
 
 @requires_bs4
