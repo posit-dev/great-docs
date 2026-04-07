@@ -42163,3 +42163,491 @@ def test_convert_rst_text_preserves_multiple_hashpipe_options():
     result = _convert_rst_text(text)
     assert "#| eval: false" in result
     assert "#| echo: true" in result
+
+
+# ── _tag_slug ──────────────────────────────────────────────────────────
+
+
+def test_tag_slug_simple():
+    """Simple tag converts to lowercase slug."""
+    assert GreatDocs._tag_slug("DataScience") == "datascience"
+
+
+def test_tag_slug_spaces():
+    """Spaces become hyphens."""
+    assert GreatDocs._tag_slug("Machine Learning") == "machine-learning"
+
+
+def test_tag_slug_escaped_slash():
+    """Escaped slashes are unescaped then collapsed."""
+    assert GreatDocs._tag_slug("AI\\/LLM") == "ai-llm"
+
+
+def test_tag_slug_special_chars():
+    """Special characters are stripped."""
+    assert GreatDocs._tag_slug("C++ & Rust!") == "c-rust"
+
+
+# ── _tag_tooltip ───────────────────────────────────────────────────────
+
+
+def test_tag_tooltip_empty():
+    """Empty pages list produces empty string."""
+    assert GreatDocs._tag_tooltip([]) == ""
+
+
+def test_tag_tooltip_one_page_with_section():
+    """Single page with section produces correct tooltip."""
+    pages = [{"title": "Intro", "section": "User Guide"}]
+    result = GreatDocs._tag_tooltip(pages, lang="en")
+    assert "1" in result
+    assert "User Guide" in result
+
+
+def test_tag_tooltip_multiple_pages():
+    """Multiple pages shows correct count."""
+    pages = [
+        {"title": "A", "section": "Recipes"},
+        {"title": "B", "section": "Recipes"},
+    ]
+    result = GreatDocs._tag_tooltip(pages, lang="en")
+    assert "2" in result
+
+
+def test_tag_tooltip_no_section():
+    """Pages without sections use the no-section template."""
+    pages = [{"title": "A"}, {"title": "B"}]
+    result = GreatDocs._tag_tooltip(pages, lang="en")
+    assert "2" in result
+
+
+# ── _tag_heading_pill ──────────────────────────────────────────────────
+
+
+def test_tag_heading_pill_simple():
+    """Simple pill has tag name and gd-tag-pill class."""
+    html = GreatDocs._tag_heading_pill("Python", "")
+    assert "gd-tag-pill" in html
+    assert "Python" in html
+
+
+def test_tag_heading_pill_with_icon():
+    """Pill includes icon HTML."""
+    html = GreatDocs._tag_heading_pill("Python", '<svg class="icon"></svg>')
+    assert '<svg class="icon"></svg>' in html
+    assert "Python" in html
+
+
+def test_tag_heading_pill_with_tooltip():
+    """Pill includes tooltip data attribute."""
+    html = GreatDocs._tag_heading_pill("Python", "", tooltip="3 pages")
+    assert 'data-tippy-content="3 pages"' in html
+
+
+def test_tag_heading_pill_segmented():
+    """Segmented pill with parent renders both segments."""
+    html = GreatDocs._tag_heading_pill("Child", "", parent="Parent", parent_icon="<svg/>")
+    assert "gd-tag-pill-segmented" in html
+    assert "gd-tag-pill-parent" in html
+    assert "Parent" in html
+    assert "Child" in html
+    assert "<svg/>" in html
+
+
+# ── _get_tag_icon_html ─────────────────────────────────────────────────
+
+
+def test_get_tag_icon_html_no_icon():
+    """Returns empty string when no icon configured."""
+    assert GreatDocs._get_tag_icon_html("Python", {}) == ""
+
+
+@patch("great_docs._icons.get_icon_svg", return_value="<svg>star</svg>")
+def test_get_tag_icon_html_found(mock_svg):
+    """Returns wrapped SVG when icon is in tag_icons."""
+    result = GreatDocs._get_tag_icon_html("Python", {"Python": "star"})
+    assert "<svg>star</svg>" in result
+    assert "margin-right" in result
+
+
+@patch("great_docs._icons.get_icon_svg", return_value=None)
+def test_get_tag_icon_html_unknown_icon(mock_svg):
+    """Returns empty string when icon SVG not found."""
+    assert GreatDocs._get_tag_icon_html("Python", {"Python": "bad-icon"}) == ""
+
+
+# ── _split_frontmatter ────────────────────────────────────────────────
+
+
+def test_split_frontmatter_with_yaml():
+    """Splits YAML frontmatter from body."""
+    content = "---\ntitle: Test\n---\nBody content."
+    with tempfile.TemporaryDirectory() as tmp:
+        gd = GreatDocs(project_path=tmp)
+        fm, body = gd._split_frontmatter(content)
+        assert fm["title"] == "Test"
+        assert "Body content." in body
+
+
+def test_split_frontmatter_no_yaml():
+    """Returns empty dict and full content when no frontmatter."""
+    content = "Just body content."
+    with tempfile.TemporaryDirectory() as tmp:
+        gd = GreatDocs(project_path=tmp)
+        fm, body = gd._split_frontmatter(content)
+        assert fm == {}
+        assert body == content
+
+
+def test_split_frontmatter_invalid_yaml():
+    """Returns empty dict on invalid YAML frontmatter."""
+    content = "---\n: invalid: {{yaml\n---\nBody."
+    with tempfile.TemporaryDirectory() as tmp:
+        gd = GreatDocs(project_path=tmp)
+        fm, body = gd._split_frontmatter(content)
+        assert fm == {}
+
+
+def test_split_frontmatter_non_dict():
+    """Returns empty dict when frontmatter is not a dict."""
+    content = "---\n- just\n- a\n- list\n---\nBody."
+    with tempfile.TemporaryDirectory() as tmp:
+        gd = GreatDocs(project_path=tmp)
+        fm, body = gd._split_frontmatter(content)
+        assert fm == {}
+
+
+# ── _derive_page_title ─────────────────────────────────────────────────
+
+
+def test_derive_page_title_dashes():
+    """Dashes and underscores become spaces, title-cased."""
+    with tempfile.TemporaryDirectory() as tmp:
+        gd = GreatDocs(project_path=tmp)
+        title = gd._derive_page_title(Path("my-cool_page.qmd"))
+        assert title == "My Cool Page"
+
+
+def test_derive_page_title_numeric_prefix():
+    """Numeric prefix is stripped."""
+    with tempfile.TemporaryDirectory() as tmp:
+        gd = GreatDocs(project_path=tmp)
+        title = gd._derive_page_title(Path("01-introduction.qmd"))
+        # Should produce "Introduction" (prefix stripped)
+        assert "introduction" in title.lower()
+
+
+# ── _translate_navbar_labels ──────────────────────────────────────────
+
+
+def test_translate_navbar_labels_en():
+    """English language does not modify labels."""
+    with tempfile.TemporaryDirectory() as tmp:
+        (Path(tmp) / "great-docs.yml").write_text("language: en\n")
+        gd = GreatDocs(project_path=tmp)
+        config = {"website": {"navbar": {"left": [{"text": "User Guide", "href": "user-guide/"}]}}}
+        gd._translate_navbar_labels(config)
+        assert config["website"]["navbar"]["left"][0]["text"] == "User Guide"
+
+
+def test_translate_navbar_labels_non_en():
+    """Non-English language translates known labels."""
+    with tempfile.TemporaryDirectory() as tmp:
+        (Path(tmp) / "great-docs.yml").write_text("site:\n  language: de\n")
+        gd = GreatDocs(project_path=tmp)
+        config = {
+            "website": {
+                "navbar": {
+                    "left": [
+                        {"text": "User Guide", "href": "user-guide/"},
+                        {"text": "Reference", "href": "reference/"},
+                    ]
+                }
+            }
+        }
+        with patch(
+            "great_docs._translations.get_translation",
+            side_effect=lambda key, lang: f"{key}_{lang}",
+        ):
+            gd._translate_navbar_labels(config)
+        labels = [item["text"] for item in config["website"]["navbar"]["left"]]
+        assert "User Guide" not in labels
+        assert "Reference" not in labels
+
+
+# ── _inject_tags_data_inline ─────────────────────────────────────────
+
+
+def test_inject_tags_data_inline_no_tags_json():
+    """Does nothing when _tags.json doesn't exist."""
+    with tempfile.TemporaryDirectory() as tmp:
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = Path(tmp)
+        gd._inject_tags_data_inline()
+        # Should not crash
+
+
+def test_inject_tags_data_inline_injects_script():
+    """Injects tags data as inline script in _quarto.yml."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp)
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = project
+
+        # Create _tags.json
+        tags_data = {"page_tags": {}, "tag_meta": {}}
+        (project / "_tags.json").write_text(json.dumps(tags_data))
+
+        # Create _quarto.yml with format.html
+        quarto_config = {"format": {"html": {"include-after-body": ["page-tags.js"]}}}
+        (project / "_quarto.yml").write_text(format_yaml(quarto_config))
+
+        gd._inject_tags_data_inline()
+
+        # Verify script was injected
+        result = read_yaml(project / "_quarto.yml")
+        entries = result["format"]["html"]["include-after-body"]
+        has_tags = any("__GD_TAGS_DATA__" in str(e) for e in entries)
+        assert has_tags
+
+
+def test_inject_tags_data_inline_idempotent():
+    """Second call does not duplicate the injection."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp)
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = project
+
+        (project / "_tags.json").write_text('{"page_tags": {}}')
+        quarto_config = {"format": {"html": {"include-after-body": ["page-tags.js"]}}}
+        (project / "_quarto.yml").write_text(format_yaml(quarto_config))
+
+        gd._inject_tags_data_inline()
+        gd._inject_tags_data_inline()  # Second call
+
+        result = read_yaml(project / "_quarto.yml")
+        entries = result["format"]["html"]["include-after-body"]
+        tags_count = sum(1 for e in entries if "__GD_TAGS_DATA__" in str(e))
+        assert tags_count == 1
+
+
+# ── _inject_status_data_inline ────────────────────────────────────────
+
+
+def test_inject_status_data_inline_no_json():
+    """Does nothing when _page_status.json doesn't exist."""
+    with tempfile.TemporaryDirectory() as tmp:
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = Path(tmp)
+        gd._inject_status_data_inline()
+
+
+def test_inject_status_data_inline_injects():
+    """Injects status data as inline script."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp)
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = project
+
+        status_data = {"page_statuses": {}, "definitions": {}}
+        (project / "_page_status.json").write_text(json.dumps(status_data))
+        quarto_config = {"format": {"html": {"include-after-body": ["page-status-badges.js"]}}}
+        (project / "_quarto.yml").write_text(format_yaml(quarto_config))
+
+        gd._inject_status_data_inline()
+
+        result = read_yaml(project / "_quarto.yml")
+        entries = result["format"]["html"]["include-after-body"]
+        has_status = any("__GD_STATUS_DATA__" in str(e) for e in entries)
+        assert has_status
+
+
+def test_inject_status_data_inline_string_body():
+    """Handles include-after-body as string (converted to list)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp)
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = project
+
+        (project / "_page_status.json").write_text('{"page_statuses": {}}')
+        quarto_config = {"format": {"html": {"include-after-body": "existing.js"}}}
+        (project / "_quarto.yml").write_text(format_yaml(quarto_config))
+
+        gd._inject_status_data_inline()
+
+        result = read_yaml(project / "_quarto.yml")
+        entries = result["format"]["html"]["include-after-body"]
+        assert isinstance(entries, list)
+        assert len(entries) >= 2  # original + injected
+
+
+# ── _collect_page_tags ─────────────────────────────────────────────────
+
+
+def test_collect_page_tags_from_user_guide():
+    """Collects tags from .qmd files in user-guide/."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp)
+        (project / "great-docs.yml").write_text("tags: true\n")
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = project
+
+        ug = project / "user-guide"
+        ug.mkdir()
+        (ug / "intro.qmd").write_text(
+            "---\ntitle: Intro\ntags:\n  - Python\n  - Data\n---\nContent."
+        )
+
+        tag_index = gd._collect_page_tags()
+        assert "Python" in tag_index
+        assert "Data" in tag_index
+        assert tag_index["Python"][0]["title"] == "Intro"
+
+
+def test_collect_page_tags_skips_index():
+    """Skips index.qmd files."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp)
+        (project / "great-docs.yml").write_text("tags: true\n")
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = project
+
+        ug = project / "user-guide"
+        ug.mkdir()
+        (ug / "index.qmd").write_text("---\ntitle: Index\ntags:\n  - Hidden\n---\nContent.")
+
+        tag_index = gd._collect_page_tags()
+        assert "Hidden" not in tag_index
+
+
+# ── _collect_page_statuses ────────────────────────────────────────────
+
+
+def test_collect_page_statuses():
+    """Collects page status from frontmatter."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp)
+        (project / "great-docs.yml").write_text("page_status: true\n")
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = project
+
+        ug = project / "user-guide"
+        ug.mkdir()
+        (ug / "feature.qmd").write_text("---\ntitle: Feature\nstatus: new\n---\nContent.")
+
+        status_map = gd._collect_page_statuses()
+        assert "user-guide/feature.qmd" in status_map
+        assert status_map["user-guide/feature.qmd"] == "new"
+
+
+def test_collect_page_statuses_ignores_invalid():
+    """Ignores files with unknown status values."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp)
+        (project / "great-docs.yml").write_text("page_status: true\n")
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = project
+
+        ug = project / "user-guide"
+        ug.mkdir()
+        (ug / "bad.qmd").write_text("---\ntitle: Bad\nstatus: nonexistent_status\n---\nContent.")
+
+        status_map = gd._collect_page_statuses()
+        assert "user-guide/bad.qmd" not in status_map
+
+
+# ── _build_metadata_margin ─────────────────────────────────────────────
+
+
+def test_build_metadata_margin_roadmap():
+    """Margin includes roadmap link when ROADMAP.md exists."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp)
+        (project / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
+        (project / "great-docs.yml").write_text("display_name: MyPkg\n")
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = project
+
+        # Create ROADMAP.md
+        (project / "ROADMAP.md").write_text("# Roadmap\n\nUpcoming features.")
+
+        result = gd._build_metadata_margin()
+        assert "roadmap" in result.lower()
+
+
+def test_build_metadata_margin_meta_tags():
+    """Margin includes tags link when tags are enabled."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp)
+        (project / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
+        (project / "great-docs.yml").write_text("display_name: MyPkg\ntags: true\n")
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = project
+
+        result = gd._build_metadata_margin()
+        assert "tags" in result.lower()
+
+
+# ── _render_tag_tree ──────────────────────────────────────────────────
+
+
+def test_render_tag_tree_flat():
+    """Renders a flat (depth=0) tag tree node."""
+    with tempfile.TemporaryDirectory() as tmp:
+        (Path(tmp) / "great-docs.yml").write_text("tags: true\n")
+        gd = GreatDocs(project_path=tmp)
+        lines: list[str] = []
+        tree = {
+            "Python": {"__pages__": [{"title": "Intro", "href": "intro.qmd", "section": "Guide"}]}
+        }
+        tag_index = {"Python": [{"title": "Intro", "href": "intro.qmd", "section": "Guide"}]}
+        gd._render_tag_tree(lines, tree, {}, depth=0, tag_index=tag_index)
+        combined = "\n".join(lines)
+        assert "Python" in combined
+        assert "gd-tag-pill" in combined
+
+
+def test_render_tag_tree_nested():
+    """Renders nested tag tree with parent/child."""
+    with tempfile.TemporaryDirectory() as tmp:
+        (Path(tmp) / "great-docs.yml").write_text("tags: true\n")
+        gd = GreatDocs(project_path=tmp)
+        lines: list[str] = []
+        tree = {
+            "AI": {
+                "__pages__": [],
+                "LLM": {
+                    "__pages__": [{"title": "P1", "href": "p1.qmd", "section": "Guide"}],
+                },
+            }
+        }
+        gd._render_tag_tree(lines, tree, {}, depth=0, tag_index={})
+        combined = "\n".join(lines)
+        assert "AI" in combined
+        assert "LLM" in combined
+
+
+# ── _generate_tags_index_page ────────────────────────────────────────
+
+
+def test_generate_tags_index_page_flat():
+    """Generates a flat tag index page."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp)
+        (project / "great-docs.yml").write_text("tags: true\n")
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = project
+
+        tag_index = {
+            "Python": [{"title": "Intro", "href": "user-guide/intro.qmd", "section": "Guide"}],
+            "R": [{"title": "Basics", "href": "user-guide/basics.qmd", "section": "Guide"}],
+        }
+
+        result = gd._generate_tags_index_page(tag_index)
+        assert result == "tags/index.qmd"
+        index_path = project / "tags" / "index.qmd"
+        assert index_path.exists()
+        content = index_path.read_text()
+        assert "Python" in content
+        assert "R" in content
+        assert "gd-tag-heading" in content
