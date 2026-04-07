@@ -1,34 +1,17 @@
-"""Bridge script for the {{< icon >}} Quarto shortcode.
-
-Called by icon.lua during ``quarto render``.  Imports
-:func:`great_docs._icons.get_icon_svg` and prints the resulting
-SVG markup to stdout.
-
-Usage::
-
-    python _icon_shortcode.py NAME [--size SIZE] [--class CSS_CLASS]
-        [--label TEXT]
-
-Examples::
-
-    python _icon_shortcode.py heart
-    python _icon_shortcode.py rocket --size 24 --class my-icon
-    python _icon_shortcode.py check --label "Complete"
-"""
-
 from __future__ import annotations
 
 import argparse
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
 
 def _load_icons_module():
-    """Load ``great_docs._icons`` without requiring great_docs to be installed.
+    """Load `great_docs._icons` without requiring great_docs to be installed.
 
     Walks up the directory tree from this script's location until it
-    finds ``great_docs/_icons.py`` and imports it directly.  This avoids
+    finds `great_docs/_icons.py` and imports it directly.  This avoids
     requiring the full great_docs package (and its dependencies) to be
     installed in whatever Python interpreter Quarto happens to use.
     """
@@ -53,10 +36,47 @@ def _load_icons_module():
     raise ImportError("Cannot locate great_docs/_icons.py")
 
 
+def _apply_inline_text_style(svg: str, size_px: int | None) -> str:
+    """Replace pixel width/height with em-based inline styles.
+
+    Follows this approach:
+
+    - height/width in `em` so the icon scales with surrounding text
+    - `vertical-align: -0.125em` to sit on the text baseline
+    - `font-size: inherit` to pick up the parent element's size
+    - `overflow: visible` to prevent clipping
+    - `position: relative` for correct stacking context
+
+    When the caller specifies a custom pixel size, it is converted to
+    `em` relative to a 16 px base (e.g. 24 px -> 1.5em).
+    """
+    if size_px is None or size_px == 16:
+        em = "1em"
+    else:
+        em = f"{round(size_px / 16, 3)}em"
+
+    style = (
+        f"height:{em};"
+        f"width:{em};"
+        "vertical-align:-0.125em;"
+        "font-size:inherit;"
+        "overflow:visible;"
+        "position:relative;"
+    )
+
+    # Strip the old pixel width="N" height="N" attributes
+    svg = re.sub(r'\s*width="\d+"', "", svg)
+    svg = re.sub(r'\s*height="\d+"', "", svg)
+
+    # Inject the style attribute into the opening <svg> tag
+    svg = svg.replace("<svg ", f'<svg style="{style}" ', 1)
+    return svg
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Render a Lucide icon as inline SVG.")
     parser.add_argument("name", help="Lucide icon name (e.g. 'heart', 'rocket')")
-    parser.add_argument("--size", type=int, default=16, help="Icon size in pixels")
+    parser.add_argument("--size", type=int, default=None, help="Icon size in pixels")
     parser.add_argument(
         "--class", dest="css_class", default="gd-icon", help="CSS class for the SVG"
     )
@@ -71,7 +91,9 @@ def main() -> None:
     try:
         get_icon_svg = _load_icons_module()
 
-        svg = get_icon_svg(args.name, size=args.size, css_class=args.css_class)
+        # get_icon_svg needs a pixel size; default to 16 (will be replaced by em)
+        px_size = args.size if args.size is not None else 16
+        svg = get_icon_svg(args.name, size=px_size, css_class=args.css_class)
 
         if not svg:
             print(
@@ -80,9 +102,15 @@ def main() -> None:
             )
             sys.exit(1)
 
+        # Replace pixel sizing with em-based inline styles
+        svg = _apply_inline_text_style(svg, args.size)
+
         # If a label is provided, make the icon accessible
         if args.label:
-            svg = svg.replace('aria-hidden="true"', f'aria-label="{args.label}" role="img"')
+            svg = svg.replace(
+                'aria-hidden="true"',
+                f'aria-label="{args.label}" role="img"',
+            )
 
         print(svg, end="")
     except Exception as exc:
