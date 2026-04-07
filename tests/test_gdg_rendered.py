@@ -7030,3 +7030,210 @@ def test_DED_tag_location_tags_index_page_generated():
     text = soup.get_text()
     for tag in ("Python", "API", "Setup"):
         assert tag in text, f"Tag '{tag}' missing from tags index page"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Icon Shortcode — {{< icon >}} renders inline SVG in various contexts
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_ICON_PKG = "gdtest_icon_shortcode"
+
+
+@requires_bs4
+def test_ICON_showcase_page_exists():
+    """The icon-showcase user guide page should be rendered."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    assert html_path.exists(), "icon-showcase.html not found"
+
+
+@requires_bs4
+def test_ICON_gallery_page_exists():
+    """The icon-gallery user guide page should be rendered."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-gallery.html"
+    assert html_path.exists(), "icon-gallery.html not found"
+
+
+@requires_bs4
+def test_ICON_showcase_contains_svgs():
+    """The showcase page should contain multiple inline SVG icons."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    if not html_path.exists():
+        pytest.skip("icon-showcase.html not found")
+
+    soup = _load_html(html_path)
+    svgs = soup.find_all("svg", class_="gd-icon")
+    assert len(svgs) >= 20, f"Expected ≥20 gd-icon SVGs, found {len(svgs)}"
+
+
+@requires_bs4
+def test_ICON_gallery_contains_svgs():
+    """The gallery page should contain inline SVG icons."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-gallery.html"
+    if not html_path.exists():
+        pytest.skip("icon-gallery.html not found")
+
+    soup = _load_html(html_path)
+    svgs = soup.find_all("svg", class_="gd-icon")
+    assert len(svgs) >= 15, f"Expected ≥15 gd-icon SVGs, found {len(svgs)}"
+
+
+@requires_bs4
+def test_ICON_in_headings():
+    """Icons should render inside heading elements."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    if not html_path.exists():
+        pytest.skip("icon-showcase.html not found")
+
+    soup = _load_html(html_path)
+    # Find headings that contain SVG icons
+    headings_with_icons = []
+    for tag in ("h2", "h3"):
+        for heading in soup.find_all(tag):
+            if heading.find("svg", class_="gd-icon"):
+                headings_with_icons.append(heading)
+    assert len(headings_with_icons) >= 1, (
+        f"Expected ≥1 headings with icons, found {len(headings_with_icons)}"
+    )
+
+
+@requires_bs4
+def test_ICON_in_table_cells():
+    """Icons should render inside table cells."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    if not html_path.exists():
+        pytest.skip("icon-showcase.html not found")
+
+    soup = _load_html(html_path)
+    cells_with_icons = soup.select("td svg.gd-icon")
+    assert len(cells_with_icons) >= 3, (
+        f"Expected ≥3 table cells with icons, found {len(cells_with_icons)}"
+    )
+
+
+@requires_bs4
+def test_ICON_in_callouts():
+    """Icons should render inside Quarto callout blocks."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    if not html_path.exists():
+        pytest.skip("icon-showcase.html not found")
+
+    soup = _load_html(html_path)
+    callouts = soup.select("div.callout")
+    callouts_with_icons = [c for c in callouts if c.find("svg", class_="gd-icon")]
+    assert len(callouts_with_icons) >= 2, (
+        f"Expected ≥2 callouts with icons, found {len(callouts_with_icons)}"
+    )
+
+
+@requires_bs4
+def test_ICON_in_lists():
+    """Icons should render inside list items."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    if not html_path.exists():
+        pytest.skip("icon-showcase.html not found")
+
+    soup = _load_html(html_path)
+    list_items_with_icons = soup.select("li svg.gd-icon")
+    assert len(list_items_with_icons) >= 5, (
+        f"Expected ≥5 list items with icons, found {len(list_items_with_icons)}"
+    )
+
+
+@requires_bs4
+def test_ICON_in_blockquote():
+    """Icons should render inside blockquotes."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    if not html_path.exists():
+        pytest.skip("icon-showcase.html not found")
+
+    soup = _load_html(html_path)
+    blockquote_icons = soup.select("blockquote svg.gd-icon")
+    assert len(blockquote_icons) >= 1, "Expected at least 1 icon in a blockquote"
+
+
+@requires_bs4
+def test_ICON_accessible_label():
+    """Icons with label= should have aria-label and role='img'."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    if not html_path.exists():
+        pytest.skip("icon-showcase.html not found")
+
+    soup = _load_html(html_path)
+    labeled = soup.find("svg", attrs={"aria-label": True, "role": "img"})
+    assert labeled is not None, "No SVG with aria-label + role='img' found"
+    assert labeled["aria-label"] == "Warning"
+
+
+@requires_bs4
+def test_ICON_custom_size():
+    """Icons with size= should have the specified width/height."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    if not html_path.exists():
+        pytest.skip("icon-showcase.html not found")
+
+    soup = _load_html(html_path)
+    large = soup.find("svg", attrs={"width": "24", "height": "24", "class": "gd-icon"})
+    assert large is not None, "No 24px icon found"
+
+
+@requires_bs4
+def test_ICON_gallery_sized_icons():
+    """The gallery page should have icons at varying sizes (12, 20, 24, 32)."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-gallery.html"
+    if not html_path.exists():
+        pytest.skip("icon-gallery.html not found")
+
+    soup = _load_html(html_path)
+    for size in ("12", "20", "24", "32"):
+        icon = soup.find("svg", attrs={"width": size, "class": "gd-icon"})
+        assert icon is not None, f"No icon with size={size} found in gallery"
+
+
+@requires_bs4
+def test_ICON_no_shortcode_errors():
+    """No icon shortcode error comments should appear in the rendered HTML."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    site = _site_dir(_ICON_PKG)
+    for html_path in site.rglob("*.html"):
+        text = html_path.read_text(encoding="utf-8")
+        assert "icon shortcode error" not in text, (
+            f"Shortcode error found in {html_path.relative_to(site)}"
+        )
