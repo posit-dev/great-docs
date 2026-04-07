@@ -1170,6 +1170,15 @@ body.quarto-light .navbar .navbar-toggler-icon {
     flex-wrap: nowrap;
 }
 
+/* Uniform sizing for all direct widget children in the tray */
+#gd-navbar-widgets > #dark-mode-toggle-container,
+#gd-navbar-widgets > #gd-keyboard-btn-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+}
+
 /* Reset Quarto's auto-margins and ordering on search when inside widget tray */
 #gd-navbar-widgets #quarto-search {
     margin-left: 0;

@@ -167,6 +167,7 @@ class GreatDocs:
             "mermaid-renderer.js",
             "responsive-tables.js",
             "video-embed.js",
+            "navbar-widgets.js",
         ]
         if self._config.markdown_pages_widget:
             js_files.append("copy-page.js")
@@ -2799,7 +2800,9 @@ class GreatDocs:
                         "href": f"{slug}/{page['filename']}",
                     }
                 )
-            contents.append({"section": section_title, "contents": section_contents})  # pragma: no cover
+            contents.append(
+                {"section": section_title, "contents": section_contents}
+            )  # pragma: no cover
 
         # Skip sidebar when a section has only a single page — the lone item
         # provides no navigation value and wastes horizontal space.  Without a
@@ -4194,7 +4197,9 @@ class GreatDocs:
                 for file_info in root_files:
                     href = get_clean_href(file_info)
                     if file_info["path"].name == "index.qmd":
-                        contents.append({"text": file_info["title"], "href": href})  # pragma: no cover
+                        contents.append(
+                            {"text": file_info["title"], "href": href}
+                        )  # pragma: no cover
                     else:
                         contents.append(href)
 
@@ -5971,14 +5976,18 @@ class GreatDocs:
                                                     member_name
                                                 )  # pragma: no cover
                                         else:
-                                            method_entries.append((member_name, lineno))  # pragma: no cover
+                                            method_entries.append(
+                                                (member_name, lineno)
+                                            )  # pragma: no cover
                                             # Store sub-type for classmethod/staticmethod/property
                                             if member_sub in (  # pragma: no cover
                                                 "classmethod",
                                                 "staticmethod",
                                                 "property",
                                             ):
-                                                categories["class_member_types"][  # pragma: no cover
+                                                categories[
+                                                    "class_member_types"
+                                                ][  # pragma: no cover
                                                     f"{name}.{member_name}"
                                                 ] = member_sub
                                     elif member.kind.value == "attribute":
@@ -6134,7 +6143,9 @@ class GreatDocs:
                                                                 "staticmethod",
                                                                 "property",
                                                             ):
-                                                                categories["class_member_types"][  # pragma: no cover
+                                                                categories[
+                                                                    "class_member_types"
+                                                                ][  # pragma: no cover
                                                                     f"{qualified}.{meth_name}"
                                                                 ] = meth_sub
                                                         except Exception:  # pragma: no cover
@@ -6166,24 +6177,36 @@ class GreatDocs:
                                                             except Exception:  # pragma: no cover
                                                                 pass  # pragma: no cover
                                                     else:
-                                                        method_entries.append((meth_name, lineno))  # pragma: no cover
+                                                        method_entries.append(
+                                                            (meth_name, lineno)
+                                                        )  # pragma: no cover
                                                         # Store sub-type
                                                         if meth_sub in (  # pragma: no cover
                                                             "classmethod",
                                                             "staticmethod",
                                                             "property",
                                                         ):
-                                                            categories["class_member_types"][  # pragma: no cover
+                                                            categories[
+                                                                "class_member_types"
+                                                            ][  # pragma: no cover
                                                                 f"{qualified}.{meth_name}"
                                                             ] = meth_sub
-                                                elif meth.kind.value == "attribute":  # pragma: no cover
+                                                elif (
+                                                    meth.kind.value == "attribute"
+                                                ):  # pragma: no cover
                                                     # Check if attribute is a @property
                                                     try:  # pragma: no cover
-                                                        meth_labels = meth.labels  # pragma: no cover
+                                                        meth_labels = (
+                                                            meth.labels
+                                                        )  # pragma: no cover
                                                     except Exception:  # pragma: no cover
                                                         meth_labels = set()  # pragma: no cover
-                                                    if "property" in meth_labels:  # pragma: no cover
-                                                        categories["class_member_types"][  # pragma: no cover
+                                                    if (
+                                                        "property" in meth_labels
+                                                    ):  # pragma: no cover
+                                                        categories[
+                                                            "class_member_types"
+                                                        ][  # pragma: no cover
                                                             f"{qualified}.{meth_name}"
                                                         ] = "property"
                                             except (
@@ -6211,7 +6234,9 @@ class GreatDocs:
                                 elif member_kind == "function":
                                     sub = self._sub_classify_function(member)
                                     if sub == "async":
-                                        categories["async_functions"].append(qualified)  # pragma: no cover
+                                        categories["async_functions"].append(
+                                            qualified
+                                        )  # pragma: no cover
                                     else:
                                         categories["functions"].append(qualified)
                                     module_had_members = True
@@ -6219,9 +6244,13 @@ class GreatDocs:
                                 elif member_kind in ("attribute", "type alias"):
                                     sub = self._sub_classify_attribute(member)
                                     if sub == "type_alias":
-                                        categories["type_aliases"].append(qualified)  # pragma: no cover
+                                        categories["type_aliases"].append(
+                                            qualified
+                                        )  # pragma: no cover
                                     elif sub == "typevar":
-                                        categories["type_aliases"].append(qualified)  # pragma: no cover
+                                        categories["type_aliases"].append(
+                                            qualified
+                                        )  # pragma: no cover
                                     else:
                                         categories["constants"].append(qualified)
                                         self._extract_constant_metadata(
@@ -6674,7 +6703,9 @@ class GreatDocs:
                                 if method.docstring:
                                     method_directives = extract_directives(method.docstring.value)
                                     if method_directives:
-                                        directive_map[f"{name}.{method_name}"] = method_directives  # pragma: no cover
+                                        directive_map[f"{name}.{method_name}"] = (
+                                            method_directives  # pragma: no cover
+                                        )
                             except Exception:  # pragma: no cover
                                 continue
                 except Exception:  # pragma: no cover
@@ -6840,7 +6871,9 @@ class GreatDocs:
                         for member in module_members[item]:
                             method_count = categories["class_methods"].get(member, 0)
                             if method_count > method_threshold:
-                                section_contents.append({"name": member, "members": []})  # pragma: no cover
+                                section_contents.append(
+                                    {"name": member, "members": []}
+                                )  # pragma: no cover
                                 large_classes_in_section.append(member)  # pragma: no cover
                             else:
                                 section_contents.append(member)
@@ -7293,7 +7326,9 @@ class GreatDocs:
         # Determine dynamic mode based on cyclic alias detection during categorization
         cyclic_alias_count = categories.get("cyclic_alias_count", 0)
         if cyclic_alias_count > 0:
-            print(f"Detected {cyclic_alias_count} cyclic alias(es), using dynamic: false")  # pragma: no cover
+            print(
+                f"Detected {cyclic_alias_count} cyclic alias(es), using dynamic: false"
+            )  # pragma: no cover
             dynamic_mode = False  # pragma: no cover
         else:
             # Run the explicit detection as a fallback
@@ -8515,7 +8550,9 @@ title: "Security Policy"
             # Wrap all HTML in raw blocks so Quarto passes them through verbatim
             features_block = ""
             if license_features_html:
-                features_block = "```{=html}\n" + license_features_html + "\n```\n\n"  # pragma: no cover
+                features_block = (
+                    "```{=html}\n" + license_features_html + "\n```\n\n"
+                )  # pragma: no cover
 
             license_qmd_content = f"""---
 title: "License"
@@ -9116,9 +9153,13 @@ toc: false
                     self._update_sidebar_from_sections()
                     print(f"✅ Applied {len(user_sections)} section(s) from great-docs.yml")
                 else:
-                    print("Warning: reference config in great-docs.yml produced no sections")  # pragma: no cover
+                    print(
+                        "Warning: reference config in great-docs.yml produced no sections"
+                    )  # pragma: no cover
             else:
-                print("Warning: Could not discover package exports. Config unchanged.")  # pragma: no cover
+                print(
+                    "Warning: Could not discover package exports. Config unchanged."
+                )  # pragma: no cover
                 print(  # pragma: no cover
                     "Tip: Add a 'reference' section to great-docs.yml to manually specify your API structure."
                 )
@@ -9202,7 +9243,9 @@ toc: false
                 if svg:  # pragma: no cover
                     scope_resolved[label] = svg  # pragma: no cover
                 else:
-                    print(f"Warning: Unknown nav icon '{icon_name}' for '{label}'")  # pragma: no cover
+                    print(
+                        f"Warning: Unknown nav icon '{icon_name}' for '{label}'"
+                    )  # pragma: no cover
             if scope_resolved:  # pragma: no cover
                 resolved[scope] = scope_resolved  # pragma: no cover
 
@@ -9295,6 +9338,7 @@ toc: false
             "mermaid-renderer.js",
             "responsive-tables.js",
             "video-embed.js",
+            "navbar-widgets.js",
         ]
         if self._config.markdown_pages_widget:
             js_resource_files.append("copy-page.js")
@@ -9530,7 +9574,9 @@ toc: false
                             config["website"]["favicon"] = generated["icon"]
                         else:
                             # Fallback: just copy the file
-                            shutil.copy2(fav_src, self.project_path / fav_src.name)  # pragma: no cover
+                            shutil.copy2(
+                                fav_src, self.project_path / fav_src.name
+                            )  # pragma: no cover
                             config["website"]["favicon"] = fav_src.name  # pragma: no cover
                     else:
                         print(f"Warning: Favicon file not found: {fav_src}")  # pragma: no cover
@@ -9670,6 +9716,24 @@ toc: false
 
         # Add dark mode toggle script (if enabled)
         dark_mode_enabled = metadata.get("dark_mode_toggle_enabled", True)
+
+        # When dark mode toggle is disabled, add a meta tag so theme-init.js
+        # knows to ignore any stored preference and always use light mode.
+        if not dark_mode_enabled:
+            if "include-in-header" not in config["format"]["html"]:
+                config["format"]["html"]["include-in-header"] = []
+            elif isinstance(config["format"]["html"]["include-in-header"], str):
+                config["format"]["html"]["include-in-header"] = [
+                    config["format"]["html"]["include-in-header"]
+                ]
+            dm_meta = {"text": '<meta name="gd-dark-mode" content="disabled">'}
+            has_dm_meta = any(
+                "gd-dark-mode" in str(item)
+                for item in config["format"]["html"]["include-in-header"]
+            )
+            if not has_dm_meta:
+                config["format"]["html"]["include-in-header"].append(dm_meta)
+
         if dark_mode_enabled:
             if "include-after-body" not in config["format"]["html"]:
                 config["format"]["html"]["include-after-body"] = []  # pragma: no cover
@@ -9764,24 +9828,32 @@ toc: false
         if self._config.show_dates:
             if "include-after-body" not in config["format"]["html"]:  # pragma: no cover
                 config["format"]["html"]["include-after-body"] = []  # pragma: no cover
-            elif isinstance(config["format"]["html"]["include-after-body"], str):  # pragma: no cover
+            elif isinstance(
+                config["format"]["html"]["include-after-body"], str
+            ):  # pragma: no cover
                 config["format"]["html"]["include-after-body"] = [  # pragma: no cover
                     config["format"]["html"]["include-after-body"]
                 ]
 
-            page_metadata_entry = {"text": '<script src="page-metadata.js"></script>'}  # pragma: no cover
+            page_metadata_entry = {
+                "text": '<script src="page-metadata.js"></script>'
+            }  # pragma: no cover
             has_page_metadata = any(  # pragma: no cover
                 "page-metadata.js" in str(item)
                 for item in config["format"]["html"]["include-after-body"]
             )
             if not has_page_metadata:  # pragma: no cover
-                config["format"]["html"]["include-after-body"].append(page_metadata_entry)  # pragma: no cover
+                config["format"]["html"]["include-after-body"].append(
+                    page_metadata_entry
+                )  # pragma: no cover
 
         # Add page tags script (if tags are enabled with show_on_pages)
         if self._config.tags_show_on_pages:
             if "include-after-body" not in config["format"]["html"]:  # pragma: no cover
                 config["format"]["html"]["include-after-body"] = []  # pragma: no cover
-            elif isinstance(config["format"]["html"]["include-after-body"], str):  # pragma: no cover
+            elif isinstance(
+                config["format"]["html"]["include-after-body"], str
+            ):  # pragma: no cover
                 config["format"]["html"]["include-after-body"] = [  # pragma: no cover
                     config["format"]["html"]["include-after-body"]
                 ]
@@ -9792,13 +9864,17 @@ toc: false
                 for item in config["format"]["html"]["include-after-body"]
             )
             if not has_page_tags:  # pragma: no cover
-                config["format"]["html"]["include-after-body"].append(page_tags_entry)  # pragma: no cover
+                config["format"]["html"]["include-after-body"].append(
+                    page_tags_entry
+                )  # pragma: no cover
 
         # Add page status badges script (if page_status is enabled)
         if self._config.page_status_enabled:
             if "include-after-body" not in config["format"]["html"]:  # pragma: no cover
                 config["format"]["html"]["include-after-body"] = []  # pragma: no cover
-            elif isinstance(config["format"]["html"]["include-after-body"], str):  # pragma: no cover
+            elif isinstance(
+                config["format"]["html"]["include-after-body"], str
+            ):  # pragma: no cover
                 config["format"]["html"]["include-after-body"] = [  # pragma: no cover
                     config["format"]["html"]["include-after-body"]
                 ]
@@ -9813,10 +9889,16 @@ toc: false
                 status_js_path = self.project_path / "page-status-badges.js"  # pragma: no cover
                 if status_js_path.is_file():  # pragma: no cover
                     js_content = status_js_path.read_text(encoding="utf-8")  # pragma: no cover
-                    page_status_entry = {"text": f"<script>{js_content}</script>"}  # pragma: no cover
+                    page_status_entry = {
+                        "text": f"<script>{js_content}</script>"
+                    }  # pragma: no cover
                 else:
-                    page_status_entry = {"text": '<script src="page-status-badges.js"></script>'}  # pragma: no cover
-                config["format"]["html"]["include-after-body"].append(page_status_entry)  # pragma: no cover
+                    page_status_entry = {
+                        "text": '<script src="page-status-badges.js"></script>'
+                    }  # pragma: no cover
+                config["format"]["html"]["include-after-body"].append(
+                    page_status_entry
+                )  # pragma: no cover
 
         # Add reference switcher script (if CLI is enabled)
         cli_enabled = metadata.get("cli_enabled", False)
@@ -9868,6 +9950,16 @@ toc: false
         if not has_video_embed:
             config["format"]["html"]["include-after-body"].append(video_embed_script_entry)
 
+        # Add navbar widget collector (always enabled — consolidates dark-mode,
+        # keyboard, search, and GitHub widgets into #gd-navbar-widgets)
+        navbar_widgets_entry = {"text": '<script src="navbar-widgets.js"></script>'}
+        has_navbar_widgets = any(
+            "navbar-widgets.js" in str(item)
+            for item in config["format"]["html"]["include-after-body"]
+        )
+        if not has_navbar_widgets:
+            config["format"]["html"]["include-after-body"].append(navbar_widgets_entry)
+
         # Add navigation icons (Lucide SVG) if configured
         if self._config.nav_icons:
             self._inject_nav_icons(config)  # pragma: no cover
@@ -9902,7 +9994,9 @@ toc: false
                     name = maintainer["name"]
                     if name not in author_names:
                         author_names.append(name)
-                elif isinstance(maintainer, str) and maintainer not in author_names:  # pragma: no cover
+                elif (
+                    isinstance(maintainer, str) and maintainer not in author_names
+                ):  # pragma: no cover
                     author_names.append(maintainer)  # pragma: no cover
 
             # Also check rich_authors from great-docs.yml (may have more detail)

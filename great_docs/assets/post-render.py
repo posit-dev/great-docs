@@ -3414,6 +3414,14 @@ def fix_script_paths():
             content = content.replace(old_keyboard_nav, new_keyboard_nav)
             modified = True
 
+        # Fix navbar-widgets.js path
+        old_navbar_widgets = '<script src="navbar-widgets.js"></script>'
+        new_navbar_widgets = f'<script src="{prefix}navbar-widgets.js"></script>'
+
+        if old_navbar_widgets in content:
+            content = content.replace(old_navbar_widgets, new_navbar_widgets)
+            modified = True
+
         # Fix mermaid-renderer.js path
         old_mermaid = '<script src="mermaid-renderer.js"></script>'
         new_mermaid = f'<script src="{prefix}mermaid-renderer.js"></script>'

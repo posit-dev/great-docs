@@ -628,18 +628,18 @@
      * Insert the keyboard button into the navbar.
      */
     function insertKeyboardButton() {
-        var navbarRight = document.querySelector(
-            '#navbarCollapse .navbar-nav.ms-auto'
-        );
-        if (!navbarRight) return;
+        // Insert into navbarCollapse; navbar-widgets.js will collect it
+        // into the unified #gd-navbar-widgets container.
+        var collapse = document.getElementById('navbarCollapse');
+        if (!collapse) return;
 
         var container = createKeyboardButton();
         var navItem = document.createElement('li');
         navItem.className = 'nav-item';
         navItem.appendChild(container);
 
-        // Insert at the beginning of the right nav items
-        navbarRight.insertBefore(navItem, navbarRight.firstChild);
+        // Append to navbarCollapse (the collector will move it)
+        collapse.appendChild(navItem);
 
         // Click handler
         var btn = document.getElementById('gd-keyboard-btn');
