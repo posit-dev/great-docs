@@ -1111,17 +1111,31 @@ def strip_directives_from_html(html_content):
 
 def strip_colgroup_tags(html_content):
     """
-    Remove `<colgroup>` tags from tables.
+    Remove `<colgroup>` tags from tables, preserving those inside GT tables.
 
     Quarto/Pandoc adds `<colgroup>` with fixed column widths, but we want the browser to determine
-    column widths based on content.
+    column widths based on content. GT tables (Great Tables) rely on their `<colgroup>` for proper
+    layout with `table-layout: fixed`, so those are left intact.
     """
     # Match the entire colgroup element including its contents
     colgroup_pattern = re.compile(
         r"<colgroup>.*?</colgroup>\s*",
         re.DOTALL,
     )
-    return colgroup_pattern.sub("", html_content)
+
+    def _replace_if_not_gt(match):
+        # Find the nearest preceding <table tag to check if it's a GT table
+        preceding = html_content[: match.start()]
+        last_table = preceding.rfind("<table")
+        if last_table >= 0:
+            table_end = preceding.find(">", last_table)
+            if table_end >= 0:
+                table_tag = preceding[last_table : table_end + 1]
+                if "gt_table" in table_tag:
+                    return match.group(0)  # Preserve GT table colgroups
+        return ""  # Strip non-GT colgroups
+
+    return colgroup_pattern.sub(_replace_if_not_gt, html_content)
 
 
 def translate_sphinx_fields(html_content):

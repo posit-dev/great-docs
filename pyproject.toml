@@ -55,6 +55,8 @@ dev = [
     "pyright>=1.1.407",
     "build>=0.7",
     "twine>=3.4",
+    "great_tables>=0.21.0",
+    "pandas>=2.0",
 ]
 docs = [
     "jupyter>=1.0.0",
