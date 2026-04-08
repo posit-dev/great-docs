@@ -9477,8 +9477,29 @@ class TestFitToSquare:
         assert result.size == (100, 100)
 
 
+def _make_mock_cairosvg():
+    """Create a mock cairosvg module that returns valid PNG data from svg2png."""
+    import io as _io
+
+    mock_mod = types.ModuleType("cairosvg")
+
+    def svg2png(**kwargs):
+        img = PILImage.new("RGBA", (256, 256), (0, 0, 255, 255))
+        buf = _io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+
+    mock_mod.svg2png = svg2png  # type: ignore[attr-defined]
+    return mock_mod
+
+
 class TestGenerateFaviconsSvg:
     """Tests for _generate_favicons with SVG source."""
+
+    @pytest.fixture(autouse=True)
+    def _mock_cairosvg(self):
+        with patch.dict("sys.modules", {"cairosvg": _make_mock_cairosvg()}):
+            yield
 
     def test_svg_generates_all_files(self):
         """SVG source should produce ico, svg, 16px, 32px, and apple-touch-icon."""
@@ -9724,6 +9745,11 @@ class TestFaviconConfigNormalization:
 
 class TestFaviconLinkInjection:
     """Tests for favicon <link> tag injection into _quarto.yml."""
+
+    @pytest.fixture(autouse=True)
+    def _mock_cairosvg(self):
+        with patch.dict("sys.modules", {"cairosvg": _make_mock_cairosvg()}):
+            yield
 
     def _build_with_favicon(
         self, tmp_dir: str, favicon_config: str | None = None, create_logo: bool = False
