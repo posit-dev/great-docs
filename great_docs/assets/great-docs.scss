@@ -97,7 +97,7 @@ header p {
    }
 }
 
-table {
+table:not(.gt_table) {
    @extend .table-bordered;
 }
 
