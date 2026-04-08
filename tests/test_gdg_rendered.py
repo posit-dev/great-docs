@@ -7239,3 +7239,146 @@ def test_ICON_no_shortcode_errors():
         assert "icon shortcode error" not in text, (
             f"Shortcode error found in {html_path.relative_to(site)}"
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Blended homepage with subdirectory user guide + section asset directories
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_HOMEPAGE_UG_SUBDIRS_PKG = "gdtest_homepage_ug_subdirs"
+
+
+@requires_bs4
+def test_HOMEPAGE_SUBDIRS_blended_index_exists():
+    """Blended homepage: index.html exists at site root with UG content."""
+    if not _has_rendered_site(_HOMEPAGE_UG_SUBDIRS_PKG):
+        pytest.skip(f"{_HOMEPAGE_UG_SUBDIRS_PKG} not rendered")
+
+    site = _site_dir(_HOMEPAGE_UG_SUBDIRS_PKG)
+    index = site / "index.html"
+    assert index.exists(), "index.html missing at site root"
+
+    soup = _load_html(index)
+    text = soup.get_text()
+
+    # Root index.qmd should have become the homepage (not a subdir file)
+    assert "Welcome" in text, "Homepage should contain 'Welcome' from root index.qmd"
+    assert "project documentation" in text, "Homepage should contain UG root content"
+
+
+@requires_bs4
+def test_HOMEPAGE_SUBDIRS_metadata_sidebar_present():
+    """Blended homepage should include the metadata sidebar."""
+    if not _has_rendered_site(_HOMEPAGE_UG_SUBDIRS_PKG):
+        pytest.skip(f"{_HOMEPAGE_UG_SUBDIRS_PKG} not rendered")
+
+    site = _site_dir(_HOMEPAGE_UG_SUBDIRS_PKG)
+    index = site / "index.html"
+    assert index.exists()
+
+    content = index.read_text(encoding="utf-8")
+    assert "gd-meta-sidebar" in content, "Blended homepage should have gd-meta-sidebar"
+
+
+@requires_bs4
+def test_HOMEPAGE_SUBDIRS_root_index_not_duplicated():
+    """The promoted root index.qmd should NOT remain in user-guide/."""
+    if not _has_rendered_site(_HOMEPAGE_UG_SUBDIRS_PKG):
+        pytest.skip(f"{_HOMEPAGE_UG_SUBDIRS_PKG} not rendered")
+
+    site = _site_dir(_HOMEPAGE_UG_SUBDIRS_PKG)
+    ug_index = site / "user-guide" / "index.html"
+    assert not ug_index.exists(), "user-guide/index.html should be removed (promoted to site root)"
+
+
+@requires_bs4
+def test_HOMEPAGE_SUBDIRS_subdir_ug_pages_exist():
+    """User guide pages in subdirectories should still be rendered."""
+    if not _has_rendered_site(_HOMEPAGE_UG_SUBDIRS_PKG):
+        pytest.skip(f"{_HOMEPAGE_UG_SUBDIRS_PKG} not rendered")
+
+    site = _site_dir(_HOMEPAGE_UG_SUBDIRS_PKG)
+    expected_pages = [
+        "user-guide/getting-started/index.html",
+        "user-guide/getting-started/quickstart.html",
+        "user-guide/advanced/analysis.html",
+    ]
+    for page_path in expected_pages:
+        html = site / page_path
+        assert html.exists(), f"Missing UG subdir page: {page_path}"
+
+
+@requires_bs4
+def test_HOMEPAGE_SUBDIRS_sidebar_first_entry_is_index():
+    """Sidebar first entry should point to index.qmd (the blended homepage)."""
+    if not _has_rendered_site(_HOMEPAGE_UG_SUBDIRS_PKG):
+        pytest.skip(f"{_HOMEPAGE_UG_SUBDIRS_PKG} not rendered")
+
+    cfg = _load_quarto_yml(_HOMEPAGE_UG_SUBDIRS_PKG)
+    sidebars = cfg.get("website", {}).get("sidebar", [])
+
+    ug_sidebar = None
+    for s in sidebars:
+        if isinstance(s, dict) and s.get("id") == "user-guide":
+            ug_sidebar = s
+            break
+    assert ug_sidebar is not None, "No user-guide sidebar found"
+
+    # First content entry should point to index.qmd
+    contents = ug_sidebar.get("contents", [])
+    assert len(contents) > 0, "User-guide sidebar has no contents"
+    first = contents[0]
+    if isinstance(first, dict):
+        assert first.get("href") == "index.qmd", (
+            f"First sidebar entry should be index.qmd, got {first.get('href')}"
+        )
+
+
+@requires_bs4
+def test_HOMEPAGE_SUBDIRS_no_user_guide_navbar_link():
+    """In blended mode, navbar should NOT have a 'User Guide' link."""
+    if not _has_rendered_site(_HOMEPAGE_UG_SUBDIRS_PKG):
+        pytest.skip(f"{_HOMEPAGE_UG_SUBDIRS_PKG} not rendered")
+
+    cfg = _load_quarto_yml(_HOMEPAGE_UG_SUBDIRS_PKG)
+    navbar_left = cfg.get("website", {}).get("navbar", {}).get("left", [])
+    nav_texts = [item.get("text") for item in navbar_left if isinstance(item, dict)]
+    assert "User Guide" not in nav_texts, (
+        "Navbar should not have 'User Guide' link in blended homepage mode"
+    )
+
+
+def test_HOMEPAGE_SUBDIRS_section_asset_dirs_copied():
+    """Section asset subdirectories (data/, img/) should be copied to build dir."""
+    if not _has_rendered_site(_HOMEPAGE_UG_SUBDIRS_PKG):
+        pytest.skip(f"{_HOMEPAGE_UG_SUBDIRS_PKG} not rendered")
+
+    build_dir = _RENDERED_DIR / _HOMEPAGE_UG_SUBDIRS_PKG / "great-docs"
+
+    # Asset directories should exist in the build dir
+    assert (build_dir / "examples" / "data").is_dir(), (
+        "examples/data/ asset directory not copied to build dir"
+    )
+    assert (build_dir / "examples" / "img").is_dir(), (
+        "examples/img/ asset directory not copied to build dir"
+    )
+
+    # Asset files should be present with correct content
+    csv_file = build_dir / "examples" / "data" / "sample.csv"
+    assert csv_file.exists(), "examples/data/sample.csv not copied"
+    assert "alpha" in csv_file.read_text(), "sample.csv content not preserved"
+
+    diagram_file = build_dir / "examples" / "img" / "diagram.txt"
+    assert diagram_file.exists(), "examples/img/diagram.txt not copied"
+
+
+@requires_bs4
+def test_HOMEPAGE_SUBDIRS_examples_section_rendered():
+    """Custom Examples section pages should be rendered in the site."""
+    if not _has_rendered_site(_HOMEPAGE_UG_SUBDIRS_PKG):
+        pytest.skip(f"{_HOMEPAGE_UG_SUBDIRS_PKG} not rendered")
+
+    site = _site_dir(_HOMEPAGE_UG_SUBDIRS_PKG)
+    for page in ("basic-usage.html", "advanced-patterns.html"):
+        html = site / "examples" / page
+        assert html.exists(), f"Missing examples section page: {page}"

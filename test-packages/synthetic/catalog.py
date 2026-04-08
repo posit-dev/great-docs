@@ -333,6 +333,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_tag_location",  # 164
     # 165: Icon shortcode in content contexts
     "gdtest_icon_shortcode",  # 165
+    # 166: Blended homepage with subdirectory user guide + section assets
+    "gdtest_homepage_ug_subdirs",  # 166
 ]
 
 
@@ -1891,6 +1893,16 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "navigation, status, and file/code icon groups plus a size comparison. "
         "Tests that the shortcode bridge produces inline SVG elements with the "
         "correct Lucide path data, custom sizes, and accessible labels."
+    ),
+    # ── 166: Blended homepage + subdir UG + section assets ────────────────
+    "gdtest_homepage_ug_subdirs": (
+        "Combines homepage: user_guide with a user guide that has subdirectories "
+        "(root index.qmd + 00-getting-started/ + 01-advanced/) and a custom "
+        "Examples section whose source dir contains asset subdirectories (data/, "
+        "img/). Tests three fixes: (1) root index.qmd sorts first despite "
+        "numbered files in subdirs, (2) blended index locates the first page "
+        "using the full relative path, (3) section asset directories are copied "
+        "to the build directory."
     ),
 }
 

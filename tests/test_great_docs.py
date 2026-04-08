@@ -40028,7 +40028,7 @@ class TestUpdateConfigWithUserGuideBatch10:
         """When website and sidebar keys are absent, they are created."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
             (tmp / "great-docs.yml").write_text("")
             docs = GreatDocs(project_path=tmp_dir)
             docs.project_path.mkdir(parents=True, exist_ok=True)
@@ -40052,6 +40052,172 @@ class TestUpdateConfigWithUserGuideBatch10:
             assert "website" in cfg
             assert "sidebar" in cfg["website"]
             assert isinstance(cfg["website"]["sidebar"], list)
+
+
+def test_discover_user_guide_sort_prioritizes_root_index():
+    """Root-level index.qmd sorts first, even with numbered files in subdirectories."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+
+        # Root-level index.qmd (should be first)
+        (ug_dir / "index.qmd").write_text("---\ntitle: Welcome\n---\nLanding page.\n")
+
+        # Subdirectory with numbered files that sort before 'index' alphabetically
+        sub = ug_dir / "00-getting-started"
+        sub.mkdir()
+        (sub / "index.qmd").write_text("---\ntitle: Getting Started\n---\nSection index.\n")
+        (sub / "01-quickstart.qmd").write_text("---\ntitle: Quickstart\n---\nQuick.\n")
+
+        # Another subdirectory
+        sub2 = ug_dir / "07-cli"
+        sub2.mkdir()
+        (sub2 / "01-cli-data.qmd").write_text("---\ntitle: CLI Data\n---\nCLI stuff.\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._discover_user_guide()
+
+        assert result is not None
+        assert len(result["files"]) == 4
+
+        # The first file should be the root-level index.qmd
+        first_path = result["files"][0]["path"]
+        assert first_path.name == "index.qmd"
+        assert first_path.parent == ug_dir
+
+
+def test_discover_user_guide_sort_relative_path_ordering():
+    """Files from earlier subdirectories sort before later ones."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        ug_dir = Path(tmp_dir) / "user_guide"
+        ug_dir.mkdir()
+
+        # Create subdirectories with files — 00-* should come before 07-*
+        sub_a = ug_dir / "00-intro"
+        sub_a.mkdir()
+        (sub_a / "01-page.qmd").write_text("---\ntitle: Page A\n---\nA.\n")
+
+        sub_b = ug_dir / "07-cli"
+        sub_b.mkdir()
+        (sub_b / "01-cli-data.qmd").write_text("---\ntitle: CLI Data\n---\nB.\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._discover_user_guide()
+
+        assert result is not None
+        assert len(result["files"]) == 2
+
+        # 00-intro/01-page.qmd should sort before 07-cli/01-cli-data.qmd
+        assert "00-intro" in str(result["files"][0]["path"])
+        assert "07-cli" in str(result["files"][1]["path"])
+
+
+def test_create_blended_index_with_subdirectory_structure():
+    """Blended homepage works when first UG page is in a subdirectory."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
+        (tmp / "great-docs.yml").write_text("display_name: My Package\nhomepage: user_guide\n")
+
+        # Create source user_guide with subdirectory structure
+        ug_src = tmp / "user_guide"
+        ug_src.mkdir()
+        (ug_src / "index.qmd").write_text(
+            "---\ntitle: Welcome\n---\n# Welcome\nThis is the landing page.\n"
+        )
+        sub = ug_src / "00-getting-started"
+        sub.mkdir()
+        (sub / "01-quickstart.qmd").write_text("---\ntitle: Quickstart\n---\nQuick.\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+
+        # Set up the user-guide destination as _copy_user_guide_to_docs would
+        ug_docs = docs.project_path / "user-guide"
+        ug_docs.mkdir(parents=True, exist_ok=True)
+        (ug_docs / "index.qmd").write_text(
+            "---\ntitle: Welcome\n---\n# Welcome\nThis is the landing page.\n"
+        )
+        sub_dest = ug_docs / "getting-started"
+        sub_dest.mkdir()
+        (sub_dest / "quickstart.qmd").write_text("---\ntitle: Quickstart\n---\nQuick.\n")
+
+        user_guide_info = {
+            "files": [
+                {"path": ug_src / "index.qmd", "title": "Welcome"},
+                {"path": sub / "01-quickstart.qmd", "title": "Quickstart"},
+            ],
+            "source_dir": ug_src,
+            "explicit": False,
+            "has_index": True,
+        }
+
+        docs._create_blended_index(user_guide_info, ["user-guide/index.qmd"])
+
+        # index.qmd should be created at site root
+        index_qmd = docs.project_path / "index.qmd"
+        assert index_qmd.exists()
+        content = index_qmd.read_text()
+        assert "title: Welcome" in content
+        assert "This is the landing page." in content
+
+        # The original should be removed from user-guide/
+        assert not (ug_docs / "index.qmd").exists()
+
+        # _blended_first_page should be set correctly
+        assert docs._blended_first_page == "user-guide/index.qmd"
+
+
+def test_create_blended_index_subdir_file_first():
+    """Blended homepage works when the first file is inside a subdirectory."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
+        (tmp / "great-docs.yml").write_text("display_name: My Package\nhomepage: user_guide\n")
+
+        # No root index.qmd — first file is in a subdirectory
+        ug_src = tmp / "user_guide"
+        ug_src.mkdir()
+        sub = ug_src / "00-getting-started"
+        sub.mkdir()
+        (sub / "01-intro.qmd").write_text(
+            "---\ntitle: Introduction\n---\n# Introduction\nHello world.\n"
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+
+        # Set up destination as _copy_user_guide_to_docs would (prefix-stripped)
+        ug_docs = docs.project_path / "user-guide"
+        sub_dest = ug_docs / "getting-started"
+        sub_dest.mkdir(parents=True)
+        (sub_dest / "intro.qmd").write_text(
+            "---\ntitle: Introduction\n---\n# Introduction\nHello world.\n"
+        )
+
+        user_guide_info = {
+            "files": [
+                {"path": sub / "01-intro.qmd", "title": "Introduction"},
+            ],
+            "source_dir": ug_src,
+            "explicit": False,
+            "has_index": False,
+        }
+
+        docs._create_blended_index(user_guide_info, ["user-guide/getting-started/intro.qmd"])
+
+        # index.qmd should be created at site root
+        index_qmd = docs.project_path / "index.qmd"
+        assert index_qmd.exists()
+        content = index_qmd.read_text()
+        assert "title: Introduction" in content
+        assert "Hello world." in content
+
+        # The original should be removed
+        assert not (sub_dest / "intro.qmd").exists()
+
+        # _blended_first_page should include the subdirectory
+        assert docs._blended_first_page == "user-guide/getting-started/intro.qmd"
 
 
 class TestCheckLinksURLCleanupBatch10:

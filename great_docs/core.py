@@ -3790,8 +3790,15 @@ class GreatDocs:
             print(f"   ⚠️  User guide directory '{user_guide_dir}' contains no .qmd or .md files")
             return None
 
-        # Sort files by name to respect ordering prefixes
-        guide_files.sort(key=lambda p: p.name)
+        # Sort files by full relative path, with root-level files first
+        # and index.qmd prioritized within each level
+        guide_files.sort(
+            key=lambda p: (
+                p.parent != user_guide_dir,  # Root-level files first
+                p.name != "index.qmd",  # index.qmd first within each level
+                p.relative_to(user_guide_dir),
+            )
+        )
 
         # Parse each file to extract section and title from frontmatter
         files_info = []
@@ -4450,11 +4457,12 @@ class GreatDocs:
             rel_path = Path(first_file["path"].name)  # pragma: no cover
 
         if is_explicit:
-            dest_filename = rel_path.name
+            dest_rel = rel_path
         else:
-            dest_filename = self._strip_numeric_prefix(rel_path.name)
+            clean_parts = [self._strip_numeric_prefix(part) for part in rel_path.parts]
+            dest_rel = Path(*clean_parts) if clean_parts else rel_path
 
-        first_ug_path = self.project_path / "user-guide" / dest_filename
+        first_ug_path = self.project_path / "user-guide" / dest_rel
 
         if not first_ug_path.exists():
             print(f"   ⚠️  First UG page '{first_ug_path}' not found for blended homepage")
@@ -4523,8 +4531,8 @@ class GreatDocs:
         # Remove the duplicate from user-guide/
         first_ug_path.unlink()
 
-        # Track the first file's destination filename for sidebar adjustment
-        self._blended_first_page = f"user-guide/{dest_filename}"
+        # Track the first file's destination path for sidebar adjustment
+        self._blended_first_page = f"user-guide/{dest_rel}"
 
         print("   📄 Blended homepage: first UG page → index.qmd")
 
