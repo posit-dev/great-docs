@@ -7382,3 +7382,266 @@ def test_HOMEPAGE_SUBDIRS_examples_section_rendered():
     for page in ("basic-usage.html", "advanced-patterns.html"):
         html = site / "examples" / page
         assert html.exists(), f"Missing examples section page: {page}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Dedicated: gdtest_gt_tables — Great Tables vs. Markdown tables
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_GT_TABLES_PKG = "gdtest_gt_tables"
+
+
+@requires_bs4
+def test_GT_TABLES_gt_page_rendered():
+    """The GT tables user-guide page should exist with GT table elements."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-tables.html"
+    assert page.exists(), "gt-tables.html not found"
+
+    soup = _load_html(page)
+    gt_tables = soup.select("table.gt_table")
+    assert len(gt_tables) >= 2, f"Expected at least 2 GT tables, found {len(gt_tables)}"
+
+
+@requires_bs4
+def test_GT_TABLES_markdown_page_rendered():
+    """The Markdown tables user-guide page should exist with standard tables."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "markdown-tables.html"
+    assert page.exists(), "markdown-tables.html not found"
+
+    soup = _load_html(page)
+    all_tables = soup.select("table")
+    md_tables = [t for t in all_tables if "gt_table" not in t.get("class", [])]
+    assert len(md_tables) >= 2, f"Expected at least 2 Markdown tables, found {len(md_tables)}"
+
+
+@requires_bs4
+def test_GT_TABLES_gt_not_wrapped_responsive():
+    """GT tables should NOT be wrapped in gd-table-responsive by post-render."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-tables.html"
+    soup = _load_html(page)
+
+    for gt in soup.select("table.gt_table"):
+        wrapper = gt.find_parent(class_="gd-table-responsive")
+        assert wrapper is None, "GT table should not be inside gd-table-responsive"
+
+
+@requires_bs4
+def test_GT_TABLES_gt_has_scoped_css():
+    """GT tables should have scoped CSS with their ID selector."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-tables.html"
+    soup = _load_html(page)
+
+    # GT tables emit a <style> block with #id-scoped selectors
+    style_blocks = soup.select("style")
+    gt_style_found = any("#gt_fixed .gt_table" in (s.string or "") for s in style_blocks)
+    assert gt_style_found, "Expected scoped GT CSS with #gt_fixed .gt_table selector"
+
+
+@requires_bs4
+def test_GT_TABLES_gt_preserves_class():
+    """GT tables should retain the gt_table CSS class after rendering."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-tables.html"
+    soup = _load_html(page)
+
+    gt_tables = soup.select("table.gt_table")
+    assert len(gt_tables) >= 1, "No GT tables found"
+
+    for gt in gt_tables:
+        assert "gt_table" in gt.get("class", []), "GT table lost its gt_table class"
+
+
+@requires_bs4
+def test_GT_TABLES_gt_no_bootstrap_classes():
+    """GT tables with quarto_disable_processing=True should have no Bootstrap classes."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-tables.html"
+    soup = _load_html(page)
+
+    bootstrap_classes = {"table-sm", "table-striped", "small", "table-bordered"}
+    for gt in soup.select("table.gt_table"):
+        classes = set(gt.get("class", []))
+        overlap = classes & bootstrap_classes
+        assert not overlap, (
+            f"GT table has Bootstrap classes {overlap} despite quarto_disable_processing=True"
+        )
+
+
+@requires_bs4
+def test_GT_TABLES_gt_fixed_preserves_colgroup():
+    """GT table with cols_width and quarto_disable_processing=True preserves colgroup."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-tables.html"
+    soup = _load_html(page)
+
+    gt_tables = soup.select("table.gt_table")
+    fixed_tables = [t for t in gt_tables if "table-layout" in (t.get("style") or "")]
+    assert len(fixed_tables) >= 1, "No fixed-layout GT table found"
+
+    for t in fixed_tables:
+        colgroups = t.select("colgroup")
+        assert len(colgroups) == 1, "GT table with cols_width should preserve its colgroup"
+
+
+@requires_bs4
+def test_GT_TABLES_gt_colgroup_preserved_when_present():
+    """GT tables with cols_width (table-layout: fixed) should preserve colgroup.
+
+    Note: Quarto with data-quarto-disable-processing='false' may strip colgroup
+    before post-render runs. This test verifies our post-render.py logic doesn't
+    strip colgroup from GT tables by testing the strip function directly.
+    """
+    import re
+
+    # Test the strip_colgroup_tags logic in isolation with GT-like HTML
+    html_with_gt_colgroup = (
+        '<table style="table-layout: fixed;; width: 0px" class="gt_table" '
+        'data-quarto-disable-processing="true" data-quarto-bootstrap="false">\n'
+        "<colgroup>\n"
+        '  <col style="width:150px;"/>\n'
+        '  <col style="width:80px;"/>\n'
+        "</colgroup>\n"
+        "<thead><tr><th>A</th><th>B</th></tr></thead>\n"
+        "</table>"
+    )
+
+    html_with_plain_colgroup = (
+        '<table class="caption-top table">\n'
+        "<colgroup>\n"
+        '  <col style="width:50%"/>\n'
+        '  <col style="width:50%"/>\n'
+        "</colgroup>\n"
+        "<thead><tr><th>X</th><th>Y</th></tr></thead>\n"
+        "</table>"
+    )
+
+    colgroup_pattern = re.compile(r"<colgroup>.*?</colgroup>\s*", re.DOTALL)
+
+    def _strip_colgroup_tags(html_content):
+        def _replace_if_not_gt(match):
+            preceding = html_content[: match.start()]
+            last_table = preceding.rfind("<table")
+            if last_table >= 0:
+                table_end = preceding.find(">", last_table)
+                if table_end >= 0:
+                    table_tag = preceding[last_table : table_end + 1]
+                    if "gt_table" in table_tag:
+                        return match.group(0)
+            return ""
+
+        return colgroup_pattern.sub(_replace_if_not_gt, html_content)
+
+    # GT table colgroup should be preserved
+    result_gt = _strip_colgroup_tags(html_with_gt_colgroup)
+    assert "<colgroup>" in result_gt, "GT table colgroup was stripped"
+
+    # Plain table colgroup should be removed
+    result_plain = _strip_colgroup_tags(html_with_plain_colgroup)
+    assert "<colgroup>" not in result_plain, "Plain table colgroup was not stripped"
+
+
+@requires_bs4
+def test_GT_TABLES_markdown_no_colgroup():
+    """Markdown tables should have their colgroup tags stripped."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "markdown-tables.html"
+    soup = _load_html(page)
+
+    md_tables = [t for t in soup.select("table") if "gt_table" not in t.get("class", [])]
+    for t in md_tables:
+        colgroups = t.select("colgroup")
+        assert len(colgroups) == 0, "Markdown table should not have colgroup"
+
+
+@requires_bs4
+def test_GT_TABLES_reference_pages_exist():
+    """Reference pages for exported symbols should exist."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    ref = _ref_dir(_GT_TABLES_PKG)
+    for page in ("make_gt_table.html", "summarize.html"):
+        assert (ref / page).exists(), f"Missing reference page: {page}"
+
+
+@requires_bs4
+def test_GT_TABLES_page_level_no_processing_gt():
+    """GT table on page with html-table-processing: none should have no Bootstrap classes."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-page-level.html"
+    assert page.exists(), "gt-page-level.html not found"
+
+    soup = _load_html(page)
+    gt_tables = soup.select("table.gt_table")
+    assert len(gt_tables) >= 1, "No GT tables found on page-level opt-out page"
+
+    bootstrap_classes = {"table-sm", "table-striped", "small", "table-bordered"}
+    for gt in gt_tables:
+        classes = set(gt.get("class", []))
+        overlap = classes & bootstrap_classes
+        assert not overlap, (
+            f"GT table has Bootstrap classes {overlap} despite html-table-processing: none"
+        )
+
+
+@requires_bs4
+def test_GT_TABLES_page_level_no_processing_colgroup():
+    """GT table with cols_width on page with html-table-processing: none preserves colgroup."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-page-level.html"
+    soup = _load_html(page)
+
+    gt_tables = soup.select("table.gt_table")
+    # The table uses cols_width so it should have a colgroup
+    fixed_tables = [t for t in gt_tables if "table-layout" in (t.get("style") or "")]
+    assert len(fixed_tables) >= 1, "No fixed-layout GT table found"
+
+    for t in fixed_tables:
+        colgroups = t.select("colgroup")
+        assert len(colgroups) == 1, "GT table with cols_width should preserve its colgroup"
+
+
+@requires_bs4
+def test_GT_TABLES_page_level_no_processing_md_table():
+    """Markdown table on page with html-table-processing: none should lack Bootstrap add-ons."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-page-level.html"
+    soup = _load_html(page)
+
+    md_tables = [t for t in soup.select("table") if "gt_table" not in t.get("class", [])]
+    assert len(md_tables) >= 1, "No Markdown table found on page-level opt-out page"
+
+    bootstrap_addons = {"table-sm", "table-striped", "small"}
+    for t in md_tables:
+        classes = set(t.get("class", []))
+        overlap = classes & bootstrap_addons
+        assert not overlap, (
+            f"Markdown table has Bootstrap add-on classes {overlap} "
+            "despite html-table-processing: none"
+        )

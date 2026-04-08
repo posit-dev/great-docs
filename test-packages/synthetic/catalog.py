@@ -335,6 +335,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_icon_shortcode",  # 165
     # 166: Blended homepage with subdirectory user guide + section assets
     "gdtest_homepage_ug_subdirs",  # 166
+    # 167: Great Tables vs. Markdown tables rendering
+    "gdtest_gt_tables",  # 167
 ]
 
 
@@ -1903,6 +1905,14 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "numbered files in subdirs, (2) blended index locates the first page "
         "using the full relative path, (3) section asset directories are copied "
         "to the build directory."
+    ),
+    # ── 167: Great Tables vs. Markdown tables ─────────────────────────────
+    "gdtest_gt_tables": (
+        "Renders Great Tables (GT) output alongside conventional Markdown "
+        "tables. Tests that GT tables preserve <colgroup> tags, are not "
+        "wrapped in gd-table-responsive, and are excluded from Bootstrap "
+        "table-bordered styling, while Markdown tables still receive all "
+        "responsive enhancements."
     ),
 }
 
