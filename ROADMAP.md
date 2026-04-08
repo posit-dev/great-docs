@@ -114,12 +114,15 @@ Generate a downloadable PDF of the entire documentation site.
 
 Unified documentation sites spanning multiple programming languages.
 
-- Language adapters consume output from each language's canonical toolchain (griffe for Python, pkgdown/Rd for R, rustdoc for Rust, TypeDoc for JS/TS) and normalize into a common intermediate representation
-- Single site, single build: one navbar, sidebar, search index, and theme across all languages (replacing hand-wired splash pages that link to separate sub-sites)
-- Uses a language selector widget in the navbar for switching the displayed API language; preference persisted in `localStorage`
-- User guide with language tabs enable parallel code examples rendered as tabsets (`{.panel-tabset}`)
-- Cross-repo source resolution for pulling R/Rust/JS packages from local paths or Git URLs (shallow-cloned into `.great-docs-cache/`)
-- Python-only projects should pay zero cost; `languages:` key activates multi-language mode
+- **Language adapters**: Consume output from each language's canonical toolchain and normalize into a common intermediate representation
+- **Single site, single build**: One navbar, sidebar, search index, and theme across all languages; replacing hand-wired splash pages that link to separate sub-sites
+- **Section selector widget**: Navbar dropdown for switching the displayed section; search scoped to selected section; preference persisted in `localStorage`
+- **Multiple sections per language**: A single language can have multiple reference sections each with their own sub-URL and sidebar group
+- **Per-section user guides**: Each section can have its own getting-started content; shown when that section is selected
+- **Cross-repo source resolution**: Pull R/Rust/JS packages from local paths or Git URLs (shallow-cloned into `.great-docs-cache/`); supports standalone docs repos
+- **Custom sub-URLs**: Each section defines its own URL path segment (e.g., `/reference/py/`, `/reference/r/`)
+- **Cross-language linking**: Auto-matched "See also" links between parallel symbols (e.g., Python `Chat` ↔ R `Chat`)
+- **Progressive**: Python-only projects pay zero cost; `sections:` key activates multi-section mode
 
 ### Monorepo / Multi-Project Support
 
