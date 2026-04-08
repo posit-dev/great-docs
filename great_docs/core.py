@@ -718,8 +718,12 @@ class GreatDocs:
         """
         import io
 
-        import cairosvg
         from PIL import Image
+
+        try:
+            import cairosvg
+        except ImportError:
+            cairosvg = None  # type: ignore[assignment]
 
         result: dict[str, str] = {}
         suffix = logo_src.suffix.lower()
@@ -732,6 +736,16 @@ class GreatDocs:
             shutil.copy2(logo_src, dest_dir / "favicon.svg")
             result["icon-svg"] = "favicon.svg"
             result["icon"] = "favicon.svg"
+
+            if cairosvg is None:
+                print(
+                    "Favicon: cairosvg is not installed; skipping raster favicon "
+                    "generation from SVG. Install it with:\n"
+                    "  pip install 'great-docs[svg]'\n"
+                    "On Linux you also need: apt install libcairo2-dev\n"
+                    "On macOS: brew install cairo"
+                )
+                return result
 
             # Rasterize SVG → PNG preserving aspect ratio, then resize
             png_data = cairosvg.svg2png(url=str(logo_src), scale=4)
