@@ -4128,7 +4128,8 @@ def test_generate_changelog_page():
         assert "## Version 2.0" in content
         assert "## Version 1.0" in content
         assert "*2026-02-10*" in content
-        assert "### Breaking changes" in content
+        # Body headings are bumped one level to nest under the version ## heading
+        assert "#### Breaking changes" in content
         assert "Initial release." in content
         assert "https://github.com/owner/repo/releases" in content
 
@@ -4168,6 +4169,142 @@ def test_generate_changelog_page_no_releases():
             result = docs._generate_changelog_page()
 
         assert result is None
+
+
+def test_generate_changelog_page_heading_normalization():
+    """Test that release body headings are bumped one level to nest under version ##."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "test-pkg"\nversion = "0.1.0"\n\n'
+            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
+        )
+        config_path = project_path / "great-docs.yml"
+        config_path.write_text("")
+        build_dir = project_path / "great-docs"
+        build_dir.mkdir()
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        # Simulate release notes that use ## headings (like Pointblank)
+        fake_releases = [
+            {
+                "tag_name": "v1.0.0",
+                "name": "v1.0.0",
+                "body": (
+                    "## Features\n\n"
+                    "- Added X\n\n"
+                    "## Bug Fixes\n\n"
+                    "- Fixed Y\n\n"
+                    "### Sub-section\n\n"
+                    "- Detail Z\n"
+                ),
+                "published_at": "2026-01-01T00:00:00Z",
+                "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
+                "prerelease": False,
+            },
+        ]
+
+        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
+            result = docs._generate_changelog_page()
+
+        assert result == "changelog.qmd"
+        content = (build_dir / "changelog.qmd").read_text()
+
+        # Version heading stays at ##
+        assert "## v1.0.0" in content
+
+        # Body ## headings should be bumped to ###
+        assert "### Features" in content
+        assert "### Bug Fixes" in content
+
+        # Body ### headings should be bumped to ####
+        assert "#### Sub-section" in content
+
+        # Original ## headings should NOT remain in body (check line-level)
+        lines = content.split("\n")
+        assert not any(line.startswith("## Features") for line in lines)
+        assert not any(line.startswith("## Bug Fixes") for line in lines)
+
+
+def test_generate_changelog_page_h3_body_headings_bumped():
+    """Test that ### body headings are also bumped (to ####)."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "test-pkg"\nversion = "0.1.0"\n\n'
+            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
+        )
+        config_path = project_path / "great-docs.yml"
+        config_path.write_text("")
+        build_dir = project_path / "great-docs"
+        build_dir.mkdir()
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        # Simulate release notes that already use ### headings (like Great Docs itself)
+        fake_releases = [
+            {
+                "tag_name": "v0.5.0",
+                "name": "v0.5.0",
+                "body": ("### New Features\n\n- Feature A\n\n### Fixes\n\n- Fix B\n"),
+                "published_at": "2026-03-15T00:00:00Z",
+                "html_url": "https://github.com/owner/repo/releases/tag/v0.5.0",
+                "prerelease": False,
+            },
+        ]
+
+        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
+            result = docs._generate_changelog_page()
+
+        content = (build_dir / "changelog.qmd").read_text()
+
+        # ### in body → ####
+        assert "#### New Features" in content
+        assert "#### Fixes" in content
+        lines = content.split("\n")
+        assert not any(line.startswith("### New Features") for line in lines)
+
+
+def test_generate_changelog_page_h1_body_headings_not_bumped():
+    """Test that # (h1) body headings are left alone (unusual but possible)."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "test-pkg"\nversion = "0.1.0"\n\n'
+            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
+        )
+        config_path = project_path / "great-docs.yml"
+        config_path.write_text("")
+        build_dir = project_path / "great-docs"
+        build_dir.mkdir()
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        fake_releases = [
+            {
+                "tag_name": "v0.1.0",
+                "name": "v0.1.0",
+                "body": "# Release Title\n\nSome text.\n",
+                "published_at": "2025-06-01T00:00:00Z",
+                "html_url": "https://github.com/owner/repo/releases/tag/v0.1.0",
+                "prerelease": False,
+            },
+        ]
+
+        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
+            docs._generate_changelog_page()
+
+        content = (build_dir / "changelog.qmd").read_text()
+
+        # Single # heading should be left untouched
+        assert "# Release Title" in content
 
 
 def test_add_changelog_to_navbar_manual_yaml():
