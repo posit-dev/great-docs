@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from great_docs._qrenderer._render.mixin_page import RenderPageMixin
+from great_docs._renderer._render.mixin_page import RenderPageMixin
 
 from ..pandoc.blocks import (
     Blocks,
@@ -73,7 +73,7 @@ class __RenderReferencePage(RenderPageMixin, RenderBase):
         """
         from . import get_render_type
 
-        render_objs = [get_render_type(s)(s, self.renderer, self.level) for s in self.sections]
+        render_objs = [get_render_type(s)(s, self.level) for s in self.sections]
         return Blocks(render_objs)
 
 

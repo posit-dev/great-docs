@@ -1776,11 +1776,11 @@ def translate_bold_section_headers(html_content):
     return html_content
 
 
-def translate_qrenderer_headings(html_content):
+def translate_renderer_headings(html_content):
     """
-    Translate section headings and labels produced by the qrenderer.
+    Translate section headings and labels produced by the renderer.
 
-    The qrenderer emits headings with `doc-*` CSS classes (e.g.
+    The renderer emits headings with `doc-*` CSS classes (e.g.
     `<h2 class="doc-parameters">Parameters</h2>`) and a `Usage` label inside
     `<div class="doc-usage-source">`.  These are rendered at Quarto build time and pass through
     untranslated.
@@ -2536,8 +2536,8 @@ for html_file in html_files:
     # Translate bold section headers (e.g. **Examples**::) into doc-sections
     content = translate_bold_section_headers(content)
 
-    # Translate qrenderer-rendered headings and Usage/Source labels
-    content = translate_qrenderer_headings(content)
+    # Translate renderer-rendered headings and Usage/Source labels
+    content = translate_renderer_headings(content)
 
     # Fix doctest >>> lines that Quarto rendered as nested blockquotes
     content = fix_doctest_blockquotes(content)
@@ -2906,8 +2906,8 @@ if os.path.exists(index_file):
 
         content = before + main_content + after
 
-    # Translate qrenderer-rendered headings, TOC, and sidebar on the index page
-    content = translate_qrenderer_headings(content)
+    # Translate renderer-rendered headings, TOC, and sidebar on the index page
+    content = translate_renderer_headings(content)
 
     with open(index_file, "w", encoding="utf-8") as file:
         file.write(content)

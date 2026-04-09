@@ -27,6 +27,7 @@ from .layout import (
     Section,
 )
 
+Annotation: TypeAlias = str | gf.Expr
 DisplayNameFormat: TypeAlias = Literal["doc", "full", "name", "short", "relative", "canonical"]
 DocObjectKind: TypeAlias = Literal[
     "module",
@@ -40,6 +41,16 @@ DocObjectKind: TypeAlias = Literal[
     "typevar",
     "type alias",
 ]
+
+DocstringDefinitionType: TypeAlias = (
+    gf.DocstringParameter
+    | gf.DocstringAttribute
+    | gf.DocstringReturn
+    | gf.DocstringYield
+    | gf.DocstringReceive
+    | gf.DocstringRaise
+    | gf.DocstringWarn
+)
 
 Documentable: TypeAlias = (
     DocClass | DocFunction | DocAttribute | DocModule | Page | Section | Layout

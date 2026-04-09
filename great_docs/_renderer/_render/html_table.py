@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import html
 import re
-from typing import Sequence
+from typing import TYPE_CHECKING, Protocol, Sequence
+
+if TYPE_CHECKING:
+    class Stringable(Protocol):
+        def __str__(self) -> str: ...
 
 
 def _md_link_to_html(text: str) -> str:
@@ -14,13 +18,13 @@ def _md_link_to_html(text: str) -> str:
     # Pattern: [content](url){.class1 .class2} or [content](url)
     pattern = r"\[([^\]]+)\]\(([^)]+)\)(?:\{([^}]+)\})?"
 
-    def replace_link(match: re.Match) -> str:
+    def replace_link(match: re.Match[str]) -> str:
         content = match.group(1)
         url = match.group(2)
         attr_str = match.group(3) or ""
 
         # Parse classes from attr string (e.g., ".doc-function .doc-label")
-        classes = []
+        classes: list[str] = []
         for part in attr_str.split():
             if part.startswith("."):
                 classes.append(part[1:])
@@ -32,7 +36,7 @@ def _md_link_to_html(text: str) -> str:
 
 
 def html_table(
-    rows: Sequence[tuple[str, str | None]],
+    rows: Sequence[tuple[Stringable, Stringable | None]],
     *,
     table_class: str = "gd-summary-table",
 ) -> str:
@@ -55,8 +59,9 @@ def html_table(
         HTML string with table markup.
     """
     # Build table rows
-    body_rows = []
+    body_rows: list[str] = []
     for name, desc in rows:
+        name, desc = str(name), str(desc)
         # Convert markdown links to HTML
         name = _md_link_to_html(name)
 
