@@ -8926,6 +8926,7 @@ section.level2:first-of-type > h2:first-child,
             qmd_content = f"""---
 title: ""
 toc: false
+body-classes: "gd-homepage"
 ---
 
 {first_heading_style}{hero_block}::: {{.column-margin}}
@@ -8938,6 +8939,7 @@ toc: false
             qmd_content = f"""---  # pragma: no cover
 title: ""
 toc: false
+body-classes: "gd-homepage"
 ---
 
 {first_heading_style}{hero_block}{readme_content}

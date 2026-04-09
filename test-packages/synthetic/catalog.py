@@ -341,6 +341,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_scale_to_fit",  # 168
     # 169: Min-scale keyword and float thresholds for scale-to-fit
     "gdtest_scale_min_scale",  # 169
+    # 170: Wide homepage content with column-margin sidebar
+    "gdtest_homepage_wide",  # 170
 ]
 
 
@@ -1931,6 +1933,11 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "fractional float values. Verifies global keyword, per-page keyword "
         "overrides, per-page float override, and inheritance when no "
         "page-level override is set."
+    ),
+    "gdtest_homepage_wide": (
+        "Tests that wide content on the homepage (code blocks, wide tables) "
+        "renders at full width when the column-margin metadata sidebar is "
+        "present. Verifies the gd-homepage body class and CSS grid fix."
     ),
 }
 

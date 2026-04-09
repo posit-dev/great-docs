@@ -3499,6 +3499,18 @@ main.content.page-columns.page-full > * {
     grid-column: body-content-start / body-content-end;
 }
 
+/* On the homepage, .column-margin triggers Quarto's page-columns grid which
+   narrows the body-content track to make room for the margin column.  This
+   causes code disclosures, output tables, and other wide elements to appear
+   indented ~100px from the left.  Reset non-margin children to span the full
+   page track so they render at normal width. */
+.gd-homepage main.page-columns > section,
+.gd-homepage main.page-columns > .cell,
+.gd-homepage main.page-columns > p,
+.gd-homepage main.page-columns > details {
+    grid-column: page !important;
+}
+
 .gd-hero-logo {
     display: block;
     width: auto;
