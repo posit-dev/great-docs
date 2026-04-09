@@ -4618,3 +4618,86 @@ else:
         print(f"\n🌐 i18n: language={_i18n_language} but no translation bundle found")
     else:
         print("\n🌐 i18n: using default language (en)")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE-LEVEL SCALE-TO-FIT META TAG INJECTION
+# ══════════════════════════════════════════════════════════════════════════════
+# When a .qmd page has `scale-to-fit: [".selector"]` in its frontmatter,
+# inject a <meta name="gd-scale-to-fit-page"> tag into the rendered HTML so
+# the responsive-tables.js script can auto-apply scaling to those elements.
+
+print("\nInjecting page-level scale-to-fit meta tags...")
+_stf_injected = 0
+for html_file in glob.glob("_site/**/*.html", recursive=True):
+    rel_path = os.path.relpath(html_file, "_site")
+    # Map rendered HTML back to the .qmd source in the project directory
+    qmd_path = os.path.splitext(rel_path)[0] + ".qmd"
+    if not os.path.exists(qmd_path):
+        continue
+
+    try:
+        with open(qmd_path, "r", encoding="utf-8") as f:
+            qmd_content = f.read()
+        if not qmd_content.startswith("---"):
+            continue
+        parts = qmd_content.split("---", 2)
+        if len(parts) < 3:
+            continue
+        import yaml
+
+        fm = yaml.safe_load(parts[1]) or {}
+    except Exception:
+        continue
+
+    stf = fm.get("scale-to-fit")
+    if not stf:
+        continue
+
+    # Normalize to list of selectors
+    if isinstance(stf, str):
+        stf = [stf]
+    if not isinstance(stf, list):
+        continue
+    stf = [s for s in stf if isinstance(s, str)]
+    if not stf:
+        continue
+
+    selectors_json = json.dumps(stf, separators=(",", ":"))
+    escaped = html.escape(selectors_json, quote=True)
+
+    # Optional per-page minimum scale (float 0–1 or keyword)
+    min_scale_attr = ""
+    raw_min = fm.get("scale-to-fit-min-scale")
+    if raw_min is not None:
+        if isinstance(raw_min, str) and raw_min.strip().lower() in (
+            "mobile",
+            "tablet",
+            "desktop",
+        ):
+            min_scale_attr = f' data-min-scale="{raw_min.strip().lower()}"'
+        else:
+            try:
+                ms = float(raw_min)
+                if 0 < ms < 1:
+                    min_scale_attr = f' data-min-scale="{ms}"'
+            except (TypeError, ValueError):
+                pass
+
+    meta_tag = f'<meta name="gd-scale-to-fit-page" data-selectors="{escaped}"{min_scale_attr}>'
+
+    try:
+        with open(html_file, "r", encoding="utf-8") as f:
+            content = f.read()
+        if "gd-scale-to-fit-page" in content:
+            continue  # Already present
+        modified = content.replace("</head>", f"  {meta_tag}\n</head>", 1)
+        if modified != content:
+            with open(html_file, "w", encoding="utf-8") as f:
+                f.write(modified)
+            _stf_injected += 1
+    except Exception as e:
+        print(f"  scale-to-fit error for {html_file}: {e}")
+
+if _stf_injected > 0:
+    print(f"   Injected page-level scale-to-fit in {_stf_injected} page(s)")
