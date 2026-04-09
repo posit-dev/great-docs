@@ -160,14 +160,14 @@ On this page, `#main_table` and `#summary_card` are both scaled, and the thresho
 
 For one-off cases where you want to scale a single block of content without adding it to the global config, wrap it in a `:::{.scale-to-fit}` fenced div in your `.qmd` page:
 
-```markdown
+````markdown
 :::{.scale-to-fit}
 ```{{python}}
 #| echo: false
 my_wide_widget()
 ```
 :::
-```
+````
 
 The `.scale-to-fit` class provides the same scaling behavior: content is measured, scaled to fit, and scrolled if it would exceed the minimum threshold. This approach requires no configuration at all; the elements inside the div are always considered for scaling. Use manual wrapping for isolated wide outputs that don't warrant a global selector.
 
