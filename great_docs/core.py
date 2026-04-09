@@ -1593,6 +1593,11 @@ class GreatDocs:
             body = (rel.get("body") or "").strip()
             if body:
                 body = self._linkify_github_references(body, owner, repo)
+
+                # Ensure body headings nest under the version ## heading.
+                # Bump ##..###### → ###..#######  (i.e., add one # to every heading)
+                body = re.sub(r"^(#{2,6})\s", lambda m: m.group(1) + "# ", body, flags=re.MULTILINE)
+
                 lines.append(body)
                 lines.append("")
 
