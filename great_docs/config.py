@@ -131,6 +131,24 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # str: preset name (applies to all pages)
     # dict: {"preset": str, "pages": "all"|"homepage"}
     "content_style": None,
+    # Scale-to-fit: auto-shrink wide HTML output to fit the content container.
+    # Targets elements by CSS selector — the matched element's nearest output
+    # wrapper is scaled down (never up) to fit the page width.
+    # None/False: disabled (default)
+    # list[str]: CSS selectors for elements to auto-scale (e.g., ["#pb_tbl"])
+    # Per-page override via frontmatter: `scale-to-fit: ["#pb_tbl"]`
+    "scale_to_fit": None,
+    # Minimum scale threshold for scale-to-fit.  When scaling would shrink
+    # content beyond this limit the element is shown at full size with
+    # horizontal scrolling instead.
+    # None/False: no minimum (scale as small as needed)
+    # float (0–1): minimum scale factor, e.g. 0.4 = "don't shrink below 40%"
+    # str keyword: viewport breakpoint below which scaling is disabled:
+    #   "mobile"  → scroll on viewports ≤ 576px
+    #   "tablet"  → scroll on viewports ≤ 768px
+    #   "desktop" → scroll on viewports ≤ 992px
+    # Per-page override via frontmatter: `scale-to-fit-min-scale: "tablet"`
+    "scale_to_fit_min_scale": None,
     # Navigation icons (Lucide icon set)
     # Prepend icons to sidebar and navbar navigation entries.
     # None/False: disabled (default)
@@ -1098,7 +1116,44 @@ class Config:
             return {"preset": preset, "pages": pages}
         return None
 
+    @property
+    def scale_to_fit(self) -> list[str] | None:
+        """Get the list of CSS selectors for auto-scale-to-fit."""
+        raw = self.get("scale_to_fit")
+        if raw is None or raw is False:
+            return None
+        if isinstance(raw, list):
+            return [s for s in raw if isinstance(s, str) and s.strip()]
+        if isinstance(raw, str):
+            return [raw]
+        return None
+
     # ── Social Cards Properties ────────────────────────────────────────────
+
+    _SCALE_KEYWORDS = frozenset({"mobile", "tablet", "desktop"})
+
+    @property
+    def scale_to_fit_min_scale(self) -> float | str | None:
+        """Get the minimum scale threshold for scale-to-fit.
+
+        Returns a float (0–1), a keyword (``"mobile"``, ``"tablet"``,
+        ``"desktop"``), or ``None``.
+        """
+        raw = self.get("scale_to_fit_min_scale")
+        if raw is None or raw is False:
+            return None
+        if isinstance(raw, str):
+            key = raw.strip().lower()
+            if key in self._SCALE_KEYWORDS:
+                return key
+            return None
+        try:
+            val = float(raw)
+        except (TypeError, ValueError):
+            return None
+        if 0 < val < 1:
+            return val
+        return None
 
     @property
     def social_cards_enabled(self) -> bool:

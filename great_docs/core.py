@@ -10434,6 +10434,28 @@ toc: false
             if "content-style.js" not in resources_list:
                 resources_list.append("content-style.js")
 
+        # Add scale-to-fit selectors if configured
+        scale_selectors = self._config.scale_to_fit
+        if scale_selectors:
+            import html as html_mod_stf
+
+            # JSON-encode the selector list and HTML-escape for the attribute
+            import json as json_mod_stf
+
+            selectors_json = html_mod_stf.escape(json_mod_stf.dumps(scale_selectors))
+            min_scale = self._config.scale_to_fit_min_scale
+            min_scale_attr = f' data-min-scale="{min_scale}"' if min_scale else ""
+            stf_meta_tag = (
+                f'<meta name="gd-scale-to-fit" data-selectors="{selectors_json}"{min_scale_attr}>'
+            )
+
+            header_list = config["format"]["html"].setdefault("include-in-header", [])
+            if isinstance(header_list, str):
+                header_list = [header_list]  # pragma: no cover
+                config["format"]["html"]["include-in-header"] = header_list  # pragma: no cover
+            header_list[:] = [h for h in header_list if "gd-scale-to-fit" not in str(h)]
+            header_list.append({"text": stf_meta_tag})
+
         # Write package metadata JSON for post-render version badge injection.
         # The version and release date come from the latest GitHub Release so
         # the badge always reflects what has actually been published.
