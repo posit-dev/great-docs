@@ -13,7 +13,6 @@ from . import (
     RenderDocClass,
     RenderDocFunction,
     RenderDocModule,
-    Renderer,
 )
 from . import layout as layout
 from .introspection import get_object
@@ -67,7 +66,7 @@ def _render(obj: gf.Object) -> str:
         case layout.DocModule():
             _Render = RenderDocModule
 
-    return str(_Render(layout_obj, Renderer()))
+    return str(_Render(layout_obj))
 
 
 def render_code_variable(code: str, name: str | None = None) -> str:

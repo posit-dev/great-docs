@@ -29,8 +29,8 @@ from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
 
 from great_docs import Config, create_default_config, GreatDocs, load_config
 from great_docs._directives import DocDirectives, extract_directives
-from great_docs._qrenderer import layout, _globals
-from great_docs._qrenderer._ast import (
+from great_docs._renderer import layout, _globals
+from great_docs._renderer._ast import (
     DocstringSectionKindPatched,
     DocstringSectionNotes,
     DocstringSectionSeeAlso,
@@ -42,7 +42,7 @@ from great_docs._qrenderer._ast import (
     tuple_to_data,
     _DocstringSectionPatched,
 )
-from great_docs._qrenderer._format import (
+from great_docs._renderer._format import (
     format_name,
     format_see_also,
     format_str,
@@ -51,13 +51,13 @@ from great_docs._qrenderer._format import (
     HAS_RUFF,
     repr_obj,
 )
-from great_docs._qrenderer._globals import (
+from great_docs._renderer._globals import (
     EXCLUDE_ATTRIBUTES,
     EXCLUDE_CLASSES,
     EXCLUDE_FUNCTIONS,
     EXCLUDE_PARAMETERS,
 )
-from great_docs._qrenderer._griffe import (
+from great_docs._renderer._griffe import (
     AliasResolutionError,
     dataclasses as dc,
     dataclasses as gdc,
@@ -65,38 +65,23 @@ from great_docs._qrenderer._griffe import (
     docstrings as gds,
     expressions as expr,
 )
-from great_docs._qrenderer._griffe.docstrings import DCDocstringSection
-from great_docs._qrenderer._md_renderer import (
-    convert_rst_link_to_md,
-    MdRenderer,
-    ParamRow,
-    Renderer,
-    _ensure_blank_before_lists,
-    _escape_dunders,
-    _get_dataclass_field_names,
-    _get_param_descriptions,
-    _has_attr_section,
-    _is_griffe_dataclass,
-    _is_non_callable_class,
-    _sanitize_title,
-    _simple_table,
-)
-from great_docs._qrenderer._render import (
+from great_docs._renderer._griffe.docstrings import DCDocstringSection
+from great_docs._renderer._render import (
     get_render_type,
     RenderDocAttribute,
     RenderDocClass,
     RenderDocFunction,
     RenderDocModule,
 )
-from great_docs._qrenderer._render._label import (
+from great_docs._renderer._render._label import (
     get_label,
     _attribute_label,
     _class_label,
     _function_label,
 )
-from great_docs._qrenderer._render.api_page import RenderAPIPage
-from great_docs._qrenderer._render.base import RenderBase
-from great_docs._qrenderer._render.extending import (
+from great_docs._renderer._render.api_page import RenderAPIPage
+from great_docs._renderer._render.base import RenderBase
+from great_docs._renderer._render.extending import (
     exclude_attributes,
     exclude_classes,
     exclude_functions,
@@ -104,14 +89,14 @@ from great_docs._qrenderer._render.extending import (
     extend_base_class,
     set_class_attr,
 )
-from great_docs._qrenderer._render.mixin_members import (
+from great_docs._renderer._render.mixin_members import (
     RenderedMemberPagesGroup,
     RenderedMembersGroup,
 )
-from great_docs._qrenderer._render.mixin_page import RenderPageMixin
-from great_docs._qrenderer._render.reference_page import RenderReferencePage
-from great_docs._qrenderer._render.reference_section import RenderReferenceSection
-from great_docs._qrenderer._rst_converters import (
+from great_docs._renderer._render.mixin_page import RenderPageMixin
+from great_docs._renderer._render.reference_page import RenderReferencePage
+from great_docs._renderer._render.reference_section import RenderReferenceSection
+from great_docs._renderer._rst_converters import (
     escape,
     sanitize,
     _convert_bold_section_headers,
@@ -133,9 +118,9 @@ from great_docs._qrenderer._rst_converters import (
     _rst_simple_table_to_md,
     _smart_dedent,
 )
-from great_docs._qrenderer._tools import render_code_variable, render_type_object
-from great_docs._qrenderer._transformers import ctx_node, Node, WorkaroundKeyError
-from great_docs._qrenderer._type_checks import (
+from great_docs._renderer._tools import render_code_variable, render_type_object
+from great_docs._renderer._transformers import ctx_node, Node, WorkaroundKeyError
+from great_docs._renderer._type_checks import (
     griffe_to_doc,
     is_field_init_false,
     is_initvar,
@@ -145,7 +130,7 @@ from great_docs._qrenderer._type_checks import (
     isDoc,
     no_init,
 )
-from great_docs._qrenderer.blueprint import (
+from great_docs._renderer.blueprint import (
     blueprint as _blueprint,
     blueprint as blueprint_func,
     BlueprintTransformer,
@@ -159,10 +144,8 @@ from great_docs._qrenderer.blueprint import (
     _resolve_alias,
     _to_simple_dict,
 )
-from great_docs._qrenderer.introspection import (
+from great_docs._renderer.introspection import (
     Builder,
-    BuilderPkgdown,
-    BuilderSinglePage,
     dynamic_alias,
     get_object,
     get_parser_defaults,
@@ -172,13 +155,13 @@ from great_docs._qrenderer.introspection import (
     _merge_frontmatter,
     _resolve_target,
 )
-from great_docs._qrenderer.inventory import (
+from great_docs._renderer.inventory import (
     convert_inventory,
     create_inventory,
     _create_inventory_item,
     _maybe_call,
 )
-from great_docs._qrenderer.layout import (
+from great_docs._renderer.layout import (
     Auto,
     AutoOptions,
     ChoicesChildren,
@@ -197,7 +180,7 @@ from great_docs._qrenderer.layout import (
     SummaryDetails,
     _Base,
 )
-from great_docs._qrenderer.pandoc.blocks import (
+from great_docs._renderer.pandoc.blocks import (
     Block,
     blockcontent_to_str,
     blockcontent_to_str_items,
@@ -214,8 +197,8 @@ from great_docs._qrenderer.pandoc.blocks import (
     RawHTMLBlockTag,
     RenderedDocObject,
 )
-from great_docs._qrenderer.pandoc.components import Attr
-from great_docs._qrenderer.pandoc.inlines import (
+from great_docs._renderer.pandoc.components import Attr
+from great_docs._renderer.pandoc.inlines import (
     Code,
     Emph,
     inlinecontent_to_str,
@@ -225,7 +208,7 @@ from great_docs._qrenderer.pandoc.inlines import (
     Str,
     Strong,
 )
-from great_docs._qrenderer.typing_information import TypeInformation, TypeSections
+from great_docs._renderer.typing_information import TypeInformation, TypeSections
 from great_docs.cli import (
     _detect_optional_dependencies,
     _detect_package_manager,
@@ -5926,2695 +5909,6 @@ class TestGdgSite144DocstringTables:
         assert "count" in html
         assert "100" in html
         assert "42.5" in html
-
-
-class TestRendererDunderEscaping:
-    """Dunder names in render_header are escaped to prevent Pandoc bold interpretation."""
-
-    def test_dunder_name_escaped_in_heading(self):
-        """__repr__ in heading becomes \\_\\_repr\\_\\_ to avoid Pandoc bold."""
-        assert _escape_dunders("__repr__") == "\\_\\_repr\\_\\_"
-
-    def test_regular_name_unchanged(self):
-        assert _escape_dunders("process") == "process"
-
-    def test_dotted_dunder_escaped(self):
-        """Collection.__repr__ -> Collection.\\_\\_repr\\_\\_"""
-
-        result = _escape_dunders("Collection.__repr__")
-
-        assert result == "Collection.\\_\\_repr\\_\\_"
-
-    def test_multiple_dunders_escaped(self):
-        result = _escape_dunders("__init__ and __del__")
-        assert result == "\\_\\_init\\_\\_ and \\_\\_del\\_\\_"
-
-    def test_single_underscore_not_escaped(self):
-        assert _escape_dunders("_private") == "_private"
-
-
-class TestRendererRstCodeBlocks:
-    """RST :: code blocks are converted to fenced code blocks at render time."""
-
-    def test_rst_code_block_to_fenced(self):
-        text = "For example::\n\n    x = 1\n    y = 2\n"
-        result = _convert_rst_text(text)
-
-        assert "```python" in result
-        assert "x = 1" in result
-        assert "::" not in result.split("```")[0]
-
-    def test_rst_directive_converted_to_callout(self):
-        """RST directives like .. note:: are converted to Quarto callouts."""
-        text = ".. note::\n\n    Important info\n"
-        result = _convert_rst_text(text)
-
-        assert ".callout-note" in result
-        assert "Important info" in result
-        assert ":::" in result
-
-    def test_math_directive_to_dollar_signs(self):
-        """.. math:: -> $$...$$ display math."""
-        text = "The formula:\n\n.. math::\n\n    a^2 + b^2 = c^2\n"
-        result = _convert_rst_text(text)
-
-        assert "$$" in result
-        assert "a^2 + b^2 = c^2" in result
-        assert ".. math::" not in result
-
-    def test_inline_math_converted(self):
-        """:math:`x^2` -> $x^2$"""
-        text = "The value :math:`x^2` is computed."
-        result = _convert_rst_text(text)
-
-        assert "$x^2$" in result
-        assert ":math:" not in result
-
-
-class TestRendererRstTables:
-    """RST tables are converted to Markdown pipe tables at render time."""
-
-    def test_simple_table_converted(self):
-        text = (
-            "========  =========\n"
-            "Method    Speed\n"
-            "========  =========\n"
-            "Quick     Fast\n"
-            "Merge     Medium\n"
-            "========  =========\n"
-        )
-        result = _convert_rst_text(text)
-
-        assert "| Method" in result
-        assert "| Quick" in result
-        assert "| ---" in result
-        assert "========" not in result
-
-    def test_grid_table_converted(self):
-        text = (
-            "+--------+-------+\n"
-            "| Name   | Value |\n"
-            "+========+=======+\n"
-            "| alpha  | 1     |\n"
-            "+--------+-------+\n"
-        )
-        result = _convert_rst_text(text)
-
-        assert "| Name" in result
-        assert "| alpha" in result
-        assert "| ---" in result
-        assert "+--------+" not in result
-
-
-class TestRendererOverloadSignatures:
-    """Overloaded functions render all @overload signatures."""
-
-    def test_render_overload_signatures(self):
-        renderer = MdRenderer()
-        # Create a simple set of "overload" lines
-        sig_lines = ["process(data: str) -> bytes", "process(data: bytes) -> str"]
-        result = renderer._render_overload_signatures("process", [])
-
-        assert "```python" in result
-
-    def test_overload_empty_falls_back(self):
-        """Empty overloads list produces a basic signature."""
-        renderer = MdRenderer()
-        result = renderer._render_overload_signatures("func", [])
-
-        assert "func()" in result
-
-
-class TestRendererDataclassAttributes:
-    """Dataclass field introspection ensures all fields appear in Attributes."""
-
-    def test_is_griffe_dataclass_true(self):
-        """A griffe object with 'dataclass' label is detected."""
-        obj = MagicMock()
-        obj.labels = {"dataclass"}
-
-        assert _is_griffe_dataclass(obj) is True
-
-    def test_is_griffe_dataclass_false(self):
-        """A griffe object without 'dataclass' label returns False."""
-        obj = MagicMock()
-        obj.labels = {"class"}
-
-        assert _is_griffe_dataclass(obj) is False
-
-    def test_get_dataclass_field_names(self):
-        """Dynamic import of a stdlib dataclass returns all field names."""
-        import dataclasses as _dc
-
-        # Create a temporary dataclass in a temporary module
-        mod = types.ModuleType("_test_dc_mod")
-
-        @_dc.dataclass
-        class SampleDC:
-            name: str = ""
-            count: int = 0
-            items: list = _dc.field(default_factory=list)
-
-        mod.SampleDC = SampleDC
-        sys.modules["_test_dc_mod"] = mod
-
-        try:
-            obj = type(
-                "FakeObj",
-                (),
-                {"canonical_path": "_test_dc_mod.SampleDC", "path": "_test_dc_mod.SampleDC"},
-            )()
-            result = _get_dataclass_field_names(obj)
-            assert result == ["name", "count", "items"]
-        finally:
-            del sys.modules["_test_dc_mod"]
-
-    def test_get_param_descriptions(self):
-        """Parameter descriptions are extracted from parsed docstring sections."""
-        param1 = MagicMock(spec=ds.DocstringParameter)
-        param1.name = "name"
-        param1.description = "The name of the item."
-
-        param2 = MagicMock(spec=ds.DocstringParameter)
-        param2.name = "count"
-        param2.description = "Number of items."
-
-        section = MagicMock(spec=ds.DocstringSectionParameters)
-        section.value = [param1, param2]
-
-        docstring = MagicMock()
-        docstring.parsed = [section]
-
-        obj = MagicMock()
-        obj.docstring = docstring
-
-        result = _get_param_descriptions(obj)
-
-        assert result == {"name": "The name of the item.", "count": "Number of items."}
-
-    def test_get_dataclass_field_names_non_dataclass_returns_none(self):
-        """Non-dataclass returns None."""
-        obj = type("FakeObj", (), {"canonical_path": "os.path", "path": "os.path"})()
-        result = _get_dataclass_field_names(obj)
-
-        assert result is None
-
-
-class TestRendererSphinxRoles:
-    """Sphinx cross-reference roles -> Markdown code spans."""
-
-    def test_func_role(self):
-        assert _convert_sphinx_roles(":func:`get_object`") == "`get_object()`"
-
-    def test_class_role(self):
-        assert _convert_sphinx_roles(":class:`MyClass`") == "`MyClass`"
-
-    def test_exc_role(self):
-        assert _convert_sphinx_roles(":exc:`ValueError`") == "`ValueError`"
-
-    def test_py_prefix_role(self):
-        assert _convert_sphinx_roles(":py:func:`bar`") == "`bar()`"
-
-    def test_meth_role_appends_parens(self):
-        assert _convert_sphinx_roles(":meth:`run`") == "`run()`"
-
-    def test_attr_role_no_parens(self):
-        assert _convert_sphinx_roles(":attr:`name`") == "`name`"
-
-    def test_multiple_roles_in_text(self):
-        text = "Use :func:`foo` and :class:`Bar` together."
-        result = _convert_sphinx_roles(text)
-
-        assert result == "Use `foo()` and `Bar` together."
-
-    def test_func_already_has_parens(self):
-        assert _convert_sphinx_roles(":func:`foo()`") == "`foo()`"
-
-
-class TestRendererRstDirectives:
-    """RST admonition / version directives -> Quarto callout blocks."""
-
-    def test_inline_note(self):
-        result = _convert_rst_directives(".. note:: Something important.")
-
-        assert ".callout-note" in result
-        assert "Something important." in result
-        assert ":::" in result
-
-    def test_inline_warning(self):
-        result = _convert_rst_directives(".. warning:: Be careful.")
-
-        assert ".callout-warning" in result
-        assert "Be careful." in result
-
-    def test_inline_versionadded(self):
-        result = _convert_rst_directives(".. versionadded:: 2.8.1")
-
-        assert ".callout-note" in result
-        assert "Added in version" in result
-        assert "2.8.1" in result
-
-    def test_inline_deprecated(self):
-        result = _convert_rst_directives(".. deprecated:: 2.6 Use X instead.")
-
-        assert ".callout-warning" in result
-        assert "Deprecated since version" in result
-        assert "2.6" in result
-
-    def test_block_note(self):
-        text = ".. note::\n\n    This is the note body.\n"
-        result = _convert_rst_directives(text)
-
-        assert ".callout-note" in result
-        assert "This is the note body." in result
-
-    def test_block_tip(self):
-        text = ".. tip::\n\n    Helpful advice.\n"
-        result = _convert_rst_directives(text)
-
-        assert ".callout-tip" in result
-        assert "Helpful advice." in result
-
-    def test_danger_maps_to_important(self):
-        result = _convert_rst_directives(".. danger:: Critical issue.")
-
-        assert ".callout-important" in result
-
-    def test_bare_directive(self):
-        result = _convert_rst_directives(".. note::")
-
-        assert ".callout-note" in result
-        assert ":::" in result
-
-    def test_versionchanged_with_block_body(self):
-        text = ".. versionchanged:: 3.0\n\n    New behaviour.\n"
-        result = _convert_rst_directives(text)
-
-        assert "Changed in version" in result
-        assert "3.0" in result
-
-
-class TestRendererBoldSectionHeaders:
-    """``**Examples**::`` -> proper QMD section headings."""
-
-    def test_examples_header(self):
-        result = _convert_bold_section_headers("**Examples**::", 2)
-
-        assert "## Examples" in result
-        assert ".doc-section-examples" in result
-
-    def test_notes_header(self):
-        result = _convert_bold_section_headers("**Notes**::", 3)
-
-        assert "### Notes" in result
-        assert ".doc-section-notes" in result
-
-    def test_see_also_header(self):
-        result = _convert_bold_section_headers("**See Also**::", 2)
-
-        assert ".doc-section-see-also" in result
-
-    def test_non_matching_text_unchanged(self):
-        text = "This is **bold** text."
-
-        assert _convert_bold_section_headers(text, 2) == text
-
-
-class TestRendererSphinxFields:
-    """Sphinx-style ``:param:`` / ``:returns:`` / ``:raises:`` fields -> sections."""
-
-    def test_param_and_type(self):
-        text = ":param x: The x value.\n:type x: int"
-        result = _convert_sphinx_fields(text, 2)
-
-        assert "## Parameters" in result
-        assert "x" in result
-        assert "int" in result
-        assert "The x value." in result
-
-    def test_returns_and_rtype(self):
-        text = ":returns: The result.\n:rtype: str"
-        result = _convert_sphinx_fields(text, 2)
-
-        assert "## Returns" in result
-        assert "str" in result
-        assert "The result." in result
-
-    def test_raises(self):
-        text = ":raises ValueError: If bad input."
-        result = _convert_sphinx_fields(text, 2)
-
-        assert "## Raises" in result
-        assert "ValueError" in result
-        assert "If bad input." in result
-
-    def test_combined_fields(self):
-        text = (
-            "Description text.\n\n"
-            ":param x: The x.\n"
-            ":type x: int\n"
-            ":returns: Result.\n"
-            ":rtype: str\n"
-            ":raises ValueError: Bad."
-        )
-        result = _convert_sphinx_fields(text, 2)
-
-        assert "Description text." in result
-        assert "## Parameters" in result
-        assert "## Returns" in result
-        assert "## Raises" in result
-
-    def test_no_fields_unchanged(self):
-        text = "Just normal text."
-
-        assert _convert_sphinx_fields(text, 2) == text
-
-
-class TestRendererGoogleSections:
-    """Google-style ``Args:`` / ``Returns:`` / ``Raises:`` sections -> QMD."""
-
-    def test_args_section(self):
-        text = "Args:\n    x: The x value.\n    y: The y value."
-        result = _convert_google_sections(text, 2)
-
-        assert "## Parameters" in result
-        assert "x" in result
-        assert "y" in result
-
-    def test_returns_section(self):
-        text = "Returns:\n    A dict of results."
-        result = _convert_google_sections(text, 2)
-
-        assert "## Returns" in result
-        assert "A dict of results." in result
-
-    def test_raises_section(self):
-        text = "Raises:\n    ValueError: If bad input.\n    TypeError: If wrong type."
-        result = _convert_google_sections(text, 2)
-
-        assert "## Raises" in result
-        assert "ValueError" in result
-        assert "TypeError" in result
-
-    def test_note_section(self):
-        text = "Note:\n    This is important."
-        result = _convert_google_sections(text, 2)
-
-        assert "## Note" in result
-        assert ".doc-section-notes" in result
-
-    def test_example_section(self):
-        text = "Examples:\n    >>> foo()\n    42"
-        result = _convert_google_sections(text, 3)
-
-        assert "### Examples" in result
-        assert ".doc-section-examples" in result
-
-    def test_combined_sections(self):
-        text = (
-            "Description.\n\n"
-            "Args:\n    x: The x.\n\n"
-            "Returns:\n    The result.\n\n"
-            "Raises:\n    ValueError: Bad."
-        )
-        result = _convert_google_sections(text, 2)
-
-        assert "Description." in result
-        assert "## Parameters" in result
-        assert "## Returns" in result
-        assert "## Raises" in result
-
-    def test_no_sections_unchanged(self):
-        text = "Just normal text."
-
-        assert _convert_google_sections(text, 2) == text
-
-
-class TestRendererDoctestFencing:
-    """Unfenced ``>>>`` doctest blocks -> fenced ```python code blocks."""
-
-    def test_single_doctest_line(self):
-        text = ">>> print('hello')"
-        result = _fence_doctest_blocks(text)
-
-        assert "```python" in result
-        assert ">>> print('hello')" in result
-        assert result.endswith("```")
-
-    def test_multi_line_doctest(self):
-        text = ">>> x = 1\n>>> y = 2\n>>> x + y"
-        result = _fence_doctest_blocks(text)
-
-        assert result.count("```python") == 1
-        assert result.count("```") == 2
-
-    def test_doctest_with_continuation(self):
-        text = ">>> for i in range(3):\n...     print(i)"
-        result = _fence_doctest_blocks(text)
-
-        assert "```python" in result
-        assert "... " in result
-
-    def test_interspersed_text(self):
-        text = "First example:\n\n>>> x = 1\n\nSecond example:\n\n>>> y = 2"
-        result = _fence_doctest_blocks(text)
-
-        assert result.count("```python") == 2
-
-    def test_no_doctest_unchanged(self):
-        text = "Just some normal text."
-
-        assert _fence_doctest_blocks(text) == text
-
-    def test_bare_prompt(self):
-        text = ">>>"
-        result = _fence_doctest_blocks(text)
-
-        assert "```python" in result
-
-    def test_in_render_section_text(self):
-        """Doctest fencing is applied in _render_section_text."""
-        text = "Example usage:\n\n>>> foo(42)\n>>> bar()"
-        result = _fence_doctest_blocks(_convert_rst_text(text))
-
-        assert "```python" in result
-        assert ">>> foo(42)" in result
-
-
-class TestRendererCallableParens:
-    """Callable objects get ``()`` appended to their heading name."""
-
-    def test_function_heading_has_parens(self):
-        renderer = MdRenderer()
-
-        doc = MagicMock(spec=["name", "obj", "__class__"])
-        doc.name = "my_func"
-        doc.obj = MagicMock()
-        doc.obj.path = "pkg.my_func"
-        doc.obj.kind.value = "function"
-        doc.obj.labels = set()
-
-        # Make isinstance check work for DocFunction
-        doc.__class__ = layout.DocFunction
-
-        result = renderer.render_header(doc)
-
-        assert "my_func()" in result
-        assert "# my_func()" in result
-
-    def test_class_heading_no_parens(self):
-        renderer = MdRenderer()
-
-        doc = MagicMock(spec=["name", "obj", "__class__"])
-        doc.name = "MyClass"
-        doc.obj = MagicMock()
-        doc.obj.path = "pkg.MyClass"
-        doc.obj.kind.value = "class"
-        doc.obj.labels = {"class"}
-
-        doc.__class__ = layout.DocClass
-
-        result = renderer.render_header(doc)
-
-        assert "MyClass" in result
-        assert "MyClass()" not in result
-
-
-class TestRendererTypeBadgeClasses:
-    """Headings get ``.doc-type-{kind}`` CSS classes."""
-
-    def test_function_type_class(self):
-        renderer = MdRenderer()
-
-        doc = MagicMock(spec=["name", "obj", "__class__"])
-        doc.name = "my_func"
-        doc.obj = MagicMock()
-        doc.obj.path = "pkg.my_func"
-        doc.obj.kind.value = "function"
-        doc.obj.labels = set()
-        doc.__class__ = layout.DocFunction
-
-        result = renderer.render_header(doc)
-
-        assert ".doc-type-function" in result
-
-    def test_class_type_class(self):
-        renderer = MdRenderer()
-
-        doc = MagicMock(spec=["name", "obj", "__class__"])
-        doc.name = "MyClass"
-        doc.obj = MagicMock()
-        doc.obj.path = "pkg.MyClass"
-        doc.obj.kind.value = "class"
-        doc.obj.labels = {"class"}
-        doc.__class__ = layout.DocClass
-
-        result = renderer.render_header(doc)
-
-        assert ".doc-type-class" in result
-
-    def test_enum_type_class(self):
-        renderer = MdRenderer()
-
-        doc = MagicMock(spec=["name", "obj", "__class__"])
-        doc.name = "Color"
-        doc.obj = MagicMock()
-        doc.obj.path = "pkg.Color"
-        doc.obj.kind.value = "class"
-        doc.obj.labels = {"enum"}
-        doc.__class__ = layout.DocClass
-
-        result = renderer.render_header(doc)
-
-        assert ".doc-type-enum" in result
-
-    def test_attribute_type_class(self):
-        renderer = MdRenderer()
-
-        doc = MagicMock(spec=["name", "obj", "__class__"])
-        doc.name = "MY_CONST"
-        doc.obj = MagicMock()
-        doc.obj.path = "pkg.MY_CONST"
-        doc.obj.kind.value = "attribute"
-        doc.obj.labels = set()
-        doc.__class__ = layout.DocAttribute
-
-        result = renderer.render_header(doc)
-
-        assert ".doc-type-attribute" in result
-        assert "MY_CONST()" not in result
-
-
-class TestRendererSignatureMultiline:
-    """Signatures with many arguments auto-wrap to multi-line."""
-
-    def test_short_sig_stays_single_line(self):
-        renderer = MdRenderer()
-        result = renderer._signature_func_or_class(
-            type(
-                "FakeEl",
-                (),
-                {
-                    "name": "foo",
-                    "path": "pkg.foo",
-                    "parameters": [],
-                    "is_class": False,
-                    "parent": None,
-                },
-            )()
-        )
-
-        assert "foo()" in result
-        assert "\n    " not in result  # no indentation = single line
-
-    def test_long_sig_wraps(self):
-        """Signatures exceeding 80 chars wrap to multi-line."""
-        renderer = MdRenderer()
-
-        params = []
-        for pname in ["very_long_param_one", "very_long_param_two", "very_long_param_three"]:
-            p = MagicMock(spec=dc.Parameter)
-            p.name = pname
-            p.kind = dc.ParameterKind.positional_or_keyword
-            p.annotation = None
-            p.default = None
-            params.append(p)
-
-        el = MagicMock()
-        el.name = "a_function_with_a_really_long_name"
-        el.path = "pkg.a_function_with_a_really_long_name"
-        el.is_class = False
-        el.parent = None
-        el.parameters = dc.Parameters(*params)
-
-        result = renderer._signature_func_or_class(el)
-
-        assert "\n    " in result  # has indentation = multi-line
-
-
-class TestRendererConstantValues:
-    """Constants include annotation and value in their signature."""
-
-    def test_bare_constant_signature(self):
-        """Constant with no annotation or value renders as plain name."""
-        renderer = MdRenderer()
-        el = MagicMock()
-        el.name = "MY_CONST"
-        el.path = "pkg.MY_CONST"
-        el.is_class = False
-        el.parent = None
-        el.annotation = None
-        el.value = None
-
-        result = renderer._signature_module_or_attr(el)
-
-        assert result == "`MY_CONST`"
-
-    def test_constant_with_annotation(self):
-        """Constant with type annotation renders as ``NAME: type``."""
-        renderer = MdRenderer()
-        el = MagicMock()
-        el.name = "TIMEOUT"
-        el.path = "pkg.TIMEOUT"
-        el.is_class = False
-        el.parent = None
-        el.annotation = "int"
-        el.value = None
-
-        result = renderer._signature_module_or_attr(el)
-
-        assert result == "`TIMEOUT: int`"
-
-    def test_constant_with_value(self):
-        """Constant with value renders as ``NAME = value``."""
-        renderer = MdRenderer()
-        el = MagicMock()
-        el.name = "MAX_RETRIES"
-        el.path = "pkg.MAX_RETRIES"
-        el.is_class = False
-        el.parent = None
-        el.annotation = None
-        el.value = "3"
-
-        result = renderer._signature_module_or_attr(el)
-
-        assert result == "`MAX_RETRIES = 3`"
-
-    def test_constant_with_both(self):
-        """Constant with annotation and value renders as ``NAME: type = value``."""
-        renderer = MdRenderer()
-        el = MagicMock()
-        el.name = "DEFAULT_PORT"
-        el.path = "pkg.DEFAULT_PORT"
-        el.is_class = False
-        el.parent = None
-        el.annotation = "int"
-        el.value = "8080"
-
-        result = renderer._signature_module_or_attr(el)
-
-        assert result == "`DEFAULT_PORT: int = 8080`"
-
-    def test_constant_long_value_skipped(self):
-        """Values exceeding 200 chars are not included."""
-        renderer = MdRenderer()
-        el = MagicMock()
-        el.name = "BIG"
-        el.path = "pkg.BIG"
-        el.is_class = False
-        el.parent = None
-        el.annotation = "str"
-        el.value = "x" * 201
-
-        result = renderer._signature_module_or_attr(el)
-
-        assert result == "`BIG: str`"
-        assert "x" * 201 not in result
-
-
-class TestRendererNonCallableCleanup:
-    """Enums and TypedDicts do not get ``()`` in their signature."""
-
-    def test_enum_signature_no_parens(self):
-        """Enum class signature has no parentheses."""
-        renderer = MdRenderer()
-
-        el = MagicMock(spec=dc.Class)
-        el.__class__ = dc.Class
-        el.name = "Color"
-        el.path = "pkg.Color"
-        el.is_class = True
-        el.parent = None
-        el.labels = {"enum"}
-        el.bases = []
-
-        result = renderer._signature_func_or_class(el)
-
-        assert "Color" in result
-        assert "Color()" not in result
-
-    def test_typeddict_signature_no_parens(self):
-        """TypedDict class signature has no parentheses."""
-        renderer = MdRenderer()
-
-        el = MagicMock(spec=dc.Class)
-        el.__class__ = dc.Class
-        el.name = "Config"
-        el.path = "pkg.Config"
-        el.is_class = True
-        el.parent = None
-        el.labels = set()
-        el.bases = ["TypedDict"]
-
-        result = renderer._signature_func_or_class(el)
-
-        assert "Config" in result
-        assert "Config()" not in result
-
-    def test_regular_class_still_has_parens(self):
-        """Normal classes retain `()` in their signature."""
-        renderer = MdRenderer()
-
-        el = MagicMock(spec=dc.Class)
-        el.__class__ = dc.Class
-        el.name = "Widget"
-        el.path = "pkg.Widget"
-        el.is_class = True
-        el.parent = None
-        el.labels = set()
-        el.bases = ["object"]
-        el.parameters = dc.Parameters()
-
-        result = renderer._signature_func_or_class(el)
-
-        assert "Widget()" in result
-
-
-class TestRendererSectionSeparators:
-    """Class member docs are separated by horizontal rules."""
-
-    def test_separators_between_methods(self):
-        """Methods section includes --- separators between member docs."""
-        renderer = MdRenderer()
-        renderer.display_name = "name"
-
-        # Build minimal griffe-level function objects
-        def _make_func_obj(name):
-            obj = MagicMock(spec=dc.Function)
-            obj.__class__ = dc.Function
-            obj.name = name
-            obj.path = f"pkg.MyClass.{name}"
-            obj.is_function = True
-            obj.is_attribute = False
-            obj.is_class = False
-            obj.kind.value = "function"
-            obj.labels = set()
-            obj.parent = MagicMock()
-            obj.parent.name = "MyClass"
-            obj.parent.is_class = True
-            obj.parameters = dc.Parameters()
-            obj.docstring = MagicMock(spec=dc.Docstring)
-            obj.docstring.parsed = [ds.DocstringSectionText(value=f"Docstring for {name}.")]
-            return obj
-
-        def _make_method_doc(name, func_obj):
-            doc = layout.DocFunction(
-                name=name,
-                obj=func_obj,
-                anchor=f"pkg.MyClass.{name}",
-                signature_name="relative",
-            )
-            return doc
-
-        func_foo = _make_func_obj("foo")
-        func_bar = _make_func_obj("bar")
-        method1 = _make_method_doc("foo", func_foo)
-        method2 = _make_method_doc("bar", func_bar)
-
-        cls_obj = MagicMock(spec=dc.Class)
-        cls_obj.__class__ = dc.Class
-        cls_obj.name = "MyClass"
-        cls_obj.path = "pkg.MyClass"
-        cls_obj.is_class = True
-        cls_obj.is_function = False
-        cls_obj.is_attribute = False
-        cls_obj.kind.value = "class"
-        cls_obj.labels = set()
-        cls_obj.bases = []
-        cls_obj.parent = None
-        cls_obj.parameters = dc.Parameters()
-        cls_obj.docstring = MagicMock(spec=dc.Docstring)
-        cls_obj.docstring.parsed = [ds.DocstringSectionText(value="A class.")]
-
-        el = layout.DocClass(
-            name="MyClass",
-            obj=cls_obj,
-            anchor="pkg.MyClass",
-            signature_name="relative",
-            members=[method1, method2],
-        )
-
-        result = renderer._render_doc_class_module(el)
-
-        # Should contain --- separator(s) between summary and members
-        assert "---" in result
-
-
-class TestRendererRstCitations:
-    """RST citation markers are converted to markdown numbered lists."""
-
-    def test_simple_citations(self):
-        """Basic ``.. [1]`` markers become numbered list items."""
-        text = ".. [1] Author (2023). Title.\n.. [2] Another ref."
-        result = _convert_rst_citations(text)
-
-        assert "1. Author (2023). Title." in result
-        assert "2. Another ref." in result
-        assert ".. [1]" not in result
-
-    def test_citation_with_url(self):
-        """Bare URLs in citation bodies get auto-linked."""
-        text = ".. [1] See https://example.com for details."
-        result = _convert_rst_citations(text)
-
-        assert "1." in result
-        assert "<https://example.com>" in result
-
-    def test_no_citations_unchanged(self):
-        """Text without citation markers passes through unchanged."""
-        text = "Regular paragraph text.\nNo citations here."
-        result = _convert_rst_citations(text)
-
-        assert result == text
-
-    def test_citations_in_convert_rst_text(self):
-        """Citations are converted as part of the full RST -> Markdown pipeline."""
-
-        text = "References\n\n.. [1] First ref.\n.. [2] Second ref."
-        result = _convert_rst_text(text)
-
-        assert "1. First ref." in result
-        assert "2. Second ref." in result
-
-    def test_multi_line_citation(self):
-        """Multi-line citations are joined."""
-        text = ".. [1] Author (2023).\n    Title of the work."
-        result = _convert_rst_citations(text)
-
-        assert "1. Author (2023). Title of the work." in result
-
-
-class TestRendererRstMathDisplay:
-    """``.. math::`` directive is converted to ``$$...$$`` display math."""
-
-    def test_math_directive_to_display_math(self):
-        """``.. math::`` block becomes ``$$`` display math."""
-        text = "Some text.\n\n.. math::\n\n    E = mc^2\n"
-        result = _convert_rst_text(text)
-
-        assert "$$" in result
-        assert "E = mc^2" in result
-        assert ".. math::" not in result
-
-    def test_inline_math_converted(self):
-        """Inline ``:math:`` roles become ``$...$``."""
-        text = "The formula :math:`x^2` is simple."
-        result = _convert_rst_text(text)
-
-        assert "$x^2$" in result
-        assert ":math:" not in result
-
-
-class TestRendererIsNonCallableClass:
-    """Helper function _is_non_callable_class detects enums and TypedDicts."""
-
-    def test_enum_detected(self):
-        obj = MagicMock()
-        obj.labels = {"enum"}
-        obj.bases = []
-
-        assert _is_non_callable_class(obj) is True
-
-    def test_typeddict_detected_by_base(self):
-        obj = MagicMock()
-        obj.labels = set()
-        obj.bases = ["TypedDict"]
-
-        assert _is_non_callable_class(obj) is True
-
-    def test_regular_class_not_detected(self):
-        obj = MagicMock()
-        obj.labels = set()
-        obj.bases = ["object"]
-
-        assert _is_non_callable_class(obj) is False
-
-    def test_int_enum_detected(self):
-        obj = MagicMock()
-        obj.labels = set()
-        obj.bases = ["IntEnum"]
-
-        assert _is_non_callable_class(obj) is True
-
-    def test_str_enum_detected(self):
-        obj = MagicMock()
-        obj.labels = set()
-        obj.bases = ["StrEnum"]
-
-        assert _is_non_callable_class(obj) is True
-
-
-class TestEnsureBlankBeforeLists:
-    """_ensure_blank_before_lists inserts blank lines before list items."""
-
-    def test_inserts_blank_before_list_after_prose(self):
-        text = "Some text\n- item one\n- item two"
-        result = _ensure_blank_before_lists(text)
-        assert result == "Some text\n\n- item one\n- item two"
-
-    def test_no_insert_when_already_blank(self):
-        text = "Some text\n\n- item one"
-        result = _ensure_blank_before_lists(text)
-        assert result == text
-
-    def test_numbered_list(self):
-        text = "Paragraph\n1. First\n2. Second"
-        result = _ensure_blank_before_lists(text)
-        assert result == "Paragraph\n\n1. First\n2. Second"
-
-    def test_list_at_start(self):
-        text = "- first item\n- second"
-        result = _ensure_blank_before_lists(text)
-        # No blank inserted at very start
-        assert result == text
-
-    def test_star_list(self):
-        text = "Hello\n* bullet"
-        result = _ensure_blank_before_lists(text)
-        assert result == "Hello\n\n* bullet"
-
-
-class TestConvertRstLinkToMd:
-    """convert_rst_link_to_md wraps RST cross-references in []()."""
-
-    def test_basic_rst_link(self):
-        rst = ":func:`some_func`"
-        result = convert_rst_link_to_md(rst)
-        assert "[](" in result
-
-    def test_no_rst_link_unchanged(self):
-        text = "Just plain text."
-        result = convert_rst_link_to_md(text)
-        assert result == text
-
-
-class TestSimpleTable:
-    """_simple_table produces a markdown table."""
-
-    def test_basic_table(self):
-        result = _simple_table([("a", "b"), ("c", "d")], ["H1", "H2"])
-        assert "| H1 | H2 |" in result
-        assert "| --- | --- |" in result
-        assert "| a | b |" in result
-        assert "| c | d |" in result
-
-
-class TestHasAttrSection:
-    """_has_attr_section checks whether a docstring has an Attributes section."""
-
-    def test_none_docstring(self):
-        assert _has_attr_section(None) is False
-
-    def test_with_attributes(self):
-        docstring = MagicMock()
-        docstring.parsed = [ds.DocstringSectionAttributes(value=[])]
-
-        assert _has_attr_section(docstring) is True
-
-    def test_without_attributes(self):
-        docstring = MagicMock()
-        docstring.parsed = [ds.DocstringSectionText(value="Hello")]
-
-        assert _has_attr_section(docstring) is False
-
-
-class TestSanitizeTitle:
-    """_sanitize_title strips non-alphanumeric characters."""
-
-    def test_basic(self):
-        assert _sanitize_title("See Also") == "See-Also"
-
-    def test_special_chars(self):
-        assert _sanitize_title("Hello World!") == "Hello-World"
-
-
-class TestGetParamDescriptions:
-    """_get_param_descriptions extracts descriptions from docstring."""
-
-    def test_no_docstring(self):
-        obj = MagicMock()
-        obj.docstring = None
-        assert _get_param_descriptions(obj) == {}
-
-    def test_with_parameters_section(self):
-        param = MagicMock()
-        param.name = "x"
-        param.description = "The x value"
-
-        obj = MagicMock()
-        obj.docstring.parsed = [ds.DocstringSectionParameters(value=[param])]
-        result = _get_param_descriptions(obj)
-        assert result == {"x": "The x value"}
-
-
-class TestParamRowToDefinitionList:
-    """ParamRow.to_definition_list builds a pandoc definition-list item."""
-
-    def test_basic(self):
-        row = ParamRow(name="x", description="An integer", annotation="int", default="0")
-        term, desc = row.to_definition_list()
-
-        assert "x" in term
-        assert "int" in term
-        assert "0" in term
-        assert "An integer" in desc
-
-    def test_no_name(self):
-        row = ParamRow(name=None, description="A return value", annotation="str")
-        term, desc = row.to_definition_list()
-
-        assert "str" in term
-        assert "A return value" in desc
-
-    def test_no_default(self):
-        row = ParamRow(name="y", description="Desc", annotation="float")
-        term, desc = row.to_definition_list()
-
-        assert "y" in term
-        assert "float" in term
-        assert "Desc" in desc
-
-    def test_no_annotation(self):
-        row = ParamRow(name="z", description="Desc")
-        term, desc = row.to_definition_list()
-
-        assert "z" in term
-
-
-class TestParamRowToTuple:
-    """ParamRow.to_tuple returns tuples for different table styles."""
-
-    def test_parameters_with_default(self):
-        row = ParamRow(name="x", description="Desc", annotation="int", default="0")
-        result = row.to_tuple("parameters")
-
-        assert result == ("x", "int", "Desc", escape("0"))
-
-    def test_parameters_no_default(self):
-        row = ParamRow(name="x", description="Desc", annotation="int")
-        result = row.to_tuple("parameters")
-
-        assert result[3] == "_required_"
-
-    def test_attributes(self):
-        row = ParamRow(name="x", description="Desc", annotation="int")
-        result = row.to_tuple("attributes")
-
-        assert result == ("x", "int", "Desc")
-
-    def test_returns(self):
-        row = ParamRow(name="x", description="Desc", annotation="int")
-        result = row.to_tuple("returns")
-
-        assert result == ("x", "int", "Desc")
-
-    def test_unsupported_style(self):
-        row = ParamRow(name="x", description="Desc")
-
-        with pytest.raises(NotImplementedError, match="Unsupported table style"):
-            row.to_tuple("unknown")
-
-
-class TestRendererFromConfig:
-    """Renderer.from_config creates renderers from different config types."""
-
-    def test_string_config(self):
-        result = Renderer.from_config("markdown")
-
-        assert isinstance(result, MdRenderer)
-
-    def test_dict_config(self):
-        result = Renderer.from_config({"style": "markdown", "header_level": 2})
-
-        assert isinstance(result, MdRenderer)
-        assert result.header_level == 2
-
-    def test_renderer_passthrough(self):
-        r = MdRenderer()
-        result = Renderer.from_config(r)
-
-        assert result is r
-
-    def test_invalid_type(self):
-        with pytest.raises(TypeError):
-            Renderer.from_config(42)
-
-
-class TestMdRendererFetchObjectDispname:
-    """MdRenderer._fetch_object_dispname handles different display_name modes."""
-
-    def test_name_mode(self):
-        renderer = MdRenderer(display_name="name")
-        obj = MagicMock()
-        obj.name = "MyClass"
-        obj.path = "pkg.mod.MyClass"
-        assert renderer._fetch_object_dispname(obj) == "MyClass"
-
-    def test_full_mode(self):
-        renderer = MdRenderer(display_name="full")
-        obj = MagicMock()
-        obj.path = "pkg.mod.MyClass"
-        assert renderer._fetch_object_dispname(obj) == "pkg.mod.MyClass"
-
-    def test_canonical_mode(self):
-        renderer = MdRenderer(display_name="canonical")
-        obj = MagicMock()
-        obj.canonical_path = "pkg.MyClass"
-        assert renderer._fetch_object_dispname(obj) == "pkg.MyClass"
-
-    def test_invalid_mode(self):
-        renderer = MdRenderer(display_name="bogus")
-        obj = MagicMock()
-        with pytest.raises(ValueError, match="Unsupported display_name"):
-            renderer._fetch_object_dispname(obj)
-
-
-class TestMdRendererRenderAnnotation:
-    """MdRenderer.render_annotation handles different annotation types."""
-
-    def test_none(self):
-        renderer = MdRenderer()
-        assert renderer.render_annotation(None) == ""
-
-    def test_string(self):
-        renderer = MdRenderer()
-        result = renderer.render_annotation("int")
-        assert "int" in result
-
-    def test_expr_name_no_interlinks(self):
-        renderer = MdRenderer(render_interlinks=False)
-        el = expr.ExprName("MyType")
-        result = renderer.render_annotation(el)
-        assert "MyType" in result
-        assert "[" not in result
-
-    def test_expr_name_with_interlinks(self):
-        renderer = MdRenderer(render_interlinks=True)
-        el = expr.ExprName("MyType")
-        result = renderer.render_annotation(el)
-        assert "[" in result
-        assert "`" in result
-
-    def test_fallback(self):
-        renderer = MdRenderer()
-        result = renderer.render_annotation(42)
-        assert "42" in result
-
-
-class TestMdRendererRenderTable:
-    """MdRenderer._render_table supports both table and description-list styles."""
-
-    def test_description_list_style(self):
-        renderer = MdRenderer(table_style="description-list")
-        rows = [ParamRow(name="x", description="Desc", annotation="int", default="0")]
-        result = renderer._render_table(
-            rows, ["Name", "Type", "Description", "Default"], "parameters"
-        )
-
-        # DefinitionList renders differently from a table
-        assert "|" not in result or "x" in result
-
-    def test_default_table_style(self):
-        renderer = MdRenderer(table_style="table")
-        rows = [ParamRow(name="x", description="Desc", annotation="int", default="0")]
-        result = renderer._render_table(
-            rows, ["Name", "Type", "Description", "Default"], "parameters"
-        )
-
-        assert "| x | int |" in result
-
-
-class TestMdRendererRenderParameters:
-    """MdRenderer._render_parameters handles kw_only and pos_only."""
-
-    def test_keyword_only_separator(self):
-        renderer = MdRenderer()
-        params = dc.Parameters(
-            dc.Parameter("a", kind=dc.ParameterKind.positional_or_keyword),
-            dc.Parameter("b", kind=dc.ParameterKind.keyword_only),
-        )
-        result = renderer._render_parameters(params)
-
-        assert "*" in result
-
-    def test_positional_only_separator(self):
-        renderer = MdRenderer()
-        params = dc.Parameters(
-            dc.Parameter("a", kind=dc.ParameterKind.positional_only),
-            dc.Parameter("b", kind=dc.ParameterKind.positional_or_keyword),
-        )
-        result = renderer._render_parameters(params)
-
-        assert "/" in result
-
-    def test_var_positional_suppresses_star(self):
-        renderer = MdRenderer()
-        params = dc.Parameters(
-            dc.Parameter("args", kind=dc.ParameterKind.var_positional),
-            dc.Parameter("b", kind=dc.ParameterKind.keyword_only),
-        )
-        result = renderer._render_parameters(params)
-
-        # No bare "*" separator when *args already present
-        assert "*" not in result  # bare * separator should not appear
-
-
-class TestMdRendererRenderDispatch:
-    """MdRenderer.render dispatches correctly for various types."""
-
-    def test_render_string(self):
-        renderer = MdRenderer()
-
-        assert renderer.render("hello") == "hello"
-
-    def test_render_warnings_section(self):
-        renderer = MdRenderer()
-        el = DocstringSectionWarnings(value="Be careful!")
-        result = renderer.render(el)
-
-        assert "Be careful" in result
-
-    def test_render_see_also_section(self):
-        renderer = MdRenderer()
-        el = DocstringSectionSeeAlso(value="other_func")
-        result = renderer.render(el)
-
-        assert "other_func" in result
-
-    def test_render_notes_section(self):
-        renderer = MdRenderer()
-        el = DocstringSectionNotes(value="Important note.")
-        result = renderer.render(el)
-
-        assert "Important note" in result
-
-    def test_render_example_code(self):
-        renderer = MdRenderer()
-        el = ExampleCode(value="x = 1")
-        result = renderer.render(el)
-
-        assert "```python" in result
-        assert "x = 1" in result
-
-    def test_render_example_text(self):
-        renderer = MdRenderer()
-        el = ExampleText(value="Some text")
-        result = renderer.render(el)
-
-        assert "Some text" in result
-
-    def test_render_admonition_notes(self):
-        renderer = MdRenderer()
-        el = ds.DocstringSectionAdmonition(kind="admonition", text="Note content", title="Notes")
-        result = renderer.render(el)
-
-        assert "Note content" in result
-
-    def test_render_admonition_see_also(self):
-        renderer = MdRenderer()
-        el = ds.DocstringSectionAdmonition(
-            kind="admonition",
-            text=":func:`other_func`",
-            title="See Also",
-        )
-        result = renderer.render(el)
-
-        assert "other_func" in result
-
-    def test_render_returns_section(self):
-        renderer = MdRenderer()
-        ret = ds.DocstringReturn(name="result", annotation="int", description="The count")
-        el = ds.DocstringSectionReturns(value=[ret])
-        result = renderer.render(el)
-
-        assert "result" in result
-        assert "The count" in result
-
-    def test_render_raises_section(self):
-        renderer = MdRenderer()
-        exc = ds.DocstringRaise(annotation="ValueError", description="If invalid")
-        el = ds.DocstringSectionRaises(value=[exc])
-        result = renderer.render(el)
-
-        assert "ValueError" in result
-        assert "If invalid" in result
-
-    def test_render_unsupported_raises(self):
-        renderer = MdRenderer()
-        el = ds.DocstringDeprecated(description="old")
-        with pytest.raises(NotImplementedError):
-            renderer.render(el)
-
-
-class TestMdRendererRenderPage:
-    """MdRenderer._render_page handles pages with and without summaries."""
-
-    def test_page_with_summary(self):
-        renderer = MdRenderer()
-
-        obj = MagicMock(spec=dc.Function)
-        obj.__class__ = dc.Function
-        obj.name = "func"
-        obj.path = "pkg.func"
-        obj.is_class = False
-        obj.is_function = True
-        obj.is_attribute = False
-        obj.kind.value = "function"
-        obj.labels = set()
-        obj.parent = None
-        obj.parameters = dc.Parameters()
-        obj.docstring = MagicMock(spec=dc.Docstring)
-        obj.docstring.parsed = [ds.DocstringSectionText(value="A func.")]
-
-        doc = layout.DocFunction(
-            name="func",
-            obj=obj,
-            anchor="pkg.func",
-            signature_name="relative",
-        )
-
-        summary = layout.SummaryDetails(name="My Page", desc="Page description")
-        page = layout.Page(path="test", summary=summary, contents=[doc])
-        result = renderer._render_page(page)
-
-        assert "My Page" in result
-        assert "Page description" in result
-
-    def test_page_without_summary(self):
-        renderer = MdRenderer()
-
-        obj = MagicMock(spec=dc.Function)
-        obj.__class__ = dc.Function
-        obj.name = "func"
-        obj.path = "pkg.func"
-        obj.is_class = False
-        obj.is_function = True
-        obj.is_attribute = False
-        obj.kind.value = "function"
-        obj.labels = set()
-        obj.parent = None
-        obj.parameters = dc.Parameters()
-        obj.docstring = MagicMock(spec=dc.Docstring)
-        obj.docstring.parsed = [ds.DocstringSectionText(value="A func.")]
-
-        doc = layout.DocFunction(
-            name="func",
-            obj=obj,
-            anchor="pkg.func",
-            signature_name="relative",
-        )
-
-        page = layout.Page(path="test", contents=[doc])
-        result = renderer._render_page(page)
-        assert "func" in result
-
-
-class TestMdRendererRenderSection:
-    """MdRenderer._render_section produces titled sections."""
-
-    def test_section_with_title(self):
-        renderer = MdRenderer()
-
-        obj = MagicMock(spec=dc.Function)
-        obj.__class__ = dc.Function
-        obj.name = "func"
-        obj.path = "pkg.func"
-        obj.is_class = False
-        obj.is_function = True
-        obj.is_attribute = False
-        obj.kind.value = "function"
-        obj.labels = set()
-        obj.parent = None
-        obj.parameters = dc.Parameters()
-        obj.docstring = MagicMock(spec=dc.Docstring)
-        obj.docstring.parsed = [ds.DocstringSectionText(value="Doc text")]
-
-        doc = layout.DocFunction(
-            name="func",
-            obj=obj,
-            anchor="pkg.func",
-            signature_name="relative",
-        )
-
-        section = layout.Section(title="Functions", desc="All functions", contents=[doc])
-        result = renderer._render_section(section)
-
-        assert "# Functions" in result
-        assert "All functions" in result
-
-
-class TestMdRendererSummarizeLayout:
-    """MdRenderer.summarize renders summary rows for layout elements."""
-
-    def test_summarize_layout(self):
-        renderer = MdRenderer()
-
-        section = layout.Section(title="API", desc="API docs", contents=[])
-        lo = layout.Layout(sections=[section])
-        result = renderer.summarize(lo)
-
-        assert "API" in result
-
-    def test_summarize_section_with_subtitle(self):
-        renderer = MdRenderer()
-
-        obj = MagicMock(spec=dc.Function)
-        obj.__class__ = dc.Function
-        obj.name = "f"
-        obj.path = "pkg.f"
-        obj.is_function = True
-        obj.is_class = False
-        obj.is_attribute = False
-        obj.kind.value = "function"
-        obj.labels = set()
-        obj.parent = None
-        obj.parameters = dc.Parameters()
-        obj.docstring = MagicMock(spec=dc.Docstring)
-        obj.docstring.parsed = [ds.DocstringSectionText(value="Hello")]
-
-        doc = layout.DocFunction(
-            name="f",
-            obj=obj,
-            anchor="pkg.f",
-            signature_name="relative",
-        )
-
-        section = layout.Section(title=None, subtitle="Sub", desc=None, contents=[doc])
-        result = renderer.summarize(section)
-        assert "### Sub" in result
-
-    def test_summarize_section_empty(self):
-        renderer = MdRenderer()
-
-        section = layout.Section(title="Empty", desc=None, contents=[])
-        result = renderer.summarize(section)
-        assert "Empty" in result
-
-    def test_summarize_member_page(self):
-        renderer = MdRenderer()
-
-        obj = MagicMock(spec=dc.Function)
-        obj.__class__ = dc.Function
-        obj.name = "func"
-        obj.path = "pkg.func"
-        obj.is_function = True
-        obj.is_class = False
-        obj.is_attribute = False
-        obj.kind.value = "function"
-        obj.labels = set()
-        obj.parent = None
-        obj.parameters = dc.Parameters()
-        obj.docstring = MagicMock(spec=dc.Docstring)
-        obj.docstring.parsed = [ds.DocstringSectionText(value="Summary text.")]
-
-        doc = layout.DocFunction(
-            name="func",
-            obj=obj,
-            anchor="pkg.func",
-            signature_name="relative",
-        )
-
-        mp = layout.MemberPage(path="member", contents=[doc])
-        result = renderer.summarize(mp)
-        assert "func" in result
-
-    def test_summarize_page_with_summary(self):
-        renderer = MdRenderer()
-        summary = layout.SummaryDetails(name="Page", desc="Page desc")
-        page = layout.Page(path="test", summary=summary, contents=[])
-        result = renderer.summarize(page)
-
-        assert "Page" in result
-        assert "Page desc" in result
-
-    def test_summarize_page_flatten(self):
-        renderer = MdRenderer()
-
-        obj = MagicMock(spec=dc.Function)
-        obj.__class__ = dc.Function
-        obj.name = "func1"
-        obj.path = "pkg.func1"
-        obj.is_function = True
-        obj.is_class = False
-        obj.is_attribute = False
-        obj.kind.value = "function"
-        obj.labels = set()
-        obj.parent = None
-        obj.parameters = dc.Parameters()
-        obj.docstring = MagicMock(spec=dc.Docstring)
-        obj.docstring.parsed = [ds.DocstringSectionText(value="Doc1.")]
-
-        obj2 = MagicMock(spec=dc.Function)
-        obj2.__class__ = dc.Function
-        obj2.name = "func2"
-        obj2.path = "pkg.func2"
-        obj2.is_function = True
-        obj2.is_class = False
-        obj2.is_attribute = False
-        obj2.kind.value = "function"
-        obj2.labels = set()
-        obj2.parent = None
-        obj2.parameters = dc.Parameters()
-        obj2.docstring = MagicMock(spec=dc.Docstring)
-        obj2.docstring.parsed = [ds.DocstringSectionText(value="Doc2.")]
-
-        doc1 = layout.DocFunction(
-            name="func1", obj=obj, anchor="pkg.func1", signature_name="relative"
-        )
-        doc2 = layout.DocFunction(
-            name="func2", obj=obj2, anchor="pkg.func2", signature_name="relative"
-        )
-
-        page = layout.Page(path="test", flatten=True, contents=[doc1, doc2])
-        result = renderer.summarize(page)
-        assert "func1" in result
-        assert "func2" in result
-
-    def test_summarize_link(self):
-        renderer = MdRenderer()
-
-        obj = MagicMock(spec=dc.Function)
-        obj.__class__ = dc.Function
-        obj.name = "func"
-        obj.path = "pkg.func"
-        obj.docstring = MagicMock(spec=dc.Docstring)
-        obj.docstring.parsed = [ds.DocstringSectionText(value="Link desc.")]
-
-        link = layout.Link(name="pkg.func", obj=obj)
-        result = renderer.summarize(link)
-
-        assert "pkg.func" in result
-
-    def test_summarize_doc_with_path(self):
-        renderer = MdRenderer()
-
-        obj = MagicMock(spec=dc.Function)
-        obj.__class__ = dc.Function
-        obj.name = "func"
-        obj.path = "pkg.func"
-        obj.is_function = True
-        obj.is_class = False
-        obj.is_attribute = False
-        obj.kind.value = "function"
-        obj.labels = set()
-        obj.parent = None
-        obj.docstring = MagicMock(spec=dc.Docstring)
-        obj.docstring.parsed = [ds.DocstringSectionText(value="A function.")]
-
-        doc = layout.DocFunction(
-            name="func",
-            obj=obj,
-            anchor="pkg.func",
-            signature_name="relative",
-        )
-
-        result = renderer.summarize(doc, "reference/pkg")
-
-        assert "reference/pkg.qmd#pkg.func" in result
-
-    def test_summarize_doc_no_path(self):
-        renderer = MdRenderer()
-
-        obj = MagicMock(spec=dc.Function)
-        obj.__class__ = dc.Function
-        obj.name = "func"
-        obj.path = "pkg.func"
-        obj.is_function = True
-        obj.is_class = False
-        obj.is_attribute = False
-        obj.kind.value = "function"
-        obj.labels = set()
-        obj.parent = None
-        obj.docstring = MagicMock(spec=dc.Docstring)
-        obj.docstring.parsed = [ds.DocstringSectionText(value="A function.")]
-
-        doc = layout.DocFunction(
-            name="func",
-            obj=obj,
-            anchor="pkg.func",
-            signature_name="relative",
-        )
-
-        result = renderer.summarize(doc)
-
-        assert "#pkg.func" in result
-
-    def test_summarize_object_no_docstring(self):
-        renderer = MdRenderer()
-
-        obj = MagicMock(spec=dc.Function)
-        obj.__class__ = dc.Function
-        obj.docstring = None
-        result = renderer.summarize(obj)
-
-        assert result == ""
-
-
-class TestMdRendererRenderDocFuncAttr:
-    """MdRenderer._render_doc_func_attr renders function/attribute docs."""
-
-    def test_render_with_signature(self):
-        renderer = MdRenderer(show_signature=True)
-
-        obj = MagicMock(spec=dc.Function)
-        obj.__class__ = dc.Function
-        obj.name = "myfunc"
-        obj.path = "pkg.myfunc"
-        obj.is_class = False
-        obj.is_function = True
-        obj.is_attribute = False
-        obj.kind.value = "function"
-        obj.labels = set()
-        obj.parent = None
-        obj.parameters = dc.Parameters()
-        obj.docstring = MagicMock(spec=dc.Docstring)
-        obj.docstring.parsed = [ds.DocstringSectionText(value="My function.")]
-
-        doc = layout.DocFunction(
-            name="myfunc",
-            obj=obj,
-            anchor="pkg.myfunc",
-            signature_name="relative",
-        )
-
-        result = renderer._render_doc_func_attr(doc)
-
-        assert "myfunc" in result
-        assert "```python" in result
-
-    def test_render_without_signature(self):
-        renderer = MdRenderer(show_signature=False)
-
-        obj = MagicMock(spec=dc.Function)
-        obj.__class__ = dc.Function
-        obj.name = "myfunc"
-        obj.path = "pkg.myfunc"
-        obj.is_class = False
-        obj.is_function = True
-        obj.is_attribute = False
-        obj.kind.value = "function"
-        obj.labels = set()
-        obj.parent = None
-        obj.parameters = dc.Parameters()
-        obj.docstring = MagicMock(spec=dc.Docstring)
-        obj.docstring.parsed = [ds.DocstringSectionText(value="My function.")]
-
-        doc = layout.DocFunction(
-            name="myfunc",
-            obj=obj,
-            anchor="pkg.myfunc",
-            signature_name="relative",
-        )
-
-        result = renderer._render_doc_func_attr(doc)
-        assert "myfunc" in result
-        assert "```python" not in result
-
-
-class TestMdRendererRenderObject:
-    """MdRenderer._render_object handles objects with/without docstrings."""
-
-    def test_no_docstring(self):
-        renderer = MdRenderer()
-        obj = MagicMock(spec=dc.Function)
-        obj.docstring = None
-
-        assert renderer._render_object(obj) == ""
-
-
-class TestMdRendererRenderDocstringParameter:
-    """MdRenderer._render_docstring_parameter returns a ParamRow."""
-
-    def test_basic_param(self):
-        renderer = MdRenderer()
-        p = ds.DocstringParameter(name="x", annotation="int", description="The x", value="0")
-        result = renderer._render_docstring_parameter(p)
-
-        assert isinstance(result, ParamRow)
-        assert result.name == "x"
-        assert result.default == "0"
-
-
-class TestMdRendererRenderDocstringReturn:
-    """MdRenderer._render_docstring_return returns a ParamRow."""
-
-    def test_basic_return(self):
-        renderer = MdRenderer()
-        r = ds.DocstringReturn(name="result", annotation="int", description="A count")
-        result = renderer._render_docstring_return(r)
-
-        assert isinstance(result, ParamRow)
-        assert result.name == "result"
-
-
-class TestMdRendererRenderDocstringRaise:
-    """MdRenderer._render_docstring_raise returns a ParamRow with name=None."""
-
-    def test_basic_raise(self):
-        renderer = MdRenderer()
-        r = ds.DocstringRaise(annotation="ValueError", description="If bad")
-        result = renderer._render_docstring_raise(r)
-
-        assert isinstance(result, ParamRow)
-        assert result.name is None
-
-
-class TestMdRendererRenderSectionExamples:
-    """MdRenderer._render_section_examples handles Examples sections."""
-
-    def test_example_section(self):
-        renderer = MdRenderer()
-        examples = ds.DocstringSectionExamples(
-            value=[
-                (DocstringSectionKind.text, "Some text"),
-                (DocstringSectionKind.examples, ">>> x = 1"),
-            ]
-        )
-        result = renderer._render_section_examples(examples)
-        assert "x = 1" in result
-
-
-class TestGetDataclassFieldNames:
-    """_get_dataclass_field_names handles various cases."""
-
-    def test_invalid_path(self):
-        obj = MagicMock()
-        obj.canonical_path = "singlename"
-        result = _get_dataclass_field_names(obj)
-        assert result is None
-
-    def test_non_importable(self):
-        obj = MagicMock()
-        obj.canonical_path = "nonexistent.module.Class"
-        result = _get_dataclass_field_names(obj)
-        assert result is None
-
-
-class TestIsGriffeDataclass:
-    """_is_griffe_dataclass checks for 'dataclass' label."""
-
-    def test_true(self):
-        obj = MagicMock()
-        obj.labels = {"dataclass"}
-        assert _is_griffe_dataclass(obj) is True
-
-    def test_false(self):
-        obj = MagicMock()
-        obj.labels = set()
-        assert _is_griffe_dataclass(obj) is False
-
-    def test_exception(self):
-        obj = MagicMock()
-        type(obj).labels = PropertyMock(side_effect=Exception("fail"))
-        assert _is_griffe_dataclass(obj) is False
-
-
-class TestMdRendererRenderHeaderDocstringSection:
-    """MdRenderer.render_header for DocstringSection elements."""
-
-    def test_section_header_with_title(self):
-        renderer = MdRenderer(header_level=2)
-        section = ds.DocstringSectionParameters(value=[])
-        section.title = "Parameters"
-        result = renderer.render_header(section)
-
-        assert "## Parameters" in result
-        assert ".doc-section" in result
-
-    def test_section_header_no_title_uses_kind(self):
-        renderer = MdRenderer(header_level=3)
-        section = ds.DocstringSectionText(value="")
-        section.title = None
-        result = renderer.render_header(section)
-
-        assert "### Text" in result
-
-    def test_unsupported_type_raises(self):
-        renderer = MdRenderer()
-        with pytest.raises(NotImplementedError):
-            renderer.render_header("not a valid type")
-
-
-class TestIsNonCallableClassExceptionBranches:
-    """_is_non_callable_class handles exceptions when accessing labels/bases."""
-
-    def test_labels_raises_exception(self):
-        """When labels access raises, falls through to base check."""
-        obj = MagicMock()
-        type(obj).labels = PropertyMock(side_effect=Exception("bad"))
-        obj.bases = ["TypedDict"]
-        assert _is_non_callable_class(obj) is True
-
-    def test_bases_raises_exception(self):
-        """When bases access raises, returns False."""
-        obj = MagicMock()
-        obj.labels = set()
-        type(obj).bases = PropertyMock(side_effect=Exception("bad"))
-        assert _is_non_callable_class(obj) is False
-
-
-class TestRendererFromConfigPyFile:
-    """Renderer.from_config handles .py file style configs."""
-
-    def test_py_file_style(self, tmp_path):
-        """A string ending in .py triggers importlib loading."""
-        # Write a custom renderer module
-        mod_file = tmp_path / "custom_renderer.py"
-        mod_file.write_text(
-            "from great_docs._qrenderer._md_renderer import MdRenderer\n"
-            "class Renderer(MdRenderer):\n"
-            "    style = '_test_custom_py'\n"
-            "    def __init__(self, **kwargs):\n"
-            "        super().__init__(**kwargs)\n"
-        )
-
-        old_cwd = os.getcwd()
-        os.chdir(tmp_path)
-        try:
-            result = Renderer.from_config("custom_renderer.py")
-
-            assert isinstance(result, MdRenderer)
-        finally:
-            os.chdir(old_cwd)
-
-            # Clean up the registry
-            Renderer._registry.pop("_test_custom_py", None)
-            sys.modules.pop("custom_renderer", None)
-
-
-class TestFetchMethodParameters:
-    """MdRenderer._fetch_method_parameters strips self/cls."""
-
-    def test_strips_self(self):
-        renderer = MdRenderer()
-        el = MagicMock(spec=dc.Function)
-        el.is_class = False
-        el.parent = MagicMock()
-        el.parent.is_class = True
-        el.parameters = dc.Parameters(
-            dc.Parameter("self", kind=dc.ParameterKind.positional_or_keyword),
-            dc.Parameter("x", kind=dc.ParameterKind.positional_or_keyword),
-        )
-        result = renderer._fetch_method_parameters(el)
-        names = [p.name for p in result]
-
-        assert "self" not in names
-        assert "x" in names
-
-    def test_strips_cls(self):
-        renderer = MdRenderer()
-        el = MagicMock(spec=dc.Function)
-        el.is_class = True
-        el.parent = None
-        el.parameters = dc.Parameters(
-            dc.Parameter("cls", kind=dc.ParameterKind.positional_or_keyword),
-            dc.Parameter("y", kind=dc.ParameterKind.positional_or_keyword),
-        )
-        result = renderer._fetch_method_parameters(el)
-        names = [p.name for p in result]
-
-        assert "cls" not in names
-        assert "y" in names
-
-    def test_no_strip_for_non_class(self):
-        renderer = MdRenderer()
-        el = MagicMock(spec=dc.Function)
-        el.is_class = False
-        el.parent = MagicMock()
-        el.parent.is_class = False
-        el.parameters = dc.Parameters(
-            dc.Parameter("a", kind=dc.ParameterKind.positional_or_keyword),
-        )
-        result = renderer._fetch_method_parameters(el)
-
-        assert len(list(result)) == 1
-
-
-class TestRenderAnnotationExpr:
-    """MdRenderer.render_annotation handles Expr (iterable of sub-annotations)."""
-
-    def test_expr_iterable(self):
-        renderer = MdRenderer()
-        # ExprSubscript is an Expr subclass that iterates over its children
-        name = expr.ExprName("Optional")
-        inner = expr.ExprName("int")
-        sub = expr.ExprSubscript(name, inner)
-        result = renderer.render_annotation(sub)
-
-        assert "Optional" in result
-        assert "int" in result
-
-
-class TestSignatureAlias:
-    """MdRenderer.signature dispatches to _signature_alias for dc.Alias."""
-
-    def test_alias_signature(self):
-        renderer = MdRenderer()
-        target = MagicMock()
-        target.__class__ = dc.Function
-        target.name = "myfunc"
-        target.path = "pkg.myfunc"
-        target.is_class = False
-        target.parameters = dc.Parameters()
-        target.labels = set()
-
-        alias = MagicMock()
-        alias.__class__ = dc.Alias
-        alias.name = "myfunc"
-        alias.path = "pkg.myfunc"
-        alias.final_target = target
-
-        result = renderer.signature(alias)
-
-        assert "```python" in result
-        assert "myfunc" in result
-
-    def test_unsupported_signature_type(self):
-        renderer = MdRenderer()
-        with pytest.raises(NotImplementedError, match="signature not supported"):
-            renderer.signature("not_a_valid_object")
-
-
-class TestSignatureDoc:
-    """MdRenderer._signature_doc respects el.signature_name."""
-
-    def test_signature_doc_uses_signature_name(self):
-        renderer = MdRenderer(display_name="relative")
-        obj = MagicMock()
-        obj.__class__ = dc.Function
-        obj.name = "func"
-        obj.path = "pkg.mod.func"
-        obj.is_class = False
-        obj.parameters = dc.Parameters()
-        obj.labels = set()
-
-        doc = layout.DocFunction(
-            name="func",
-            obj=obj,
-            anchor="pkg.mod.func",
-            signature_name="full",
-        )
-        result = renderer.signature(doc)
-
-        assert "pkg.mod.func" in result
-
-        # verify display_name was restored
-        assert renderer.display_name == "relative"
-
-
-class TestRenderOverloadSignatures:
-    """MdRenderer._render_overload_signatures handles @overload functions."""
-
-    def test_basic_overloads(self):
-        renderer = MdRenderer()
-
-        ov1 = MagicMock()
-        p1 = MagicMock()
-        p1.name = "x"
-        p1.annotation = "int"
-        p1.default = None
-        ov1.parameters = [p1]
-        ov1.returns = "int"
-
-        ov2 = MagicMock()
-        p2 = MagicMock()
-        p2.name = "x"
-        p2.annotation = "str"
-        p2.default = None
-        ov2.parameters = [p2]
-        ov2.returns = "str"
-
-        result = renderer._render_overload_signatures("func", [ov1, ov2])
-
-        assert "```python" in result
-        assert "func(x: int) -> int" in result
-        assert "func(x: str) -> str" in result
-
-    def test_overload_with_default(self):
-        renderer = MdRenderer()
-
-        ov = MagicMock()
-        p = MagicMock()
-        p.name = "x"
-        p.annotation = "int"
-        p.default = "0"
-        ov.parameters = [p]
-        ov.returns = None
-
-        result = renderer._render_overload_signatures("func", [ov])
-        assert "func(x: int = 0)" in result
-
-    def test_overload_no_annotation(self):
-        renderer = MdRenderer()
-
-        ov = MagicMock()
-        p = MagicMock()
-        p.name = "x"
-        p.annotation = None
-        p.default = "5"
-        ov.parameters = [p]
-        ov.returns = None
-
-        result = renderer._render_overload_signatures("func", [ov])
-        assert "func(x=5)" in result
-
-    def test_overload_plain_param(self):
-        renderer = MdRenderer()
-
-        ov = MagicMock()
-        p = MagicMock()
-        p.name = "x"
-        p.annotation = None
-        p.default = None
-        ov.parameters = [p]
-        ov.returns = None
-
-        result = renderer._render_overload_signatures("func", [ov])
-
-        assert "func(x)" in result
-
-    def test_overload_no_parameters_attr(self):
-        renderer = MdRenderer()
-
-        ov = MagicMock(spec=[])  # no attributes
-        result = renderer._render_overload_signatures("func", [ov])
-        assert "func()" in result
-
-    def test_signature_func_with_overloads(self):
-        """_signature_func_or_class detects and uses overloads."""
-        renderer = MdRenderer()
-
-        ov = MagicMock()
-        p = MagicMock()
-        p.name = "x"
-        p.annotation = "int"
-        p.default = None
-        ov.parameters = [p]
-        ov.returns = "int"
-
-        el = MagicMock(spec=dc.Function)
-        el.__class__ = dc.Function
-        el.name = "func"
-        el.path = "pkg.func"
-        el.is_class = False
-        el.labels = set()
-        el.overloads = [ov]
-        el.parameters = dc.Parameters()
-
-        result = renderer._signature_func_or_class(el)
-
-        assert "func(x: int) -> int" in result
-
-
-class TestSignatureModuleOrAttrAnnotationValue:
-    """_signature_module_or_attr includes annotations and values."""
-
-    def test_with_annotation_and_value(self):
-        renderer = MdRenderer()
-        el = MagicMock(spec=dc.Attribute)
-        el.__class__ = dc.Attribute
-        el.name = "MY_CONST"
-        el.path = "pkg.MY_CONST"
-        el.annotation = "int"
-        el.value = "42"
-
-        result = renderer._signature_module_or_attr(el)
-
-        assert "MY_CONST" in result
-        assert ": int" in result
-        assert "= 42" in result
-
-    def test_long_value_skipped(self):
-        renderer = MdRenderer()
-        el = MagicMock(spec=dc.Attribute)
-        el.__class__ = dc.Attribute
-        el.name = "BIG"
-        el.path = "pkg.BIG"
-        el.annotation = None
-        el.value = "x" * 300  # > 200 chars
-
-        result = renderer._signature_module_or_attr(el)
-
-        assert "BIG" in result
-        assert "x" * 300 not in result
-
-
-class TestRenderHeaderEnumBranch:
-    """render_header correctly labels enum classes."""
-
-    def test_enum_type_class(self):
-        renderer = MdRenderer()
-
-        obj = MagicMock(spec=dc.Class)
-        obj.__class__ = dc.Class
-        obj.name = "Color"
-        obj.path = "pkg.Color"
-        obj.is_class = True
-        obj.is_function = False
-        obj.is_attribute = False
-        obj.kind.value = "class"
-        obj.labels = {"enum"}
-
-        doc = layout.DocClass(
-            name="Color",
-            obj=obj,
-            anchor="pkg.Color",
-            signature_name="relative",
-        )
-        result = renderer.render_header(doc)
-        assert ".doc-type-enum" in result
-
-
-class TestRenderParameterAnnotations:
-    """MdRenderer._render_parameter with show_signature_annotations=True."""
-
-    def test_annotation_and_default(self):
-        renderer = MdRenderer(show_signature_annotations=True)
-        p = dc.Parameter(
-            "x", annotation="int", default="0", kind=dc.ParameterKind.positional_or_keyword
-        )
-        result = renderer._render_parameter(p)
-
-        assert result == "x: int = 0"
-
-    def test_annotation_no_default(self):
-        renderer = MdRenderer(show_signature_annotations=True)
-        p = dc.Parameter("x", annotation="int", kind=dc.ParameterKind.positional_or_keyword)
-        result = renderer._render_parameter(p)
-
-        assert result == "x: int"
-
-    def test_no_annotation_with_annotations_enabled(self):
-        renderer = MdRenderer(show_signature_annotations=True)
-        p = dc.Parameter("x", kind=dc.ParameterKind.positional_or_keyword)
-        result = renderer._render_parameter(p)
-
-        assert result == "x"
-
-    def test_var_keyword(self):
-        renderer = MdRenderer()
-        p = dc.Parameter("kwargs", kind=dc.ParameterKind.var_keyword)
-        result = renderer._render_parameter(p)
-
-        assert result == "**kwargs"
-
-
-class TestRenderInterlaced:
-    """MdRenderer._render_interlaced handles Interlaced layout elements."""
-
-    def _make_func_obj(self, name, docstring_text="Docstring."):
-        obj = MagicMock(spec=dc.Function)
-        obj.__class__ = dc.Function
-        obj.name = name
-        obj.path = f"pkg.{name}"
-        obj.is_class = False
-        obj.is_function = True
-        obj.is_attribute = False
-        obj.kind.value = "function"
-        obj.labels = set()
-        obj.parent = None
-        obj.parameters = dc.Parameters()
-        obj.docstring = MagicMock(spec=dc.Docstring)
-        obj.docstring.parsed = [ds.DocstringSectionText(value=docstring_text)]
-        return obj
-
-    def test_interlaced_basic(self):
-        renderer = MdRenderer()
-        obj1 = self._make_func_obj("func_a", "First function.")
-        obj2 = self._make_func_obj("func_b", "Second function.")
-
-        doc1 = layout.DocFunction(
-            name="func_a", obj=obj1, anchor="pkg.func_a", signature_name="relative"
-        )
-        doc2 = layout.DocFunction(
-            name="func_b", obj=obj2, anchor="pkg.func_b", signature_name="relative"
-        )
-
-        el = layout.Interlaced(contents=[doc1, doc2])
-        result = renderer._render_interlaced(el)
-
-        assert "func_a" in result
-        assert "First function" in result
-
-    def test_interlaced_no_docstring_raises(self):
-        renderer = MdRenderer()
-        obj = MagicMock(spec=dc.Function)
-        obj.__class__ = dc.Function
-        obj.name = "f"
-        obj.path = "pkg.f"
-        obj.is_class = False
-        obj.is_function = True
-        obj.is_attribute = False
-        obj.kind.value = "function"
-        obj.labels = set()
-        obj.parent = None
-        obj.parameters = dc.Parameters()
-        obj.docstring = None
-
-        doc = layout.DocFunction(name="f", obj=obj, anchor="pkg.f", signature_name="relative")
-        el = layout.Interlaced(contents=[doc])
-        with pytest.raises(ValueError, match="first element"):
-            renderer._render_interlaced(el)
-
-    def test_interlaced_without_signature(self):
-        renderer = MdRenderer(show_signature=False)
-        obj1 = self._make_func_obj("func_a")
-
-        doc1 = layout.DocFunction(
-            name="func_a", obj=obj1, anchor="pkg.func_a", signature_name="relative"
-        )
-        el = layout.Interlaced(contents=[doc1])
-        result = renderer._render_interlaced(el)
-
-        assert "func_a" in result
-        assert "```python" not in result
-
-    def test_interlaced_invalid_content_type(self):
-        renderer = MdRenderer()
-        # DocClass is not DocFunction or DocAttribute
-        obj = MagicMock(spec=dc.Class)
-        obj.__class__ = dc.Class
-        obj.name = "C"
-        doc = layout.DocClass(name="C", obj=obj, anchor="pkg.C", signature_name="relative")
-
-        el = layout.Interlaced(contents=[doc])
-        with pytest.raises(NotImplementedError, match="Can only render Interlaced"):
-            renderer._render_interlaced(el)
-
-
-class TestRenderDocClassModuleAdvanced:
-    """Tests for _render_doc_class_module covering attrs, classes, modules."""
-
-    def _make_attr_obj(self, name):
-        obj = MagicMock(spec=dc.Attribute)
-        obj.__class__ = dc.Attribute
-        obj.name = name
-        obj.path = f"pkg.MyClass.{name}"
-        obj.is_class = False
-        obj.is_function = False
-        obj.is_attribute = True
-        obj.kind.value = "attribute"
-        obj.labels = set()
-        obj.parent = None
-        obj.annotation = None
-        obj.value = None
-        obj.docstring = MagicMock(spec=dc.Docstring)
-        obj.docstring.parsed = [ds.DocstringSectionText(value=f"Attr {name}.")]
-        return obj
-
-    def _make_func_obj(self, name):
-        obj = MagicMock(spec=dc.Function)
-        obj.__class__ = dc.Function
-        obj.name = name
-        obj.path = f"pkg.MyClass.{name}"
-        obj.is_class = False
-        obj.is_function = True
-        obj.is_attribute = False
-        obj.kind.value = "function"
-        obj.labels = set()
-        obj.parent = MagicMock()
-        obj.parent.is_class = True
-        obj.parameters = dc.Parameters()
-        obj.docstring = MagicMock(spec=dc.Docstring)
-        obj.docstring.parsed = [ds.DocstringSectionText(value=f"Method {name}.")]
-        return obj
-
-    def _make_class_obj(self, name):
-        obj = MagicMock(spec=dc.Class)
-        obj.__class__ = dc.Class
-        obj.name = name
-        obj.path = f"pkg.{name}"
-        obj.is_class = True
-        obj.is_function = False
-        obj.is_attribute = False
-        obj.kind.value = "class"
-        obj.labels = set()
-        obj.bases = []
-        obj.parent = None
-        obj.parameters = dc.Parameters()
-        obj.docstring = MagicMock(spec=dc.Docstring)
-        obj.docstring.parsed = [ds.DocstringSectionText(value=f"Class {name}.")]
-        return obj
-
-    def test_class_with_attributes(self):
-        """DocClass with attribute members renders Attributes section."""
-        renderer = MdRenderer()
-
-        cls_obj = self._make_class_obj("MyClass")
-        cls_obj.docstring.parsed = [
-            __import__(
-                "great_docs._qrenderer._griffe.docstrings", fromlist=["DocstringSectionText"]
-            ).DocstringSectionText(value="A class.")
-        ]
-
-        attr_obj = self._make_attr_obj("my_attr")
-        attr_doc = layout.DocAttribute(
-            name="my_attr", obj=attr_obj, anchor="pkg.MyClass.my_attr", signature_name="relative"
-        )
-
-        el = layout.DocClass(
-            name="MyClass",
-            obj=cls_obj,
-            anchor="pkg.MyClass",
-            signature_name="relative",
-            members=[attr_doc],
-        )
-        result = renderer._render_doc_class_module(el)
-
-        assert "Attributes" in result
-        assert "my_attr" in result
-
-    def test_class_with_nested_classes(self):
-        """DocClass with nested class members renders Classes section."""
-        renderer = MdRenderer()
-
-        parent_obj = self._make_class_obj("Parent")
-        child_obj = self._make_class_obj("Child")
-
-        child_doc = layout.DocClass(
-            name="Child",
-            obj=child_obj,
-            anchor="pkg.Child",
-            signature_name="relative",
-            members=[],
-        )
-
-        el = layout.DocClass(
-            name="Parent",
-            obj=parent_obj,
-            anchor="pkg.Parent",
-            signature_name="relative",
-            members=[child_doc],
-        )
-        result = renderer._render_doc_class_module(el)
-        assert "Classes" in result
-        assert "Child" in result
-
-    def test_module_with_functions(self):
-        """DocModule renders Functions section (not Methods)."""
-        renderer = MdRenderer()
-
-        mod_obj = self._make_class_obj("mymod")
-        mod_obj.kind.value = "module"
-        mod_obj.is_class = False
-        mod_obj.is_function = False
-
-        func_obj = self._make_func_obj("my_func")
-        func_obj.parent = MagicMock()
-        func_obj.parent.is_class = False
-
-        func_doc = layout.DocFunction(
-            name="my_func",
-            obj=func_obj,
-            anchor="pkg.my_func",
-            signature_name="relative",
-        )
-
-        el = layout.DocModule(
-            name="mymod",
-            obj=mod_obj,
-            anchor="pkg.mymod",
-            signature_name="relative",
-            members=[func_doc],
-        )
-        result = renderer._render_doc_class_module(el)
-        assert "Functions" in result
-
-    def test_dataclass_with_non_field_attrs(self):
-        """Dataclass DocClass separates dc fields from non-field attrs."""
-        renderer = MdRenderer()
-
-        cls_obj = self._make_class_obj("MyDC")
-        cls_obj.labels = {"dataclass"}
-        cls_obj.docstring.parsed = [ds.DocstringSectionText(value="A dataclass.")]
-
-        # Field attribute (should be filtered out)
-        field_attr = self._make_attr_obj("field1")
-        field_doc = layout.DocAttribute(
-            name="field1", obj=field_attr, anchor="pkg.MyDC.field1", signature_name="relative"
-        )
-
-        # Non-field attribute (should appear in Attributes)
-        prop_attr = self._make_attr_obj("my_prop")
-        prop_doc = layout.DocAttribute(
-            name="my_prop", obj=prop_attr, anchor="pkg.MyDC.my_prop", signature_name="relative"
-        )
-
-        el = layout.DocClass(
-            name="MyDC",
-            obj=cls_obj,
-            anchor="pkg.MyDC",
-            signature_name="relative",
-            members=[field_doc, prop_doc],
-        )
-
-        with patch(
-            "great_docs._qrenderer._md_renderer._get_dataclass_field_names", return_value=["field1"]
-        ):
-            result = renderer._render_doc_class_module(el)
-
-        assert "Attributes" in result
-        assert "my_prop" in result
-
-
-class TestRenderDocClassModuleFlat:
-    """DocClass with flat=True uses n_incr=1 for header increment."""
-
-    def test_flat_class(self):
-        renderer = MdRenderer()
-
-        cls_obj = MagicMock(spec=dc.Class)
-        cls_obj.__class__ = dc.Class
-        cls_obj.name = "Flat"
-        cls_obj.path = "pkg.Flat"
-        cls_obj.is_class = True
-        cls_obj.is_function = False
-        cls_obj.is_attribute = False
-        cls_obj.kind.value = "class"
-        cls_obj.labels = set()
-        cls_obj.bases = []
-        cls_obj.parent = None
-        cls_obj.parameters = dc.Parameters()
-        cls_obj.docstring = MagicMock(spec=dc.Docstring)
-        cls_obj.docstring.parsed = [ds.DocstringSectionText(value="Flat cls.")]
-
-        func_obj = MagicMock(spec=dc.Function)
-        func_obj.__class__ = dc.Function
-        func_obj.name = "m"
-        func_obj.path = "pkg.Flat.m"
-        func_obj.is_class = False
-        func_obj.is_function = True
-        func_obj.is_attribute = False
-        func_obj.kind.value = "function"
-        func_obj.labels = set()
-        func_obj.parent = MagicMock()
-        func_obj.parent.is_class = True
-        func_obj.parameters = dc.Parameters()
-        func_obj.docstring = MagicMock(spec=dc.Docstring)
-        func_obj.docstring.parsed = [ds.DocstringSectionText(value="Method m.")]
-
-        func_doc = layout.DocFunction(
-            name="m", obj=func_obj, anchor="pkg.Flat.m", signature_name="relative"
-        )
-
-        el = layout.DocClass(
-            name="Flat",
-            obj=cls_obj,
-            anchor="pkg.Flat",
-            signature_name="relative",
-            members=[func_doc],
-            flat=True,
-        )
-        result = renderer._render_doc_class_module(el)
-
-        assert "Methods" in result
-        assert "---" in result
-
-
-class TestRenderDispatchGriffeTypes:
-    """MdRenderer.render dispatches for Docstring, Parameters, Parameter, Attribute."""
-
-    def test_render_docstring_parameter(self):
-        renderer = MdRenderer()
-        p = ds.DocstringParameter(name="x", description="Description")
-        result = renderer.render(p)
-
-        assert isinstance(result, ParamRow)
-        assert result.name == "x"
-
-    def test_render_docstring_return(self):
-        renderer = MdRenderer()
-        r = ds.DocstringReturn(name="result", annotation="int", description="Count")
-        result = renderer.render(r)
-
-        assert isinstance(result, ParamRow)
-
-    def test_render_docstring_raise(self):
-        renderer = MdRenderer()
-        r = ds.DocstringRaise(annotation="ValueError", description="Bad")
-        result = renderer.render(r)
-
-        assert isinstance(result, ParamRow)
-        assert result.name is None
-
-    def test_render_docstring_attribute(self):
-        renderer = MdRenderer()
-        a = ds.DocstringAttribute(name="x", annotation="int", description="Attr")
-        result = renderer.render(a)
-
-        assert isinstance(result, ParamRow)
-
-    def test_render_dc_parameter(self):
-        renderer = MdRenderer()
-        p = dc.Parameter("x", kind=dc.ParameterKind.positional_or_keyword)
-        result = renderer.render(p)
-
-        assert isinstance(result, str)
-        assert "x" in result
-
-    def test_render_dc_parameters(self):
-        renderer = MdRenderer()
-        params = dc.Parameters(
-            dc.Parameter("a", kind=dc.ParameterKind.positional_or_keyword),
-        )
-        result = renderer.render(params)
-
-        assert isinstance(result, list)
-
-    def test_render_unsupported_type(self):
-        renderer = MdRenderer()
-        with pytest.raises(NotImplementedError, match="Unsupported type"):
-            renderer.render(12345)
-
-
-class TestSummarizeSectionNoTitleNoSubtitle:
-    """MdRenderer.summarize handles Section with no title and no subtitle."""
-
-    def test_section_no_title_no_subtitle(self):
-        renderer = MdRenderer()
-
-        # Section requires at least title, subtitle, or contents
-        obj = MagicMock(spec=dc.Function)
-        obj.__class__ = dc.Function
-        obj.name = "f"
-        obj.path = "pkg.f"
-        obj.is_function = True
-        obj.is_class = False
-        obj.is_attribute = False
-        obj.kind.value = "function"
-        obj.labels = set()
-        obj.parent = None
-        obj.docstring = MagicMock(spec=dc.Docstring)
-        obj.docstring.parsed = [ds.DocstringSectionText(value="Doc.")]
-
-        doc = layout.DocFunction(name="f", obj=obj, anchor="pkg.f", signature_name="relative")
-        section = layout.Section(title=None, subtitle=None, desc=None, contents=[doc])
-        result = renderer.summarize(section)
-        # No title header, just the table
-        assert "f" in result
-        assert "##" not in result
-
-
-class TestSummarizeInterlaced:
-    """MdRenderer.summarize handles Interlaced elements."""
-
-    def test_summarize_interlaced(self):
-        renderer = MdRenderer()
-
-        obj1 = MagicMock(spec=dc.Function)
-        obj1.__class__ = dc.Function
-        obj1.name = "f1"
-        obj1.path = "pkg.f1"
-        obj1.is_function = True
-        obj1.is_class = False
-        obj1.is_attribute = False
-        obj1.kind.value = "function"
-        obj1.labels = set()
-        obj1.parent = None
-        obj1.docstring = MagicMock(spec=dc.Docstring)
-        obj1.docstring.parsed = [ds.DocstringSectionText(value="Func 1.")]
-
-        doc1 = layout.DocFunction(name="f1", obj=obj1, anchor="pkg.f1", signature_name="relative")
-
-        interlaced = layout.Interlaced(contents=[doc1])
-        result = renderer.summarize(interlaced, "ref")
-        assert "f1" in result
-
-
-class TestSummarizePageError:
-    """MdRenderer.summarize raises for multi-content Page without flatten."""
-
-    def test_page_multi_content_no_flatten_raises(self):
-        renderer = MdRenderer()
-
-        obj1 = MagicMock(spec=dc.Function)
-        obj1.__class__ = dc.Function
-        obj1.name = "f1"
-        obj1.path = "pkg.f1"
-        obj1.is_function = True
-        obj1.is_class = False
-        obj1.is_attribute = False
-        obj1.kind.value = "function"
-        obj1.labels = set()
-        obj1.parent = None
-        obj1.docstring = MagicMock(spec=dc.Docstring)
-        obj1.docstring.parsed = [ds.DocstringSectionText(value="Func 1.")]
-
-        obj2 = MagicMock(spec=dc.Function)
-        obj2.__class__ = dc.Function
-        obj2.name = "f2"
-        obj2.path = "pkg.f2"
-        obj2.is_function = True
-        obj2.is_class = False
-        obj2.is_attribute = False
-        obj2.kind.value = "function"
-        obj2.labels = set()
-        obj2.parent = None
-        obj2.docstring = MagicMock(spec=dc.Docstring)
-        obj2.docstring.parsed = [ds.DocstringSectionText(value="Func 2.")]
-
-        doc1 = layout.DocFunction(name="f1", obj=obj1, anchor="pkg.f1", signature_name="relative")
-        doc2 = layout.DocFunction(name="f2", obj=obj2, anchor="pkg.f2", signature_name="relative")
-
-        page = layout.Page(path="test", flatten=False, contents=[doc1, doc2])
-        with pytest.raises(ValueError, match="Cannot summarize Page"):
-            renderer.summarize(page)
-
-
-class TestRenderSectionParametersAndAttributes:
-    """MdRenderer._render_section_parameters and _render_section_attributes."""
-
-    def test_parameters_section(self):
-        renderer = MdRenderer()
-        p1 = ds.DocstringParameter(name="x", description="X value", annotation="int", value="0")
-        p2 = ds.DocstringParameter(name="y", description="Y value", annotation="str")
-        el = ds.DocstringSectionParameters(value=[p1, p2])
-        result = renderer._render_section_parameters(el)
-
-        assert "x" in result
-        assert "y" in result
-        assert "Name" in result
-
-    def test_attributes_section(self):
-        renderer = MdRenderer()
-        a = ds.DocstringAttribute(name="count", annotation="int", description="The count")
-        el = ds.DocstringSectionAttributes(value=[a])
-        result = renderer._render_section_attributes(el)
-
-        assert "count" in result
-        assert "int" in result
-
-
-class TestRenderSectionAdmonitionGeneric:
-    """_render_section_admonition falls through to generic for unknown kinds."""
-
-    def test_generic_admonition(self):
-        renderer = MdRenderer()
-        el = ds.DocstringSectionAdmonition(kind="admonition", text="Some tip.", title="Tip")
-        result = renderer._render_section_admonition(el)
-
-        assert "Some tip." in result
-
 
 def _bp_make_trans(objects=None):
     """Helper: create a BlueprintTransformer backed by a dict of objects."""
@@ -22595,7 +19889,7 @@ def test_detect_dynamic_mode_with_cyclic_error():
 
         with (
             patch("griffe.load", return_value=mock_pkg),
-            patch("great_docs._qrenderer.introspection.get_object", side_effect=fake_get_object),
+            patch("great_docs._renderer.introspection.get_object", side_effect=fake_get_object),
         ):
             result = docs._detect_dynamic_mode("mypkg")
 
@@ -25224,7 +22518,7 @@ def test_build_prepare_and_render_flow():
             patch.object(docs, "_copy_assets", return_value=False),
             patch.object(docs, "_get_quarto_env", return_value={}),
             patch(
-                "great_docs._qrenderer.introspection.Builder",
+                "great_docs._renderer.introspection.Builder",
                 mock_builder_class,
             ),
             patch("subprocess.Popen") as mock_popen,
@@ -25324,7 +22618,7 @@ def test_build_dynamic_fallback_to_static():
             patch.object(docs, "_copy_assets", return_value=False),
             patch.object(docs, "_get_quarto_env", return_value={}),
             patch(
-                "great_docs._qrenderer.introspection.Builder",
+                "great_docs._renderer.introspection.Builder",
                 mock_builder_class,
             ),
             patch("subprocess.Popen") as mock_popen,
@@ -25377,7 +22671,7 @@ def test_build_static_mode_failure_exits():
             patch.object(docs, "_copy_assets", return_value=False),
             patch.object(docs, "_get_quarto_env", return_value={}),
             patch(
-                "great_docs._qrenderer.introspection.Builder",
+                "great_docs._renderer.introspection.Builder",
                 mock_builder_class,
             ),
         ):
@@ -25421,7 +22715,7 @@ def test_build_non_dynamic_failure_exits():
             patch.object(docs, "_copy_assets", return_value=False),
             patch.object(docs, "_get_quarto_env", return_value={}),
             patch(
-                "great_docs._qrenderer.introspection.Builder",
+                "great_docs._renderer.introspection.Builder",
                 mock_builder_class,
             ),
         ):
@@ -29094,7 +26388,7 @@ def test_get_object_deprecated_object_name_warns():
 
 def test_get_object_with_shared_loader():
     """get_object reuses a loader if provided."""
-    from great_docs._qrenderer.introspection import (
+    from great_docs._renderer.introspection import (
         GriffeLoader,
         LinesCollection,
         ModulesCollection,
@@ -29272,7 +26566,7 @@ def test_replace_docstring_alias():
 
 def test_canonical_path_module():
     """_canonical_path for a module returns module name."""
-    from great_docs._qrenderer.introspection import _canonical_path
+    from great_docs._renderer.introspection import _canonical_path
 
     result = _canonical_path(json, "")
 
@@ -29281,7 +26575,7 @@ def test_canonical_path_module():
 
 def test_canonical_path_module_with_qualname():
     """_canonical_path for a module with qualname appends suffix."""
-    from great_docs._qrenderer.introspection import _canonical_path
+    from great_docs._renderer.introspection import _canonical_path
 
     result = _canonical_path(json, "dumps")
 
@@ -29290,7 +26584,7 @@ def test_canonical_path_module_with_qualname():
 
 def test_canonical_path_function():
     """_canonical_path for a function returns module:qualname."""
-    from great_docs._qrenderer.introspection import _canonical_path
+    from great_docs._renderer.introspection import _canonical_path
 
     result = _canonical_path(json.dumps, "")
     assert result == "json:dumps"
@@ -29298,7 +26592,7 @@ def test_canonical_path_function():
 
 def test_canonical_path_function_with_qualname():
     """_canonical_path for a function with extra qualname appends it."""
-    from great_docs._qrenderer.introspection import _canonical_path
+    from great_docs._renderer.introspection import _canonical_path
 
     result = _canonical_path(json.dumps, "extra")
     assert result == "json:dumps.extra"
@@ -29306,7 +26600,7 @@ def test_canonical_path_function_with_qualname():
 
 def test_canonical_path_class():
     """_canonical_path for a class returns module:qualname."""
-    from great_docs._qrenderer.introspection import _canonical_path
+    from great_docs._renderer.introspection import _canonical_path
 
     result = _canonical_path(json.JSONEncoder, "")
     assert result == "json.encoder:JSONEncoder"
@@ -29314,7 +26608,7 @@ def test_canonical_path_class():
 
 def test_canonical_path_plain_object():
     """_canonical_path for a plain object (not module/class/function) returns None."""
-    from great_docs._qrenderer.introspection import _canonical_path
+    from great_docs._renderer.introspection import _canonical_path
 
     result = _canonical_path(42, "")
     assert result is None
@@ -29322,7 +26616,7 @@ def test_canonical_path_plain_object():
 
 def test_canonical_path_no_module_attr():
     """_canonical_path returns None when __module__ is missing."""
-    from great_docs._qrenderer.introspection import _canonical_path
+    from great_docs._renderer.introspection import _canonical_path
 
     class NoModule:
         pass
@@ -29335,7 +26629,7 @@ def test_canonical_path_no_module_attr():
 
 def test_canonical_path_class_no_module():
     """_canonical_path returns None when class has no __module__."""
-    from great_docs._qrenderer.introspection import _canonical_path
+    from great_docs._renderer.introspection import _canonical_path
 
     cls = type("DynClass", (), {})
     cls.__module__ = None
@@ -29521,7 +26815,7 @@ def test_dynamic_alias_nonexistent_attr_raises():
 
 def test_dynamic_alias_with_loader():
     """dynamic_alias accepts a shared loader."""
-    from great_docs._qrenderer.introspection import (
+    from great_docs._renderer.introspection import (
         GriffeLoader,
         LinesCollection,
         ModulesCollection,
@@ -29675,20 +26969,6 @@ def test_builder_init_source_dir():
     assert Path(builder.source_dir).is_absolute()
 
 
-def test_builder_init_renderer_string():
-    """Builder accepts renderer as string."""
-
-    builder = Builder(package="json", renderer="markdown")
-    assert builder.renderer is not None
-
-
-def test_builder_init_render_interlinks():
-    """Builder sets render_interlinks on renderer."""
-
-    builder = Builder(package="json", render_interlinks=True)
-    assert builder.renderer.render_interlinks is True
-
-
 def test_builder_init_css():
     """Builder accepts css parameter."""
 
@@ -29716,7 +26996,7 @@ def test_builder_init_desc():
 def test_builder_load_layout_error():
     """Builder.load_layout raises ValueError for invalid sections."""
 
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, TypeError)):
         Builder(package="json", sections=123)
 
 
@@ -30048,7 +27328,7 @@ def test_builder_from_quarto_config_no_section_raises():
 
 
 def test_builder_from_quarto_config_with_style():
-    """Builder.from_quarto_config uses style to pick builder class."""
+    """Builder.from_quarto_config ignores style key in config."""
 
     cfg = {
         "api-reference": {
@@ -30075,52 +27355,6 @@ def test_builder_from_quarto_config_interlinks_fast():
     }
     builder = Builder.from_quarto_config(cfg)
     assert builder._fast_inventory is True
-
-
-def test_builder_pkgdown_style():
-    """BuilderPkgdown has style='pkgdown'."""
-
-    assert BuilderPkgdown.style == "pkgdown"
-
-
-def test_builder_single_page_style():
-    """BuilderSinglePage has style='single-page'."""
-
-    assert BuilderSinglePage.style == "single-page"
-
-
-def test_builder_single_page_wraps_sections():
-    """BuilderSinglePage wraps sections in a single Page."""
-
-    builder = BuilderSinglePage(
-        package="json",
-        sections=[{"title": "Funcs", "desc": "", "contents": [{"name": "dumps"}]}],
-    )
-    # layout.sections should be a single Page
-    assert len(builder.layout.sections) == 1
-
-
-def test_builder_single_page_from_config():
-    """BuilderSinglePage is selected via style='single-page'."""
-
-    cfg = {
-        "api-reference": {
-            "package": "json",
-            "sections": [],
-            "style": "single-page",
-        }
-    }
-    builder = Builder.from_quarto_config(cfg)
-    assert isinstance(builder, BuilderSinglePage)
-
-
-def test_builder_single_page_write_index_noop():
-    """BuilderSinglePage.write_index does nothing."""
-
-    builder = BuilderSinglePage(package="json")
-    # write_index should return None and not create files
-    result = builder.write_index(builder.layout)
-    assert result is None
 
 
 def test_cli_ordered_group_list_commands():
@@ -31136,7 +28370,7 @@ def test_ast_transform_all():
 
 def test_ast_fields_example_code():
     """fields() returns dataclass field names for ExampleCode."""
-    from great_docs._qrenderer._ast import ExampleCode, fields
+    from great_docs._renderer._ast import ExampleCode, fields
 
     ec = ExampleCode("print(1)")
     result = fields(ec)
@@ -31145,7 +28379,7 @@ def test_ast_fields_example_code():
 
 def test_ast_fields_example_text():
     """fields() returns dataclass field names for ExampleText."""
-    from great_docs._qrenderer._ast import ExampleText, fields
+    from great_docs._renderer._ast import ExampleText, fields
 
     et = ExampleText("description")
     result = fields(et)
@@ -31154,7 +28388,7 @@ def test_ast_fields_example_text():
 
 def test_ast_fields_function():
     """fields() returns expected fields for dc.Function."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     func = dc.Function(name="my_func", lineno=1)
     result = fields(func)
@@ -31164,7 +28398,7 @@ def test_ast_fields_function():
 
 def test_ast_fields_attribute():
     """fields() returns expected fields for dc.Attribute."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     attr = dc.Attribute(name="x", lineno=1)
     result = fields(attr)
@@ -31174,7 +28408,7 @@ def test_ast_fields_attribute():
 
 def test_ast_fields_docstring():
     """fields() returns expected fields for dc.Docstring."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     ds_obj = dc.Docstring("Hello", parser="numpy")
     result = fields(ds_obj)
@@ -31184,7 +28418,7 @@ def test_ast_fields_docstring():
 
 def test_ast_fields_parameter():
     """fields() returns expected fields for dc.Parameter."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     param = dc.Parameter(name="x")
     result = fields(param)
@@ -31194,7 +28428,7 @@ def test_ast_fields_parameter():
 
 def test_ast_fields_docstring_parameter():
     """fields() returns expected fields for ds.DocstringParameter."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     dp = ds.DocstringParameter(name="x", description="a number", annotation="int")
     result = fields(dp)
@@ -31204,7 +28438,7 @@ def test_ast_fields_docstring_parameter():
 
 def test_ast_fields_docstring_named_element():
     """fields() returns expected fields for ds.DocstringNamedElement."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     ne = ds.DocstringNamedElement(name="x", description="desc")
     result = fields(ne)
@@ -31214,7 +28448,7 @@ def test_ast_fields_docstring_named_element():
 
 def test_ast_fields_docstring_section():
     """fields() returns expected fields for ds.DocstringSection."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     sec = ds.DocstringSectionText("hello")
     result = fields(sec)
@@ -31224,7 +28458,7 @@ def test_ast_fields_docstring_section():
 
 def test_ast_fields_alias():
     """fields() follows alias target for dc.Alias."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     mod = dc.Module(name="testmod")
     func = dc.Function(name="f", lineno=1)
@@ -31241,7 +28475,7 @@ def test_ast_fields_alias_unresolvable():
 
     from griffe import ModulesCollection
 
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     mc = ModulesCollection()
     mod = dc.Module(name="testmod")
@@ -31259,7 +28493,7 @@ def test_ast_fields_alias_unresolvable():
 
 def test_ast_fields_object():
     """fields() returns discovered attributes for dc.Object (Module)."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     mod = dc.Module(name="mymod")
     result = fields(mod)
@@ -31271,7 +28505,7 @@ def test_ast_fields_object():
 
 def test_ast_fields_layout_base():
     """fields() returns non-default fields for a LayoutBase subclass."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     auto = Auto(name="my_func")
     result = fields(auto)
@@ -31280,7 +28514,7 @@ def test_ast_fields_layout_base():
 
 def test_ast_fields_dict():
     """fields() returns dict keys."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     result = fields({"a": 1, "b": 2})
     assert result == ["a", "b"]
@@ -31288,7 +28522,7 @@ def test_ast_fields_dict():
 
 def test_ast_fields_list():
     """fields() returns list indices."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     result = fields([10, 20, 30])
     assert result == [0, 1, 2]
@@ -31296,7 +28530,7 @@ def test_ast_fields_list():
 
 def test_ast_fields_parameters():
     """fields() returns indices for dc.Parameters."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     params = dc.Parameters(dc.Parameter(name="a"), dc.Parameter(name="b"))
     result = fields(params)
@@ -31306,7 +28540,7 @@ def test_ast_fields_parameters():
 
 def test_ast_fields_none_for_unknown():
     """fields() returns None for unrecognized types."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     assert fields(42) is None
     assert fields("hello") is None
@@ -31445,7 +28679,7 @@ def test_ast_formatter_format_nested():
 
 def test_ast_preview_print(capsys):
     """preview() prints the formatted tree."""
-    from great_docs._qrenderer._ast import ExampleCode, preview
+    from great_docs._renderer._ast import ExampleCode, preview
 
     preview(ExampleCode("x = 1"))
     captured = capsys.readouterr()
@@ -31454,7 +28688,7 @@ def test_ast_preview_print(capsys):
 
 def test_ast_preview_as_string():
     """preview(as_string=True) returns the tree as a string."""
-    from great_docs._qrenderer._ast import ExampleCode, preview
+    from great_docs._renderer._ast import ExampleCode, preview
 
     result = preview(ExampleCode("x = 1"), as_string=True)
     assert isinstance(result, str)
@@ -31463,7 +28697,7 @@ def test_ast_preview_as_string():
 
 def test_ast_preview_max_depth():
     """preview() respects max_depth parameter."""
-    from great_docs._qrenderer._ast import ExampleCode, preview
+    from great_docs._renderer._ast import ExampleCode, preview
 
     result = preview(ExampleCode("x = 1"), max_depth=0, as_string=True)
     assert "ExampleCode" in result
@@ -31472,7 +28706,7 @@ def test_ast_preview_max_depth():
 
 def test_ast_preview_compact():
     """preview() respects compact parameter."""
-    from great_docs._qrenderer._ast import ExampleCode, preview
+    from great_docs._renderer._ast import ExampleCode, preview
 
     result = preview(ExampleCode("x = 1"), compact=True, as_string=True)
     assert "ExampleCode" in result
@@ -31503,7 +28737,7 @@ def test_ast_docstring_section_warnings():
 
 def test_ast_fields_docstring_element():
     """fields() returns expected fields for ds.DocstringElement."""
-    from great_docs._qrenderer._ast import fields
+    from great_docs._renderer._ast import fields
 
     # DocstringElement is the base; DocstringReturn is a subclass not matching
     # DocstringNamedElement or DocstringParameter
@@ -31591,11 +28825,9 @@ def test_mixin_rendered_member_pages_group_str():
 def test_mixin_render_body_with_doc_members():
     """render_body renders docstring + member groups for Doc members."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -31609,11 +28841,9 @@ def test_mixin_render_body_with_doc_members():
 def test_mixin_render_body_with_member_pages():
     """render_body renders docstring + member page groups for MemberPage members."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -31624,12 +28854,10 @@ def test_mixin_render_body_with_member_pages():
 
 def test_mixin_render_body_no_members():
     """render_body returns just docstring when no members."""
-    from great_docs._qrenderer._renderer import Renderer
 
     cls_obj = dc.Class(name="Empty", lineno=1)
     doc_cls = layout.DocClass(name="Empty", obj=cls_obj, members=[])
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     body = render.render_body()
 
@@ -31639,13 +28867,11 @@ def test_mixin_render_body_no_members():
 
 def test_mixin_render_body_invalid_member_type_raises():
     """render_body raises ValueError for unrecognized member types."""
-    from great_docs._qrenderer._renderer import Renderer
 
     cls_obj = dc.Class(name="Bad", lineno=1)
     # Use a plain string as a member — not Doc or MemberPage
     doc_cls = layout.DocClass(name="Bad", obj=cls_obj, members=["not_a_doc"])
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     with pytest.raises(ValueError, match="Cannot render members of type"):
         render.render_body()
@@ -31653,11 +28879,9 @@ def test_mixin_render_body_invalid_member_type_raises():
 
 def test_mixin_render_members_returns_groups():
     """render_members returns [attributes, classes, functions] groups."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     members = render.render_members()
     assert len(members) == 3
@@ -31667,11 +28891,9 @@ def test_mixin_render_members_returns_groups():
 
 def test_mixin_render_members_show_members_false():
     """render_members returns empty list when show_members=False."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
     render.show_members = False
 
     assert render.render_members() == []
@@ -31679,11 +28901,9 @@ def test_mixin_render_members_show_members_false():
 
 def test_mixin_render_member_pages_returns_groups():
     """render_member_pages returns [attributes, classes, functions] page groups."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     pages = render.render_member_pages()
     assert len(pages) == 3
@@ -31693,11 +28913,9 @@ def test_mixin_render_member_pages_returns_groups():
 
 def test_mixin_render_member_pages_show_members_false():
     """render_member_pages returns empty list when show_members=False."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
     render.show_members = False
 
     assert render.render_member_pages() == []
@@ -31705,11 +28923,9 @@ def test_mixin_render_member_pages_show_members_false():
 
 def test_mixin_attributes_property():
     """attributes property filters Doc members by is_attribute."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     attrs = render.attributes
     assert len(attrs) == 1
@@ -31718,11 +28934,9 @@ def test_mixin_attributes_property():
 
 def test_mixin_classes_property():
     """classes property filters Doc members by is_class."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     classes = render.classes
     assert len(classes) == 1
@@ -31731,11 +28945,9 @@ def test_mixin_classes_property():
 
 def test_mixin_functions_property():
     """functions property filters Doc members by is_function."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     funcs = render.functions
     assert len(funcs) == 1
@@ -31744,11 +28956,9 @@ def test_mixin_functions_property():
 
 def test_mixin_attribute_member_pages_property():
     """attribute_member_pages filters MemberPage members by is_attribute."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     pages = render.attribute_member_pages
     assert len(pages) == 1
@@ -31757,11 +28967,9 @@ def test_mixin_attribute_member_pages_property():
 
 def test_mixin_class_member_pages_property():
     """class_member_pages filters MemberPage members by is_class."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     pages = render.class_member_pages
     assert len(pages) == 1
@@ -31770,11 +28978,9 @@ def test_mixin_class_member_pages_property():
 
 def test_mixin_function_member_pages_property():
     """function_member_pages filters MemberPage members by is_function."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     pages = render.function_member_pages
     assert len(pages) == 1
@@ -31783,11 +28989,9 @@ def test_mixin_function_member_pages_property():
 
 def test_mixin_attributes_exclude_filter():
     """attributes property respects EXCLUDE_ATTRIBUTES."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     old = _globals.EXCLUDE_ATTRIBUTES.copy()
     try:
@@ -31803,11 +29007,9 @@ def test_mixin_attributes_exclude_filter():
 
 def test_mixin_functions_exclude_filter():
     """functions property respects EXCLUDE_FUNCTIONS."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     old = _globals.EXCLUDE_FUNCTIONS.copy()
     try:
@@ -31823,11 +29025,9 @@ def test_mixin_functions_exclude_filter():
 
 def test_mixin_classes_exclude_filter():
     """classes property respects EXCLUDE_CLASSES."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     old = _globals.EXCLUDE_CLASSES.copy()
     try:
@@ -31843,11 +29043,9 @@ def test_mixin_classes_exclude_filter():
 
 def test_mixin_attribute_member_pages_exclude_filter():
     """attribute_member_pages respects EXCLUDE_ATTRIBUTES."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     old = _globals.EXCLUDE_ATTRIBUTES.copy()
     try:
@@ -31863,11 +29061,9 @@ def test_mixin_attribute_member_pages_exclude_filter():
 
 def test_mixin_class_member_pages_exclude_filter():
     """class_member_pages respects EXCLUDE_CLASSES."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     old = _globals.EXCLUDE_CLASSES.copy()
     try:
@@ -31883,11 +29079,9 @@ def test_mixin_class_member_pages_exclude_filter():
 
 def test_mixin_function_member_pages_exclude_filter():
     """function_member_pages respects EXCLUDE_FUNCTIONS."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     old = _globals.EXCLUDE_FUNCTIONS.copy()
     try:
@@ -31903,11 +29097,9 @@ def test_mixin_function_member_pages_exclude_filter():
 
 def test_mixin_render_classes():
     """render_classes returns a RenderedMembersGroup with 'Classes' title."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     result = render.render_classes()
     assert isinstance(result, RenderedMembersGroup)
@@ -31916,11 +29108,9 @@ def test_mixin_render_classes():
 
 def test_mixin_render_functions():
     """render_functions returns a RenderedMembersGroup with 'Methods' title for classes."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     result = render.render_functions()
     assert isinstance(result, RenderedMembersGroup)
@@ -31929,11 +29119,9 @@ def test_mixin_render_functions():
 
 def test_mixin_render_attributes():
     """render_attributes returns a RenderedMembersGroup with 'Attributes' title."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     result = render.render_attributes()
     assert isinstance(result, RenderedMembersGroup)
@@ -31942,11 +29130,9 @@ def test_mixin_render_attributes():
 
 def test_mixin_render_classes_show_false():
     """render_classes returns None when show_classes=False."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
     render.show_classes = False
 
     assert render.render_classes() is None
@@ -31954,11 +29140,9 @@ def test_mixin_render_classes_show_false():
 
 def test_mixin_render_functions_show_false():
     """render_functions returns None when show_functions=False."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
     render.show_functions = False
 
     assert render.render_functions() is None
@@ -31966,11 +29150,9 @@ def test_mixin_render_functions_show_false():
 
 def test_mixin_render_attributes_show_false():
     """render_attributes returns None when show_attributes=False."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
     render.show_attributes = False
 
     assert render.render_attributes() is None
@@ -31978,11 +29160,9 @@ def test_mixin_render_attributes_show_false():
 
 def test_mixin_render_class_member_pages():
     """render_class_member_pages returns RenderedMemberPagesGroup."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     result = render.render_class_member_pages()
     assert isinstance(result, RenderedMemberPagesGroup)
@@ -31990,11 +29170,9 @@ def test_mixin_render_class_member_pages():
 
 def test_mixin_render_function_member_pages():
     """render_function_member_pages returns RenderedMemberPagesGroup."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     result = render.render_function_member_pages()
     assert isinstance(result, RenderedMemberPagesGroup)
@@ -32002,11 +29180,9 @@ def test_mixin_render_function_member_pages():
 
 def test_mixin_render_attribute_member_pages():
     """render_attribute_member_pages returns RenderedMemberPagesGroup."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     result = render.render_attribute_member_pages()
     assert isinstance(result, RenderedMemberPagesGroup)
@@ -32014,11 +29190,9 @@ def test_mixin_render_attribute_member_pages():
 
 def test_mixin_render_class_member_pages_show_false():
     """render_class_member_pages returns None when show_classes=False."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
     render.show_classes = False
 
     assert render.render_class_member_pages() is None
@@ -32026,11 +29200,9 @@ def test_mixin_render_class_member_pages_show_false():
 
 def test_mixin_render_function_member_pages_show_false():
     """render_function_member_pages returns None when show_functions=False."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
     render.show_functions = False
 
     assert render.render_function_member_pages() is None
@@ -32038,11 +29210,9 @@ def test_mixin_render_function_member_pages_show_false():
 
 def test_mixin_render_attribute_member_pages_show_false():
     """render_attribute_member_pages returns None when show_attributes=False."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
     render.show_attributes = False
 
     assert render.render_attribute_member_pages() is None
@@ -32050,11 +29220,9 @@ def test_mixin_render_attribute_member_pages_show_false():
 
 def test_mixin_render_members_group_no_summary():
     """_render_members_group skips summary when show_*_summary=False."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
     render.show_functions_summary = False
 
     result = render.render_functions()
@@ -32064,11 +29232,9 @@ def test_mixin_render_members_group_no_summary():
 
 def test_mixin_render_members_group_no_body():
     """_render_members_group skips body when show_*_body=False."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
     render.show_functions_body = False
 
     result = render.render_functions()
@@ -32078,11 +29244,9 @@ def test_mixin_render_members_group_no_body():
 
 def test_mixin_render_members_group_no_summary_global():
     """_render_members_group skips summary when show_members_summary=False."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
     render.show_members_summary = False
 
     result = render.render_functions()
@@ -32092,7 +29256,6 @@ def test_mixin_render_members_group_no_summary_global():
 
 def test_mixin_render_members_group_empty_returns_none():
     """_render_members_group returns None when no members of that type."""
-    from great_docs._qrenderer._renderer import Renderer
 
     cls_obj = dc.Class(name="FuncOnly", lineno=1)
     func_obj = dc.Function(name="method", lineno=2)
@@ -32100,8 +29263,7 @@ def test_mixin_render_members_group_empty_returns_none():
     doc_func = layout.DocFunction(name="method", obj=func_obj)
     doc_cls = layout.DocClass(name="FuncOnly", obj=cls_obj, members=[doc_func])
 
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     assert render.render_attributes() is None
     assert render.render_classes() is None
@@ -32110,11 +29272,9 @@ def test_mixin_render_members_group_empty_returns_none():
 
 def test_mixin_render_members_group_attributes_summary_and_body():
     """_render_members_group for attributes respects show_attributes_summary/body."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
     render.show_attributes_summary = False
     render.show_attributes_body = False
 
@@ -32126,11 +29286,9 @@ def test_mixin_render_members_group_attributes_summary_and_body():
 
 def test_mixin_render_members_group_classes_summary_and_body():
     """_render_members_group for classes respects show_classes_summary/body."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
     render.show_classes_summary = False
     render.show_classes_body = False
 
@@ -32142,11 +29300,9 @@ def test_mixin_render_members_group_classes_summary_and_body():
 
 def test_mixin_render_member_pages_group_no_summary():
     """_render_member_pages_group skips summary when show_*_summary=False."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
     render.show_functions_summary = False
 
     result = render.render_function_member_pages()
@@ -32156,7 +29312,6 @@ def test_mixin_render_member_pages_group_no_summary():
 
 def test_mixin_render_member_pages_group_empty_returns_none():
     """_render_member_pages_group returns None when no pages of that type."""
-    from great_docs._qrenderer._renderer import Renderer
 
     cls_obj = dc.Class(name="FuncOnly", lineno=1)
     func_obj = dc.Function(name="method", lineno=2)
@@ -32166,8 +29321,7 @@ def test_mixin_render_member_pages_group_empty_returns_none():
     page_func = layout.MemberPage(path="method", contents=[doc_func])
     doc_cls = layout.DocClass(name="FuncOnly", obj=cls_obj, members=[page_func])
 
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     assert render.render_attribute_member_pages() is None
     assert render.render_class_member_pages() is None
@@ -32176,11 +29330,9 @@ def test_mixin_render_member_pages_group_empty_returns_none():
 
 def test_mixin_render_member_pages_group_functions_slug_for_class():
     """_render_member_pages_group uses 'Functions' slug for DocClass function pages."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     result = render.render_function_member_pages()
     assert result is not None
@@ -32190,11 +29342,9 @@ def test_mixin_render_member_pages_group_functions_slug_for_class():
 
 def test_mixin_render_member_pages_group_attributes_no_summary():
     """_render_member_pages_group for attributes skips summary when disabled."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
     render.show_attributes_summary = False
 
     result = render.render_attribute_member_pages()
@@ -32204,11 +29354,9 @@ def test_mixin_render_member_pages_group_attributes_no_summary():
 
 def test_mixin_render_member_pages_group_classes_no_summary():
     """_render_member_pages_group for classes skips summary when disabled."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
     render.show_classes_summary = False
 
     result = render.render_class_member_pages()
@@ -32218,11 +29366,9 @@ def test_mixin_render_member_pages_group_classes_no_summary():
 
 def test_mixin_render_member_pages_group_global_summary_off():
     """_render_member_pages_group skips summary when show_members_summary=False."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
     render.show_members_summary = False
 
     result = render.render_function_member_pages()
@@ -32232,11 +29378,9 @@ def test_mixin_render_member_pages_group_global_summary_off():
 
 def test_mixin_render_members_group_has_summary_table():
     """_render_members_group produces a tabulate summary."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_members()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     result = render.render_functions()
     assert result is not None
@@ -32246,11 +29390,9 @@ def test_mixin_render_members_group_has_summary_table():
 
 def test_mixin_render_member_pages_group_has_summary_table():
     """_render_member_pages_group produces a tabulate summary."""
-    from great_docs._qrenderer._renderer import Renderer
 
     _, doc_cls = _build_class_with_member_pages()
-    r = Renderer()
-    render = RenderDocClass(doc_cls, r, level=1)
+    render = RenderDocClass(doc_cls, level=1)
 
     result = render.render_function_member_pages()
     assert result is not None
@@ -32260,7 +29402,6 @@ def test_mixin_render_member_pages_group_has_summary_table():
 
 def test_mixin_render_functions_module_uses_functions_slug():
     """For DocModule, render_functions uses 'Functions' not 'Methods'."""
-    from great_docs._qrenderer._renderer import Renderer
 
     mod_obj = dc.Module(name="mymod")
     func_obj = dc.Function(name="func", lineno=1)
@@ -32269,8 +29410,7 @@ def test_mixin_render_functions_module_uses_functions_slug():
     doc_func = layout.DocFunction(name="func", obj=func_obj)
     doc_mod = layout.DocModule(name="mymod", obj=mod_obj, members=[doc_func])
 
-    r = Renderer()
-    render = RenderDocModule(doc_mod, r, level=1)
+    render = RenderDocModule(doc_mod, level=1)
 
     result = render.render_functions()
     assert result is not None
@@ -32280,7 +29420,6 @@ def test_mixin_render_functions_module_uses_functions_slug():
 def test_mixin_render_members_module_uses_functions_slug():
     """For DocModule, render_members has 'Functions' group not 'Methods'."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     mod_obj = dc.Module(name="mymod")
     func_obj = dc.Function(name="func", lineno=1)
@@ -32295,8 +29434,7 @@ def test_mixin_render_members_module_uses_functions_slug():
     doc_attr = layout.DocAttribute(name="val", obj=attr_obj)
     doc_mod = layout.DocModule(name="mymod", obj=mod_obj, members=[doc_attr, doc_cls, doc_func])
 
-    r = Renderer()
-    render = RenderDocModule(doc_mod, r, level=1)
+    render = RenderDocModule(doc_mod, level=1)
 
     members = render.render_members()
     assert len(members) == 3
@@ -33972,75 +31110,10 @@ def test_rstconv_simple_table_two_sep_via_wrapper():
     assert "|" in result
 
 
-def test_renderer_render_method():
-    """Renderer.render() imports and instantiates RenderAPIPage."""
-
-    from great_docs._qrenderer._renderer import Renderer
-
-    r = Renderer()
-    mock_page = MagicMock()
-    mock_render_api = MagicMock(return_value="rendered-page")
-
-    # The local import `from . import RenderAPIPage` resolves via great_docs._qrenderer
-    with patch("great_docs._qrenderer.RenderAPIPage", mock_render_api):
-        result = r.render(mock_page)
-
-    mock_render_api.assert_called_once_with(mock_page, r, 1)
-    assert result == "rendered-page"
-
-
-def test_renderer_summarize_method():
-    """Renderer.summarize() imports and instantiates RenderReferencePage."""
-
-    from great_docs._qrenderer._renderer import Renderer
-
-    r = Renderer()
-    mock_layout = MagicMock()
-    mock_render_ref = MagicMock(return_value="summarized-layout")
-
-    with patch("great_docs._qrenderer.RenderReferencePage", mock_render_ref):
-        result = r.summarize(mock_layout)
-
-    mock_render_ref.assert_called_once_with(mock_layout, r, 1)
-    assert result == "summarized-layout"
-
-
-def test_renderer_pages_written_calls_write_typing():
-    """Renderer._pages_written() calls _write_typing_information."""
-
-    from great_docs._qrenderer._renderer import Renderer
-
-    r = Renderer()
-    mock_builder = MagicMock()
-
-    with patch.object(r, "_write_typing_information") as mock_wti:
-        r._pages_written(mock_builder)
-
-    mock_wti.assert_called_once_with(mock_builder)
-
-
-def test_renderer_write_typing_information():
-    """Renderer._write_typing_information() creates TypeInformation per module."""
-
-    from great_docs._qrenderer._renderer import Renderer
-
-    r = Renderer(typing_module_paths=["mod_a", "mod_b"])
-    mock_builder = MagicMock()
-    mock_ti_cls = MagicMock()
-
-    with patch("great_docs._qrenderer.typing_information.TypeInformation", mock_ti_cls):
-        r._write_typing_information(mock_builder)
-
-    assert mock_ti_cls.call_count == 2
-    mock_ti_cls.assert_any_call("mod_a", r, mock_builder)
-    mock_ti_cls.assert_any_call("mod_b", r, mock_builder)
-    assert mock_ti_cls.return_value.write.call_count == 2
-
 
 def test_docclass_attributes_excludes_dataclass_params():
     """DocClass.attributes filters out dataclass params when is_dataclass=True."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     cls_obj = dc.Class(name="DC", lineno=1)
     cls_obj.labels.add("dataclass")
@@ -34067,10 +31140,9 @@ def test_docclass_attributes_excludes_dataclass_params():
     doc_attr_y = layout.DocAttribute(name="y", obj=attr_y)
     doc_cls = layout.DocClass(name="DC", obj=cls_obj, members=[doc_attr_x, doc_attr_y])
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocClass(doc_cls, r, level=1)
+        render = RenderDocClass(doc_cls, level=1)
 
         # is_dataclass should be True
         assert render.is_dataclass is True
@@ -34084,7 +31156,6 @@ def test_docclass_attributes_excludes_dataclass_params():
 def test_docclass_parameter_attributes_with_dataclass():
     """DocClass.parameter_attributes returns params found in class attributes."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     cls_obj = dc.Class(name="DC2", lineno=1)
     cls_obj.labels.add("dataclass")
@@ -34105,10 +31176,9 @@ def test_docclass_parameter_attributes_with_dataclass():
     doc_attr_a = layout.DocAttribute(name="a", obj=attr_a)
     doc_cls = layout.DocClass(name="DC2", obj=cls_obj, members=[doc_attr_a])
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocClass(doc_cls, r, level=1)
+        render = RenderDocClass(doc_cls, level=1)
         pa = render.parameter_attributes
         assert len(pa) == 1
         assert pa[0].name == "a"
@@ -34117,7 +31187,6 @@ def test_docclass_parameter_attributes_with_dataclass():
 def test_docclass_init_parameters_with_dataclass():
     """DocClass.init_parameters returns params NOT in class attributes."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     cls_obj = dc.Class(name="DC3", lineno=1)
     cls_obj.labels.add("dataclass")
@@ -34142,10 +31211,9 @@ def test_docclass_init_parameters_with_dataclass():
     doc_attr_a = layout.DocAttribute(name="a", obj=attr_a)
     doc_cls = layout.DocClass(name="DC3", obj=cls_obj, members=[doc_attr_a])
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocClass(doc_cls, r, level=1)
+        render = RenderDocClass(doc_cls, level=1)
         ip = render.init_parameters
 
         # "self" and "b" are not in class attributes; "a" is
@@ -34158,15 +31226,13 @@ def test_docclass_init_parameters_with_dataclass():
 def test_docmodule_render_signature_no_signature_name():
     """DocModule.render_signature() returns None when signature_name is falsy."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     mod_obj = dc.Module(name="my_module")
     doc_mod = layout.DocModule(name="my_module", obj=mod_obj)
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocModule(doc_mod, r, level=1)
+        render = RenderDocModule(doc_mod, level=1)
         # Override the cached_property by setting in instance __dict__
         render.__dict__["signature_name"] = ""
         result = render.render_signature()
@@ -34176,15 +31242,13 @@ def test_docmodule_render_signature_no_signature_name():
 def test_docmodule_render_signature_with_name():
     """DocModule.render_signature() returns Div when signature_name is set."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     mod_obj = dc.Module(name="my_module")
     doc_mod = layout.DocModule(name="my_module", obj=mod_obj)
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocModule(doc_mod, r, level=1)
+        render = RenderDocModule(doc_mod, level=1)
         # Ensure signature_name is non-empty
         render.__dict__["signature_name"] = "my_module"
         result = render.render_signature()
@@ -34196,15 +31260,13 @@ def test_docmodule_render_signature_with_name():
 def test_docmodule_post_init_narrows_types():
     """DocModule.__post_init__() narrows self.doc and self.obj types."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     mod_obj = dc.Module(name="test_mod")
     doc_mod = layout.DocModule(name="test_mod", obj=mod_obj)
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocModule(doc_mod, r, level=1)
+        render = RenderDocModule(doc_mod, level=1)
 
     # After __post_init__, self.doc and self.obj should be set
     assert render.doc is doc_mod
@@ -34224,15 +31286,13 @@ def test_get_render_type_raises_for_unmapped_type():
 def test_renderbase_title_property():
     """RenderBase.title calls render_title()."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     mod_obj = dc.Module(name="tmod")
     doc_mod = layout.DocModule(name="tmod", obj=mod_obj)
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocModule(doc_mod, r, level=1)
+        render = RenderDocModule(doc_mod, level=1)
 
         # Access the 'title' cached property, which calls render_title()
         title = render.title
@@ -34244,12 +31304,9 @@ def test_renderbase_title_property():
 def test_renderbase_summary_name_property():
     """RenderBase.summary_name returns empty string."""
 
-    # RenderBase expects layout_obj and renderer; use a minimal approach
-
     # Create a mock that won't trigger __post_init__ logic
     rb = object.__new__(RenderBase)
     rb.layout_obj = MagicMock()
-    rb.renderer = MagicMock()
     rb.level = 1
     assert rb.summary_name == ""
 
@@ -34282,7 +31339,6 @@ def test_extract_directives_seealso_empty_entry():
 def test_docattribute_render_signature_type_kind():
     """DocAttribute.render_signature() clears name/annotation for TypeAlias kind."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     attr_obj = dc.Attribute(name="MyType", lineno=1)
     attr_obj.annotation = gf.ExprName("str")
@@ -34292,10 +31348,9 @@ def test_docattribute_render_signature_type_kind():
 
     doc_attr = layout.DocAttribute(name="MyType", obj=attr_obj)
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocAttribute(doc_attr, r, level=1)
+        render = RenderDocAttribute(doc_attr, level=1)
 
         assert "type" in render.kind
 
@@ -34311,7 +31366,6 @@ def test_mixin_page_render_title():
     # Create instance bypassing __init__
     obj = object.__new__(RenderPageMixin)
     obj.layout_obj = MagicMock()
-    obj.renderer = MagicMock()
     obj.level = 1
 
     # render_metadata returns None by default (no override)
@@ -34334,7 +31388,6 @@ def test_renderbase_summary_property():
 
     rb = object.__new__(RenderBase)
     rb.layout_obj = MagicMock()
-    rb.renderer = MagicMock()
     rb.level = 1
     # Access summary cached_property which calls render_summary()
     result = rb.summary
@@ -34344,7 +31397,6 @@ def test_renderbase_summary_property():
 def test_docclass_attribute_member_pages_dataclass():
     """DocClass.attribute_member_pages filters dataclass params."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     cls_obj = dc.Class(name="DC4", lineno=1)
     cls_obj.labels.add("dataclass")
@@ -34371,10 +31423,9 @@ def test_docclass_attribute_member_pages_dataclass():
     page_y = layout.MemberPage(path="y", contents=[doc_attr_y])
     doc_cls = layout.DocClass(name="DC4", obj=cls_obj, members=[page_x, page_y])
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocClass(doc_cls, r, level=1)
+        render = RenderDocClass(doc_cls, level=1)
         pages = render.attribute_member_pages
         page_names = [p.obj.name for p in pages]
         assert "x" not in page_names
@@ -34384,15 +31435,13 @@ def test_docclass_attribute_member_pages_dataclass():
 def test_docclass_parameter_attributes_non_dataclass():
     """DocClass.parameter_attributes returns empty for non-dataclass."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     cls_obj = dc.Class(name="RegularClass", lineno=1)
     doc_cls = layout.DocClass(name="RegularClass", obj=cls_obj, members=[])
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocClass(doc_cls, r, level=1)
+        render = RenderDocClass(doc_cls, level=1)
         assert render.is_dataclass is False
         pa = render.parameter_attributes
         assert len(pa) == 0
@@ -34401,15 +31450,13 @@ def test_docclass_parameter_attributes_non_dataclass():
 def test_docclass_init_parameters_non_dataclass():
     """DocClass.init_parameters returns empty for non-dataclass."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     cls_obj = dc.Class(name="RegularClass2", lineno=1)
     doc_cls = layout.DocClass(name="RegularClass2", obj=cls_obj, members=[])
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocClass(doc_cls, r, level=1)
+        render = RenderDocClass(doc_cls, level=1)
         assert render.is_dataclass is False
         ip = render.init_parameters
         assert len(ip) == 0
@@ -34506,7 +31553,7 @@ def test_emph_str():
 
 def test_image_str():
     """Image.__str__ renders markdown image syntax."""
-    from great_docs._qrenderer.pandoc.inlines import Image
+    from great_docs._renderer.pandoc.inlines import Image
 
     img = Image(caption="Logo", src="img.png")
     assert str(img) == "![Logo](img.png)"
@@ -34696,7 +31743,7 @@ def test_is_field_init_false_no_field():
 
 def test_canonical_path_with_type():
     """_canonical_path returns module.qualname for a type."""
-    from great_docs._qrenderer._tools import _canonical_path
+    from great_docs._renderer._tools import _canonical_path
 
     result = _canonical_path(int)
     assert result == "int"  # builtins returns just qualname
@@ -34707,7 +31754,7 @@ def test_canonical_path_with_type():
 
 def test_canonical_path_with_class():
     """_canonical_path returns full path for non-builtin type."""
-    from great_docs._qrenderer._tools import _canonical_path
+    from great_docs._renderer._tools import _canonical_path
 
     result = _canonical_path(Attr)
     assert "Attr" in result
@@ -34716,7 +31763,7 @@ def test_canonical_path_with_class():
 
 def test_canonical_path_with_instance():
     """_canonical_path handles non-type by using __class__."""
-    from great_docs._qrenderer._tools import _canonical_path
+    from great_docs._renderer._tools import _canonical_path
 
     result = _canonical_path("hello")
     assert result == "str"  # builtins
@@ -34742,7 +31789,7 @@ def test_render_type_object_with_type():
     """render_type_object renders a python type."""
 
     # Use a type from the package itself that griffe can find
-    result = render_type_object("great_docs._qrenderer.pandoc.components.Attr")
+    result = render_type_object("great_docs._renderer.pandoc.components.Attr")
     assert isinstance(result, str)
 
 
@@ -35256,8 +32303,8 @@ def test_render_reference_section_title():
     """RenderReferenceSection.render_title() returns a Header."""
 
     section = layout.Section(title="Functions", contents=[layout.Auto(name="x")])
-    renderer = MagicMock()
-    rs = RenderReferenceSection(layout_obj=section, renderer=renderer, level=1)
+
+    rs = RenderReferenceSection(layout_obj=section, level=1)
     title = rs.render_title()
 
     assert title is not None
@@ -35268,8 +32315,8 @@ def test_render_reference_section_subtitle():
     """RenderReferenceSection.render_title() handles subtitles."""
 
     section = layout.Section(subtitle="Helper Functions", contents=[layout.Auto(name="x")])
-    renderer = MagicMock()
-    rs = RenderReferenceSection(layout_obj=section, renderer=renderer, level=1)
+
+    rs = RenderReferenceSection(layout_obj=section, level=1)
     title = rs.render_title()
 
     assert title is not None
@@ -35280,8 +32327,8 @@ def test_render_reference_section_no_title():
     """RenderReferenceSection.render_title() returns None when no title/subtitle."""
 
     section = layout.Section(contents=[layout.Auto(name="x")])
-    renderer = MagicMock()
-    rs = RenderReferenceSection(layout_obj=section, renderer=renderer, level=1)
+
+    rs = RenderReferenceSection(layout_obj=section, level=1)
     title = rs.render_title()
 
     assert title is None
@@ -35291,8 +32338,8 @@ def test_render_reference_section_description():
     """RenderReferenceSection.render_description() returns a Div."""
 
     section = layout.Section(title="Test", desc="A description", contents=[layout.Auto(name="x")])
-    renderer = MagicMock()
-    rs = RenderReferenceSection(layout_obj=section, renderer=renderer, level=1)
+
+    rs = RenderReferenceSection(layout_obj=section, level=1)
     desc = rs.render_description()
 
     assert "A description" in str(desc)
@@ -35302,8 +32349,8 @@ def test_render_reference_section_body_empty():
     """RenderReferenceSection.render_body() returns None for empty section."""
 
     section = layout.Section(title="Empty", contents=[])
-    renderer = MagicMock()
-    rs = RenderReferenceSection(layout_obj=section, renderer=renderer, level=1)
+
+    rs = RenderReferenceSection(layout_obj=section, level=1)
     body = rs.render_body()
 
     assert body is None
@@ -35318,8 +32365,8 @@ def test_render_reference_page_post_init():
         sections=[layout.Section(title="Funcs", contents=[layout.Auto(name="x")])],
         package="mypkg",
     )
-    renderer = MagicMock()
-    rp = RenderReferencePage(layout_obj=lyt, renderer=renderer, level=1)
+
+    rp = RenderReferencePage(layout_obj=lyt, level=1)
 
     assert rp.layout is lyt
     assert rp.sections == lyt.sections
@@ -35335,8 +32382,8 @@ def test_render_reference_page_description():
         description="My description",
         sections=[layout.Section(title="S", contents=[layout.Auto(name="x")])],
     )
-    renderer = MagicMock()
-    rp = RenderReferencePage(layout_obj=lyt, renderer=renderer, level=1)
+
+    rp = RenderReferencePage(layout_obj=lyt, level=1)
     desc = rp.render_description()
 
     assert desc is not None
@@ -35350,8 +32397,8 @@ def test_render_reference_page_no_description():
         title="API Ref",
         sections=[layout.Section(title="S", contents=[layout.Auto(name="x")])],
     )
-    renderer = MagicMock()
-    rp = RenderReferencePage(layout_obj=lyt, renderer=renderer, level=1)
+
+    rp = RenderReferencePage(layout_obj=lyt, level=1)
     desc = rp.render_description()
 
     assert desc is None
@@ -35364,8 +32411,8 @@ def test_render_reference_page_metadata():
         title="API Reference",
         sections=[layout.Section(title="S", contents=[layout.Auto(name="x")])],
     )
-    renderer = MagicMock()
-    rp = RenderReferencePage(layout_obj=lyt, renderer=renderer, level=1)
+
+    rp = RenderReferencePage(layout_obj=lyt, level=1)
     meta = rp.render_metadata()
 
     assert "API Reference" in str(meta)
@@ -35377,8 +32424,8 @@ def test_render_api_page_post_init():
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
     page = layout.Page(path="reference/my_func", contents=[doc_obj])
-    renderer = MagicMock()
-    ap = RenderAPIPage(layout_obj=page, renderer=renderer, level=1)
+
+    ap = RenderAPIPage(layout_obj=page, level=1)
 
     assert ap.page is page
     assert ap.path == "reference/my_func.qmd"
@@ -35390,8 +32437,8 @@ def test_render_api_page_has_one_object():
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
     page = layout.Page(path="reference/my_func", contents=[doc_obj])
-    renderer = MagicMock()
-    ap = RenderAPIPage(layout_obj=page, renderer=renderer, level=1)
+
+    ap = RenderAPIPage(layout_obj=page, level=1)
 
     assert ap._has_one_object is True
 
@@ -35402,11 +32449,9 @@ def test_render_api_page_metadata():
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
     page = layout.Page(path="reference/my_func", contents=[doc_obj])
-    renderer = MagicMock()
-    renderer.display_name_format = "doc"
-    renderer.signature_name_format = "doc"
-    renderer.show_signature = True
-    ap = RenderAPIPage(layout_obj=page, renderer=renderer, level=1)
+
+
+    ap = RenderAPIPage(layout_obj=page, level=1)
     meta = ap.render_metadata()
     meta_str = str(meta)
 
@@ -35419,11 +32464,9 @@ def test_render_api_page_render_body():
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
     page = layout.Page(path="reference/my_func", contents=[doc_obj])
-    renderer = MagicMock()
-    renderer.display_name_format = "doc"
-    renderer.signature_name_format = "doc"
-    renderer.show_signature = True
-    ap = RenderAPIPage(layout_obj=page, renderer=renderer, level=1)
+
+
+    ap = RenderAPIPage(layout_obj=page, level=1)
     body = ap.render_body()
 
     assert body is not None
@@ -35440,11 +32483,9 @@ def test_render_api_page_summary_with_summary_details():
         contents=[doc_obj],
         summary=summary,
     )
-    renderer = MagicMock()
-    renderer.display_name_format = "doc"
-    renderer.signature_name_format = "doc"
-    renderer.show_signature = True
-    ap = RenderAPIPage(layout_obj=page, renderer=renderer, level=1)
+
+
+    ap = RenderAPIPage(layout_obj=page, level=1)
     result = ap.render_summary()
 
     assert len(result) == 1
@@ -35461,11 +32502,9 @@ def test_render_api_page_summary_multi_no_flatten_raises():
         contents=[f1, f2],
         flatten=False,
     )
-    renderer = MagicMock()
-    renderer.display_name_format = "doc"
-    renderer.signature_name_format = "doc"
-    renderer.show_signature = True
-    ap = RenderAPIPage(layout_obj=page, renderer=renderer, level=1)
+
+
+    ap = RenderAPIPage(layout_obj=page, level=1)
     with pytest.raises(ValueError, match="Cannot summarize page"):
         ap.render_summary()
 
@@ -35723,14 +32762,12 @@ def test_render_reference_page_render_body():
     section = layout.Section(title="Functions", contents=[doc_func])
     lyt = layout.Layout(title="API", sections=[section])
 
-    renderer = MagicMock()
-    renderer.display_name_format = "doc"
-    renderer.signature_name_format = "doc"
-    renderer.show_signature = True
+
+
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        rp = RenderReferencePage(layout_obj=lyt, renderer=renderer, level=1)
+        rp = RenderReferencePage(layout_obj=lyt, level=1)
         body = rp.render_body()
 
     assert body is not None
@@ -35748,14 +32785,12 @@ def test_render_reference_section_body_with_contents():
 
     section = layout.Section(title="Functions", contents=[doc_func])
 
-    renderer = MagicMock()
-    renderer.display_name_format = "doc"
-    renderer.signature_name_format = "doc"
-    renderer.show_signature = True
+
+
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        rs = RenderReferenceSection(layout_obj=section, renderer=renderer, level=1)
+        rs = RenderReferenceSection(layout_obj=section, level=1)
         body = rs.render_body()
 
     assert body is not None
@@ -35769,8 +32804,8 @@ def test_render_reference_section_post_init():
     """RenderReferenceSection.__post_init__() sets section."""
 
     section = layout.Section(title="Test", contents=[layout.Auto(name="x")])
-    renderer = MagicMock()
-    rs = RenderReferenceSection(layout_obj=section, renderer=renderer, level=1)
+
+    rs = RenderReferenceSection(layout_obj=section, level=1)
 
     assert rs.section is section
 
@@ -35780,13 +32815,13 @@ def test_render_reference_section_title_and_subtitle():
 
     # Title case
     sec_t = layout.Section(title="Methods", contents=[layout.Auto(name="x")])
-    rs_t = RenderReferenceSection(layout_obj=sec_t, renderer=MagicMock(), level=1)
+    rs_t = RenderReferenceSection(layout_obj=sec_t, level=1)
 
     assert "Methods" in str(rs_t.render_title())
 
     # Subtitle case
     sec_s = layout.Section(subtitle="Helpers", contents=[layout.Auto(name="x")])
-    rs_s = RenderReferenceSection(layout_obj=sec_s, renderer=MagicMock(), level=1)
+    rs_s = RenderReferenceSection(layout_obj=sec_s, level=1)
 
     assert "Helpers" in str(rs_s.render_title())
 
@@ -35800,14 +32835,12 @@ def test_render_api_page_full_lifecycle():
 
     page = layout.Page(path="reference/my_func", contents=[doc_func])
 
-    renderer = MagicMock()
-    renderer.display_name_format = "doc"
-    renderer.signature_name_format = "doc"
-    renderer.show_signature = True
+
+
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        ap = RenderAPIPage(layout_obj=page, renderer=renderer, level=1)
+        ap = RenderAPIPage(layout_obj=page, level=1)
 
         # Test __post_init__
         assert ap.page is page
@@ -35845,14 +32878,12 @@ def test_render_api_page_with_summary_details():
         summary=layout.SummaryDetails(name="fn()", desc="Do something"),
     )
 
-    renderer = MagicMock()
-    renderer.display_name_format = "doc"
-    renderer.signature_name_format = "doc"
-    renderer.show_signature = True
+
+
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        ap = RenderAPIPage(layout_obj=page, renderer=renderer, level=1)
+        ap = RenderAPIPage(layout_obj=page, level=1)
         summary = ap.render_summary()
     assert len(summary) == 1
     assert "fn()" in str(summary[0][0])
@@ -35862,15 +32893,13 @@ def test_render_api_page_with_summary_details():
 def test_renderdoc_display_name_relative_level_gt1():
     """RenderDoc.display_name uses 'name' format when level > 1."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_func = layout.DocFunction(name="my_func", obj=func_obj)
 
-    r = Renderer(display_name_format="relative")
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocFunction(doc_func, r, level=2)
+        render = RenderDocFunction(doc_func, level=2, display_name_format="relative")
         name = render.display_name
     # At level > 1 with "relative" format, it switches to "name"
     assert isinstance(name, str)
@@ -35879,15 +32908,13 @@ def test_renderdoc_display_name_relative_level_gt1():
 def test_renderdoc_render_annotation_non_attribute_raises():
     """RenderDoc.render_annotation() raises TypeError for non-attribute."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     func_obj = gf.Function(name="fn", lineno=1)
     doc_func = layout.DocFunction(name="fn", obj=func_obj)
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocFunction(doc_func, r, level=1)
+        render = RenderDocFunction(doc_func, level=1)
         with pytest.raises(TypeError, match="Cannot render annotation"):
             render.render_annotation()
 
@@ -35895,16 +32922,14 @@ def test_renderdoc_render_annotation_non_attribute_raises():
 def test_renderdoc_render_annotation_attribute():
     """RenderDoc.render_annotation() for attribute."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     attr_obj = gf.Attribute(name="x", lineno=1)
     attr_obj.annotation = gf.ExprName("int")
     doc_attr = layout.DocAttribute(name="x", obj=attr_obj)
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocAttribute(doc_attr, r, level=1)
+        render = RenderDocAttribute(doc_attr, level=1)
         result = render.render_annotation()
     assert isinstance(result, str)
     assert "int" in result
@@ -35913,16 +32938,14 @@ def test_renderdoc_render_annotation_attribute():
 def test_renderdoc_render_annotation_none():
     """RenderDoc.render_annotation() with None annotation."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     attr_obj = gf.Attribute(name="y", lineno=1)
     attr_obj.annotation = None
     doc_attr = layout.DocAttribute(name="y", obj=attr_obj)
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocAttribute(doc_attr, r, level=1)
+        render = RenderDocAttribute(doc_attr, level=1)
         result = render.render_annotation()
     assert result == ""
 
@@ -35930,7 +32953,6 @@ def test_renderdoc_render_annotation_none():
 def test_renderdoc_docstring_section_deprecated():
     """RenderDoc handles DocstringSectionDeprecated."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     func_obj = gf.Function(name="old_fn", lineno=1)
     func_obj.docstring = gf.Docstring(
@@ -35940,10 +32962,9 @@ def test_renderdoc_docstring_section_deprecated():
     )
     doc_func = layout.DocFunction(name="old_fn", obj=func_obj)
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocFunction(doc_func, r, level=1)
+        render = RenderDocFunction(doc_func, level=1)
         body = render.render_body()
     body_str = str(body)
     assert "Deprecated" in body_str or "deprecated" in body_str
@@ -35952,7 +32973,6 @@ def test_renderdoc_docstring_section_deprecated():
 def test_renderdoc_docstring_section_examples():
     """RenderDoc handles DocstringSectionExamples."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     func_obj = gf.Function(name="ex_fn", lineno=1)
     func_obj.docstring = gf.Docstring(
@@ -35962,10 +32982,9 @@ def test_renderdoc_docstring_section_examples():
     )
     doc_func = layout.DocFunction(name="ex_fn", obj=func_obj)
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocFunction(doc_func, r, level=1)
+        render = RenderDocFunction(doc_func, level=1)
         body = render.render_body()
     body_str = str(body)
     assert "1 + 1" in body_str or "Examples" in body_str
@@ -35974,7 +32993,6 @@ def test_renderdoc_docstring_section_examples():
 def test_renderdoc_docstring_section_text_in_div():
     """RenderDoc wraps 'Text' sections in a Div."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     func_obj = gf.Function(name="txt_fn", lineno=1)
     func_obj.docstring = gf.Docstring(
@@ -35984,10 +33002,9 @@ def test_renderdoc_docstring_section_text_in_div():
     )
     doc_func = layout.DocFunction(name="txt_fn", obj=func_obj)
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocFunction(doc_func, r, level=1)
+        render = RenderDocFunction(doc_func, level=1)
         body = render.render_body()
     assert body is not None
 
@@ -35995,7 +33012,6 @@ def test_renderdoc_docstring_section_text_in_div():
 def test_renderdoc_source_link_with_github_url():
     """RenderDoc.source_link returns Link when GITHUB_REPO_URL is set."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     mod = gf.Module(name="mymod", filepath=Path("/fake/pkg/mymod.py"))
     func_obj = gf.Function(name="linked_fn", lineno=5)
@@ -36003,16 +33019,15 @@ def test_renderdoc_source_link_with_github_url():
     mod.set_member("linked_fn", func_obj)
     doc_func = layout.DocFunction(name="linked_fn", obj=func_obj)
 
-    r = Renderer()
     # Patch package_info directly so we don't depend on os.environ ordering
     with patch(
-        "great_docs._qrenderer._render.doc.package_info",
+        "great_docs._renderer._render.doc.package_info",
         side_effect=lambda key: {
             "GITHUB_REPO_URL": "https://github.com/test/repo",
             "GIT_REF": "main",
         }.get(key),
     ):
-        render = RenderDocFunction(doc_func, r, level=1)
+        render = RenderDocFunction(doc_func, level=1)
         link = render.source_link
     assert link is not None
     link_str = str(link)
@@ -36023,7 +33038,6 @@ def test_renderdoc_source_link_with_github_url():
 def test_renderdoc_see_also_section():
     """RenderDoc handles See Also section."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     func_obj = gf.Function(name="sa_fn", lineno=1)
     func_obj.docstring = gf.Docstring(
@@ -36033,10 +33047,9 @@ def test_renderdoc_see_also_section():
     )
     doc_func = layout.DocFunction(name="sa_fn", obj=func_obj)
 
-    r = Renderer()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        render = RenderDocFunction(doc_func, r, level=1)
+        render = RenderDocFunction(doc_func, level=1)
         body = render.render_body()
     body_str = str(body) if body else ""
     assert isinstance(body_str, str)
@@ -36466,14 +33479,11 @@ def test_build_github_source_url_with_source_path():
 def test_type_sections_empty_lists():
     """TypeSections with no items produces empty Blocks output."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
-    r = Renderer()
     ts = TypeSections(
         protocols_items=[],
         typevars_items=[],
         typealiases_items=[],
-        renderer=r,
     )
 
     assert ts.protocols_renders == []
@@ -36488,21 +33498,19 @@ def test_type_sections_empty_lists():
 def test_type_sections_items_combines_all():
     """TypeSections.items returns protocols + typevars + typealiases combined."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     p_item = layout.Item(name="P", obj=MagicMock(), uri="ref/P.html#P", dispname="P")
     tv_item = layout.Item(name="TV", obj=MagicMock(), uri="ref/TV.html#TV", dispname="TV")
     ta_item = layout.Item(name="TA", obj=MagicMock(), uri="ref/TA.html#TA", dispname="TA")
 
-    r = Renderer()
 
     mock_render = MagicMock()
     mock_render_cls = MagicMock(return_value=mock_render)
 
     with (
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc") as mock_g2d,
+        patch("great_docs._renderer.typing_information.griffe_to_doc") as mock_g2d,
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         mock_g2d.return_value = MagicMock()
@@ -36510,7 +33518,6 @@ def test_type_sections_items_combines_all():
             protocols_items=[p_item],
             typevars_items=[tv_item],
             typealiases_items=[ta_item],
-            renderer=r,
         )
 
     assert ts.items == [p_item, tv_item, ta_item]
@@ -36522,26 +33529,23 @@ def test_type_sections_items_combines_all():
 def test_type_sections_post_init_protocols_no_summary():
     """TypeSections.__post_init__ sets show_members_summary=False on protocols."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     p_item = layout.Item(name="Proto", obj=MagicMock())
 
     mock_render = MagicMock()
     mock_render_cls = MagicMock(return_value=mock_render)
 
-    r = Renderer()
 
     with (
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         ts = TypeSections(
             protocols_items=[p_item],
             typevars_items=[],
             typealiases_items=[],
-            renderer=r,
         )
 
     assert mock_render.show_members_summary is False
@@ -36550,26 +33554,23 @@ def test_type_sections_post_init_protocols_no_summary():
 def test_type_sections_post_init_typevars_no_sig_name():
     """TypeSections.__post_init__ sets show_signature_name=False on typevars."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     tv_item = layout.Item(name="T", obj=MagicMock())
 
     mock_render = MagicMock()
     mock_render_cls = MagicMock(return_value=mock_render)
 
-    r = Renderer()
 
     with (
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         ts = TypeSections(
             protocols_items=[],
             typevars_items=[tv_item],
             typealiases_items=[],
-            renderer=r,
         )
 
     assert mock_render.show_signature_name is False
@@ -36578,26 +33579,23 @@ def test_type_sections_post_init_typevars_no_sig_name():
 def test_type_sections_post_init_typealiases_settings():
     """TypeSections.__post_init__ sets show_signature_name=False and show_signature_annotation=False on typealiases."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     ta_item = layout.Item(name="MyAlias", obj=MagicMock())
 
     mock_render = MagicMock()
     mock_render_cls = MagicMock(return_value=mock_render)
 
-    r = Renderer()
 
     with (
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         ts = TypeSections(
             protocols_items=[],
             typevars_items=[],
             typealiases_items=[ta_item],
-            renderer=r,
         )
 
     assert mock_render.show_signature_name is False
@@ -36607,7 +33605,6 @@ def test_type_sections_post_init_typealiases_settings():
 def test_type_sections_render_body_protocols_section():
     """TypeSections.render_body includes 'Protocols' header when protocols exist."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     p_item = layout.Item(name="P", obj=MagicMock())
 
@@ -36615,19 +33612,17 @@ def test_type_sections_render_body_protocols_section():
     mock_render.__str__ = MagicMock(return_value="<protocol-rendered>")
     mock_render_cls = MagicMock(return_value=mock_render)
 
-    r = Renderer()
 
     with (
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         ts = TypeSections(
             protocols_items=[p_item],
             typevars_items=[],
             typealiases_items=[],
-            renderer=r,
         )
 
     body_str = str(ts.render_body())
@@ -36640,7 +33635,6 @@ def test_type_sections_render_body_protocols_section():
 def test_type_sections_render_body_typevars_section():
     """TypeSections.render_body includes 'Type Variables' header when typevars exist."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     tv_item = layout.Item(name="T", obj=MagicMock())
 
@@ -36648,19 +33642,17 @@ def test_type_sections_render_body_typevars_section():
     mock_render.__str__ = MagicMock(return_value="<typevar-rendered>")
     mock_render_cls = MagicMock(return_value=mock_render)
 
-    r = Renderer()
 
     with (
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         ts = TypeSections(
             protocols_items=[],
             typevars_items=[tv_item],
             typealiases_items=[],
-            renderer=r,
         )
 
     body_str = str(ts.render_body())
@@ -36671,7 +33663,6 @@ def test_type_sections_render_body_typevars_section():
 def test_type_sections_render_body_typealiases_section():
     """TypeSections.render_body includes 'Type Aliases' header when typealiases exist."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     ta_item = layout.Item(name="A", obj=MagicMock())
 
@@ -36679,19 +33670,17 @@ def test_type_sections_render_body_typealiases_section():
     mock_render.__str__ = MagicMock(return_value="<alias-rendered>")
     mock_render_cls = MagicMock(return_value=mock_render)
 
-    r = Renderer()
 
     with (
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         ts = TypeSections(
             protocols_items=[],
             typevars_items=[],
             typealiases_items=[ta_item],
-            renderer=r,
         )
 
     body_str = str(ts.render_body())
@@ -36702,7 +33691,6 @@ def test_type_sections_render_body_typealiases_section():
 def test_type_sections_render_body_all_sections():
     """TypeSections.render_body includes all three section headers when all types present."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
     p_item = layout.Item(name="P", obj=MagicMock())
     tv_item = layout.Item(name="T", obj=MagicMock())
@@ -36712,19 +33700,17 @@ def test_type_sections_render_body_all_sections():
     mock_render.__str__ = MagicMock(return_value="<rendered>")
     mock_render_cls = MagicMock(return_value=mock_render)
 
-    r = Renderer()
 
     with (
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
         ts = TypeSections(
             protocols_items=[p_item],
             typevars_items=[tv_item],
             typealiases_items=[ta_item],
-            renderer=r,
         )
 
     body_str = str(ts.render_body())
@@ -36736,14 +33722,12 @@ def test_type_sections_render_body_all_sections():
 def test_type_information_post_init():
     """TypeInformation.__post_init__ sets package and dir from builder."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
-    r = Renderer()
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
     mock_builder.dir = "reference"
 
-    ti = TypeInformation(module_path="mypkg.types", renderer=r, builder=mock_builder)
+    ti = TypeInformation(module_path="mypkg.types", builder=mock_builder)
 
     assert ti.package == "mypkg"
     assert ti.dir == "reference"
@@ -36752,37 +33736,31 @@ def test_type_information_post_init():
 def test_type_information_base_uri_strips_package():
     """TypeInformation.base_uri strips the package prefix from module_path."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
-    r = Renderer()
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
     mock_builder.dir = "reference"
 
-    ti = TypeInformation(module_path="mypkg.sub.types", renderer=r, builder=mock_builder)
+    ti = TypeInformation(module_path="mypkg.sub.types", builder=mock_builder)
     assert ti.base_uri == "reference/sub.types"
 
 
 def test_type_information_base_uri_no_package_prefix():
     """TypeInformation.base_uri keeps full path when module doesn't start with package."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
-    r = Renderer()
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
     mock_builder.dir = "reference"
 
-    ti = TypeInformation(module_path="otherpkg.types", renderer=r, builder=mock_builder)
+    ti = TypeInformation(module_path="otherpkg.types", builder=mock_builder)
     assert ti.base_uri == "reference/otherpkg.types"
 
 
 def test_type_information_sections_calls_get_object():
     """TypeInformation.sections calls get_object and classifies members."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
-    r = Renderer()
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
     mock_builder.dir = "reference"
@@ -36802,25 +33780,25 @@ def test_type_information_sections_calls_get_object():
     mock_render_cls = MagicMock(return_value=mock_render_obj)
 
     with (
-        patch("great_docs._qrenderer.typing_information.get_object", return_value=mock_module),
+        patch("great_docs._renderer.typing_information.get_object", return_value=mock_module),
         patch(
-            "great_docs._qrenderer.typing_information.is_protocol",
+            "great_docs._renderer.typing_information.is_protocol",
             side_effect=lambda m: m is mock_proto,
         ),
         patch(
-            "great_docs._qrenderer.typing_information.is_typevar",
+            "great_docs._renderer.typing_information.is_typevar",
             side_effect=lambda m: m is mock_tv,
         ),
         patch(
-            "great_docs._qrenderer.typing_information.is_typealias",
+            "great_docs._renderer.typing_information.is_typealias",
             side_effect=lambda m: m is mock_alias,
         ),
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
-        ti = TypeInformation(module_path="mypkg.types", renderer=r, builder=mock_builder)
+        ti = TypeInformation(module_path="mypkg.types", builder=mock_builder)
         sections = ti.sections
 
     assert len(sections.protocols_items) == 1
@@ -36834,9 +33812,7 @@ def test_type_information_sections_calls_get_object():
 def test_type_information_sections_item_uris():
     """TypeInformation.sections creates items with correct URIs based on base_uri."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
-    r = Renderer()
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
     mock_builder.dir = "reference"
@@ -36851,16 +33827,16 @@ def test_type_information_sections_item_uris():
     mock_render_cls = MagicMock(return_value=mock_render_obj)
 
     with (
-        patch("great_docs._qrenderer.typing_information.get_object", return_value=mock_module),
-        patch("great_docs._qrenderer.typing_information.is_protocol", return_value=False),
-        patch("great_docs._qrenderer.typing_information.is_typevar", return_value=False),
-        patch("great_docs._qrenderer.typing_information.is_typealias", return_value=True),
-        patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+        patch("great_docs._renderer.typing_information.get_object", return_value=mock_module),
+        patch("great_docs._renderer.typing_information.is_protocol", return_value=False),
+        patch("great_docs._renderer.typing_information.is_typevar", return_value=False),
+        patch("great_docs._renderer.typing_information.is_typealias", return_value=True),
+        patch("great_docs._renderer.typing_information.griffe_to_doc"),
         patch(
-            "great_docs._qrenderer.typing_information.get_render_type", return_value=mock_render_cls
+            "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
-        ti = TypeInformation(module_path="mypkg.sub", renderer=r, builder=mock_builder)
+        ti = TypeInformation(module_path="mypkg.sub", builder=mock_builder)
         sections = ti.sections
 
     item = sections.typealiases_items[0]
@@ -36871,9 +33847,7 @@ def test_type_information_sections_item_uris():
 def test_type_information_content_has_meta_and_sections():
     """TypeInformation.content returns Blocks with Meta title and TypeSections."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
-    r = Renderer()
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
     mock_builder.dir = "reference"
@@ -36881,8 +33855,8 @@ def test_type_information_content_has_meta_and_sections():
     mock_module = MagicMock()
     mock_module.members = {}
 
-    with patch("great_docs._qrenderer.typing_information.get_object", return_value=mock_module):
-        ti = TypeInformation(module_path="mypkg.types", renderer=r, builder=mock_builder)
+    with patch("great_docs._renderer.typing_information.get_object", return_value=mock_module):
+        ti = TypeInformation(module_path="mypkg.types", builder=mock_builder)
         content = ti.content
 
     content_str = str(content)
@@ -36892,9 +33866,7 @@ def test_type_information_content_has_meta_and_sections():
 def test_type_information_str_delegates_to_content():
     """TypeInformation.__str__ returns str(self.content)."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
-    r = Renderer()
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
     mock_builder.dir = "reference"
@@ -36902,8 +33874,8 @@ def test_type_information_str_delegates_to_content():
     mock_module = MagicMock()
     mock_module.members = {}
 
-    with patch("great_docs._qrenderer.typing_information.get_object", return_value=mock_module):
-        ti = TypeInformation(module_path="mypkg.types", renderer=r, builder=mock_builder)
+    with patch("great_docs._renderer.typing_information.get_object", return_value=mock_module):
+        ti = TypeInformation(module_path="mypkg.types", builder=mock_builder)
         result = str(ti)
 
     assert "Typing Information" in result
@@ -36912,9 +33884,7 @@ def test_type_information_str_delegates_to_content():
 def test_type_information_write_creates_file():
     """TypeInformation.write() extends builder items and writes the qmd file."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
-    r = Renderer()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         mock_builder = MagicMock()
@@ -36925,8 +33895,8 @@ def test_type_information_write_creates_file():
         mock_module = MagicMock()
         mock_module.members = {}
 
-        with patch("great_docs._qrenderer.typing_information.get_object", return_value=mock_module):
-            ti = TypeInformation(module_path="mypkg.types", renderer=r, builder=mock_builder)
+        with patch("great_docs._renderer.typing_information.get_object", return_value=mock_module):
+            ti = TypeInformation(module_path="mypkg.types", builder=mock_builder)
 
             # Ensure the output directory exists
             Path(ti.base_uri).parent.mkdir(parents=True, exist_ok=True)
@@ -36941,9 +33911,7 @@ def test_type_information_write_creates_file():
 def test_type_information_write_extends_builder_items():
     """TypeInformation.write() adds all section items to builder.items."""
 
-    from great_docs._qrenderer._renderer import Renderer
 
-    r = Renderer()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         ref_dir = str(Path(tmp_dir) / "reference")
@@ -36963,17 +33931,17 @@ def test_type_information_write_extends_builder_items():
         mock_render_cls = MagicMock(return_value=mock_render_obj)
 
         with (
-            patch("great_docs._qrenderer.typing_information.get_object", return_value=mock_module),
-            patch("great_docs._qrenderer.typing_information.is_protocol", return_value=False),
-            patch("great_docs._qrenderer.typing_information.is_typevar", return_value=True),
-            patch("great_docs._qrenderer.typing_information.is_typealias", return_value=False),
-            patch("great_docs._qrenderer.typing_information.griffe_to_doc"),
+            patch("great_docs._renderer.typing_information.get_object", return_value=mock_module),
+            patch("great_docs._renderer.typing_information.is_protocol", return_value=False),
+            patch("great_docs._renderer.typing_information.is_typevar", return_value=True),
+            patch("great_docs._renderer.typing_information.is_typealias", return_value=False),
+            patch("great_docs._renderer.typing_information.griffe_to_doc"),
             patch(
-                "great_docs._qrenderer.typing_information.get_render_type",
+                "great_docs._renderer.typing_information.get_render_type",
                 return_value=mock_render_cls,
             ),
         ):
-            ti = TypeInformation(module_path="mypkg.types", renderer=r, builder=mock_builder)
+            ti = TypeInformation(module_path="mypkg.types", builder=mock_builder)
 
             Path(ref_dir).mkdir(parents=True, exist_ok=True)
             ti.write()
