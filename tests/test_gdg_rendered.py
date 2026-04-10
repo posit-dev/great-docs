@@ -8311,3 +8311,101 @@ def test_DED_interlinks_userguide_autolinked_code():
         assert expected in link_texts, (
             f"Advanced: autolinked code {expected!r} not found. Found: {link_texts}"
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: Code spans in docstring section headings (gdtest_code_span_headings)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _csh_skip():
+    pkg = "gdtest_code_span_headings"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+
+def _csh_ref():
+    return _ref_dir("gdtest_code_span_headings")
+
+
+@requires_bs4
+def test_DED_code_span_headings_pages_exist():
+    """gdtest_code_span_headings: reference pages exist for both functions."""
+    _csh_skip()
+    ref = _csh_ref()
+    for name in ("compare_values", "filter_range"):
+        assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
+
+
+@requires_bs4
+def test_DED_code_span_headings_slug_sanitized():
+    """gdtest_code_span_headings: heading CSS class has no backticks or special chars."""
+    _csh_skip()
+    ref = _csh_ref()
+
+    expected_classes = {
+        "compare_values": "doc-what-can-be-used-in-value",
+        "filter_range": "doc-what-can-be-used-in-left-and-right",
+    }
+
+    for page_name, expected_class in expected_classes.items():
+        soup = _load_html(ref / f"{page_name}.html")
+        tag = soup.find(class_=expected_class)
+        assert tag is not None, f"{page_name}.html: expected class {expected_class!r} not found"
+        # Verify no backticks or problematic chars in any doc- class on this page
+        for el in soup.find_all(class_=True):
+            for cls in el.get("class", []):
+                if cls.startswith("doc-"):
+                    assert "`" not in cls, f"Backtick in class: {cls}"
+                    assert "=" not in cls, f"Equals in class: {cls}"
+                    assert "?" not in cls, f"Question mark in class: {cls}"
+
+
+@requires_bs4
+def test_DED_code_span_headings_code_preserved():
+    """gdtest_code_span_headings: heading text preserves code spans as <code> elements."""
+    _csh_skip()
+    ref = _csh_ref()
+
+    # compare_values should have: What Can Be Used In <code>value=</code>?
+    soup = _load_html(ref / "compare_values.html")
+    heading = soup.find("h2", class_="doc-what-can-be-used-in-value")
+    if heading is None:
+        heading = soup.find("h3", class_="doc-what-can-be-used-in-value")
+    assert heading is not None, "Custom heading element not found"
+    code_el = heading.find("code")
+    assert code_el is not None, "No <code> element inside heading"
+    assert code_el.get_text() == "value=", (
+        f"Expected code span 'value=', got {code_el.get_text()!r}"
+    )
+
+    # filter_range should have: What Can Be Used In <code>left=</code> And <code>right=</code>?
+    soup = _load_html(ref / "filter_range.html")
+    heading = soup.find("h2", class_="doc-what-can-be-used-in-left-and-right")
+    if heading is None:
+        heading = soup.find("h3", class_="doc-what-can-be-used-in-left-and-right")
+    assert heading is not None, "Custom heading element not found"
+    codes = heading.find_all("code")
+    assert len(codes) == 2, f"Expected 2 <code> elements, found {len(codes)}"
+    assert codes[0].get_text() == "left=", f"Expected 'left=', got {codes[0].get_text()!r}"
+    assert codes[1].get_text() == "right=", f"Expected 'right=', got {codes[1].get_text()!r}"
+
+
+@requires_bs4
+def test_DED_code_span_headings_title_case_outside_code():
+    """gdtest_code_span_headings: text outside code spans is title-cased."""
+    _csh_skip()
+    ref = _csh_ref()
+
+    soup = _load_html(ref / "compare_values.html")
+    heading = soup.find("h2", class_="doc-what-can-be-used-in-value")
+    if heading is None:
+        heading = soup.find("h3", class_="doc-what-can-be-used-in-value")
+    assert heading is not None
+    # Get text-only content (strips <code> tags)
+    full_text = heading.get_text().strip()
+    # Should be title-cased: "What Can Be Used In value=?"
+    # The words outside code should start with uppercase
+    assert full_text.startswith("What Can Be Used In"), (
+        f"Heading text not title-cased: {full_text!r}"
+    )
