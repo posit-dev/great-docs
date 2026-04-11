@@ -2648,6 +2648,8 @@ class GreatDocs:
             "  contents:",
             '    - "**.qmd"',
             "bread-crumbs: false",
+            "toc: false",
+            "body-classes: gd-blog-index",
             "---",
             "",
         ]

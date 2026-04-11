@@ -4107,6 +4107,12 @@ body.gd-license-page .content.column-page {
     max-width: 100%;
 }
 
+// Blog index page: use full width (no TOC sidebar)
+body.gd-blog-index .content.column-page {
+    grid-column: page-start / page-end !important;
+    max-width: 100%;
+}
+
 // Terminal-style raw skill file rendering
 .gd-skills-raw {
     background: $gray-100;
