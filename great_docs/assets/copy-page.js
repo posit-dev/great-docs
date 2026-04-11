@@ -60,6 +60,9 @@
         // Skip the Tags index page
         if (document.body.classList.contains('gd-tags-index')) return;
 
+        // Skip the Blog index page
+        if (document.body.classList.contains('gd-blog-index')) return;
+
         // Create the widget container
         var widget = document.createElement('div');
         widget.className = 'gd-copy-page';
