@@ -2443,6 +2443,14 @@ class GreatDocs:
                 # (subdirectory index.qmd files are individual blog posts)
                 has_user_index = (source_path / "index.qmd").exists()
                 if has_user_index:
+                    # Inject blog-index layout options into the user's index
+                    blog_index = dest_dir / "index.qmd"
+                    idx_content = blog_index.read_text(encoding="utf-8")
+                    idx_content = self._add_frontmatter_option(idx_content, "toc", False)
+                    idx_content = self._add_frontmatter_option(
+                        idx_content, "body-classes", "gd-blog-index"
+                    )
+                    blog_index.write_text(idx_content, encoding="utf-8")
                     index_href = f"{slug}/index.qmd"
                 else:
                     self._generate_blog_index(title, slug, dest_dir)
