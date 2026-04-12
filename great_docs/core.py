@@ -2595,6 +2595,10 @@ class GreatDocs:
         and leaves blog frontmatter intact so Quarto's `listing:` directive
         can read `title`, `author`, `date`, `categories`, etc.
 
+        Also copies co-located asset files (images, data files, etc.)
+        from any directory that contains a .qmd/.md file, so that
+        relative references like ``![](./image.png)`` resolve correctly.
+
         Parameters
         ----------
         files
@@ -2611,12 +2615,18 @@ class GreatDocs:
         """
         copied: list[dict] = []
 
+        # Track directories that contain content files so we can copy
+        # their co-located assets afterward
+        content_dirs: set[Path] = set()
+
         for src_file in files:
             rel = src_file.relative_to(source_dir)
             dest_file = dest_dir / rel
 
             # Ensure subdirectories exist
             dest_file.parent.mkdir(parents=True, exist_ok=True)
+
+            content_dirs.add(src_file.parent)
 
             content = src_file.read_text(encoding="utf-8")
 
@@ -2645,6 +2655,30 @@ class GreatDocs:
                     "description": description,
                 }
             )
+
+        # Copy co-located non-content files (images, data, etc.) from
+        # every directory that contained a .qmd/.md file
+        content_suffixes = {".qmd", ".md"}
+        for src_dir_path in content_dirs:
+            for item in src_dir_path.iterdir():
+                if item.is_file() and item.suffix.lower() not in content_suffixes:
+                    rel = item.relative_to(source_dir)
+                    dest_file = dest_dir / rel
+                    dest_file.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(item, dest_file)
+            # Also copy subdirectories that don't contain .qmd files
+            # (e.g., blog/my-post/datasets/)
+            for item in src_dir_path.iterdir():
+                if item.is_dir():
+                    has_content = any(
+                        f.suffix in content_suffixes for f in item.rglob("*")
+                    )
+                    if not has_content:
+                        rel = item.relative_to(source_dir)
+                        dest_sub = dest_dir / rel
+                        if dest_sub.exists():
+                            shutil.rmtree(dest_sub)
+                        shutil.copytree(item, dest_sub)
 
         return copied
 

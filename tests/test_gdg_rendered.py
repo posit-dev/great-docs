@@ -8464,3 +8464,23 @@ def test_DED_sec_blog_user_index_preserves_user_listing():
     # Table listing uses quarto-listing-container-table
     listing = soup.find("div", class_="quarto-listing-container-table")
     assert listing is not None, "Expected table-type listing container"
+
+
+def test_DED_sec_blog_user_index_copies_root_image():
+    """gdtest_sec_blog_user_index: co-located root image is copied to site."""
+    pkg = "gdtest_sec_blog_user_index"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    img = _site_dir(pkg) / "blog" / "blog-header.svg"
+    assert img.exists(), "Root-level blog image blog-header.svg not copied"
+
+
+def test_DED_sec_blog_user_index_copies_post_image():
+    """gdtest_sec_blog_user_index: co-located post image is copied to site."""
+    pkg = "gdtest_sec_blog_user_index"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    img = _site_dir(pkg) / "blog" / "first-post" / "post-banner.svg"
+    assert img.exists(), "Post-level image first-post/post-banner.svg not copied"
