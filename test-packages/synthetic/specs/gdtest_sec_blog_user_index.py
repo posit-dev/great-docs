@@ -84,6 +84,7 @@ SPEC = {
                 return {"title": title, "status": "draft"}
         ''',
         # User-provided blog index with a custom listing type (table)
+        # and a co-located header image referenced via relative path
         "blog/index.qmd": (
             "---\n"
             "title: Blog\n"
@@ -95,7 +96,16 @@ SPEC = {
             '    - "**.qmd"\n'
             "---\n"
             "\n"
+            "![](./blog-header.svg)\n"
+            "\n"
             "Welcome to our blog.\n"
+        ),
+        # Co-located SVG image referenced by the blog index
+        "blog/blog-header.svg": (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="80">'
+            '<rect width="400" height="80" fill="#4a90d9" rx="8"/>'
+            '<text x="200" y="48" text-anchor="middle" fill="white" '
+            'font-size="24" font-family="sans-serif">Blog</text></svg>\n'
         ),
         "blog/first-post/index.qmd": (
             "---\n"
@@ -104,13 +114,23 @@ SPEC = {
             "date: 2024-03-01\n"
             "categories: [announcements]\n"
             "description: Our very first blog post.\n"
+            "image: post-banner.svg\n"
             "---\n"
             "\n"
             "This is the first post on our blog.\n"
             "\n"
+            "![](post-banner.svg)\n"
+            "\n"
             "## Getting Started\n"
             "\n"
             "We're excited to share our work with you.\n"
+        ),
+        # Co-located image inside a blog post subdirectory
+        "blog/first-post/post-banner.svg": (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="60">'
+            '<rect width="300" height="60" fill="#5cb85c" rx="6"/>'
+            '<text x="150" y="38" text-anchor="middle" fill="white" '
+            'font-size="18" font-family="sans-serif">First Post</text></svg>\n'
         ),
         "blog/second-post/index.qmd": (
             "---\n"
