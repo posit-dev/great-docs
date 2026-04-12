@@ -347,6 +347,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_interlinks_userguide",  # 171
     # 172: Custom docstring headings with backtick code spans
     "gdtest_code_span_headings",  # 172
+    # 173: Blog section with user-provided index.qmd
+    "gdtest_sec_blog_user_index",  # 173
 ]
 
 
@@ -1954,6 +1956,12 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "backtick code spans (e.g. 'What Can Be Used in `value=`?'). "
         "Tests that title-casing preserves code verbatim and that slug "
         "generation strips backticks and special characters."
+    ),
+    "gdtest_sec_blog_user_index": (
+        "Blog section with a user-provided blog/index.qmd (table listing). "
+        "Tests that Great Docs injects toc: false and body-classes: "
+        "gd-blog-index into the user's index, hiding the TOC sidebar "
+        "and copy-page widget."
     ),
 }
 

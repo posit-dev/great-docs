@@ -8409,3 +8409,58 @@ def test_DED_code_span_headings_title_case_outside_code():
     assert full_text.startswith("What Can Be Used In"), (
         f"Heading text not title-cased: {full_text!r}"
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: Blog section with user-provided index
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_DED_sec_blog_user_index_has_body_class():
+    """gdtest_sec_blog_user_index: blog index has gd-blog-index body class."""
+    pkg = "gdtest_sec_blog_user_index"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    blog_index = _site_dir(pkg) / "blog" / "index.html"
+    assert blog_index.exists(), "Blog index.html missing"
+
+    soup = _load_html(blog_index)
+    body = soup.find("body")
+    assert body is not None
+    classes = body.get("class", [])
+    assert "gd-blog-index" in classes, f"Expected gd-blog-index in body classes, got {classes}"
+
+
+@requires_bs4
+def test_DED_sec_blog_user_index_no_toc():
+    """gdtest_sec_blog_user_index: blog index has fullcontent (no TOC sidebar)."""
+    pkg = "gdtest_sec_blog_user_index"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    blog_index = _site_dir(pkg) / "blog" / "index.html"
+    assert blog_index.exists(), "Blog index.html missing"
+
+    soup = _load_html(blog_index)
+    body = soup.find("body")
+    assert body is not None
+    classes = body.get("class", [])
+    assert "fullcontent" in classes, f"Expected fullcontent in body classes, got {classes}"
+
+
+@requires_bs4
+def test_DED_sec_blog_user_index_preserves_user_listing():
+    """gdtest_sec_blog_user_index: user-provided listing type is preserved."""
+    pkg = "gdtest_sec_blog_user_index"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    blog_index = _site_dir(pkg) / "blog" / "index.html"
+    assert blog_index.exists(), "Blog index.html missing"
+
+    soup = _load_html(blog_index)
+    # Table listing uses quarto-listing-container-table
+    listing = soup.find("div", class_="quarto-listing-container-table")
+    assert listing is not None, "Expected table-type listing container"
