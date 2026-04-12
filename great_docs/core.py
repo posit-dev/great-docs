@@ -11,6 +11,28 @@ from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
 from .config import Config
 
 
+def _patch_griffe():
+    """Ensure griffe has CyclicAliasError and AliasResolutionError at top level.
+
+    Older griffe versions don't re-export these from the top-level package.
+    This patches them in so ``griffe.CyclicAliasError`` etc. work everywhere.
+    """
+    import griffe
+
+    if hasattr(griffe, "CyclicAliasError") and hasattr(griffe, "AliasResolutionError"):
+        return
+
+    try:
+        from griffe.exceptions import AliasResolutionError, CyclicAliasError
+    except ImportError:
+        from griffe._internal.exceptions import AliasResolutionError, CyclicAliasError
+
+    if not hasattr(griffe, "CyclicAliasError"):
+        griffe.CyclicAliasError = CyclicAliasError
+    if not hasattr(griffe, "AliasResolutionError"):
+        griffe.AliasResolutionError = AliasResolutionError
+
+
 class GreatDocs:
     """
     GreatDocs class for creating beautiful API documentation sites.
@@ -76,7 +98,7 @@ class GreatDocs:
         project_path
             Path to the project root directory. Defaults to current directory.
         """
-        self.project_root = Path(project_path or os.getcwd())
+        self.project_root = Path(project_path or os.getcwd()).resolve()
         # Build directory is always 'great-docs' - created during build, not init
         self.docs_dir = Path("great-docs")
         self.project_path = self.project_root / self.docs_dir
@@ -4564,6 +4586,8 @@ class GreatDocs:
         try:
             import griffe
 
+            _patch_griffe()
+
             normalized_name = package_name.replace("-", "_")
 
             # Load the package with griffe
@@ -5080,6 +5104,8 @@ class GreatDocs:
         try:
             import griffe
 
+            _patch_griffe()
+
             # Normalize package name (replace dashes with underscores)
             normalized_name = package_name.replace("-", "_")
 
@@ -5290,6 +5316,8 @@ class GreatDocs:
         try:
             import griffe
 
+            _patch_griffe()
+
             # Normalize package name
             normalized_name = package_name.replace("-", "_")
 
@@ -5430,6 +5458,8 @@ class GreatDocs:
 
         try:
             import griffe
+
+            _patch_griffe()
 
             from great_docs._qrenderer.introspection import get_object as qd_get_object
         except ImportError:  # pragma: no cover
@@ -5901,6 +5931,8 @@ class GreatDocs:
         """
         try:
             import griffe
+
+            _patch_griffe()
 
             # Load the package using griffe
             normalized_name = package_name.replace("-", "_")
@@ -6682,6 +6714,8 @@ class GreatDocs:
 
         try:
             import griffe
+
+            _patch_griffe()
 
             normalized_name = package_name.replace("-", "_")
 
@@ -12227,10 +12261,10 @@ body-classes: "gd-homepage"
                     if p and p not in sys.path:
                         sys.path.insert(0, p)  # pragma: no cover
 
+                quarto_yml = self.project_path / "_quarto.yml"
                 try:
                     from great_docs._qrenderer.introspection import Builder
 
-                    quarto_yml = self.project_path / "_quarto.yml"
                     builder = Builder.from_quarto_config(str(quarto_yml))
                     builder.build()
                     print("\n✅ API reference generated")

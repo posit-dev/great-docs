@@ -246,7 +246,7 @@ from great_docs.cli import (
 def test_great_docs_init():
     """Test GreatDocs initialization."""
     docs = GreatDocs()
-    assert docs.project_root == Path.cwd()
+    assert docs.project_root == Path.cwd().resolve()
 
 
 def test_great_docs_init_with_path():
@@ -254,7 +254,31 @@ def test_great_docs_init_with_path():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs.project_root == Path(tmp_dir)
+        assert docs.project_root == Path(tmp_dir).resolve()
+
+
+def test_great_docs_init_project_path_always_absolute():
+    """Test that project_path is always absolute, even with relative input like '.'."""
+    docs = GreatDocs(project_path=".")
+    assert docs.project_root.is_absolute()
+    assert docs.project_path.is_absolute()
+    assert docs.project_root == Path(".").resolve()
+
+
+def test_great_docs_init_relative_path_resolves():
+    """Test that a relative project_path is resolved to absolute."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        original = os.getcwd()
+        try:
+            os.chdir(tmp_dir)
+            docs = GreatDocs(project_path=".")
+            assert docs.project_root.is_absolute()
+            assert docs.project_path.is_absolute()
+            # After chdir, project_path should still be valid
+            os.chdir("/")
+            assert docs.project_root == Path(tmp_dir).resolve()
+        finally:
+            os.chdir(original)
 
 
 def test_install_creates_files():
@@ -387,7 +411,7 @@ def test_find_package_init_with_nested_structure():
         found_init = docs._find_package_init("mypackage")
 
         assert found_init is not None
-        assert found_init == init_file
+        assert found_init == init_file.resolve()
 
 
 def test_cli_import():
@@ -2143,7 +2167,7 @@ def test_get_quarto_env_detects_venv():
         env = docs._get_quarto_env()
 
         assert "QUARTO_PYTHON" in env
-        assert env["QUARTO_PYTHON"] == str(fake_python)
+        assert env["QUARTO_PYTHON"] == str(fake_python.resolve())
 
 
 def test_get_quarto_env_preserves_existing_env():
@@ -3105,7 +3129,7 @@ def test_user_guide_config_option_overrides_default_dir():
         assert user_guide_info is not None
         assert len(user_guide_info["files"]) == 1
         assert user_guide_info["files"][0]["title"] == "From Custom"
-        assert user_guide_info["source_dir"] == custom_dir
+        assert user_guide_info["source_dir"] == custom_dir.resolve()
 
 
 def test_user_guide_config_option_custom_directory():
@@ -3129,7 +3153,7 @@ def test_user_guide_config_option_custom_directory():
 
         assert user_guide_info is not None
         assert len(user_guide_info["files"]) == 1
-        assert user_guide_info["source_dir"] == custom_dir
+        assert user_guide_info["source_dir"] == custom_dir.resolve()
 
 
 def test_user_guide_config_option_nonexistent_dir(capsys):
@@ -3226,7 +3250,7 @@ def test_user_guide_config_warns_when_both_exist(capsys):
         assert user_guide_info is not None
 
         # Config option should win
-        assert user_guide_info["source_dir"] == custom_dir
+        assert user_guide_info["source_dir"] == custom_dir.resolve()
 
         captured = capsys.readouterr()
 
@@ -3254,7 +3278,7 @@ def test_user_guide_fallback_without_config():
         user_guide_info = docs._discover_user_guide()
 
         assert user_guide_info is not None
-        assert user_guide_info["source_dir"] == ug_dir
+        assert user_guide_info["source_dir"] == ug_dir.resolve()
 
 
 def test_user_guide_config_empty_dir_warns(capsys):
@@ -3623,7 +3647,7 @@ def test_user_guide_explicit_with_conventional_dir():
 
         assert result is not None
         assert result["explicit"] is True
-        assert result["source_dir"] == user_guide
+        assert result["source_dir"] == user_guide.resolve()
 
 
 def test_user_guide_string_config_still_works():
@@ -3648,7 +3672,7 @@ def test_user_guide_string_config_still_works():
 
         assert result is not None
         assert result.get("explicit", False) is False
-        assert result["source_dir"] == custom_dir
+        assert result["source_dir"] == custom_dir.resolve()
         assert len(result["files"]) == 1
 
 
@@ -14803,7 +14827,7 @@ def test_get_quarto_env_venv_detection():
         docs = GreatDocs(project_path=tmp_dir)
         env = docs._get_quarto_env()
 
-        assert env["QUARTO_PYTHON"] == str(venv_python)
+        assert env["QUARTO_PYTHON"] == str(venv_python.resolve())
 
 
 def test_get_quarto_env_preserves_existing_pythonpath(monkeypatch):
@@ -16629,7 +16653,7 @@ def test_get_quarto_env_venv_alternative_name():
         docs = GreatDocs(project_path=tmp_dir)
         env = docs._get_quarto_env()
 
-        assert env["QUARTO_PYTHON"] == str(venv_python)
+        assert env["QUARTO_PYTHON"] == str(venv_python.resolve())
 
 
 def test_update_navbar_github_link_with_string_items():
@@ -20203,7 +20227,7 @@ def test_find_package_root_with_pyproject():
         pyproject.write_text('[project]\nname = "pkg"\n', encoding="utf-8")
         root = docs._find_package_root()
 
-        assert root == Path(tmp_dir)
+        assert root == Path(tmp_dir).resolve()
 
 
 def test_find_package_root_no_pyproject():
@@ -22694,6 +22718,43 @@ def test_detect_docstring_style_no_docstrings():
         assert result == "numpy"
 
 
+def test_patch_griffe_adds_missing_exceptions():
+    """Test _patch_griffe patches CyclicAliasError and AliasResolutionError onto griffe."""
+    import griffe
+
+    from great_docs.core import _patch_griffe
+
+    # Save originals (they may already exist)
+    had_cyclic = hasattr(griffe, "CyclicAliasError")
+    had_alias = hasattr(griffe, "AliasResolutionError")
+    orig_cyclic = getattr(griffe, "CyclicAliasError", None)
+    orig_alias = getattr(griffe, "AliasResolutionError", None)
+
+    try:
+        # Remove to simulate older griffe
+        if hasattr(griffe, "CyclicAliasError"):
+            delattr(griffe, "CyclicAliasError")
+        if hasattr(griffe, "AliasResolutionError"):
+            delattr(griffe, "AliasResolutionError")
+
+        _patch_griffe()
+
+        assert hasattr(griffe, "CyclicAliasError")
+        assert hasattr(griffe, "AliasResolutionError")
+        assert issubclass(griffe.CyclicAliasError, Exception)
+        assert issubclass(griffe.AliasResolutionError, Exception)
+    finally:
+        # Restore originals
+        if had_cyclic:
+            griffe.CyclicAliasError = orig_cyclic
+        elif hasattr(griffe, "CyclicAliasError"):
+            delattr(griffe, "CyclicAliasError")
+        if had_alias:
+            griffe.AliasResolutionError = orig_alias
+        elif hasattr(griffe, "AliasResolutionError"):
+            delattr(griffe, "AliasResolutionError")
+
+
 def test_detect_docstring_style_griffe_unavailable():
     """Test _detect_docstring_style defaults to numpy when griffe import fails."""
 
@@ -24326,7 +24387,7 @@ def test_find_package_root_searches_upward():
         sub.mkdir()
         docs = GreatDocs(project_path=sub)
         root = docs._find_package_root()
-        assert root == Path(tmp_dir)
+        assert root == Path(tmp_dir).resolve()
 
 
 def test_detect_dynamic_mode_pyproject_dynamic():
@@ -25262,7 +25323,7 @@ def test_discover_user_guide_with_files():
 
         assert result is not None
         assert len(result["files"]) == 2
-        assert result["source_dir"] == ug_dir
+        assert result["source_dir"] == ug_dir.resolve()
 
 
 def test_discover_user_guide_no_dir():
@@ -40402,7 +40463,7 @@ def test_discover_user_guide_sort_prioritizes_root_index():
         # The first file should be the root-level index.qmd
         first_path = result["files"][0]["path"]
         assert first_path.name == "index.qmd"
-        assert first_path.parent == ug_dir
+        assert first_path.parent == ug_dir.resolve()
 
 
 def test_discover_user_guide_sort_relative_path_ordering():
