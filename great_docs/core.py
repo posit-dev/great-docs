@@ -744,7 +744,7 @@ class GreatDocs:
 
         try:
             import cairosvg
-        except ImportError:
+        except (ImportError, OSError):
             cairosvg = None  # type: ignore[assignment]
 
         result: dict[str, str] = {}
