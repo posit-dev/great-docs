@@ -1,6 +1,7 @@
 ---
 title: "Proofread Your Documentation"
 description: "Catch spelling and grammar issues with the built-in proofreader."
+tags: [Quality]
 ---
 
 # Proofread Your Documentation

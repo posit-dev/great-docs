@@ -1,6 +1,7 @@
 ---
 title: "Customizing with an LLM"
 description: "Use an AI coding agent to tweak theming, add sections, and write user guide content without touching YAML by hand."
+tags: [AI\/LLM, Customization]
 ---
 
 # Customizing with an LLM

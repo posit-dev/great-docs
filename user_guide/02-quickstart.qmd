@@ -1,6 +1,7 @@
 ---
 title: "Quick Start"
 guide-section: "Getting Started"
+tags: [Getting Started, Setup]
 ---
 
 # Quick Start
@@ -56,10 +57,7 @@ The `great-docs.yml` file contains your API structure and is **committed to git*
 
 ## Customize Your Configuration
 
-Open `great-docs.yml` and tailor it to your project—organize API
-sections, add authors or funding info, set a `display_name`, add a
-`user_guide` directory, etc.
-See [Configuration](configuration.qmd) for all available options.
+Open `great-docs.yml` and tailor it to your project. Organize API sections, add authors or funding info, set a `display_name`, add a `user_guide` directory, etc. See [Configuration](configuration.qmd) for all available options.
 
 ## Build Your Documentation
 
@@ -92,7 +90,7 @@ If your README contains images with relative paths (like `![](images/screenshot.
 ::: {.callout-tip}
 ## Ephemeral Build Directory
 
-The `great-docs/` directory is created fresh on each build. You can safely delete it between builds—it will be recreated from `great-docs.yml` and your source files.
+The `great-docs/` directory is created fresh on each build. You can safely delete it between builds (it will be recreated from `great-docs.yml` and your source files).
 :::
 
 ## Preview Locally

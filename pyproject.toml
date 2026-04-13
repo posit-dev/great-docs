@@ -39,11 +39,13 @@ dependencies = [
     "pygments>=2.0.0",
     "requests>=2.25.0",
     "Pillow>=9.0.0",
-    "cairosvg>=2.5.0",
     "ruff>=0.9.9",
 ]
 
 [project.optional-dependencies]
+svg = [
+    "cairosvg>=2.5.0",
+]
 dev = [
     "pytest>=6.0",
     "pytest-cov>=3.0",
@@ -53,6 +55,8 @@ dev = [
     "pyright>=1.1.407",
     "build>=0.7",
     "twine>=3.4",
+    "great_tables>=0.21.0",
+    "pandas>=2.0",
 ]
 docs = [
     "jupyter>=1.0.0",

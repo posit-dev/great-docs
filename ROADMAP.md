@@ -18,16 +18,6 @@ Display author information with circular GitHub-style avatars on authored pages.
 - Optional `team_author:` config for a catch-all team attribution (e.g., "Great Tables Team")
 - `site.show_author: true/false` to enable/disable author display
 
-### Page Status Badges
-
-Visual indicators for page lifecycle status in navigation.
-
-- `status: new` frontmatter shows "New" badge in sidebar
-- `status: deprecated` shows deprecation indicator
-- Custom status definitions in `great-docs.yml`
-- Badge icons and colors configurable per status
-- Filter/highlight pages by status
-
 ### Reading Time Estimate
 
 Auto-calculate and display estimated reading time.
@@ -91,17 +81,6 @@ Surface "Added in version X" and "Deprecated in version Y" badges automatically.
 - Diff consecutive versions to detect additions, removals, signature changes
 - Deprecation warning callouts in rendered docs
 
-### API Evolution Insights
-
-Tools for understanding how the API surface changes over time.
-
-- Interactive dependency graph showing class inheritance and function relationships
-- Version-to-version diff reports: added/removed/changed symbols
-- Parameter change tracking (renamed, retyped, new defaults, removed)
-- Breaking change detection and migration hints
-- `great-docs api-diff v1.0 v2.0` CLI command
-- Visual timeline of API surface growth
-
 ### Analytics Integration
 
 One-line config for privacy-friendly analytics.
@@ -130,6 +109,20 @@ Generate a downloadable PDF of the entire documentation site.
 - Styled to match the site theme
 - Auto-generated link on homepage or configurable placement
 - Optional per-build regeneration or manual `great-docs pdf` command
+
+### Multi-Language API Documentation (Python + R + Rust + JS)
+
+Unified documentation sites spanning multiple programming languages.
+
+- **Language adapters**: Consume output from each language's canonical toolchain and normalize into a common intermediate representation
+- **Single site, single build**: One navbar, sidebar, search index, and theme across all languages; replacing hand-wired splash pages that link to separate sub-sites
+- **Section selector widget**: Navbar dropdown for switching the displayed section; search scoped to selected section; preference persisted in `localStorage`
+- **Multiple sections per language**: A single language can have multiple reference sections each with their own sub-URL and sidebar group
+- **Per-section user guides**: Each section can have its own getting-started content; shown when that section is selected
+- **Cross-repo source resolution**: Pull R/Rust/JS packages from local paths or Git URLs (shallow-cloned into `.great-docs-cache/`); supports standalone docs repos
+- **Custom sub-URLs**: Each section defines its own URL path segment (e.g., `/reference/py/`, `/reference/r/`)
+- **Cross-language linking**: Auto-matched "See also" links between parallel symbols (e.g., Python `Chat` ↔ R `Chat`)
+- **Progressive**: Python-only projects pay zero cost; `sections:` key activates multi-section mode
 
 ### Monorepo / Multi-Project Support
 
@@ -235,18 +228,6 @@ Tabbed content blocks for alternative instructions.
 - Synced tabs across pages (user preference remembered)
 - Keyboard accessible
 - Code blocks and prose supported inside tabs
-
-### Page Tags
-
-Categorize pages with tags for improved discoverability.
-
-- Add tags via frontmatter (`tags: [Python, Testing, API]`)
-- Auto-generated tags index page listing all tags and linked pages
-- Tags rendered above page title with links to tag index
-- Nested/hierarchical tags (e.g., `Python/Testing`)
-- Shadow tags for internal organization (hidden from public view)
-- Scoped tag listings per documentation section
-- Optional tag icons
 
 ### Enhanced Search
 

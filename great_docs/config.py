@@ -70,7 +70,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_releases": 50,
     },
     # Custom sections (generic page groups: examples, tutorials, blog, etc.)
-    # Each entry: {"title": str, "dir": str, "index": bool, "navbar_after": str | None}
+    # Each entry: {"title": str, "dir": str, "index": bool, "index_columns": int,
+    #              "navbar_after": str | None}
     "sections": [],
     # Custom static HTML pages.
     # None: auto-discover from project_root/custom/
@@ -131,6 +132,24 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # str: preset name (applies to all pages)
     # dict: {"preset": str, "pages": "all"|"homepage"}
     "content_style": None,
+    # Scale-to-fit: auto-shrink wide HTML output to fit the content container.
+    # Targets elements by CSS selector — the matched element's nearest output
+    # wrapper is scaled down (never up) to fit the page width.
+    # None/False: disabled (default)
+    # list[str]: CSS selectors for elements to auto-scale (e.g., ["#pb_tbl"])
+    # Per-page override via frontmatter: `scale-to-fit: ["#pb_tbl"]`
+    "scale_to_fit": None,
+    # Minimum scale threshold for scale-to-fit.  When scaling would shrink
+    # content beyond this limit the element is shown at full size with
+    # horizontal scrolling instead.
+    # None/False: no minimum (scale as small as needed)
+    # float (0–1): minimum scale factor, e.g. 0.4 = "don't shrink below 40%"
+    # str keyword: viewport breakpoint below which scaling is disabled:
+    #   "mobile"  → scroll on viewports ≤ 576px
+    #   "tablet"  → scroll on viewports ≤ 768px
+    #   "desktop" → scroll on viewports ≤ 992px
+    # Per-page override via frontmatter: `scale-to-fit-min-scale: "tablet"`
+    "scale_to_fit_min_scale": None,
     # Navigation icons (Lucide icon set)
     # Prepend icons to sidebar and navbar navigation entries.
     # None/False: disabled (default)
@@ -180,6 +199,78 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "twitter_card": None,  # None = auto-detect based on image
         # Twitter/X @handle for the site (e.g., "@posaboron")
         "twitter_site": None,
+    },
+    # Page Status Badges
+    # Visual indicators for page lifecycle status in sidebar navigation.
+    # Pages set `status: new` (or `deprecated`, etc.) in frontmatter.
+    # True: enable with defaults
+    # False: disable
+    # dict: fine-grained control
+    "page_status": {
+        "enabled": False,  # Master switch for page status badges
+        # Show status badges next to sidebar navigation links
+        "show_in_sidebar": True,
+        # Show status indicator below page titles (like tags)
+        "show_on_pages": True,
+        # Built-in status definitions (can be extended/overridden)
+        # Each status: {label, icon, color, description}
+        "statuses": {
+            "new": {
+                "label": "New",
+                "icon": "sparkles",
+                "color": "#10b981",  # Emerald green
+                "description": "Recently added",
+            },
+            "updated": {
+                "label": "Updated",
+                "icon": "refresh-cw",
+                "color": "#3b82f6",  # Blue
+                "description": "Recently updated",
+            },
+            "beta": {
+                "label": "Beta",
+                "icon": "flask-conical",
+                "color": "#f59e0b",  # Amber
+                "description": "Beta feature",
+            },
+            "deprecated": {
+                "label": "Deprecated",
+                "icon": "triangle-alert",
+                "color": "#ef4444",  # Red
+                "description": "May be removed in a future release",
+            },
+            "experimental": {
+                "label": "Experimental",
+                "icon": "beaker",
+                "color": "#8b5cf6",  # Purple
+                "description": "API may change without notice",
+            },
+        },
+    },
+    # Page Tags
+    # Categorize pages with tags for improved discoverability.
+    # Tags are added via frontmatter (`tags: [Python, Testing, API]`).
+    # True: enable with defaults
+    # False: disable
+    # dict: fine-grained control
+    "tags": {
+        "enabled": False,  # Master switch for page tags
+        # Auto-generate a tags index page listing all tags and linked pages
+        "index_page": True,
+        # Render tag pills above page titles with links to the tag index
+        "show_on_pages": True,
+        # Support hierarchical tags with "/" separator (e.g., "Python/Testing")
+        "hierarchical": True,
+        # Optional tag icons: dict mapping tag names to Lucide icon names
+        # e.g., {"Python": "code", "Tutorial": "book-open"}
+        "icons": {},
+        # Shadow tags: list of tag names hidden from public view (for internal
+        # organization only). Shadow-tagged pages are indexed but tags are not
+        # rendered on the page or shown in the tag index.
+        "shadow": [],
+        # Scoped listings: when True, section pages (user guide, recipes, etc.)
+        # show a tag cloud scoped to that section
+        "scoped": False,
     },
     # SEO configuration for search engine optimization
     # Generates sitemap.xml, robots.txt, and adds metadata for better discoverability
@@ -1026,7 +1117,44 @@ class Config:
             return {"preset": preset, "pages": pages}
         return None
 
+    @property
+    def scale_to_fit(self) -> list[str] | None:
+        """Get the list of CSS selectors for auto-scale-to-fit."""
+        raw = self.get("scale_to_fit")
+        if raw is None or raw is False:
+            return None
+        if isinstance(raw, list):
+            return [s for s in raw if isinstance(s, str) and s.strip()]
+        if isinstance(raw, str):
+            return [raw]
+        return None
+
     # ── Social Cards Properties ────────────────────────────────────────────
+
+    _SCALE_KEYWORDS = frozenset({"mobile", "tablet", "desktop"})
+
+    @property
+    def scale_to_fit_min_scale(self) -> float | str | None:
+        """Get the minimum scale threshold for scale-to-fit.
+
+        Returns a float (0–1), a keyword (``"mobile"``, ``"tablet"``,
+        ``"desktop"``), or ``None``.
+        """
+        raw = self.get("scale_to_fit_min_scale")
+        if raw is None or raw is False:
+            return None
+        if isinstance(raw, str):
+            key = raw.strip().lower()
+            if key in self._SCALE_KEYWORDS:
+                return key
+            return None
+        try:
+            val = float(raw)
+        except (TypeError, ValueError):
+            return None
+        if 0 < val < 1:
+            return val
+        return None
 
     @property
     def social_cards_enabled(self) -> bool:
@@ -1063,6 +1191,92 @@ class Config:
         if isinstance(raw, dict):
             return raw.get("twitter_site")
         return None
+
+    # ── Page Status Properties ────────────────────────────────────────────
+
+    @property
+    def page_status_enabled(self) -> bool:
+        """Check if page status badges are enabled."""
+        raw = self.get("page_status")
+        if raw is None or raw is False:
+            return False
+        if raw is True:
+            return True
+        if isinstance(raw, dict):
+            return raw.get("enabled", False)
+        return False
+
+    @property
+    def page_status_show_in_sidebar(self) -> bool:
+        """Check if status badges should appear in the sidebar."""
+        return self.page_status_enabled and self.get("page_status.show_in_sidebar", True)
+
+    @property
+    def page_status_show_on_pages(self) -> bool:
+        """Check if status indicators should appear below page titles."""
+        return self.page_status_enabled and self.get("page_status.show_on_pages", True)
+
+    @property
+    def page_status_definitions(self) -> dict[str, dict[str, str]]:
+        """Get the status definitions (built-in + custom overrides)."""
+        defs = self.get("page_status.statuses")
+        if defs and isinstance(defs, dict):
+            return defs
+        # Shorthand `page_status: true` replaces the entire dict with a bool,
+        # so fall back to the built-in defaults.
+        return DEFAULT_CONFIG.get("page_status", {}).get("statuses", {})
+
+    # ── Page Tags Properties ─────────────────────────────────────────────
+
+    @property
+    def tags_enabled(self) -> bool:
+        """Check if page tags are enabled."""
+        raw = self.get("tags")
+        if raw is None or raw is False:
+            return False
+        if raw is True:
+            return True
+        if isinstance(raw, dict):
+            return raw.get("enabled", False)
+        return False
+
+    @property
+    def tags_index_page(self) -> bool:
+        """Check if a tags index page should be generated."""
+        return self.tags_enabled and self.get("tags.index_page", True)
+
+    @property
+    def tags_show_on_pages(self) -> bool:
+        """Check if tags should be rendered above page titles."""
+        return self.tags_enabled and self.get("tags.show_on_pages", True)
+
+    @property
+    def tags_location(self) -> str:
+        """Get the default tag pill placement: ``"top"`` or ``"bottom"``."""
+        val = self.get("tags.location", "top")
+        if val in ("top", "bottom"):
+            return val
+        return "top"
+
+    @property
+    def tags_hierarchical(self) -> bool:
+        """Check if hierarchical tags (using '/') are supported."""
+        return self.get("tags.hierarchical", True)
+
+    @property
+    def tags_icons(self) -> dict[str, str]:
+        """Get the tag-to-icon mapping."""
+        return self.get("tags.icons", {})
+
+    @property
+    def tags_shadow(self) -> list[str]:
+        """Get the list of shadow tags (hidden from public view)."""
+        return self.get("tags.shadow", [])
+
+    @property
+    def tags_scoped(self) -> bool:
+        """Check if scoped tag listings per section are enabled."""
+        return self.get("tags.scoped", False)
 
     # ── SEO Configuration Properties ─────────────────────────────────────────
 
@@ -1284,6 +1498,7 @@ def create_default_config() -> str:
 #   - title: Examples            # Navbar link text
 #     dir: examples              # Source directory (relative to project root)
 #     index: true                # Generate card-based index page (default: false)
+#     index_columns: 2           # Columns for image cards: 1 or 2 (default: 2)
 #     navbar_after: User Guide   # Place after this navbar item (optional)
 #   - title: Tutorials
 #     dir: tutorials             # No index — navbar links to first page

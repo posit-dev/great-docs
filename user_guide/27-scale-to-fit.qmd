@@ -1,0 +1,216 @@
+---
+title: "Scale-to-Fit"
+guide-section: "Config & Theming"
+bread-crumbs: false
+tags: [Theming, Tables, Customization]
+---
+
+# Scale-to-Fit
+
+Wide content like GT tables, DataFrames, and custom `_repr_html_` objects often overflow the content area on smaller screens. Great Docs includes a **scale-to-fit** system that automatically shrinks targeted elements so they fit within the container width, and falls back to horizontal scrolling when the element would need to shrink beyond a configurable threshold.
+
+## How It Works
+
+The scale-to-fit system operates as a three-level cascade:
+
+1. **Global config**: target specific CSS selectors across the entire site
+2. **Page frontmatter**: override the selectors and threshold on individual pages
+3. **Manual div**: wrap any content block in a `:::{.scale-to-fit}` div for one-off scaling
+
+When an element matches a targeted selector, the system:
+
+- Measures the element's natural width against the available container width
+- Computes a scale factor (`container width / element width`)
+- Applies a CSS `transform: scale()` to shrink the element proportionally
+- If the scale factor falls below the minimum threshold, the element is shown at full size with horizontal scrolling instead
+
+The scaling is applied on page load and recalculated on window resize. Together, these three levels give you fine-grained control over which elements scale, how far they can shrink, and when they should scroll instead.
+
+## Global Configuration
+
+To enable scale-to-fit for specific elements across your entire site, add `scale_to_fit` to your `great-docs.yml` with a list of CSS selectors. Any element that matches one of these selectors will be automatically scaled.
+
+```{.yaml filename="great-docs.yml"}
+scale_to_fit:
+  - "#my_wide_table"
+  - ".wide-output"
+```
+
+A single selector also works:
+
+```{.yaml filename="great-docs.yml"}
+scale_to_fit:
+  - "#gt_table_1"
+```
+
+### Minimum Scale Threshold
+
+By default there is no minimum scale: elements will shrink as much as needed to fit. You can set a threshold below which the system falls back to horizontal scrolling instead:
+
+```{.yaml filename="great-docs.yml"}
+scale_to_fit:
+  - "#my_wide_table"
+scale_to_fit_min_scale: tablet
+```
+
+The threshold can be a **viewport keyword** or a **numeric fraction**.
+
+#### Viewport Keywords
+
+Viewport keywords switch to scrolling when the viewport is at or below the named breakpoint, regardless of the computed scale factor.
+
+| Keyword | Max Width | When It Scrolls |
+|---------|-----------|-----------------|
+| `mobile` | 576 px | Phones in portrait |
+| `tablet` | 768 px | Tablets in portrait |
+| `desktop` | 992 px | Small laptops and below |
+
+```{.yaml filename="great-docs.yml"}
+scale_to_fit_min_scale: mobile   # Only scroll on phones
+```
+
+```{.yaml filename="great-docs.yml"}
+scale_to_fit_min_scale: desktop  # Scroll on anything below a large desktop
+```
+
+Viewport keywords are the simplest way to set a threshold: pick the device class where scaling should stop and scrolling should begin.
+
+#### Numeric Fraction
+
+A decimal value between 0 and 1 sets a minimum scale factor. If the computed scale drops below this value, the element scrolls instead.
+
+```{.yaml filename="great-docs.yml"}
+scale_to_fit_min_scale: 0.5  # Scroll if element would shrink below 50%
+```
+
+```{.yaml filename="great-docs.yml"}
+scale_to_fit_min_scale: 0.35  # Allow more aggressive shrinking
+```
+
+Choose a numeric fraction when you want precise control over the shrink limit, independent of any particular viewport size.
+
+### Disabling
+
+To disable scale-to-fit entirely, remove the `scale_to_fit` key from your config or set it explicitly:
+
+```{.yaml filename="great-docs.yml"}
+scale_to_fit: false
+```
+
+With `scale_to_fit` and `scale_to_fit_min_scale`, the global configuration covers most sites. For pages that need different behavior, use page-level overrides.
+
+## Page-Level Overrides
+
+Individual pages can override both the targeted selectors and the minimum scale threshold using frontmatter keys. This is useful when a particular page needs different behavior than the site-wide default.
+
+### Overriding Selectors
+
+Use `scale-to-fit` in the page's YAML frontmatter to target different elements on that page:
+```yaml
+---
+title: My Page
+scale-to-fit:
+  - "#special_table"
+  - "#dashboard_widget"
+---
+```
+
+The page-level selectors **replace** (not merge with) the global selectors for that page. If you want to keep the global selectors and add more, list them all in the page frontmatter.
+
+### Overriding the Threshold
+
+Use `scale-to-fit-min-scale` in frontmatter to set a different threshold for the page:
+
+```yaml
+---
+title: My Page
+scale-to-fit:
+  - "#wide_output"
+scale-to-fit-min-scale: mobile
+---
+```
+
+If a page specifies `scale-to-fit` selectors but omits `scale-to-fit-min-scale`, the global `scale_to_fit_min_scale` value is used as a fallback. This lets you change which elements are targeted on a page without having to repeat the threshold.
+
+### Combined Example
+
+Consider a site that globally targets `#main_table` with a `tablet` threshold:
+
+```{.yaml filename="great-docs.yml"}
+scale_to_fit:
+  - "#main_table"
+scale_to_fit_min_scale: tablet
+```
+
+A specific page can override both:
+
+```yaml
+---
+title: Dashboard
+scale-to-fit:
+  - "#main_table"
+  - "#summary_card"
+scale-to-fit-min-scale: 0.4
+---
+```
+
+On this page, `#main_table` and `#summary_card` are both scaled, and the threshold is a 40 % minimum scale factor instead of the global `tablet` keyword. Page-level overrides give you full flexibility to tailor the scaling behavior for individual pages without changing the site-wide defaults.
+
+## Manual Div Wrapping
+
+For one-off cases where you want to scale a single block of content without adding it to the global config, wrap it in a `:::{.scale-to-fit}` fenced div in your `.qmd` page:
+
+````markdown
+:::{.scale-to-fit}
+```{{python}}
+#| echo: false
+my_wide_widget()
+```
+:::
+````
+
+The `.scale-to-fit` class provides the same scaling behavior: content is measured, scaled to fit, and scrolled if it would exceed the minimum threshold. This approach requires no configuration at all; the elements inside the div are always considered for scaling. Use manual wrapping for isolated wide outputs that don't warrant a global selector.
+
+## Typical Selectors
+
+The selectors you provide are standard CSS selectors. These examples show common patterns:
+
+| Selector | Matches |
+|----------|---------|
+| `#my_table` | An element with `id="my_table"` |
+| `.gt_table` | Any element with class `gt_table` |
+| `table.dataframe` | A `<table>` element with class `dataframe` |
+
+For GT tables, the `id` parameter controls the HTML `id`:
+
+```python
+GT(df, id="my_table")
+```
+
+For objects with `_repr_html_`, include the `id` attribute in your returned HTML:
+
+```python
+class MyWidget:
+    def _repr_html_(self):
+        return '<div id="my_widget" style="width:1400px;">...</div>'
+```
+
+As long as your output element has a stable `id` or class name, it can be targeted by scale-to-fit: the system works with any HTML content, not just tables.
+
+## Configuration Reference
+
+### Global (great-docs.yml)
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `scale_to_fit` | list of strings | `None` | CSS selectors to target for auto-scaling |
+| `scale_to_fit_min_scale` | string or float | `None` | Minimum threshold: `"mobile"`, `"tablet"`, `"desktop"`, or a float (0–1) |
+
+### Page Frontmatter
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `scale-to-fit` | list of strings | Overrides global selectors for this page |
+| `scale-to-fit-min-scale` | string or float | Overrides global threshold for this page |
+
+Note the key naming: global config uses **underscores** (`scale_to_fit`) to match Python property names, while page frontmatter uses **hyphens** (`scale-to-fit`) to match Quarto's built-in key style. Between these two tables you have the full set of options available for controlling scale-to-fit behavior at both the site and page level.

@@ -2,6 +2,7 @@
 title: "Configuration"
 guide-section: "Config & Theming"
 bread-crumbs: false
+tags: [Configuration]
 ---
 
 # Configuration

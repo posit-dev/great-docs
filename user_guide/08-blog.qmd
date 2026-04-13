@@ -2,6 +2,7 @@
 title: "Blog"
 guide-section: "Site Content"
 bread-crumbs: false
+tags: [Content]
 ---
 
 # Blog
@@ -32,7 +33,7 @@ sections:
     type: blog
 ```
 
-3. Run `great-docs build` — a **Blog** link appears in the navbar, and the listing page is generated automatically.
+3. Run `great-docs build`: a **Blog** link appears in the navbar, and the listing page is generated automatically.
 
 ## Post Structure
 

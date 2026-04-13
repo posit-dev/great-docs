@@ -96,10 +96,43 @@ cli:
   module: great_docs.cli
   name: cli
 
+# Page Tags
+# ---------
+# Enable page tags for content discoverability
+tags:
+  enabled: true
+  icons:
+    Getting Started: rocket
+    Configuration: cog
+    Theming: palette
+    API: file-code
+    CLI: terminal
+    Content: pen-line
+    Build: hammer
+    Deployment: cloud-upload
+    Quality: list-checks
+    SEO: search
+    Multimedia: image
+    AI/LLM: wand-sparkles
+    GitHub: git-branch
+    Customization: sliders
+    Troubleshooting: wrench
+    Branding: paintbrush
+    Internationalization: globe
+    CI/CD: repeat
+    Setup: download
+    Tables: table
+
 # Dark Mode Toggle
 # ----------------
 # Enable/disable the dark mode toggle in navbar (default: true)
 dark_mode_toggle: true
+
+# Page Status Badges
+# ------------------
+# Show status badges (e.g., Experimental, New) on pages that set a `status` key
+# in their YAML frontmatter.
+page_status: true
 
 # Navigation Icons
 # ----------------
@@ -118,6 +151,7 @@ nav_icons:
     Theming & Appearance: palette
     Cross-Referencing: link
     Internationalization: globe
+    Scale-to-Fit: scaling
     API Documentation: file-code
     CLI Documentation: terminal
     User Guides: book-text
@@ -132,8 +166,12 @@ nav_icons:
     Link Checker: scan-search
     Proofreading: spell-check
     Changelog: history
+    Custom Static Pages: app-window
+    Page Tags: tags
+    Page Status Badges: shield-check
     Community Files: file-heart
     Docs Linting: list-checks
+    API Evolution: git-compare-arrows
 
 # Author Information
 # ------------------

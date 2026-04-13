@@ -1,6 +1,7 @@
 ---
 title: "Set Up GitHub Pages CI"
 description: "Automate documentation builds and deployment with GitHub Actions."
+tags: [Deployment, CI\/CD, GitHub]
 ---
 
 # Set Up GitHub Pages CI

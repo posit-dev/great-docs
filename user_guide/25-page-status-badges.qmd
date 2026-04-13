@@ -1,0 +1,208 @@
+---
+title: "Page Status Badges"
+guide-section: "Site Content"
+bread-crumbs: false
+tags: [Content, Configuration]
+---
+
+# Page Status Badges
+
+Great Docs lets you mark pages with a lifecycle status such as "New", "Beta", or "Deprecated". Status badges appear as colored indicators in two places:
+
+1. **Below the page title**: a full badge with icon, label, and description
+2. **In sidebar navigation**: a compact icon next to the link, with a tooltip on hover
+
+Status badges are disabled by default. To enable them, add a `page_status` section to `great-docs.yml`:
+
+```{.yaml filename="great-docs.yml"}
+page_status:
+  enabled: true
+```
+
+Or use the shorthand:
+
+```{.yaml filename="great-docs.yml"}
+page_status: true
+```
+
+## Adding a Status to a Page
+
+Set the `status` key in the YAML frontmatter of any user guide, recipe, or custom section page:
+
+```{.yaml filename="user_guide/03-migration.qmd"}
+---
+title: "Migration Guide"
+status: deprecated
+---
+```
+
+The value must match one of the defined status keys (see below). Pages without a `status` key display no badge.
+
+## Built-in Statuses
+
+Great Docs ships with five built-in statuses, each with a [Lucide](https://lucide.dev/icons/) icon, color, and description:
+
+| Key            | Label          | Icon               | Color   | Description                         |
+|----------------|----------------|---------------------|---------|-------------------------------------|
+| `new`          | New            | `sparkles`          | Green   | Recently added                      |
+| `updated`      | Updated        | `refresh-cw`        | Blue    | Recently updated                    |
+| `beta`         | Beta           | `flask-conical`     | Amber   | Beta feature                        |
+| `deprecated`   | Deprecated     | `triangle-alert`    | Red     | May be removed in a future release  |
+| `experimental` | Experimental   | `beaker`            | Purple  | API may change without notice       |
+
+All built-in status labels and descriptions are automatically translated when the site uses a non-English language (see [Internationalization](internationalization.qmd)).
+
+## Custom Statuses
+
+You can add your own statuses or override built-in ones via the `statuses` map in `great-docs.yml`:
+
+```{.yaml filename="great-docs.yml"}
+page_status:
+  enabled: true
+  statuses:
+    draft:
+      label: "Draft"
+      icon: pencil
+      color: "#6b7280"
+      description: "Work in progress"
+    review:
+      label: "In Review"
+      icon: eye
+      color: "#0ea5e9"
+      description: "Awaiting technical review"
+```
+
+Each custom status definition accepts:
+
+| Key           | Type   | Required | Description                                               |
+|---------------|--------|----------|-----------------------------------------------------------|
+| `label`       | string | No       | Display text (defaults to the key in title case)           |
+| `icon`        | string | No       | Lucide icon name (e.g., `pencil`, `eye`)                   |
+| `color`       | string | No       | CSS color for the badge (defaults to `#6b7280`)            |
+| `description` | string | No       | Short explanation shown on the page badge and as a tooltip |
+
+Custom statuses use their literal `label` and `description` values in all languages. Only the five built-in statuses are translated automatically.
+
+Then use the custom key in frontmatter:
+
+```{.yaml filename="user_guide/10-new-api.qmd"}
+---
+title: "New API Design"
+status: draft
+---
+```
+
+## Overriding Built-in Statuses
+
+To change a built-in status (for example, switching the icon or color for `deprecated`), redefine it in `statuses`:
+
+```{.yaml filename="great-docs.yml"}
+page_status:
+  enabled: true
+  statuses:
+    deprecated:
+      label: "Legacy"
+      icon: archive
+      color: "#9ca3af"
+      description: "Superseded by a newer approach"
+```
+
+Your definition fully replaces the built-in default for that key.
+
+## Controlling Where Badges Appear
+
+By default, badges are shown both below page titles and in the sidebar. You can disable either location independently:
+
+### Sidebar Only
+
+```{.yaml filename="great-docs.yml"}
+page_status:
+  enabled: true
+  show_on_pages: false   # No badge below the title
+  show_in_sidebar: true  # Icon in sidebar (default)
+```
+
+### Page Title Only
+
+```{.yaml filename="great-docs.yml"}
+page_status:
+  enabled: true
+  show_on_pages: true    # Badge below the title (default)
+  show_in_sidebar: false # No icon in sidebar
+```
+
+## How It Looks
+
+### On the Page
+
+The page-level badge appears directly below the title (and subtitle, if present). It displays the status icon, label, and description in the status color:
+
+```
+  Getting Started               ← page title
+  A quick introduction          ← subtitle (if any)
+  ✦ New — Recently added        ← status badge
+```
+
+### In the Sidebar
+
+Sidebar links for pages with a status show a small colored icon after the link text. Hovering over the icon displays a tooltip with the full label and description:
+
+```
+  ▸ Getting Started  ✦          ← icon with tooltip
+  ▸ Migration Guide  ⚠
+  ▸ Configuration
+```
+
+## Which Pages Are Scanned?
+
+Great Docs scans for `status` frontmatter in `.qmd` files found in:
+
+- **User guide** pages (`user-guide/`)
+- **Recipes** pages (`recipes/`)
+- **Custom sections** (any section defined in `sections:` config)
+
+API reference pages, the changelog, and index pages are not scanned.
+
+## Full Configuration Reference
+
+Here is the complete `page_status` configuration with all options and their defaults:
+
+```{.yaml filename="great-docs.yml"}
+page_status:
+  enabled: false           # Master switch (default: false)
+  show_in_sidebar: true    # Show icon in sidebar links (default: true)
+  show_on_pages: true      # Show badge below page titles (default: true)
+  statuses:                # Status definitions (built-ins shown below)
+    new:
+      label: "New"
+      icon: sparkles
+      color: "#10b981"
+      description: "Recently added"
+    updated:
+      label: "Updated"
+      icon: refresh-cw
+      color: "#3b82f6"
+      description: "Recently updated"
+    beta:
+      label: "Beta"
+      icon: flask-conical
+      color: "#f59e0b"
+      description: "Beta feature"
+    deprecated:
+      label: "Deprecated"
+      icon: triangle-alert
+      color: "#ef4444"
+      description: "May be removed in a future release"
+    experimental:
+      label: "Experimental"
+      icon: beaker
+      color: "#8b5cf6"
+      description: "API may change without notice"
+```
+
+## Tips
+
+- **Use statuses sparingly**: a page should carry a status only when it communicates something actionable. If every page is "New", the badge loses its value.
+- **Remove stale statuses**: revisit `status: new` and `status: updated` periodically and remove them once the content is no longer recent.
+- **Combine with tags**: statuses and tags serve different purposes. Tags categorize content by topic; statuses communicate lifecycle. A page can have both.
+- **Custom statuses for workflows**: define statuses like `draft` or `review` to track editorial progress while keeping the documentation published.

@@ -209,6 +209,7 @@ ALL_PACKAGES: list[str] = [
     "gdtest_sec_with_ref",  # 74
     "gdtest_sec_deep",  # 75
     "gdtest_sec_index_opt",  # 75b
+    "gdtest_sec_index_hero",  # 75b2
     "gdtest_sec_sidebar_single",  # 75c
     "gdtest_custom_passthrough_navbar",  # 75d
     "gdtest_custom_raw_navbar_after",  # 75e
@@ -325,6 +326,30 @@ ALL_PACKAGES: list[str] = [
     "gdtest_code_cells",  # 160
     # 161: Navigation icons
     "gdtest_nav_icons",  # 161
+    # 162: Page tags
+    "gdtest_page_tags",  # 162
+    # 163: Page status badges
+    "gdtest_page_status",  # 163
+    # 164: Tag location (top vs. bottom)
+    "gdtest_tag_location",  # 164
+    # 165: Icon shortcode in content contexts
+    "gdtest_icon_shortcode",  # 165
+    # 166: Blended homepage with subdirectory user guide + section assets
+    "gdtest_homepage_ug_subdirs",  # 166
+    # 167: Great Tables vs. Markdown tables rendering
+    "gdtest_gt_tables",  # 167
+    # 168: Scale-to-fit auto-scaling for wide HTML output
+    "gdtest_scale_to_fit",  # 168
+    # 169: Min-scale keyword and float thresholds for scale-to-fit
+    "gdtest_scale_min_scale",  # 169
+    # 170: Wide homepage content with column-margin sidebar
+    "gdtest_homepage_wide",  # 170
+    # 171: Interlinks and autolinking in user-guide pages (non-reference GDLS)
+    "gdtest_interlinks_userguide",  # 171
+    # 172: Custom docstring headings with backtick code spans
+    "gdtest_code_span_headings",  # 172
+    # 173: Blog section with user-provided index.qmd
+    "gdtest_sec_blog_user_index",  # 173
 ]
 
 
@@ -509,6 +534,7 @@ DIMENSIONS: dict[str, dict[str, str]] = {
     "N7": {"axis": "sections", "label": "navbar_after"},
     "N8": {"axis": "sections", "label": "Section index opt-in"},
     "N9": {"axis": "sections", "label": "Single-page sidebar hide"},
+    "N10": {"axis": "sections", "label": "Section index hero cards"},
     # Reference axes
     "P1": {"axis": "reference", "label": "Explicit reference"},
     "P2": {"axis": "reference", "label": "members: false"},
@@ -539,6 +565,11 @@ DIMENSIONS: dict[str, dict[str, str]] = {
     "K51": {"axis": "config", "label": "i18n: Japanese (CJK)"},
     "K52": {"axis": "config", "label": "i18n: Arabic (RTL)"},
     "K53": {"axis": "config", "label": "nav_icons config"},
+    # Page tags axes
+    "T1": {"axis": "tags", "label": "Page tags with hierarchy + shadow"},
+    "T3": {"axis": "tags", "label": "Tag location top vs. bottom with per-page overrides"},
+    # Page status axes
+    "T2": {"axis": "status", "label": "Page status badges in sidebar + pages"},
 }
 
 
@@ -1495,6 +1526,11 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "card-based index page; Tutorials section without index (default) "
         "has navbar linking directly to the first page."
     ),
+    "gdtest_sec_index_hero": (
+        "Section index hero cards: Demos section with 2-col image cards "
+        "(4 featured + 6 plain links), Gallery section with 1-col image "
+        "cards (index_columns: 1). Tests mixed image/plain and column options."
+    ),
     "gdtest_sec_sidebar_single": (
         "Section sidebar for single-page sections. Has a 2-page Guides "
         "section (sidebar visible) and a 1-page FAQ section (sidebar "
@@ -1841,6 +1877,98 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "Each entry should have a small inline SVG icon prepended to its label "
         "for quick visual scanning. The site also uses the 'sky' gradient and "
         "an announcement banner."
+    ),
+    "gdtest_page_tags": (
+        "Four user-guide pages tagged with flat, hierarchical, and shadow tags. "
+        "Tests that tags/index.qmd is generated with all visible tags, that "
+        "page-tags.js is included for client-side pill rendering, that shadow "
+        "tags (needs-review, internal) are excluded from the public tag index, "
+        "and that hierarchical tags like Python/Configuration create nested "
+        "headings on the tags page. Tag icons are configured for Python, "
+        "Tutorial, and API."
+    ),
+    "gdtest_tag_location": (
+        "Six user-guide pages testing tag_location placement. The global default "
+        "is set to 'bottom' so tags appear after page metadata. Three pages have "
+        "frontmatter dates (date_created, last_update) with show_dates enabled "
+        "to test bottom-placed tags appearing after the metadata block. Two "
+        "pages override to 'top' via tag-location frontmatter, one page "
+        "explicitly sets 'bottom', one page has no dates (tags under <hr>), "
+        "and one page has no tags at all."
+    ),
+    "gdtest_page_status": (
+        "Seven user-guide pages exercising page status badges. Six pages carry "
+        "a status frontmatter value (new, updated, beta, deprecated, experimental, "
+        "and a custom draft status) while one page has no status. Tests that "
+        "_page_status.json is generated with the correct page-to-status mapping, "
+        "that page-status-badges.js is included for client-side rendering, that "
+        "sidebar links display compact status badges, and that page titles show "
+        "a styled status indicator with icon and description. The custom draft "
+        "status (defined in great-docs.yml) verifies user-defined status extensions."
+    ),
+    "gdtest_icon_shortcode": (
+        "Two user-guide pages exercising the Lucide icon Quarto shortcode in "
+        "many content contexts: section headings, inline prose, Markdown tables, "
+        "callouts (note, tip, warning), ordered and unordered lists, blockquotes, "
+        "and definition lists. A second page provides an icon gallery with "
+        "navigation, status, and file/code icon groups plus a size comparison. "
+        "Tests that the shortcode bridge produces inline SVG elements with the "
+        "correct Lucide path data, custom sizes, and accessible labels."
+    ),
+    # ── 166: Blended homepage + subdir UG + section assets ────────────────
+    "gdtest_homepage_ug_subdirs": (
+        "Combines homepage: user_guide with a user guide that has subdirectories "
+        "(root index.qmd + 00-getting-started/ + 01-advanced/) and a custom "
+        "Examples section whose source dir contains asset subdirectories (data/, "
+        "img/). Tests three fixes: (1) root index.qmd sorts first despite "
+        "numbered files in subdirs, (2) blended index locates the first page "
+        "using the full relative path, (3) section asset directories are copied "
+        "to the build directory."
+    ),
+    # ── 167: Great Tables vs. Markdown tables ─────────────────────────────
+    "gdtest_gt_tables": (
+        "Renders Great Tables (GT) output alongside conventional Markdown "
+        "tables. Tests that GT tables preserve <colgroup> tags, are not "
+        "wrapped in gd-table-responsive, and are excluded from Bootstrap "
+        "table-bordered styling, while Markdown tables still receive all "
+        "responsive enhancements."
+    ),
+    "gdtest_scale_to_fit": (
+        "Tests the 3-level scale-to-fit configuration system: global config "
+        "targeting by CSS selector, page-level frontmatter overrides, and "
+        "manual div wrapping. Uses GT tables of varying widths (4-16 cols) "
+        "and a custom _repr_html_ widget to verify correct scaling behavior, "
+        "ID-based targeting, and override precedence."
+    ),
+    "gdtest_scale_min_scale": (
+        "Tests scale-to-fit minimum-scale thresholds: viewport keyword "
+        "breakpoints (mobile ≤576px, tablet ≤768px, desktop ≤992px) and "
+        "fractional float values. Verifies global keyword, per-page keyword "
+        "overrides, per-page float override, and inheritance when no "
+        "page-level override is set."
+    ),
+    "gdtest_homepage_wide": (
+        "Tests that wide content on the homepage (code blocks, wide tables) "
+        "renders at full width when the column-margin metadata sidebar is "
+        "present. Verifies the gd-homepage body class and CSS grid fix."
+    ),
+    "gdtest_interlinks_userguide": (
+        "Three exports (Engine, Connection, execute) with user-guide pages "
+        "using [](`~pkg.Name`) interlinks and inline-code autolinking. "
+        "Tests that the GDLS resolves links on non-reference pages with "
+        "correct relative paths back to reference/."
+    ),
+    "gdtest_code_span_headings": (
+        "Two functions with custom docstring section headings containing "
+        "backtick code spans (e.g. 'What Can Be Used in `value=`?'). "
+        "Tests that title-casing preserves code verbatim and that slug "
+        "generation strips backticks and special characters."
+    ),
+    "gdtest_sec_blog_user_index": (
+        "Blog section with a user-provided blog/index.qmd (table listing). "
+        "Tests that Great Docs injects toc: false and body-classes: "
+        "gd-blog-index into the user's index, hiding the TOC sidebar "
+        "and copy-page widget."
     ),
 }
 

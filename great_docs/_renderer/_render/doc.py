@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from copy import copy
 from dataclasses import dataclass
 from functools import cached_property, singledispatchmethod
@@ -402,7 +403,11 @@ class __RenderDoc(RenderBase):
 
         for i, section in enumerate(sections):
             section_kind: gf.DocstringSectionKind = section.kind
-            title = (section.title or section_kind).strip().title()
+            raw_title = (section.title or section_kind).strip()
+            # Apply .title() only to text outside backtick-delimited code spans
+            # so that e.g. "What Can Be Used in `value=`?" keeps `value=` verbatim.
+            parts = raw_title.split("`")
+            title = "`".join(part if idx % 2 else part.title() for idx, part in enumerate(parts))
 
             if section_kind == "text":
                 assert i == 0, f"unexpected text section {section_kind}"
@@ -424,7 +429,11 @@ class __RenderDoc(RenderBase):
             body = self.render_docstring_section(section) or ""
             if not body:
                 continue
-            slug = title.lower().replace(" ", "-")
+            # Build a slug-safe CSS class: strip backticks and non-alphanumeric
+            # characters (except hyphens/spaces) before lowercasing and hyphenating.
+            slug_raw = title.replace("`", "")
+            slug = re.sub(r"[^a-z0-9 -]", "", slug_raw.lower())
+            slug = re.sub(r"[ -]+", "-", slug).strip("-")
             section_classes = [f"doc-{slug}"]
             if title in ("Text", "Deprecated"):
                 content = Div(body, Attr(classes=section_classes))

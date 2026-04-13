@@ -202,6 +202,7 @@ def _get_seealso_functions():
         "__builtins__": __builtins__,
         # Provide empty inventory for resolve_interlinks
         "_interlinks_inventory": {},
+        "_CALLABLE_ROLES": {"function", "method"},
         "_t": _t,
     }
 
@@ -209,6 +210,7 @@ def _get_seealso_functions():
         "extract_seealso_from_html",
         "extract_seealso_from_doc_section",
         "generate_seealso_html",
+        "_make_relative_uri",
         "_resolve_interlink_name",
         "resolve_interlinks",
         "autolink_code_references",
@@ -755,8 +757,9 @@ def _make_autolink(inventory):
         "re": _re,
         "__builtins__": __builtins__,
         "_interlinks_inventory": inventory,
+        "_CALLABLE_ROLES": {"function", "method"},
     }
-    for func_name in ("_resolve_interlink_name", "autolink_code_references"):
+    for func_name in ("_make_relative_uri", "_resolve_interlink_name", "autolink_code_references"):
         start = source.find(f"def {func_name}(")
         rest = source[start:]
         lines = rest.split("\n")
@@ -881,6 +884,325 @@ class TestAutolinkCodeReferences:
         fn = _make_autolink({})
         html = "<p><code>MyClass</code></p>"
         assert fn(html) == html
+
+
+# ── Helpers for page_path–aware GDLS tests ──────────────────────────────────
+
+
+def _extract_make_relative_uri():
+    """Extract _make_relative_uri as a standalone callable."""
+    source = _SCRIPT.read_text()
+    ns = {"__builtins__": __builtins__}
+    start = source.find("def _make_relative_uri(")
+    rest = source[start:]
+    lines = rest.split("\n")
+    func_lines = [lines[0]]
+    for line in lines[1:]:
+        if (
+            line
+            and not line[0].isspace()
+            and (line.startswith("def ") or line.startswith("class "))
+        ):
+            break
+        func_lines.append(line)
+    exec("\n".join(func_lines), ns)
+    return ns["_make_relative_uri"]
+
+
+class TestMakeRelativeUri:
+    """Direct unit tests for _make_relative_uri."""
+
+    @pytest.fixture(autouse=True)
+    def _load(self):
+        self.fn = _extract_make_relative_uri()
+
+    def test_none_strips_reference_prefix(self):
+        """page_path=None strips reference/ prefix (legacy behaviour)."""
+        assert self.fn("reference/Foo.html#anchor", None) == "Foo.html#anchor"
+
+    def test_none_non_reference_uri_unchanged(self):
+        """page_path=None with non-reference/ URI returns it as-is."""
+        assert self.fn("other/page.html", None) == "other/page.html"
+
+    def test_same_directory(self):
+        """URI and page in same directory -> sibling-relative."""
+        result = self.fn("reference/Foo.html", "reference/Bar.html")
+        assert result == "Foo.html"
+
+    def test_parent_directory(self):
+        """URI in reference/, page one level up -> reference/ prefix."""
+        result = self.fn("reference/Foo.html", "index.html")
+        assert result == "reference/Foo.html"
+
+    def test_sibling_directory(self):
+        """URI in reference/, page in user-guide/ -> ../reference/."""
+        result = self.fn("reference/Foo.html", "user-guide/intro.html")
+        assert result == "../reference/Foo.html"
+
+    def test_deeply_nested_page(self):
+        """Page 3 levels deep -> three ../ segments."""
+        result = self.fn("reference/Foo.html", "blog/2025/01/post.html")
+        assert result == "../../../reference/Foo.html"
+
+    def test_preserves_fragment(self):
+        """Fragment (#anchor) is preserved through relpath calculation."""
+        result = self.fn("reference/Foo.html#pkg.Foo", "user-guide/intro.html")
+        assert result == "../reference/Foo.html#pkg.Foo"
+
+    def test_non_reference_uri_from_subdir(self):
+        """Non-reference/ URI also gets correct relative path."""
+        result = self.fn("changelog.html", "user-guide/intro.html")
+        assert result == "../changelog.html"
+
+    def test_same_file(self):
+        """URI pointing to the same file -> just the filename."""
+        result = self.fn("user-guide/intro.html", "user-guide/intro.html")
+        assert result == "intro.html"
+
+
+def _make_resolve_interlinks(inventory):
+    """Create a resolve_interlinks function bound to a given inventory."""
+    import re as _re
+
+    source = _SCRIPT.read_text()
+    ns = {
+        "re": _re,
+        "__builtins__": __builtins__,
+        "_interlinks_inventory": inventory,
+        "_CALLABLE_ROLES": {"function", "method"},
+    }
+    for func_name in ("_make_relative_uri", "_resolve_interlink_name", "resolve_interlinks"):
+        start = source.find(f"def {func_name}(")
+        rest = source[start:]
+        lines = rest.split("\n")
+        func_lines = [lines[0]]
+        for line in lines[1:]:
+            if (
+                line
+                and not line[0].isspace()
+                and (line.startswith("def ") or line.startswith("class "))
+            ):
+                break
+            func_lines.append(line)
+        exec("\n".join(func_lines), ns)
+    return ns["resolve_interlinks"]
+
+
+def _make_autolink_with_path(inventory):
+    """Create an autolink function bound to a given inventory (page_path-aware)."""
+    import re as _re
+
+    source = _SCRIPT.read_text()
+    ns = {
+        "re": _re,
+        "__builtins__": __builtins__,
+        "_interlinks_inventory": inventory,
+        "_CALLABLE_ROLES": {"function", "method"},
+    }
+    for func_name in (
+        "_make_relative_uri",
+        "_resolve_interlink_name",
+        "autolink_code_references",
+    ):
+        start = source.find(f"def {func_name}(")
+        rest = source[start:]
+        lines = rest.split("\n")
+        func_lines = [lines[0]]
+        for line in lines[1:]:
+            if (
+                line
+                and not line[0].isspace()
+                and (line.startswith("def ") or line.startswith("class "))
+            ):
+                break
+            func_lines.append(line)
+        exec("\n".join(func_lines), ns)
+    return ns["autolink_code_references"]
+
+
+class TestResolveInterlinksPagePath:
+    """Tests for resolve_interlinks with page_path for non-reference pages."""
+
+    INVENTORY = {
+        "pkg.Engine": {
+            "uri": "reference/Engine.html#pkg.Engine",
+            "dispname": "-",
+            "role": "class",
+        },
+        "pkg.execute": {
+            "uri": "reference/execute.html#pkg.execute",
+            "dispname": "-",
+            "role": "function",
+        },
+    }
+
+    def _resolve(self, html, page_path=None):
+        fn = _make_resolve_interlinks(self.INVENTORY)
+        return fn(html, page_path=page_path)
+
+    def test_reference_page_strips_prefix(self):
+        """On a reference page (page_path=None), strips reference/ prefix."""
+        html = '<a href="`~pkg.Engine`"></a>'
+        result = self._resolve(html, page_path=None)
+        assert 'href="Engine.html#pkg.Engine"' in result
+
+    def test_reference_page_explicit_path(self):
+        """On a reference page with explicit path, keeps sibling-relative."""
+        html = '<a href="`~pkg.Engine`"></a>'
+        result = self._resolve(html, page_path="reference/Connection.html")
+        assert 'href="Engine.html#pkg.Engine"' in result
+
+    def test_user_guide_page_relative_path(self):
+        """On a user-guide page, produces ../reference/ relative path."""
+        html = '<a href="`~pkg.Engine`"></a>'
+        result = self._resolve(html, page_path="user-guide/intro.html")
+        assert 'href="../reference/Engine.html#pkg.Engine"' in result
+
+    def test_user_guide_subdir_relative_path(self):
+        """On a deeper user-guide page, produces ../../reference/ path."""
+        html = '<a href="`~pkg.Engine`"></a>'
+        result = self._resolve(html, page_path="user-guide/advanced/tips.html")
+        assert 'href="../../reference/Engine.html#pkg.Engine"' in result
+
+    def test_root_page_relative_path(self):
+        """On the site root (e.g. index.html), reference/ is direct child."""
+        html = '<a href="`~pkg.Engine`"></a>'
+        result = self._resolve(html, page_path="index.html")
+        assert 'href="reference/Engine.html#pkg.Engine"' in result
+
+    def test_callable_gets_parens(self):
+        """Functions get () appended when using tilde shortening."""
+        html = '<a href="`~pkg.execute`"></a>'
+        result = self._resolve(html, page_path="user-guide/intro.html")
+        assert "execute()" in result
+        assert 'href="../reference/execute.html#pkg.execute"' in result
+
+    def test_full_qualified_display(self):
+        """Without tilde, full qualified name is shown."""
+        html = '<a href="`pkg.Engine`"></a>'
+        result = self._resolve(html, page_path="user-guide/intro.html")
+        assert "pkg.Engine" in result
+        assert 'href="../reference/Engine.html#pkg.Engine"' in result
+
+    def test_custom_text_preserved(self):
+        """Custom link text is preserved regardless of page_path."""
+        html = '<a href="`~pkg.Engine`">my custom text</a>'
+        result = self._resolve(html, page_path="user-guide/intro.html")
+        assert "my custom text" in result
+        assert 'href="../reference/Engine.html#pkg.Engine"' in result
+
+    def test_unresolved_left_unchanged(self):
+        """Unresolved interlink on non-reference page is left as-is."""
+        html = '<a href="`~pkg.Unknown`"></a>'
+        result = self._resolve(html, page_path="user-guide/intro.html")
+        assert result == html
+
+    def test_multiple_interlinks_in_one_page(self):
+        """Multiple interlinks in a single page all resolve independently."""
+        html = '<p><a href="`~pkg.Engine`"></a> and <a href="`~pkg.execute`"></a></p>'
+        result = self._resolve(html, page_path="user-guide/intro.html")
+        assert 'href="../reference/Engine.html#pkg.Engine"' in result
+        assert 'href="../reference/execute.html#pkg.execute"' in result
+        assert "Engine" in result
+        assert "execute()" in result
+
+    def test_empty_inventory_returns_unchanged(self):
+        """With empty inventory, content is returned unchanged."""
+        fn = _make_resolve_interlinks({})
+        html = '<a href="`~pkg.Engine`"></a>'
+        assert fn(html, page_path="user-guide/intro.html") == html
+
+
+class TestAutolinkCodeReferencesPagePath:
+    """Tests for autolink_code_references with page_path for non-reference pages."""
+
+    INVENTORY = {
+        "pkg.Engine": {
+            "uri": "reference/Engine.html#pkg.Engine",
+            "dispname": "-",
+        },
+        "pkg.execute": {
+            "uri": "reference/execute.html#pkg.execute",
+            "dispname": "-",
+        },
+    }
+
+    def _autolink(self, html, page_path=None):
+        fn = _make_autolink_with_path(self.INVENTORY)
+        return fn(html, page_path=page_path)
+
+    def test_reference_page_strips_prefix(self):
+        """On a reference page (page_path=None), strips reference/ prefix."""
+        result = self._autolink("<p><code>Engine</code></p>", page_path=None)
+        assert 'href="Engine.html#pkg.Engine"' in result
+
+    def test_user_guide_relative_path(self):
+        """On a user-guide page, produces ../reference/ path."""
+        result = self._autolink("<p><code>Engine</code></p>", page_path="user-guide/intro.html")
+        assert 'href="../reference/Engine.html#pkg.Engine"' in result
+
+    def test_root_page_relative_path(self):
+        """On the site root, reference/ is direct child."""
+        result = self._autolink("<p><code>Engine</code></p>", page_path="index.html")
+        assert 'href="reference/Engine.html#pkg.Engine"' in result
+
+    def test_deep_subdir_relative_path(self):
+        """On a deeply nested page, correct number of ../ segments."""
+        result = self._autolink("<p><code>Engine</code></p>", page_path="blog/2025/01/post.html")
+        assert 'href="../../../reference/Engine.html#pkg.Engine"' in result
+
+    def test_tilde_shortening_with_path(self):
+        """~~ shortening works with page_path."""
+        result = self._autolink(
+            "<p><code>~~pkg.Engine</code></p>", page_path="user-guide/intro.html"
+        )
+        assert 'href="../reference/Engine.html#pkg.Engine"' in result
+        assert ">Engine</a>" in result
+
+    def test_parens_preserved_with_path(self):
+        """Name() display is preserved with correct page_path."""
+        result = self._autolink("<p><code>execute()</code></p>", page_path="user-guide/intro.html")
+        assert 'href="../reference/execute.html#pkg.execute"' in result
+        assert "execute()" in result
+
+    def test_pre_block_protected_with_path(self):
+        """Code inside <pre> is NOT autolinked even with page_path."""
+        result = self._autolink("<pre><code>Engine</code></pre>", page_path="user-guide/intro.html")
+        assert "<a" not in result
+
+    def test_gd_no_link_with_path(self):
+        """gd-no-link class still suppresses autolinking with page_path."""
+        result = self._autolink(
+            '<p><code class="gd-no-link">Engine</code></p>',
+            page_path="user-guide/intro.html",
+        )
+        assert "<a" not in result
+
+    def test_already_inside_link_with_path(self):
+        """Code already inside an <a> tag is not double-wrapped."""
+        result = self._autolink(
+            '<a href="foo.html"><code>Engine</code></a>',
+            page_path="user-guide/intro.html",
+        )
+        assert result.count("<a ") == 1
+
+    def test_unresolved_code_unchanged_with_path(self):
+        """Unresolved code on non-reference page stays as plain <code>."""
+        result = self._autolink(
+            "<p><code>UnknownThing</code></p>",
+            page_path="user-guide/intro.html",
+        )
+        assert "<a" not in result
+        assert "<code>UnknownThing</code>" in result
+
+    def test_multiple_codes_in_one_page(self):
+        """Multiple code references in one page all resolve."""
+        result = self._autolink(
+            "<p><code>Engine</code> and <code>execute()</code></p>",
+            page_path="user-guide/intro.html",
+        )
+        assert 'href="../reference/Engine.html#pkg.Engine"' in result
+        assert 'href="../reference/execute.html#pkg.execute"' in result
 
 
 class TestFixPlainDoctestGdCodeNav:

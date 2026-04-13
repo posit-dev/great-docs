@@ -2,6 +2,7 @@
 title: "SEO Optimization"
 guide-section: "Build & Deploy"
 bread-crumbs: false
+tags: [SEO, Deployment]
 ---
 
 # SEO Optimization

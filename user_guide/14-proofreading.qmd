@@ -1,6 +1,7 @@
 ---
 title: "Proofreading"
 guide-section: "Quality & Maintenance"
+tags: [Quality]
 ---
 
 Good documentation requires accurate spelling and grammar. Great Docs includes a proofreading command that checks your documentation for spelling mistakes, grammar issues, and common writing problems using [Harper](https://github.com/Automattic/harper), a fast, privacy-focused grammar checker that runs entirely on your machine.

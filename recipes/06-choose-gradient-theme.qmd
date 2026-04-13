@@ -1,6 +1,7 @@
 ---
 title: "Choose a Gradient Theme"
 description: "Apply animated gradient backgrounds to the navbar, banner, and content area."
+tags: [Theming, Customization]
 ---
 
 # Choose a Gradient Theme

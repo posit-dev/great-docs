@@ -2,11 +2,12 @@
 title: "Custom Sections"
 guide-section: "Site Content"
 bread-crumbs: false
+tags: [Content, Customization]
 ---
 
 # Custom Sections
 
-Great Docs lets you add any number of custom page groups to your documentation site — examples, tutorials, demos, or anything else. Each section gets its own navbar link and sidebar navigation. By default, the navbar links directly to the first page in the section. Set `index: true` to generate a card-based index page instead. For blog-style content, there's a dedicated `type: blog` mode that uses Quarto's native listing directive.
+Great Docs lets you add any number of custom page groups to your documentation site (examples, tutorials, demos, or anything else). Each section gets its own navbar link and sidebar navigation. By default, the navbar links directly to the first page in the section. Set `index: true` to generate a card-based index page instead. For blog-style content, there's a dedicated `type: blog` mode that uses Quarto's native listing directive.
 
 If you need a single hand-written HTML page rather than a section of `.qmd` files, see [Custom Static Pages](custom-pages.qmd). Custom sections and custom static pages are complementary features.
 
@@ -32,7 +33,7 @@ sections:
     dir: examples
 ```
 
-3. Run `great-docs build` — the Examples link appears in the navbar and the pages are rendered with a sidebar.
+3. Run `great-docs build`: the Examples link appears in the navbar and the pages are rendered with a sidebar.
 
 ## Configuration
 
@@ -56,11 +57,12 @@ sections:
 
 ### Optional Fields
 
-| Field          | Default            | Description |
-|----------------|--------------------|-------------|
-| `index`        | `false`            | When `true`, auto-generates a card-based index page; when `false`, navbar links to the first page |
-| `navbar_after` | Before "Reference" | Name of an existing navbar item to place this section after |
-| `type`         | `default`          | `"default"` for card-grid index with sidebar; `"blog"` for Quarto listing page |
+| Field            | Default            | Description |
+|------------------|--------------------|-------------|
+| `index`          | `false`            | When `true`, auto-generates a card-based index page; when `false`, navbar links to the first page |
+| `index_columns`  | `2`                | Number of columns for image cards on the index page (1 or 2). Only applies when `index: true` |
+| `navbar_after`   | Before "Reference" | Name of an existing navbar item to place this section after |
+| `type`           | `default`          | `"default"` for card-grid index with sidebar; `"blog"` for Quarto listing page |
 
 ## Multiple Sections
 
@@ -147,9 +149,63 @@ sections:
     index: true
 ```
 
+The generated index page renders entries in two zones:
+
+1. **Image cards** — pages with an `image` field in frontmatter appear first as clickable cards in a responsive grid. Each card shows the hero image, title, and description.
+2. **Plain links** — pages without an `image` field appear below as a single-column list of title + description links.
+
+When both zones are present, a horizontal rule separates them. This design mirrors the pattern used by the [pointblank demos page](https://posit-dev.github.io/pointblank/demos/), where featured items with screenshots sit above a simpler list of additional entries.
+
+#### Controlling Columns
+
+By default, image cards use a **2-column** responsive grid. Set `index_columns: 1` for a single-column layout (useful for wide screenshots or fewer items):
+
+```{.yaml filename="great-docs.yml"}
+sections:
+  - title: Gallery
+    dir: gallery
+    index: true
+    index_columns: 1
+```
+
+::: {.callout-tip}
+## Mixed layouts
+You can combine both approaches in the same site: a 2-column demos section with featured screenshots alongside a 1-column gallery with full-width images, plus plain text links for supplementary pages that don't need a visual.
+:::
+
+#### Example: Featured Demos with Plain Links
+
+Given this directory:
+
+```
+demos/
+├── 01-starter.qmd       ← Has image: "img/starter.png"
+├── 02-advanced.qmd      ← Has image: "img/advanced.png"
+├── 03-tips.qmd          ← No image
+├── 04-faq.qmd           ← No image
+└── img/
+    ├── starter.png
+    └── advanced.png
+```
+
+With this config:
+
+```{.yaml filename="great-docs.yml"}
+sections:
+  - title: Demos
+    dir: demos
+    index: true
+```
+
+The generated index page shows:
+
+- Two image cards side by side (Starter and Advanced) at the top
+- A horizontal rule
+- Two plain link entries (Tips and FAQ) in a single-column list below
+
 ### Custom Index
 
-If you provide your own `index.qmd` in the directory, Great Docs uses it as-is — regardless of the `index` setting. This gives you full control over the landing page layout as you can write custom HTML, use Quarto grid layouts, or embed interactive content.
+If you provide your own `index.qmd` in the directory, Great Docs uses it as-is (regardless of the `index` setting). This gives you full control over the landing page layout as you can write custom HTML, use Quarto grid layouts, or embed interactive content.
 
 ```
 examples/

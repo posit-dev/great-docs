@@ -1,6 +1,7 @@
 ---
 title: "llms.txt and llms-full.txt"
 description: "Learn what the auto-generated llms.txt and llms-full.txt files are, how agents use them, and how to customize them."
+tags: [AI\/LLM, SEO]
 ---
 
 # llms.txt and llms-full.txt

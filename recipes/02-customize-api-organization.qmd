@@ -1,6 +1,7 @@
 ---
 title: "Customize API Organization"
 description: "Rearrange your API reference into domain-specific sections instead of the default type-based layout."
+tags: [API, Customization]
 ---
 
 # Customize API Organization

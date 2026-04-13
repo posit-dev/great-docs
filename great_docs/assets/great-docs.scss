@@ -91,9 +91,13 @@ header p {
 
 .description {
    font-style: italic;
+
+   @media (max-width: 767.98px) {
+      padding-bottom: 1em;
+   }
 }
 
-table {
+table:not(.gt_table) {
    @extend .table-bordered;
 }
 
@@ -1166,6 +1170,15 @@ body.quarto-light .navbar .navbar-toggler-icon {
     flex-wrap: nowrap;
 }
 
+/* Uniform sizing for all direct widget children in the tray */
+#gd-navbar-widgets > #dark-mode-toggle-container,
+#gd-navbar-widgets > #gd-keyboard-btn-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+}
+
 /* Reset Quarto's auto-margins and ordering on search when inside widget tray */
 #gd-navbar-widgets #quarto-search {
     margin-left: 0;
@@ -1290,6 +1303,24 @@ body.quarto-light .navbar .gd-navbar-icon:hover {
     zoom: 60%;
 }
 
+// Scale-to-fit: shrinks wide content (tables, GT output) to fill the
+// container width.  Apply in .qmd via  :::{.scale-to-fit} ... :::
+.scale-to-fit {
+    width: 100%;
+    position: relative;
+
+    .gd-scale-wrapper {
+        transform-origin: top left;
+    }
+
+    // Fallback when content is too wide for the min-scale threshold:
+    // show at full size with horizontal scrolling.
+    &.gd-scale-scrollable {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
 .nav-footer {
     position: relative;
     z-index: 1;
@@ -1351,8 +1382,36 @@ body.quarto-light .navbar .gd-navbar-icon:hover {
 }
 
 /* Page navigation (prev/next) at bottom of pages */
+.nav-page.nav-page-previous a,
+.nav-page.nav-page-next a {
+    border-style: solid;
+    padding-left: 0.5rem;
+    border-radius: 8px;
+    padding-right: 0.5rem;
+    border-width: 1px;
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
+}
+
 .nav-page-text {
     font-size: 0.875em;
+    position: relative;
+    top: -1px;
+}
+
+/* Stack prev/next nav vertically and center on mobile */
+@media (max-width: 576px) {
+    .page-navigation {
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .nav-page.nav-page-previous,
+    .nav-page.nav-page-next {
+        width: auto;
+        text-align: center;
+    }
 }
 
 /* Source link styling */
@@ -3337,9 +3396,23 @@ textarea,
 
 .section-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 1rem;
     margin-top: 0.5rem;
+}
+
+/* 2-column image card grid (default) */
+.section-cards-2col {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+/* 1-column image card grid */
+.section-cards-1col {
+    grid-template-columns: 1fr;
+}
+
+/* Single-column plain link list */
+.section-cards-list {
+    grid-template-columns: 1fr;
 }
 
 .section-card {
@@ -3412,7 +3485,9 @@ html:not(.theme-loaded) *::after {
 @media (min-width: 992px) {
     body[data-page="index"] #quarto-document-content > section:not(.column-margin),
     body[data-page="index"] #quarto-document-content > .gd-hero,
-    body[data-page="index"] #quarto-document-content > p {
+    body[data-page="index"] #quarto-document-content > p,
+    body[data-page="index"] #quarto-document-content > .cell,
+    body[data-page="index"] #quarto-document-content > details {
         grid-column: page-start-inset / body-content-end !important;
     }
 
@@ -3440,9 +3515,20 @@ main.content.page-columns.page-full > * {
     grid-column: body-content-start / body-content-end;
 }
 
+/* On the homepage, .column-margin triggers Quarto's page-columns grid which
+   narrows the body-content track to make room for the margin column.  This
+   causes code disclosures, output tables, and other wide elements to appear
+   indented ~100px from the left.  The data-page=index rule above handles
+   section, p, .cell, and details with the correct grid span; this fallback
+   covers any remaining direct children of main.page-columns. */
+.gd-homepage main.page-columns > *:not(.column-margin) {
+    grid-column: page-start-inset / body-content-end;
+}
+
 .gd-hero-logo {
     display: block;
     width: auto;
+    max-width: 80%;
     margin-left: auto;
     margin-right: auto;
     margin-bottom: 1.25rem;
@@ -4031,6 +4117,12 @@ body.gd-skills-page .content.column-page {
 
 // License page: same full-width layout as Skills page
 body.gd-license-page .content.column-page {
+    grid-column: page-start / page-end !important;
+    max-width: 100%;
+}
+
+// Blog index page: use full width (no TOC sidebar)
+body.gd-blog-index .content.column-page {
     grid-column: page-start / page-end !important;
     max-width: 100%;
 }
@@ -4758,6 +4850,16 @@ html[data-bs-theme="dark"] {
     .gd-table-scroll-indicator {
         display: none;
     }
+}
+
+/* ── Inline icon shortcode ───────────────────────────────────── */
+
+/* Strip the paragraph margin Pandoc adds when wrapping inline icons
+   inside table cells.  Without this, <td><p><svg>…</svg></p></td>
+   gets ~1rem of bottom margin and rows appear double-height.         */
+td > p:has(> svg.gd-icon) {
+    margin: 0;
+    line-height: inherit;
 }
 
 
@@ -5524,6 +5626,246 @@ html[data-bs-theme="dark"] {
 
 /* Dark mode — icon color inherits from text (stroke: currentColor) */
 /* No extra rules needed because Lucide uses stroke="currentColor" */
+
+// ── Page Tags ───────────────────────────────────────────────────────────────
+
+// Tag pills displayed below page titles
+.gd-page-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.35rem;
+    margin-bottom: 0.8rem;
+}
+
+.gd-tag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.4;
+    color: mix($primary, $body-color, 60%);
+    background-color: tint-color($primary, 90%);
+    border: 1px solid tint-color($primary, 75%);
+    border-radius: 1rem;
+    text-decoration: none;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+    white-space: nowrap;
+
+    &:hover,
+    &:focus-visible {
+        background-color: tint-color($primary, 80%);
+        border-color: tint-color($primary, 60%);
+        color: shade-color($primary, 10%);
+        text-decoration: none;
+    }
+
+    .gd-tag-icon {
+        display: inline-flex;
+        align-items: center;
+        margin-right: 0.15rem;
+        opacity: 0.7;
+    }
+}
+
+// Tags index page — headings styled as pills
+.gd-tag-heading {
+    margin-top: 1.5rem;
+    margin-bottom: 0.35rem;
+
+    .gd-tag-pill {
+        cursor: default;
+        pointer-events: none;
+    }
+}
+
+// Indentation for subtags (depth 1 = child, depth 2 = grandchild)
+.gd-tag-indent-1 {
+    margin-left: 2rem;
+}
+
+.gd-tag-indent-2 {
+    margin-left: 4rem;
+}
+
+// Page links under each tag (no bullets, indented)
+.gd-tag-pages {
+    margin-bottom: 0.75rem;
+}
+
+.gd-tag-page-link {
+    padding: 0.15rem 0;
+    padding-left: 1.25rem;
+
+    a {
+        color: $body-color;
+        text-decoration: underline;
+
+        &:hover {
+            color: $primary;
+        }
+    }
+}
+
+// Segmented pills for hierarchical tags (e.g. Python | Advanced)
+.gd-tag-pill-segmented {
+    padding: 0;
+    overflow: hidden;
+    gap: 0;
+
+    .gd-tag-pill-segment {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.15rem 0.55rem;
+    }
+
+    .gd-tag-pill-parent {
+        background-color: tint-color($primary, 90%);
+    }
+
+    .gd-tag-pill-segment:not(.gd-tag-pill-parent) {
+        background-color: tint-color($primary, 95%);
+    }
+
+    .gd-tag-pill-sep {
+        display: inline-block;
+        width: 1px;
+        align-self: stretch;
+        background-color: tint-color($primary, 60%);
+    }
+}
+
+.gd-tag-section {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: $text-muted;
+    background-color: $gray-100;
+    padding: 0.05rem 0.4rem;
+    border-radius: 0.25rem;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+}
+
+// Dark mode overrides for tag pills
+body.quarto-dark {
+    .gd-tag-pill {
+        color: tint-color($primary, 70%);
+        background-color: rgba($primary, 0.15);
+        border-color: rgba($primary, 0.3);
+
+        &:hover,
+        &:focus-visible {
+            background-color: rgba($primary, 0.25);
+            border-color: rgba($primary, 0.5);
+            color: tint-color($primary, 85%);
+        }
+    }
+
+    .gd-tag-section {
+        color: $gray-400;
+        background-color: $gray-800;
+    }
+
+    .gd-tag-pill-sep {
+        background-color: rgba($primary, 0.4);
+    }
+
+    .gd-tag-pill-segmented .gd-tag-pill-parent {
+        background-color: rgba($primary, 0.15);
+    }
+
+    .gd-tag-pill-segmented .gd-tag-pill-segment:not(.gd-tag-pill-parent) {
+        background-color: rgba($primary, 0.08);
+    }
+
+    .gd-tag-page-link a {
+        color: $gray-300;
+    }
+}
+
+// ── Page Status Badges ──────────────────────────────────────────────────────
+
+// Page-level status indicator (below page title)
+.gd-page-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    margin-top: 0.3rem;
+    margin-bottom: 0.6rem;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+    border-radius: 0.35rem;
+    color: var(--gd-status-color, $text-muted);
+    background-color: color-mix(in srgb, var(--gd-status-color, $text-muted) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--gd-status-color, $text-muted) 25%, transparent);
+
+    .gd-status-badge-icon {
+        display: inline-flex;
+        align-items: center;
+        opacity: 0.85;
+
+        svg {
+            width: 14px;
+            height: 14px;
+        }
+    }
+
+    .gd-status-badge-label {
+        font-weight: 600;
+    }
+
+    .gd-status-badge-desc {
+        font-weight: 400;
+        opacity: 0.8;
+    }
+}
+
+// Sidebar status badges (inline after link text)
+.gd-sidebar-status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 4px;
+    padding: 0.05rem 0.35rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1.3;
+    border-radius: 0.75rem;
+    color: var(--gd-status-color, $text-muted);
+    background-color: color-mix(in srgb, var(--gd-status-color, $text-muted) 10%, transparent);
+    white-space: nowrap;
+    flex-shrink: 0;
+
+    svg {
+        width: 11px;
+        height: 11px;
+    }
+}
+
+// Make sidebar links flex so badges align right
+// #quarto-sidebar has .sidebar-navigation on itself (not a descendant),
+// so use #quarto-sidebar.sidebar-navigation for correct matching.
+#quarto-sidebar.sidebar-navigation .sidebar-item .sidebar-link {
+    display: flex;
+    align-items: center;
+}
+
+// Dark mode overrides for status badges
+body.quarto-dark {
+    .gd-page-status {
+        background-color: color-mix(in srgb, var(--gd-status-color, $text-muted) 12%, transparent);
+        border-color: color-mix(in srgb, var(--gd-status-color, $text-muted) 30%, transparent);
+    }
+
+    .gd-sidebar-status-badge {
+        background-color: color-mix(in srgb, var(--gd-status-color, $text-muted) 15%, transparent);
+    }
+}
 
 
 /*-- scss:functions --*/
