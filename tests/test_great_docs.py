@@ -11665,6 +11665,112 @@ def test_generate_section_index_with_image():
         assert "<img" in content
 
 
+def test_generate_section_index_mixed_image_and_plain():
+    """_generate_section_index separates image cards from plain links."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        dest = tmp / "sec"
+        dest.mkdir()
+
+        pages = [
+            {
+                "filename": "featured.qmd",
+                "title": "Featured",
+                "description": "Has image",
+                "image": "hero.png",
+            },
+            {"filename": "plain.qmd", "title": "Plain", "description": "No image", "image": ""},
+            {"filename": "also-plain.qmd", "title": "Also Plain", "description": "Text only"},
+        ]
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._generate_section_index("Mixed", pages, "sec", dest)
+
+        content = (dest / "index.qmd").read_text()
+
+        # Image cards use 2col layout by default
+        assert "section-cards-2col" in content
+        # Plain links use list layout
+        assert "section-cards-list" in content
+        # Separator between image and plain sections
+        assert "<hr>" in content
+        # Image entries have <img> tags
+        assert "hero.png" in content
+        # Plain entries do NOT have <img> tags for their cards
+        assert content.count("<img") == 1
+        # All titles present
+        assert "Featured" in content
+        assert "Plain" in content
+        assert "Also Plain" in content
+
+
+def test_generate_section_index_single_column():
+    """_generate_section_index respects columns=1 for image cards."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        dest = tmp / "sec"
+        dest.mkdir()
+
+        pages = [
+            {"filename": "a.qmd", "title": "A", "description": "Desc A", "image": "a.png"},
+            {"filename": "b.qmd", "title": "B", "description": "Desc B", "image": "b.png"},
+        ]
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._generate_section_index("Gallery", pages, "sec", dest, columns=1)
+
+        content = (dest / "index.qmd").read_text()
+
+        assert "section-cards-1col" in content
+        assert "section-cards-2col" not in content
+        # No plain list section (all have images)
+        assert "section-cards-list" not in content
+        assert "<hr>" not in content
+
+
+def test_generate_section_index_only_plain():
+    """_generate_section_index renders only plain links when no images."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        dest = tmp / "sec"
+        dest.mkdir()
+
+        pages = [
+            {"filename": "a.qmd", "title": "A", "description": "Desc A"},
+            {"filename": "b.qmd", "title": "B", "description": "Desc B"},
+        ]
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._generate_section_index("Docs", pages, "sec", dest)
+
+        content = (dest / "index.qmd").read_text()
+
+        # No image grid at all
+        assert "section-cards-2col" not in content
+        assert "section-cards-1col" not in content
+        # Only plain list
+        assert "section-cards-list" in content
+        assert "<hr>" not in content
+        assert "<img" not in content
+
+
+def test_generate_section_index_only_images():
+    """_generate_section_index renders only image cards when all have images."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        dest = tmp / "sec"
+        dest.mkdir()
+
+        pages = [
+            {"filename": "a.qmd", "title": "A", "description": "Desc A", "image": "a.png"},
+        ]
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._generate_section_index("Gallery", pages, "sec", dest)
+
+        content = (dest / "index.qmd").read_text()
+
+        assert "section-cards-2col" in content
+        assert "section-cards-list" not in content
+        assert "<hr>" not in content
+
+
 def test_copy_section_files_strips_prefix():
     """_copy_section_files strips numeric prefixes from filenames."""
     with tempfile.TemporaryDirectory() as tmp_dir:
