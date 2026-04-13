@@ -18,4 +18,20 @@ __all__ = [
     "create_default_config",
     "load_config",
     "main",
+    "render_evolution_table",
 ]
+
+
+def render_evolution_table(
+    project_path=".",
+    symbol="",
+    **kwargs,
+):
+    """Generate a self-contained HTML evolution table for a symbol.
+
+    Convenience re-export of :func:`great_docs._api_diff.render_evolution_table`.
+    See that function for the full parameter list.
+    """
+    from ._api_diff import render_evolution_table as _render
+
+    return _render(project_path, symbol, **kwargs)

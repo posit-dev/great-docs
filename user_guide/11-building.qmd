@@ -2,6 +2,7 @@
 title: "Building & Previewing"
 guide-section: "Build & Deploy"
 bread-crumbs: false
+tags: [Build]
 ---
 
 # Building & Previewing

@@ -2,6 +2,7 @@
 title: "API Documentation"
 guide-section: "Site Content"
 bread-crumbs: false
+tags: [API, Content]
 ---
 
 # API Documentation

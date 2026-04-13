@@ -1,0 +1,54 @@
+{
+  "symbol": "build",
+  "package": "great_docs",
+  "versions": ["v0.1.0", "v0.3.0", "v0.6.0", "v1.0.0"],
+  "dates": ["2023-03-10", "2023-06-22", "2023-11-05", "2024-02-14"],
+  "slots": [
+    {
+      "position": 0,
+      "cells": [
+        {"name": "project_path", "type": "str", "default": null},
+        {"name": "project_path", "type": "str | Path", "default": null},
+        {"name": "project_path", "type": "str | Path", "default": null},
+        {"name": "project_path", "type": "str | Path", "default": "None"}
+      ]
+    },
+    {
+      "position": 1,
+      "cells": [
+        {"name": "output_dir", "type": "str", "default": "\"site\""},
+        {"name": "output_dir", "type": "Path", "default": "Path(\"site\")"},
+        {"name": "watch", "type": "bool", "default": "False"},
+        {"name": "watch", "type": "bool", "default": "False"}
+      ]
+    },
+    {
+      "position": 2,
+      "cells": [
+        null,
+        {"name": "watch", "type": "bool", "default": "False"},
+        {"name": "output_dir", "type": "Path", "default": "Path(\"site\")"},
+        {"name": "output_dir", "type": "Path", "default": "Path(\"_site\")"}
+      ]
+    },
+    {
+      "position": 3,
+      "cells": [
+        null,
+        null,
+        {"name": "clean", "type": "bool", "default": "True"},
+        {"name": "clean", "type": "bool", "default": "True"}
+      ]
+    },
+    {
+      "position": 4,
+      "cells": [
+        null,
+        null,
+        null,
+        {"name": "verbose", "type": "bool", "default": "False"}
+      ]
+    }
+  ],
+  "returns": ["None", "None", "int", "int"]
+}

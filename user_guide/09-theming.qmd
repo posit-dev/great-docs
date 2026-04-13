@@ -2,6 +2,7 @@
 title: "Theming & Appearance"
 guide-section: "Config & Theming"
 bread-crumbs: false
+tags: [Theming, Customization]
 ---
 
 # Theming & Appearance
@@ -559,6 +560,62 @@ Lucide names are lowercase and hyphen-separated. Common patterns:
 ### Dark Mode
 
 Icons automatically adapt to dark mode. They use `stroke="currentColor"`, so they inherit the text color of their navigation context (no additional configuration is needed).
+
+## Inline Icons
+
+Beyond navbar and sidebar icons, you can place Lucide icons anywhere in your `.qmd` content using the `icon` shortcode. Icons scale with the surrounding text, sit on the baseline, and inherit the text color.
+
+### Basic Usage
+
+```{shortcodes="false"}
+{{< icon heart >}}
+```
+
+This renders inline: {{< icon heart >}} (sized to match the surrounding text).
+
+A few more examples: {{< icon rocket >}} `rocket`, {{< icon star >}} `star`, {{< icon check >}} `check`, {{< icon book-open >}} `book-open`. Icon names follow the same Lucide naming convention described above.
+
+### Size
+
+By default icons are `1em` tall (matching the current font size). Use `size` to specify a different size in pixels (the value is converted to `em` units so the icon still scales with its context):
+
+```{shortcodes="false"}
+{{< icon star size="12" >}}  small
+{{< icon star >}}            default (16px = 1em)
+{{< icon star size="24" >}}  large
+{{< icon star size="32" >}}  very large
+```
+
+Result: {{< icon star size="12" >}} small · {{< icon star >}} default · {{< icon star size="24" >}} large · {{< icon star size="32" >}} very large
+
+### Accessibility
+
+By default icons are decorative (`aria-hidden="true"`). When an icon conveys meaning on its own, add a `label`:
+
+```{shortcodes="false"}
+{{< icon alert-triangle label="Warning" >}}
+```
+
+This replaces `aria-hidden` with `aria-label="Warning" role="img"`, so screen readers announce the icon's purpose.
+
+### In Context
+
+Icons work in headings, callouts, lists, tables, and blockquotes:
+
+::: {.callout-tip}
+## {{< icon lightbulb >}} Pro Tip
+Use icons sparingly to draw attention to key information without cluttering the page.
+:::
+
+- {{< icon file-text >}} Documentation pages
+- {{< icon code-2 >}} Source code references
+- {{< icon test-tube >}} Testing guides
+
+| Status | Icon | Description |
+|--------|------|-------------|
+| Complete | {{< icon check-circle >}} | Feature is stable |
+| In progress | {{< icon loader >}} | Under active development |
+| Planned | {{< icon calendar >}} | Scheduled for a future release |
 
 ## Next Steps
 

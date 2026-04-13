@@ -1,6 +1,7 @@
 ---
 title: "Hide Internal Symbols"
 description: "Keep private helpers out of your API reference while still exporting them."
+tags: [API, Configuration]
 ---
 
 # Hide Internal Symbols

@@ -1,6 +1,7 @@
 ---
 title: "Document a CLI"
 description: "Auto-generate reference pages for Click-based command-line interfaces."
+tags: [CLI, Content]
 ---
 
 # Document a CLI

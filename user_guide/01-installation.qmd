@@ -1,6 +1,7 @@
 ---
 title: "Installation"
 guide-section: "Getting Started"
+tags: [Getting Started, Setup]
 ---
 
 # Installation
@@ -11,7 +12,7 @@ This guide covers how to install Great Docs and its prerequisites.
 
 Before installing Great Docs, ensure you have:
 
-- **Python 3.9 or later**
+- **Python 3.11 or later**
 - **Quarto** – The publishing system that renders your documentation
 
 ### Installing Quarto

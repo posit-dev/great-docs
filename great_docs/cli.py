@@ -1774,6 +1774,311 @@ def lint(project_path: str | None, checks: tuple[str, ...], json_output: bool) -
 cli.add_command(lint)
 
 
+@click.command("api-diff")
+@click.argument("old_version")
+@click.argument("new_version")
+@click.option(
+    "--project-path",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Path to your project root directory (default: current directory)",
+)
+@click.option(
+    "--package",
+    help="Python package name (auto-detected from pyproject.toml if omitted)",
+)
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    help="Output results as JSON",
+)
+@click.option(
+    "--graph",
+    is_flag=True,
+    help="Show dependency graph as Mermaid diagram for the NEW version",
+)
+@click.option(
+    "--timeline",
+    is_flag=True,
+    help="Show API surface growth timeline across all version tags",
+)
+@click.option(
+    "--symbol",
+    help="Track a single symbol across versions (shows signature history)",
+)
+@click.option(
+    "--changes-only",
+    is_flag=True,
+    help="With --symbol, show only versions where the symbol changed",
+)
+@click.option(
+    "--table",
+    is_flag=True,
+    help="With --symbol, show parameter evolution as a table",
+)
+@click.option(
+    "--html",
+    is_flag=True,
+    help="With --symbol --table, output HTML (with disclosure wrapper)",
+)
+def api_diff_cmd(
+    old_version: str,
+    new_version: str,
+    project_path: str | None,
+    package: str | None,
+    json_output: bool,
+    graph: bool,
+    timeline: bool,
+    symbol: str | None,
+    changes_only: bool,
+    table: bool,
+    html: bool,
+) -> None:
+    """Compare the public API between two versions.
+
+    Analyzes how the API surface changed between OLD_VERSION and NEW_VERSION
+    (git tags). Detects added, removed, and changed symbols, tracks parameter
+    changes, and flags breaking changes with migration hints.
+
+    \b
+    Use "HEAD" as NEW_VERSION to compare against the working tree.
+
+    \b
+    Examples:
+      great-docs api-diff v0.1.0 v0.2.0
+      great-docs api-diff v1.0.0 HEAD
+      great-docs api-diff v0.9.0 v1.0.0 --json
+      great-docs api-diff v0.1.0 v0.2.0 --graph
+      great-docs api-diff v0.1.0 HEAD --timeline
+      great-docs api-diff v0.1.0 v0.5.0 --symbol GreatDocs
+      great-docs api-diff v0.1.0 v0.5.0 --symbol GreatDocs --changes-only
+      great-docs api-diff v0.1.0 v0.5.0 --symbol GreatDocs --table
+      great-docs api-diff v0.1.0 v0.5.0 --symbol GreatDocs --table --html
+    """
+    import json
+    import shutil
+
+    from ._api_diff import (
+        api_diff,
+        build_dependency_graph,
+        build_timeline,
+        evolution_table_html,
+        evolution_table_text,
+        snapshot_at_tag,
+        snapshot_from_griffe,
+        symbol_history,
+        timeline_to_mermaid,
+    )
+
+    project_root = Path(project_path) if project_path else Path.cwd()
+
+    try:
+        # --- Symbol history mode ---
+        if symbol:
+            from ._api_diff import list_version_tags
+
+            all_tags = list_version_tags(project_root)
+            # Filter to tags between old_version and new_version (inclusive)
+            try:
+                start_idx = all_tags.index(old_version)
+            except ValueError:
+                start_idx = 0
+            try:
+                end_idx = all_tags.index(new_version) + 1
+            except ValueError:
+                end_idx = len(all_tags)
+            selected_tags = all_tags[start_idx:end_idx]
+
+            if not selected_tags:
+                click.echo(
+                    f"No version tags found between {old_version} and {new_version}.",
+                    err=True,
+                )
+                sys.exit(1)
+
+            hist = symbol_history(project_root, symbol, package_name=package, tags=selected_tags)
+            if hist is None:
+                click.echo("Could not determine package name.", err=True)
+                sys.exit(1)
+
+            if json_output:
+                click.echo(json.dumps(hist.to_dict(changes_only=changes_only), indent=2))
+            elif table:
+                if html:
+                    click.echo(
+                        evolution_table_html(hist, changes_only=changes_only, disclosure=True)
+                    )
+                else:
+                    click.echo(evolution_table_text(hist, changes_only=changes_only))
+            else:
+                entries = hist.changed_entries if changes_only else hist.entries
+                term_width = shutil.get_terminal_size((80, 24)).columns
+                sep = "═" * min(term_width, 60)
+                thin = "─" * min(term_width, 60)
+
+                click.echo(f"\n{sep}")
+                click.echo(f"Symbol History: {hist.symbol_name}")
+                click.echo(f"Package: {hist.package_name}")
+                if changes_only:
+                    click.echo("Showing only versions with changes")
+                click.echo(sep)
+
+                if not entries:
+                    click.echo("\n  (no entries)")
+                else:
+                    for entry in entries:
+                        click.echo(f"\n{thin}")
+                        if entry.present:
+                            tag = ""
+                            if entry.change:
+                                if entry.change.is_breaking:
+                                    tag = "  ⚠ BREAKING"
+                                elif entry.change.change_type == "added":
+                                    tag = "  ✚ NEW"
+                                else:
+                                    tag = "  ∆ CHANGED"
+                            click.echo(f"  {entry.version}{tag}")
+                            click.echo(f"    {entry.signature}")
+                            if entry.change and entry.change.details:
+                                for detail in entry.change.details:
+                                    click.echo(f"      {detail}")
+                        else:
+                            click.echo(f"  {entry.version}  ✖ NOT PRESENT")
+                            if entry.change and entry.change.details:
+                                for detail in entry.change.details:
+                                    click.echo(f"      {detail}")
+
+                click.echo(f"\n{sep}\n")
+            return
+
+        # --- Timeline mode ---
+        if timeline:
+            tl = build_timeline(project_root, package or "")
+            if not tl:
+                click.echo("No version tags found or could not build snapshots.", err=True)
+                sys.exit(1)
+            if json_output:
+                click.echo(json.dumps(tl, indent=2))
+            else:
+                click.echo(timeline_to_mermaid(tl))
+            return
+
+        # --- Diff ---
+        result = api_diff(project_root, old_version, new_version, package_name=package)
+
+        if result is None:
+            click.echo(
+                "Could not build API snapshots. Check that the tags exist and the "
+                "package source is present at those versions.",
+                err=True,
+            )
+            sys.exit(1)
+
+        # --- Graph mode ---
+        if graph:
+            # Build graph for the new version
+            if new_version.upper() == "HEAD":
+                snap = snapshot_from_griffe(result.package_name, version="HEAD")
+            else:
+                snap = snapshot_at_tag(project_root, new_version, result.package_name)
+            if snap is None:
+                click.echo("Could not build snapshot for graph.", err=True)
+                sys.exit(1)
+            dep_graph = build_dependency_graph(snap)
+            if json_output:
+                click.echo(
+                    json.dumps(
+                        {
+                            "nodes": dep_graph.nodes,
+                            "inheritance": [
+                                {"child": e.child, "parent": e.parent}
+                                for e in dep_graph.inheritance
+                            ],
+                        },
+                        indent=2,
+                    )
+                )
+            else:
+                click.echo(dep_graph.to_mermaid())
+            return
+
+        # --- JSON output ---
+        if json_output:
+            click.echo(json.dumps(result.to_dict(), indent=2))
+            return
+
+        # --- Text output ---
+        term_width = shutil.get_terminal_size((80, 24)).columns
+        sep = "═" * min(term_width, 60)
+        thin = "─" * min(term_width, 60)
+
+        click.echo(f"\n{sep}")
+        click.echo(f"API Diff: {result.old_version} → {result.new_version}")
+        click.echo(f"Package: {result.package_name}")
+        click.echo(sep)
+
+        # Summary
+        click.echo(
+            f"\n  Added: {len(result.added)}  │  "
+            f"Removed: {len(result.removed)}  │  "
+            f"Changed: {len(result.changed)}  │  "
+            f"Breaking: {len(result.breaking_changes)}"
+        )
+
+        if not result.added and not result.removed and not result.changed:
+            click.echo("\n✅ No API changes detected.")
+            return
+
+        # Added
+        if result.added:
+            click.echo(f"\n{thin}")
+            click.echo(f"  ✚ Added ({len(result.added)})")
+            click.echo(thin)
+            for c in result.added:
+                click.echo(f"    + {c.symbol}")
+
+        # Removed
+        if result.removed:
+            click.echo(f"\n{thin}")
+            click.echo(f"  ✖ Removed ({len(result.removed)})  [BREAKING]")
+            click.echo(thin)
+            for c in result.removed:
+                click.echo(f"    - {c.symbol}")
+                if c.migration_hint:
+                    click.echo(f"      hint: {c.migration_hint}")
+
+        # Changed
+        if result.changed:
+            click.echo(f"\n{thin}")
+            click.echo(f"  ∆ Changed ({len(result.changed)})")
+            click.echo(thin)
+            for c in result.changed:
+                label = "  ⚠ BREAKING" if c.is_breaking else ""
+                click.echo(f"    ~ {c.symbol}{label}")
+                for detail in c.details:
+                    click.echo(f"        {detail}")
+                if c.migration_hint:
+                    click.echo(f"        hint: {c.migration_hint}")
+
+        # Breaking summary
+        if result.has_breaking_changes:
+            click.echo(f"\n{sep}")
+            click.echo(f"⚠  {len(result.breaking_changes)} breaking change(s) detected")
+            click.echo(sep)
+
+        click.echo()
+
+    except Exception as e:
+        if json_output:
+            click.echo(json.dumps({"status": "error", "error": str(e)}))
+        else:
+            click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
+cli.add_command(api_diff_cmd)
+
+
 def main() -> None:
     """Main CLI entry point for great-docs."""
     cli()

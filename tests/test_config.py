@@ -1,5 +1,3 @@
-"""Comprehensive tests for great_docs/config.py."""
-
 from __future__ import annotations
 
 import tempfile
@@ -729,3 +727,115 @@ class TestModuleFunctions:
         assert isinstance(result, str)
         assert "Great Docs Configuration" in result
         assert "parser:" in result
+
+
+# ── custom_pages edge cases ────────────────────────────────────────────
+
+
+def test_custom_pages_dict_no_output(tmp_path):
+    """Dict entry with missing output falls back to dir name."""
+    (tmp_path / "great-docs.yml").write_text("custom_pages:\n  - dir: my_pages\n")
+    cfg = Config(tmp_path)
+    result = cfg.custom_pages
+    assert result == [{"dir": "my_pages", "output": "my_pages"}]
+
+
+def test_custom_pages_dict_empty_output(tmp_path):
+    """Dict entry with empty-string output falls back to dir name."""
+    (tmp_path / "great-docs.yml").write_text('custom_pages:\n  - dir: my_pages\n    output: ""\n')
+    cfg = Config(tmp_path)
+    result = cfg.custom_pages
+    assert result[0]["output"] == "my_pages"
+
+
+# ── dark_mode_toggle ───────────────────────────────────────────────────
+
+
+def test_dark_mode_toggle_false(tmp_path):
+    """dark_mode_toggle returns False when explicitly disabled."""
+    (tmp_path / "great-docs.yml").write_text("dark_mode_toggle: false\n")
+    cfg = Config(tmp_path)
+    assert cfg.dark_mode_toggle is False
+
+
+# ── team_author ────────────────────────────────────────────────────────
+
+
+def test_team_author_with_name(tmp_path):
+    """team_author returns dict when configured with a name."""
+    (tmp_path / "great-docs.yml").write_text(
+        "team_author:\n  name: Team\n  image: avatar.png\n  url: https://team.dev\n"
+    )
+    cfg = Config(tmp_path)
+    result = cfg.team_author
+    assert result == {"name": "Team", "image": "avatar.png", "url": "https://team.dev"}
+
+
+def test_team_author_missing_name(tmp_path):
+    """team_author returns None when name is not set."""
+    (tmp_path / "great-docs.yml").write_text("team_author:\n  image: avatar.png\n")
+    cfg = Config(tmp_path)
+    assert cfg.team_author is None
+
+
+def test_team_author_none(tmp_path):
+    """team_author returns None when not configured."""
+    cfg = Config(tmp_path)
+    assert cfg.team_author is None
+
+
+# ── jupyter ────────────────────────────────────────────────────────────
+
+
+def test_jupyter_custom_kernel(tmp_path):
+    """jupyter returns custom kernel name when configured."""
+    (tmp_path / "great-docs.yml").write_text("jupyter: ir\n")
+    cfg = Config(tmp_path)
+    assert cfg.jupyter == "ir"
+
+
+# ── social_cards properties ────────────────────────────────────────────
+
+
+def test_social_cards_image(tmp_path):
+    """social_cards_image returns image path from dict config."""
+    (tmp_path / "great-docs.yml").write_text("social_cards:\n  image: card.png\n")
+    cfg = Config(tmp_path)
+    assert cfg.social_cards_image == "card.png"
+
+
+def test_social_cards_image_none(tmp_path):
+    """social_cards_image returns None when not dict."""
+    (tmp_path / "great-docs.yml").write_text("social_cards: true\n")
+    cfg = Config(tmp_path)
+    assert cfg.social_cards_image is None
+
+
+def test_social_cards_twitter_card(tmp_path):
+    """social_cards_twitter_card returns card type."""
+    (tmp_path / "great-docs.yml").write_text("social_cards:\n  twitter_card: summary_large_image\n")
+    cfg = Config(tmp_path)
+    assert cfg.social_cards_twitter_card == "summary_large_image"
+
+
+def test_social_cards_twitter_site(tmp_path):
+    """social_cards_twitter_site returns handle."""
+    (tmp_path / "great-docs.yml").write_text("social_cards:\n  twitter_site: '@myhandle'\n")
+    cfg = Config(tmp_path)
+    assert cfg.social_cards_twitter_site == "@myhandle"
+
+
+# ── tags_index_page ───────────────────────────────────────────────────
+
+
+def test_tags_index_page_true(tmp_path):
+    """tags_index_page returns True when tags are enabled."""
+    (tmp_path / "great-docs.yml").write_text("tags: true\n")
+    cfg = Config(tmp_path)
+    assert cfg.tags_index_page is True
+
+
+def test_tags_index_page_false_when_disabled(tmp_path):
+    """tags_index_page returns False when tags disabled."""
+    cfg = Config(tmp_path)
+    assert cfg.tags_index_page is False

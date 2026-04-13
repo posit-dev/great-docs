@@ -1,6 +1,7 @@
 ---
 title: "Fix Common Build Errors"
 description: "Diagnose and resolve the most frequent errors that come up when building a Great Docs site."
+tags: [Build, Troubleshooting]
 ---
 
 # Fix Common Build Errors

@@ -1,6 +1,7 @@
 ---
 title: "Docs Linting"
 guide-section: "Quality & Maintenance"
+tags: [Quality, API]
 ---
 
 # Docs Linting

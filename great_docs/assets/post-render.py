@@ -23,7 +23,7 @@ source_links = {}
 source_links_path = "_source_links.json"
 if os.path.exists(source_links_path):
     print(f"Loading source links from {source_links_path}")
-    with open(source_links_path, "r") as f:
+    with open(source_links_path, "r", encoding="utf-8") as f:
         source_links = json.load(f)
     print(f"Loaded {len(source_links)} source links")
 else:
@@ -36,7 +36,7 @@ object_types = {}
 object_types_path = "_object_types.json"
 if os.path.exists(object_types_path):
     print(f"Loading object types from {object_types_path}")
-    with open(object_types_path, "r") as f:
+    with open(object_types_path, "r", encoding="utf-8") as f:
         object_types = json.load(f)
     print(f"Loaded {len(object_types)} object type entries")
 else:
@@ -47,7 +47,7 @@ else:
 constant_values: dict[str, dict[str, str]] = {}
 constant_values_path = "_constant_values.json"
 if os.path.exists(constant_values_path):
-    with open(constant_values_path, "r") as f:
+    with open(constant_values_path, "r", encoding="utf-8") as f:
         constant_values = json.load(f)
     print(f"Loaded {len(constant_values)} constant value entries")
 
@@ -58,7 +58,7 @@ if os.path.exists(constant_values_path):
 dataclass_attrs_metadata: dict[str, dict[str, str]] = {}
 dataclass_attrs_path = "_dataclass_attrs.json"
 if os.path.exists(dataclass_attrs_path):
-    with open(dataclass_attrs_path, "r") as f:
+    with open(dataclass_attrs_path, "r", encoding="utf-8") as f:
         dataclass_attrs_metadata = json.load(f)
     if dataclass_attrs_metadata:
         print(f"Loaded dataclass attribute metadata for {len(dataclass_attrs_metadata)} class(es)")
@@ -67,7 +67,7 @@ if os.path.exists(dataclass_attrs_path):
 _gd_options: dict[str, object] = {}
 _gd_options_path = "_gd_options.json"
 if os.path.exists(_gd_options_path):
-    with open(_gd_options_path, "r") as f:
+    with open(_gd_options_path, "r", encoding="utf-8") as f:
         _gd_options = json.load(f)
 
 # i18n helper — look up a translated string from _gd_options["i18n"]
@@ -84,7 +84,7 @@ def _t(key: str, fallback: str | None = None) -> str:
 _interlinks_inventory: dict[str, dict[str, str]] = {}
 _objects_json_path = "objects.json"
 if os.path.exists(_objects_json_path):
-    with open(_objects_json_path, "r") as f:
+    with open(_objects_json_path, "r", encoding="utf-8") as f:
         _inv_data = json.load(f)
     for item in _inv_data.get("items", []):
         name = item.get("name", "")
@@ -641,7 +641,30 @@ def _resolve_interlink_name(name):
     return None
 
 
-def resolve_interlinks(html_content):
+def _make_relative_uri(uri, page_path):
+    """Convert a site-root-relative URI to a path relative to *page_path*.
+
+    *page_path* is relative to ``_site/`` (e.g. ``"reference/Foo.html"``,
+    ``"user-guide/intro.html"``, ``"index.html"``).
+
+    If *page_path* is ``None``, the legacy behaviour is used: strip the
+    ``reference/`` prefix (assumes the page lives inside ``reference/``).
+    """
+    if page_path is None:
+        # Legacy: reference-page context — just strip the shared prefix
+        if uri.startswith("reference/"):
+            return uri[len("reference/") :]
+        return uri
+
+    # Compute a relative path from the directory containing *page_path*
+    # to the URI (both relative to _site/).
+    import posixpath
+
+    page_dir = posixpath.dirname(page_path)  # e.g. "user-guide"
+    return posixpath.relpath(uri, page_dir)
+
+
+def resolve_interlinks(html_content, page_path=None):
     """Resolve interlink references in rendered HTML.
 
     Quarto renders interlink syntax as `<a>` tags with backtick-wrapped hrefs:
@@ -652,6 +675,10 @@ def resolve_interlinks(html_content):
     - ``[custom text](`~pkg.Name`)`` -> custom display text preserved
 
     This function resolves those links against the objects.json inventory.
+
+    *page_path* is the page's path relative to ``_site/`` (e.g.
+    ``"user-guide/intro.html"``).  When ``None``, the legacy
+    reference-page behaviour is used (strip ``reference/`` prefix).
     """
     if not _interlinks_inventory:
         return html_content
@@ -669,11 +696,8 @@ def resolve_interlinks(html_content):
         if result is None:
             return m.group(0)
         uri, short_name, role = result
-        # URIs from objects.json are root-relative (e.g. "reference/Name.html#...")
-        # but reference pages live inside reference/, so strip the prefix
-        # to get a sibling-relative path.
-        if uri.startswith("reference/"):
-            uri = uri[len("reference/") :]
+        # Convert site-root-relative URI to a path relative to this page
+        uri = _make_relative_uri(uri, page_path)
         # Determine display text:
         # 1. Custom text provided by user → keep it
         # 2. ~ prefix (shortened) → use short name
@@ -698,7 +722,7 @@ def resolve_interlinks(html_content):
     return html_content
 
 
-def autolink_code_references(html_content):
+def autolink_code_references(html_content, page_path=None):
     """Auto-convert inline code matching API names into clickable links.
 
     Scans `<code>` tags (outside `<pre>` blocks) for text that matches an entry in the objects.json
@@ -713,6 +737,10 @@ def autolink_code_references(html_content):
 
     Code with the `gd-no-link` class is never autolinked. Code inside `<pre>` blocks (fenced code)
     is never autolinked. Code containing spaces, operators, or arguments is never autolinked.
+
+    *page_path* is the page's path relative to ``_site/`` (e.g.
+    ``"user-guide/intro.html"``).  When ``None``, the legacy
+    reference-page behaviour is used (strip ``reference/`` prefix).
     """
     if not _interlinks_inventory:
         return html_content
@@ -766,8 +794,7 @@ def autolink_code_references(html_content):
             return full_tag
 
         uri, short_name, _role = result
-        if uri.startswith("reference/"):
-            uri = uri[len("reference/") :]
+        uri = _make_relative_uri(uri, page_path)
 
         # Determine display text based on prefix
         if prefix == "~~.":
@@ -1111,17 +1138,31 @@ def strip_directives_from_html(html_content):
 
 def strip_colgroup_tags(html_content):
     """
-    Remove `<colgroup>` tags from tables.
+    Remove `<colgroup>` tags from tables, preserving those inside GT tables.
 
     Quarto/Pandoc adds `<colgroup>` with fixed column widths, but we want the browser to determine
-    column widths based on content.
+    column widths based on content. GT tables (Great Tables) rely on their `<colgroup>` for proper
+    layout with `table-layout: fixed`, so those are left intact.
     """
     # Match the entire colgroup element including its contents
     colgroup_pattern = re.compile(
         r"<colgroup>.*?</colgroup>\s*",
         re.DOTALL,
     )
-    return colgroup_pattern.sub("", html_content)
+
+    def _replace_if_not_gt(match):
+        # Find the nearest preceding <table tag to check if it's a GT table
+        preceding = html_content[: match.start()]
+        last_table = preceding.rfind("<table")
+        if last_table >= 0:
+            table_end = preceding.find(">", last_table)
+            if table_end >= 0:
+                table_tag = preceding[last_table : table_end + 1]
+                if "gt_table" in table_tag:
+                    return match.group(0)  # Preserve GT table colgroups
+        return ""  # Strip non-GT colgroups
+
+    return colgroup_pattern.sub(_replace_if_not_gt, html_content)
 
 
 def translate_sphinx_fields(html_content):
@@ -2498,7 +2539,7 @@ for html_file in html_files:
     # Extract the item name from the filename (e.g., "GreatDocs.html" -> "GreatDocs")
     item_name_from_file = os.path.basename(html_file).replace(".html", "")
 
-    with open(html_file, "r") as file:
+    with open(html_file, "r", encoding="utf-8") as file:
         content = file.read()
 
     # Extract %seealso before stripping directives
@@ -2807,7 +2848,7 @@ for html_file in html_files:
 
     content = content_str.splitlines(keepends=True)
 
-    with open(html_file, "w") as file:
+    with open(html_file, "w", encoding="utf-8") as file:
         file.writelines(content)
 
 
@@ -2817,7 +2858,7 @@ index_file = "_site/reference/index.html"
 if os.path.exists(index_file):
     print(f"Processing index file: {index_file}")
 
-    with open(index_file, "r") as file:
+    with open(index_file, "r", encoding="utf-8") as file:
         content = file.read()
 
     # Convert tables to dl/dt/dd format
@@ -2895,7 +2936,7 @@ if os.path.exists(index_file):
     # Translate renderer-rendered headings, TOC, and sidebar on the index page
     content = translate_renderer_headings(content)
 
-    with open(index_file, "w") as file:
+    with open(index_file, "w", encoding="utf-8") as file:
         file.write(content)
 
     print("Index file processing complete")
@@ -2912,7 +2953,7 @@ print(f"Found {len(all_html_files)} HTML files to check for secondary nav title"
 _user_guide_label = (_gd_options.get("i18n") or {}).get("user_guide", "User Guide")
 
 for html_file in all_html_files:
-    with open(html_file, "r") as file:
+    with open(html_file, "r", encoding="utf-8") as file:
         content = file.read()
 
     modified = False
@@ -2937,10 +2978,47 @@ for html_file in all_html_files:
         modified = True
 
     if modified:
-        with open(html_file, "w") as file:
+        with open(html_file, "w", encoding="utf-8") as file:
             file.write(content)
 
 print("Finished processing all files")
+
+
+# ============================================================================
+# GDLS (Great Docs Linking System) — resolve interlinks on non-reference pages
+# ============================================================================
+# resolve_interlinks() and autolink_code_references() were already applied to
+# reference pages inside the reference-page loop above.  Here we apply them to
+# every *other* page (user guide, blog, recipes, homepage, etc.) so that the
+# [](`~pkg.Name`) shortcode syntax and inline-code autolinking work site-wide.
+
+if _interlinks_inventory:
+    # Pages already processed by the reference-page loop
+    _ref_pages = {os.path.normpath(f) for f in glob.glob("_site/reference/*.html")}
+    _gdls_count = 0
+
+    for html_file in all_html_files:
+        if os.path.normpath(html_file) in _ref_pages:
+            continue
+
+        with open(html_file, "r", encoding="utf-8") as file:
+            content = file.read()
+
+        # Compute the page path relative to _site/ for correct relative URIs
+        page_rel = os.path.relpath(html_file, "_site")
+
+        new_content = resolve_interlinks(content, page_path=page_rel)
+        new_content = autolink_code_references(new_content, page_path=page_rel)
+
+        if new_content != content:
+            with open(html_file, "w", encoding="utf-8") as file:
+                file.write(new_content)
+            _gdls_count += 1
+
+    print(f"GDLS: resolved interlinks on {_gdls_count} non-reference pages")
+else:
+    print("GDLS: no interlinks inventory loaded, skipping non-reference pages")
+
 
 # ── Translate autocomplete search-button title ──────────────────────────────
 # The Algolia autocomplete library (autocomplete.umd.js) ships with a
@@ -2954,7 +3032,7 @@ if _autocomplete_js:
     _search_label = None
     # Read the search-label from any HTML page's search-options JSON
     for _hf in all_html_files[:5]:
-        with open(_hf, "r") as f:
+        with open(_hf, "r", encoding="utf-8") as f:
             _hcontent = f.read()
         _sl_m = re.search(r'"search-label"\s*:\s*"([^"]+)"', _hcontent)
         if _sl_m:
@@ -2962,14 +3040,14 @@ if _autocomplete_js:
             break
     if _search_label and _search_label != "Search":
         for _acjs in _autocomplete_js:
-            with open(_acjs, "r") as f:
+            with open(_acjs, "r", encoding="utf-8") as f:
                 _ac_content = f.read()
             _old = 'detachedSearchButtonTitle:"Search"'
             if _old in _ac_content:
                 _ac_content = _ac_content.replace(
                     _old, f'detachedSearchButtonTitle:"{_search_label}"'
                 )
-                with open(_acjs, "w") as f:
+                with open(_acjs, "w", encoding="utf-8") as f:
                     f.write(_ac_content)
                 print(f"Patched search button title to '{_search_label}' in {_acjs}")
 
@@ -2998,7 +3076,7 @@ def inject_github_widget():
     widget_count = 0
 
     for html_file in all_html_files:
-        with open(html_file, "r") as file:
+        with open(html_file, "r", encoding="utf-8") as file:
             content = file.read()
 
         # Check if this file has an escaped widget placeholder
@@ -3011,7 +3089,7 @@ def inject_github_widget():
             replacement = f'<div id="github-widget" data-owner="{owner}" data-repo="{repo}"></div>'
             content = widget_escaped_pattern.sub(replacement, content)
 
-            with open(html_file, "w") as file:
+            with open(html_file, "w", encoding="utf-8") as file:
                 file.write(content)
 
             widget_count += 1
@@ -3045,7 +3123,7 @@ def inject_version_badge():
         print("No _package_meta.json found, skipping version badge injection")
         return
 
-    with open(meta_path, "r") as f:
+    with open(meta_path, "r", encoding="utf-8") as f:
         meta = json.load(f)
 
     version = meta.get("version", "")
@@ -3090,7 +3168,7 @@ def inject_version_badge():
     logo_count = 0
 
     for html_file in all_html_files:
-        with open(html_file, "r") as file:
+        with open(html_file, "r", encoding="utf-8") as file:
             content = file.read()
 
         modified = False
@@ -3115,7 +3193,7 @@ def inject_version_badge():
                 logo_count += 1
 
         if modified:
-            with open(html_file, "w") as file:
+            with open(html_file, "w", encoding="utf-8") as file:
                 file.write(content)
 
     if badge_count > 0:
@@ -3148,14 +3226,14 @@ def process_cli_reference_pages():
     print(f"Processing {len(cli_html_files)} CLI reference pages...")
 
     for html_file in cli_html_files:
-        with open(html_file, "r") as file:
+        with open(html_file, "r", encoding="utf-8") as file:
             content = file.read()
 
         # Add 'cli-title' class to h1.title elements
         # This matches the pattern: <h1 class="title">
         content = content.replace('<h1 class="title">', '<h1 class="title cli-title">')
 
-        with open(html_file, "w") as file:
+        with open(html_file, "w", encoding="utf-8") as file:
             file.write(content)
 
     print(f"Styled {len(cli_html_files)} CLI reference page titles")
@@ -3177,7 +3255,7 @@ def disable_sidebar_collapse():
     modified_count = 0
 
     for html_file in html_files:
-        with open(html_file, "r") as f:
+        with open(html_file, "r", encoding="utf-8") as f:
             content = f.read()
 
         original = content
@@ -3211,7 +3289,7 @@ def disable_sidebar_collapse():
         )
 
         if content != original:
-            with open(html_file, "w") as f:
+            with open(html_file, "w", encoding="utf-8") as f:
                 f.write(content)
             modified_count += 1
 
@@ -3240,14 +3318,14 @@ def remove_empty_footer_divs():
     )
 
     for html_file in html_files:
-        with open(html_file, "r") as f:
+        with open(html_file, "r", encoding="utf-8") as f:
             content = f.read()
 
         original = content
         content = empty_div_pattern.sub("\n", content)
 
         if content != original:
-            with open(html_file, "w") as f:
+            with open(html_file, "w", encoding="utf-8") as f:
                 f.write(content)
             modified_count += 1
 
@@ -3278,7 +3356,7 @@ def fix_script_paths():
         if depth == 0:
             continue
 
-        with open(html_file, "r") as file:
+        with open(html_file, "r", encoding="utf-8") as file:
             content = file.read()
 
         # Build the relative path prefix (e.g., "../" for depth 1, "../../" for depth 2)
@@ -3414,6 +3492,14 @@ def fix_script_paths():
             content = content.replace(old_keyboard_nav, new_keyboard_nav)
             modified = True
 
+        # Fix navbar-widgets.js path
+        old_navbar_widgets = '<script src="navbar-widgets.js"></script>'
+        new_navbar_widgets = f'<script src="{prefix}navbar-widgets.js"></script>'
+
+        if old_navbar_widgets in content:
+            content = content.replace(old_navbar_widgets, new_navbar_widgets)
+            modified = True
+
         # Fix mermaid-renderer.js path
         old_mermaid = '<script src="mermaid-renderer.js"></script>'
         new_mermaid = f'<script src="{prefix}mermaid-renderer.js"></script>'
@@ -3422,8 +3508,16 @@ def fix_script_paths():
             content = content.replace(old_mermaid, new_mermaid)
             modified = True
 
+        # Fix page-tags.js path
+        old_page_tags = '<script src="page-tags.js"></script>'
+        new_page_tags = f'<script src="{prefix}page-tags.js"></script>'
+
+        if old_page_tags in content:
+            content = content.replace(old_page_tags, new_page_tags)
+            modified = True
+
         if modified:
-            with open(html_file, "w") as file:
+            with open(html_file, "w", encoding="utf-8") as file:
                 file.write(content)
             fixed_count += 1
 
@@ -3473,12 +3567,12 @@ def inject_sidebar_body_classes():
         if not rel_path.startswith("reference" + os.sep) and rel_path != "reference":
             continue
 
-        with open(html_file, "r") as f:
+        with open(html_file, "r", encoding="utf-8") as f:
             content = f.read()
 
         new_content = content.replace('<body class="', '<body class="gd-ref-sidebar ', 1)
         if new_content != content:
-            with open(html_file, "w") as f:
+            with open(html_file, "w", encoding="utf-8") as f:
                 f.write(new_content)
             count += 1
 
@@ -3510,7 +3604,7 @@ def style_api_index_sidebar_item():
         if not rel_path.startswith("reference" + os.sep) and rel_path != "reference":
             continue
 
-        with open(html_file, "r") as f:
+        with open(html_file, "r", encoding="utf-8") as f:
             content = f.read()
 
         # Find the sidebar-item-container div immediately followed by the
@@ -3540,7 +3634,7 @@ def style_api_index_sidebar_item():
         )
 
         if new_content != content:
-            with open(html_file, "w") as f:
+            with open(html_file, "w", encoding="utf-8") as f:
                 f.write(new_content)
             count += 1
 
@@ -4588,3 +4682,86 @@ else:
         print(f"\n🌐 i18n: language={_i18n_language} but no translation bundle found")
     else:
         print("\n🌐 i18n: using default language (en)")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE-LEVEL SCALE-TO-FIT META TAG INJECTION
+# ══════════════════════════════════════════════════════════════════════════════
+# When a .qmd page has `scale-to-fit: [".selector"]` in its frontmatter,
+# inject a <meta name="gd-scale-to-fit-page"> tag into the rendered HTML so
+# the responsive-tables.js script can auto-apply scaling to those elements.
+
+print("\nInjecting page-level scale-to-fit meta tags...")
+_stf_injected = 0
+for html_file in glob.glob("_site/**/*.html", recursive=True):
+    rel_path = os.path.relpath(html_file, "_site")
+    # Map rendered HTML back to the .qmd source in the project directory
+    qmd_path = os.path.splitext(rel_path)[0] + ".qmd"
+    if not os.path.exists(qmd_path):
+        continue
+
+    try:
+        with open(qmd_path, "r", encoding="utf-8") as f:
+            qmd_content = f.read()
+        if not qmd_content.startswith("---"):
+            continue
+        parts = qmd_content.split("---", 2)
+        if len(parts) < 3:
+            continue
+        import yaml
+
+        fm = yaml.safe_load(parts[1]) or {}
+    except Exception:
+        continue
+
+    stf = fm.get("scale-to-fit")
+    if not stf:
+        continue
+
+    # Normalize to list of selectors
+    if isinstance(stf, str):
+        stf = [stf]
+    if not isinstance(stf, list):
+        continue
+    stf = [s for s in stf if isinstance(s, str)]
+    if not stf:
+        continue
+
+    selectors_json = json.dumps(stf, separators=(",", ":"))
+    escaped = html.escape(selectors_json, quote=True)
+
+    # Optional per-page minimum scale (float 0–1 or keyword)
+    min_scale_attr = ""
+    raw_min = fm.get("scale-to-fit-min-scale")
+    if raw_min is not None:
+        if isinstance(raw_min, str) and raw_min.strip().lower() in (
+            "mobile",
+            "tablet",
+            "desktop",
+        ):
+            min_scale_attr = f' data-min-scale="{raw_min.strip().lower()}"'
+        else:
+            try:
+                ms = float(raw_min)
+                if 0 < ms < 1:
+                    min_scale_attr = f' data-min-scale="{ms}"'
+            except (TypeError, ValueError):
+                pass
+
+    meta_tag = f'<meta name="gd-scale-to-fit-page" data-selectors="{escaped}"{min_scale_attr}>'
+
+    try:
+        with open(html_file, "r", encoding="utf-8") as f:
+            content = f.read()
+        if "gd-scale-to-fit-page" in content:
+            continue  # Already present
+        modified = content.replace("</head>", f"  {meta_tag}\n</head>", 1)
+        if modified != content:
+            with open(html_file, "w", encoding="utf-8") as f:
+                f.write(modified)
+            _stf_injected += 1
+    except Exception as e:
+        print(f"  scale-to-fit error for {html_file}: {e}")
+
+if _stf_injected > 0:
+    print(f"   Injected page-level scale-to-fit in {_stf_injected} page(s)")

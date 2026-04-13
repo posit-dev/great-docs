@@ -1,7 +1,11 @@
 // Early theme initialization to prevent flash of wrong theme
 (function() {
-    var stored = localStorage.getItem('great-docs-theme');
-    var theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    // When dark mode toggle is disabled, always use light mode
+    var dmMeta = document.querySelector('meta[name="gd-dark-mode"]');
+    var darkModeDisabled = dmMeta && dmMeta.getAttribute('content') === 'disabled';
+
+    var stored = darkModeDisabled ? null : localStorage.getItem('great-docs-theme');
+    var theme = stored || (darkModeDisabled ? 'light' : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
     var html = document.documentElement;
 
     // Hide body until theme is fully applied to prevent flash

@@ -1,6 +1,7 @@
 ---
 title: "Install the Great Docs Skill"
 description: "Give your AI coding agent the Great Docs skill so it can help build and configure your documentation site."
+tags: [AI\/LLM, Setup]
 ---
 
 # Install the Great Docs Skill

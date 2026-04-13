@@ -2,6 +2,7 @@
 title: "Social Cards"
 guide-section: "Build & Deploy"
 bread-crumbs: false
+tags: [SEO, Multimedia]
 ---
 
 # Social Cards
@@ -173,9 +174,9 @@ social_cards:
 
 Social card descriptions are extracted automatically with this priority:
 
-1. **Existing meta description** — if the page already has a `<meta name="description">` tag (from SEO processing or manual frontmatter), that text is reused
-2. **First paragraph** — the first `<p>` in the page's `<main>` content with at least 30 characters of meaningful text
-3. **Default description** — the `seo.default_description` value from `great-docs.yml`, or the package description from `pyproject.toml`
+1. **Existing meta description**: if the page already has a `<meta name="description">` tag (from SEO processing or manual frontmatter), that text is reused
+2. **First paragraph**: the first `<p>` in the page's `<main>` content with at least 30 characters of meaningful text
+3. **Default description**: the `seo.default_description` value from `great-docs.yml`, or the package description from `pyproject.toml`
 
 For the best previews, add a `description` to important pages' frontmatter:
 

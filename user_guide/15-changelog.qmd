@@ -2,6 +2,7 @@
 title: "Changelog"
 guide-section: "Quality & Maintenance"
 bread-crumbs: false
+tags: [Quality, GitHub]
 ---
 
 # Changelog
@@ -92,9 +93,9 @@ great-docs changelog --max-releases 10
 
 ## What Gets Included
 
-- **Published releases** — shown with their title, date, and body
-- **Pre-releases** — included but marked with a "(Pre-release)" badge
-- **Draft releases** — excluded (they aren't public yet)
+- **Published releases**: shown with their title, date, and body
+- **Pre-releases**: included but marked with a "(Pre-release)" badge
+- **Draft releases**: excluded (they aren't public yet)
 
 The release body is rendered as Markdown, so any formatting, lists, headings, or code blocks in your GitHub Release notes carry through to the documentation site.
 

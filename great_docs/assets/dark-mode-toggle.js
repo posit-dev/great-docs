@@ -179,29 +179,22 @@
      * Insert the toggle button into the navbar
      */
     function insertToggleButton() {
-        // Look for the navbar right section
-        const navbarRight = document.querySelector('#navbarCollapse .navbar-nav.ms-auto');
-        const navbarContainer = document.querySelector('#navbarCollapse');
+        // Insert into navbarCollapse; navbar-widgets.js will collect it
+        // into the unified #gd-navbar-widgets container.
+        const collapse = document.getElementById('navbarCollapse');
+        if (!collapse) return;
 
-        if (navbarRight) {
-            // Insert before the GitHub widget if present, or at the end
-            const githubWidget = navbarRight.querySelector('#github-widget')?.closest('li');
-            const toggleContainer = createToggleButton();
+        const toggleContainer = createToggleButton();
+        const navItem = document.createElement('li');
+        navItem.className = 'nav-item';
+        navItem.appendChild(toggleContainer);
 
-            // Wrap in a nav item
-            const navItem = document.createElement('li');
-            navItem.className = 'nav-item';
-            navItem.appendChild(toggleContainer);
-
-            if (githubWidget) {
-                navbarRight.insertBefore(navItem, githubWidget);
-            } else {
-                navbarRight.appendChild(navItem);
-            }
-        } else if (navbarContainer) {
-            // Fallback: add to navbar collapse area
-            const toggleContainer = createToggleButton();
-            navbarContainer.appendChild(toggleContainer);
+        // Append to navbarCollapse (the collector will move it)
+        var msAuto = collapse.querySelector('.navbar-nav.ms-auto');
+        if (msAuto) {
+            msAuto.insertBefore(navItem, msAuto.firstChild);
+        } else {
+            collapse.appendChild(navItem);
         }
 
         // Add click handler

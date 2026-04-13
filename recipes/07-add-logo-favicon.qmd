@@ -1,6 +1,7 @@
 ---
 title: "Add a Logo and Favicon"
 description: "Display your package's logo in the navbar and generate favicons automatically."
+tags: [Theming, Branding]
 ---
 
 # Add a Logo and Favicon

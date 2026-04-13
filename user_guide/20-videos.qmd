@@ -2,6 +2,7 @@
 title: "Videos"
 guide-section: "Site Content"
 bread-crumbs: false
+tags: [Content, Multimedia]
 ---
 
 # Videos
@@ -12,12 +13,12 @@ Videos can make tutorials, demos, and explainers far more effective than screens
 
 Use the following syntax to embed a YouTube video. You can use the regular watch URL, the short URL, or the embed URL (all three work):
 
-```markdown
-{{{{< video https://www.youtube.com/watch?v=wo9vZccmqwc >}}}}
+```{shortcodes="false"}
+{{< video https://www.youtube.com/watch?v=wo9vZccmqwc >}}
 
-{{{{< video https://youtu.be/wo9vZccmqwc >}}}}
+{{< video https://youtu.be/wo9vZccmqwc >}}
 
-{{{{< video https://www.youtube.com/embed/wo9vZccmqwc >}}}}
+{{< video https://www.youtube.com/embed/wo9vZccmqwc >}}
 ```
 
 All three produce the same result. The video is responsive by default and it scales to fill the available width while maintaining a 16:9 aspect ratio.
@@ -36,27 +37,27 @@ YouTube embeds are automatically optimized. Instead of loading the full YouTube 
 
 To start playback at a specific point, use the `start` option (in seconds):
 
-```markdown
-{{{{< video https://youtu.be/wo9vZccmqwc start="116" >}}}}
+```{shortcodes="false"}
+{{< video https://youtu.be/wo9vZccmqwc start="116" >}}
 ```
 
 ### Title and Accessibility
 
 Add a `title` for the iframe and an `aria-label` for screen readers:
 
-```markdown
-{{{{< video https://www.youtube.com/embed/wo9vZccmqwc
+```{shortcodes="false"}
+{{< video https://www.youtube.com/embed/wo9vZccmqwc
     title="What is the CERN?"
     aria-label="Video tour of CERN particle physics laboratory"
->}}}}
+>}}
 ```
 
 ## Vimeo
 
 Vimeo videos work the same way:
 
-```markdown
-{{{{< video https://vimeo.com/548291297 >}}}}
+```{shortcodes="false"}
+{{< video https://vimeo.com/548291297 >}}
 ```
 
 Vimeo embeds are lazy-loaded automatically: the iframe content is deferred until the video scrolls near the viewport.
@@ -65,8 +66,8 @@ Vimeo embeds are lazy-loaded automatically: the iframe content is deferred until
 
 To embed a video file stored alongside your documentation (e.g., a short screen recording), place the file in your project and reference it directly:
 
-```markdown
-{{{{< video demo.mp4 >}}}}
+```{shortcodes="false"}
+{{< video demo.mp4 >}}
 ```
 
 Local videos are rendered as HTML5 `<video>` elements. To host them alongside your `.qmd` files, place them in the `assets/` directory:
@@ -80,8 +81,8 @@ user_guide/
 
 Then reference from the `.qmd` file:
 
-```markdown
-{{{{< video assets/demo.mp4 >}}}}
+```{shortcodes="false"}
+{{< video assets/demo.mp4 >}}
 ```
 
 ::: {.callout-note}
@@ -92,8 +93,8 @@ Keep video files small. Git repositories aren't ideal for large binary files. Fo
 
 The default aspect ratio is 16:9. You can change it to one of the standard Bootstrap ratios:
 
-```markdown
-{{{{< video https://youtu.be/wo9vZccmqwc aspect-ratio="4x3" >}}}}
+```{shortcodes="false"}
+{{< video https://youtu.be/wo9vZccmqwc aspect-ratio="4x3" >}}
 ```
 
 Available ratios: `1x1`, `4x3`, `16x9` (default), and `21x9`.
@@ -102,18 +103,18 @@ Available ratios: `1x1`, `4x3`, `16x9` (default), and `21x9`.
 
 To disable responsive sizing and set explicit pixel dimensions:
 
-```markdown
-{{{{< video https://youtu.be/wo9vZccmqwc width="400" height="225" >}}}}
+```{shortcodes="false"}
+{{< video https://youtu.be/wo9vZccmqwc width="400" height="225" >}}
 ```
 
 ## Cross-Referencing Videos
 
 To create a numbered, cross-referenceable video (like a figure), wrap it in a fenced div:
 
-```markdown
+```{shortcodes="false"}
 ::: {#fig-demo}
 
-{{{{< video https://www.youtube.com/embed/wo9vZccmqwc >}}}}
+{{< video https://www.youtube.com/embed/wo9vZccmqwc >}}
 
 A short tour of the CERN facility.
 

@@ -1,6 +1,7 @@
 ---
 title: "Add a Custom Domain"
 description: "Serve your documentation from a custom domain instead of *.github.io."
+tags: [Deployment, Configuration]
 ---
 
 # Add a Custom Domain

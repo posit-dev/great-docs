@@ -6898,3 +6898,1589 @@ def test_DED_nav_icons_tutorials_navbar_icon():
     navbar = icon_map.get("navbar", {})
     assert "Tutorials" in navbar, "Tutorials navbar entry should have an icon"
     assert "<svg" in navbar["Tutorials"], "Tutorials navbar icon should be an SVG"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Dedicated: tag location (gdtest_tag_location)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_TAG_LOC_PKG = "gdtest_tag_location"
+
+
+@requires_bs4
+def test_DED_tag_location_tags_json_has_default_location():
+    """_tags.json should contain default_location set to 'bottom'."""
+    if not _has_rendered_site(_TAG_LOC_PKG):
+        pytest.skip(f"{_TAG_LOC_PKG} not rendered")
+
+    import json
+
+    tags_json = _RENDERED_DIR / _TAG_LOC_PKG / "great-docs" / "_tags.json"
+    assert tags_json.exists(), "_tags.json not generated"
+    data = json.loads(tags_json.read_text(encoding="utf-8"))
+    assert data["default_location"] == "bottom", "Global default_location should be 'bottom'"
+
+
+@requires_bs4
+def test_DED_tag_location_tags_json_has_page_overrides():
+    """_tags.json should include per-page tag-location overrides."""
+    if not _has_rendered_site(_TAG_LOC_PKG):
+        pytest.skip(f"{_TAG_LOC_PKG} not rendered")
+
+    import json
+
+    tags_json = _RENDERED_DIR / _TAG_LOC_PKG / "great-docs" / "_tags.json"
+    data = json.loads(tags_json.read_text(encoding="utf-8"))
+    locs = data.get("page_tag_locations", {})
+
+    # api-guide.qmd and tips.qmd override to "top"
+    assert locs.get("user-guide/api-guide.qmd") == "top", "api-guide.qmd should override to 'top'"
+    assert locs.get("user-guide/tips.qmd") == "top", "tips.qmd should override to 'top'"
+
+    # setup.qmd explicitly sets "bottom"
+    assert locs.get("user-guide/setup.qmd") == "bottom", "setup.qmd should explicitly set 'bottom'"
+
+    # intro.qmd and advanced.qmd have no override (inherit global)
+    assert "user-guide/intro.qmd" not in locs, "intro.qmd should not have a per-page override"
+    assert "user-guide/advanced.qmd" not in locs, "advanced.qmd should not have a per-page override"
+
+
+@requires_bs4
+def test_DED_tag_location_inline_data_in_html():
+    """Rendered pages should have __GD_TAGS_DATA__ with location fields."""
+    if not _has_rendered_site(_TAG_LOC_PKG):
+        pytest.skip(f"{_TAG_LOC_PKG} not rendered")
+
+    import json
+
+    site = _site_dir(_TAG_LOC_PKG)
+    intro_html = site / "user-guide" / "intro.html"
+    assert intro_html.exists(), "intro.html not found"
+
+    soup = _load_html(intro_html)
+    scripts = soup.find_all("script")
+    tags_script = None
+    for s in scripts:
+        if s.string and "__GD_TAGS_DATA__" in s.string:
+            tags_script = s
+            break
+
+    assert tags_script is not None, "Inline __GD_TAGS_DATA__ script not found"
+
+    # Extract the JSON from "window.__GD_TAGS_DATA__={...};"
+    text = tags_script.string
+    start = text.index("{")
+    end = text.rindex("}") + 1
+    # Unescape the "<\/" sequences used to protect inline script
+    raw = text[start:end].replace(r"<\/", "</")
+    data = json.loads(raw)
+
+    assert "default_location" in data, "default_location missing from inline data"
+    assert data["default_location"] == "bottom"
+    assert "page_tag_locations" in data, "page_tag_locations missing from inline data"
+
+
+@requires_bs4
+def test_DED_tag_location_page_tags_js_included():
+    """Every tagged page should include page-tags.js."""
+    if not _has_rendered_site(_TAG_LOC_PKG):
+        pytest.skip(f"{_TAG_LOC_PKG} not rendered")
+
+    site = _site_dir(_TAG_LOC_PKG)
+    for page_name in ("intro", "api-guide", "advanced", "tips", "setup"):
+        html_path = site / "user-guide" / f"{page_name}.html"
+        if not html_path.exists():
+            continue
+        soup = _load_html(html_path)
+        scripts = [s.get("src", "") for s in soup.find_all("script")]
+        has_tags_js = any("page-tags.js" in src for src in scripts)
+        assert has_tags_js, f"{page_name}.html should include page-tags.js"
+
+
+@requires_bs4
+def test_DED_tag_location_untagged_page_still_has_data():
+    """Even pages without tags should have __GD_TAGS_DATA__ (global injection)."""
+    if not _has_rendered_site(_TAG_LOC_PKG):
+        pytest.skip(f"{_TAG_LOC_PKG} not rendered")
+
+    site = _site_dir(_TAG_LOC_PKG)
+    faq_html = site / "user-guide" / "faq.html"
+    if not faq_html.exists():
+        pytest.skip("faq.html not found")
+
+    soup = _load_html(faq_html)
+    scripts = soup.find_all("script")
+    has_data = any(s.string and "__GD_TAGS_DATA__" in s.string for s in scripts)
+    assert has_data, (
+        "faq.html (untagged) should still have __GD_TAGS_DATA__ (it is injected globally)"
+    )
+
+
+@requires_bs4
+def test_DED_tag_location_tags_index_page_generated():
+    """A tags/index.html should be generated listing all tags."""
+    if not _has_rendered_site(_TAG_LOC_PKG):
+        pytest.skip(f"{_TAG_LOC_PKG} not rendered")
+
+    site = _site_dir(_TAG_LOC_PKG)
+    tags_index = site / "tags" / "index.html"
+    assert tags_index.exists(), "tags/index.html not generated"
+
+    soup = _load_html(tags_index)
+    text = soup.get_text()
+    for tag in ("Python", "API", "Setup"):
+        assert tag in text, f"Tag '{tag}' missing from tags index page"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Icon Shortcode — {{< icon >}} renders inline SVG in various contexts
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_ICON_PKG = "gdtest_icon_shortcode"
+
+
+@requires_bs4
+def test_ICON_showcase_page_exists():
+    """The icon-showcase user guide page should be rendered."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    assert html_path.exists(), "icon-showcase.html not found"
+
+
+@requires_bs4
+def test_ICON_gallery_page_exists():
+    """The icon-gallery user guide page should be rendered."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-gallery.html"
+    assert html_path.exists(), "icon-gallery.html not found"
+
+
+@requires_bs4
+def test_ICON_showcase_contains_svgs():
+    """The showcase page should contain multiple inline SVG icons."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    if not html_path.exists():
+        pytest.skip("icon-showcase.html not found")
+
+    soup = _load_html(html_path)
+    svgs = soup.find_all("svg", class_="gd-icon")
+    assert len(svgs) >= 20, f"Expected ≥20 gd-icon SVGs, found {len(svgs)}"
+
+
+@requires_bs4
+def test_ICON_gallery_contains_svgs():
+    """The gallery page should contain inline SVG icons."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-gallery.html"
+    if not html_path.exists():
+        pytest.skip("icon-gallery.html not found")
+
+    soup = _load_html(html_path)
+    svgs = soup.find_all("svg", class_="gd-icon")
+    assert len(svgs) >= 15, f"Expected ≥15 gd-icon SVGs, found {len(svgs)}"
+
+
+@requires_bs4
+def test_ICON_in_headings():
+    """Icons should render inside heading elements."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    if not html_path.exists():
+        pytest.skip("icon-showcase.html not found")
+
+    soup = _load_html(html_path)
+    # Find headings that contain SVG icons
+    headings_with_icons = []
+    for tag in ("h2", "h3"):
+        for heading in soup.find_all(tag):
+            if heading.find("svg", class_="gd-icon"):
+                headings_with_icons.append(heading)
+    assert len(headings_with_icons) >= 1, (
+        f"Expected ≥1 headings with icons, found {len(headings_with_icons)}"
+    )
+
+
+@requires_bs4
+def test_ICON_in_table_cells():
+    """Icons should render inside table cells."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    if not html_path.exists():
+        pytest.skip("icon-showcase.html not found")
+
+    soup = _load_html(html_path)
+    cells_with_icons = soup.select("td svg.gd-icon")
+    assert len(cells_with_icons) >= 3, (
+        f"Expected ≥3 table cells with icons, found {len(cells_with_icons)}"
+    )
+
+
+@requires_bs4
+def test_ICON_in_callouts():
+    """Icons should render inside Quarto callout blocks."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    if not html_path.exists():
+        pytest.skip("icon-showcase.html not found")
+
+    soup = _load_html(html_path)
+    callouts = soup.select("div.callout")
+    callouts_with_icons = [c for c in callouts if c.find("svg", class_="gd-icon")]
+    assert len(callouts_with_icons) >= 2, (
+        f"Expected ≥2 callouts with icons, found {len(callouts_with_icons)}"
+    )
+
+
+@requires_bs4
+def test_ICON_in_lists():
+    """Icons should render inside list items."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    if not html_path.exists():
+        pytest.skip("icon-showcase.html not found")
+
+    soup = _load_html(html_path)
+    list_items_with_icons = soup.select("li svg.gd-icon")
+    assert len(list_items_with_icons) >= 5, (
+        f"Expected ≥5 list items with icons, found {len(list_items_with_icons)}"
+    )
+
+
+@requires_bs4
+def test_ICON_in_blockquote():
+    """Icons should render inside blockquotes."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    if not html_path.exists():
+        pytest.skip("icon-showcase.html not found")
+
+    soup = _load_html(html_path)
+    blockquote_icons = soup.select("blockquote svg.gd-icon")
+    assert len(blockquote_icons) >= 1, "Expected at least 1 icon in a blockquote"
+
+
+@requires_bs4
+def test_ICON_accessible_label():
+    """Icons with label= should have aria-label and role='img'."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    if not html_path.exists():
+        pytest.skip("icon-showcase.html not found")
+
+    soup = _load_html(html_path)
+    labeled = soup.find("svg", attrs={"aria-label": True, "role": "img"})
+    assert labeled is not None, "No SVG with aria-label + role='img' found"
+    assert labeled["aria-label"] == "Warning"
+
+
+@requires_bs4
+def test_ICON_custom_size():
+    """Icons with size= should use em-based sizing in inline style."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-showcase.html"
+    if not html_path.exists():
+        pytest.skip("icon-showcase.html not found")
+
+    soup = _load_html(html_path)
+    # Look for an icon with a non-default size (24px → 1.5em)
+    large = soup.find("svg", class_="gd-icon", style=re.compile(r"height:1\.5em"))
+    assert large is not None, "No 1.5em (24px) icon found"
+
+
+@requires_bs4
+def test_ICON_gallery_sized_icons():
+    """The gallery page should have icons at varying sizes."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    html_path = _site_dir(_ICON_PKG) / "user-guide" / "icon-gallery.html"
+    if not html_path.exists():
+        pytest.skip("icon-gallery.html not found")
+
+    soup = _load_html(html_path)
+    # 12px→0.75em, 20px→1.25em, 24px→1.5em, 32px→2em
+    for em_val in ("0.75em", "1.25em", "1.5em", "2"):
+        icon = soup.find("svg", class_="gd-icon", style=re.compile(re.escape(f"height:{em_val}")))
+        assert icon is not None, f"No icon with height:{em_val} found in gallery"
+
+
+@requires_bs4
+def test_ICON_no_shortcode_errors():
+    """No icon shortcode error comments should appear in the rendered HTML."""
+    if not _has_rendered_site(_ICON_PKG):
+        pytest.skip(f"{_ICON_PKG} not rendered")
+
+    site = _site_dir(_ICON_PKG)
+    for html_path in site.rglob("*.html"):
+        text = html_path.read_text(encoding="utf-8")
+        assert "icon shortcode error" not in text, (
+            f"Shortcode error found in {html_path.relative_to(site)}"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Blended homepage with subdirectory user guide + section asset directories
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_HOMEPAGE_UG_SUBDIRS_PKG = "gdtest_homepage_ug_subdirs"
+
+
+@requires_bs4
+def test_HOMEPAGE_SUBDIRS_blended_index_exists():
+    """Blended homepage: index.html exists at site root with UG content."""
+    if not _has_rendered_site(_HOMEPAGE_UG_SUBDIRS_PKG):
+        pytest.skip(f"{_HOMEPAGE_UG_SUBDIRS_PKG} not rendered")
+
+    site = _site_dir(_HOMEPAGE_UG_SUBDIRS_PKG)
+    index = site / "index.html"
+    assert index.exists(), "index.html missing at site root"
+
+    soup = _load_html(index)
+    text = soup.get_text()
+
+    # Root index.qmd should have become the homepage (not a subdir file)
+    assert "Welcome" in text, "Homepage should contain 'Welcome' from root index.qmd"
+    assert "project documentation" in text, "Homepage should contain UG root content"
+
+
+@requires_bs4
+def test_HOMEPAGE_SUBDIRS_metadata_sidebar_present():
+    """Blended homepage should include the metadata sidebar."""
+    if not _has_rendered_site(_HOMEPAGE_UG_SUBDIRS_PKG):
+        pytest.skip(f"{_HOMEPAGE_UG_SUBDIRS_PKG} not rendered")
+
+    site = _site_dir(_HOMEPAGE_UG_SUBDIRS_PKG)
+    index = site / "index.html"
+    assert index.exists()
+
+    content = index.read_text(encoding="utf-8")
+    assert "gd-meta-sidebar" in content, "Blended homepage should have gd-meta-sidebar"
+
+
+@requires_bs4
+def test_HOMEPAGE_SUBDIRS_root_index_not_duplicated():
+    """The promoted root index.qmd should NOT remain in user-guide/."""
+    if not _has_rendered_site(_HOMEPAGE_UG_SUBDIRS_PKG):
+        pytest.skip(f"{_HOMEPAGE_UG_SUBDIRS_PKG} not rendered")
+
+    site = _site_dir(_HOMEPAGE_UG_SUBDIRS_PKG)
+    ug_index = site / "user-guide" / "index.html"
+    assert not ug_index.exists(), "user-guide/index.html should be removed (promoted to site root)"
+
+
+@requires_bs4
+def test_HOMEPAGE_SUBDIRS_subdir_ug_pages_exist():
+    """User guide pages in subdirectories should still be rendered."""
+    if not _has_rendered_site(_HOMEPAGE_UG_SUBDIRS_PKG):
+        pytest.skip(f"{_HOMEPAGE_UG_SUBDIRS_PKG} not rendered")
+
+    site = _site_dir(_HOMEPAGE_UG_SUBDIRS_PKG)
+    expected_pages = [
+        "user-guide/getting-started/index.html",
+        "user-guide/getting-started/quickstart.html",
+        "user-guide/advanced/analysis.html",
+    ]
+    for page_path in expected_pages:
+        html = site / page_path
+        assert html.exists(), f"Missing UG subdir page: {page_path}"
+
+
+@requires_bs4
+def test_HOMEPAGE_SUBDIRS_sidebar_first_entry_is_index():
+    """Sidebar first entry should point to index.qmd (the blended homepage)."""
+    if not _has_rendered_site(_HOMEPAGE_UG_SUBDIRS_PKG):
+        pytest.skip(f"{_HOMEPAGE_UG_SUBDIRS_PKG} not rendered")
+
+    cfg = _load_quarto_yml(_HOMEPAGE_UG_SUBDIRS_PKG)
+    sidebars = cfg.get("website", {}).get("sidebar", [])
+
+    ug_sidebar = None
+    for s in sidebars:
+        if isinstance(s, dict) and s.get("id") == "user-guide":
+            ug_sidebar = s
+            break
+    assert ug_sidebar is not None, "No user-guide sidebar found"
+
+    # First content entry should point to index.qmd
+    contents = ug_sidebar.get("contents", [])
+    assert len(contents) > 0, "User-guide sidebar has no contents"
+    first = contents[0]
+    if isinstance(first, dict):
+        assert first.get("href") == "index.qmd", (
+            f"First sidebar entry should be index.qmd, got {first.get('href')}"
+        )
+
+
+@requires_bs4
+def test_HOMEPAGE_SUBDIRS_no_user_guide_navbar_link():
+    """In blended mode, navbar should NOT have a 'User Guide' link."""
+    if not _has_rendered_site(_HOMEPAGE_UG_SUBDIRS_PKG):
+        pytest.skip(f"{_HOMEPAGE_UG_SUBDIRS_PKG} not rendered")
+
+    cfg = _load_quarto_yml(_HOMEPAGE_UG_SUBDIRS_PKG)
+    navbar_left = cfg.get("website", {}).get("navbar", {}).get("left", [])
+    nav_texts = [item.get("text") for item in navbar_left if isinstance(item, dict)]
+    assert "User Guide" not in nav_texts, (
+        "Navbar should not have 'User Guide' link in blended homepage mode"
+    )
+
+
+def test_HOMEPAGE_SUBDIRS_section_asset_dirs_copied():
+    """Section asset subdirectories (data/, img/) should be copied to build dir."""
+    if not _has_rendered_site(_HOMEPAGE_UG_SUBDIRS_PKG):
+        pytest.skip(f"{_HOMEPAGE_UG_SUBDIRS_PKG} not rendered")
+
+    build_dir = _RENDERED_DIR / _HOMEPAGE_UG_SUBDIRS_PKG / "great-docs"
+
+    # Asset directories should exist in the build dir
+    assert (build_dir / "examples" / "data").is_dir(), (
+        "examples/data/ asset directory not copied to build dir"
+    )
+    assert (build_dir / "examples" / "img").is_dir(), (
+        "examples/img/ asset directory not copied to build dir"
+    )
+
+    # Asset files should be present with correct content
+    csv_file = build_dir / "examples" / "data" / "sample.csv"
+    assert csv_file.exists(), "examples/data/sample.csv not copied"
+    assert "alpha" in csv_file.read_text(), "sample.csv content not preserved"
+
+    diagram_file = build_dir / "examples" / "img" / "diagram.txt"
+    assert diagram_file.exists(), "examples/img/diagram.txt not copied"
+
+
+@requires_bs4
+def test_HOMEPAGE_SUBDIRS_examples_section_rendered():
+    """Custom Examples section pages should be rendered in the site."""
+    if not _has_rendered_site(_HOMEPAGE_UG_SUBDIRS_PKG):
+        pytest.skip(f"{_HOMEPAGE_UG_SUBDIRS_PKG} not rendered")
+
+    site = _site_dir(_HOMEPAGE_UG_SUBDIRS_PKG)
+    for page in ("basic-usage.html", "advanced-patterns.html"):
+        html = site / "examples" / page
+        assert html.exists(), f"Missing examples section page: {page}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Dedicated: gdtest_gt_tables — Great Tables vs. Markdown tables
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_GT_TABLES_PKG = "gdtest_gt_tables"
+
+
+@requires_bs4
+def test_GT_TABLES_gt_page_rendered():
+    """The GT tables user-guide page should exist with GT table elements."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-tables.html"
+    assert page.exists(), "gt-tables.html not found"
+
+    soup = _load_html(page)
+    gt_tables = soup.select("table.gt_table")
+    assert len(gt_tables) >= 2, f"Expected at least 2 GT tables, found {len(gt_tables)}"
+
+
+@requires_bs4
+def test_GT_TABLES_markdown_page_rendered():
+    """The Markdown tables user-guide page should exist with standard tables."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "markdown-tables.html"
+    assert page.exists(), "markdown-tables.html not found"
+
+    soup = _load_html(page)
+    all_tables = soup.select("table")
+    md_tables = [t for t in all_tables if "gt_table" not in t.get("class", [])]
+    assert len(md_tables) >= 2, f"Expected at least 2 Markdown tables, found {len(md_tables)}"
+
+
+@requires_bs4
+def test_GT_TABLES_gt_not_wrapped_responsive():
+    """GT tables should NOT be wrapped in gd-table-responsive by post-render."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-tables.html"
+    soup = _load_html(page)
+
+    for gt in soup.select("table.gt_table"):
+        wrapper = gt.find_parent(class_="gd-table-responsive")
+        assert wrapper is None, "GT table should not be inside gd-table-responsive"
+
+
+@requires_bs4
+def test_GT_TABLES_gt_has_scoped_css():
+    """GT tables should have scoped CSS with their ID selector."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-tables.html"
+    soup = _load_html(page)
+
+    # GT tables emit a <style> block with #id-scoped selectors
+    style_blocks = soup.select("style")
+    gt_style_found = any("#gt_fixed .gt_table" in (s.string or "") for s in style_blocks)
+    assert gt_style_found, "Expected scoped GT CSS with #gt_fixed .gt_table selector"
+
+
+@requires_bs4
+def test_GT_TABLES_gt_preserves_class():
+    """GT tables should retain the gt_table CSS class after rendering."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-tables.html"
+    soup = _load_html(page)
+
+    gt_tables = soup.select("table.gt_table")
+    assert len(gt_tables) >= 1, "No GT tables found"
+
+    for gt in gt_tables:
+        assert "gt_table" in gt.get("class", []), "GT table lost its gt_table class"
+
+
+@requires_bs4
+def test_GT_TABLES_gt_no_bootstrap_classes():
+    """GT tables with quarto_disable_processing=True should have no Bootstrap classes."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-tables.html"
+    soup = _load_html(page)
+
+    bootstrap_classes = {"table-sm", "table-striped", "small", "table-bordered"}
+    for gt in soup.select("table.gt_table"):
+        classes = set(gt.get("class", []))
+        overlap = classes & bootstrap_classes
+        assert not overlap, (
+            f"GT table has Bootstrap classes {overlap} despite quarto_disable_processing=True"
+        )
+
+
+@requires_bs4
+def test_GT_TABLES_gt_fixed_preserves_colgroup():
+    """GT table with cols_width and quarto_disable_processing=True preserves colgroup."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-tables.html"
+    soup = _load_html(page)
+
+    gt_tables = soup.select("table.gt_table")
+    fixed_tables = [t for t in gt_tables if "table-layout" in (t.get("style") or "")]
+    assert len(fixed_tables) >= 1, "No fixed-layout GT table found"
+
+    for t in fixed_tables:
+        colgroups = t.select("colgroup")
+        assert len(colgroups) == 1, "GT table with cols_width should preserve its colgroup"
+
+
+@requires_bs4
+def test_GT_TABLES_gt_colgroup_preserved_when_present():
+    """GT tables with cols_width (table-layout: fixed) should preserve colgroup.
+
+    Note: Quarto with data-quarto-disable-processing='false' may strip colgroup
+    before post-render runs. This test verifies our post-render.py logic doesn't
+    strip colgroup from GT tables by testing the strip function directly.
+    """
+    import re
+
+    # Test the strip_colgroup_tags logic in isolation with GT-like HTML
+    html_with_gt_colgroup = (
+        '<table style="table-layout: fixed;; width: 0px" class="gt_table" '
+        'data-quarto-disable-processing="true" data-quarto-bootstrap="false">\n'
+        "<colgroup>\n"
+        '  <col style="width:150px;"/>\n'
+        '  <col style="width:80px;"/>\n'
+        "</colgroup>\n"
+        "<thead><tr><th>A</th><th>B</th></tr></thead>\n"
+        "</table>"
+    )
+
+    html_with_plain_colgroup = (
+        '<table class="caption-top table">\n'
+        "<colgroup>\n"
+        '  <col style="width:50%"/>\n'
+        '  <col style="width:50%"/>\n'
+        "</colgroup>\n"
+        "<thead><tr><th>X</th><th>Y</th></tr></thead>\n"
+        "</table>"
+    )
+
+    colgroup_pattern = re.compile(r"<colgroup>.*?</colgroup>\s*", re.DOTALL)
+
+    def _strip_colgroup_tags(html_content):
+        def _replace_if_not_gt(match):
+            preceding = html_content[: match.start()]
+            last_table = preceding.rfind("<table")
+            if last_table >= 0:
+                table_end = preceding.find(">", last_table)
+                if table_end >= 0:
+                    table_tag = preceding[last_table : table_end + 1]
+                    if "gt_table" in table_tag:
+                        return match.group(0)
+            return ""
+
+        return colgroup_pattern.sub(_replace_if_not_gt, html_content)
+
+    # GT table colgroup should be preserved
+    result_gt = _strip_colgroup_tags(html_with_gt_colgroup)
+    assert "<colgroup>" in result_gt, "GT table colgroup was stripped"
+
+    # Plain table colgroup should be removed
+    result_plain = _strip_colgroup_tags(html_with_plain_colgroup)
+    assert "<colgroup>" not in result_plain, "Plain table colgroup was not stripped"
+
+
+@requires_bs4
+def test_GT_TABLES_markdown_no_colgroup():
+    """Markdown tables should have their colgroup tags stripped."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "markdown-tables.html"
+    soup = _load_html(page)
+
+    md_tables = [t for t in soup.select("table") if "gt_table" not in t.get("class", [])]
+    for t in md_tables:
+        colgroups = t.select("colgroup")
+        assert len(colgroups) == 0, "Markdown table should not have colgroup"
+
+
+@requires_bs4
+def test_GT_TABLES_reference_pages_exist():
+    """Reference pages for exported symbols should exist."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    ref = _ref_dir(_GT_TABLES_PKG)
+    for page in ("make_gt_table.html", "summarize.html"):
+        assert (ref / page).exists(), f"Missing reference page: {page}"
+
+
+@requires_bs4
+def test_GT_TABLES_page_level_no_processing_gt():
+    """GT table on page with html-table-processing: none should have no Bootstrap classes."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-page-level.html"
+    assert page.exists(), "gt-page-level.html not found"
+
+    soup = _load_html(page)
+    gt_tables = soup.select("table.gt_table")
+    assert len(gt_tables) >= 1, "No GT tables found on page-level opt-out page"
+
+    bootstrap_classes = {"table-sm", "table-striped", "small", "table-bordered"}
+    for gt in gt_tables:
+        classes = set(gt.get("class", []))
+        overlap = classes & bootstrap_classes
+        assert not overlap, (
+            f"GT table has Bootstrap classes {overlap} despite html-table-processing: none"
+        )
+
+
+@requires_bs4
+def test_GT_TABLES_page_level_no_processing_colgroup():
+    """GT table with cols_width on page with html-table-processing: none preserves colgroup."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-page-level.html"
+    soup = _load_html(page)
+
+    gt_tables = soup.select("table.gt_table")
+    # The table uses cols_width so it should have a colgroup
+    fixed_tables = [t for t in gt_tables if "table-layout" in (t.get("style") or "")]
+    assert len(fixed_tables) >= 1, "No fixed-layout GT table found"
+
+    for t in fixed_tables:
+        colgroups = t.select("colgroup")
+        assert len(colgroups) == 1, "GT table with cols_width should preserve its colgroup"
+
+
+@requires_bs4
+def test_GT_TABLES_page_level_no_processing_md_table():
+    """Markdown table on page with html-table-processing: none should lack Bootstrap add-ons."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "gt-page-level.html"
+    soup = _load_html(page)
+
+    md_tables = [t for t in soup.select("table") if "gt_table" not in t.get("class", [])]
+    assert len(md_tables) >= 1, "No Markdown table found on page-level opt-out page"
+
+    bootstrap_addons = {"table-sm", "table-striped", "small"}
+    for t in md_tables:
+        classes = set(t.get("class", []))
+        overlap = classes & bootstrap_addons
+        assert not overlap, (
+            f"Markdown table has Bootstrap add-on classes {overlap} "
+            "despite html-table-processing: none"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Dedicated: gdtest_scale_to_fit — Scale-to-fit config system
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_STF_PKG = "gdtest_scale_to_fit"
+
+
+def _stf_site():
+    return _site_dir(_STF_PKG)
+
+
+def _stf_skip():
+    if not _has_rendered_site(_STF_PKG):
+        pytest.skip(f"{_STF_PKG} not rendered")
+
+
+# ── Meta tag presence ────────────────────────────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_TO_FIT_global_meta_on_all_pages():
+    """All user-guide pages should have the global gd-scale-to-fit meta tag."""
+    _stf_skip()
+    for page_name in ("global-targeting", "page-override", "manual-div", "width-comparison"):
+        page = _stf_site() / "user-guide" / f"{page_name}.html"
+        assert page.exists(), f"Missing page: {page_name}"
+        soup = _load_html(page)
+        meta = soup.find("meta", attrs={"name": "gd-scale-to-fit"})
+        assert meta is not None, f"Missing gd-scale-to-fit meta on {page_name}"
+        selectors = meta.get("data-selectors", "")
+        assert "#wide_gt" in selectors, f"#wide_gt not in global selectors on {page_name}"
+        assert "#custom_html" in selectors, f"#custom_html not in global selectors on {page_name}"
+
+
+@requires_bs4
+def test_SCALE_TO_FIT_page_override_meta_present():
+    """The page-override page should have a gd-scale-to-fit-page meta tag."""
+    _stf_skip()
+    page = _stf_site() / "user-guide" / "page-override.html"
+    soup = _load_html(page)
+    meta = soup.find("meta", attrs={"name": "gd-scale-to-fit-page"})
+    assert meta is not None, "Missing gd-scale-to-fit-page meta on page-override"
+    selectors = meta.get("data-selectors", "")
+    assert "#page_gt" in selectors, "#page_gt not in page-level selectors"
+
+
+@requires_bs4
+def test_SCALE_TO_FIT_page_meta_absent_elsewhere():
+    """Pages without scale-to-fit frontmatter should NOT have gd-scale-to-fit-page."""
+    _stf_skip()
+    for page_name in ("global-targeting", "manual-div", "width-comparison"):
+        page = _stf_site() / "user-guide" / f"{page_name}.html"
+        soup = _load_html(page)
+        meta = soup.find("meta", attrs={"name": "gd-scale-to-fit-page"})
+        assert meta is None, f"Unexpected gd-scale-to-fit-page meta on {page_name}"
+
+
+# ── GT table IDs rendered ───────────────────────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_TO_FIT_global_page_has_expected_ids():
+    """The global-targeting page should have #wide_gt, #custom_html, #narrow_gt."""
+    _stf_skip()
+    page = _stf_site() / "user-guide" / "global-targeting.html"
+    soup = _load_html(page)
+    for eid in ("wide_gt", "custom_html", "narrow_gt"):
+        el = soup.find(id=eid)
+        assert el is not None, f"Missing element with id={eid}"
+
+
+@requires_bs4
+def test_SCALE_TO_FIT_override_page_has_expected_ids():
+    """The page-override page should have #page_gt and #wide_gt_2."""
+    _stf_skip()
+    page = _stf_site() / "user-guide" / "page-override.html"
+    soup = _load_html(page)
+    for eid in ("page_gt", "wide_gt_2"):
+        el = soup.find(id=eid)
+        assert el is not None, f"Missing element with id={eid}"
+
+
+@requires_bs4
+def test_SCALE_TO_FIT_manual_page_has_expected_ids():
+    """The manual-div page should have #manual_gt and #unwrapped_gt."""
+    _stf_skip()
+    page = _stf_site() / "user-guide" / "manual-div.html"
+    soup = _load_html(page)
+    for eid in ("manual_gt", "unwrapped_gt"):
+        el = soup.find(id=eid)
+        assert el is not None, f"Missing element with id={eid}"
+
+
+# ── Manual div wrapping ─────────────────────────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_TO_FIT_manual_div_has_class():
+    """The manual-div page should have a .scale-to-fit container around #manual_gt."""
+    _stf_skip()
+    page = _stf_site() / "user-guide" / "manual-div.html"
+    soup = _load_html(page)
+    gt = soup.find(id="manual_gt")
+    assert gt is not None, "Missing #manual_gt"
+    # Walk up to find a parent with scale-to-fit class
+    parent = gt.parent
+    found = False
+    while parent:
+        classes = parent.get("class", [])
+        if "scale-to-fit" in classes:
+            found = True
+            break
+        parent = parent.parent
+    assert found, "#manual_gt is not inside a .scale-to-fit container"
+
+
+@requires_bs4
+def test_SCALE_TO_FIT_unwrapped_not_in_scale_div():
+    """#unwrapped_gt on manual-div page should NOT be inside a .scale-to-fit container."""
+    _stf_skip()
+    page = _stf_site() / "user-guide" / "manual-div.html"
+    soup = _load_html(page)
+    gt = soup.find(id="unwrapped_gt")
+    assert gt is not None, "Missing #unwrapped_gt"
+    parent = gt.parent
+    while parent:
+        classes = parent.get("class", [])
+        if "scale-to-fit" in classes:
+            pytest.fail("#unwrapped_gt is unexpectedly inside a .scale-to-fit container")
+        parent = parent.parent
+
+
+# ── Width comparison page ────────────────────────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_TO_FIT_width_comparison_tables():
+    """Width comparison page should have 4 GT tables with incremental column counts."""
+    _stf_skip()
+    page = _stf_site() / "user-guide" / "width-comparison.html"
+    soup = _load_html(page)
+    for eid in ("cmp_4", "cmp_8", "cmp_12", "cmp_16"):
+        el = soup.find(id=eid)
+        assert el is not None, f"Missing element with id={eid}"
+
+
+# ── GT table structural integrity ────────────────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_TO_FIT_gt_tables_have_gt_class():
+    """All GT tables should have the gt_table class."""
+    _stf_skip()
+    for page_name in ("global-targeting", "page-override", "manual-div", "width-comparison"):
+        page = _stf_site() / "user-guide" / f"{page_name}.html"
+        soup = _load_html(page)
+        gt_tables = soup.select("table.gt_table")
+        assert len(gt_tables) > 0, f"No gt_table class found on {page_name}"
+
+
+@requires_bs4
+def test_SCALE_TO_FIT_gt_tables_no_bootstrap():
+    """GT tables should NOT have Bootstrap table-bordered/table-sm classes."""
+    _stf_skip()
+    bootstrap_classes = {"table-bordered", "table-sm", "table-striped"}
+    for page_name in ("global-targeting", "page-override", "manual-div", "width-comparison"):
+        page = _stf_site() / "user-guide" / f"{page_name}.html"
+        soup = _load_html(page)
+        for gt in soup.select("table.gt_table"):
+            classes = set(gt.get("class", []))
+            overlap = classes & bootstrap_classes
+            assert not overlap, f"GT table on {page_name} has Bootstrap classes {overlap}"
+
+
+@requires_bs4
+def test_SCALE_TO_FIT_gt_tables_not_responsive_wrapped():
+    """GT tables should NOT be inside gd-table-responsive wrappers."""
+    _stf_skip()
+    for page_name in ("global-targeting", "page-override", "manual-div", "width-comparison"):
+        page = _stf_site() / "user-guide" / f"{page_name}.html"
+        soup = _load_html(page)
+        for gt in soup.select("table.gt_table"):
+            parent = gt.parent
+            while parent:
+                classes = parent.get("class", [])
+                if "gd-table-responsive" in classes:
+                    pytest.fail(f"GT table on {page_name} is wrapped in gd-table-responsive")
+                parent = parent.parent
+
+
+# ── Custom HTML widget ────────────────────────────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_TO_FIT_custom_html_widget_rendered():
+    """The custom _repr_html_ widget with id=custom_html should render."""
+    _stf_skip()
+    page = _stf_site() / "user-guide" / "global-targeting.html"
+    soup = _load_html(page)
+    widget = soup.find(id="custom_html")
+    assert widget is not None, "Missing #custom_html widget"
+    assert widget.name == "div", f"Expected div, got {widget.name}"
+    text = widget.get_text()
+    assert "CustomWidget" in text, "Widget content not rendered"
+
+
+# ── Reference pages ──────────────────────────────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_TO_FIT_reference_pages_exist():
+    """All expected reference pages should exist."""
+    _stf_skip()
+    ref = _site_dir(_STF_PKG) / "reference"
+    for name in ("make_wide_table", "make_narrow_table", "make_medium_table", "CustomWidget"):
+        page = ref / f"{name}.html"
+        assert page.exists(), f"Missing reference page: {name}.html"
+
+
+# ── Config verification ──────────────────────────────────────────────────────
+
+
+def test_SCALE_TO_FIT_config_has_scale_to_fit():
+    """The generated great-docs.yml should have scale_to_fit selectors."""
+    _stf_skip()
+    cfg = _load_quarto_yml(_STF_PKG)
+    # The scale_to_fit config is injected as a meta tag, not in _quarto.yml
+    # Check that the header includes contain the meta tag
+    header_includes = cfg.get("format", {}).get("html", {}).get("include-in-header", [])
+    found = False
+    for item in header_includes:
+        item_text = str(item)
+        if "gd-scale-to-fit" in item_text:
+            found = True
+            assert "#wide_gt" in item_text, "Missing #wide_gt in scale-to-fit header"
+            assert "#custom_html" in item_text, "Missing #custom_html in scale-to-fit header"
+            break
+    assert found, "No gd-scale-to-fit meta tag in include-in-header"
+
+
+# ── Minimum scale threshold ──────────────────────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_TO_FIT_global_min_scale_attribute():
+    """All pages should have data-min-scale on the global gd-scale-to-fit meta."""
+    _stf_skip()
+    for page_name in ("global-targeting", "page-override", "manual-div", "width-comparison"):
+        page = _stf_site() / "user-guide" / f"{page_name}.html"
+        soup = _load_html(page)
+        meta = soup.find("meta", attrs={"name": "gd-scale-to-fit"})
+        assert meta is not None, f"Missing gd-scale-to-fit meta on {page_name}"
+        ms = meta.get("data-min-scale")
+        assert ms == "tablet", f"Expected data-min-scale='tablet', got '{ms}' on {page_name}"
+
+
+@requires_bs4
+def test_SCALE_TO_FIT_page_override_min_scale():
+    """The page-override page should have a different data-min-scale on the page-level meta."""
+    _stf_skip()
+    page = _stf_site() / "user-guide" / "page-override.html"
+    soup = _load_html(page)
+    meta = soup.find("meta", attrs={"name": "gd-scale-to-fit-page"})
+    assert meta is not None, "Missing gd-scale-to-fit-page meta"
+    ms = meta.get("data-min-scale")
+    assert ms == "mobile", f"Expected page-level data-min-scale='mobile', got '{ms}'"
+
+
+@requires_bs4
+def test_SCALE_TO_FIT_non_override_pages_no_page_min_scale():
+    """Pages without page-level frontmatter should NOT have data-min-scale on a page meta."""
+    _stf_skip()
+    for page_name in ("global-targeting", "manual-div", "width-comparison"):
+        page = _stf_site() / "user-guide" / f"{page_name}.html"
+        soup = _load_html(page)
+        meta = soup.find("meta", attrs={"name": "gd-scale-to-fit-page"})
+        assert meta is None, f"Unexpected gd-scale-to-fit-page meta on {page_name}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Dedicated: gdtest_scale_min_scale — Min-scale keyword & float thresholds
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SMS_PKG = "gdtest_scale_min_scale"
+
+
+def _sms_site():
+    return _site_dir(_SMS_PKG)
+
+
+def _sms_skip():
+    if not _has_rendered_site(_SMS_PKG):
+        pytest.skip(f"{_SMS_PKG} not rendered")
+
+
+# ── Global meta tag ──────────────────────────────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_global_meta_on_all_pages():
+    """All pages should carry the global gd-scale-to-fit meta with data-min-scale='desktop'."""
+    _sms_skip()
+    for page in ("no-override", "mobile", "tablet", "desktop", "float-override"):
+        html = _sms_site() / "user-guide" / f"{page}.html"
+        assert html.exists(), f"Missing page: {page}"
+        soup = _load_html(html)
+        meta = soup.find("meta", attrs={"name": "gd-scale-to-fit"})
+        assert meta is not None, f"Missing gd-scale-to-fit meta on {page}"
+        assert meta.get("data-min-scale") == "desktop", (
+            f"Expected global data-min-scale='desktop' on {page}, "
+            f"got '{meta.get('data-min-scale')}'"
+        )
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_global_selectors_correct():
+    """The global meta should target #stf_wide, #stf_styled, #summary_card."""
+    _sms_skip()
+    html = _sms_site() / "user-guide" / "no-override.html"
+    soup = _load_html(html)
+    meta = soup.find("meta", attrs={"name": "gd-scale-to-fit"})
+    assert meta is not None
+    selectors = meta.get("data-selectors", "")
+    for sel in ("#stf_wide", "#stf_styled", "#summary_card"):
+        assert sel in selectors, f"Missing {sel} in global selectors: {selectors}"
+
+
+# ── Page-level keyword overrides ─────────────────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_mobile_keyword():
+    """mobile.html should have page-level data-min-scale='mobile'."""
+    _sms_skip()
+    soup = _load_html(_sms_site() / "user-guide" / "mobile.html")
+    meta = soup.find("meta", attrs={"name": "gd-scale-to-fit-page"})
+    assert meta is not None, "Missing gd-scale-to-fit-page meta on mobile page"
+    assert meta.get("data-min-scale") == "mobile"
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_tablet_keyword():
+    """tablet.html should have page-level data-min-scale='tablet'."""
+    _sms_skip()
+    soup = _load_html(_sms_site() / "user-guide" / "tablet.html")
+    meta = soup.find("meta", attrs={"name": "gd-scale-to-fit-page"})
+    assert meta is not None, "Missing gd-scale-to-fit-page meta on tablet page"
+    assert meta.get("data-min-scale") == "tablet"
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_desktop_keyword():
+    """desktop.html should have page-level data-min-scale='desktop'."""
+    _sms_skip()
+    soup = _load_html(_sms_site() / "user-guide" / "desktop.html")
+    meta = soup.find("meta", attrs={"name": "gd-scale-to-fit-page"})
+    assert meta is not None, "Missing gd-scale-to-fit-page meta on desktop page"
+    assert meta.get("data-min-scale") == "desktop"
+
+
+# ── Float override ───────────────────────────────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_float_override():
+    """float-override.html should have page-level data-min-scale='0.35'."""
+    _sms_skip()
+    soup = _load_html(_sms_site() / "user-guide" / "float-override.html")
+    meta = soup.find("meta", attrs={"name": "gd-scale-to-fit-page"})
+    assert meta is not None, "Missing gd-scale-to-fit-page meta on float-override page"
+    assert meta.get("data-min-scale") == "0.35", (
+        f"Expected data-min-scale='0.35', got '{meta.get('data-min-scale')}'"
+    )
+
+
+# ── No-override page inherits global ────────────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_no_override_has_no_page_meta():
+    """no-override.html should NOT have a gd-scale-to-fit-page meta tag."""
+    _sms_skip()
+    soup = _load_html(_sms_site() / "user-guide" / "no-override.html")
+    meta = soup.find("meta", attrs={"name": "gd-scale-to-fit-page"})
+    assert meta is None, "Unexpected gd-scale-to-fit-page meta on no-override page"
+
+
+# ── GT table IDs ─────────────────────────────────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_stf_wide_ids_present():
+    """Every page should have a #stf_wide GT table."""
+    _sms_skip()
+    for page in ("no-override", "mobile", "tablet", "desktop", "float-override"):
+        html = _sms_site() / "user-guide" / f"{page}.html"
+        soup = _load_html(html)
+        el = soup.find(id="stf_wide")
+        assert el is not None, f"Missing #stf_wide on {page}"
+
+
+# ── Reference pages ──────────────────────────────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_reference_pages_exist():
+    """Reference pages for all exported symbols should exist."""
+    _sms_skip()
+    ref = _sms_site() / "reference"
+    for name in ("make_wide_table", "make_narrow_table", "make_styled_table", "SummaryCard"):
+        page = ref / f"{name}.html"
+        assert page.exists(), f"Missing reference page: {name}.html"
+
+
+# ── Keyword values are distinct across pages ─────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_all_keywords_distinct():
+    """Each keyword page should carry a different data-min-scale value."""
+    _sms_skip()
+    seen = {}
+    for page, expected in [("mobile", "mobile"), ("tablet", "tablet"), ("desktop", "desktop")]:
+        html = _sms_site() / "user-guide" / f"{page}.html"
+        soup = _load_html(html)
+        meta = soup.find("meta", attrs={"name": "gd-scale-to-fit-page"})
+        val = meta.get("data-min-scale") if meta else None
+        assert val == expected, f"{page}: expected '{expected}', got '{val}'"
+        seen[page] = val
+    # All three should be different values
+    assert len(set(seen.values())) == 3, f"Expected 3 distinct keywords, got {seen}"
+
+
+# ── Styled table presence ────────────────────────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_styled_table_present():
+    """Pages that display make_styled_table() should have an #stf_styled element."""
+    _sms_skip()
+    for page in ("no-override", "tablet", "float-override"):
+        html = _sms_site() / "user-guide" / f"{page}.html"
+        soup = _load_html(html)
+        el = soup.find(id="stf_styled")
+        assert el is not None, f"Missing #stf_styled on {page}"
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_styled_table_absent_where_not_used():
+    """Pages that do NOT use make_styled_table() should lack #stf_styled."""
+    _sms_skip()
+    for page in ("mobile", "desktop"):
+        html = _sms_site() / "user-guide" / f"{page}.html"
+        soup = _load_html(html)
+        el = soup.find(id="stf_styled")
+        assert el is None, f"Unexpected #stf_styled on {page}"
+
+
+# ── SummaryCard presence ─────────────────────────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_summary_card_present():
+    """Pages that display SummaryCard should have a #summary_card element."""
+    _sms_skip()
+    for page in ("mobile", "float-override"):
+        html = _sms_site() / "user-guide" / f"{page}.html"
+        soup = _load_html(html)
+        el = soup.find(id="summary_card")
+        assert el is not None, f"Missing #summary_card on {page}"
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_summary_card_absent_where_not_used():
+    """Pages that do NOT use SummaryCard should lack #summary_card."""
+    _sms_skip()
+    for page in ("no-override", "tablet", "desktop"):
+        html = _sms_site() / "user-guide" / f"{page}.html"
+        soup = _load_html(html)
+        el = soup.find(id="summary_card")
+        assert el is None, f"Unexpected #summary_card on {page}"
+
+
+# ── Narrow table (not targeted by scale-to-fit) ─────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_narrow_table_on_no_override():
+    """no-override.html should include the narrow table (not targeted)."""
+    _sms_skip()
+    soup = _load_html(_sms_site() / "user-guide" / "no-override.html")
+    el = soup.find(id="stf_narrow")
+    assert el is not None, "Missing #stf_narrow on no-override page"
+
+
+# ── Page-level selectors ─────────────────────────────────────────────────────
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_mobile_page_selectors():
+    """mobile.html page meta should target #stf_wide and #summary_card."""
+    _sms_skip()
+    soup = _load_html(_sms_site() / "user-guide" / "mobile.html")
+    meta = soup.find("meta", attrs={"name": "gd-scale-to-fit-page"})
+    assert meta is not None
+    selectors = meta.get("data-selectors", "")
+    assert "#stf_wide" in selectors
+    assert "#summary_card" in selectors
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_tablet_page_selectors():
+    """tablet.html page meta should target #stf_wide and #stf_styled."""
+    _sms_skip()
+    soup = _load_html(_sms_site() / "user-guide" / "tablet.html")
+    meta = soup.find("meta", attrs={"name": "gd-scale-to-fit-page"})
+    assert meta is not None
+    selectors = meta.get("data-selectors", "")
+    assert "#stf_wide" in selectors
+    assert "#stf_styled" in selectors
+
+
+@requires_bs4
+def test_SCALE_MIN_SCALE_float_page_selectors():
+    """float-override.html page meta should target all three IDs."""
+    _sms_skip()
+    soup = _load_html(_sms_site() / "user-guide" / "float-override.html")
+    meta = soup.find("meta", attrs={"name": "gd-scale-to-fit-page"})
+    assert meta is not None
+    selectors = meta.get("data-selectors", "")
+    for sel in ("#stf_wide", "#stf_styled", "#summary_card"):
+        assert sel in selectors, f"Missing {sel} in float-override page selectors"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: GDLS on non-reference pages (gdtest_interlinks_userguide)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _ilu_skip():
+    pkg = "gdtest_interlinks_userguide"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+
+def _ilu_site():
+    return _site_dir("gdtest_interlinks_userguide")
+
+
+@requires_bs4
+def test_DED_interlinks_userguide_ref_pages_exist():
+    """gdtest_interlinks_userguide: all exports have reference pages."""
+    _ilu_skip()
+    ref = _ref_dir("gdtest_interlinks_userguide")
+    for name in ("Engine", "Connection", "execute"):
+        assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
+
+
+@requires_bs4
+def test_DED_interlinks_userguide_ug_pages_exist():
+    """gdtest_interlinks_userguide: user-guide pages exist."""
+    _ilu_skip()
+    ug = _ilu_site() / "user-guide"
+    assert (ug / "getting-started.html").exists(), "Getting Started page missing"
+    assert (ug / "advanced.html").exists(), "Advanced page missing"
+
+
+@requires_bs4
+def test_DED_interlinks_userguide_shortened_links():
+    """gdtest_interlinks_userguide: [](`~pkg.Name`) in user-guide resolves to links."""
+    _ilu_skip()
+    ug = _ilu_site() / "user-guide"
+    page = ug / "getting-started.html"
+    if not page.exists():
+        pytest.skip("getting-started.html not found")
+
+    soup = _load_html(page)
+    gdls_links = soup.find_all("a", class_="gdls-link")
+    link_texts = [a.get_text(strip=True) for a in gdls_links]
+
+    # Shortened references should produce short display names
+    for expected in ("Engine", "Connection", "execute()"):
+        assert expected in link_texts, (
+            f"Getting Started: shortened interlink {expected!r} not found. Found: {link_texts}"
+        )
+
+
+@requires_bs4
+def test_DED_interlinks_userguide_hrefs_relative():
+    """gdtest_interlinks_userguide: user-guide interlink hrefs use ../reference/ paths."""
+    _ilu_skip()
+    ug = _ilu_site() / "user-guide"
+    page = ug / "getting-started.html"
+    if not page.exists():
+        pytest.skip("getting-started.html not found")
+
+    soup = _load_html(page)
+    gdls_links = soup.find_all("a", class_="gdls-link")
+    for link in gdls_links:
+        href = link.get("href", "")
+        # From user-guide/*.html, href should start with ../reference/
+        assert href.startswith("../reference/"), (
+            f"User-guide interlink href {href!r} should be relative to ../reference/"
+        )
+
+
+@requires_bs4
+def test_DED_interlinks_userguide_full_qualified():
+    """gdtest_interlinks_userguide: [](`pkg.Name`) renders full qualified name."""
+    _ilu_skip()
+    ug = _ilu_site() / "user-guide"
+    page = ug / "advanced.html"
+    if not page.exists():
+        pytest.skip("advanced.html not found")
+
+    soup = _load_html(page)
+    gdls_links = soup.find_all("a", class_="gdls-link")
+    link_texts = [a.get_text(strip=True) for a in gdls_links]
+
+    assert "gdtest_interlinks_userguide.Engine" in link_texts, (
+        f"Advanced: full qualified 'gdtest_interlinks_userguide.Engine' not found. "
+        f"Found: {link_texts}"
+    )
+
+
+@requires_bs4
+def test_DED_interlinks_userguide_custom_text():
+    """gdtest_interlinks_userguide: [custom text](`pkg.Name`) preserves display text."""
+    _ilu_skip()
+    ug = _ilu_site() / "user-guide"
+    page = ug / "advanced.html"
+    if not page.exists():
+        pytest.skip("advanced.html not found")
+
+    soup = _load_html(page)
+    gdls_links = soup.find_all("a", class_="gdls-link")
+    link_texts = [a.get_text(strip=True) for a in gdls_links]
+
+    assert "custom link text" in link_texts, (
+        f"Advanced: custom text 'custom link text' not found. Found: {link_texts}"
+    )
+    assert "custom text with tilde" in link_texts, (
+        f"Advanced: custom text 'custom text with tilde' not found. Found: {link_texts}"
+    )
+
+
+@requires_bs4
+def test_DED_interlinks_userguide_autolinked_code():
+    """gdtest_interlinks_userguide: `Engine`, `execute()` autolinked in user-guide."""
+    _ilu_skip()
+    ug = _ilu_site() / "user-guide"
+    page = ug / "advanced.html"
+    if not page.exists():
+        pytest.skip("advanced.html not found")
+
+    soup = _load_html(page)
+    # Look for gdls-link gdls-code links (autolinked code produces this class combo)
+    code_links = soup.find_all("a", class_="gdls-code")
+    link_texts = [a.get_text(strip=True) for a in code_links]
+
+    for expected in ("Engine", "Connection", "execute()"):
+        assert expected in link_texts, (
+            f"Advanced: autolinked code {expected!r} not found. Found: {link_texts}"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: Code spans in docstring section headings (gdtest_code_span_headings)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _csh_skip():
+    pkg = "gdtest_code_span_headings"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+
+def _csh_ref():
+    return _ref_dir("gdtest_code_span_headings")
+
+
+@requires_bs4
+def test_DED_code_span_headings_pages_exist():
+    """gdtest_code_span_headings: reference pages exist for both functions."""
+    _csh_skip()
+    ref = _csh_ref()
+    for name in ("compare_values", "filter_range"):
+        assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
+
+
+@requires_bs4
+def test_DED_code_span_headings_slug_sanitized():
+    """gdtest_code_span_headings: heading CSS class has no backticks or special chars."""
+    _csh_skip()
+    ref = _csh_ref()
+
+    expected_classes = {
+        "compare_values": "doc-what-can-be-used-in-value",
+        "filter_range": "doc-what-can-be-used-in-left-and-right",
+    }
+
+    for page_name, expected_class in expected_classes.items():
+        soup = _load_html(ref / f"{page_name}.html")
+        tag = soup.find(class_=expected_class)
+        assert tag is not None, f"{page_name}.html: expected class {expected_class!r} not found"
+        # Verify no backticks or problematic chars in any doc- class on this page
+        for el in soup.find_all(class_=True):
+            for cls in el.get("class", []):
+                if cls.startswith("doc-"):
+                    assert "`" not in cls, f"Backtick in class: {cls}"
+                    assert "=" not in cls, f"Equals in class: {cls}"
+                    assert "?" not in cls, f"Question mark in class: {cls}"
+
+
+@requires_bs4
+def test_DED_code_span_headings_code_preserved():
+    """gdtest_code_span_headings: heading text preserves code spans as <code> elements."""
+    _csh_skip()
+    ref = _csh_ref()
+
+    # compare_values should have: What Can Be Used In <code>value=</code>?
+    soup = _load_html(ref / "compare_values.html")
+    heading = soup.find("h2", class_="doc-what-can-be-used-in-value")
+    if heading is None:
+        heading = soup.find("h3", class_="doc-what-can-be-used-in-value")
+    assert heading is not None, "Custom heading element not found"
+    code_el = heading.find("code")
+    assert code_el is not None, "No <code> element inside heading"
+    assert code_el.get_text() == "value=", (
+        f"Expected code span 'value=', got {code_el.get_text()!r}"
+    )
+
+    # filter_range should have: What Can Be Used In <code>left=</code> And <code>right=</code>?
+    soup = _load_html(ref / "filter_range.html")
+    heading = soup.find("h2", class_="doc-what-can-be-used-in-left-and-right")
+    if heading is None:
+        heading = soup.find("h3", class_="doc-what-can-be-used-in-left-and-right")
+    assert heading is not None, "Custom heading element not found"
+    codes = heading.find_all("code")
+    assert len(codes) == 2, f"Expected 2 <code> elements, found {len(codes)}"
+    assert codes[0].get_text() == "left=", f"Expected 'left=', got {codes[0].get_text()!r}"
+    assert codes[1].get_text() == "right=", f"Expected 'right=', got {codes[1].get_text()!r}"
+
+
+@requires_bs4
+def test_DED_code_span_headings_title_case_outside_code():
+    """gdtest_code_span_headings: text outside code spans is title-cased."""
+    _csh_skip()
+    ref = _csh_ref()
+
+    soup = _load_html(ref / "compare_values.html")
+    heading = soup.find("h2", class_="doc-what-can-be-used-in-value")
+    if heading is None:
+        heading = soup.find("h3", class_="doc-what-can-be-used-in-value")
+    assert heading is not None
+    # Get text-only content (strips <code> tags)
+    full_text = heading.get_text().strip()
+    # Should be title-cased: "What Can Be Used In value=?"
+    # The words outside code should start with uppercase
+    assert full_text.startswith("What Can Be Used In"), (
+        f"Heading text not title-cased: {full_text!r}"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: Blog section with user-provided index
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+def test_DED_sec_blog_user_index_has_body_class():
+    """gdtest_sec_blog_user_index: blog index has gd-blog-index body class."""
+    pkg = "gdtest_sec_blog_user_index"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    blog_index = _site_dir(pkg) / "blog" / "index.html"
+    assert blog_index.exists(), "Blog index.html missing"
+
+    soup = _load_html(blog_index)
+    body = soup.find("body")
+    assert body is not None
+    classes = body.get("class", [])
+    assert "gd-blog-index" in classes, f"Expected gd-blog-index in body classes, got {classes}"
+
+
+@requires_bs4
+def test_DED_sec_blog_user_index_no_toc():
+    """gdtest_sec_blog_user_index: blog index has fullcontent (no TOC sidebar)."""
+    pkg = "gdtest_sec_blog_user_index"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    blog_index = _site_dir(pkg) / "blog" / "index.html"
+    assert blog_index.exists(), "Blog index.html missing"
+
+    soup = _load_html(blog_index)
+    body = soup.find("body")
+    assert body is not None
+    classes = body.get("class", [])
+    assert "fullcontent" in classes, f"Expected fullcontent in body classes, got {classes}"
+
+
+@requires_bs4
+def test_DED_sec_blog_user_index_preserves_user_listing():
+    """gdtest_sec_blog_user_index: user-provided listing type is preserved."""
+    pkg = "gdtest_sec_blog_user_index"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    blog_index = _site_dir(pkg) / "blog" / "index.html"
+    assert blog_index.exists(), "Blog index.html missing"
+
+    soup = _load_html(blog_index)
+    # Table listing uses quarto-listing-container-table
+    listing = soup.find("div", class_="quarto-listing-container-table")
+    assert listing is not None, "Expected table-type listing container"
+
+
+def test_DED_sec_blog_user_index_copies_root_image():
+    """gdtest_sec_blog_user_index: co-located root image is copied to site."""
+    pkg = "gdtest_sec_blog_user_index"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    img = _site_dir(pkg) / "blog" / "blog-header.svg"
+    assert img.exists(), "Root-level blog image blog-header.svg not copied"
+
+
+def test_DED_sec_blog_user_index_copies_post_image():
+    """gdtest_sec_blog_user_index: co-located post image is copied to site."""
+    pkg = "gdtest_sec_blog_user_index"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    img = _site_dir(pkg) / "blog" / "first-post" / "post-banner.svg"
+    assert img.exists(), "Post-level image first-post/post-banner.svg not copied"

@@ -1,0 +1,216 @@
+---
+title: "API Evolution"
+guide-section: "Quality & Maintenance"
+tags: [API, CLI]
+status: experimental
+---
+
+# API Evolution
+
+Great Docs can track how your package's public API changes across tagged releases. This is useful for understanding signature drift, detecting breaking changes, and generating visual migration aids for your users.
+
+## Quick Start
+
+Compare two versions from the command line:
+
+```{.bash filename="Terminal"}
+great-docs api-diff v0.1.0 v1.0.0
+```
+
+This produces a summary showing added, removed, and changed symbols, with breaking-change detection and migration hints:
+
+```
+════════════════════════════════════════════════════════════
+API Diff: v0.1.0 → v1.0.0
+Package: my_package
+════════════════════════════════════════════════════════════
+
+  Added: 3  │  Removed: 1  │  Changed: 5  │  Breaking: 2
+
+──────────────────────────────────────────────────────────
+  ✚ Added (3)
+──────────────────────────────────────────────────────────
+    + preview
+    + scan
+    + setup_github_pages
+
+──────────────────────────────────────────────────────────
+  ✖ Removed (1)  [BREAKING]
+──────────────────────────────────────────────────────────
+    - generate_config
+      hint: 'generate_config' was removed. Check the changelog for a replacement.
+
+──────────────────────────────────────────────────────────
+  ∆ Changed (5)
+──────────────────────────────────────────────────────────
+    ~ build  ⚠ BREAKING
+        ⚠ New parameter: watch
+        Return type: (none) → int
+```
+
+Use `--json` for machine-readable output, perfect for CI checks:
+
+```{.bash filename="Terminal"}
+great-docs api-diff v0.9.0 v1.0.0 --json
+```
+
+## Tracking a Single Symbol
+
+Use `--symbol` to follow one function or class across every version:
+
+```{.bash filename="Terminal"}
+great-docs api-diff v0.1.0 v1.0.0 --symbol build
+```
+
+Add `--changes-only` to skip versions where the signature was unchanged:
+
+```{.bash filename="Terminal"}
+great-docs api-diff v0.1.0 v1.0.0 --symbol build --changes-only
+```
+
+## Evolution Table
+
+The `--table` flag renders a positional parameter grid that shows exactly how a signature evolved. Each column is a version (where a change occurred), and each row is a positional parameter slot. Every cell is self-contained (it shows the parameter name, type, and default at that position) so insertions, reorderings, and removals are immediately visible.
+
+```{.bash filename="Terminal"}
+# Plain-text table (for terminal)
+great-docs api-diff v0.1.0 v1.0.0 --symbol build --table --changes-only
+
+# HTML table with disclosure wrapper (for embedding in docs)
+great-docs api-diff v0.1.0 v1.0.0 --symbol build --table --html
+```
+
+### Live Demo
+
+Below is a demonstration of how a `build()` function might evolve over four releases. The table is rendered from a JSON data file using the shortcode:
+
+```{shortcodes="false"}
+{{< evolution build json="api-evolution-demo.json" >}}
+```
+
+{{< evolution build json="api-evolution-demo.json" >}}
+
+Reading this table left-to-right tells the story:
+
+- `v0.1.0`: there are two parameters, `project_path=` (required `str`) and `output_dir=` (with a string default).
+- `v0.3.0`: `project_path=` widens to `str | Path`. A new `watch=` parameter is appended. `output_dir=` changes its default to a `Path` object.
+- `v0.6.0`: `watch=` moves to position 2 (before `output_dir`), and a new `clean=` parameter is added. The return type changes from `None` to `int`.
+- `v1.0.0`: `project_path=` gets a default (`None`), `output_dir=`'s default changes to `"_site"`, and a new `verbose=` parameter is appended.
+
+Notice how this layout makes insertions and reorderings visible. In v0.6.0 you can see that `watch=` moved up and `output_dir=` moved down, which would be invisible in a row-per-parameter-name layout.
+
+### Embedding in Pages
+
+To insert an evolution table directly into a User Guide page or any `.qmd` file, use the shortcode syntax:
+
+```{shortcodes="false"}
+{{< evolution build >}}
+```
+
+This produces a self-contained HTML table (with embedded CSS) showing how `build()` evolved across all tagged releases. The table is generated at build time so no Python code blocks or manual HTML is required.
+
+#### Options
+
+You can customize the output with named arguments:
+
+```{shortcodes="false"}
+{{< evolution symbol="build" old_version="v0.3.0" new_version="v1.0.0" >}}
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| (positional or `symbol`) | *required* | Symbol name to track |
+| `old_version` | first tag | Earliest version to include |
+| `new_version` | latest tag | Latest version to include |
+| `changes_only` | `"true"` | Only show versions where the signature changed |
+| `disclosure` | `"false"` | Wrap in a collapsible `<details>` element |
+| `summary` | auto | Custom label for the disclosure header |
+| `css` | `"true"` | Include the `<style>` block (set `"false"` for the second table on a page) |
+| `json` | — | Path to a JSON file; renders from data instead of live git history |
+
+#### Multiple Tables on One Page
+
+When embedding more than one table, set `css="false"` on all but the first to avoid duplicating the stylesheet:
+
+```{shortcodes="false"}
+{{< evolution build >}}
+
+{{< evolution preview css="false" >}}
+
+{{< evolution GreatDocs css="false" >}}
+```
+
+## JSON Data Format {#json-spec}
+
+The evolution table can be exported as JSON for use in CI pipelines, external tools, or custom rendering:
+
+```{.bash filename="Terminal"}
+great-docs api-diff v0.1.0 v1.0.0 --symbol build --json > evolution.json
+```
+
+The schema of the evolution table JSON (obtained via `evolution_table_to_dict()`) is:
+
+```{.json filename="evolution.json"}
+{
+  "symbol": "build",
+  "package": "my_package",
+  "versions": ["v0.1.0", "v0.3.0", "v0.6.0", "v1.0.0"],
+  "slots": [
+    {
+      "position": 0,
+      "cells": [
+        {"name": "project_path", "type": "str", "default": null},
+        {"name": "project_path", "type": "str | Path", "default": null},
+        ...
+      ]
+    }
+  ],
+  "returns": ["None", "None", "int", "int"]
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `symbol` | Name of the tracked symbol |
+| `package` | Python package name |
+| `versions` | Ordered list of version labels (column headers) |
+| `slots` | Array of positional parameter slots |
+| `slots[].position` | Zero-based parameter position |
+| `slots[].cells` | Array parallel to `versions` (one entry per column) |
+| `slots[].cells[]` | `{"name", "type", "default"}` or `null` if the slot didn't exist |
+| `returns` | Array parallel to `versions` with return types (`null` if none); omitted if no version has a return annotation |
+
+A `null` entry in `cells` means the parameter slot did not exist in that version (the function had fewer parameters).
+
+## Other Modes
+
+### Dependency Graph
+
+The `--graph` flag generates a [Mermaid](https://mermaid.js.org/) diagram showing class inheritance relationships within your package at the newer version. Classes are drawn as rectangles, functions as rounded boxes, and arrows point from parent to child.
+
+```{.bash filename="Terminal"}
+great-docs api-diff v0.1.0 v1.0.0 --graph
+```
+
+The output is a Mermaid `graph TD` block that you can paste into a `.qmd` file, a GitHub comment, or any Mermaid-compatible renderer. Add `--json` for a machine-readable representation with `nodes` (name → kind) and `inheritance` edge lists.
+
+### API Surface Timeline
+
+The `--timeline` flag produces a Mermaid bar chart that tracks how the total number of public symbols (classes and functions combined) grows across every tagged release between the two versions.
+
+```{.bash filename="Terminal"}
+great-docs api-diff v0.1.0 v1.0.0 --timeline
+```
+
+This is useful for spotting rapid API expansion or for confirming that a stabilization release didn't inadvertently expose new symbols. The default output is a `xychart-beta` Mermaid block; use `--json` for an array of `{version, symbols, classes, functions}` objects suitable for custom charting.
+
+## What's Next
+
+API Evolution is still experimental. As such the commands, shortcode options, and JSON schema may change as we gather feedback. Here are some directions we're exploring:
+
+- breaking-change reports (embedded directly in changelog pages)
+- per-version diffing in CI with automatic comments on pull requests that alter the public API surface
+- richer dependency graphs that include call edges and module-level relationships, not just class inheritance
+- interactive evolution tables with tooltips, filtering, and collapsible version ranges
+
+If you run into rough edges or have ideas for what would be most useful, please [open an issue](https://github.com/posit-dev/great-docs/issues).
