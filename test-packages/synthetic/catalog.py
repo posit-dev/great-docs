@@ -209,6 +209,7 @@ ALL_PACKAGES: list[str] = [
     "gdtest_sec_with_ref",  # 74
     "gdtest_sec_deep",  # 75
     "gdtest_sec_index_opt",  # 75b
+    "gdtest_sec_index_hero",  # 75b2
     "gdtest_sec_sidebar_single",  # 75c
     "gdtest_custom_passthrough_navbar",  # 75d
     "gdtest_custom_raw_navbar_after",  # 75e
@@ -533,6 +534,7 @@ DIMENSIONS: dict[str, dict[str, str]] = {
     "N7": {"axis": "sections", "label": "navbar_after"},
     "N8": {"axis": "sections", "label": "Section index opt-in"},
     "N9": {"axis": "sections", "label": "Single-page sidebar hide"},
+    "N10": {"axis": "sections", "label": "Section index hero cards"},
     # Reference axes
     "P1": {"axis": "reference", "label": "Explicit reference"},
     "P2": {"axis": "reference", "label": "members: false"},
@@ -1523,6 +1525,11 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "Section index opt-in: Examples section with index: true gets a "
         "card-based index page; Tutorials section without index (default) "
         "has navbar linking directly to the first page."
+    ),
+    "gdtest_sec_index_hero": (
+        "Section index hero cards: Demos section with 2-col image cards "
+        "(4 featured + 6 plain links), Gallery section with 1-col image "
+        "cards (index_columns: 1). Tests mixed image/plain and column options."
     ),
     "gdtest_sec_sidebar_single": (
         "Section sidebar for single-page sections. Has a 2-page Guides "
