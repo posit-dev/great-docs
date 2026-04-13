@@ -3396,9 +3396,23 @@ textarea,
 
 .section-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 1rem;
     margin-top: 0.5rem;
+}
+
+/* 2-column image card grid (default) */
+.section-cards-2col {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+/* 1-column image card grid */
+.section-cards-1col {
+    grid-template-columns: 1fr;
+}
+
+/* Single-column plain link list */
+.section-cards-list {
+    grid-template-columns: 1fr;
 }
 
 .section-card {
