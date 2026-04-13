@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, cast
 
 import griffe as gf
 
-from great_docs._qrenderer._render._label import get_label
+from great_docs._renderer._render._label import get_label
 
 from .. import _ast as qast
 from .. import layout
@@ -22,7 +22,7 @@ from .._format import (
     render_formatted_expr,
     repr_obj,
 )
-from .._rst_converters import _convert_rst_text
+from .._rst_converters import _convert_rst_text  # pyright: ignore[reportPrivateUsage]
 from .._type_checks import package_info
 from ..pandoc.blocks import (
     Block,
@@ -47,6 +47,7 @@ if TYPE_CHECKING:
     from ..typing import (
         Annotation,
         AnyDocstringSection,
+        DisplayNameFormat,
         DocObjectKind,
     )
 
@@ -136,6 +137,12 @@ class __RenderDoc(RenderBase):
     show_source_link: bool = True
     """Whether to show a link to the source code"""
 
+    display_name_format: DisplayNameFormat = "doc"
+    """Format for the display name"""
+
+    signature_name_format: DisplayNameFormat = "doc"
+    """Format for the signature name"""
+
     def __post_init__(self):
         # The layout_obj is too general. It is typed to include all
         # classes of documentable objects. And for layout.Doc objects,
@@ -148,8 +155,6 @@ class __RenderDoc(RenderBase):
 
         self.obj = cast("gf.Object | gf.Alias", self.doc.obj)
         """Griffe object (or alias)"""
-
-        self.show_signature = self.renderer.show_signature
 
     @cached_property
     def kind(self) -> DocObjectKind:
@@ -169,7 +174,7 @@ class __RenderDoc(RenderBase):
 
     @cached_property
     def display_name(self) -> str:
-        format = self.renderer.display_name_format
+        format = self.display_name_format
         if format == "relative" and self.level > 1:
             format = "name"
         name = format_name(self.doc, format)
@@ -183,7 +188,7 @@ class __RenderDoc(RenderBase):
 
     @cached_property
     def signature_name(self) -> str:
-        return format_name(self.doc, self.renderer.signature_name_format)
+        return format_name(self.doc, self.signature_name_format)
 
     def render_description(self) -> BlockContent:
         """
@@ -385,7 +390,7 @@ class __RenderDoc(RenderBase):
 
         sections = cast(
             "list[gf.DocstringSection]",
-            qast.transform(self.obj.docstring.parsed),  # pyright: ignore[reportUnknownMemberType]
+            qast.transform(self.obj.docstring.parsed),
         )
 
         # Remove the docstring subject from the top of the docstring
@@ -464,14 +469,14 @@ class __RenderDoc(RenderBase):
         [](`~functools.singledispatchmethod`) method for that type
         of section.
         """
-        new_el = qast.transform(el)  # pyright: ignore[reportUnknownMemberType]
+        new_el = qast.transform(el)
         if isinstance(new_el, qast.ExampleCode):
             return CodeBlock(el.value, Attr(classes=["python"]))
         return _convert_rst_text(el.value)
 
     @render_docstring_section.register
     def _(self, el: gf.DocstringSectionExamples):
-        return Blocks([self.render_docstring_section(qast.transform(c)) for c in el.value])  # pyright: ignore[reportUnknownMemberType]
+        return Blocks([self.render_docstring_section(qast.transform(c)) for c in el.value])
 
     @render_docstring_section.register
     def _(self, el: gf.DocstringSectionDeprecated):

@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
-from great_docs._qrenderer._render.mixin_page import RenderPageMixin
+from great_docs._renderer._render.mixin_page import RenderPageMixin
 
 from .._format import markdown_escape
 from ..pandoc.blocks import (
@@ -49,7 +49,6 @@ class __RenderAPIPage(RenderPageMixin, RenderBase):
         render_objs: list[RenderDoc] = [
             get_render_type(c)(
                 c,
-                self.renderer,
                 level,
                 page_path=self.path,
             )
