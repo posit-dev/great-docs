@@ -63,6 +63,7 @@ sections:
 | `index_columns`  | `2`                | Number of columns for image cards on the index page (1 or 2). Only applies when `index: true` |
 | `navbar_after`   | Before "Reference" | Name of an existing navbar item to place this section after |
 | `type`           | `default`          | `"default"` for card-grid index with sidebar; `"blog"` for Quarto listing page |
+| `dir_titles`     | `{}`               | Mapping of subdirectory names to custom sidebar section titles (see [Subdirectories](#subdirectories)) |
 
 ## Multiple Sections
 
@@ -219,7 +220,7 @@ examples/
 
 ## Subdirectories
 
-Sections support nested subdirectories. Files in subdirectories are copied with their relative paths preserved:
+Sections support nested subdirectories. Files in subdirectories are copied with their relative paths preserved, and each subdirectory becomes a **sidebar section** with its own heading.
 
 ```
 tutorials/
@@ -229,6 +230,46 @@ tutorials/
 └── advanced/
     └── custom-config.qmd
 ```
+
+### Numeric Prefix Stripping
+
+Just like individual files, subdirectory names have numeric prefixes stripped automatically. This lets you control the sort order of sidebar sections while keeping clean display titles:
+
+```
+examples/
+├── 01-getting-started/
+│   ├── installation.qmd
+│   └── first-steps.qmd
+├── 02-results-and-reporting/
+│   ├── basic-report.qmd
+│   └── custom-output.qmd
+└── 03-advanced-topics/
+    └── custom-config.qmd
+```
+
+The sidebar displays these as **"Getting Started"**, **"Results And Reporting"**, and **"Advanced Topics"** (not "01 Getting Started", etc.).
+
+### Custom Subdirectory Titles {#custom-subdirectory-titles}
+
+The auto-generated title converts hyphens and underscores to spaces and applies title case. If you need different capitalization or phrasing, use `dir_titles` to override specific subdirectory headings:
+
+```{.yaml filename="great-docs.yml"}
+sections:
+  - title: Demos
+    dir: examples
+    index: true
+    dir_titles:
+      getting-started: "Getting Started"
+      results-and-reporting: "Results/Reporting"
+      advanced-topics: "Advanced Topics"
+```
+
+The keys in `dir_titles` are the subdirectory names **after** numeric prefix stripping (e.g., use `getting-started`, not `01-getting-started`). Any subdirectory not listed in the mapping falls back to the auto-generated title.
+
+::: {.callout-tip}
+## When to use `dir_titles`
+This is useful when the auto-generated title doesn't match your preferred style — for example, turning "Results And Reporting" into "Results/Reporting", or "Actions And Thresholds" into "Actions & Thresholds".
+:::
 
 ## Example: Visual Gallery
 
