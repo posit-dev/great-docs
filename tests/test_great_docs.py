@@ -6071,6 +6071,7 @@ class TestGdgSite144DocstringTables:
         assert "100" in html
         assert "42.5" in html
 
+
 def _bp_make_trans(objects=None):
     """Helper: create a BlueprintTransformer backed by a dict of objects."""
     objects = objects or {}
@@ -9648,6 +9649,117 @@ def test_add_section_sidebar_replaces_existing():
 
         assert len(sidebar) == 1
         assert sidebar[0]["title"] == "Recipes"
+
+
+def test_add_section_sidebar_strips_numeric_prefix_from_subdirs():
+    """_add_section_sidebar strips numeric prefixes from subdirectory sidebar titles."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        docs = GreatDocs(project_path=tmp_dir)
+        quarto_yml = docs.project_path / "_quarto.yml"
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+
+        config = {"website": {"sidebar": [], "navbar": {"left": []}}}
+        with open(quarto_yml, "w") as f:
+            write_yaml(config, f)
+
+        pages = [
+            {"filename": "01-getting-started/install.qmd", "title": "Install"},
+            {"filename": "01-getting-started/first-steps.qmd", "title": "First Steps"},
+            {"filename": "02-advanced/config.qmd", "title": "Config"},
+        ]
+        docs._add_section_sidebar("Tutorials", "tutorials", pages, has_user_index=True)
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        sidebar = result["website"]["sidebar"]
+        assert len(sidebar) == 1
+
+        sections = [c for c in sidebar[0]["contents"] if isinstance(c, dict) and "section" in c]
+        section_titles = [s["section"] for s in sections]
+
+        # Numeric prefixes should be stripped
+        assert "Getting Started" in section_titles
+        assert "Advanced" in section_titles
+        # Raw prefixed names should NOT appear
+        assert "01 Getting Started" not in section_titles
+        assert "02 Advanced" not in section_titles
+
+
+def test_add_section_sidebar_dir_titles_override():
+    """_add_section_sidebar uses dir_titles mapping to override sidebar section titles."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        docs = GreatDocs(project_path=tmp_dir)
+        quarto_yml = docs.project_path / "_quarto.yml"
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+
+        config = {"website": {"sidebar": [], "navbar": {"left": []}}}
+        with open(quarto_yml, "w") as f:
+            write_yaml(config, f)
+
+        pages = [
+            {"filename": "01-getting-started/install.qmd", "title": "Install"},
+            {"filename": "02-results-and-reporting/report.qmd", "title": "Report"},
+            {"filename": "03-advanced/config.qmd", "title": "Config"},
+        ]
+        dir_titles = {
+            "getting-started": "Getting Started",
+            "results-and-reporting": "Results/Reporting",
+            # "advanced" intentionally omitted — should fall back to auto-generated
+        }
+        docs._add_section_sidebar(
+            "Demos", "demos", pages, has_user_index=True, dir_titles=dir_titles
+        )
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        sidebar = result["website"]["sidebar"]
+        sections = [c for c in sidebar[0]["contents"] if isinstance(c, dict) and "section" in c]
+        section_titles = [s["section"] for s in sections]
+
+        assert "Getting Started" in section_titles
+        assert "Results/Reporting" in section_titles
+        # Fallback auto-generated title for unmapped subdir
+        assert "Advanced" in section_titles
+
+
+def test_user_guide_sidebar_auto_strips_numeric_prefix_from_subdirs():
+    """_generate_user_guide_sidebar_auto strips numeric prefixes from subdir section titles."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        src = tmp / "user_guide"
+        src.mkdir()
+        sub1 = src / "01-basics"
+        sub1.mkdir()
+        (sub1 / "intro.qmd").write_text("Intro\n")
+        sub2 = src / "02-advanced-topics"
+        sub2.mkdir()
+        (sub2 / "deep.qmd").write_text("Deep\n")
+
+        guide_info = {
+            "files": [
+                {"path": sub1 / "intro.qmd", "title": "Intro", "section": None},
+                {"path": sub2 / "deep.qmd", "title": "Deep", "section": None},
+            ],
+            "source_dir": src,
+            "sections": {},
+        }
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._generate_user_guide_sidebar_auto(guide_info)
+
+        section_items = [c for c in result["contents"] if isinstance(c, dict) and "section" in c]
+        section_titles = [s["section"] for s in section_items]
+
+        # Numeric prefixes should be stripped
+        assert "Basics" in section_titles
+        assert "Advanced Topics" in section_titles
+        # Raw prefixed names should NOT appear
+        assert "01 Basics" not in section_titles
+        assert "02 Advanced Topics" not in section_titles
 
 
 def test_inject_section_body_class_adds_class():
@@ -29311,7 +29423,6 @@ def test_mixin_rendered_member_pages_group_str():
 def test_mixin_render_body_with_doc_members():
     """render_body renders docstring + member groups for Doc members."""
 
-
     _, doc_cls = _build_class_with_members()
     render = RenderDocClass(doc_cls, level=1)
 
@@ -29326,7 +29437,6 @@ def test_mixin_render_body_with_doc_members():
 
 def test_mixin_render_body_with_member_pages():
     """render_body renders docstring + member page groups for MemberPage members."""
-
 
     _, doc_cls = _build_class_with_member_pages()
     render = RenderDocClass(doc_cls, level=1)
@@ -29905,7 +30015,6 @@ def test_mixin_render_functions_module_uses_functions_slug():
 
 def test_mixin_render_members_module_uses_functions_slug():
     """For DocModule, render_members has 'Functions' group not 'Methods'."""
-
 
     mod_obj = dc.Module(name="mymod")
     func_obj = dc.Function(name="func", lineno=1)
@@ -31596,10 +31705,8 @@ def test_rstconv_simple_table_two_sep_via_wrapper():
     assert "|" in result
 
 
-
 def test_docclass_attributes_excludes_dataclass_params():
     """DocClass.attributes filters out dataclass params when is_dataclass=True."""
-
 
     cls_obj = dc.Class(name="DC", lineno=1)
     cls_obj.labels.add("dataclass")
@@ -31642,7 +31749,6 @@ def test_docclass_attributes_excludes_dataclass_params():
 def test_docclass_parameter_attributes_with_dataclass():
     """DocClass.parameter_attributes returns params found in class attributes."""
 
-
     cls_obj = dc.Class(name="DC2", lineno=1)
     cls_obj.labels.add("dataclass")
 
@@ -31672,7 +31778,6 @@ def test_docclass_parameter_attributes_with_dataclass():
 
 def test_docclass_init_parameters_with_dataclass():
     """DocClass.init_parameters returns params NOT in class attributes."""
-
 
     cls_obj = dc.Class(name="DC3", lineno=1)
     cls_obj.labels.add("dataclass")
@@ -31712,7 +31817,6 @@ def test_docclass_init_parameters_with_dataclass():
 def test_docmodule_render_signature_no_signature_name():
     """DocModule.render_signature() returns None when signature_name is falsy."""
 
-
     mod_obj = dc.Module(name="my_module")
     doc_mod = layout.DocModule(name="my_module", obj=mod_obj)
 
@@ -31727,7 +31831,6 @@ def test_docmodule_render_signature_no_signature_name():
 
 def test_docmodule_render_signature_with_name():
     """DocModule.render_signature() returns Div when signature_name is set."""
-
 
     mod_obj = dc.Module(name="my_module")
     doc_mod = layout.DocModule(name="my_module", obj=mod_obj)
@@ -31745,7 +31848,6 @@ def test_docmodule_render_signature_with_name():
 
 def test_docmodule_post_init_narrows_types():
     """DocModule.__post_init__() narrows self.doc and self.obj types."""
-
 
     mod_obj = dc.Module(name="test_mod")
     doc_mod = layout.DocModule(name="test_mod", obj=mod_obj)
@@ -31771,7 +31873,6 @@ def test_get_render_type_raises_for_unmapped_type():
 
 def test_renderbase_title_property():
     """RenderBase.title calls render_title()."""
-
 
     mod_obj = dc.Module(name="tmod")
     doc_mod = layout.DocModule(name="tmod", obj=mod_obj)
@@ -31824,7 +31925,6 @@ def test_extract_directives_seealso_empty_entry():
 
 def test_docattribute_render_signature_type_kind():
     """DocAttribute.render_signature() clears name/annotation for TypeAlias kind."""
-
 
     attr_obj = dc.Attribute(name="MyType", lineno=1)
     attr_obj.annotation = gf.ExprName("str")
@@ -31883,7 +31983,6 @@ def test_renderbase_summary_property():
 def test_docclass_attribute_member_pages_dataclass():
     """DocClass.attribute_member_pages filters dataclass params."""
 
-
     cls_obj = dc.Class(name="DC4", lineno=1)
     cls_obj.labels.add("dataclass")
 
@@ -31921,7 +32020,6 @@ def test_docclass_attribute_member_pages_dataclass():
 def test_docclass_parameter_attributes_non_dataclass():
     """DocClass.parameter_attributes returns empty for non-dataclass."""
 
-
     cls_obj = dc.Class(name="RegularClass", lineno=1)
     doc_cls = layout.DocClass(name="RegularClass", obj=cls_obj, members=[])
 
@@ -31935,7 +32033,6 @@ def test_docclass_parameter_attributes_non_dataclass():
 
 def test_docclass_init_parameters_non_dataclass():
     """DocClass.init_parameters returns empty for non-dataclass."""
-
 
     cls_obj = dc.Class(name="RegularClass2", lineno=1)
     doc_cls = layout.DocClass(name="RegularClass2", obj=cls_obj, members=[])
@@ -32936,7 +33033,6 @@ def test_render_api_page_metadata():
     doc_obj = griffe_to_doc(func_obj)
     page = layout.Page(path="reference/my_func", contents=[doc_obj])
 
-
     ap = RenderAPIPage(layout_obj=page, level=1)
     meta = ap.render_metadata()
     meta_str = str(meta)
@@ -32950,7 +33046,6 @@ def test_render_api_page_render_body():
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
     page = layout.Page(path="reference/my_func", contents=[doc_obj])
-
 
     ap = RenderAPIPage(layout_obj=page, level=1)
     body = ap.render_body()
@@ -32970,7 +33065,6 @@ def test_render_api_page_summary_with_summary_details():
         summary=summary,
     )
 
-
     ap = RenderAPIPage(layout_obj=page, level=1)
     result = ap.render_summary()
 
@@ -32988,7 +33082,6 @@ def test_render_api_page_summary_multi_no_flatten_raises():
         contents=[f1, f2],
         flatten=False,
     )
-
 
     ap = RenderAPIPage(layout_obj=page, level=1)
     with pytest.raises(ValueError, match="Cannot summarize page"):
@@ -33248,9 +33341,6 @@ def test_render_reference_page_render_body():
     section = layout.Section(title="Functions", contents=[doc_func])
     lyt = layout.Layout(title="API", sections=[section])
 
-
-
-
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
         rp = RenderReferencePage(layout_obj=lyt, level=1)
@@ -33270,9 +33360,6 @@ def test_render_reference_section_body_with_contents():
     doc_func = layout.DocFunction(name="some_func", obj=func_obj, anchor="some_func")
 
     section = layout.Section(title="Functions", contents=[doc_func])
-
-
-
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -33321,9 +33408,6 @@ def test_render_api_page_full_lifecycle():
 
     page = layout.Page(path="reference/my_func", contents=[doc_func])
 
-
-
-
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
         ap = RenderAPIPage(layout_obj=page, level=1)
@@ -33364,9 +33448,6 @@ def test_render_api_page_with_summary_details():
         summary=layout.SummaryDetails(name="fn()", desc="Do something"),
     )
 
-
-
-
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
         ap = RenderAPIPage(layout_obj=page, level=1)
@@ -33378,7 +33459,6 @@ def test_render_api_page_with_summary_details():
 
 def test_renderdoc_display_name_relative_level_gt1():
     """RenderDoc.display_name uses 'name' format when level > 1."""
-
 
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_func = layout.DocFunction(name="my_func", obj=func_obj)
@@ -33394,7 +33474,6 @@ def test_renderdoc_display_name_relative_level_gt1():
 def test_renderdoc_render_annotation_non_attribute_raises():
     """RenderDoc.render_annotation() raises TypeError for non-attribute."""
 
-
     func_obj = gf.Function(name="fn", lineno=1)
     doc_func = layout.DocFunction(name="fn", obj=func_obj)
 
@@ -33407,7 +33486,6 @@ def test_renderdoc_render_annotation_non_attribute_raises():
 
 def test_renderdoc_render_annotation_attribute():
     """RenderDoc.render_annotation() for attribute."""
-
 
     attr_obj = gf.Attribute(name="x", lineno=1)
     attr_obj.annotation = gf.ExprName("int")
@@ -33424,7 +33502,6 @@ def test_renderdoc_render_annotation_attribute():
 def test_renderdoc_render_annotation_none():
     """RenderDoc.render_annotation() with None annotation."""
 
-
     attr_obj = gf.Attribute(name="y", lineno=1)
     attr_obj.annotation = None
     doc_attr = layout.DocAttribute(name="y", obj=attr_obj)
@@ -33438,7 +33515,6 @@ def test_renderdoc_render_annotation_none():
 
 def test_renderdoc_docstring_section_deprecated():
     """RenderDoc handles DocstringSectionDeprecated."""
-
 
     func_obj = gf.Function(name="old_fn", lineno=1)
     func_obj.docstring = gf.Docstring(
@@ -33459,7 +33535,6 @@ def test_renderdoc_docstring_section_deprecated():
 def test_renderdoc_docstring_section_examples():
     """RenderDoc handles DocstringSectionExamples."""
 
-
     func_obj = gf.Function(name="ex_fn", lineno=1)
     func_obj.docstring = gf.Docstring(
         "Short desc.\n\nExamples\n--------\n>>> 1 + 1\n2\n",
@@ -33479,7 +33554,6 @@ def test_renderdoc_docstring_section_examples():
 def test_renderdoc_docstring_section_text_in_div():
     """RenderDoc wraps 'Text' sections in a Div."""
 
-
     func_obj = gf.Function(name="txt_fn", lineno=1)
     func_obj.docstring = gf.Docstring(
         "Short description.\n\nParameters\n----------\nx : int\n    A number.",
@@ -33497,7 +33571,6 @@ def test_renderdoc_docstring_section_text_in_div():
 
 def test_renderdoc_source_link_with_github_url():
     """RenderDoc.source_link returns Link when GITHUB_REPO_URL is set."""
-
 
     mod = gf.Module(name="mymod", filepath=Path("/fake/pkg/mymod.py"))
     func_obj = gf.Function(name="linked_fn", lineno=5)
@@ -33523,7 +33596,6 @@ def test_renderdoc_source_link_with_github_url():
 
 def test_renderdoc_see_also_section():
     """RenderDoc handles See Also section."""
-
 
     func_obj = gf.Function(name="sa_fn", lineno=1)
     func_obj.docstring = gf.Docstring(
@@ -33965,7 +34037,6 @@ def test_build_github_source_url_with_source_path():
 def test_type_sections_empty_lists():
     """TypeSections with no items produces empty Blocks output."""
 
-
     ts = TypeSections(
         protocols_items=[],
         typevars_items=[],
@@ -33984,11 +34055,9 @@ def test_type_sections_empty_lists():
 def test_type_sections_items_combines_all():
     """TypeSections.items returns protocols + typevars + typealiases combined."""
 
-
     p_item = layout.Item(name="P", obj=MagicMock(), uri="ref/P.html#P", dispname="P")
     tv_item = layout.Item(name="TV", obj=MagicMock(), uri="ref/TV.html#TV", dispname="TV")
     ta_item = layout.Item(name="TA", obj=MagicMock(), uri="ref/TA.html#TA", dispname="TA")
-
 
     mock_render = MagicMock()
     mock_render_cls = MagicMock(return_value=mock_render)
@@ -34015,12 +34084,10 @@ def test_type_sections_items_combines_all():
 def test_type_sections_post_init_protocols_no_summary():
     """TypeSections.__post_init__ sets show_members_summary=False on protocols."""
 
-
     p_item = layout.Item(name="Proto", obj=MagicMock())
 
     mock_render = MagicMock()
     mock_render_cls = MagicMock(return_value=mock_render)
-
 
     with (
         patch("great_docs._renderer.typing_information.griffe_to_doc"),
@@ -34040,12 +34107,10 @@ def test_type_sections_post_init_protocols_no_summary():
 def test_type_sections_post_init_typevars_no_sig_name():
     """TypeSections.__post_init__ sets show_signature_name=False on typevars."""
 
-
     tv_item = layout.Item(name="T", obj=MagicMock())
 
     mock_render = MagicMock()
     mock_render_cls = MagicMock(return_value=mock_render)
-
 
     with (
         patch("great_docs._renderer.typing_information.griffe_to_doc"),
@@ -34065,12 +34130,10 @@ def test_type_sections_post_init_typevars_no_sig_name():
 def test_type_sections_post_init_typealiases_settings():
     """TypeSections.__post_init__ sets show_signature_name=False and show_signature_annotation=False on typealiases."""
 
-
     ta_item = layout.Item(name="MyAlias", obj=MagicMock())
 
     mock_render = MagicMock()
     mock_render_cls = MagicMock(return_value=mock_render)
-
 
     with (
         patch("great_docs._renderer.typing_information.griffe_to_doc"),
@@ -34091,13 +34154,11 @@ def test_type_sections_post_init_typealiases_settings():
 def test_type_sections_render_body_protocols_section():
     """TypeSections.render_body includes 'Protocols' header when protocols exist."""
 
-
     p_item = layout.Item(name="P", obj=MagicMock())
 
     mock_render = MagicMock()
     mock_render.__str__ = MagicMock(return_value="<protocol-rendered>")
     mock_render_cls = MagicMock(return_value=mock_render)
-
 
     with (
         patch("great_docs._renderer.typing_information.griffe_to_doc"),
@@ -34121,13 +34182,11 @@ def test_type_sections_render_body_protocols_section():
 def test_type_sections_render_body_typevars_section():
     """TypeSections.render_body includes 'Type Variables' header when typevars exist."""
 
-
     tv_item = layout.Item(name="T", obj=MagicMock())
 
     mock_render = MagicMock()
     mock_render.__str__ = MagicMock(return_value="<typevar-rendered>")
     mock_render_cls = MagicMock(return_value=mock_render)
-
 
     with (
         patch("great_docs._renderer.typing_information.griffe_to_doc"),
@@ -34149,13 +34208,11 @@ def test_type_sections_render_body_typevars_section():
 def test_type_sections_render_body_typealiases_section():
     """TypeSections.render_body includes 'Type Aliases' header when typealiases exist."""
 
-
     ta_item = layout.Item(name="A", obj=MagicMock())
 
     mock_render = MagicMock()
     mock_render.__str__ = MagicMock(return_value="<alias-rendered>")
     mock_render_cls = MagicMock(return_value=mock_render)
-
 
     with (
         patch("great_docs._renderer.typing_information.griffe_to_doc"),
@@ -34177,7 +34234,6 @@ def test_type_sections_render_body_typealiases_section():
 def test_type_sections_render_body_all_sections():
     """TypeSections.render_body includes all three section headers when all types present."""
 
-
     p_item = layout.Item(name="P", obj=MagicMock())
     tv_item = layout.Item(name="T", obj=MagicMock())
     ta_item = layout.Item(name="A", obj=MagicMock())
@@ -34185,7 +34241,6 @@ def test_type_sections_render_body_all_sections():
     mock_render = MagicMock()
     mock_render.__str__ = MagicMock(return_value="<rendered>")
     mock_render_cls = MagicMock(return_value=mock_render)
-
 
     with (
         patch("great_docs._renderer.typing_information.griffe_to_doc"),
@@ -34208,7 +34263,6 @@ def test_type_sections_render_body_all_sections():
 def test_type_information_post_init():
     """TypeInformation.__post_init__ sets package and dir from builder."""
 
-
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
     mock_builder.dir = "reference"
@@ -34222,7 +34276,6 @@ def test_type_information_post_init():
 def test_type_information_base_uri_strips_package():
     """TypeInformation.base_uri strips the package prefix from module_path."""
 
-
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
     mock_builder.dir = "reference"
@@ -34234,7 +34287,6 @@ def test_type_information_base_uri_strips_package():
 def test_type_information_base_uri_no_package_prefix():
     """TypeInformation.base_uri keeps full path when module doesn't start with package."""
 
-
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
     mock_builder.dir = "reference"
@@ -34245,7 +34297,6 @@ def test_type_information_base_uri_no_package_prefix():
 
 def test_type_information_sections_calls_get_object():
     """TypeInformation.sections calls get_object and classifies members."""
-
 
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
@@ -34298,7 +34349,6 @@ def test_type_information_sections_calls_get_object():
 def test_type_information_sections_item_uris():
     """TypeInformation.sections creates items with correct URIs based on base_uri."""
 
-
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
     mock_builder.dir = "reference"
@@ -34333,7 +34383,6 @@ def test_type_information_sections_item_uris():
 def test_type_information_content_has_meta_and_sections():
     """TypeInformation.content returns Blocks with Meta title and TypeSections."""
 
-
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
     mock_builder.dir = "reference"
@@ -34352,7 +34401,6 @@ def test_type_information_content_has_meta_and_sections():
 def test_type_information_str_delegates_to_content():
     """TypeInformation.__str__ returns str(self.content)."""
 
-
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
     mock_builder.dir = "reference"
@@ -34369,8 +34417,6 @@ def test_type_information_str_delegates_to_content():
 
 def test_type_information_write_creates_file():
     """TypeInformation.write() extends builder items and writes the qmd file."""
-
-
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         mock_builder = MagicMock()
@@ -34396,8 +34442,6 @@ def test_type_information_write_creates_file():
 
 def test_type_information_write_extends_builder_items():
     """TypeInformation.write() adds all section items to builder.items."""
-
-
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         ref_dir = str(Path(tmp_dir) / "reference")
