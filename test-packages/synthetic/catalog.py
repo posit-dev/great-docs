@@ -350,6 +350,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_code_span_headings",  # 172
     # 173: Blog section with user-provided index.qmd
     "gdtest_sec_blog_user_index",  # 173
+    # 174: Custom section with dir_titles and numeric-prefix subdirectories
+    "gdtest_sec_dir_titles",  # 174
 ]
 
 
@@ -535,6 +537,7 @@ DIMENSIONS: dict[str, dict[str, str]] = {
     "N8": {"axis": "sections", "label": "Section index opt-in"},
     "N9": {"axis": "sections", "label": "Single-page sidebar hide"},
     "N10": {"axis": "sections", "label": "Section index hero cards"},
+    "N11": {"axis": "sections", "label": "dir_titles + numeric prefix subdirs"},
     # Reference axes
     "P1": {"axis": "reference", "label": "Explicit reference"},
     "P2": {"axis": "reference", "label": "members: false"},
@@ -1969,6 +1972,14 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "Tests that Great Docs injects toc: false and body-classes: "
         "gd-blog-index into the user's index, hiding the TOC sidebar "
         "and copy-page widget."
+    ),
+    "gdtest_sec_dir_titles": (
+        "Custom section with dir_titles overrides and numeric-prefix "
+        "subdirectories (01-getting-started/, 02-results-and-reporting/, "
+        "03-advanced-topics/). Tests that numeric prefixes are stripped "
+        "from sidebar section headings and that dir_titles mapping "
+        "overrides the auto-generated title (e.g., 'Results/Reporting' "
+        "instead of 'Results And Reporting')."
     ),
 }
 
