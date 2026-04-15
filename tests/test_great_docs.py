@@ -30016,7 +30016,7 @@ def test_mixin_render_functions_module_uses_functions_slug():
 def test_mixin_render_members_module_uses_functions_slug():
     """For DocModule, render_members has 'Functions' group not 'Methods'."""
 
-    mod_obj = dc.Module(name="mymod")
+    mod_obj = dc.Module(name="mymod", filepath=Path("/tmp/mymod.py"))
     func_obj = dc.Function(name="func", lineno=1)
     cls_obj = dc.Class(name="Cls", lineno=2)
     attr_obj = dc.Attribute(name="val", lineno=3)
