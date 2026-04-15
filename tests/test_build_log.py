@@ -320,17 +320,27 @@ class TestEstimateBuildTime:
 
     def test_api_items_only(self):
         result = estimate_build_time(n_api_items=100, n_total_pages=0)
-        assert result == pytest.approx(5.0 + 100 * 0.02)
+        assert result == pytest.approx(5.0 + 100 * 3.2)
 
     def test_pages_only(self):
         result = estimate_build_time(n_api_items=0, n_total_pages=200)
-        expected = 5.0 + 200 * 0.8 + 200 * 0.03
+        expected = 5.0 + 200 * 0.5 + 200 * 0.3
         assert result == pytest.approx(expected)
 
+    def test_code_cells_only(self):
+        result = estimate_build_time(n_api_items=0, n_total_pages=0, n_code_cells=10)
+        assert result == pytest.approx(5.0 + 10 * 3.0)
+
     def test_combined(self):
-        result = estimate_build_time(n_api_items=162, n_total_pages=203)
-        expected = (5.0 + 162 * 0.02) + (203 * 0.8) + (203 * 0.03)
+        result = estimate_build_time(n_api_items=162, n_total_pages=203, n_code_cells=50)
+        expected = 5.0 + 162 * 3.2 + 203 * 0.5 + 50 * 3.0 + 203 * 0.3
         assert result == pytest.approx(expected)
+
+    def test_pointblank_scenario(self):
+        """Calibration check: Pointblank-sized project should estimate ~15–20 min."""
+        result = estimate_build_time(n_api_items=163, n_total_pages=208, n_code_cells=40)
+        minutes = result / 60
+        assert 10 < minutes < 25
 
     def test_default_args(self):
         result = estimate_build_time()

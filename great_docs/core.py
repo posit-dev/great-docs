@@ -12237,6 +12237,7 @@ body-classes: "gd-homepage"
         # Count total pages for time estimate (API items from config)
         n_api_items = 0
         n_total_pages = 0
+        n_code_cells = 0
         obj_types_path = self.project_path / "_object_types.json"
         if obj_types_path.exists():
             try:
@@ -12245,8 +12246,52 @@ body-classes: "gd-homepage"
             except Exception:
                 pass
 
+        # Cheap page & code-cell scan for the time estimate
+        try:
+            _qmd_exts = ("*.qmd", "*.md")
+            _page_dirs: list[Path] = []
+
+            # User guide pages
+            ug_dir = self._find_user_guide_dir()
+            if ug_dir and ug_dir.is_dir():
+                _page_dirs.append(ug_dir)
+
+            # Custom section directories
+            for sec in self._config.sections:
+                sec_dir_name = sec.get("dir", "")
+                if sec_dir_name:
+                    sec_dir = self._find_package_root() / sec_dir_name
+                    if sec_dir.is_dir():
+                        _page_dirs.append(sec_dir)
+
+            for d in _page_dirs:
+                for ext in _qmd_exts:
+                    for p in d.rglob(ext):
+                        n_total_pages += 1
+                        try:
+                            text = p.read_text(encoding="utf-8", errors="ignore")
+                            n_code_cells += text.count("```{python}")
+                        except OSError:
+                            pass
+
+            # Reference pages (≈ n_api_items, one page per item)
+            n_total_pages += n_api_items
+
+            # Fixed pages: homepage, changelog, citation, etc.
+            n_total_pages += 3
+
+            # CLI pages (rough estimate if enabled)
+            if self._config.cli_enabled:
+                n_total_pages += 10
+        except Exception:
+            pass  # never let estimation crash the build
+
         total_steps = 17
-        est_seconds = estimate_build_time(n_api_items=n_api_items, n_total_pages=n_total_pages)
+        est_seconds = estimate_build_time(
+            n_api_items=n_api_items,
+            n_total_pages=n_total_pages,
+            n_code_cells=n_code_cells,
+        )
 
         log = BuildLog(
             package_name=package_name,
