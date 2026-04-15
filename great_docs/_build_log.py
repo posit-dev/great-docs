@@ -12,9 +12,9 @@ from dataclasses import dataclass, field
 # Emoji / decoration stripping
 # ---------------------------------------------------------------------------
 
-# Common emoji used by internal print() calls that we want to normalise away
-# in structured verbose output.  We match a broad set of multi-byte emoji
-# codepoints at the *start* of a line (after optional whitespace).
+# Common emoji used by internal print() calls that we want to normalise away in structured verbose
+# output. We match a broad set of multi-byte emoji codepoints at the *start* of a line (after
+# optional whitespace).
 _EMOJI_RE = re.compile(
     r"^[\s]*([\U0001f300-\U0001f9ff\u2600-\u27bf\u2700-\u27bf"
     r"\U0001fa00-\U0001faff\u200d\ufe0f\u26a0\u2705\u274c"
@@ -165,18 +165,45 @@ def format_estimate(seconds: float) -> str:
 
 
 def estimate_build_time(
+    *,
     n_api_items: int = 0,
     n_total_pages: int = 0,
+    n_code_cells: int = 0,
 ) -> float:
     """Return an estimated build time in seconds.
 
-    Uses the heuristic from the spec:
-    `prepare + quarto + post_render`.
+    Calibrated against large real-world projects on a current-generation MacBook Pro (M-series).
+    Each coefficient represents a single dominant cost observed in profiling:
+
+    =========  ===========  ============================================
+    Phase      Coefficient  Rationale
+    =========  ===========  ============================================
+    griffe     3.2 s/item   Import + introspection (~1.3 s) **plus**
+                            source-link resolution (~1.9 s) per
+                            `_object_types.json` entry.
+    quarto     0.5 s/page   Markdown-only page render average
+    code cell  3.0 s/cell   Jupyter kernel startup amortised per cell
+    post-rend  0.3 s/page   HTML transforms (BeautifulSoup)
+    =========  ===========  ============================================
+
+    Parameters
+    ----------
+    n_api_items
+        Total entries in `_object_types.json` (classes + methods +
+        functions + attributes — **not** just top-level exports).
+    n_total_pages
+        Total `.qmd` / `.md` pages Quarto will render (reference +
+        user guide + sections + changelog + homepage + CLI).
+    n_code_cells
+        Number of executable ````` ```{python} ````` fences across
+        all `.qmd` files.  Each cell adds ~3 s of Jupyter overhead.
     """
-    prepare = 5.0 + n_api_items * 0.02
-    quarto = n_total_pages * 0.8
-    post_render = n_total_pages * 0.03
-    return prepare + quarto + post_render
+    base = 5.0  # fixed overhead (directory setup, asset copy, etc.)
+    griffe = n_api_items * 3.2  # import + introspect + source links
+    quarto = n_total_pages * 0.5  # plain page rendering
+    code = n_code_cells * 3.0  # executable code cell overhead
+    post_render = n_total_pages * 0.3  # HTML post-processing
+    return base + griffe + quarto + code + post_render
 
 
 # ---------------------------------------------------------------------------
