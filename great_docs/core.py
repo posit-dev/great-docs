@@ -15,7 +15,7 @@ def _patch_griffe():
     """Ensure griffe has CyclicAliasError and AliasResolutionError at top level.
 
     Older griffe versions don't re-export these from the top-level package.
-    This patches them in so ``griffe.CyclicAliasError`` etc. work everywhere.
+    This patches them in so `griffe.CyclicAliasError` etc. work everywhere.
     """
     import griffe
 
@@ -665,15 +665,14 @@ class GreatDocs:
         """
         Scan conventional paths for hero-specific logo files.
 
-        Looks for ``logo-hero.*`` files in the project root and ``assets/``
-        directory.  If a light/dark pair is found (``logo-hero-light.*`` and
-        ``logo-hero-dark.*``), both are returned.
+        Looks for `logo-hero.*` files in the project root and `assets/` directory.  If a light/dark
+        pair is found (`logo-hero-light.*` and `logo-hero-dark.*`), both are returned.
 
         Returns
         -------
         dict | None
-            A dict with ``light`` (and optionally ``dark``) keys, or ``None``
-            if no hero logo file was found.
+            A dict with `light` (and optionally `dark`) keys, or `None` if no hero logo file was
+            found.
         """
         package_root = self._find_package_root()
 
@@ -838,8 +837,8 @@ class GreatDocs:
     def _fit_to_square(img: "Image.Image", size: int) -> "Image.Image":
         """Fit an image into a square canvas, preserving aspect ratio.
 
-        The image is scaled to fit within ``size x size``, then centered
-        on a transparent canvas of exactly ``size x size``.
+        The image is scaled to fit within `size x size`, then centered on a transparent canvas of
+        exactly `size x size`.
         """
         from PIL import Image
 
@@ -1667,7 +1666,7 @@ class GreatDocs:
         Returns
         -------
         dict[str, list[dict[str, str]]]
-            Mapping of tag name → list of ``{"title": ..., "href": ..., "section": ...}``.
+            Mapping of tag name → list of `{"title": ..., "href": ..., "section": ...}`.
         """
         tag_index: dict[str, list[dict[str, str]]] = {}
         shadow_tags = set(self._config.tags_shadow)
@@ -1724,11 +1723,11 @@ class GreatDocs:
 
     @staticmethod
     def _split_tag_parts(tag: str) -> list[str]:
-        """Split a tag on unescaped ``/`` separators.
+        r"""Split a tag on unescaped `/` separators.
 
-        A backslash-escaped slash (``\\/``) is treated as a literal ``/``
+        A backslash-escaped slash (`\/`) is treated as a literal `/`
         character and does **not** create a hierarchy level.  After splitting,
-        each part has ``\\/`` replaced with ``/``.
+        each part has `\/` replaced with `/`.
         """
         # Split on "/" that is NOT preceded by "\"
         parts = re.split(r"(?<!\\)/", tag)
@@ -1741,12 +1740,12 @@ class GreatDocs:
         Parameters
         ----------
         tag_index
-            Flat tag-to-pages mapping from ``_collect_page_tags()``.
+            Flat tag-to-pages mapping from `_collect_page_tags()`.
 
         Returns
         -------
         dict
-            Nested dict with ``"__pages__"`` lists at each node.
+            Nested dict with `"__pages__"` lists at each node.
         """
         tree: dict = {}
         for tag, pages in sorted(tag_index.items()):
@@ -1765,17 +1764,17 @@ class GreatDocs:
 
     def _generate_tags_index_page(self, tag_index: dict[str, list[dict[str, str]]]) -> str:
         """
-        Generate a ``tags/index.qmd`` page listing all tags and their linked pages.
+        Generate a `tags/index.qmd` page listing all tags and their linked pages.
 
         Parameters
         ----------
         tag_index
-            Tag-to-pages mapping from ``_collect_page_tags()``.
+            Tag-to-pages mapping from `_collect_page_tags()`.
 
         Returns
         -------
         str
-            The relative path of the generated file (``"tags/index.qmd"``).
+            The relative path of the generated file (`tags/index.qmd`).
         """
         from ._translations import get_translation
 
@@ -1904,12 +1903,12 @@ class GreatDocs:
 
     def _generate_tags_json(self, tag_index: dict[str, list[dict[str, str]]]) -> None:
         """
-        Write ``_tags.json`` for the client-side JS to render tag pills.
+        Write `_tags.json` for the client-side JS to render tag pills.
 
         Parameters
         ----------
         tag_index
-            Tag-to-pages mapping from ``_collect_page_tags()``.
+            Tag-to-pages mapping from `_collect_page_tags()`.
         """
         # Build a page-centric index: href → [tag1, tag2, ...]
         page_tags: dict[str, list[str]] = {}
@@ -2034,14 +2033,13 @@ class GreatDocs:
         """
         Main entry point for the page tags feature.
 
-        Collects tags from frontmatter, generates the tags index page,
-        writes ``_tags.json`` for client-side rendering, and wires the
-        navbar link.
+        Collects tags from frontmatter, generates the tags index page, writes `_tags.json` for
+        client-side rendering, and wires the navbar link.
 
         Returns
         -------
         bool
-            ``True`` if any tags were found and processed.
+            `True` if any tags were found and processed.
         """
         tag_index = self._collect_page_tags()
         if not tag_index:
@@ -2059,11 +2057,11 @@ class GreatDocs:
         return True
 
     def _inject_tags_data_inline(self) -> None:
-        """Inject ``_tags.json`` data as an inline ``<script>`` in ``_quarto.yml``.
+        """Inject `_tags.json` data as an inline `<script>` in `_quarto.yml`.
 
-        This ensures ``page-tags.js`` can read the data directly from
-        ``window.__GD_TAGS_DATA__`` without an XHR request, which would fail
-        under ``file://`` protocol or when the relative path depth is wrong.
+        This ensures `page-tags.js` can read the data directly from `window.__GD_TAGS_DATA__`
+        without an XHR request, which would fail under `file://` protocol or when the relative path
+        depth is wrong.
         """
         tags_json_path = self.project_path / "_tags.json"
         if not tags_json_path.is_file():
@@ -2139,7 +2137,7 @@ class GreatDocs:
 
     @staticmethod
     def _tag_tooltip(pages: list[dict[str, str]], lang: str = "en") -> str:
-        """Build a translated tooltip string like ``'2 pages in User Guide'``."""
+        """Build a translated tooltip string like `'2 pages in User Guide'`."""
         from ._translations import get_translation
 
         n = len(pages)
@@ -2163,7 +2161,7 @@ class GreatDocs:
         parent_icon: str = "",
         tooltip: str = "",
     ) -> str:
-        """Return a pill-styled ``<span>`` for use as a tag heading.
+        """Return a pill-styled `<span>` for use as a tag heading.
 
         For hierarchical child tags, renders a segmented pill with the parent
         as a muted left segment separated by a vertical line.  The icon always
@@ -2186,10 +2184,10 @@ class GreatDocs:
 
     def _collect_page_statuses(self) -> dict[str, str]:
         """
-        Scan all built .qmd files for ``status`` in frontmatter.
+        Scan all built .qmd files for `status` in frontmatter.
 
-        Returns a mapping of page href (relative to build dir) to the status
-        string (e.g. ``"new"``, ``"deprecated"``).
+        Returns a mapping of page href (relative to build dir) to the status string (e.g. `"new"`,
+        `"deprecated"`).
 
         Returns
         -------
@@ -2240,12 +2238,13 @@ class GreatDocs:
 
     def _generate_status_json(self, status_map: dict[str, str]) -> None:
         """
-        Write ``_page_status.json`` for the client-side JS to render badges.
+        Write `_page_status.json` for the client-side JS to render badges.
 
         Parameters
         ----------
         status_map
-            Page href → status string mapping from ``_collect_page_statuses()``.
+            Page href → status string mapping from `_collect_page_statuses()`.
+
         """
         from ._icons import get_icon_svg
         from ._translations import get_translation
@@ -2286,10 +2285,10 @@ class GreatDocs:
             json.dump(status_json, f)
 
     def _inject_status_data_inline(self) -> None:
-        """Inject ``_page_status.json`` data as an inline ``<script>`` in ``_quarto.yml``.
+        """Inject `_page_status.json` data as an inline `<script>` in `_quarto.yml`.
 
-        Ensures ``page-status-badges.js`` can read status data directly from
-        ``window.__GD_STATUS_DATA__``.
+        Ensures `page-status-badges.js` can read status data directly from
+        `window.__GD_STATUS_DATA__`.
         """
         status_json_path = self.project_path / "_page_status.json"
         if not status_json_path.is_file():
@@ -2344,13 +2343,13 @@ class GreatDocs:
         """
         Main entry point for the page status badges feature.
 
-        Collects statuses from frontmatter, writes ``_page_status.json``,
-        and injects the inline data script.
+        Collects statuses from frontmatter, writes `_page_status.json`, and injects the inline data
+        script.
 
         Returns
         -------
         bool
-            ``True`` if any pages with status were found and processed.
+            `True` if any pages with status were found and processed.
         """
         status_map = self._collect_page_statuses()
         if not status_map:
@@ -2608,7 +2607,7 @@ class GreatDocs:
 
         Also copies co-located asset files (images, data files, etc.)
         from any directory that contains a .qmd/.md file, so that
-        relative references like ``![](./image.png)`` resolve correctly.
+        relative references like `![](./image.png)` resolve correctly.
 
         Parameters
         ----------
@@ -2742,7 +2741,7 @@ class GreatDocs:
         Auto-generate an index page for a custom section.
 
         Creates a gallery-style listing from each page's frontmatter title
-        and description.  Entries that have an ``image`` field are rendered
+        and description.  Entries that have an `image` field are rendered
         as image cards in a grid (1- or 2-column); entries without images
         are rendered as a simple single-column link list below the cards.
 
@@ -2751,7 +2750,7 @@ class GreatDocs:
         title
             Section title (used as page heading).
         pages
-            List of page dicts from ``_copy_section_files``.
+            List of page dicts from `_copy_section_files`.
         slug
             URL slug for the section.
         dest_dir
@@ -2895,7 +2894,7 @@ class GreatDocs:
         dir_titles: dict[str, str] | None = None,
     ) -> None:
         """
-        Add a sidebar for the custom section to ``_quarto.yml``.
+        Add a sidebar for the custom section to `_quarto.yml`.
 
         Parameters
         ----------
@@ -2904,7 +2903,7 @@ class GreatDocs:
         slug
             URL slug for the section directory.
         pages
-            List of page dicts from ``_copy_section_files``.
+            List of page dicts from `_copy_section_files`.
         has_user_index
             Whether the user provided their own index.qmd.
         has_generated_index
@@ -3540,6 +3539,7 @@ class GreatDocs:
         cli_ref_dir.mkdir(parents=True, exist_ok=True)
 
         generated_files: list[str | dict] = []
+        generated_paths: list[str] = []
 
         # Generate main CLI page
         main_page = self._generate_cli_command_page(cli_info, is_main=True)
@@ -3547,10 +3547,18 @@ class GreatDocs:
         with open(main_path, "w") as f:
             f.write(main_page)
         generated_files.append("reference/cli/index.qmd")
-        print(f"Generated CLI reference: {main_path.relative_to(self.project_path)}")
+        generated_paths.append(str(main_path.relative_to(self.project_path)))
 
         # Generate pages for subcommands
-        generated_files.extend(self._generate_subcommand_pages(cli_info, cli_ref_dir))
+        generated_files.extend(
+            self._generate_subcommand_pages(cli_info, cli_ref_dir, _paths=generated_paths)
+        )
+
+        # Print grouped summary
+        if generated_paths:
+            print("Generating CLI reference .qmd files:")
+            for p in generated_paths:
+                print(f"  - {p}")
 
         return generated_files
 
@@ -3559,6 +3567,7 @@ class GreatDocs:
         cmd_info: dict,
         output_dir: Path,
         rel_prefix: str = "reference/cli",
+        _paths: list[str] | None = None,
     ) -> list[str | dict]:
         """
         Recursively generate pages for subcommands.
@@ -3591,14 +3600,15 @@ class GreatDocs:
                 f.write(page_content)
 
             rel_path = f"{rel_prefix}/{safe_name}.qmd"
-            print(f"Generated CLI reference: {page_path.relative_to(self.project_path)}")
+            if _paths is not None:
+                _paths.append(str(page_path.relative_to(self.project_path)))
 
             # Recursively generate for nested subcommands
             if subcmd.get("commands"):
                 subcmd_dir = output_dir / safe_name
                 subcmd_dir.mkdir(exist_ok=True)
                 nested = self._generate_subcommand_pages(
-                    subcmd, subcmd_dir, f"{rel_prefix}/{safe_name}"
+                    subcmd, subcmd_dir, f"{rel_prefix}/{safe_name}", _paths=_paths
                 )
                 sidebar_items.append({"section": subcmd["name"], "contents": [rel_path] + nested})
             else:
@@ -4407,21 +4417,20 @@ class GreatDocs:
 
     def _rewrite_sidebar_first_entry(self, sidebar_config: dict, blended_first: str) -> None:
         """
-        Rewrite the first sidebar entry to point to ``index.qmd``.
+        Rewrite the first sidebar entry to point to `index.qmd`.
 
-        In blended homepage mode the first UG page lives at the site root
-        as ``index.qmd``, so the sidebar must link there instead of to
-        ``user-guide/<page>.qmd``.
+        In blended homepage mode the first UG page lives at the site root as `index.qmd`, so the
+        sidebar must link there instead of to `user-guide/<page>.qmd`.
 
-        Handles both flat and sectioned sidebar layouts by recursively
-        searching for the first href match.
+        Handles both flat and sectioned sidebar layouts by recursively searching for the first href
+        match.
 
         Parameters
         ----------
         sidebar_config
             The user-guide sidebar dict (modified in place).
         blended_first
-            The original href that was promoted (e.g. ``"user-guide/introduction.qmd"``).
+            The original href that was promoted (e.g. `"user-guide/introduction.qmd"`).
         """
         contents = sidebar_config.get("contents", [])
         self._rewrite_href_recursive(contents, blended_first, "index.qmd")
@@ -6526,8 +6535,7 @@ class GreatDocs:
         Returns
         -------
         dict
-            Categories dictionary with the same structure as
-            ``_categorize_api_objects``.
+            Categories dictionary with the same structure as `_categorize_api_objects`.
         """
         import inspect
 
@@ -7961,14 +7969,13 @@ jupyter: python3
         Parameters
         ----------
         metadata
-            Dictionary of package metadata from ``_get_package_metadata()``.
+            Dictionary of package metadata from `_get_package_metadata()`.
 
         Returns
         -------
         str
-            The generated Markdown content for the landing page body (not
-            including YAML frontmatter or sidebar — those are added by the
-            caller).
+            The generated Markdown content for the landing page body (not including YAML frontmatter
+            or sidebar as those are added by the caller).
         """
         package_name = self._detect_package_name() or "Package"
         description = metadata.get("description", "")
@@ -8015,7 +8022,7 @@ jupyter: python3
 
         Supports two common README layouts:
 
-        1. **Top-of-file badges** — bare ``[![alt](img)](url)`` lines right
+        1. **Top-of-file badges** — bare `[![alt](img)](url)` lines right
            after the first heading.
         2. **Centered-div badges** — badges inside a
            `<div align="center">` block. When this layout is detected, the entire
@@ -8032,10 +8039,10 @@ jupyter: python3
         Returns
         -------
         tuple[list[dict], str, dict]
-            ``(badges, cleaned_content, hero_extras)`` — a list of badge
-            dicts (keys: ``url``, ``img``, ``alt``), the content with the
+            `(badges, cleaned_content, hero_extras)` — a list of badge
+            dicts (keys: `url`, `img`, `alt`), the content with the
             badge block removed, and a dict of extracted hero elements
-            (optional keys: ``logo_url``, ``tagline``).
+            (optional keys: `logo_url`, `tagline`).
         """
         import re
 
@@ -8197,9 +8204,9 @@ jupyter: python3
         Returns
         -------
         tuple[str, str | None]
-            ``(hero_html, cleaned_content)`` — the hero HTML block (empty
+            `(hero_html, cleaned_content)` — the hero HTML block (empty
             string when hero is disabled) and the cleaned README content
-            (``None`` when no cleaning was performed).
+            (`None` when no cleaning was performed).
         """
         if self._config.hero_explicitly_disabled:
             return "", None
@@ -9407,7 +9414,7 @@ body-classes: "gd-homepage"
         """Inject navigation icon data and script into the Quarto config.
 
         Resolves configured icon names to inline SVG strings and emits a
-        self-contained ``<script>`` block in ``include-after-body`` that
+        self-contained `<script>` block in `include-after-body` that
         prepends icons to matching navigation entries at runtime.
 
         Everything is inlined into a single script tag to avoid relative-path
@@ -11103,11 +11110,11 @@ body-classes: "gd-homepage"
         documented package — its capabilities, API decision table, gotchas, and links
         to comprehensive documentation.
 
-        If the user has provided a hand-written SKILL.md via ``skill.file`` in
-        ``great-docs.yml``, that file is copied verbatim instead of generating one.
+        If the user has provided a hand-written SKILL.md via `skill.file` in
+        `great-docs.yml`, that file is copied verbatim instead of generating one.
 
-        The generated file is written to ``<docs>/skill.md`` and optionally copied to
-        ``<docs>/.well-known/skills/default/SKILL.md`` for auto-discovery.
+        The generated file is written to `<docs>/skill.md` and optionally copied to
+        `<docs>/.well-known/skills/default/SKILL.md` for auto-discovery.
         """
         import shutil
 
@@ -11317,7 +11324,7 @@ body-classes: "gd-homepage"
 
     def _generate_skills_page(self, skill_path: "Path", *, skill_dir: "Path | None" = None) -> None:
         """
-        Generate a ``skills.qmd`` page that renders the raw SKILL.md content in a
+        Generate a `skills.qmd` page that renders the raw SKILL.md content in a
         styled, human-readable format.
 
         The page displays the skill's YAML frontmatter as a highlighted block and
@@ -11325,8 +11332,8 @@ body-classes: "gd-homepage"
         point between raw Markdown and fully rendered HTML.
 
         When *skill_dir* points to a curated skill directory that contains companion
-        subdirectories (``references/``, ``scripts/``, ``assets/``), a directory
-        tree is rendered before the SKILL.md and each ``.md`` / ``.sh`` file is
+        subdirectories (`references/`, `scripts/`, `assets/`), a directory
+        tree is rendered before the SKILL.md and each `.md` / `.sh` file is
         displayed in its own text area with anchor links.
 
         Parameters
@@ -12172,14 +12179,99 @@ body-classes: "gd-homepage"
                 "generate a configuration file."
             )
 
+        import re as _re_build
         import subprocess
         import sys
         import threading
+        from contextlib import contextmanager
 
-        def run_streaming(cmd, env=None, prefix="   "):  # pragma: no cover
-            """Run a subprocess and stream its output in real time.
+        from great_docs._build_log import BuildLog, estimate_build_time
 
-            Returns a result-like object with returncode and captured stderr.
+        _ansi_re = _re_build.compile(r"\033\[[0-9;]*m")
+
+        class _DetailStream:
+            """A file-like object that forwards each line to `log.detail()`."""
+
+            def __init__(self):
+                self._buf = ""
+
+            def write(self, s):
+                self._buf += s
+                while "\n" in self._buf:
+                    line, self._buf = self._buf.split("\n", 1)
+                    if line.strip():
+                        log.detail(line.rstrip())
+
+            def flush(self):
+                # Flush any remaining partial line
+                if self._buf.strip():
+                    log.detail(self._buf.rstrip())
+                    self._buf = ""
+
+        @contextmanager
+        def _quiet_prints():
+            """Redirect print() to `log.detail()` in real time.
+
+            `log._write()` is unaffected because it writes to the
+            `stream` object captured at init time (not `sys.stdout`).
+            """
+            old_stdout = sys.stdout
+            sys.stdout = _DetailStream()
+            try:
+                yield
+            finally:
+                sys.stdout.flush()
+                sys.stdout = old_stdout
+
+        # --- Gather metadata for the build header -------------------------
+        package_name = self._detect_package_name() or ""
+        package_version = ""
+        if package_name:
+            try:
+                from importlib.metadata import version as _pkg_version
+
+                package_version = _pkg_version(package_name)
+            except Exception:
+                pass
+
+        # Count total pages for time estimate (API items from config)
+        n_api_items = 0
+        n_total_pages = 0
+        obj_types_path = self.project_path / "_object_types.json"
+        if obj_types_path.exists():
+            try:
+                with open(obj_types_path) as f:
+                    n_api_items = len(json.load(f))
+            except Exception:
+                pass
+
+        total_steps = 17
+        est_seconds = estimate_build_time(n_api_items=n_api_items, n_total_pages=n_total_pages)
+
+        log = BuildLog(
+            package_name=package_name,
+            package_version=package_version,
+            total_steps=total_steps,
+            estimated_seconds=est_seconds,
+        )
+
+        log.header()
+
+        # Step counter
+        step = 0
+
+        _GD_PASS_PREFIX = "##GD:PASS:"  # pragma: no cover
+
+        def run_streaming(
+            cmd, env=None, progress_bar=None, on_pass=None, on_bar_done=None
+        ):  # pragma: no cover
+            """Run a subprocess, stream output, optionally feeding a progress bar.
+
+            Lines starting with `##GD:PASS:` are collected into
+            `result.passes` (a list of label strings).  If *on_pass* is
+            provided it is called with each label as it arrives.  If
+            *on_bar_done* is provided it is called once when the progress
+            bar reaches 100 %.
             """
             process = subprocess.Popen(
                 cmd,
@@ -12187,26 +12279,69 @@ body-classes: "gd-homepage"
                 stderr=subprocess.PIPE,
                 text=True,
                 env=env,
-                bufsize=1,  # Line-buffered
+                bufsize=1,
             )
 
             stderr_lines = []
+            pass_labels: list[str] = []
+            quarto_warnings: list[str] = []
+            bar_finished = [False]  # mutable flag for closure
+            page_re = _re_build.compile(r"\[\s*(\d+)/(\d+)\]")
+
+            def _finish_bar():
+                """Finish the progress bar, emit warnings, and notify caller."""
+                if not bar_finished[0] and progress_bar:
+                    bar_finished[0] = True
+                    progress_bar.finish()
+                    for w in quarto_warnings:
+                        log.warn(w)
+                    if on_bar_done:
+                        on_bar_done()
+
+            def _handle_line(stripped):
+                """Route a single output line: progress / pass-marker / detail."""
+                if stripped.startswith(_GD_PASS_PREFIX):
+                    label = stripped[len(_GD_PASS_PREFIX) :]
+                    pass_labels.append(label)
+                    if on_pass:
+                        on_pass(label)
+                    return
+                if progress_bar:
+                    if not bar_finished[0]:
+                        m = page_re.search(stripped)
+                        if m:
+                            cur, tot = int(m.group(1)), int(m.group(2))
+                            if tot != progress_bar.total:
+                                progress_bar.total = tot
+                            progress_bar.update(cur)
+                            # Auto-finish bar when rendering is complete
+                            if cur >= tot:
+                                _finish_bar()
+                            return
+                        # Capture Quarto warnings (strip ANSI codes first);
+                        # discard all other noise while the bar is active.
+                        plain = _ansi_re.sub("", stripped)
+                        if plain.startswith("WARN"):
+                            quarto_warnings.append(plain)
+                    # After bar finishes, post-render output streams through
+                    # here — suppress it (Step 16 shows the substep checklist).
+                    return
+                log.detail(stripped)
 
             def read_stderr():
                 for line in process.stderr:
                     stderr_lines.append(line)
                     stripped = line.rstrip()
                     if stripped:
-                        print(f"{prefix}{stripped}", flush=True)
+                        _handle_line(stripped)
 
             stderr_thread = threading.Thread(target=read_stderr, daemon=True)
             stderr_thread.start()
 
-            # Stream stdout line by line
             for line in process.stdout:
                 stripped = line.rstrip()
                 if stripped:
-                    print(f"{prefix}{stripped}", flush=True)
+                    _handle_line(stripped)
 
             process.wait()
             stderr_thread.join(timeout=5)
@@ -12217,157 +12352,210 @@ body-classes: "gd-homepage"
             r = Result()
             r.returncode = process.returncode
             r.stderr = "".join(stderr_lines)
-            r.stdout = ""  # Already streamed
+            r.stdout = ""
+            r.passes = pass_labels
             return r
 
-        print("Building documentation with great-docs...")
-
-        # Prepare the build directory with all assets and configuration
-        self._prepare_build_directory()
+        # ── Step 1: Prepare build directory ────────────────────────────
+        step += 1
+        log.step_start(step, "Prepare build directory")
+        with _quiet_prints():
+            self._prepare_build_directory()
+        log.step_done("Ready")
 
         # Change to build directory
         original_dir = os.getcwd()
         try:
             os.chdir(self.project_path)
 
-            # Step 0.5: Refresh API reference config if requested
+            # ── Step 2: Configure API reference ────────────────────────
+            step += 1
+            log.step_start(step, "Configure API reference")
             if refresh and self._has_api_reference:
-                print("\n🔄 Refreshing API reference configuration...")
-                self._refresh_api_reference_config()
+                with _quiet_prints():
+                    self._refresh_api_reference_config()
+                log.step_done("API reference refreshed")
+            elif self._has_api_reference:
+                log.step_done("Using existing config")
+            else:
+                log.step_skip(step, "no API reference")
 
-            # Step 0.6: Generate llms.txt and llms-full.txt files
-            print("\n📝 Generating llms.txt and llms-full.txt...")
-            self._generate_llms_txt()
-            self._generate_llms_full_txt()
+            # ── Step 3: Generate llms.txt / llms-full.txt ──────────────
+            step += 1
+            log.step_start(step, "Generate llms.txt / llms-full.txt")
+            with _quiet_prints():
+                self._generate_llms_txt()
+                self._generate_llms_full_txt()
+            log.step_done("Created llms.txt + llms-full.txt")
 
-            # Step 0.65: Generate SKILL.md (Agent Skills specification)
+            # ── Step 4: Generate SKILL.md ──────────────────────────────
+            step += 1
+            log.step_start(step, "Generate SKILL.md")
             if self._config.skill_enabled:
-                print("\n🤖 Generating SKILL.md...")
-                self._generate_skill_md()
+                with _quiet_prints():
+                    self._generate_skill_md()
+                log.step_done("Created skill.md")
+            else:
+                log.step_skip(step, "disabled in config")
 
-            # Step 0.7: Generate source links JSON
-            print("\n🔗 Generating source links...")
-            package_name = self._detect_package_name()
-            if package_name:
-                self._generate_source_links_json(package_name)
+            # ── Step 5: Generate source links ──────────────────────────
+            step += 1
+            log.step_start(step, "Generate source links")
+            pkg_name = self._detect_package_name()
+            if pkg_name:
+                with _quiet_prints():
+                    self._generate_source_links_json(pkg_name)
+                log.step_done(f"Source links generated for {pkg_name}")
+            else:
+                log.step_skip(step, "no package detected")
 
-            # Step 0.75: Generate changelog from GitHub Releases (if enabled)
+            # ── Step 6: Generate changelog ─────────────────────────────
+            step += 1
+            log.step_start(step, "Generate changelog")
             if self._config.changelog_enabled:
                 owner, repo, _base_url = self._get_github_repo_info()
                 if owner and repo:
-                    print("\n📋 Generating changelog from GitHub Releases...")
                     try:
-                        result_file = self._generate_changelog_page()
+                        with _quiet_prints():
+                            result_file = self._generate_changelog_page()
                         if result_file:
                             self._add_changelog_to_navbar()
-                            print("✅ Changelog generated")
+                            log.step_done("Changelog from GitHub Releases")
                         else:
-                            print("   No releases found; skipping changelog")
+                            log.step_done("No releases found; skipped")
                     except Exception as e:
-                        print(f"   ⚠️  Error generating changelog: {e}")
+                        log.warn(f"Error generating changelog: {e}")
+                        log.step_done("Changelog generation had issues")
+                else:
+                    log.step_skip(step, "no GitHub repo info")
+            else:
+                log.step_skip(step, "disabled in config")
 
-            # Step 0.8: Generate CLI documentation if enabled
+            # ── Step 7: Generate CLI reference ─────────────────────────
+            step += 1
+            log.step_start(step, "Generate CLI reference")
             metadata = self._get_package_metadata()
             if metadata.get("cli_enabled", False):
-                print("\n🖥️  Generating CLI reference...")
                 try:
-                    cli_info = self._discover_click_cli(package_name)
+                    with _quiet_prints():
+                        cli_info = self._discover_click_cli(pkg_name)
                     if cli_info:
-                        cli_files = self._generate_cli_reference_pages(cli_info)
+                        with _quiet_prints():
+                            cli_files = self._generate_cli_reference_pages(cli_info)
                         if cli_files:
-                            self._update_sidebar_with_cli(cli_files)
+                            with _quiet_prints():
+                                self._update_sidebar_with_cli(cli_files)
                             n_pages = self._count_cli_sidebar_items(cli_files)
-                            print(f"✅ Generated {n_pages} CLI reference page(s)")
+                            log.step_done(f"{n_pages} CLI reference page(s)")
+                        else:
+                            log.step_done("No CLI pages generated")  # pragma: no cover
                     else:
-                        print(
-                            "   No Click CLI found or CLI documentation disabled"
-                        )  # pragma: no cover
+                        log.step_skip(step, "no Click CLI found")
                 except Exception as e:
-                    print(f"   ⚠️  Error generating CLI documentation: {e}")
-                    import traceback
+                    log.warn(f"Error generating CLI docs: {e}")
+                    log.step_done("CLI generation had issues")
+            else:
+                log.step_skip(step, "CLI not enabled")
 
-                    traceback.print_exc()
-
-            # Step 0.9: Process User Guide if present
+            # ── Step 8: Process User Guide ─────────────────────────────
+            step += 1
+            log.step_start(step, "Process User Guide")
             try:
-                self._process_user_guide()
+                with _quiet_prints():
+                    ug_result = self._process_user_guide()
+                if ug_result:
+                    log.step_done("User Guide configured")
+                else:
+                    log.step_skip(step, "no user guide found")
             except Exception as e:
-                print(f"   ⚠️  Error processing User Guide: {e}")
-                import traceback
+                log.warn(f"Error processing User Guide: {e}")
+                log.step_done("User Guide had issues")
 
-                traceback.print_exc()
-
-            # Step 0.85: Process custom sections (examples, tutorials, etc.)
+            # ── Step 9: Process custom sections ────────────────────────
+            step += 1
+            log.step_start(step, "Process custom sections")
             if self._config.sections:
-                print("\n📂 Processing custom sections...")
                 try:
-                    n_sections = self._process_sections()
+                    with _quiet_prints():
+                        n_sections = self._process_sections()
                     if n_sections:
-                        print(f"✅ {n_sections} section(s) processed")
+                        log.step_done(f"{n_sections} section(s) processed")
+                    else:
+                        log.step_done("No sections to process")
                 except Exception as e:
-                    print(f"   ⚠️  Error processing sections: {e}")
-                    import traceback
+                    log.warn(f"Error processing sections: {e}")
+                    log.step_done("Sections had issues")
+            else:
+                log.step_skip(step, "no sections configured")
 
-                    traceback.print_exc()
-
-            # Step 0.9: Process auto-discovered custom HTML pages
+            # ── Step 10: Process custom pages ──────────────────────────
+            step += 1
+            log.step_start(step, "Process custom pages")
             try:
-                n_custom_pages = self._process_custom_pages()
+                with _quiet_prints():
+                    n_custom_pages = self._process_custom_pages()
                 if n_custom_pages:
-                    print(f"✅ {n_custom_pages} custom page(s) processed")  # pragma: no cover
+                    log.step_done(f"{n_custom_pages} custom page(s)")
+                else:
+                    log.step_skip(step, "no custom pages")
             except Exception as e:  # pragma: no cover
-                print(f"   ⚠️  Error processing custom pages: {e}")  # pragma: no cover
-                import traceback  # pragma: no cover
+                log.warn(f"Error processing custom pages: {e}")
+                log.step_done("Custom pages had issues")
 
-                traceback.print_exc()  # pragma: no cover
-
-            # Step 0.92: Process page tags (if enabled)
+            # ── Step 11: Process page tags ─────────────────────────────
+            step += 1
+            log.step_start(step, "Process page tags")
             if self._config.tags_enabled:
-                print("\n🏷️  Processing page tags...")
                 try:
-                    has_tags = self._process_tags()
+                    with _quiet_prints():
+                        has_tags = self._process_tags()
                     if has_tags:
-                        print("✅ Tags processed")  # pragma: no cover
+                        log.step_done("Tags processed")
                     else:
-                        print("   No tagged pages found")
+                        log.step_skip(step, "no tagged pages found")
                 except Exception as e:
-                    print(f"   ⚠️  Error processing tags: {e}")
-                    import traceback
+                    log.warn(f"Error processing tags: {e}")
+                    log.step_done("Tags had issues")
+            else:
+                log.step_skip(step, "tags not enabled")
 
-                    traceback.print_exc()
-
-            # Step 0.93: Process page status badges (if enabled)
+            # ── Step 12: Process page status badges ────────────────────
+            step += 1
+            log.step_start(step, "Process page status badges")
             if self._config.page_status_enabled:
-                print("\n🏅 Processing page status badges...")
                 try:
-                    has_statuses = self._process_page_statuses()
+                    with _quiet_prints():
+                        has_statuses = self._process_page_statuses()
                     if has_statuses:
-                        print("✅ Status badges processed")  # pragma: no cover
+                        log.step_done("Status badges processed")
                     else:
-                        print("   No pages with status found")
+                        log.step_skip(step, "no pages with status")
                 except Exception as e:
-                    print(f"   ⚠️  Error processing page statuses: {e}")
-                    import traceback
+                    log.warn(f"Error processing page statuses: {e}")
+                    log.step_done("Status badges had issues")
+            else:
+                log.step_skip(step, "page status not enabled")
 
-                    traceback.print_exc()
-
-            # Step 0.95: Copy assets directory if present
+            # ── Step 13: Copy assets ───────────────────────────────────
+            step += 1
+            log.step_start(step, "Copy assets")
             try:
-                assets_copied = self._copy_assets()
-                # Update Quarto config to include assets in resources if they were copied
+                with _quiet_prints():
+                    assets_copied = self._copy_assets()
+                    if assets_copied:
+                        self._update_quarto_config()
                 if assets_copied:
-                    self._update_quarto_config()
+                    log.step_done("Assets copied")
+                else:
+                    log.step_skip(step, "no assets directory")
             except Exception as e:
-                print(f"   ⚠️  Error copying assets: {e}")
-                import traceback
+                log.warn(f"Error copying assets: {e}")
+                log.step_done("Assets had issues")
 
-                traceback.print_exc()
-
-            # Step 1: Build API reference using internal renderer (uses the internal renderer)
+            # ── Step 14: Generate API reference ────────────────────────
+            step += 1
+            log.step_start(step, "Generate API reference")
             if self._has_api_reference:
-                print("\n📚 Step 1: Generating API reference...")
-
-                # Set up PYTHONPATH so griffe can find the target package
                 build_env = self._get_quarto_env()
                 extra_paths = build_env.get("PYTHONPATH", "").split(os.pathsep)
                 for p in extra_paths:
@@ -12378,80 +12566,127 @@ body-classes: "gd-homepage"
                 try:
                     from great_docs._renderer.introspection import Builder
 
-                    builder = Builder.from_quarto_config(str(quarto_yml))
-                    builder.build()
-                    print("\n✅ API reference generated")
+                    with _quiet_prints():
+                        builder = Builder.from_quarto_config(str(quarto_yml))
+                        builder.build()
+                    log.step_done("API reference generated")
                 except Exception as e:
-                    # If dynamic mode was used, retry with static mode
                     dynamic = self._config.dynamic
                     if dynamic:
-                        print("\n⚠️  API reference build failed with dynamic introspection.")
-                        print("   Retrying with static analysis (dynamic: false)...\n")
-
+                        log.warn("Dynamic introspection failed, retrying static...")
+                        log.detail(str(e))
                         with open(quarto_yml, "r") as f:
                             qconfig = read_yaml(f) or {}
-
                         if "api-reference" in qconfig:
                             qconfig["api-reference"]["dynamic"] = False
                             with open(quarto_yml, "w") as f:
                                 write_yaml(qconfig, f)
-
                         try:
-                            builder = Builder.from_quarto_config(str(quarto_yml))
-                            builder.build()
-                            print("\n✅ API reference generated (using static analysis)")
-                            print(
-                                "   Tip: Add 'dynamic: false' to great-docs.yml "
-                                "to skip the retry next time"
-                            )
+                            with _quiet_prints():
+                                builder = Builder.from_quarto_config(str(quarto_yml))
+                                builder.build()
+                            log.step_done("API reference generated (static analysis)")
                         except Exception as e2:
-                            print("\n❌ API reference build failed (static mode):")
-                            print(str(e2))
+                            log.step_fail(f"API reference build failed: {e2}")
+                            log.footer()
                             sys.exit(1)
                     else:
-                        print("\n❌ API reference build failed:")
-                        print(str(e))
-                        import traceback
-
-                        traceback.print_exc()
+                        log.step_fail(f"API reference build failed: {e}")
+                        log.error_detail(str(e))
+                        log.footer()
                         sys.exit(1)
             else:
-                print("\n📚 Step 1: Skipping API reference (disabled)")
+                log.step_skip(step, "API reference disabled")
 
-            # Get environment with QUARTO_PYTHON set for proper Python detection
+            # Get environment with QUARTO_PYTHON set
             quarto_env = self._get_quarto_env()
 
-            # Step 2: Run quarto render or preview
+            # ── Step 15: Build site with Quarto ────────────────────────
+            step += 1
+            log.step_start(step, "Build site with Quarto")
             if watch:
-                print("\n🔄 Step 2: Starting Quarto in watch mode...")
-                print("Press Ctrl+C to stop watching")
+                log.step_done("Starting watch mode...")
+                log.footer(watch_mode=True)
                 subprocess.run(["quarto", "preview", "--no-browser"], env=quarto_env)
+                return
             else:
-                print("\n🔨 Step 2: Building site with Quarto...")
+                bar = log.progress("Rendering pages", 1)
+
+                # Track Step 15→16 transition for live substep display.
+                step16_started = [False]
+                pass_count = [0]
+
+                def _start_step16():
+                    """Transition from Step 15 to Step 16 immediately."""
+                    if not step16_started[0]:
+                        step16_started[0] = True
+                        log.step_done("Site rendered")
+                        nonlocal step
+                        step += 1
+                        log.step_start(step, "Post-render processing")
+
+                def _on_pass(label):
+                    _start_step16()
+                    pass_count[0] += 1
+                    log.substep(label)
 
                 result = run_streaming(
                     ["quarto", "render"],
                     env=quarto_env,
+                    progress_bar=bar,
+                    on_pass=_on_pass,
+                    on_bar_done=_start_step16,
                 )
+                bar.finish()  # no-op if auto-finished at 100%
 
                 if result.returncode != 0:
-                    print("\n❌ quarto render failed:")
-                    print(result.stderr)
+                    log.step_fail("Quarto render failed")
+                    log.error_detail(result.stderr)
+
+                    # ── Steps 16, 17 skipped on failure ────────────────
+                    if not step16_started[0]:
+                        step += 1
+                        log.step_start(step, "Post-render processing")
+                    log.step_skip(step, "build failed")
+                    step += 1
+                    log.step_start(step, "Generate SEO files")
+                    log.step_skip(step, "build failed")
+
+                    log.footer()
                     sys.exit(1)
                 else:
-                    print("\n✅ Site built successfully")  # pragma: no cover
-
-                    # Step 3: Generate SEO files (sitemap.xml, robots.txt)
-                    try:
-                        self._generate_seo_files()
-                    except Exception as e:  # pragma: no cover
-                        print(f"   ⚠️  Error generating SEO files: {e}")  # pragma: no cover
-
-                    site_path = self.project_path / "_site" / "index.html"
-                    if site_path.exists():
-                        print(f"\n🎉 Your site is ready! Open: {site_path}")  # pragma: no cover
+                    # Step 15 done + Step 16 substeps were emitted live
+                    # via the _on_pass callback.  Finish up Step 16.
+                    if not step16_started[0]:  # pragma: no cover
+                        # No passes arrived (shouldn't happen, but be safe)
+                        log.step_done("Site rendered")  # pragma: no cover
+                        step += 1  # pragma: no cover
+                        log.step_start(step, "Post-render processing")  # pragma: no cover
+                        log.step_done("HTML transforms applied")  # pragma: no cover
                     else:
-                        print(f"\n🎉 Your site is ready in: {self.project_path / '_site'}")
+                        n = pass_count[0]  # pragma: no cover
+                        log.step_done(  # pragma: no cover
+                            f"{n} transforms applied"  # pragma: no cover
+                        )  # pragma: no cover
+
+                    # ── Step 17: Generate SEO files ────────────────────
+                    step += 1  # pragma: no cover
+                    log.step_start(step, "Generate SEO files")  # pragma: no cover
+                    try:  # pragma: no cover
+                        with _quiet_prints():  # pragma: no cover
+                            self._generate_seo_files()  # pragma: no cover
+                        log.step_done("sitemap.xml + robots.txt")  # pragma: no cover
+                    except Exception as e:  # pragma: no cover
+                        log.warn(f"Error generating SEO files: {e}")  # pragma: no cover
+                        log.step_done("SEO files had issues")  # pragma: no cover
+
+                    site_path = self.project_path / "_site" / "index.html"  # pragma: no cover
+                    if site_path.exists():  # pragma: no cover
+                        log.footer(site_path=str(site_path))  # pragma: no cover
+                    else:  # pragma: no cover
+                        log.footer(  # pragma: no cover
+                            site_path=str(self.project_path / "_site")
+                        )
 
         finally:
             os.chdir(original_dir)
@@ -12462,7 +12697,7 @@ body-classes: "gd-homepage"
 
         Starts a local HTTP server and opens the built site in the default
         browser.  If the site hasn't been built yet, it will be built first.
-        Use ``great-docs build`` to rebuild the site if you've made changes.
+        Use `great-docs build` to rebuild the site if you've made changes.
 
         ::: {.callout-note}
         In practice, you would normally use the `great-docs preview` CLI command
@@ -12473,7 +12708,7 @@ body-classes: "gd-homepage"
         Parameters
         ----------
         port
-            The port number for the local HTTP server (default ``3000``).
+            The port number for the local HTTP server (default `3000`).
 
         Examples
         --------

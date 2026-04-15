@@ -157,6 +157,10 @@ docs-preview: ## Preview documentation locally
 docs-install: ## Install documentation dependencies
 	@pip install -e ".[docs]"
 
+.PHONY: site-build
+site-build: ## Build the great-docs site
+	@great-docs build
+
 .PHONY: hub-build
 hub-build: ## Full build of the Great Docs Gauntlet (200 packages, port 3333)
 	@$(PYTHON) test-packages/render_all.py --build

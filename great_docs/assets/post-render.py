@@ -2982,6 +2982,7 @@ for html_file in all_html_files:
             file.write(content)
 
 print("Finished processing all files")
+print("##GD:PASS:Reference pages processed", flush=True)
 
 
 # ============================================================================
@@ -3016,8 +3017,10 @@ if _interlinks_inventory:
             _gdls_count += 1
 
     print(f"GDLS: resolved interlinks on {_gdls_count} non-reference pages")
+    print("##GD:PASS:Interlinks resolved", flush=True)
 else:
     print("GDLS: no interlinks inventory loaded, skipping non-reference pages")
+    print("##GD:PASS:Interlinks skipped", flush=True)
 
 
 # ── Translate autocomplete search-button title ──────────────────────────────
@@ -3101,6 +3104,7 @@ def inject_github_widget():
 
 
 inject_github_widget()
+print("##GD:PASS:GitHub widget injected", flush=True)
 
 
 # ============================================================================
@@ -3205,6 +3209,7 @@ def inject_version_badge():
 
 
 inject_version_badge()
+print("##GD:PASS:Version badge injected", flush=True)
 
 
 # ============================================================================
@@ -3240,6 +3245,7 @@ def process_cli_reference_pages():
 
 
 process_cli_reference_pages()
+print("##GD:PASS:CLI reference styled", flush=True)
 
 
 def disable_sidebar_collapse():
@@ -3297,6 +3303,7 @@ def disable_sidebar_collapse():
 
 
 disable_sidebar_collapse()
+print("##GD:PASS:Sidebar collapse disabled", flush=True)
 
 
 def remove_empty_footer_divs():
@@ -3333,6 +3340,7 @@ def remove_empty_footer_divs():
 
 
 remove_empty_footer_divs()
+print("##GD:PASS:Empty footer divs removed", flush=True)
 
 
 def fix_script_paths():
@@ -3528,6 +3536,7 @@ def fix_script_paths():
 
 
 fix_script_paths()
+print("##GD:PASS:Script paths fixed", flush=True)
 
 
 # Remove copy-page widget from the root index page (homepage) and the
@@ -3580,6 +3589,7 @@ def inject_sidebar_body_classes():
 
 
 inject_sidebar_body_classes()
+print("##GD:PASS:Sidebar body classes injected", flush=True)
 
 
 def style_api_index_sidebar_item():
@@ -3642,6 +3652,7 @@ def style_api_index_sidebar_item():
 
 
 style_api_index_sidebar_item()
+print("##GD:PASS:API Index sidebar styled", flush=True)
 
 
 # ============================================================================
@@ -3973,6 +3984,7 @@ def inject_page_metadata():
 
 
 inject_page_metadata()
+print("##GD:PASS:Page metadata injected", flush=True)
 
 
 # Fix page-metadata.js script paths for subdirectory pages
@@ -4545,6 +4557,7 @@ def generate_markdown_pages():
 
 if _gd_options.get("markdown_pages", True):
     generate_markdown_pages()
+print("##GD:PASS:Markdown pages generated", flush=True)
 
 
 # ── Clean up skill.html ──────────────────────────────────────────────────────
@@ -4592,6 +4605,7 @@ for html_file in glob.glob("_site/**/*.html", recursive=True):
 
 if colgroup_stripped > 0:
     print(f"   Stripped colgroup from {colgroup_stripped} file(s)")
+print("##GD:PASS:Colgroup tags stripped", flush=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -4629,6 +4643,7 @@ if _gd_options.get("seo_enabled", False):
     print(f"   SEO enhancements applied to {seo_processed} page(s) ({seo_errors} errors)")
 else:
     print("\n🔍 SEO processing: disabled")
+print("##GD:PASS:SEO enhancements applied", flush=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -4682,6 +4697,7 @@ else:
         print(f"\n🌐 i18n: language={_i18n_language} but no translation bundle found")
     else:
         print("\n🌐 i18n: using default language (en)")
+print("##GD:PASS:I18n translations injected", flush=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -4765,3 +4781,4 @@ for html_file in glob.glob("_site/**/*.html", recursive=True):
 
 if _stf_injected > 0:
     print(f"   Injected page-level scale-to-fit in {_stf_injected} page(s)")
+print("##GD:PASS:Scale-to-fit tags injected", flush=True)
