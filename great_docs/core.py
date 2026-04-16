@@ -954,7 +954,28 @@ class GreatDocs:
                 )
                 if hatch_packages:
                     pkg = hatch_packages[0]
-                    return pkg.split("/")[-1]
+                    pkg_name = pkg.split("/")[-1]
+
+                    # Resolve the package path on disk to check for namespace packages
+                    pkg_path = package_root / pkg
+                    init_py = pkg_path / "__init__.py"
+
+                    # If the directory has no __init__.py, it is a namespace root
+                    # (e.g., src/firebird/ for the firebird.* namespace).
+                    # Derive the subpackage from the project name.
+                    if pkg_path.is_dir() and not init_py.exists():
+                        project_name = self._detect_package_name()
+                        if project_name:
+                            normalized_project = project_name.replace("-", "_")
+                            # "firebird-base" → "firebird_base"; namespace "firebird"
+                            # → subpackage "base"
+                            if normalized_project.startswith(pkg_name + "_"):
+                                sub_name = normalized_project[len(pkg_name) + 1 :]
+                                sub_path = pkg_path / sub_name
+                                if sub_path.is_dir() and (sub_path / "__init__.py").exists():
+                                    return f"{pkg_name}.{sub_name}"
+
+                    return pkg_name
 
             except Exception:
                 pass
@@ -964,7 +985,25 @@ class GreatDocs:
         if project_name:
             init_file = self._find_package_init(project_name)
             if init_file:
-                return init_file.parent.name
+                # Compute the dotted module name by finding the layout-root
+                # that contains this __init__.py (e.g. src/, python/, lib/
+                # or the project root itself).
+                pkg_dir = init_file.parent
+                for layout_dir in [
+                    package_root / "src",
+                    package_root / "python",
+                    package_root / "lib",
+                    package_root,
+                ]:
+                    try:
+                        rel = pkg_dir.relative_to(layout_dir)
+                    except ValueError:
+                        continue
+                    parts = rel.parts
+                    if parts:
+                        return ".".join(parts)
+                # Fallback: just use the immediate directory name
+                return pkg_dir.name
 
         return None
 
@@ -7539,6 +7578,17 @@ class GreatDocs:
         # Get normalized package name for imports
         importable_name = self._normalize_package_name(package_name)
 
+        # Try to detect the actual module name (handles namespace packages,
+        # src-layout mismatches, compiled extensions, etc.)
+        module_name = self._detect_module_name()
+        if module_name:
+            importable_name = module_name
+
+        # Only write an explicit 'module:' line when the detected module name
+        # differs from the simple hyphen→underscore normalized project name.
+        normalized_name = self._normalize_package_name(package_name)
+        explicit_module = module_name if module_name != normalized_name else None
+
         # Detect docstring style
         print("Detecting docstring style...")
         parser_style = self._detect_docstring_style(importable_name)
@@ -7553,6 +7603,7 @@ class GreatDocs:
             config_content = self._generate_minimal_config(
                 parser=parser_style,
                 dynamic=dynamic_mode,
+                module=explicit_module,
             )
             config_path.write_text(config_content, encoding="utf-8")
             print(f"Created {config_path}")
@@ -7580,6 +7631,7 @@ class GreatDocs:
             importable_name,
             parser=parser_style,
             dynamic=dynamic_mode,
+            module=explicit_module,
         )
 
         config_path.write_text(config_content, encoding="utf-8")
@@ -7590,6 +7642,7 @@ class GreatDocs:
         self,
         parser: str = "numpy",
         dynamic: bool = True,
+        module: str | None = None,
     ) -> str:
         """
         Generate minimal great-docs.yml without reference section.
@@ -7600,6 +7653,8 @@ class GreatDocs:
             The docstring parser style ("numpy", "google", or "sphinx").
         dynamic
             Whether to use dynamic introspection mode for API reference generation.
+        module
+            Explicit module name when it differs from the project name.
 
         Returns
         -------
@@ -7628,7 +7683,7 @@ class GreatDocs:
 # ----------------------
 # Set this if your importable module name differs from the project name.
 # Example: project 'py-yaml12' with module name 'yaml12'
-# module: yaml12
+{f"module: {module}" if module else "# module: yaml12"}
 
 # Docstring Parser
 # ----------------
@@ -7701,6 +7756,7 @@ jupyter: python3
         package_name: str,
         parser: str = "numpy",
         dynamic: bool = True,
+        module: str | None = None,
     ) -> str:
         """
         Generate great-docs.yml with a reference section from discovered exports.
@@ -7715,6 +7771,8 @@ jupyter: python3
             The docstring parser style ("numpy", "google", or "sphinx").
         dynamic
             Whether to use dynamic introspection mode for API reference generation.
+        module
+            Explicit module name when it differs from the project name.
 
         Returns
         -------
@@ -7735,7 +7793,7 @@ jupyter: python3
             "# ----------------------",
             "# Set this if your importable module name differs from the project name.",
             "# Example: project 'py-yaml12' with module name 'yaml12'",
-            "# module: yaml12",
+            f"module: {module}" if module else "# module: yaml12",
             "",
         ]
 
