@@ -119,6 +119,25 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # dict: {"content": str, "type": "info"|"warning"|"success"|"danger",
     #        "dismissable": bool, "url": str|None}
     "announcement": None,
+    # Multi-version documentation
+    # None/[]: disabled (default — single-version site)
+    # list[str | dict]: ordered list of versions (newest first)
+    # Minimal: ["0.3", "0.2", "0.1"]
+    # Full: [{"tag": "0.3", "label": "0.3.0", "latest": true}, ...]
+    "versions": [],
+    # Version selector widget configuration
+    "version_selector": {
+        "enabled": True,  # Enabled automatically when versions is non-empty
+        "placement": "navbar-right",  # "navbar-right" | "navbar-left" | "sidebar-top"
+        "show_eol": True,  # Include end-of-life versions in dropdown
+        "warning_banner": True,  # Show banner on non-latest versions
+    },
+    # Floating version aliases (/v/latest/, /v/stable/, /v/dev/)
+    "version_aliases": {
+        "latest": True,  # /v/latest/ -> latest stable version
+        "stable": True,  # /v/stable/ -> same as latest
+        "dev": True,  # /v/dev/ -> prerelease version (if any)
+    },
     # Navbar gradient preset (e.g., "sky", "peach", "lilac", etc.)
     "navbar_style": None,
     # Navbar solid background color (CSS color: hex, named, etc.)
@@ -143,7 +162,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # content beyond this limit the element is shown at full size with
     # horizontal scrolling instead.
     # None/False: no minimum (scale as small as needed)
-    # float (0–1): minimum scale factor, e.g. 0.4 = "don't shrink below 40%"
+    # float (0-1): minimum scale factor, e.g. 0.4 = "don't shrink below 40%"
     # str keyword: viewport breakpoint below which scaling is disabled:
     #   "mobile"  → scroll on viewports ≤ 576px
     #   "tablet"  → scroll on viewports ≤ 768px
@@ -830,7 +849,7 @@ class Config:
         Returns
         -------
         dict | None
-            Normalized logo dict with at least `light` key, or `None` if no logo is configured.  A
+            Normalized logo dict with at least `light` key, or `None` if no logo is configured. A
             bare string in `great-docs.yml` is expanded to `{"light": "<path>", "dark": "<path>"}`.
         """
         raw = self.get("logo")
@@ -880,8 +899,8 @@ class Config:
     def hero(self) -> dict[str, Any]:
         """Get the resolved hero configuration dict.
 
-        Returns a dict with keys: enabled, logo, logo_height, name,
-        tagline, badges.  Missing keys are filled with defaults.
+        Returns a dict with keys: enabled, logo, logo_height, name, tagline, badges. Missing keys
+        are filled with defaults.
         """
         raw = self.get("hero")
         if isinstance(raw, dict):
@@ -892,7 +911,7 @@ class Config:
     def hero_logo(self) -> str | dict | None | bool:
         """Get the explicit hero logo config.
 
-        Returns the hero-specific logo value only.  Returns `False` when explicitly suppressed,
+        Returns the hero-specific logo value only. Returns `False` when explicitly suppressed,
         `None` when not configured. The full fallback chain (auto-detected hero logos, navbar logo)
         is handled in `core._build_hero_section`.
         """
@@ -999,6 +1018,38 @@ class Config:
                 "style": raw.get("style"),
             }
         return None
+
+    @property
+    def versions(self) -> list:
+        """Get the raw versions list from config."""
+        return self.get("versions", [])
+
+    @property
+    def has_versions(self) -> bool:
+        """Whether multi-version documentation is enabled."""
+        return bool(self.versions)
+
+    @property
+    def version_selector_enabled(self) -> bool:
+        """Whether the version selector widget is enabled."""
+        if not self.has_versions:
+            return False
+        return self.get("version_selector.enabled", True)
+
+    @property
+    def version_selector_placement(self) -> str:
+        """Get the version selector placement."""
+        return self.get("version_selector.placement", "navbar-right")
+
+    @property
+    def version_warning_banner(self) -> bool:
+        """Whether to show warning banners on non-latest versions."""
+        return self.get("version_selector.warning_banner", True)
+
+    @property
+    def version_aliases(self) -> dict:
+        """Get the version aliases configuration."""
+        return self.get("version_aliases", {"latest": True, "stable": True, "dev": True})
 
     @property
     def include_in_header(self) -> list[dict[str, str]]:
@@ -1137,8 +1188,7 @@ class Config:
     def scale_to_fit_min_scale(self) -> float | str | None:
         """Get the minimum scale threshold for scale-to-fit.
 
-        Returns a float (0–1), a keyword (``"mobile"``, ``"tablet"``,
-        ``"desktop"``), or ``None``.
+        Returns a float (0-1), a keyword (`"mobile"`, `"tablet"`, `"desktop"`), or `None`.
         """
         raw = self.get("scale_to_fit_min_scale")
         if raw is None or raw is False:
