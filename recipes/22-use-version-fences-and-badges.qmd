@@ -1,0 +1,148 @@
+---
+title: "Use Version Fences and Badges"
+description: "Annotate content with version fences, inline badges, and callouts to show version-specific information."
+tags: [Versioning, Authoring]
+---
+
+# Use Version Fences and Badges
+
+Version fences let you include or exclude blocks of content per version without maintaining separate files. Inline badges and callouts add visual markers for when features were added, changed, or deprecated.
+
+## Version Fences
+
+### Include Content for Specific Versions
+
+Wrap content in a `.version-only` fence with a version expression:
+
+```{.markdown filename="user_guide/configuration.qmd"}
+::: {.version-only versions=">=0.3"}
+## Environment Variable Support
+
+Starting in 0.3, configuration values can reference environment variables:
+
+`​``yaml
+api_key: ${API_KEY}
+`​``
+:::
+```
+
+This block only appears in version 0.3 and later.
+
+### Exclude Content from Specific Versions
+
+Use `.version-except` to hide content from specific versions:
+
+```{.markdown filename="user_guide/install.qmd"}
+::: {.version-except versions="0.1"}
+Install with pip:
+
+`​``bash
+pip install my-package[extras]
+`​``
+:::
+```
+
+This block appears in every version except 0.1.
+
+### Combine Multiple Constraints
+
+Use commas to list specific tags, or comparison operators for ranges:
+
+```{.markdown filename="guide.qmd"}
+::: {.version-only versions="0.2,0.3"}
+Supported in 0.2 and 0.3 only.
+:::
+
+::: {.version-only versions=">0.1,<0.4"}
+Supported in versions between 0.1 and 0.4 (exclusive).
+:::
+```
+
+### Nest Fences
+
+Fences can be nested for progressive disclosure:
+
+```{.markdown filename="guide.qmd"}
+::: {.version-only versions=">=0.2"}
+## Advanced Options
+
+These options were added in 0.2.
+
+::: {.version-only versions=">=0.3"}
+### Experimental Options
+
+These experimental options are only available in 0.3+.
+:::
+
+:::
+```
+
+## Inline Badges
+
+Add a badge inline to mark individual features, parameters, or methods:
+
+```markdown
+## predict() [version-badge new]
+
+## transform() [version-badge changed 0.2]
+
+## old_method() [version-badge deprecated 0.1]
+```
+
+These render as small colored badges:
+
+- `[version-badge new]` → <span style="background:#4CAF50;color:white;padding:2px 6px;border-radius:3px;font-size:0.8em">New</span> (uses the current version's label)
+- `[version-badge changed 0.2]` → <span style="background:#2196F3;color:white;padding:2px 6px;border-radius:3px;font-size:0.8em">Changed in 0.2</span>
+- `[version-badge deprecated 0.1]` → <span style="background:#FF9800;color:white;padding:2px 6px;border-radius:3px;font-size:0.8em">Deprecated in 0.1</span>
+
+You can place multiple badges on the same line:
+
+```markdown
+## render() [version-badge changed 0.3] [version-badge new 0.2]
+```
+
+## Version Callouts
+
+For longer version notes, use callout blocks:
+
+```{.markdown filename="user_guide/api-guide.qmd"}
+::: {.version-note version="0.3"}
+The `format` parameter was renamed from `fmt` in this version.
+Update your code to use the new name.
+:::
+
+::: {.version-deprecated version="0.1"}
+The `legacy_mode` parameter is deprecated and will be removed in 0.4.
+Use `new_mode()` instead.
+:::
+```
+
+Version callouts render as styled boxes:
+
+- `.version-note` — blue info callout titled "Added in *version*"
+- `.version-deprecated` — orange warning callout titled "Deprecated since *version*"
+
+If you omit the `version` attribute, the current version's label is used.
+
+## Page-Level Scoping
+
+To restrict an entire page to specific versions, use frontmatter instead of fences:
+
+```{.yaml filename="user_guide/migration-02-to-03.qmd"}
+---
+title: "Migrating from 0.2 to 0.3"
+versions: ["0.3", "dev"]
+---
+```
+
+This page is completely excluded from the build, sidebar, and search index for versions other than 0.3 and dev.
+
+## Choosing the Right Tool
+
+| Scenario | Tool |
+|---|---|
+| A paragraph or section differs between versions | Version fence (`.version-only` / `.version-except`) |
+| A single feature was added or changed | Inline badge (`[version-badge ...]`) |
+| A multi-line note about a version change | Version callout (`.version-note` / `.version-deprecated`) |
+| An entire page only applies to some versions | Page-level `versions` frontmatter |
+| An entire section only applies to some versions | Section-level `versions` in config |

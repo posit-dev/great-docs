@@ -1,0 +1,139 @@
+---
+title: "Enable Multi-Version Documentation"
+description: "Add a version selector to your documentation site so users can switch between releases."
+tags: [Configuration, Versioning, Build]
+---
+
+# Enable Multi-Version Documentation
+
+This recipe walks you through enabling versioned documentation for a project with two existing releases (0.1 and 0.2) and a development version.
+
+## 1. Declare Your Versions
+
+Add a `versions` list to your `great-docs.yml`:
+
+```{.yaml filename="great-docs.yml"}
+versions:
+  - label: "0.3.0 (dev)"
+    tag: dev
+    prerelease: true
+  - label: "0.2.0"
+    tag: "0.2"
+    latest: true
+  - label: "0.1.0"
+    tag: "0.1"
+```
+
+Order versions newest-first. The version marked `latest: true` becomes the canonical version served at the site root.
+
+## 2. Snapshot Older Versions' APIs
+
+The current version (dev) uses live API introspection. For released versions, create API snapshots so the build can generate accurate reference pages without needing the old source code:
+
+```{.bash filename="Terminal"}
+great-docs api-snapshot --output api-snapshots/0.2.json
+```
+
+Check out the 0.1 tag and do the same:
+
+```{.bash filename="Terminal"}
+git stash
+git checkout v0.1.0
+great-docs api-snapshot --output api-snapshots/0.1.json
+git checkout main
+git stash pop
+```
+
+Then reference the snapshots in your config:
+
+```{.yaml filename="great-docs.yml"}
+versions:
+  - label: "0.3.0 (dev)"
+    tag: dev
+    prerelease: true
+  - label: "0.2.0"
+    tag: "0.2"
+    latest: true
+    api_snapshot: api-snapshots/0.2.json
+  - label: "0.1.0"
+    tag: "0.1"
+    api_snapshot: api-snapshots/0.1.json
+```
+
+:::{.callout-tip}
+Alternatively, use `git_ref` to let Great Docs introspect the package at a Git tag automatically:
+
+```yaml
+  - label: "0.1.0"
+    tag: "0.1"
+    git_ref: v0.1.0
+```
+:::
+
+## 3. Build
+
+```{.bash filename="Terminal"}
+great-docs build
+```
+
+This produces a site with:
+
+- `/` — version 0.2 (the latest)
+- `/v/dev/` — the development version
+- `/v/0.1/` — version 0.1
+
+A version selector dropdown appears in the navbar.
+
+## 4. Add Version-Specific Content (Optional)
+
+Mark content that only applies to certain versions:
+
+```{.markdown filename="user_guide/getting-started.qmd"}
+::: {.version-only versions=">=0.2"}
+## New Configuration Format
+
+Starting in 0.2, configuration uses YAML instead of TOML.
+:::
+```
+
+Or scope an entire page to specific versions using frontmatter:
+
+```{.yaml filename="user_guide/migration.qmd"}
+---
+title: "Migrating from 0.1 to 0.2"
+versions: ["0.2", "dev"]
+---
+```
+
+## 5. Iterate Quickly
+
+During development, build only the latest version for faster iteration:
+
+```{.bash filename="Terminal"}
+great-docs build --latest-only
+```
+
+When you're ready to publish, run a full build to generate all versions.
+
+## 6. Mark End-of-Life Versions
+
+When you drop support for a version, add `eol: true`:
+
+```{.yaml filename="great-docs.yml"}
+  - label: "0.1.0"
+    tag: "0.1"
+    eol: true
+    api_snapshot: api-snapshots/0.1.json
+```
+
+Visitors viewing 0.1 will see a warning banner encouraging them to upgrade.
+
+## Result
+
+Your site now has:
+
+- A **version selector** in the navbar for switching between versions
+- **Warning banners** on non-latest versions
+- **Floating aliases** at `/v/latest/` and `/v/stable/`
+- **Per-version API reference** pages generated from snapshots
+- **Smart fallback navigation** — switching to a version that lacks the current page lands on the section index instead of a 404
