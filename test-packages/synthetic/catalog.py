@@ -352,6 +352,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_sec_blog_user_index",  # 173
     # 174: Custom section with dir_titles and numeric-prefix subdirectories
     "gdtest_sec_dir_titles",  # 174
+    # 175: Namespace package with src/ layout and dotted module name
+    "gdtest_namespace_src",  # 175
 ]
 
 
@@ -1980,6 +1982,13 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "from sidebar section headings and that dir_titles mapping "
         "overrides the auto-generated title (e.g., 'Results/Reporting' "
         "instead of 'Results And Reporting')."
+    ),
+    "gdtest_namespace_src": (
+        "Namespace package using src/ layout with dotted module name "
+        "(nspkg.core). Code lives at src/nspkg/core/__init__.py and the "
+        "great-docs.yml sets module: nspkg.core. Tests discovery of "
+        "namespace packages in src/ layout via griffe search_paths and "
+        "dotted path resolution in _find_package_init."
     ),
 }
 
