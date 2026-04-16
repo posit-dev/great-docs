@@ -135,8 +135,8 @@ def format_elapsed(seconds: float) -> str:
 
     Rules (from the spec):
     * < 0.1 s  → `<0.1s`
-    * 0.1–59.9 → `{n:.1f}s`
-    * 60–3599  → `{m}m {s:.1f}s`
+    * 0.1-59.9 → `{n:.1f}s`
+    * 60-3599  → `{m}m {s:.1f}s`
     * ≥ 3600   → `{h}h {m}m {s}s`
     """
     if seconds < 0.1:

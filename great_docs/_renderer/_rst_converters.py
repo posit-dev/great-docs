@@ -37,7 +37,7 @@ def sanitize(
 
 
 # RST text transforms --------------------------------------------------------
-# These were previously applied as QMD-level patches in core.py (Steps 1.5–1.8).
+# These were previously applied as QMD-level patches in core.py (Steps 1.5-1.8).
 # Now they are applied at render time so the QMD is correct from the start.
 
 _RST_CODE_BLOCK_RE = re.compile(

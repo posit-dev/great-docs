@@ -1525,7 +1525,7 @@ def translate_sphinx_roles(html_content):
 
     _CALLABLE_ROLES = {"func", "meth"}
 
-    # Pattern 1 – role prefix followed by <code>…</code>
+    # Pattern 1: role prefix followed by <code>…</code>
     # e.g.  :py:class:<code>datetime.datetime</code>
     #       :func:<code>get_object</code>
     def _replace_code_role(m):
@@ -1542,9 +1542,9 @@ def translate_sphinx_roles(html_content):
         html_content,
     )
 
-    # Pattern 2 – role with backtick-delimited text (inside <pre><code> blocks
+    # Pattern 2: role with backtick-delimited text (inside <pre><code> blocks
     # or other contexts where markdown didn't convert backticks to <code>)
-    # e.g.  :func:`get_zonefile_instance`
+    # e.g., :func:`get_zonefile_instance`
     def _replace_backtick_role(m):
         role = m.group("role")
         inner = m.group("inner")
@@ -1639,8 +1639,8 @@ def translate_rst_directives(html_content):
             f"</div>"
         )
 
-    # Pattern 1 – directive <p> followed by a <pre><code> block body.
-    # RST block directives like ``.. note::`` with indented body text
+    # Pattern 1: directive <p> followed by a <pre><code> block body.
+    # RST block directives like `.. note::` with indented body text
     # become: <p>.. note::</p>\n<pre><code>body text</code></pre>
     def _replace_block_directive(m):
         directive = m.group("directive")
@@ -1679,7 +1679,7 @@ def translate_rst_directives(html_content):
         flags=re.DOTALL,
     )
 
-    # Pattern 2 – directive with inline body text in the same <p> tag.
+    # Pattern 2: directive with inline body text in the same <p> tag.
     # e.g. <p>.. versionadded:: 2.8.1</p>
     # The body may contain inline HTML tags (e.g. <code>...</code>) produced
     # by the Sphinx-role translation step that runs before this function.
@@ -1689,9 +1689,9 @@ def translate_rst_directives(html_content):
         html_content,
     )
 
-    # Pattern 3 – directive misinterpreted as a return-type annotation in a
+    # Pattern 3: directive misinterpreted as a return-type annotation in a
     # <dt>/<dd> pair.  the renderer's numpy parser sometimes treats directives
-    # like ``.. versionadded:: 2.0`` at the end of a docstring as an extra
+    # like `.. versionadded:: 2.0` at the end of a docstring as an extra
     # return entry, producing:
     #   <dt><code>...<span class="parameter-annotation">.. versionadded:: 2.0
     #   </span></code></dt>
@@ -4746,7 +4746,7 @@ for html_file in glob.glob("_site/**/*.html", recursive=True):
     selectors_json = json.dumps(stf, separators=(",", ":"))
     escaped = html.escape(selectors_json, quote=True)
 
-    # Optional per-page minimum scale (float 0–1 or keyword)
+    # Optional per-page minimum scale (float 0-1 or keyword)
     min_scale_attr = ""
     raw_min = fm.get("scale-to-fit-min-scale")
     if raw_min is not None:
