@@ -402,7 +402,14 @@ def scan(project_path: str | None, docs_dir: str | None, verbose: bool) -> None:
             click.echo("Error: Could not detect package name.", err=True)
             sys.exit(1)
 
-        importable_name = docs._normalize_package_name(package_name)
+        # Use explicit module name from great-docs.yml (or auto-detection) when
+        # available; this handles namespace packages like "firebird.base" where
+        # the importable module name differs from the PyPI project name.
+        module_name = docs._detect_module_name()
+        if module_name:
+            importable_name = module_name
+        else:
+            importable_name = docs._normalize_package_name(package_name)
 
         # Section 1: Discovery
         click.echo("─" * 50)
