@@ -22802,7 +22802,10 @@ def test_get_package_exports_no_all():
         docs = GreatDocs(project_path=tmp_dir)
         exports = docs._get_package_exports("exportpkg_noall")
 
-        assert exports is None
+        # No __all__ defined and the only public name (VERSION) is auto-excluded,
+        # so there are no documentable exports.  With griffe search-paths the
+        # package *is* discovered (returns []) rather than undiscoverable (None).
+        assert not exports
 
 
 def test_get_package_exports_hyphenated_name():
@@ -28246,6 +28249,7 @@ def test_cli_scan_success():
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs._detect_package_name.return_value = "my_package"
+            mock_docs._detect_module_name.return_value = None
             mock_docs._normalize_package_name.return_value = "my_package"
             mock_docs._get_package_exports.return_value = ["MyClass", "my_func"]
             mock_docs._categorize_api_objects.return_value = {
@@ -28281,6 +28285,7 @@ def test_cli_scan_verbose():
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs._detect_package_name.return_value = "my_pkg"
+            mock_docs._detect_module_name.return_value = None
             mock_docs._normalize_package_name.return_value = "my_pkg"
             mock_docs._get_package_exports.return_value = ["func"]
             mock_docs._categorize_api_objects.return_value = {
@@ -28324,6 +28329,7 @@ def test_cli_scan_no_exports():
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs._detect_package_name.return_value = "my_pkg"
+            mock_docs._detect_module_name.return_value = None
             mock_docs._normalize_package_name.return_value = "my_pkg"
             mock_docs._get_package_exports.return_value = []
 
@@ -28341,6 +28347,7 @@ def test_cli_scan_no_reference_config():
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs._detect_package_name.return_value = "my_pkg"
+            mock_docs._detect_module_name.return_value = None
             mock_docs._normalize_package_name.return_value = "my_pkg"
             mock_docs._get_package_exports.return_value = ["func"]
             mock_docs._categorize_api_objects.return_value = {
@@ -28363,6 +28370,7 @@ def test_cli_scan_class_without_members():
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs._detect_package_name.return_value = "my_pkg"
+            mock_docs._detect_module_name.return_value = None
             mock_docs._normalize_package_name.return_value = "my_pkg"
             mock_docs._get_package_exports.return_value = ["MyClass"]
             mock_docs._categorize_api_objects.return_value = {
@@ -28390,6 +28398,7 @@ def test_cli_scan_flat_categories():
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs._detect_package_name.return_value = "my_pkg"
+            mock_docs._detect_module_name.return_value = None
             mock_docs._normalize_package_name.return_value = "my_pkg"
             mock_docs._get_package_exports.return_value = [
                 "MyEnum",
@@ -28435,6 +28444,7 @@ def test_cli_scan_class_like_categories():
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs._detect_package_name.return_value = "my_pkg"
+            mock_docs._detect_module_name.return_value = None
             mock_docs._normalize_package_name.return_value = "my_pkg"
             mock_docs._get_package_exports.return_value = [
                 "MyDC",
@@ -28469,6 +28479,7 @@ def test_cli_scan_string_items_in_reference():
             mock_docs = MagicMock()
             MockGD.return_value = mock_docs
             mock_docs._detect_package_name.return_value = "my_pkg"
+            mock_docs._detect_module_name.return_value = None
             mock_docs._normalize_package_name.return_value = "my_pkg"
             mock_docs._get_package_exports.return_value = ["my_func"]
             mock_docs._categorize_api_objects.return_value = {
@@ -40911,3 +40922,152 @@ def test_collect_page_tags_from_recipes():
         tag_index = gd._collect_page_tags()
         assert "Config" in tag_index
         assert tag_index["Config"][0]["section"] == "Recipes"
+
+
+# ── Namespace package support ────────────────────────────────────────────────
+
+
+def test_find_package_init_dotted_module_src_layout():
+    """_find_package_init finds __init__.py for a dotted namespace module in src/."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Simulate firebird.base in src/firebird/base/
+        pkg_path = Path(tmp_dir) / "src" / "firebird" / "base"
+        pkg_path.mkdir(parents=True)
+        init_file = pkg_path / "__init__.py"
+        init_file.write_text(
+            '"""Firebird base package."""\n__all__ = ["connect"]\n',
+            encoding="utf-8",
+        )
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "firebird-base"\n', encoding="utf-8"
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._find_package_init("firebird.base")
+
+        assert result is not None
+        assert result.resolve() == init_file.resolve()
+
+
+def test_find_package_init_dotted_module_flat_layout():
+    """_find_package_init finds __init__.py for a dotted namespace module in flat layout."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Simulate mynamespace.pkg in mynamespace/pkg/
+        pkg_path = Path(tmp_dir) / "mynamespace" / "pkg"
+        pkg_path.mkdir(parents=True)
+        init_file = pkg_path / "__init__.py"
+        init_file.write_text(
+            '"""Package."""\n__version__ = "1.0"\n',
+            encoding="utf-8",
+        )
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "mynamespace-pkg"\n', encoding="utf-8"
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._find_package_init("mynamespace.pkg")
+
+        assert result is not None
+        assert result.resolve() == init_file.resolve()
+
+
+def test_discover_exports_namespace_src_layout():
+    """_parse_package_exports discovers exports for namespace pkg in src/ layout."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Create src/mypkg/sub/__init__.py with __all__
+        src_dir = Path(tmp_dir) / "src"
+        pkg_path = src_dir / "mypkg" / "sub"
+        pkg_path.mkdir(parents=True)
+        (pkg_path / "__init__.py").write_text(
+            '"""Namespace sub-package."""\n'
+            '__all__ = ["hello", "goodbye"]\n'
+            "\n"
+            "def hello(name: str) -> str:\n"
+            '    """Say hello."""\n'
+            "    return f'Hello {name}'\n"
+            "\n"
+            "def goodbye(name: str) -> str:\n"
+            '    """Say goodbye."""\n'
+            "    return f'Goodbye {name}'\n",
+            encoding="utf-8",
+        )
+        # mypkg namespace level
+        (src_dir / "mypkg" / "__init__.py").write_text("")
+
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "mypkg-sub"\n', encoding="utf-8"
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        # Use _parse_package_exports which exercises the core fix:
+        # dotted name -> path resolution in _find_package_init
+        exports = docs._parse_package_exports("mypkg.sub")
+
+        assert exports is not None
+        assert "hello" in exports
+        assert "goodbye" in exports
+
+
+def test_griffe_search_paths_includes_src():
+    """_griffe_search_paths includes src/ when it exists."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "test"\n', encoding="utf-8"
+        )
+        (Path(tmp_dir) / "src").mkdir()
+
+        docs = GreatDocs(project_path=tmp_dir)
+        paths = docs._griffe_search_paths()
+
+        resolved = [str(Path(p).resolve()) for p in paths]
+        assert str((Path(tmp_dir) / "src").resolve()) in resolved
+        assert str(Path(tmp_dir).resolve()) in resolved
+
+
+def test_cli_scan_uses_module_name():
+    """CLI scan uses _detect_module_name when available (namespace package support)."""
+    from click.testing import CliRunner
+
+    runner = CliRunner()
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        with patch("great_docs.cli.GreatDocs") as MockGD:
+            mock_docs = MagicMock()
+            MockGD.return_value = mock_docs
+            mock_docs._detect_package_name.return_value = "firebird-base"
+            # Simulate module: firebird.base in great-docs.yml
+            mock_docs._detect_module_name.return_value = "firebird.base"
+            mock_docs._get_package_exports.return_value = ["connect", "Config"]
+            mock_docs._categorize_api_objects.return_value = {
+                "classes": ["Config"],
+                "functions": ["connect"],
+                "class_method_names": {},
+            }
+            mock_docs._config.reference = []
+
+            result = runner.invoke(scan, ["--project-path", tmp_dir])
+            assert result.exit_code == 0
+            # Should show the module name, not the PyPI name
+            assert "firebird.base" in result.output
+            # _get_package_exports should have been called with the module name
+            mock_docs._get_package_exports.assert_called_with("firebird.base")
+
+
+def test_parse_package_exports_dotted_name():
+    """_parse_package_exports parses __all__ from a namespace package init."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_path = Path(tmp_dir) / "src" / "ns" / "pkg"
+        pkg_path.mkdir(parents=True)
+        (pkg_path / "__init__.py").write_text(
+            '__all__ = ["Alpha", "Beta"]\n',
+            encoding="utf-8",
+        )
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "ns-pkg"\n', encoding="utf-8"
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        exports = docs._parse_package_exports("ns.pkg")
+
+        assert exports is not None
+        assert "Alpha" in exports
+        assert "Beta" in exports
