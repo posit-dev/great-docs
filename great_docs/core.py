@@ -3465,6 +3465,64 @@ class GreatDocs:
         cli_info["entry_point_name"] = display_name
         return cli_info
 
+    def _find_click_cli_obj(self, package_name: str) -> object | None:
+        """Return the raw Click command object for *package_name*, or *None*."""
+        metadata = self._get_package_metadata()
+        if not metadata.get("cli_enabled", False):
+            return None
+        try:
+            import click
+        except ImportError:
+            return None
+
+        importable_name = self._normalize_package_name(package_name)
+        cli_module_path = metadata.get("cli_module")
+        if not cli_module_path:
+            for mod in (
+                f"{importable_name}.cli",
+                f"{importable_name}.__main__",
+                f"{importable_name}.main",
+            ):
+                try:
+                    import importlib
+
+                    m = importlib.import_module(mod)
+                    if any(
+                        isinstance(getattr(m, a, None), (click.Command, click.Group))
+                        for a in dir(m)
+                    ):
+                        cli_module_path = mod
+                        break
+                except ImportError:
+                    continue
+        if not cli_module_path:
+            return None
+        try:
+            import importlib
+
+            module = importlib.import_module(cli_module_path)
+        except ImportError:
+            return None
+
+        cli_name = metadata.get("cli_name")
+        if cli_name:
+            obj = getattr(module, cli_name, None)
+            if isinstance(obj, (click.Command, click.Group)):
+                return obj
+
+        for attr_name in ["cli", "main", "app", "command", importable_name]:
+            obj = getattr(module, attr_name, None)
+            if isinstance(obj, (click.Command, click.Group)):
+                return obj
+
+        for attr_name in dir(module):
+            if attr_name.startswith("_"):
+                continue
+            obj = getattr(module, attr_name)
+            if isinstance(obj, (click.Command, click.Group)):
+                return obj
+        return None
+
     def _get_cli_entry_point_name(self, package_name: str) -> str | None:
         """
         Get the CLI entry point name from pyproject.toml.
@@ -10888,6 +10946,18 @@ body-classes: "gd-homepage"
             pass
 
         snap = snapshot_from_griffe(package_name, version=version)
+
+        # Include CLI snapshot when CLI documentation is enabled
+        if self._config.cli_enabled:
+            try:
+                from great_docs._api_diff import snapshot_cli_from_click
+
+                cli_obj = self._find_click_cli_obj(package_name)
+                if cli_obj is not None:
+                    snap.cli_commands = snapshot_cli_from_click(cli_obj)
+            except Exception:
+                pass  # CLI snapshot is best-effort
+
         snap_dir = self.project_root / ".great-docs" / "snapshots"
         snap.save(snap_dir / f"{version}.json")
 
