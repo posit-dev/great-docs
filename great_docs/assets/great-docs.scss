@@ -1976,6 +1976,62 @@ html.quarto-dark .gd-version-banner-eol a,
     color: #f47067;
 }
 
+/* Inline version badges (gd-badge-new, gd-badge-changed, gd-badge-deprecated) */
+.gd-badge {
+    display: inline-block;
+    font-size: 0.7em;
+    font-weight: 600;
+    line-height: 1;
+    padding: 3px 8px;
+    border-radius: 10px;
+    vertical-align: middle;
+    margin-left: 6px;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+}
+
+.gd-badge-new {
+    background: #dafbe1;
+    color: #1a7f37;
+    border: 1px solid #a6e3b0;
+}
+
+.gd-badge-changed {
+    background: #ddf4ff;
+    color: #0550ae;
+    border: 1px solid #80ccff;
+}
+
+.gd-badge-deprecated {
+    background: #ffebe9;
+    color: #82071e;
+    border: 1px solid #ffb8b0;
+}
+
+body.quarto-dark .gd-badge-new,
+html.quarto-dark .gd-badge-new,
+:root[data-bs-theme="dark"] .gd-badge-new {
+    background: #0d3117;
+    color: #57ab5a;
+    border-color: #1b4b27;
+}
+
+body.quarto-dark .gd-badge-changed,
+html.quarto-dark .gd-badge-changed,
+:root[data-bs-theme="dark"] .gd-badge-changed {
+    background: #0d2137;
+    color: #539bf5;
+    border-color: #1b3a57;
+}
+
+body.quarto-dark .gd-badge-deprecated,
+html.quarto-dark .gd-badge-deprecated,
+:root[data-bs-theme="dark"] .gd-badge-deprecated {
+    background: #3c1118;
+    color: #f47067;
+    border-color: #5c1a23;
+}
+
 /* Mobile responsive adjustments */
 @media (max-width: 991.98px) {
     /* Remove large side margins to align nav titles with page content */
