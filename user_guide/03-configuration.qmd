@@ -9,7 +9,9 @@ tags: [Configuration]
 
 Great Docs is designed to work with zero configuration, but you can customize its behavior through a `great-docs.yml` file. This page covers the functional settings: API discovery, docstring parsing, GitHub integration, sidebar behavior, content features, and more. For visual customization (logos, gradients, banners, hero sections, dark mode), see [Theming & Appearance](theming.qmd).
 
+::: {.version-only versions=">=0.6"}
 For HTML-based landing pages and demo surfaces, see [Custom Static Pages](custom-pages.qmd). That feature is configured with `custom_pages` and still falls back to `custom/` when omitted.
+:::
 
 ## Configuration Location
 
