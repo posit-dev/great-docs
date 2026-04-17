@@ -5947,8 +5947,8 @@ def test_categorize_fallback_discovers_module_by_dir():
     the fallback must discover and import the correct module directory."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        # Project name normalizes to 'my_v2_pkg' but the actual module is 'mypkg'
-        pkg_dir = Path(tmp_dir) / "mypkg"
+        # Project name normalizes to 'my_v2_pkg' but the actual module is 'fallback_discover_pkg'
+        pkg_dir = Path(tmp_dir) / "fallback_discover_pkg"
         pkg_dir.mkdir()
         (pkg_dir / "__init__.py").write_text(
             '"""Package with mismatched name."""\n'
@@ -5968,7 +5968,7 @@ def test_categorize_fallback_discovers_module_by_dir():
         try:
             docs = GreatDocs(project_path=tmp_dir)
             categories = docs._categorize_api_objects_fallback(
-                "my_v2_pkg",  # wrong name — should discover 'mypkg'
+                "my_v2_pkg",  # wrong name — should discover 'fallback_discover_pkg'
                 ["do_stuff"],
             )
 
@@ -5976,6 +5976,7 @@ def test_categorize_fallback_discovers_module_by_dir():
             assert categories["other"] == []
         finally:
             sys.path.remove(tmp_dir)
+            sys.modules.pop("fallback_discover_pkg", None)
 
 
 def test_categorize_fallback_skips_metadata():
