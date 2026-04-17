@@ -383,11 +383,9 @@ The unversioned root (`/`) serves the latest version directly for clean canonica
 
 The version selector is the primary way visitors navigate between versions. It appears as a dropdown in the navbar and shows:
 
-- The current version (with a checkmark)
-- Pre-release versions (with a dot indicator)
-- End-of-life versions (with a warning indicator)
-
-When switching versions, the widget navigates to the same page in the target version. If that page doesn't exist (because it was added or removed between versions), it falls back to the section index, then the homepage.
+- the current version
+- any pre-release versions (with a dot indicator)
+- any end-of-life versions (with a warning indicator)
 
 The selected version is persisted in `localStorage`, so returning visitors see their last-used version. The widget is also keyboard-accessible (arrow keys, Enter, Escape) and works entirely client-side with no server round-trips.
 
@@ -415,7 +413,7 @@ A `vercel.json` file is generated with equivalent rewrite rules.
 
 ### GitHub Pages
 
-Static redirect HTML files are generated for each alias, so aliases work on any static hosting platform without server-side configuration. No matter which platform you deploy to, the core versioned site works out of the box — these redirect mechanisms only affect the floating alias URLs.
+Static redirect HTML files are generated for each alias, so aliases work on any static hosting platform without server-side configuration. No matter which platform you deploy to, the core versioned site works out of the box. These redirect mechanisms only affect the floating alias URLs.
 
 ## Build Architecture
 
@@ -429,4 +427,18 @@ Understanding the build pipeline is optional for most users, but it helps when d
 
 The version map (`_version_map.json`) is a JSON manifest listing all versions, their metadata, and which pages exist in each version. The version selector widget reads this at runtime to enable smart navigation and fallback behavior.
 
-Because each version is rendered independently, the build is embarrassingly parallel — there are no cross-version dependencies during rendering. A project with five versions takes only slightly longer than a single-version build on a multi-core machine.
+Because each version is rendered independently, the build is embarrassingly parallel (there are no cross-version dependencies during rendering). A project with five versions takes only slightly longer than a single-version build on a multi-core machine.
+
+## Build Directories
+
+Versioned builds create two directories in your project root:
+
+- **`.great-docs-build/`**: temporary staging directory where per-version source trees are prepared and rendered. Automatically cleaned and recreated at the start of every build. No manual maintenance needed.
+- **`.great-docs-cache/`**: persistent cache for API introspection results from Strategy B (`git_ref`). Stores one JSON snapshot per version so subsequent builds skip the expensive checkout-and-introspect step. You can safely delete this directory at any time to force a fresh introspection (the next build will just take longer).
+
+Both directories should be added to your `.gitignore`. Great Docs does this automatically when you run `great-docs init`, but if you set up versioning on an existing project you can add them manually:
+
+```{.text filename=".gitignore"}
+.great-docs-build/
+.great-docs-cache/
+```

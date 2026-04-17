@@ -7836,9 +7836,7 @@ def test_update_gitignore_skip_when_already_present():
     """_update_project_gitignore does not duplicate entries already present."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         gitignore = Path(tmp_dir) / ".gitignore"
-        gitignore.write_text(
-            "great-docs/\n.great-docs-build/\n.great-docs-cache/\n.great-docs/\n"
-        )
+        gitignore.write_text("great-docs/\n.great-docs-build/\n.great-docs-cache/\n.great-docs/\n")
 
         docs = GreatDocs(project_path=tmp_dir)
         docs._update_project_gitignore(force=True)
