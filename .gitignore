@@ -146,6 +146,9 @@ __marimo__/
 
 # Great Docs build directory (ephemeral, do not commit)
 great-docs/
+.great-docs-build/
+.great-docs-cache/
+.great-docs/
 
 # But keep the skills/great-docs/ directory (Agent Skills, not a build artifact)
 !skills/great-docs/
