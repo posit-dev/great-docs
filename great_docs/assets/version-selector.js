@@ -170,8 +170,8 @@
       '<circle cx="6" cy="18" r="3"/>' +
       '<path d="M18 9a9 9 0 0 1-9 9"/>' +
       "</svg>" +
-      '<span class="gd-vs-label">v' +
-      currentVersion.tag +
+      '<span class="gd-vs-label">' +
+      (currentVersion.tag === "dev" ? "dev" : "v" + currentVersion.tag) +
       "</span>" +
       '<svg class="gd-vs-arrow" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">' +
       '<path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/>' +
@@ -193,7 +193,7 @@
       link.setAttribute("role", "menuitem");
       link.setAttribute("data-version", v.tag);
 
-      // Status indicator
+      // Status indicator (left side) — spacer for alignment when no badge
       var indicator = "";
       if (v.prerelease) {
         indicator =
@@ -201,12 +201,16 @@
       } else if (v.eol) {
         indicator =
           '<span class="gd-vs-badge gd-vs-badge-eol" title="End of life">⚠</span>';
-      } else if (isCurrent) {
-        indicator =
-          '<span class="gd-vs-badge gd-vs-badge-current" title="Current">✓</span>';
+      } else {
+        indicator = '<span class="gd-vs-badge-spacer"></span>';
       }
 
-      link.innerHTML = indicator + "<span>" + v.label + "</span>";
+      // Current-version check on the right
+      var check = isCurrent
+        ? '<span class="gd-vs-check" title="Current">✓</span>'
+        : "";
+
+      link.innerHTML = indicator + "<span>" + v.label + "</span>" + check;
 
       link.addEventListener(
         "click",
@@ -312,9 +316,7 @@
       banner.classList.add("gd-version-banner-pre");
       banner.innerHTML =
         '<span class="gd-vb-icon">🔬</span> ' +
-        "Pre-release documentation (" +
-        currentVersion.label +
-        "). May contain unreleased features. " +
+        "Pre-release documentation. May contain unreleased features. " +
         '<a href="' +
         latestUrl +
         '">Switch to stable →</a>';

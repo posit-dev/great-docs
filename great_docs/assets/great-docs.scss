@@ -1821,8 +1821,10 @@ div.sourceCode:hover > .gd-code-nav .gd-code-copy,
     flex-shrink: 0;
 }
 
-.gd-vs-badge-current {
-    color: #1a7f37;
+.gd-vs-badge-spacer {
+    display: inline-block;
+    width: 16px;
+    flex-shrink: 0;
 }
 
 .gd-vs-badge-pre {
@@ -1831,6 +1833,13 @@ div.sourceCode:hover > .gd-code-nav .gd-code-copy,
 
 .gd-vs-badge-eol {
     color: #cf222e;
+}
+
+.gd-vs-check {
+    margin-left: auto;
+    color: #1a7f37;
+    font-size: 12px;
+    flex-shrink: 0;
 }
 
 /* Version warning banner */
@@ -1896,8 +1905,8 @@ html.quarto-dark .gd-vs-trigger:hover,
 body.quarto-dark .gd-vs-dropdown,
 html.quarto-dark .gd-vs-dropdown,
 :root[data-bs-theme="dark"] .gd-vs-dropdown {
-    background: #2d333b;
-    border-color: #444c56;
+    background: var(--gd-bg-secondary);
+    border-color: var(--gd-border-color);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
@@ -1917,6 +1926,12 @@ body.quarto-dark .gd-vs-item-active,
 html.quarto-dark .gd-vs-item-active,
 :root[data-bs-theme="dark"] .gd-vs-item-active {
     background: #1c3049;
+}
+
+body.quarto-dark .gd-vs-check,
+html.quarto-dark .gd-vs-check,
+:root[data-bs-theme="dark"] .gd-vs-check {
+    color: #57ab5a;
 }
 
 body.quarto-dark .gd-version-banner-old,
