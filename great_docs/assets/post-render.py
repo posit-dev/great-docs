@@ -3404,6 +3404,14 @@ def fix_script_paths():
             content = content.replace(old_ref_switcher, new_ref_switcher)
             modified = True
 
+        # Fix version-selector.js path
+        old_version_sel = '<script src="version-selector.js"></script>'
+        new_version_sel = f'<script src="{prefix}version-selector.js"></script>'
+
+        if old_version_sel in content:
+            content = content.replace(old_version_sel, new_version_sel)
+            modified = True
+
         # Fix dark-mode-toggle.js path
         old_dark_mode = '<script src="dark-mode-toggle.js"></script>'
         new_dark_mode = f'<script src="{prefix}dark-mode-toggle.js"></script>'

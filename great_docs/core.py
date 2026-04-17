@@ -10832,14 +10832,23 @@ body-classes: "gd-homepage"
             header_list[:] = [h for h in header_list if "gd-version-warning-banner" not in str(h)]
             header_list.append({"text": banner_meta})
 
-        # Add the version selector script to after-body
+        # Add the version selector script to after-body, BEFORE navbar-widgets.js
+        # so the widget element exists when the collector runs.
         after_body = config["format"]["html"].setdefault("include-after-body", [])
         if isinstance(after_body, str):
             after_body = [after_body]
             config["format"]["html"]["include-after-body"] = after_body
         vs_script_entry = {"text": '<script src="version-selector.js"></script>'}
         if not any("version-selector" in str(item) for item in after_body):
-            after_body.append(vs_script_entry)
+            # Insert before navbar-widgets.js if present, otherwise append
+            nw_idx = next(
+                (i for i, item in enumerate(after_body) if "navbar-widgets" in str(item)),
+                None,
+            )
+            if nw_idx is not None:
+                after_body.insert(nw_idx, vs_script_entry)
+            else:
+                after_body.append(vs_script_entry)
 
         # Ensure version-selector.js is in resources
         resources_list = config["project"].setdefault("resources", [])

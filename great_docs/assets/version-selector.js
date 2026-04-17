@@ -147,93 +147,125 @@
     }
     if (!currentVersion) return;
 
-    // Create container
+    // Create container (mirrors #github-widget structure)
     var container = document.createElement("div");
+    container.id = "gd-version-selector";
     container.className = "gd-version-selector";
     container.setAttribute("role", "navigation");
     container.setAttribute("aria-label", "Version selector");
 
-    // Create toggle button
-    var toggle = document.createElement("button");
-    toggle.className = "gd-version-toggle";
-    toggle.setAttribute("aria-haspopup", "listbox");
-    toggle.setAttribute("aria-expanded", "false");
-    toggle.innerHTML =
-      '<span class="gd-version-label">v' +
+    // Build the trigger button (mirrors .gh-widget-trigger)
+    var trigger = document.createElement("div");
+    trigger.className = "gd-vs-trigger";
+    trigger.setAttribute("role", "button");
+    trigger.setAttribute("aria-haspopup", "true");
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.setAttribute("tabindex", "0");
+
+    // Git-branch SVG icon (Lucide)
+    trigger.innerHTML =
+      '<svg class="gd-vs-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<line x1="6" y1="3" x2="6" y2="15"/>' +
+      '<circle cx="18" cy="6" r="3"/>' +
+      '<circle cx="6" cy="18" r="3"/>' +
+      '<path d="M18 9a9 9 0 0 1-9 9"/>' +
+      "</svg>" +
+      '<span class="gd-vs-label">v' +
       currentVersion.tag +
       "</span>" +
-      '<span class="gd-version-chevron">&#9662;</span>';
+      '<svg class="gd-vs-arrow" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">' +
+      '<path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/>' +
+      "</svg>";
 
-    // Create dropdown
-    var dropdown = document.createElement("ul");
-    dropdown.className = "gd-version-dropdown";
-    dropdown.setAttribute("role", "listbox");
-    dropdown.style.display = "none";
+    // Build the dropdown (mirrors .gh-dropdown)
+    var dropdown = document.createElement("div");
+    dropdown.className = "gd-vs-dropdown";
+    dropdown.setAttribute("role", "menu");
+    dropdown.setAttribute("aria-hidden", "true");
 
     for (var j = 0; j < versionMap.versions.length; j++) {
       var v = versionMap.versions[j];
-      var item = document.createElement("li");
-      item.setAttribute("role", "option");
-      item.className = "gd-version-item";
-      if (v.tag === currentTag) {
-        item.classList.add("gd-version-current");
-        item.setAttribute("aria-selected", "true");
-      }
-
-      var indicator = "";
-      if (v.prerelease) indicator = '<span class="gd-vi gd-vi-pre">●</span>';
-      else if (v.eol) indicator = '<span class="gd-vi gd-vi-eol">⚠</span>';
-      else if (v.tag === currentTag)
-        indicator = '<span class="gd-vi gd-vi-cur">✓</span>';
+      var isCurrent = v.tag === currentTag;
 
       var link = document.createElement("a");
       link.href = buildVersionUrl(versionMap, v.tag, currentRelPath) || "#";
-      link.innerHTML = indicator + v.label;
+      link.className = "gd-vs-item" + (isCurrent ? " gd-vs-item-active" : "");
+      link.setAttribute("role", "menuitem");
       link.setAttribute("data-version", v.tag);
+
+      // Status indicator
+      var indicator = "";
+      if (v.prerelease) {
+        indicator =
+          '<span class="gd-vs-badge gd-vs-badge-pre" title="Pre-release">●</span>';
+      } else if (v.eol) {
+        indicator =
+          '<span class="gd-vs-badge gd-vs-badge-eol" title="End of life">⚠</span>';
+      } else if (isCurrent) {
+        indicator =
+          '<span class="gd-vs-badge gd-vs-badge-current" title="Current">✓</span>';
+      }
+
+      link.innerHTML = indicator + "<span>" + v.label + "</span>";
 
       link.addEventListener(
         "click",
         (function (tag) {
-          return function (e) {
+          return function () {
             setStoredVersion(tag);
           };
         })(v.tag)
       );
 
-      item.appendChild(link);
-      dropdown.appendChild(item);
+      dropdown.appendChild(link);
     }
 
-    container.appendChild(toggle);
+    container.appendChild(trigger);
     container.appendChild(dropdown);
 
-    // Toggle dropdown on click
-    toggle.addEventListener("click", function (e) {
+    // Toggle dropdown (mirrors GitHub widget behavior)
+    function openDropdown() {
+      container.classList.add("gd-vs-open");
+      trigger.setAttribute("aria-expanded", "true");
+      dropdown.setAttribute("aria-hidden", "false");
+    }
+    function closeDropdown() {
+      container.classList.remove("gd-vs-open");
+      trigger.setAttribute("aria-expanded", "false");
+      dropdown.setAttribute("aria-hidden", "true");
+    }
+
+    trigger.addEventListener("click", function (e) {
       e.stopPropagation();
-      var expanded = dropdown.style.display !== "none";
-      dropdown.style.display = expanded ? "none" : "block";
-      toggle.setAttribute("aria-expanded", String(!expanded));
-    });
-
-    // Close on outside click
-    document.addEventListener("click", function () {
-      dropdown.style.display = "none";
-      toggle.setAttribute("aria-expanded", "false");
-    });
-
-    // Keyboard navigation
-    container.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") {
-        dropdown.style.display = "none";
-        toggle.setAttribute("aria-expanded", "false");
-        toggle.focus();
+      if (container.classList.contains("gd-vs-open")) {
+        closeDropdown();
+      } else {
+        openDropdown();
       }
     });
 
-    // Insert into navbar
-    var navbar = document.querySelector(".navbar-nav.navbar-nav-scroll");
-    if (!navbar) navbar = document.querySelector("nav.navbar .container-fluid");
+    trigger.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        trigger.click();
+      }
+    });
+
+    document.addEventListener("click", function () {
+      closeDropdown();
+    });
+
+    container.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        closeDropdown();
+        trigger.focus();
+      }
+    });
+
+    // Insert into navbar (will be collected by navbar-widgets.js)
+    var navbar = document.querySelector(".navbar .container-fluid");
     if (navbar) {
+      // Place as a direct child so navbar-widgets.js can find it
       navbar.appendChild(container);
     }
   }

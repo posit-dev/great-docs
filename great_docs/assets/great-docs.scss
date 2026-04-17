@@ -1712,6 +1712,255 @@ div.sourceCode:hover > .gd-code-nav .gd-code-copy,
     font-weight: 600;
 }
 
+/* ==========================================================================
+   Version Selector Widget — mirrors GitHub widget styling
+   ========================================================================== */
+
+.gd-version-selector {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.gd-vs-trigger {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    color: var(--gd-navbar-text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.gd-vs-trigger:hover {
+    background: rgba(0, 0, 0, 0.10);
+    border-color: rgba(0, 0, 0, 0.25);
+}
+
+.gd-vs-open .gd-vs-trigger {
+    background: rgba(0, 0, 0, 0.12);
+    border-color: rgba(0, 0, 0, 0.25);
+}
+
+.gd-vs-icon {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+}
+
+.gd-vs-label {
+    line-height: 1;
+}
+
+.gd-vs-arrow {
+    margin-left: 2px;
+    opacity: 0.7;
+    transition: transform 0.2s ease;
+}
+
+.gd-vs-open .gd-vs-arrow {
+    transform: rotate(180deg);
+}
+
+.gd-vs-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 170px;
+    background: #ffffff;
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(31, 35, 40, 0.12);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-8px);
+    transition: all 0.2s ease;
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.gd-vs-open .gd-vs-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.gd-vs-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    color: #24292f !important;
+    text-decoration: none !important;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.15s ease;
+}
+
+.gd-vs-item:hover {
+    background: #f6f8fa;
+}
+
+.gd-vs-item-active {
+    background: #f0f6ff;
+    font-weight: 600;
+}
+
+.gd-vs-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.gd-vs-badge-current {
+    color: #1a7f37;
+}
+
+.gd-vs-badge-pre {
+    color: #9a6700;
+}
+
+.gd-vs-badge-eol {
+    color: #cf222e;
+}
+
+/* Version warning banner */
+.gd-version-banner {
+    padding: 10px 20px;
+    font-size: 14px;
+    text-align: center;
+    font-weight: 500;
+    border-bottom: 1px solid;
+}
+
+.gd-version-banner a {
+    font-weight: 600;
+    text-decoration: underline;
+    margin-left: 4px;
+}
+
+.gd-version-banner-old {
+    background: #fff8c5;
+    color: #4d2d00;
+    border-color: #d4a72c;
+}
+
+.gd-version-banner-old a {
+    color: #4d2d00;
+}
+
+.gd-version-banner-pre {
+    background: #ddf4ff;
+    color: #0550ae;
+    border-color: #54aeff;
+}
+
+.gd-version-banner-pre a {
+    color: #0550ae;
+}
+
+.gd-version-banner-eol {
+    background: #ffebe9;
+    color: #82071e;
+    border-color: #ff8182;
+}
+
+.gd-version-banner-eol a {
+    color: #82071e;
+}
+
+/* Dark mode overrides for version selector */
+body.quarto-dark .gd-vs-trigger,
+html.quarto-dark .gd-vs-trigger,
+:root[data-bs-theme="dark"] .gd-vs-trigger {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+body.quarto-dark .gd-vs-trigger:hover,
+html.quarto-dark .gd-vs-trigger:hover,
+:root[data-bs-theme="dark"] .gd-vs-trigger:hover {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+body.quarto-dark .gd-vs-dropdown,
+html.quarto-dark .gd-vs-dropdown,
+:root[data-bs-theme="dark"] .gd-vs-dropdown {
+    background: #2d333b;
+    border-color: #444c56;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+body.quarto-dark .gd-vs-item,
+html.quarto-dark .gd-vs-item,
+:root[data-bs-theme="dark"] .gd-vs-item {
+    color: #adbac7 !important;
+}
+
+body.quarto-dark .gd-vs-item:hover,
+html.quarto-dark .gd-vs-item:hover,
+:root[data-bs-theme="dark"] .gd-vs-item:hover {
+    background: #373e47;
+}
+
+body.quarto-dark .gd-vs-item-active,
+html.quarto-dark .gd-vs-item-active,
+:root[data-bs-theme="dark"] .gd-vs-item-active {
+    background: #1c3049;
+}
+
+body.quarto-dark .gd-version-banner-old,
+html.quarto-dark .gd-version-banner-old,
+:root[data-bs-theme="dark"] .gd-version-banner-old {
+    background: #3d2e00;
+    color: #e3b341;
+    border-color: #5c4400;
+}
+
+body.quarto-dark .gd-version-banner-old a,
+html.quarto-dark .gd-version-banner-old a,
+:root[data-bs-theme="dark"] .gd-version-banner-old a {
+    color: #e3b341;
+}
+
+body.quarto-dark .gd-version-banner-pre,
+html.quarto-dark .gd-version-banner-pre,
+:root[data-bs-theme="dark"] .gd-version-banner-pre {
+    background: #0d2137;
+    color: #539bf5;
+    border-color: #1b3a57;
+}
+
+body.quarto-dark .gd-version-banner-pre a,
+html.quarto-dark .gd-version-banner-pre a,
+:root[data-bs-theme="dark"] .gd-version-banner-pre a {
+    color: #539bf5;
+}
+
+body.quarto-dark .gd-version-banner-eol,
+html.quarto-dark .gd-version-banner-eol,
+:root[data-bs-theme="dark"] .gd-version-banner-eol {
+    background: #3c1118;
+    color: #f47067;
+    border-color: #5c1a23;
+}
+
+body.quarto-dark .gd-version-banner-eol a,
+html.quarto-dark .gd-version-banner-eol a,
+:root[data-bs-theme="dark"] .gd-version-banner-eol a {
+    color: #f47067;
+}
+
 /* Mobile responsive adjustments */
 @media (max-width: 991.98px) {
     /* Remove large side margins to align nav titles with page content */
