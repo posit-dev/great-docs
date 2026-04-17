@@ -4,13 +4,20 @@ import json
 from pathlib import Path
 
 from great_docs._api_diff import (
+    ApiDiff,
     ApiSnapshot,
+    CliChange,
+    CliCommandInfo,
+    CliOptionInfo,
     ParameterInfo,
     SymbolInfo,
+    _import_cli_from_source,
     compute_version_badges,
+    diff_snapshots,
     inject_badges_into_qmd,
     load_snapshots_for_annotations,
     render_badge_html,
+    snapshot_cli_from_click,
 )
 
 
@@ -362,3 +369,349 @@ class TestLoadSnapshotsForAnnotations:
         curr, prev = load_snapshots_for_annotations(tmp_path, "v1.0", "v0.9")
         assert curr is None
         assert prev is None
+
+
+# ---------------------------------------------------------------------------
+# CliOptionInfo serialization
+# ---------------------------------------------------------------------------
+
+
+class TestCliOptionInfoSerialization:
+    def test_roundtrip(self):
+        opt = CliOptionInfo(
+            name="--verbose",
+            type="option",
+            is_flag=True,
+            required=False,
+            default=None,
+            help="Enable verbose output",
+        )
+        d = opt.to_dict()
+        assert d["name"] == "--verbose"
+        assert d["type"] == "option"
+        assert d["is_flag"] is True
+        restored = CliOptionInfo.from_dict(d)
+        assert restored == opt
+
+    def test_argument_roundtrip(self):
+        arg = CliOptionInfo(name="path", type="argument", required=True)
+        d = arg.to_dict()
+        restored = CliOptionInfo.from_dict(d)
+        assert restored == arg
+        assert restored.is_flag is False
+
+
+# ---------------------------------------------------------------------------
+# CliCommandInfo serialization
+# ---------------------------------------------------------------------------
+
+
+class TestCliCommandInfoSerialization:
+    def test_roundtrip_simple_command(self):
+        cmd = CliCommandInfo(
+            name="build",
+            help="Build the docs",
+            options=[
+                CliOptionInfo(name="--clean", type="option", is_flag=True),
+            ],
+        )
+        d = cmd.to_dict()
+        assert d["name"] == "build"
+        assert len(d["options"]) == 1
+        restored = CliCommandInfo.from_dict(d)
+        assert restored == cmd
+
+    def test_roundtrip_nested_group(self):
+        group = CliCommandInfo(
+            name="cli",
+            help="My CLI",
+            is_group=True,
+            subcommands=[
+                CliCommandInfo(
+                    name="build",
+                    help="Build the docs",
+                    options=[CliOptionInfo(name="--clean", type="option", is_flag=True)],
+                ),
+                CliCommandInfo(name="serve", help="Serve locally"),
+            ],
+        )
+        d = group.to_dict()
+        assert d["is_group"] is True
+        assert len(d["subcommands"]) == 2
+        restored = CliCommandInfo.from_dict(d)
+        assert restored == group
+
+    def test_all_command_paths(self):
+        group = CliCommandInfo(
+            name="app",
+            is_group=True,
+            subcommands=[
+                CliCommandInfo(name="build"),
+                CliCommandInfo(
+                    name="check",
+                    is_group=True,
+                    subcommands=[CliCommandInfo(name="links")],
+                ),
+            ],
+        )
+        paths = group.all_command_paths()
+        assert "app" in paths
+        assert "app build" in paths
+        assert "app check" in paths
+        assert "app check links" in paths
+
+
+# ---------------------------------------------------------------------------
+# ApiSnapshot with CLI
+# ---------------------------------------------------------------------------
+
+
+class TestApiSnapshotWithCli:
+    def test_roundtrip(self, tmp_path: Path):
+        cli = CliCommandInfo(
+            name="myapp",
+            help="My app",
+            is_group=True,
+            subcommands=[CliCommandInfo(name="run", help="Run it")],
+        )
+        snap = ApiSnapshot(
+            version="v1.0",
+            package_name="test_pkg",
+            symbols={},
+            cli_commands=cli,
+        )
+        snap.save(tmp_path / "v1.json")
+        loaded = ApiSnapshot.load(tmp_path / "v1.json")
+        assert loaded.cli_commands is not None
+        assert loaded.cli_commands.name == "myapp"
+        assert len(loaded.cli_commands.subcommands) == 1
+
+    def test_cli_command_count(self):
+        cli = CliCommandInfo(
+            name="myapp",
+            is_group=True,
+            subcommands=[
+                CliCommandInfo(name="a"),
+                CliCommandInfo(name="b"),
+            ],
+        )
+        snap = ApiSnapshot(version="v1.0", package_name="pkg", symbols={}, cli_commands=cli)
+        assert snap.cli_command_count == 3  # myapp + a + b
+
+    def test_cli_command_count_none(self):
+        snap = _make_snapshot("v1.0")
+        assert snap.cli_command_count == 0
+
+
+# ---------------------------------------------------------------------------
+# CLI diffing
+# ---------------------------------------------------------------------------
+
+
+def _make_cli_group(*subcmds: CliCommandInfo, name: str = "app") -> CliCommandInfo:
+    return CliCommandInfo(name=name, is_group=True, subcommands=list(subcmds))
+
+
+class TestCliDiffing:
+    def test_added_command(self):
+        old = _make_snapshot("v1")
+        old.cli_commands = _make_cli_group(CliCommandInfo(name="build"))
+
+        new = _make_snapshot("v2")
+        new.cli_commands = _make_cli_group(
+            CliCommandInfo(name="build"),
+            CliCommandInfo(name="serve"),
+        )
+
+        diff = diff_snapshots(old, new)
+        assert len(diff.cli_changes) == 1
+        assert diff.cli_changes[0].command == "app serve"
+        assert diff.cli_changes[0].change_type == "added"
+
+    def test_removed_command(self):
+        old = _make_snapshot("v1")
+        old.cli_commands = _make_cli_group(
+            CliCommandInfo(name="build"),
+            CliCommandInfo(name="serve"),
+        )
+
+        new = _make_snapshot("v2")
+        new.cli_commands = _make_cli_group(CliCommandInfo(name="build"))
+
+        diff = diff_snapshots(old, new)
+        assert len(diff.cli_changes) == 1
+        assert diff.cli_changes[0].command == "app serve"
+        assert diff.cli_changes[0].change_type == "removed"
+        assert diff.cli_changes[0].is_breaking is True
+
+    def test_changed_option(self):
+        old = _make_snapshot("v1")
+        old.cli_commands = _make_cli_group(
+            CliCommandInfo(
+                name="build",
+                options=[CliOptionInfo(name="--clean", type="option", is_flag=True)],
+            )
+        )
+
+        new = _make_snapshot("v2")
+        new.cli_commands = _make_cli_group(
+            CliCommandInfo(
+                name="build",
+                options=[
+                    CliOptionInfo(name="--clean", type="option", is_flag=False, required=True)
+                ],
+            )
+        )
+
+        diff = diff_snapshots(old, new)
+        assert len(diff.cli_changes) == 1
+        c = diff.cli_changes[0]
+        assert c.command == "app build"
+        assert c.change_type == "changed"
+        assert c.is_breaking is True
+        assert any("flag" in d for d in c.details)
+        assert any("required" in d for d in c.details)
+
+    def test_no_cli_changes(self):
+        old = _make_snapshot("v1")
+        old.cli_commands = _make_cli_group(CliCommandInfo(name="build"))
+
+        new = _make_snapshot("v2")
+        new.cli_commands = _make_cli_group(CliCommandInfo(name="build"))
+
+        diff = diff_snapshots(old, new)
+        assert diff.cli_changes == []
+
+    def test_both_none(self):
+        diff = diff_snapshots(_make_snapshot("v1"), _make_snapshot("v2"))
+        assert diff.cli_changes == []
+
+    def test_cli_appears(self):
+        old = _make_snapshot("v1")
+        new = _make_snapshot("v2")
+        new.cli_commands = _make_cli_group(CliCommandInfo(name="build"))
+
+        diff = diff_snapshots(old, new)
+        assert len(diff.cli_changes) == 2  # app group + build
+        assert all(c.change_type == "added" for c in diff.cli_changes)
+
+    def test_cli_removed_entirely(self):
+        old = _make_snapshot("v1")
+        old.cli_commands = _make_cli_group(CliCommandInfo(name="build"))
+
+        new = _make_snapshot("v2")
+        diff = diff_snapshots(old, new)
+        assert len(diff.cli_changes) == 2
+        assert all(c.change_type == "removed" for c in diff.cli_changes)
+        assert all(c.is_breaking for c in diff.cli_changes)
+
+
+# ---------------------------------------------------------------------------
+# snapshot_cli_from_click
+# ---------------------------------------------------------------------------
+
+
+class TestSnapshotCliFromClick:
+    def test_simple_command(self):
+        import click
+
+        @click.command()
+        @click.option("--name", "-n", help="Your name", required=True)
+        @click.option("--verbose", is_flag=True)
+        @click.argument("path")
+        def hello(name, verbose, path):
+            """Say hello."""
+
+        result = snapshot_cli_from_click(hello)
+        assert result is not None
+        assert result.name == "hello"
+        assert result.help == "Say hello."
+        assert not result.is_group
+        opts = {o.name: o for o in result.options}
+        assert "--name" in opts
+        assert opts["--name"].required is True
+        assert "--verbose" in opts
+        assert opts["--verbose"].is_flag is True
+        assert "path" in opts
+        assert opts["path"].type == "argument"
+
+    def test_group(self):
+        import click
+
+        @click.group()
+        def cli():
+            """My CLI."""
+
+        @cli.command()
+        @click.option("--all", is_flag=True)
+        def build(all):
+            """Build."""
+
+        @cli.command()
+        def serve():
+            """Serve."""
+
+        result = snapshot_cli_from_click(cli)
+        assert result is not None
+        assert result.is_group
+        assert len(result.subcommands) == 2
+        names = {s.name for s in result.subcommands}
+        assert names == {"build", "serve"}
+
+    def test_non_click_returns_none(self):
+        result = snapshot_cli_from_click("not a click object")
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _import_cli_from_source
+# ---------------------------------------------------------------------------
+
+
+class TestImportCliFromSource:
+    def test_import_from_extracted_source(self, tmp_path: Path):
+        """Simulate an extracted package with a Click CLI module."""
+        pkg_dir = tmp_path / "mypkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("")
+        (pkg_dir / "cli.py").write_text(
+            "import click\n"
+            "\n"
+            "@click.group()\n"
+            "def cli():\n"
+            '    """My CLI."""\n'
+            "\n"
+            "@cli.command()\n"
+            '@click.option("--verbose", is_flag=True)\n'
+            "def build(verbose):\n"
+            '    """Build it."""\n'
+        )
+
+        result = _import_cli_from_source(tmp_path, "mypkg.cli")
+        assert result is not None
+        assert result.name == "cli"
+        assert result.is_group
+        assert len(result.subcommands) == 1
+        assert result.subcommands[0].name == "build"
+
+    def test_import_missing_module(self, tmp_path: Path):
+        result = _import_cli_from_source(tmp_path, "nonexistent.cli")
+        assert result is None
+
+    def test_no_click_command_in_module(self, tmp_path: Path):
+        pkg_dir = tmp_path / "noclickcli"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("")
+        (pkg_dir / "cli.py").write_text("x = 42\n")
+
+        result = _import_cli_from_source(tmp_path, "noclickcli.cli")
+        assert result is None
+
+    def test_sys_path_cleaned_up(self, tmp_path: Path):
+        """Verify sys.path is restored after import."""
+        import sys
+
+        original_path = list(sys.path)
+        _import_cli_from_source(tmp_path, "nonexistent.cli")
+        assert str(tmp_path) not in sys.path
+        assert len(sys.path) == len(original_path)
