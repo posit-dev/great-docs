@@ -166,6 +166,70 @@ def _prune_quarto_cli_sidebar(dest_dir: Path, valid_stems: set[str]) -> None:
         pass  # Best-effort
 
 
+def _prune_missing_sidebar_pages(dest_dir: Path) -> None:
+    """Remove sidebar entries whose .qmd files no longer exist in *dest_dir*.
+
+    After page-level and section-level version scoping delete excluded `.qmd` files, the sidebar in
+    `_quarto.yml` may still reference them. Quarto renders those stale entries as raw path text
+    instead of links. This function walks every sidebar section and drops entries that point to
+    non-existent files. Empty sections are removed entirely.
+    """
+    from yaml12 import read_yaml, write_yaml
+
+    quarto_yml = dest_dir / "_quarto.yml"
+    if not quarto_yml.exists():
+        return
+
+    try:
+        with open(quarto_yml, "r", encoding="utf-8") as fh:
+            content = read_yaml(fh)
+        if not content:
+            return
+
+        sidebars = content.get("website", {}).get("sidebar", [])
+        modified = False
+
+        for sidebar in sidebars:
+            pruned = _prune_sidebar_contents(sidebar.get("contents", []), dest_dir)
+            if pruned != sidebar.get("contents", []):
+                sidebar["contents"] = pruned
+                modified = True
+
+        if modified:
+            with open(quarto_yml, "w", encoding="utf-8") as fh:
+                write_yaml(content, fh)
+    except Exception:
+        pass  # Best-effort
+
+
+def _prune_sidebar_contents(contents: list, dest_dir: Path) -> list:
+    """Recursively prune sidebar entries whose target files are missing."""
+    result = []
+    for item in contents:
+        if isinstance(item, str):
+            # Bare href like "user-guide/scale-to-fit.qmd"
+            if item.endswith((".qmd", ".md")) and not (dest_dir / item).exists():
+                continue
+            result.append(item)
+        elif isinstance(item, dict):
+            if "section" in item:
+                # Section group — recurse into contents
+                inner = _prune_sidebar_contents(item.get("contents", []), dest_dir)
+                if inner:
+                    result.append({**item, "contents": inner})
+                # else: drop the empty section entirely
+            elif "href" in item:
+                href = item["href"]
+                if href.endswith((".qmd", ".md")) and not (dest_dir / href).exists():
+                    continue
+                result.append(item)
+            else:
+                result.append(item)
+        else:
+            result.append(item)
+    return result
+
+
 def _prune_cli_pages_for_version(dest_dir: Path, project_root: Path, entry: VersionEntry) -> None:
     """Load the cached snapshot for a version and prune stale CLI pages."""
     git_ref = entry.git_ref
@@ -1271,6 +1335,7 @@ def run_versioned_build(
             versions,
             project_root=project_root,
         )
+        _prune_missing_sidebar_pages(ver_dir)
         _rewrite_quarto_yml_for_version(ver_dir, entry, latest_tag, site_url=site_url)
         pages_by_version[entry.tag] = pages
         build_dirs.append(ver_dir)
