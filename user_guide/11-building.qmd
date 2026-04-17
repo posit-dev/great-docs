@@ -25,7 +25,9 @@ When you run `great-docs build`, the following steps execute in order:
 
 6. Custom sections defined in `great-docs.yml` (examples, tutorials, blog posts, etc.) are processed and copied to the output directory.
 
+::: {.version-only versions=">=0.6"}
 7. If `custom_pages` is configured, or if the fallback `custom/` directory exists, custom HTML pages are discovered. Passthrough pages are converted into generated `.qmd` files and raw pages are copied through unchanged.
+:::
 
 8. If the changelog is enabled and a GitHub repository URL exists in `pyproject.toml`, GitHub Releases are fetched and a `changelog.qmd` file is generated.
 
