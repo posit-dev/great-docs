@@ -239,9 +239,41 @@ def process_version_fences(
     # Stack tracks nested fences: each entry is (include: bool, colon_count: int)
     stack: list[tuple[bool, int]] = []
 
+    # Track fenced code blocks (``` or ````+) so we don't process
+    # version fences that appear inside code examples.
+    in_code_block = False
+    code_fence_pattern = ""
+
     i = 0
     while i < len(lines):
         line = lines[i]
+        stripped = line.strip()
+
+        # Toggle code block state on ``` or ```` lines
+        if not in_code_block and (stripped.startswith("```") or stripped.startswith("~~~~")):
+            marker = stripped[:3] if stripped.startswith("```") else stripped[:4]
+            # Count the actual fence chars
+            fence_char = marker[0]
+            fence_len = 0
+            for ch in stripped:
+                if ch == fence_char:
+                    fence_len += 1
+                else:
+                    break
+            code_fence_pattern = fence_char * fence_len
+            in_code_block = True
+            if not stack or stack[-1][0]:
+                result.append(line)
+            i += 1
+            continue
+        elif in_code_block:
+            if stripped.startswith(code_fence_pattern) and stripped.rstrip(code_fence_pattern[0]) == "":
+                in_code_block = False
+                code_fence_pattern = ""
+            if not stack or stack[-1][0]:
+                result.append(line)
+            i += 1
+            continue
 
         # Check for version fence opening
         m = _FENCE_OPEN_RE.match(line)
