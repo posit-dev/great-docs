@@ -3,6 +3,7 @@ title: "Page Status Badges"
 guide-section: "Site Content"
 bread-crumbs: false
 tags: [Content, Configuration]
+versions: ["0.6", "0.7", "dev"]
 ---
 
 # Page Status Badges
