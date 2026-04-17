@@ -2,6 +2,7 @@
 title: "Use Version Fences and Badges"
 description: "Annotate content with version fences, inline badges, and callouts to show version-specific information."
 tags: [Versioning, Authoring]
+versions: ["dev"]
 ---
 
 # Use Version Fences and Badges
