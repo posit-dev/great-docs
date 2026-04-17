@@ -60,10 +60,10 @@ sections:
 | Field            | Default            | Description |
 |------------------|--------------------|-------------|
 | `index`          | `false`            | When `true`, auto-generates a card-based index page; when `false`, navbar links to the first page |
-| `index_columns`  | `2`                | Number of columns for image cards on the index page (1 or 2). Only applies when `index: true` |
+| `index_columns`  | `2`                | Number of columns for image cards on the index page (1 or 2). Only applies when `index: true` [version-badge new 0.7] |
 | `navbar_after`   | Before "Reference" | Name of an existing navbar item to place this section after |
 | `type`           | `default`          | `"default"` for card-grid index with sidebar; `"blog"` for Quarto listing page |
-| `dir_titles`     | `{}`               | Mapping of subdirectory names to custom sidebar section titles (see [Subdirectories](#subdirectories)) |
+| `dir_titles`     | `{}`               | Mapping of subdirectory names to custom sidebar section titles (see [Subdirectories](#subdirectories)) [version-badge new dev] |
 
 ## Multiple Sections
 
@@ -157,6 +157,8 @@ The generated index page renders entries in two zones:
 
 When both zones are present, a horizontal rule separates them. This design mirrors the pattern used by the [pointblank demos page](https://posit-dev.github.io/pointblank/demos/), where featured items with screenshots sit above a simpler list of additional entries.
 
+::: {.version-only versions=">=0.7"}
+
 #### Controlling Columns
 
 By default, image cards use a **2-column** responsive grid. Set `index_columns: 1` for a single-column layout (useful for wide screenshots or fewer items):
@@ -172,6 +174,8 @@ sections:
 ::: {.callout-tip}
 ## Mixed layouts
 You can combine both approaches in the same site: a 2-column demos section with featured screenshots alongside a 1-column gallery with full-width images, plus plain text links for supplementary pages that don't need a visual.
+:::
+
 :::
 
 #### Example: Featured Demos with Plain Links
@@ -249,6 +253,8 @@ examples/
 
 The sidebar displays these as **"Getting Started"**, **"Results And Reporting"**, and **"Advanced Topics"** (not "01 Getting Started", etc.).
 
+::: {.version-only versions="dev"}
+
 ### Custom Subdirectory Titles {#custom-subdirectory-titles}
 
 The auto-generated title converts hyphens and underscores to spaces and applies title case. If you need different capitalization or phrasing, use `dir_titles` to override specific subdirectory headings:
@@ -269,6 +275,8 @@ The keys in `dir_titles` are the subdirectory names **after** numeric prefix str
 ::: {.callout-tip}
 ## When to use `dir_titles`
 This is useful when the auto-generated title doesn't match your preferred style — for example, turning "Results And Reporting" into "Results/Reporting", or "Actions And Thresholds" into "Actions & Thresholds".
+:::
+
 :::
 
 ## Example: Visual Gallery
