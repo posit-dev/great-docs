@@ -39,6 +39,40 @@ logo:
 
 favicon: assets/favicon.svg
 
+# Versioned Documentation
+# -----------------------
+# Publish multiple versions of the site from a single source tree.
+versions:
+  - label: "0.8 (dev)"
+    tag: dev
+    prerelease: true
+  - label: "0.7"
+    tag: "0.7"
+    git_ref: v0.7
+    latest: true
+  - label: "0.6"
+    tag: "0.6"
+    git_ref: v0.6
+  - label: "0.5"
+    tag: "0.5"
+    git_ref: v0.5
+  - label: "0.4"
+    tag: "0.4"
+    git_ref: v0.4
+    eol: true
+  - label: "0.3"
+    tag: "0.3"
+    git_ref: v0.3
+    eol: true
+  - label: "0.2"
+    tag: "0.2"
+    git_ref: v0.2
+    eol: true
+  - label: "0.1"
+    tag: "0.1"
+    git_ref: v0.1
+    eol: true
+
 # GitHub Integration
 # ------------------
 # Repository URL override (auto-detected from pyproject.toml [project.urls] by default)
