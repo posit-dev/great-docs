@@ -41,7 +41,9 @@ back_to_top: false   # Disable the button
 
 The button respects the visitor's `prefers-reduced-motion` setting: when reduced motion is preferred, scrolling is instant rather than animated.
 
-## Keyboard Navigation
+## Keyboard Navigation [version-badge new 0.5]
+
+::: {.version-only versions=">=0.5"}
 
 Great Docs includes built-in keyboard shortcuts that let visitors navigate the site and access common actions without reaching for the mouse. A small keyboard icon appears in the navbar; clicking it (or pressing `h` / `?`) opens an overlay listing every shortcut.
 
@@ -91,6 +93,8 @@ keyboard_nav: false
 ### Accessibility
 
 Keyboard shortcuts are automatically skipped when the visitor is typing in an input field, textarea, or content-editable element, so they never interfere with form entry or search. The help overlay uses ARIA attributes for screen reader compatibility, and animations respect the visitor's `prefers-reduced-motion` system setting.
+
+:::
 
 ## Announcement Banner
 
@@ -482,7 +486,9 @@ hero:
 | `hero.logo_height` | `str` | `200px` | CSS max-height for the hero logo |
 | `hero.badges` | `list` / `false` | `auto` | Explicit badge list or `false` to suppress |
 
-## Navigation Icons
+## Navigation Icons [version-badge new 0.5]
+
+::: {.version-only versions=">=0.5"}
 
 Add [Lucide](https://lucide.dev/) icons to navbar and sidebar entries for quick visual identification. Great Docs ships with the complete Lucide icon set (1,900+ icons) and resolves them to lightweight inline SVGs at build time.
 
@@ -561,7 +567,11 @@ Lucide names are lowercase and hyphen-separated. Common patterns:
 
 Icons automatically adapt to dark mode. They use `stroke="currentColor"`, so they inherit the text color of their navigation context (no additional configuration is needed).
 
-## Inline Icons
+:::
+
+## Inline Icons [version-badge new 0.6]
+
+::: {.version-only versions=">=0.6"}
 
 Beyond navbar and sidebar icons, you can place Lucide icons anywhere in your `.qmd` content using the `icon` shortcode. Icons scale with the surrounding text, sit on the baseline, and inherit the text color.
 
@@ -616,6 +626,8 @@ Use icons sparingly to draw attention to key information without cluttering the 
 | Complete | {{< icon check-circle >}} | Feature is stable |
 | In progress | {{< icon loader >}} | Under active development |
 | Planned | {{< icon calendar >}} | Scheduled for a future release |
+
+:::
 
 ## Next Steps
 
