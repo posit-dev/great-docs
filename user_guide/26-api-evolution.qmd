@@ -3,6 +3,7 @@ title: "API Evolution"
 guide-section: "Quality & Maintenance"
 tags: [API, CLI]
 status: experimental
+versions: ["0.6", "0.7", "dev"]
 ---
 
 # API Evolution
