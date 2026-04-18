@@ -248,8 +248,9 @@ def process_version_fences(
     lines = content.split("\n")
     result: list[str] = []
 
-    # Stack tracks nested fences: each entry is (include: bool, colon_count: int)
-    stack: list[tuple[bool, int]] = []
+    # Stack tracks nested fences: (include: bool, colon_count: int, is_version_fence: bool)
+    # Version fence markers are stripped from output; generic div markers are preserved.
+    stack: list[tuple[bool, int, bool]] = []
 
     # Track fenced code blocks (``` or ````+) so we don't process
     # version fences that appear inside code examples.
@@ -339,14 +340,29 @@ def process_version_fences(
 
             # Count colons in opening fence for matching the close
             colon_count = len(line) - len(line.lstrip(":"))
-            stack.append((include, colon_count))
+            stack.append((include, colon_count, True))
+            i += 1
+            continue
+
+        # Check for generic ::: div opening (callouts, panels, etc.)
+        # These need stack tracking so their closing ::: doesn't pop a
+        # version fence.
+        if stripped.startswith(":::") and not _FENCE_CLOSE_RE.match(stripped):
+            include = not stack or stack[-1][0]
+            colon_count = len(line) - len(line.lstrip(":"))
+            stack.append((include, colon_count, False))
+            if include:
+                result.append(line)
             i += 1
             continue
 
         # Check for fence close
         close_m = _FENCE_CLOSE_RE.match(line)
         if close_m and stack:
-            stack.pop()
+            entry = stack.pop()
+            # Generic divs (not version fences) need their closing ::: emitted
+            if not entry[2] and entry[0]:
+                result.append(line)
             i += 1
             continue
 
