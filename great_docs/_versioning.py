@@ -260,6 +260,7 @@ def process_version_fences(
     # [version-badge new VERSION] and the target is older, skip everything
     # until the next heading at the same or higher level.
     skip_heading_level = 0
+    skip_div_depth = 0  # nested ::: div depth inside skipped section
 
     i = 0
     while i < len(lines):
@@ -293,9 +294,18 @@ def process_version_fences(
             continue
 
         # Heading-level skip mode: skip lines until a same-or-higher-level heading
+        # that is NOT inside a ::: fenced div (e.g., callout boxes contain headings
+        # that should not terminate the skip).
         if skip_heading_level > 0:
+            # Track ::: div nesting inside the skipped section
+            if not in_code_block:
+                if stripped.startswith(":::") and not _FENCE_CLOSE_RE.match(stripped):
+                    skip_div_depth += 1
+                elif _FENCE_CLOSE_RE.match(stripped) and skip_div_depth > 0:
+                    skip_div_depth -= 1
+
             hm = _HEADING_RE.match(line)
-            if hm and len(hm.group(1)) <= skip_heading_level:
+            if hm and len(hm.group(1)) <= skip_heading_level and skip_div_depth == 0:
                 # This heading ends the skip — fall through to normal processing
                 skip_heading_level = 0
             else:
