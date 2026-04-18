@@ -2,6 +2,7 @@
 title: "Embed Videos"
 description: "Add YouTube, Vimeo, and local video files to your documentation pages."
 tags: [Content, Multimedia]
+versions: ">=0.3"
 ---
 
 # Embed Videos
