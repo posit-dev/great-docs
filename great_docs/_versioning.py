@@ -317,6 +317,7 @@ def process_version_fences(
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 _VERSIONS_KEY_RE = re.compile(r"^versions:\s*\[([^\]]*)\]", re.MULTILINE)
+_VERSIONS_SCALAR_RE = re.compile(r'^versions:\s*["\']([^"\']+)["\']\s*$', re.MULTILINE)
 _VERSIONS_LIST_RE = re.compile(r"^versions:\s*$", re.MULTILINE)
 _LIST_ITEM_RE = re.compile(r"^\s*-\s*[\"']?([^\"'\s]+)[\"']?\s*$", re.MULTILINE)
 
@@ -349,6 +350,11 @@ def extract_page_versions(content: str) -> list[str] | None:
         items = [s.strip().strip("\"'") for s in items_str.split(",") if s.strip()]
         return items if items else None
 
+    # Try scalar string form: versions: ">=0.7"
+    scalar_match = _VERSIONS_SCALAR_RE.search(frontmatter)
+    if scalar_match:
+        return [scalar_match.group(1)]
+
     # Try block list form:
     # versions:
     #   - "0.3"
@@ -369,7 +375,11 @@ def extract_page_versions(content: str) -> list[str] | None:
     return None
 
 
-def page_matches_version(content: str, target_tag: str) -> bool:
+def page_matches_version(
+    content: str,
+    target_tag: str,
+    versions: list[VersionEntry] | None = None,
+) -> bool:
     """
     Check whether a page should be included for a given target version.
 
@@ -379,16 +389,27 @@ def page_matches_version(content: str, target_tag: str) -> bool:
         The raw .qmd file content.
     target_tag
         The version tag being built.
+    versions
+        The full ordered list of version entries. When provided, version expressions
+        (e.g. ``">=0.7"``) are evaluated; otherwise only bare tag matching is used.
 
     Returns
     -------
     bool
-        `True` if the page should be included (no `versions:` key, or the target tag is in the
-        list).
+        `True` if the page should be included (no `versions:` key, or the target tag matches
+        the expression).
     """
     page_versions = extract_page_versions(content)
     if page_versions is None:
         return True
+
+    # Join all entries into a single expression and evaluate through the
+    # expression engine. This handles both bare tags ("0.7,dev" → OR mode)
+    # and operator expressions (">=0.7" → AND mode) uniformly.
+    if versions is not None:
+        expr = ",".join(page_versions)
+        return evaluate_version_expr(expr, target_tag, versions)
+
     return target_tag in page_versions
 
 

@@ -319,7 +319,7 @@ def preprocess_version(
         content = qmd_file.read_text(encoding="utf-8", errors="replace")
 
         # 1. Page-level version scoping
-        if not page_matches_version(content, entry.tag):
+        if not page_matches_version(content, entry.tag, all_versions):
             qmd_file.unlink()
             continue
 
