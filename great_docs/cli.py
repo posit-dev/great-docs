@@ -681,11 +681,13 @@ def setup_github_pages(
           python -m pip install uv
           uv sync
           uv pip install {great_docs_install}"""
+            build_command = "uv run great-docs build"
         elif package_manager == "poetry":
             install_commands = f"""\
           python -m pip install poetry
           poetry install
           poetry run pip install {great_docs_install}"""
+            build_command = "poetry run great-docs build"
         else:
             # pip: try to detect optional dependencies
             optional_deps = _detect_optional_dependencies(project_root)
@@ -701,6 +703,7 @@ def setup_github_pages(
           python -m pip install --upgrade pip
           python -m pip install -e .
           python -m pip install {great_docs_install}"""
+            build_command = "great-docs build"
 
         # Create .github/workflows directory
         workflow_dir = project_root / ".github" / "workflows"
@@ -739,6 +742,7 @@ def setup_github_pages(
         workflow_content = workflow_content.replace("{ python_version }", python_version)
         workflow_content = workflow_content.replace("{python_version}", python_version)
         workflow_content = workflow_content.replace("{install_commands}", install_commands)
+        workflow_content = workflow_content.replace("{build_command}", build_command)
 
         # Write workflow file
         workflow_file.write_text(workflow_content)
