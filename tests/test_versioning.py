@@ -273,6 +273,127 @@ class TestProcessVersionFences:
         result = process_version_fences(content, "0.3", versions)
         assert "Inside" in result
 
+    def test_heading_badge_removes_section_for_old_version(self, versions):
+        content = (
+            "Intro\n"
+            "\n"
+            "## Feature A [version-badge new 0.2]\n"
+            "\n"
+            "Feature A content.\n"
+            "\n"
+            "## Feature B\n"
+            "\n"
+            "Feature B content.\n"
+        )
+        result = process_version_fences(content, "0.1", versions)
+        assert "Intro" in result
+        assert "Feature A" not in result
+        assert "Feature A content" not in result
+        assert "Feature B" in result
+        assert "Feature B content" in result
+
+    def test_heading_badge_keeps_section_for_matching_version(self, versions):
+        content = (
+            "## Feature A [version-badge new 0.2]\n"
+            "\n"
+            "Feature A content.\n"
+            "\n"
+            "## Feature B\n"
+        )
+        result = process_version_fences(content, "0.3", versions)
+        assert "Feature A" in result
+        assert "Feature A content" in result
+        assert "Feature B" in result
+
+    def test_heading_badge_skips_sub_headings(self, versions):
+        content = (
+            "## Feature [version-badge new 0.3]\n"
+            "\n"
+            "### Sub-section\n"
+            "\n"
+            "Sub content.\n"
+            "\n"
+            "## Next Section\n"
+            "\n"
+            "Next content.\n"
+        )
+        result = process_version_fences(content, "0.1", versions)
+        assert "Feature" not in result
+        assert "Sub-section" not in result
+        assert "Sub content" not in result
+        assert "Next Section" in result
+        assert "Next content" in result
+
+    def test_heading_badge_consecutive_badges(self, versions):
+        """Multiple consecutive badged headings: each triggers its own skip."""
+        content = (
+            "## A [version-badge new 0.2]\n"
+            "\n"
+            "A content.\n"
+            "\n"
+            "## B [version-badge new 0.3]\n"
+            "\n"
+            "B content.\n"
+            "\n"
+            "## C\n"
+            "\n"
+            "C content.\n"
+        )
+        result = process_version_fences(content, "0.1", versions)
+        assert "A content" not in result
+        assert "B content" not in result
+        assert "C content" in result
+
+        result2 = process_version_fences(content, "0.2", versions)
+        assert "A content" in result2
+        assert "B content" not in result2
+        assert "C content" in result2
+
+    def test_heading_badge_with_explicit_fence(self, versions):
+        """Heading badge + explicit fence inside: both are removed cleanly."""
+        content = (
+            "## Feature [version-badge new 0.2]\n"
+            "\n"
+            '::: {.version-only versions=">=0.2"}\n'
+            "Fenced content.\n"
+            ":::\n"
+            "\n"
+            "## Next\n"
+        )
+        result = process_version_fences(content, "0.1", versions)
+        assert "Feature" not in result
+        assert "Fenced content" not in result
+        assert "Next" in result
+
+    def test_heading_badge_changed_not_removed(self, versions):
+        """changed badges do NOT trigger section removal."""
+        content = (
+            "## Feature [version-badge changed 0.3]\n"
+            "\n"
+            "Content here.\n"
+            "\n"
+            "## Next\n"
+        )
+        result = process_version_fences(content, "0.1", versions)
+        assert "Feature" in result
+        assert "Content here" in result
+
+    def test_heading_badge_in_code_block_ignored(self, versions):
+        """Heading badges inside code blocks are not processed."""
+        content = (
+            "```markdown\n"
+            "## Feature [version-badge new 0.3]\n"
+            "\n"
+            "Example text.\n"
+            "```\n"
+            "\n"
+            "After code block.\n"
+        )
+        result = process_version_fences(content, "0.1", versions)
+        assert "Feature" in result
+        assert "Example text" in result
+        assert "After code block" in result
+
 
 # ---------------------------------------------------------------------------
 # Page-level version scoping
