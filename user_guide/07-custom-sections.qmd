@@ -9,7 +9,9 @@ tags: [Content, Customization]
 
 Great Docs lets you add any number of custom page groups to your documentation site (examples, tutorials, demos, or anything else). Each section gets its own navbar link and sidebar navigation. By default, the navbar links directly to the first page in the section. Set `index: true` to generate a card-based index page instead. For blog-style content, there's a dedicated `type: blog` mode that uses Quarto's native listing directive.
 
+::: {.version-only versions=">=0.6"}
 If you need a single hand-written HTML page rather than a section of `.qmd` files, see [Custom Static Pages](custom-pages.qmd). Custom sections and custom static pages are complementary features.
+:::
 
 ## Quick Start
 
@@ -60,10 +62,16 @@ sections:
 | Field            | Default            | Description |
 |------------------|--------------------|-------------|
 | `index`          | `false`            | When `true`, auto-generates a card-based index page; when `false`, navbar links to the first page |
-| `index_columns`  | `2`                | Number of columns for image cards on the index page (1 or 2). Only applies when `index: true` [version-badge new 0.7] |
 | `navbar_after`   | Before "Reference" | Name of an existing navbar item to place this section after |
 | `type`           | `default`          | `"default"` for card-grid index with sidebar; `"blog"` for Quarto listing page |
+
+::: {.version-only versions=">=0.7"}
+| `index_columns`  | `2`                | Number of columns for image cards on the index page (1 or 2). Only applies when `index: true` [version-badge new 0.7] |
+:::
+
+::: {.version-only versions="dev"}
 | `dir_titles`     | `{}`               | Mapping of subdirectory names to custom sidebar section titles (see [Subdirectories](#subdirectories)) [version-badge new dev] |
+:::
 
 ## Multiple Sections
 
