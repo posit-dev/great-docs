@@ -1170,6 +1170,26 @@ body.quarto-light .navbar .navbar-toggler-icon {
     flex-wrap: nowrap;
 }
 
+/* Compact widget tray on narrow phones (iPhone portrait) */
+@media (max-width: 430px) {
+    .navbar .container-fluid {
+        flex-wrap: wrap;
+    }
+    .navbar-brand.navbar-brand-logo {
+        padding-right: 100%;
+    }
+    .quarto-navbar-tools {
+        flex: 0 0 100%;
+        justify-content: center;
+        order: 99;
+        padding-top: 4px;
+        padding-bottom: 4px;
+    }
+    #gd-navbar-widgets {
+        justify-content: center;
+    }
+}
+
 /* Uniform sizing for all direct widget children in the tray */
 #gd-navbar-widgets > #dark-mode-toggle-container,
 #gd-navbar-widgets > #gd-keyboard-btn-container {
