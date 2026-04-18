@@ -191,7 +191,34 @@ versions: ["0.1", "0.2"]
 ---
 ```
 
-Pages with no `versions` key appear in **all** versions. Pages with `versions: [...]` appear only in the listed versions so they are excluded from the sidebar, search index, and build output for other versions. This keeps the navigation clean — users never see links to pages that don't exist in their version.
+### Version Expressions in Frontmatter
+
+Instead of listing every matching version explicitly, you can use the same version expression syntax that fences support. This is especially useful for pages that apply to a version "and everything newer" — you don't need to update the frontmatter each time a new version is released:
+
+```{.yaml filename="new-feature.qmd"}
+---
+title: "Social Cards"
+versions: ">=0.5"
+---
+```
+
+This page will appear in version 0.5, 0.6, 0.7, dev, and any future version, without needing a change when a new release is tagged.
+
+All expression types work:
+
+| Frontmatter | Meaning |
+|---|---|
+| `versions: ">=0.5"` | Version 0.5 and all newer versions |
+| `versions: "<=0.3"` | Version 0.3 and all older versions |
+| `versions: ["0.3", "dev"]` | Exactly versions 0.3 and dev |
+| `versions: ["0.3"]` | Exactly version 0.3 |
+
+::: {.callout-tip}
+## Prefer expressions for forward-looking pages
+Use `versions: ">=0.5"` instead of `versions: ["0.5", "0.6", "0.7", "dev"]`. The expression form automatically includes future versions so you never need to update frontmatter when a new version is released.
+:::
+
+Pages with no `versions` key appear in **all** versions. Scoped pages are excluded from the sidebar, search index, and build output for non-matching versions. This keeps the navigation clean — users never see links to pages that don't exist in their version.
 
 ## Section-Level Version Scoping
 
