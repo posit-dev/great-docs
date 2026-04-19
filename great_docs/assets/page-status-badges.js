@@ -188,6 +188,14 @@
       ' 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5' +
       ' .05 5 .05"/></svg>';
     titleEl.appendChild(icon);
+
+    // Also apply to mobile secondary nav title (visible at narrow widths)
+    var mobileTitle = document.querySelector("h1.quarto-secondary-nav-title");
+    if (mobileTitle && mobileTitle !== titleEl) {
+      mobileTitle.classList.add("gd-upcoming-title");
+      var mobileIcon = icon.cloneNode(true);
+      mobileTitle.appendChild(mobileIcon);
+    }
   }
 
   /**

@@ -6241,6 +6241,12 @@ body.quarto-dark {
     vertical-align: middle;
 }
 
+// Smaller icon in the mobile secondary nav title
+h1.quarto-secondary-nav-title .gd-upcoming-icon svg {
+    width: 16px;
+    height: 16px;
+}
+
 .gd-sidebar-upcoming {
     display: inline-flex;
     align-items: center;
