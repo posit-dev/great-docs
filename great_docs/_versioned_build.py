@@ -42,6 +42,24 @@ def _collect_qmd_files(source_dir: Path) -> list[Path]:
     return sorted(files)
 
 
+_FRONTMATTER_VALUE_RE = _re.compile(r"^---\s*\n(.*?)\n---\s*\n", _re.DOTALL)
+
+
+def _extract_frontmatter_value(content: str, key: str) -> str | None:
+    """Extract a scalar value for *key* from YAML frontmatter, or `None`."""
+    m = _FRONTMATTER_VALUE_RE.match(content)
+    if not m:
+        return None
+    fm = m.group(1)
+    # Simple line-based extraction that handles `key: value` and `key: "value"`
+    pattern = _re.compile(rf"^{_re.escape(key)}\s*:\s*(.+)$", _re.MULTILINE)
+    km = pattern.search(fm)
+    if not km:
+        return None
+    val = km.group(1).strip().strip('"').strip("'")
+    return val
+
+
 def _prune_cli_pages(dest_dir: Path, snap: object) -> None:
     """
     Remove CLI reference QMD files for commands not in the snapshot.
@@ -256,6 +274,7 @@ def preprocess_version(
     all_versions: list[VersionEntry],
     project_root: Path | None = None,
     section_configs: list[dict] | None = None,
+    badge_expiry: "BadgeExpiry | None" = None,
 ) -> list[str]:
     """
     Preprocess the documentation source for a single version.
@@ -351,7 +370,16 @@ def preprocess_version(
     # 6. Expand inline [version-badge] markers and version callouts
     for qmd_file in _collect_qmd_files(dest_dir):
         content = qmd_file.read_text(encoding="utf-8", errors="replace")
-        updated = expand_version_badges(content, entry)
+
+        # Per-page new-is-old override
+        page_expiry = badge_expiry
+        page_override = _extract_frontmatter_value(content, "new-is-old")
+        if page_override is not None:
+            from great_docs._versioning import parse_badge_expiry
+
+            page_expiry = parse_badge_expiry(page_override)
+
+        updated = expand_version_badges(content, entry, all_versions, page_expiry)
         updated = expand_version_callouts(updated, entry)
         if updated != content:
             qmd_file.write_text(updated, encoding="utf-8")
@@ -802,12 +830,20 @@ _VERSION_DEPRECATED_RE = _re.compile(
 )
 
 
-def expand_version_badges(content: str, entry: VersionEntry) -> str:
+def expand_version_badges(
+    content: str,
+    entry: VersionEntry,
+    versions: list[VersionEntry] | None = None,
+    expiry: "BadgeExpiry | None" = None,
+) -> str:
     """
     Expand `[version-badge new]` and `[version-badge changed 0.3]` inline markers into HTML
     `<span>` badges.
 
     If no version is specified in the marker, the current entry's label is used.
+
+    When *expiry* is provided and a `new` badge is expired, the marker is removed entirely (no HTML
+    emitted). `changed` and `deprecated` badges are never affected by expiry.
 
     Parameters
     ----------
@@ -815,16 +851,28 @@ def expand_version_badges(content: str, entry: VersionEntry) -> str:
         The `.qmd` file content.
     entry
         The version being built.
+    versions
+        The full ordered list of version entries (needed for expiry evaluation).
+    expiry
+        Badge expiry policy. `None` means never expire.
 
     Returns
     -------
     str
         Content with markers replaced by HTML spans.
     """
+    from great_docs._versioning import BADGE_EXPIRY_NEVER, is_badge_expired
+
+    effective_expiry = expiry or BADGE_EXPIRY_NEVER
 
     def _replace(m: _re.Match) -> str:
         badge_type = m.group(1).lower()
         version = m.group(2) or entry.label
+
+        # Check expiry for "new" badges only
+        if badge_type == "new" and versions and effective_expiry.mode != "never":
+            if is_badge_expired(version, entry, versions, effective_expiry):
+                return ""
 
         css_class = f"gd-badge gd-badge-{badge_type}"
         if badge_type == "new":
@@ -1274,6 +1322,7 @@ def run_versioned_build(
     site_url: str | None = None,
     progress_callback: Callable[[int, int, int], None] | None = None,
     on_renders_done: Callable[[], None] | None = None,
+    badge_expiry_raw: str | None = None,
 ) -> dict[str, Any]:
     """
     Orchestrate a full multi-version build.
@@ -1315,6 +1364,11 @@ def run_versioned_build(
     latest = get_latest_version(versions)
     latest_tag = latest.tag if latest else versions[0].tag
 
+    # Parse badge expiry config
+    from great_docs._versioning import parse_badge_expiry
+
+    badge_expiry = parse_badge_expiry(badge_expiry_raw)
+
     # Filter versions based on CLI flags
     if latest_only:
         targets = [v for v in versions if v.tag == latest_tag]
@@ -1349,6 +1403,7 @@ def run_versioned_build(
             entry,
             versions,
             project_root=project_root,
+            badge_expiry=badge_expiry,
         )
         _prune_missing_sidebar_pages(ver_dir)
         _rewrite_quarto_yml_for_version(ver_dir, entry, latest_tag, site_url=site_url)
