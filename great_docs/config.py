@@ -264,6 +264,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
                 "color": "#8b5cf6",  # Purple
                 "description": "API may change without notice",
             },
+            "upcoming": {
+                "label": "Upcoming",
+                "icon": "rocket",
+                "color": "#e63946",  # Red (Christopher Doyle palette)
+                "description": "Coming in a future release",
+            },
         },
     },
     # Page Tags

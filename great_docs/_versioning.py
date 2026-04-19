@@ -18,6 +18,7 @@ class VersionEntry:
     api_snapshot: str | None = None
     git_ref: str | None = None
     released: str | None = None
+    version: str | None = None
 
     # Positional index in the versions list (0 = newest).
     # Set by parse_versions_config after construction.
@@ -126,6 +127,7 @@ def parse_versions_config(raw: list[Any]) -> list[VersionEntry]:
                 api_snapshot=item.get("api_snapshot"),
                 git_ref=item.get("git_ref"),
                 released=item.get("released"),
+                version=item.get("version"),
             )
         else:
             raise ValueError(f"versions[{i}]: expected a string or dict, got {type(item).__name__}")
@@ -172,6 +174,10 @@ def _resolve_index(tag: str, versions: list[VersionEntry]) -> int | None:
     alt = tag[1:] if tag.startswith("v") else f"v{tag}"
     for v in versions:
         if v.tag == alt:
+            return v._index
+    # Fallback: match against the version field (e.g. tag="dev", version="0.8")
+    for v in versions:
+        if v.version and v.version == tag:
             return v._index
     return None
 
@@ -342,13 +348,17 @@ def is_badge_expired(
 
 
 def _find_entry(tag: str, versions: list[VersionEntry]) -> VersionEntry | None:
-    """Find a VersionEntry by tag, with v-prefix fallback."""
+    """Find a VersionEntry by tag, with v-prefix and version field fallbacks."""
     for v in versions:
         if v.tag == tag:
             return v
     alt = tag[1:] if tag.startswith("v") else f"v{tag}"
     for v in versions:
         if v.tag == alt:
+            return v
+    # Fallback: match against the version field
+    for v in versions:
+        if v.version and v.version == tag:
             return v
     return None
 
@@ -597,6 +607,79 @@ def extract_page_versions(content: str) -> list[str] | None:
         return items if items else None
 
     return None
+
+
+def is_page_upcoming(content: str, versions: list[VersionEntry]) -> bool:
+    """
+    Check whether a page is scoped exclusively to prerelease versions.
+
+    A page is "upcoming" when it has a `versions:` frontmatter key and every version it matches is
+    marked `prerelease: True`.  Pages with no `versions:` key (visible in all versions) are never
+    considered upcoming.
+
+    Parameters
+    ----------
+    content
+        The raw `.qmd` file content.
+    versions
+        The full ordered list of version entries.
+
+    Returns
+    -------
+    bool
+        `True` if the page only targets prerelease versions.
+    """
+    page_versions = extract_page_versions(content)
+    if page_versions is None:
+        return False
+
+    # Resolve which version entries the page actually matches
+    matched = []
+    for v in versions:
+        expr = ",".join(page_versions)
+        if evaluate_version_expr(expr, v.tag, versions):
+            matched.append(v)
+
+    if not matched:
+        return False
+
+    return all(v.prerelease for v in matched)
+
+
+def is_page_upcoming_for_version(
+    upcoming_value: str,
+    target_tag: str,
+    versions: list[VersionEntry],
+) -> bool:
+    """
+    Check whether the `upcoming` frontmatter key applies to the current build.
+
+    Returns `True` when the page declares `upcoming: "0.8"` and the current build target is
+    **older** than 0.8 (i.e. the feature hasn't shipped yet for this version).
+
+    Parameters
+    ----------
+    upcoming_value
+        The raw value of the `upcoming:` frontmatter key (a version tag or semantic version).
+    target_tag
+        The version tag currently being built.
+    versions
+        The full ordered list of version entries.
+
+    Returns
+    -------
+    bool
+        `True` if the current build is older than the upcoming version.
+    """
+    upcoming_idx = _resolve_index(upcoming_value, versions)
+    target_idx = _resolve_index(target_tag, versions)
+
+    if upcoming_idx is None or target_idx is None:
+        return False
+
+    # Lower index = newer. If target is older (higher index) than the upcoming
+    # version, the page is "upcoming" for this build.
+    return target_idx > upcoming_idx
 
 
 def page_matches_version(

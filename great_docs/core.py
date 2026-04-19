@@ -2337,7 +2337,7 @@ class GreatDocs:
         from ._translations import get_translation
 
         lang = self._config.language
-        builtin_statuses = {"new", "updated", "beta", "deprecated", "experimental"}
+        builtin_statuses = {"new", "updated", "beta", "deprecated", "experimental", "upcoming"}
 
         definitions = self._config.page_status_definitions
         resolved_statuses: dict[str, dict[str, str]] = {}

@@ -15,6 +15,8 @@ from great_docs._versioning import (
     VersionEntry,
     build_version_map,
     get_latest_version,
+    is_page_upcoming,
+    is_page_upcoming_for_version,
     page_matches_version,
     parse_versions_config,
     process_version_fences,
@@ -58,6 +60,110 @@ def _extract_frontmatter_value(content: str, key: str) -> str | None:
         return None
     val = km.group(1).strip().strip('"').strip("'")
     return val
+
+
+def _inject_upcoming_status(content: str) -> str:
+    """Inject `status: upcoming` into YAML frontmatter if no status is already set.
+
+    Used only for pages scoped exclusively to prerelease versions that have no explicit status.
+    Pages with an existing status (e.g. `experimental`) keep their status and the upcoming indicator
+    renders independently.
+    """
+    m = _FRONTMATTER_VALUE_RE.match(content)
+    if not m:
+        return content
+    fm = m.group(1)
+    if _re.search(r"^status\s*:", fm, _re.MULTILINE):
+        return content
+    new_fm = fm + "\nstatus: upcoming"
+    return content[: m.start(1)] + new_fm + content[m.end(1) :]
+
+
+def _update_page_status_json(dest_dir: Path, upcoming_pages: list[tuple[str, str | None]]) -> None:
+    """Update `_page_status.json` in the per-version build dir with upcoming page data.
+
+    Upcoming pages are stored in a separate `upcoming_pages` key so they render independently from
+    the regular `page_statuses` (which tracks status like `experimental`, `new`, etc.).
+
+    Parameters
+    ----------
+    dest_dir
+        Per-version build directory containing the JSON file.
+    upcoming_pages
+        List of `(page_href, version)` tuples. *version* is the upcoming version string (e.g.,
+        `"0.8"`) or None if inferred from version scoping.
+    """
+    status_path = dest_dir / "_page_status.json"
+    if not status_path.exists():
+        return
+    try:
+        data = json.loads(status_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+
+    upcoming_map = data.get("upcoming_pages", {})
+    for page_href, version in upcoming_pages:
+        qmd_href = page_href.replace(".html", ".qmd")
+        upcoming_map[qmd_href] = version or True
+
+    data["upcoming_pages"] = upcoming_map
+    status_path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def _sync_status_inline_script(dest_dir: Path) -> None:
+    """Inject a **separate** `__GD_UPCOMING_DATA__` inline script into `_quarto.yml`.
+
+    Instead of modifying the existing (large, SVG-laden) `__GD_STATUS_DATA__` script (which breaks
+    when round-tripped through yaml12 due to nested quoting issues) we append a tiny new `<script>`
+    that only carries the lightweight `upcoming_pages` map.  The page-status-badges JS reads both
+    globals.
+
+    Must be called AFTER `_update_page_status_json` so that the JSON file contains the
+    `upcoming_pages` map.
+    """
+    status_path = dest_dir / "_page_status.json"
+    quarto_yml_path = dest_dir / "_quarto.yml"
+    if not status_path.exists() or not quarto_yml_path.exists():
+        return
+    try:
+        data = json.loads(status_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+
+    upcoming_map = data.get("upcoming_pages")
+    if not upcoming_map:
+        return
+
+    # Build a tiny inline script with just the upcoming data (no SVGs, no
+    # complex escaping).
+    upcoming_json = json.dumps(upcoming_map)
+    inline_script = "<script>window.__GD_UPCOMING_DATA__=" + upcoming_json + ";</script>"
+
+    # Insert directly into the raw YAML text — find the __GD_STATUS_DATA__
+    # line and append the new script entry right after it.
+    yml_content = quarto_yml_path.read_text(encoding="utf-8")
+
+    # Guard: check for the actual injected script tag (not JS references)
+    if "<script>window.__GD_UPCOMING_DATA__=" in yml_content:
+        return  # Already injected
+
+    lines = yml_content.split("\n")
+    insert_after = None
+    for i, line in enumerate(lines):
+        if "<script>window.__GD_STATUS_DATA__=" in line:
+            insert_after = i
+            break
+
+    if insert_after is None:
+        return
+
+    # Match the indentation of the status data line
+    status_line = lines[insert_after]
+    indent = len(status_line) - len(status_line.lstrip())
+    # The upcoming JSON is simple (no quotes to escape in YAML single-quoted)
+    new_line = " " * indent + "- text: '" + inline_script + "'"
+    lines.insert(insert_after + 1, new_line)
+    quarto_yml_path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def _prune_cli_pages(dest_dir: Path, snap: object) -> None:
@@ -322,6 +428,7 @@ def preprocess_version(
     shutil.copytree(source_dir, dest_dir, dirs_exist_ok=False)
 
     included_pages: list[str] = []
+    upcoming_pages: list[tuple[str, str | None]] = []
 
     for qmd_file in _collect_qmd_files(dest_dir):
         rel = qmd_file.relative_to(dest_dir)
@@ -344,6 +451,25 @@ def preprocess_version(
 
         # 2. Process version fences
         processed = process_version_fences(content, entry.tag, all_versions)
+
+        # 3. Detect upcoming pages (independent of status: badge).
+        #    Two mechanisms: (a) page scoped exclusively to prerelease versions,
+        #    (b) page has `upcoming: "0.8"` and current build is older than 0.8.
+        is_upcoming = False
+        upcoming_val: str | None = None
+        if is_page_upcoming(content, all_versions):
+            is_upcoming = True
+            # For pages with no existing status, inject status: upcoming
+            processed = _inject_upcoming_status(processed)
+        else:
+            upcoming_val = _extract_frontmatter_value(content, "upcoming")
+            if upcoming_val and is_page_upcoming_for_version(upcoming_val, entry.tag, all_versions):
+                is_upcoming = True
+
+        if is_upcoming:
+            page_href = str(rel).replace(".qmd", ".html").replace(".md", ".html")
+            upcoming_pages.append((page_href, upcoming_val))
+
         if processed != content:
             qmd_file.write_text(processed, encoding="utf-8")
 
@@ -383,6 +509,10 @@ def preprocess_version(
         updated = expand_version_callouts(updated, entry)
         if updated != content:
             qmd_file.write_text(updated, encoding="utf-8")
+
+    # 7. Update _page_status.json with upcoming pages for this version
+    if upcoming_pages:
+        _update_page_status_json(dest_dir, upcoming_pages)
 
     return included_pages
 
@@ -861,7 +991,7 @@ def expand_version_badges(
     str
         Content with markers replaced by HTML spans.
     """
-    from great_docs._versioning import BADGE_EXPIRY_NEVER, is_badge_expired
+    from great_docs._versioning import BADGE_EXPIRY_NEVER, _find_entry, is_badge_expired
 
     effective_expiry = expiry or BADGE_EXPIRY_NEVER
 
@@ -874,14 +1004,30 @@ def expand_version_badges(
             if is_badge_expired(version, entry, versions, effective_expiry):
                 return ""
 
-        css_class = f"gd-badge gd-badge-{badge_type}"
-        if badge_type == "new":
+        # Determine if badge version refers to a prerelease entry
+        is_upcoming = False
+        if badge_type == "new" and versions:
+            badge_entry = _find_entry(version, versions)
+            if badge_entry is None:
+                # Try matching by label (author may write the label, e.g. "0.8")
+                badge_entry = _find_entry(m.group(2) or entry.tag, versions)
+            if badge_entry and badge_entry.prerelease and badge_entry.tag != entry.tag:
+                is_upcoming = True
+
+        if is_upcoming:
+            css_class = "gd-badge gd-badge-upcoming"
+            label = f"Upcoming in {version}"
+        elif badge_type == "new":
+            css_class = "gd-badge gd-badge-new"
             label = f"New in {version}"
         elif badge_type == "changed":
+            css_class = "gd-badge gd-badge-changed"
             label = f"Changed in {version}"
         elif badge_type == "deprecated":
+            css_class = "gd-badge gd-badge-deprecated"
             label = f"Deprecated in {version}"
         else:
+            css_class = f"gd-badge gd-badge-{badge_type}"
             label = f"{badge_type} in {version}"
 
         return f'<span class="{css_class}">{label}</span>'
@@ -1407,6 +1553,7 @@ def run_versioned_build(
         )
         _prune_missing_sidebar_pages(ver_dir)
         _rewrite_quarto_yml_for_version(ver_dir, entry, latest_tag, site_url=site_url)
+        _sync_status_inline_script(ver_dir)
         pages_by_version[entry.tag] = pages
         build_dirs.append(ver_dir)
 
