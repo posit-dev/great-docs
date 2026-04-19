@@ -6215,6 +6215,39 @@ body.quarto-dark {
     }
 }
 
+// Upcoming indicator: animated gradient title text (Christopher Doyle palette)
+.gd-upcoming-title {
+    background: linear-gradient(90deg, #e63946, #eab308, #2a9d8f, #e63946);
+    background-size: 300% auto;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gd-upcoming-gradient 5s ease-in-out infinite;
+}
+
+@keyframes gd-upcoming-gradient {
+    0%   { background-position: 0% center; }
+    50%  { background-position: 100% center; }
+    100% { background-position: 0% center; }
+}
+
+.gd-upcoming-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.4em;
+    color: #e63946;
+    -webkit-text-fill-color: #e63946;
+    cursor: help;
+    vertical-align: middle;
+}
+
+.gd-sidebar-upcoming {
+    display: inline-flex;
+    align-items: center;
+    margin-left: auto;
+    cursor: help;
+}
+
 
 /*-- scss:functions --*/
 
