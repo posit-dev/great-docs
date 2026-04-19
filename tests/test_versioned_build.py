@@ -721,6 +721,26 @@ class TestExpandVersionBadges:
         assert "Changed in 0.8" in result
         assert "gd-badge-changed" in result
 
+    def test_badges_inside_code_blocks_not_expanded(self):
+        content = (
+            "Some text [version-badge new]\n"
+            "\n"
+            "```{.markdown filename=\"reference.qmd\"}\n"
+            "## Widget [version-badge new]\n"
+            "## render() [version-badge changed 0.2]\n"
+            "```\n"
+            "\n"
+            "More text [version-badge deprecated 0.1]\n"
+        )
+        entry = VersionEntry(tag="0.5", label="0.5")
+        result = expand_version_badges(content, entry)
+        # Outside code block: expanded
+        assert '<span class="gd-badge gd-badge-new">New in 0.5</span>' in result
+        assert '<span class="gd-badge gd-badge-deprecated">Deprecated in 0.1</span>' in result
+        # Inside code block: literal text preserved
+        assert "## Widget [version-badge new]" in result
+        assert "## render() [version-badge changed 0.2]" in result
+
 
 # ---------------------------------------------------------------------------
 # Upcoming status injection

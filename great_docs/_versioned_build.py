@@ -1032,7 +1032,39 @@ def expand_version_badges(
 
         return f'<span class="{css_class}">{label}</span>'
 
-    return _VERSION_BADGE_RE.sub(_replace, content)
+    # Split content into code-block and non-code-block segments so that
+    # version-badge markers inside fenced code examples are left untouched.
+    _fence_re = _re.compile(r"^(`{3,}|~{3,})", _re.MULTILINE)
+    parts: list[str] = []
+    in_fence = False
+    fence_marker = ""
+    last_end = 0
+
+    for m_fence in _fence_re.finditer(content):
+        marker = m_fence.group(1)
+        if not in_fence:
+            # Opening fence — expand badges in the text before the fence
+            parts.append(_VERSION_BADGE_RE.sub(_replace, content[last_end : m_fence.start()]))
+            in_fence = True
+            fence_marker = marker[0] * len(marker)
+            last_end = m_fence.start()
+        else:
+            # Potential closing fence — must use same char and at least as many
+            if marker[0] == fence_marker[0] and len(marker) >= len(fence_marker):
+                # Include through end of this line (closing fence)
+                line_end = content.find("\n", m_fence.end())
+                if line_end == -1:
+                    line_end = len(content)
+                else:
+                    line_end += 1
+                parts.append(content[last_end:line_end])
+                last_end = line_end
+                in_fence = False
+                fence_marker = ""
+
+    # Remaining text after the last fence (or all text if no fences)
+    parts.append(_VERSION_BADGE_RE.sub(_replace, content[last_end:]))
+    return "".join(parts)
 
 
 def expand_version_callouts(content: str, entry: VersionEntry) -> str:
