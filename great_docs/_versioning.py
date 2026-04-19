@@ -108,6 +108,11 @@ def _resolve_index(tag: str, versions: list[VersionEntry]) -> int | None:
     for v in versions:
         if v.tag == tag:
             return v._index
+    # Fallback: try stripping or adding 'v' prefix
+    alt = tag[1:] if tag.startswith("v") else f"v{tag}"
+    for v in versions:
+        if v.tag == alt:
+            return v._index
     return None
 
 
