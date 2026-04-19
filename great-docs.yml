@@ -45,6 +45,7 @@ favicon: assets/favicon.svg
 versions:
   - label: "0.8 (dev)"
     tag: dev
+    version: "0.8"
     prerelease: true
   - label: "0.7"
     tag: "0.7"
