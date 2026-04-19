@@ -3,12 +3,16 @@ from __future__ import annotations
 import pytest
 
 from great_docs._versioning import (
+    BADGE_EXPIRY_NEVER,
+    BadgeExpiry,
     VersionEntry,
     build_version_map,
     evaluate_version_expr,
     extract_page_versions,
     get_latest_version,
+    is_badge_expired,
     page_matches_version,
+    parse_badge_expiry,
     parse_versions_config,
     process_version_fences,
 )
@@ -639,3 +643,189 @@ class TestBuildVersionMap:
         # Non-flagged version should not have the keys
         assert "prerelease" not in result["versions"][1]
         assert "eol" not in result["versions"][1]
+
+
+# ---------------------------------------------------------------------------
+# parse_badge_expiry
+# ---------------------------------------------------------------------------
+
+
+class TestParseBadgeExpiry:
+    def test_none(self):
+        assert parse_badge_expiry(None) is BADGE_EXPIRY_NEVER
+
+    def test_never_string(self):
+        result = parse_badge_expiry("never")
+        assert result.mode == "never"
+
+    def test_never_case_insensitive(self):
+        assert parse_badge_expiry("Never").mode == "never"
+
+    def test_releases(self):
+        result = parse_badge_expiry("3 releases")
+        assert result.mode == "releases"
+        assert result.value == 3
+
+    def test_release_singular(self):
+        result = parse_badge_expiry("1 release")
+        assert result.mode == "releases"
+        assert result.value == 1
+
+    def test_minor_releases(self):
+        result = parse_badge_expiry("2 minor releases")
+        assert result.mode == "minor_releases"
+        assert result.value == 2
+
+    def test_days(self):
+        result = parse_badge_expiry("180 days")
+        assert result.mode == "days"
+        assert result.value == 180
+
+    def test_day_singular(self):
+        result = parse_badge_expiry("1 day")
+        assert result.mode == "days"
+        assert result.value == 1
+
+    def test_iso_date(self):
+        result = parse_badge_expiry("2026-06-01")
+        assert result.mode == "date"
+        assert result.value == "2026-06-01"
+
+    def test_version_tag(self):
+        result = parse_badge_expiry("0.8")
+        assert result.mode == "version"
+        assert result.value == "0.8"
+
+    def test_version_tag_with_v_prefix(self):
+        result = parse_badge_expiry("v1.2")
+        assert result.mode == "version"
+        assert result.value == "v1.2"
+
+
+# ---------------------------------------------------------------------------
+# is_badge_expired
+# ---------------------------------------------------------------------------
+
+
+class TestIsBadgeExpired:
+    @pytest.fixture
+    def versions(self) -> list[VersionEntry]:
+        return parse_versions_config(
+            [
+                {"tag": "dev", "label": "dev", "prerelease": True},
+                {"tag": "0.7", "label": "0.7.0"},
+                {"tag": "0.6", "label": "0.6.0"},
+                {"tag": "0.5", "label": "0.5.0"},
+                {"tag": "0.4", "label": "0.4.0"},
+                {"tag": "0.3", "label": "0.3.0"},
+            ]
+        )
+
+    def test_never_not_expired(self, versions):
+        assert is_badge_expired("0.3", versions[1], versions, BADGE_EXPIRY_NEVER) is False
+
+    # --- releases mode ---
+
+    def test_releases_not_expired_same_version(self, versions):
+        expiry = BadgeExpiry(mode="releases", value=3)
+        target = versions[5]  # 0.3
+        assert is_badge_expired("0.3", target, versions, expiry) is False
+
+    def test_releases_not_expired_within_window(self, versions):
+        expiry = BadgeExpiry(mode="releases", value=3)
+        target = versions[3]  # 0.5 — 2 releases after 0.3
+        assert is_badge_expired("0.3", target, versions, expiry) is False
+
+    def test_releases_expired_at_boundary(self, versions):
+        expiry = BadgeExpiry(mode="releases", value=3)
+        target = versions[2]  # 0.6 — 3 releases after 0.3
+        assert is_badge_expired("0.3", target, versions, expiry) is True
+
+    def test_releases_expired_past_boundary(self, versions):
+        expiry = BadgeExpiry(mode="releases", value=3)
+        target = versions[1]  # 0.7 — 4 releases after 0.3
+        assert is_badge_expired("0.3", target, versions, expiry) is True
+
+    # --- minor_releases mode ---
+
+    def test_minor_releases_skips_prerelease(self, versions):
+        # dev is prerelease, so only 0.7-0.3 count
+        expiry = BadgeExpiry(mode="minor_releases", value=3)
+        target = versions[2]  # 0.6 — 3 non-pre releases after 0.3
+        assert is_badge_expired("0.3", target, versions, expiry) is True
+
+    def test_minor_releases_not_expired(self, versions):
+        expiry = BadgeExpiry(mode="minor_releases", value=3)
+        target = versions[3]  # 0.5 — 2 non-pre releases after 0.3
+        assert is_badge_expired("0.3", target, versions, expiry) is False
+
+    def test_minor_releases_prerelease_target_falls_back_to_latest(self, versions):
+        # dev (prerelease) should behave like the latest non-prerelease (0.7)
+        expiry = BadgeExpiry(mode="minor_releases", value=3)
+        target_dev = versions[0]  # dev
+        target_07 = versions[1]  # 0.7
+        assert is_badge_expired("0.3", target_dev, versions, expiry) == is_badge_expired(
+            "0.3", target_07, versions, expiry
+        )
+
+    # --- version mode ---
+
+    def test_version_not_expired_before_threshold(self, versions):
+        expiry = BadgeExpiry(mode="version", value="0.6")
+        target = versions[3]  # 0.5
+        assert is_badge_expired("0.3", target, versions, expiry) is False
+
+    def test_version_expired_at_threshold(self, versions):
+        expiry = BadgeExpiry(mode="version", value="0.6")
+        target = versions[2]  # 0.6
+        assert is_badge_expired("0.3", target, versions, expiry) is True
+
+    def test_version_expired_after_threshold(self, versions):
+        expiry = BadgeExpiry(mode="version", value="0.6")
+        target = versions[1]  # 0.7
+        assert is_badge_expired("0.3", target, versions, expiry) is True
+
+    # --- date mode ---
+
+    def test_date_not_expired_future(self, versions):
+        expiry = BadgeExpiry(mode="date", value="2099-01-01")
+        assert is_badge_expired("0.3", versions[1], versions, expiry) is False
+
+    def test_date_expired_past(self, versions):
+        expiry = BadgeExpiry(mode="date", value="2020-01-01")
+        assert is_badge_expired("0.3", versions[1], versions, expiry) is True
+
+    # --- days mode ---
+
+    def test_days_no_released_date(self, versions):
+        expiry = BadgeExpiry(mode="days", value=90)
+        # No released date → fail open
+        assert is_badge_expired("0.3", versions[1], versions, expiry) is False
+
+    def test_days_expired(self):
+        versions = parse_versions_config(
+            [
+                {"tag": "0.5", "label": "0.5.0"},
+                {"tag": "0.3", "label": "0.3.0", "released": "2020-01-01"},
+            ]
+        )
+        expiry = BadgeExpiry(mode="days", value=90)
+        assert is_badge_expired("0.3", versions[0], versions, expiry) is True
+
+    def test_days_not_expired(self):
+        versions = parse_versions_config(
+            [
+                {"tag": "0.5", "label": "0.5.0"},
+                {"tag": "0.3", "label": "0.3.0", "released": "2099-01-01"},
+            ]
+        )
+        expiry = BadgeExpiry(mode="days", value=90)
+        assert is_badge_expired("0.3", versions[0], versions, expiry) is False
+
+    # --- unknown badge version ---
+
+    def test_unknown_badge_version(self, versions):
+        expiry = BadgeExpiry(mode="releases", value=1)
+        assert is_badge_expired("9.9", versions[1], versions, expiry) is False
+
+    # --- changed/deprecated not affected (tested via expand_version_badges) ---
