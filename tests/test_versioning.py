@@ -183,6 +183,30 @@ class TestEvaluateVersionExpr:
         assert evaluate_version_expr("dev", "dev", versions) is True
         assert evaluate_version_expr("dev", "0.3", versions) is False
 
+    def test_v_prefix_in_expr(self, versions):
+        """Tags with v prefix match versions configured without it."""
+        assert evaluate_version_expr("v0.2", "0.2", versions) is True
+        assert evaluate_version_expr(">=v0.2", "0.3", versions) is True
+        assert evaluate_version_expr(">=v0.2", "0.1", versions) is False
+
+    def test_v_prefix_in_target(self, versions):
+        """Target tag with v prefix matches configured bare tag."""
+        assert evaluate_version_expr("0.2", "v0.2", versions) is True
+        assert evaluate_version_expr(">=0.2", "v0.3", versions) is True
+
+    def test_v_prefix_on_configured_tags(self):
+        """Bare tags in content match v-prefixed configured tags."""
+        vers = parse_versions_config(
+            [
+                {"tag": "v0.3", "label": "0.3.0"},
+                {"tag": "v0.2", "label": "0.2.0"},
+                {"tag": "v0.1", "label": "0.1.0"},
+            ]
+        )
+        assert evaluate_version_expr("0.2", "v0.2", vers) is True
+        assert evaluate_version_expr(">=0.2", "v0.3", vers) is True
+        assert evaluate_version_expr("0.2", "0.2", vers) is True
+
 
 # ---------------------------------------------------------------------------
 # process_version_fences
