@@ -556,6 +556,54 @@ class TestExpandVersionBadges:
         result = expand_version_badges(content, entry)
         assert "New in 0.3.0" in result
 
+    def test_new_badge_expired_suppressed(self):
+        from great_docs._versioning import BadgeExpiry, parse_versions_config
+
+        versions = parse_versions_config(["0.7", "0.6", "0.5", "0.4", "0.3"])
+        entry = versions[0]  # 0.7
+        expiry = BadgeExpiry(mode="releases", value=3)
+        content = "Feature [version-badge new 0.3] here."
+        result = expand_version_badges(content, entry, versions, expiry)
+        assert "gd-badge" not in result
+        assert "Feature  here." in result
+
+    def test_new_badge_within_window_kept(self):
+        from great_docs._versioning import BadgeExpiry, parse_versions_config
+
+        versions = parse_versions_config(["0.7", "0.6", "0.5", "0.4", "0.3"])
+        entry = versions[2]  # 0.5
+        expiry = BadgeExpiry(mode="releases", value=3)
+        content = "Feature [version-badge new 0.3] here."
+        result = expand_version_badges(content, entry, versions, expiry)
+        assert "New in 0.3" in result
+
+    def test_changed_badge_never_expired(self):
+        from great_docs._versioning import BadgeExpiry, parse_versions_config
+
+        versions = parse_versions_config(["0.7", "0.6", "0.5", "0.4", "0.3"])
+        entry = versions[0]  # 0.7
+        expiry = BadgeExpiry(mode="releases", value=1)
+        content = "[version-badge changed 0.3]"
+        result = expand_version_badges(content, entry, versions, expiry)
+        assert "Changed in 0.3" in result
+
+    def test_deprecated_badge_never_expired(self):
+        from great_docs._versioning import BadgeExpiry, parse_versions_config
+
+        versions = parse_versions_config(["0.7", "0.6", "0.5", "0.4", "0.3"])
+        entry = versions[0]  # 0.7
+        expiry = BadgeExpiry(mode="releases", value=1)
+        content = "[version-badge deprecated 0.3]"
+        result = expand_version_badges(content, entry, versions, expiry)
+        assert "Deprecated in 0.3" in result
+
+    def test_no_expiry_backward_compatible(self):
+        """Calling without expiry params still works (backward compatible)."""
+        entry = VersionEntry(tag="0.7", label="0.7.0")
+        content = "Feature [version-badge new 0.3] here."
+        result = expand_version_badges(content, entry)
+        assert "New in 0.3" in result
+
 
 # ---------------------------------------------------------------------------
 # Version callout expansion
