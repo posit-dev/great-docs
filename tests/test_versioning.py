@@ -11,6 +11,8 @@ from great_docs._versioning import (
     extract_page_versions,
     get_latest_version,
     is_badge_expired,
+    is_page_upcoming,
+    is_page_upcoming_for_version,
     page_matches_version,
     parse_badge_expiry,
     parse_versions_config,
@@ -210,6 +212,42 @@ class TestEvaluateVersionExpr:
         assert evaluate_version_expr("0.2", "v0.2", vers) is True
         assert evaluate_version_expr(">=0.2", "v0.3", vers) is True
         assert evaluate_version_expr("0.2", "0.2", vers) is True
+
+    def test_version_field_resolves_dev_tag(self):
+        """The version field maps a non-numeric tag to a semantic version."""
+        vers = parse_versions_config(
+            [
+                {"tag": "dev", "label": "0.8 (dev)", "version": "0.8", "prerelease": True},
+                {"tag": "0.7", "label": "0.7.0", "latest": True},
+                {"tag": "0.6", "label": "0.6.0"},
+            ]
+        )
+        # >=0.8 should match dev (via version field) but not 0.7 or 0.6
+        assert evaluate_version_expr(">=0.8", "dev", vers) is True
+        assert evaluate_version_expr(">=0.8", "0.7", vers) is False
+        assert evaluate_version_expr(">=0.8", "0.6", vers) is False
+
+    def test_version_field_exact_match(self):
+        vers = parse_versions_config(
+            [
+                {"tag": "dev", "version": "0.8", "prerelease": True},
+                {"tag": "0.7", "latest": True},
+            ]
+        )
+        assert evaluate_version_expr("0.8", "dev", vers) is True
+        assert evaluate_version_expr("0.8", "0.7", vers) is False
+
+    def test_version_field_in_range(self):
+        vers = parse_versions_config(
+            [
+                {"tag": "dev", "version": "0.8", "prerelease": True},
+                {"tag": "0.7", "latest": True},
+                {"tag": "0.6"},
+            ]
+        )
+        # dev is 0.8 → >0.6,<0.8 should not match dev (0.8 is not <0.8)
+        assert evaluate_version_expr(">0.6,<0.8", "dev", vers) is False
+        assert evaluate_version_expr(">0.6,<0.8", "0.7", vers) is True
 
 
 # ---------------------------------------------------------------------------
@@ -581,6 +619,91 @@ class TestPageMatchesVersion:
         content = '---\nversions: ["0.7", "dev"]\n---\nBody\n'
         assert page_matches_version(content, "0.7") is True
         assert page_matches_version(content, "0.5") is False
+
+
+# ---------------------------------------------------------------------------
+# is_page_upcoming
+# ---------------------------------------------------------------------------
+
+
+class TestIsPageUpcoming:
+    @pytest.fixture
+    def versions(self) -> list[VersionEntry]:
+        return parse_versions_config(
+            [
+                {"tag": "dev", "label": "0.8.0", "prerelease": True},
+                {"tag": "0.7", "label": "0.7.0", "latest": True},
+                {"tag": "0.6", "label": "0.6.0"},
+            ]
+        )
+
+    def test_scoped_to_prerelease_only(self, versions):
+        content = '---\nversions: ["dev"]\n---\nBody\n'
+        assert is_page_upcoming(content, versions) is True
+
+    def test_scoped_to_stable_not_upcoming(self, versions):
+        content = '---\nversions: ["0.7"]\n---\nBody\n'
+        assert is_page_upcoming(content, versions) is False
+
+    def test_scoped_to_mixed_not_upcoming(self, versions):
+        content = '---\nversions: ["dev", "0.7"]\n---\nBody\n'
+        assert is_page_upcoming(content, versions) is False
+
+    def test_no_versions_key_not_upcoming(self, versions):
+        content = '---\ntitle: "Hello"\n---\nBody\n'
+        assert is_page_upcoming(content, versions) is False
+
+    def test_expression_matching_only_prerelease(self, versions):
+        """An expression that resolves to only prerelease entries."""
+        # dev is index 0, so >0.7 only matches dev
+        content = '---\nversions: ">0.7"\n---\nBody\n'
+        assert is_page_upcoming(content, versions) is True
+
+    def test_expression_matching_stable_too(self, versions):
+        content = '---\nversions: ">=0.7"\n---\nBody\n'
+        assert is_page_upcoming(content, versions) is False
+
+
+class TestIsPageUpcomingForVersion:
+    @pytest.fixture
+    def versions(self) -> list[VersionEntry]:
+        return parse_versions_config(
+            [
+                {"tag": "dev", "label": "0.8.0", "version": "0.8", "prerelease": True},
+                {"tag": "0.7", "label": "0.7.0", "latest": True},
+                {"tag": "0.6", "label": "0.6.0"},
+            ]
+        )
+
+    def test_older_build_is_upcoming(self, versions):
+        # Building 0.7, upcoming: "0.8" → 0.7 is older → True
+        assert is_page_upcoming_for_version("0.8", "0.7", versions) is True
+
+    def test_older_build_0_6_is_upcoming(self, versions):
+        assert is_page_upcoming_for_version("0.8", "0.6", versions) is True
+
+    def test_same_version_not_upcoming(self, versions):
+        # Building dev (version 0.8), upcoming: "0.8" → same → False
+        assert is_page_upcoming_for_version("0.8", "dev", versions) is False
+
+    def test_newer_build_not_upcoming(self, versions):
+        # If we ever build something newer than 0.8, it wouldn't be upcoming
+        vers = parse_versions_config(
+            [
+                {"tag": "0.9", "label": "0.9.0"},
+                {"tag": "0.8", "label": "0.8.0"},
+                {"tag": "0.7", "label": "0.7.0"},
+            ]
+        )
+        assert is_page_upcoming_for_version("0.8", "0.9", vers) is False
+
+    def test_unknown_upcoming_version(self, versions):
+        # Unknown version tag → fail-open (not upcoming)
+        assert is_page_upcoming_for_version("9.9", "0.7", versions) is False
+
+    def test_upcoming_with_dev_tag_directly(self, versions):
+        # upcoming: "dev" targeting 0.7 → 0.7 is older than dev → True
+        assert is_page_upcoming_for_version("dev", "0.7", versions) is True
 
 
 # ---------------------------------------------------------------------------

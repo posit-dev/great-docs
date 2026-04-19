@@ -158,6 +158,92 @@
   }
 
   /**
+   * Render the "upcoming" visual indicator on the page title.
+   * Independent from status badges — a page can be "experimental" and
+   * "upcoming" simultaneously.
+   * @param {string|true} version - Upcoming version (e.g. "0.8") or true
+   */
+  function renderUpcomingIndicator(version) {
+    var titleEl = document.querySelector(
+      "h1.title, header#title-block-header h1, main h1"
+    );
+    if (!titleEl) return;
+
+    titleEl.classList.add("gd-upcoming-title");
+
+    var tip = typeof version === "string"
+      ? "Expected in " + version
+      : "Coming in a future release";
+
+    var icon = document.createElement("span");
+    icon.className = "gd-upcoming-icon";
+    icon.setAttribute("title", tip);
+    icon.setAttribute("aria-label", tip);
+    icon.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"' +
+      ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"' +
+      ' stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84' +
+      '.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62' +
+      ' 0-5 0-5"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78' +
+      ' 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5' +
+      ' .05 5 .05"/></svg>';
+    titleEl.appendChild(icon);
+  }
+
+  /**
+   * Render small rocket icons in the sidebar for upcoming pages.
+   * @param {object} upcomingPages - Mapping of page href → version string or true
+   */
+  function renderSidebarUpcoming(upcomingPages) {
+    var sidebarLinks = document.querySelectorAll(
+      ".sidebar-navigation .sidebar-item .sidebar-link"
+    );
+
+    sidebarLinks.forEach(function (link) {
+      var href = link.getAttribute("href");
+      if (!href) return;
+
+      var path = href;
+      try {
+        var url = new URL(href, window.location.href);
+        path = url.pathname;
+      } catch (_) {}
+
+      var normalized = path
+        .replace(/^\//, "")
+        .replace(/\.html$/, ".qmd")
+        .replace(/\/index\.html$/, "/index.qmd");
+
+      var version = upcomingPages[normalized];
+      if (!version) {
+        var segments = normalized.split("/");
+        for (var i = 1; i < segments.length && !version; i++) {
+          version = upcomingPages[segments.slice(i).join("/")];
+        }
+      }
+      if (!version) return;
+      if (link.querySelector(".gd-sidebar-upcoming")) return;
+
+      var tip = typeof version === "string"
+        ? "Expected in " + version
+        : "Coming in a future release";
+
+      var badge = document.createElement("span");
+      badge.className = "gd-sidebar-upcoming";
+      badge.setAttribute("title", tip);
+      badge.innerHTML =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"' +
+        ' fill="none" stroke="#e63946" stroke-width="2.5" stroke-linecap="round"' +
+        ' stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84' +
+        '.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62' +
+        ' 0-5 0-5"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78' +
+        ' 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5' +
+        ' .05 5 .05"/></svg>';
+      link.appendChild(badge);
+    });
+  }
+
+  /**
    * Initialize: read inline status data and render.
    */
   function init() {
@@ -180,6 +266,18 @@
     // Render sidebar badges
     if (data.show_in_sidebar) {
       renderSidebarBadges(data.page_statuses, definitions);
+    }
+
+    // Render upcoming indicators (from separate __GD_UPCOMING_DATA__ global)
+    var upcoming = window.__GD_UPCOMING_DATA__;
+    if (upcoming) {
+      var upResult = findPageStatus(upcoming);
+      if (upResult) {
+        renderUpcomingIndicator(upResult.status);
+      }
+      if (data.show_in_sidebar) {
+        renderSidebarUpcoming(upcoming);
+      }
     }
   }
 

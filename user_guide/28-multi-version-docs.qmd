@@ -3,7 +3,8 @@ title: "Versioned Docs"
 guide-section: "Build & Deploy"
 tags: [Build, Configuration, Versioning]
 status: experimental
-versions: ["dev"]
+upcoming: "0.8"
+versions: ">=0.7"
 ---
 
 # Versioned Docs
@@ -62,6 +63,7 @@ versions:
 versions:
   - label: "0.4.0 (dev)"
     tag: dev
+    version: "0.4"
     prerelease: true
   - label: "0.3.0"
     tag: "0.3"
@@ -86,6 +88,7 @@ versions:
 | `api_snapshot` | `str` | `None` | Path to a pre-generated API snapshot JSON |
 | `git_ref` | `str` | `None` | Git tag for API introspection (tags only) |
 | `released` | `str` | `None` | ISO date (e.g. `"2025-03-15"`) when this version was released. Used by the `days` badge expiry mode |
+| `version` | `str` | `None` | Semantic version this tag represents (e.g. `"0.8"` for a `dev` tag). Enables version expressions like `>=0.8` to match non-numeric tags |
 
 When strings are used instead of dicts, `tag` and `label` both default to the string value. Most projects only need `tag`, `label`, and occasionally `api_snapshot`. The other fields are useful when you have pre-release or end-of-life versions to distinguish.
 
@@ -266,6 +269,75 @@ These expand into styled `<span>` badges:
 - `[version-badge deprecated 0.1]` → **Deprecated in 0.1**
 
 Badges are compact enough to use liberally throughout your API reference and user guide pages. They give readers an at-a-glance sense of what's new without interrupting the flow of the documentation.
+
+### Upcoming Feature Badges
+
+When a version is marked `prerelease: true` in your config, any `[version-badge new]` that references it automatically renders as "Upcoming" instead of "New". This lets you document features before they ship without special syntax:
+
+```{.yaml filename="great-docs.yml"}
+versions:
+  - label: "0.8.0"
+    tag: "0.8"
+    prerelease: true
+  - label: "0.7.0"
+    tag: "0.7"
+    latest: true
+```
+
+```{.markdown filename="guide.qmd"}
+## Widget [version-badge new 0.8]
+```
+
+While 0.8 is prerelease, this badge renders differently depending on which version is being built:
+
+- **Building 0.7** (stable): **Upcoming in 0.8** with `gd-badge-upcoming` style
+- **Building 0.8** (prerelease): **New in 0.8** with `gd-badge-new` style
+
+When you release 0.8 (remove `prerelease: true` or change it to `false`), it becomes **New in 0.8** on all builds — no source edits needed.
+
+Only `new` badges are affected. `changed` and `deprecated` badges always render with their normal labels regardless of prerelease status.
+
+::: {.callout-tip}
+## Use the version number as the tag
+If your prerelease tag is the actual version number (e.g. `tag: "0.8"` with `prerelease: true`), the transition from "Upcoming" to "New" is zero-maintenance: just flip the `prerelease` flag at release time. If you use a rolling tag like `dev`, you'll need to rename badge references from `dev` to the release number when you ship.
+:::
+
+### Upcoming Pages
+
+When a page documents a feature that hasn't shipped yet, you want it visible in current docs (so readers know it's coming) but clearly marked as "Upcoming". Great Docs supports two mechanisms for this.
+
+#### The `upcoming` frontmatter key
+
+The most explicit approach — add `upcoming:` to a page's frontmatter with the version where the feature will ship:
+
+```{.yaml filename="new-feature.qmd"}
+---
+title: "Versioned Docs"
+upcoming: "0.8"
+versions: ">=0.7"
+---
+```
+
+This page is included starting from version 0.7, but when building 0.7 (or any version older than 0.8), it automatically receives `status: upcoming` — adding an "Upcoming" badge in the sidebar and at the top of the page. When building 0.8 or later, the page renders normally with no badge.
+
+The `upcoming` key works with both the `version` field (e.g. referencing `"0.8"` which maps to a `dev` tag) and direct tags. Once 0.8 ships, the key becomes inert — no cleanup needed.
+
+#### Automatic detection from version scoping
+
+If a page is scoped exclusively to prerelease versions, Great Docs detects this automatically:
+
+```{.yaml filename="prerelease-only.qmd"}
+---
+title: "New Feature"
+versions: ["dev"]
+---
+```
+
+Because `dev` is the only version listed and it's marked `prerelease: true`, the page automatically gets the "Upcoming" status badge — no `upcoming:` key needed. This also works with expressions like `versions: ">0.7"` when only prerelease entries are newer than 0.7.
+
+::: {.callout-note}
+Neither mechanism overrides an existing `status:` in frontmatter. If you've manually set `status: experimental`, that takes precedence over automatic upcoming injection.
+:::
 
 ### Badge Expiry
 

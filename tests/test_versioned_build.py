@@ -604,6 +604,355 @@ class TestExpandVersionBadges:
         result = expand_version_badges(content, entry)
         assert "New in 0.3" in result
 
+    def test_new_badge_prerelease_own_build_renders_new(self):
+        """Building the prerelease itself renders as 'New', not 'Upcoming'."""
+        from great_docs._versioning import parse_versions_config
+
+        versions = parse_versions_config(
+            [
+                {"tag": "0.8", "label": "0.8.0", "prerelease": True},
+                {"tag": "0.7", "label": "0.7.0", "latest": True},
+            ]
+        )
+        entry = versions[0]  # building 0.8 (prerelease)
+        content = "[version-badge new 0.8]"
+        result = expand_version_badges(content, entry, versions)
+        assert "New in 0.8" in result
+        assert "gd-badge-new" in result
+        assert "gd-badge-upcoming" not in result
+
+    def test_new_badge_prerelease_stable_build_renders_upcoming(self):
+        """Building a stable version shows prerelease badges as 'Upcoming'."""
+        from great_docs._versioning import parse_versions_config
+
+        versions = parse_versions_config(
+            [
+                {"tag": "0.8", "label": "0.8.0", "prerelease": True},
+                {"tag": "0.7", "label": "0.7.0", "latest": True},
+            ]
+        )
+        entry = versions[1]  # building 0.7 (stable)
+        content = "[version-badge new 0.8]"
+        result = expand_version_badges(content, entry, versions)
+        assert "Upcoming in 0.8" in result
+        assert "gd-badge-upcoming" in result
+        assert "gd-badge-new" not in result
+
+    def test_new_badge_prerelease_dev_tag_stable_build(self):
+        """Dev tag badge on a stable build renders as 'Upcoming'."""
+        from great_docs._versioning import parse_versions_config
+
+        versions = parse_versions_config(
+            [
+                {"tag": "dev", "label": "0.8.0", "prerelease": True},
+                {"tag": "0.7", "label": "0.7.0", "latest": True},
+            ]
+        )
+        entry = versions[1]  # building 0.7 (stable)
+        content = "[version-badge new dev]"
+        result = expand_version_badges(content, entry, versions)
+        assert "Upcoming in dev" in result
+        assert "gd-badge-upcoming" in result
+
+    def test_new_badge_prerelease_dev_tag_own_build_renders_new(self):
+        """Building the dev version itself renders as 'New'."""
+        from great_docs._versioning import parse_versions_config
+
+        versions = parse_versions_config(
+            [
+                {"tag": "dev", "label": "0.8.0", "prerelease": True},
+                {"tag": "0.7", "label": "0.7.0", "latest": True},
+            ]
+        )
+        entry = versions[0]  # building dev
+        content = "[version-badge new dev]"
+        result = expand_version_badges(content, entry, versions)
+        assert "New in dev" in result
+        assert "gd-badge-new" in result
+        assert "gd-badge-upcoming" not in result
+
+    def test_new_badge_released_version_not_upcoming(self):
+        """A new badge referencing a released version stays 'New'."""
+        from great_docs._versioning import parse_versions_config
+
+        versions = parse_versions_config(
+            [
+                {"tag": "0.8", "label": "0.8.0", "prerelease": True},
+                {"tag": "0.7", "label": "0.7.0", "latest": True},
+                {"tag": "0.6", "label": "0.6.0"},
+            ]
+        )
+        entry = versions[1]  # building 0.7
+        content = "[version-badge new 0.6]"
+        result = expand_version_badges(content, entry, versions)
+        assert "New in 0.6" in result
+        assert "gd-badge-new" in result
+        assert "gd-badge-upcoming" not in result
+
+    def test_bare_new_badge_on_prerelease_build(self):
+        """Bare [version-badge new] on a prerelease build renders as 'New' (own build)."""
+        from great_docs._versioning import parse_versions_config
+
+        versions = parse_versions_config(
+            [
+                {"tag": "0.8", "label": "0.8.0", "prerelease": True},
+                {"tag": "0.7", "label": "0.7.0", "latest": True},
+            ]
+        )
+        entry = versions[0]  # building 0.8 (prerelease)
+        content = "[version-badge new]"
+        result = expand_version_badges(content, entry, versions)
+        assert "New in 0.8.0" in result
+        assert "gd-badge-new" in result
+
+    def test_changed_badge_not_affected_by_prerelease(self):
+        """Changed badges stay 'Changed' even when version is prerelease."""
+        from great_docs._versioning import parse_versions_config
+
+        versions = parse_versions_config(
+            [
+                {"tag": "0.8", "label": "0.8.0", "prerelease": True},
+                {"tag": "0.7", "label": "0.7.0", "latest": True},
+            ]
+        )
+        entry = versions[0]
+        content = "[version-badge changed 0.8]"
+        result = expand_version_badges(content, entry, versions)
+        assert "Changed in 0.8" in result
+        assert "gd-badge-changed" in result
+
+
+# ---------------------------------------------------------------------------
+# Upcoming status injection
+# ---------------------------------------------------------------------------
+
+
+class TestInjectUpcomingStatus:
+    def test_injects_status(self):
+        from great_docs._versioned_build import _inject_upcoming_status
+
+        content = '---\ntitle: "New Feature"\nversions: ["dev"]\n---\nBody\n'
+        result = _inject_upcoming_status(content)
+        assert "status: upcoming" in result
+        assert result.startswith("---\n")
+        assert "---\nBody" in result
+
+    def test_preserves_existing_status(self):
+        from great_docs._versioned_build import _inject_upcoming_status
+
+        content = '---\ntitle: "Feature"\nstatus: experimental\n---\nBody\n'
+        result = _inject_upcoming_status(content)
+        assert "status: experimental" in result
+        assert "status: upcoming" not in result
+
+    def test_no_frontmatter(self):
+        from great_docs._versioned_build import _inject_upcoming_status
+
+        content = "No frontmatter here.\n"
+        result = _inject_upcoming_status(content)
+        assert result == content
+
+
+class TestUpdatePageStatusJson:
+    def test_adds_upcoming_pages(self, tmp_path):
+        import json
+        from great_docs._versioned_build import _update_page_status_json
+
+        status_path = tmp_path / "_page_status.json"
+        status_path.write_text(
+            json.dumps(
+                {
+                    "page_statuses": {"user-guide/intro.qmd": "new"},
+                    "definitions": {},
+                }
+            )
+        )
+        _update_page_status_json(tmp_path, [("user-guide/feature.html", "0.8")])
+        data = json.loads(status_path.read_text())
+        # Upcoming is stored separately — page_statuses untouched
+        assert data["page_statuses"] == {"user-guide/intro.qmd": "new"}
+        assert data["upcoming_pages"]["user-guide/feature.qmd"] == "0.8"
+
+    def test_preserves_existing_status(self, tmp_path):
+        import json
+        from great_docs._versioned_build import _update_page_status_json
+
+        status_path = tmp_path / "_page_status.json"
+        status_path.write_text(
+            json.dumps(
+                {
+                    "page_statuses": {"user-guide/feature.qmd": "experimental"},
+                    "definitions": {},
+                }
+            )
+        )
+        _update_page_status_json(tmp_path, [("user-guide/feature.html", "0.8")])
+        data = json.loads(status_path.read_text())
+        # Status stays experimental — upcoming is independent
+        assert data["page_statuses"]["user-guide/feature.qmd"] == "experimental"
+        assert data["upcoming_pages"]["user-guide/feature.qmd"] == "0.8"
+
+    def test_no_version_uses_true(self, tmp_path):
+        import json
+        from great_docs._versioned_build import _update_page_status_json
+
+        status_path = tmp_path / "_page_status.json"
+        status_path.write_text(
+            json.dumps(
+                {
+                    "page_statuses": {},
+                    "definitions": {},
+                }
+            )
+        )
+        _update_page_status_json(tmp_path, [("user-guide/feature.html", None)])
+        data = json.loads(status_path.read_text())
+        assert data["upcoming_pages"]["user-guide/feature.qmd"] is True
+
+    def test_missing_file_does_nothing(self, tmp_path):
+        from great_docs._versioned_build import _update_page_status_json
+
+        # Should not raise
+        _update_page_status_json(tmp_path, [("feature.html", "0.8")])
+
+
+class TestSyncStatusInlineScript:
+    """Tests for _sync_status_inline_script which injects __GD_UPCOMING_DATA__."""
+
+    def _make_quarto_yml(self, tmp_path, include_js_inline=True):
+        """Create a _quarto.yml with __GD_STATUS_DATA__ inline script."""
+        import json
+
+        status_data = {
+            "page_statuses": {"a.qmd": "experimental"},
+            "definitions": {"experimental": {"label": "Experimental"}},
+            "show_in_sidebar": True,
+            "show_on_pages": True,
+        }
+        escaped = json.dumps(status_data).replace("</", r"<\/")
+        script = "<script>window.__GD_STATUS_DATA__=" + escaped + ";</script>"
+        lines = [
+            "format:",
+            "  html:",
+            "    include-after-body:",
+            f'      - text: "{script}"',
+        ]
+        if include_js_inline:
+            # Simulate inlined page-status-badges.js that references __GD_UPCOMING_DATA__
+            lines.append(
+                '      - text: "<script>// var upcoming = window.__GD_UPCOMING_DATA__;</script>"'
+            )
+        (tmp_path / "_quarto.yml").write_text("\n".join(lines))
+
+    def test_injects_upcoming_data(self, tmp_path):
+        import json
+
+        from great_docs._versioned_build import _sync_status_inline_script
+
+        self._make_quarto_yml(tmp_path)
+        status_path = tmp_path / "_page_status.json"
+        status_path.write_text(
+            json.dumps(
+                {
+                    "page_statuses": {"a.qmd": "experimental"},
+                    "definitions": {},
+                    "upcoming_pages": {"user-guide/feature.qmd": "0.8"},
+                }
+            )
+        )
+        _sync_status_inline_script(tmp_path)
+        yml = (tmp_path / "_quarto.yml").read_text()
+        assert "<script>window.__GD_UPCOMING_DATA__=" in yml
+        assert '"user-guide/feature.qmd": "0.8"' in yml
+
+    def test_does_not_double_inject(self, tmp_path):
+        import json
+
+        from great_docs._versioned_build import _sync_status_inline_script
+
+        self._make_quarto_yml(tmp_path)
+        status_path = tmp_path / "_page_status.json"
+        status_path.write_text(
+            json.dumps(
+                {
+                    "page_statuses": {},
+                    "definitions": {},
+                    "upcoming_pages": {"a.qmd": "0.9"},
+                }
+            )
+        )
+        _sync_status_inline_script(tmp_path)
+        _sync_status_inline_script(tmp_path)  # second call
+        yml = (tmp_path / "_quarto.yml").read_text()
+        assert yml.count("<script>window.__GD_UPCOMING_DATA__=") == 1
+
+    def test_no_upcoming_pages_skips(self, tmp_path):
+        import json
+
+        from great_docs._versioned_build import _sync_status_inline_script
+
+        self._make_quarto_yml(tmp_path)
+        status_path = tmp_path / "_page_status.json"
+        status_path.write_text(
+            json.dumps({"page_statuses": {}, "definitions": {}})
+        )
+        _sync_status_inline_script(tmp_path)
+        yml = (tmp_path / "_quarto.yml").read_text()
+        assert "__GD_UPCOMING_DATA__=" not in yml
+
+    def test_missing_status_json_skips(self, tmp_path):
+        from great_docs._versioned_build import _sync_status_inline_script
+
+        self._make_quarto_yml(tmp_path)
+        # No _page_status.json
+        _sync_status_inline_script(tmp_path)
+        yml = (tmp_path / "_quarto.yml").read_text()
+        assert "__GD_UPCOMING_DATA__=" not in yml
+
+    def test_no_status_data_script_skips(self, tmp_path):
+        import json
+
+        from great_docs._versioned_build import _sync_status_inline_script
+
+        # _quarto.yml without __GD_STATUS_DATA__ script tag
+        (tmp_path / "_quarto.yml").write_text(
+            "format:\n  html:\n    include-after-body:\n      - somefile.js\n"
+        )
+        (tmp_path / "_page_status.json").write_text(
+            json.dumps(
+                {
+                    "page_statuses": {},
+                    "definitions": {},
+                    "upcoming_pages": {"a.qmd": "0.8"},
+                }
+            )
+        )
+        _sync_status_inline_script(tmp_path)
+        yml = (tmp_path / "_quarto.yml").read_text()
+        assert "__GD_UPCOMING_DATA__=" not in yml
+
+    def test_not_confused_by_js_reference(self, tmp_path):
+        """The guard should not be tricked by __GD_UPCOMING_DATA__ in JS comments."""
+        import json
+
+        from great_docs._versioned_build import _sync_status_inline_script
+
+        self._make_quarto_yml(tmp_path, include_js_inline=True)
+        status_path = tmp_path / "_page_status.json"
+        status_path.write_text(
+            json.dumps(
+                {
+                    "page_statuses": {},
+                    "definitions": {},
+                    "upcoming_pages": {"page.qmd": "1.0"},
+                }
+            )
+        )
+        _sync_status_inline_script(tmp_path)
+        yml = (tmp_path / "_quarto.yml").read_text()
+        # Should still inject despite the JS reference existing
+        assert "<script>window.__GD_UPCOMING_DATA__=" in yml
+
 
 # ---------------------------------------------------------------------------
 # Version callout expansion
