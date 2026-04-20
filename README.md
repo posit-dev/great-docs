@@ -272,30 +272,52 @@ Beyond `init`, `build`, and `preview`, Great Docs includes a full suite of quali
 
 The documentation includes 22 step-by-step recipes:
 
+### Content & API
+
+| Recipe                                                                                                       | Topic                                      |
+| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| [Hide Internal Symbols](https://posit-dev.github.io/great-docs/recipes/hide-internal-symbols.html)           | Control what appears in your API reference |
+| [Customize API Organization](https://posit-dev.github.io/great-docs/recipes/customize-api-organization.html) | Structure reference sections your way      |
+| [Document a CLI](https://posit-dev.github.io/great-docs/recipes/document-a-cli.html)                         | Auto-generate CLI reference from Click     |
+| [Cross-Reference Items](https://posit-dev.github.io/great-docs/recipes/cross-reference-items.html)           | Link between documented objects            |
+| [Write Effective Docstrings](https://posit-dev.github.io/great-docs/recipes/write-effective-docstrings.html) | Get the most out of auto-generated docs    |
+| [Add Images & Diagrams](https://posit-dev.github.io/great-docs/recipes/add-images-diagrams.html)             | Include visuals in your documentation      |
+| [Embed Videos](https://posit-dev.github.io/great-docs/recipes/embed-videos.html)                             | Add YouTube, Vimeo, and local videos       |
+
+### Theming & Appearance
+
 | Recipe                                                                                                             | Topic                                      |
 | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
-| [Hide Internal Symbols](https://posit-dev.github.io/great-docs/recipes/hide-internal-symbols.html)                 | Control what appears in your API reference |
-| [Customize API Organization](https://posit-dev.github.io/great-docs/recipes/customize-api-organization.html)       | Structure reference sections your way      |
-| [Document a CLI](https://posit-dev.github.io/great-docs/recipes/document-a-cli.html)                               | Auto-generate CLI reference from Click     |
-| [Cross-Reference Items](https://posit-dev.github.io/great-docs/recipes/cross-reference-items.html)                 | Link between documented objects            |
 | [Add Custom CSS](https://posit-dev.github.io/great-docs/recipes/add-custom-css.html)                               | Override styles with your own SCSS         |
 | [Choose Gradient Theme](https://posit-dev.github.io/great-docs/recipes/choose-gradient-theme.html)                 | Pick and customize navbar gradients        |
 | [Add Logo & Favicon](https://posit-dev.github.io/great-docs/recipes/add-logo-favicon.html)                         | Brand your site with custom icons          |
 | [Customize Announcement Banner](https://posit-dev.github.io/great-docs/recipes/customize-announcement-banner.html) | Add dismissible site-wide notices          |
-| [Write Effective Docstrings](https://posit-dev.github.io/great-docs/recipes/write-effective-docstrings.html)       | Get the most out of auto-generated docs    |
-| [Add Images & Diagrams](https://posit-dev.github.io/great-docs/recipes/add-images-diagrams.html)                   | Include visuals in your documentation      |
+
+### Publishing & Versioning
+
+| Recipe                                                                                                             | Topic                                      |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
 | [Create Changelog](https://posit-dev.github.io/great-docs/recipes/create-changelog.html)                           | Pull changelog from GitHub Releases        |
 | [GitHub Pages & CI](https://posit-dev.github.io/great-docs/recipes/github-pages-ci.html)                           | Automate deployment with Actions           |
 | [Add Custom Domain](https://posit-dev.github.io/great-docs/recipes/add-custom-domain.html)                         | Serve docs from your own domain            |
-| [Install Great Docs Skill](https://posit-dev.github.io/great-docs/recipes/install-great-docs-skill.html)           | Generate an Agent Skill for your package   |
-| [Build Site with LLM](https://posit-dev.github.io/great-docs/recipes/build-site-with-llm.html)                     | Use an AI assistant to set up your site    |
-| [Customize Site with LLM](https://posit-dev.github.io/great-docs/recipes/customize-site-with-llm.html)             | Use an AI assistant to tweak your site     |
-| [Understand llms.txt](https://posit-dev.github.io/great-docs/recipes/understand-llms-txt.html)                     | Make your docs AI-accessible               |
-| [Fix Common Build Errors](https://posit-dev.github.io/great-docs/recipes/fix-common-build-errors.html)             | Troubleshoot build issues quickly          |
-| [Proofread Documentation](https://posit-dev.github.io/great-docs/recipes/proofread-documentation.html)             | Catch spelling and grammar issues          |
-| [Embed Videos](https://posit-dev.github.io/great-docs/recipes/embed-videos.html)                                   | Add YouTube, Vimeo, and local videos       |
 | [Enable Multi-Version Docs](https://posit-dev.github.io/great-docs/recipes/enable-multi-version-docs.html)         | Add a version selector to your site        |
 | [Use Version Fences and Badges](https://posit-dev.github.io/great-docs/recipes/use-version-fences-and-badges.html) | Annotate version-specific content          |
+
+### AI-Assisted Workflows
+
+| Recipe                                                                                                   | Topic                                      |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| [Install Great Docs Skill](https://posit-dev.github.io/great-docs/recipes/install-great-docs-skill.html) | Generate an Agent Skill for your package   |
+| [Build Site with LLM](https://posit-dev.github.io/great-docs/recipes/build-site-with-llm.html)           | Use an AI assistant to set up your site    |
+| [Customize Site with LLM](https://posit-dev.github.io/great-docs/recipes/customize-site-with-llm.html)   | Use an AI assistant to tweak your site     |
+| [Understand llms.txt](https://posit-dev.github.io/great-docs/recipes/understand-llms-txt.html)           | Make your docs AI-accessible               |
+
+### Build & Quality
+
+| Recipe                                                                                                 | Topic                                      |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| [Fix Common Build Errors](https://posit-dev.github.io/great-docs/recipes/fix-common-build-errors.html) | Troubleshoot build issues quickly          |
+| [Proofread Documentation](https://posit-dev.github.io/great-docs/recipes/proofread-documentation.html) | Catch spelling and grammar issues          |
 
 ## Documentation
 
