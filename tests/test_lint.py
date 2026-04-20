@@ -900,3 +900,239 @@ class TestCheckDirectiveConsistencyEdgeCases:
         # Note: the actual _directives.extract_directives filters empties via `if name:`
         # so this won't produce an issue — but we still exercise the code path
         assert all(i.check != "empty-seealso" for i in result.issues)
+
+
+# ---------------------------------------------------------------------------
+# Stale version annotation checks
+# ---------------------------------------------------------------------------
+
+
+class TestCheckStaleVersions:
+    """Tests for _check_stale_versions lint check."""
+
+    def _make_project(self, tmp_path, versions_yaml, qmd_files: dict[str, str]):
+        """Create a minimal project with great-docs.yml and .qmd files."""
+        config = f"versions:\n{versions_yaml}\n"
+        (tmp_path / "great-docs.yml").write_text(config)
+        for rel_path, content in qmd_files.items():
+            p = tmp_path / rel_path
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(content)
+
+    @property
+    def _versions_yaml(self):
+        return (
+            '  - label: "0.8 (dev)"\n'
+            "    tag: dev\n"
+            '    version: "0.8"\n'
+            "    prerelease: true\n"
+            '  - label: "0.7"\n'
+            '    tag: "0.7"\n'
+            "    latest: true\n"
+            '  - label: "0.6"\n'
+            '    tag: "0.6"\n'
+            '  - label: "0.5"\n'
+            '    tag: "0.5"\n'
+            '  - label: "0.4"\n'
+            '    tag: "0.4"\n'
+            '  - label: "0.3"\n'
+            '    tag: "0.3"\n'
+            '  - label: "0.2"\n'
+            '    tag: "0.2"\n'
+            '  - label: "0.1"\n'
+            '    tag: "0.1"\n'
+        )
+
+    def test_stale_badge_detected(self, tmp_path):
+        from great_docs._lint import _check_stale_versions
+
+        self._make_project(
+            tmp_path,
+            self._versions_yaml,
+            {
+                "user_guide/page.qmd": (
+                    "---\ntitle: Test\n---\n\nSome text [version-badge new 0.3] here.\n"
+                ),
+            },
+        )
+        result = LintResult()
+        _check_stale_versions(tmp_path, result)
+        stale = [i for i in result.issues if i.check == "stale-badge"]
+        assert len(stale) == 1
+        assert "0.3" in stale[0].message
+        assert "4 releases behind" in stale[0].message
+
+    def test_fresh_badge_not_flagged(self, tmp_path):
+        from great_docs._lint import _check_stale_versions
+
+        self._make_project(
+            tmp_path,
+            self._versions_yaml,
+            {
+                "user_guide/page.qmd": (
+                    "---\ntitle: Test\n---\n\nSome text [version-badge new 0.6] here.\n"
+                ),
+            },
+        )
+        result = LintResult()
+        _check_stale_versions(tmp_path, result)
+        stale = [i for i in result.issues if i.check == "stale-badge"]
+        assert len(stale) == 0
+
+    def test_stale_callout_detected(self, tmp_path):
+        from great_docs._lint import _check_stale_versions
+
+        self._make_project(
+            tmp_path,
+            self._versions_yaml,
+            {
+                "user_guide/page.qmd": (
+                    "---\ntitle: Test\n---\n\n"
+                    '::: {.version-note version="0.2"}\n'
+                    "Added in 0.2.\n"
+                    ":::\n"
+                ),
+            },
+        )
+        result = LintResult()
+        _check_stale_versions(tmp_path, result)
+        stale = [i for i in result.issues if i.check == "stale-callout"]
+        assert len(stale) == 1
+        assert "0.2" in stale[0].message
+        assert stale[0].severity == "info"
+
+    def test_fresh_callout_not_flagged(self, tmp_path):
+        from great_docs._lint import _check_stale_versions
+
+        self._make_project(
+            tmp_path,
+            self._versions_yaml,
+            {
+                "user_guide/page.qmd": (
+                    "---\ntitle: Test\n---\n\n"
+                    '::: {.version-note version="0.5"}\n'
+                    "Added in 0.5.\n"
+                    ":::\n"
+                ),
+            },
+        )
+        result = LintResult()
+        _check_stale_versions(tmp_path, result)
+        stale = [i for i in result.issues if i.check == "stale-callout"]
+        assert len(stale) == 0
+
+    def test_stale_upcoming_detected(self, tmp_path):
+        from great_docs._lint import _check_stale_versions
+
+        self._make_project(
+            tmp_path,
+            self._versions_yaml,
+            {
+                "user_guide/page.qmd": ('---\ntitle: Test\nupcoming: "0.5"\n---\n\nContent.\n'),
+            },
+        )
+        result = LintResult()
+        _check_stale_versions(tmp_path, result)
+        stale = [i for i in result.issues if i.check == "stale-upcoming"]
+        assert len(stale) == 1
+        assert "0.5" in stale[0].message
+        assert "already-released" in stale[0].message
+
+    def test_valid_upcoming_not_flagged(self, tmp_path):
+        from great_docs._lint import _check_stale_versions
+
+        self._make_project(
+            tmp_path,
+            self._versions_yaml,
+            {
+                "user_guide/page.qmd": ('---\ntitle: Test\nupcoming: "0.8"\n---\n\nContent.\n'),
+            },
+        )
+        result = LintResult()
+        _check_stale_versions(tmp_path, result)
+        stale = [i for i in result.issues if i.check == "stale-upcoming"]
+        assert len(stale) == 0
+
+    def test_deprecated_callout_stale(self, tmp_path):
+        from great_docs._lint import _check_stale_versions
+
+        self._make_project(
+            tmp_path,
+            self._versions_yaml,
+            {
+                "user_guide/page.qmd": (
+                    "---\ntitle: Test\n---\n\n"
+                    '::: {.version-deprecated version="0.1"}\n'
+                    "Use new_func().\n"
+                    ":::\n"
+                ),
+            },
+        )
+        result = LintResult()
+        _check_stale_versions(tmp_path, result)
+        stale = [i for i in result.issues if i.check == "stale-callout"]
+        assert len(stale) == 1
+        assert "version-deprecated" in stale[0].message
+
+    def test_custom_thresholds(self, tmp_path):
+        from great_docs._lint import _check_stale_versions
+
+        # Use a very high threshold so nothing is flagged
+        config = (
+            f"versions:\n{self._versions_yaml}\n"
+            "lint:\n"
+            "  stale_versions:\n"
+            "    badge_threshold: 99\n"
+            "    callout_threshold: 99\n"
+        )
+        (tmp_path / "great-docs.yml").write_text(config)
+        qmd = tmp_path / "user_guide" / "page.qmd"
+        qmd.parent.mkdir(parents=True)
+        qmd.write_text(
+            "---\ntitle: Test\n---\n\n"
+            "[version-badge new 0.1]\n"
+            '::: {.version-note version="0.1"}\nOld.\n:::\n'
+        )
+        result = LintResult()
+        _check_stale_versions(tmp_path, result)
+        assert len(result.issues) == 0
+
+    def test_no_versions_config_skips(self, tmp_path):
+        from great_docs._lint import _check_stale_versions
+
+        (tmp_path / "great-docs.yml").write_text("theme: default\n")
+        result = LintResult()
+        _check_stale_versions(tmp_path, result)
+        assert len(result.issues) == 0
+
+    def test_skips_underscore_dirs(self, tmp_path):
+        from great_docs._lint import _check_stale_versions
+
+        self._make_project(
+            tmp_path,
+            self._versions_yaml,
+            {
+                "_site/page.qmd": ("---\ntitle: Test\n---\n\n[version-badge new 0.1]\n"),
+            },
+        )
+        result = LintResult()
+        _check_stale_versions(tmp_path, result)
+        assert len(result.issues) == 0
+
+    def test_line_numbers_correct(self, tmp_path):
+        from great_docs._lint import _check_stale_versions
+
+        self._make_project(
+            tmp_path,
+            self._versions_yaml,
+            {
+                "user_guide/page.qmd": (
+                    "---\ntitle: Test\n---\n\nLine 5\nLine 6\n[version-badge new 0.1]\n"
+                ),
+            },
+        )
+        result = LintResult()
+        _check_stale_versions(tmp_path, result)
+        stale = [i for i in result.issues if i.check == "stale-badge"]
+        assert len(stale) == 1
+        assert stale[0].symbol == "user_guide/page.qmd:7"
