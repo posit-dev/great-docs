@@ -107,7 +107,9 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 - Click CLI documentation
 - User Guide pages from `user_guide/` directory
 - Custom sections (recipes, blog, tutorials, etc.)
-- Custom HTML pages from `custom/` with passthrough or raw layouts
+- Custom HTML pages with passthrough or raw layouts
+- Multi-version documentation with version selector
+- Video embeds (YouTube, Vimeo, local files)
 
 </td>
 <td width="50%" valign="top">
@@ -120,6 +122,10 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 - Source links to GitHub for every item
 - Copy-to-clipboard for code blocks
 - Responsive, mobile-friendly layout
+- Page tags and tag index pages
+- Page status badges (experimental, stable, deprecated)
+- API evolution annotations (new, changed, deprecated)
+- Social cards (Open Graph / Twitter)
 
 </td>
 </tr>
@@ -142,6 +148,7 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 - Custom favicon and Open Graph images
 - Author metadata with ORCID support
 - Changelog from GitHub Releases
+- Internationalization support
 
 </td>
 </tr>
@@ -151,9 +158,12 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 **Quality & Reliability**
 
 - Built-in link checker
+- Documentation linter (docstrings, cross-refs, style)
 - Proofreading (spelling & grammar)
+- SEO auditing
+- API diff between versions
 - Tested against 250+ synthetic packages
-- 6,500+ unit tests
+- 15,600+ tests
 
 </td>
 <td width="50%" valign="top">
@@ -162,6 +172,7 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 
 - One-command GitHub Pages setup
 - GitHub Actions workflow generation
+- Multi-version deployment with version selector
 - Custom domain support
 - Static output: host anywhere
 
@@ -201,6 +212,13 @@ cli:
   module: my_package.cli
   name: cli
 
+# Multi-version documentation
+versions:
+  - tag: v2.0.0
+    label: "2.0 (latest)"
+  - tag: v1.5.0
+    label: "1.5"
+
 # Custom sections
 sections:
   - title: Recipes
@@ -232,9 +250,27 @@ great-docs setup-github-pages
 
 This creates a `.github/workflows/` file that builds and publishes your site on every push to `main`. Your docs stay in sync with your code automatically.
 
+## CLI Commands
+
+Beyond `init`, `build`, and `preview`, Great Docs includes a full suite of quality and maintenance tools:
+
+| Command | Purpose |
+| --- | --- |
+| `great-docs scan` | Preview discovered exports before building |
+| `great-docs lint` | Check for missing docstrings, broken cross-refs, style issues |
+| `great-docs proofread` | Catch spelling and grammar problems |
+| `great-docs check-links` | Validate all links in the built site |
+| `great-docs seo` | Audit SEO health (sitemap, meta tags, structured data) |
+| `great-docs api-diff OLD NEW` | Show API changes between two versions |
+| `great-docs api-snapshot` | Capture a JSON snapshot of your public API |
+| `great-docs versions` | List and validate multi-version configuration |
+| `great-docs changelog` | Generate changelog from GitHub Releases |
+| `great-docs setup-github-pages` | Create CI workflow for GitHub Pages deployment |
+| `great-docs config` | Generate a fully-documented config template |
+
 ## Recipes
 
-The documentation includes 18 step-by-step recipes:
+The documentation includes 22 step-by-step recipes:
 
 | Recipe                                                                                                             | Topic                                      |
 | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
@@ -256,18 +292,29 @@ The documentation includes 18 step-by-step recipes:
 | [Customize Site with LLM](https://posit-dev.github.io/great-docs/recipes/customize-site-with-llm.html)             | Use an AI assistant to tweak your site     |
 | [Understand llms.txt](https://posit-dev.github.io/great-docs/recipes/understand-llms-txt.html)                     | Make your docs AI-accessible               |
 | [Fix Common Build Errors](https://posit-dev.github.io/great-docs/recipes/fix-common-build-errors.html)             | Troubleshoot build issues quickly          |
+| [Proofread Documentation](https://posit-dev.github.io/great-docs/recipes/proofread-documentation.html)             | Catch spelling and grammar issues          |
+| [Embed Videos](https://posit-dev.github.io/great-docs/recipes/embed-videos.html)                                   | Add YouTube, Vimeo, and local videos       |
+| [Enable Multi-Version Docs](https://posit-dev.github.io/great-docs/recipes/enable-multi-version-docs.html)         | Add a version selector to your site        |
+| [Use Version Fences and Badges](https://posit-dev.github.io/great-docs/recipes/use-version-fences-and-badges.html) | Annotate version-specific content          |
 
 ## Documentation
 
 Full documentation is available at **[posit-dev.github.io/great-docs](https://posit-dev.github.io/great-docs/)**:
 
-- [Installation](https://posit-dev.github.io/great-docs/user-guide/installation.html) — setup and requirements
-- [Quick Start](https://posit-dev.github.io/great-docs/user-guide/quickstart.html) — first site in minutes
-- [Configuration](https://posit-dev.github.io/great-docs/user-guide/configuration.html) — every option explained
-- [Theming & Appearance](https://posit-dev.github.io/great-docs/user-guide/theming.html) — gradients, colors, dark mode
-- [API Documentation](https://posit-dev.github.io/great-docs/user-guide/api-documentation.html) — how API references are generated
-- [CLI Documentation](https://posit-dev.github.io/great-docs/user-guide/cli-documentation.html) — documenting Click CLIs
-- [Deployment](https://posit-dev.github.io/great-docs/user-guide/deployment.html) — GitHub Pages and beyond
+- [Installation](https://posit-dev.github.io/great-docs/user-guide/installation.html): setup and requirements
+- [Quick Start](https://posit-dev.github.io/great-docs/user-guide/quickstart.html): first site in minutes
+- [Configuration](https://posit-dev.github.io/great-docs/user-guide/configuration.html): every option explained
+- [Theming & Appearance](https://posit-dev.github.io/great-docs/user-guide/theming.html): gradients, colors, dark mode
+- [API Documentation](https://posit-dev.github.io/great-docs/user-guide/api-documentation.html): how API references are generated
+- [CLI Documentation](https://posit-dev.github.io/great-docs/user-guide/cli-documentation.html): documenting Click CLIs
+- [Deployment](https://posit-dev.github.io/great-docs/user-guide/deployment.html): GitHub Pages and beyond
+- [Link Checker](https://posit-dev.github.io/great-docs/user-guide/link-checker.html): validate all links
+- [Proofreading](https://posit-dev.github.io/great-docs/user-guide/proofreading.html): spelling & grammar checks
+- [Linting](https://posit-dev.github.io/great-docs/user-guide/linting.html): documentation quality checks
+- [SEO](https://posit-dev.github.io/great-docs/user-guide/seo.html): search engine optimization
+- [Multi-Version Docs](https://posit-dev.github.io/great-docs/user-guide/multi-version-docs.html): version selector and versioned builds
+- [API Evolution](https://posit-dev.github.io/great-docs/user-guide/api-evolution.html): tracking API changes across versions
+- [Social Cards](https://posit-dev.github.io/great-docs/user-guide/social-cards.html): Open Graph and Twitter cards
 
 ## Requirements
 
@@ -276,7 +323,7 @@ Full documentation is available at **[posit-dev.github.io/great-docs](https://po
 
 ## Contributing
 
-Contributions are welcome. Please see [CONTRIBUTING](https://posit-dev.github.io/great-docs/contributing.html) for guidelines and the [Code of Conduct](https://posit-dev.github.io/great-docs/code-of-conduct.html).
+Contributions are welcome! Please see [CONTRIBUTING](https://posit-dev.github.io/great-docs/contributing.html) for guidelines and the [Code of Conduct](https://posit-dev.github.io/great-docs/code-of-conduct.html).
 
 ## License
 
