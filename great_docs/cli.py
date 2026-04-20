@@ -1699,7 +1699,7 @@ cli.add_command(seo)
     "--check",
     "checks",
     multiple=True,
-    type=click.Choice(["docstrings", "cross-refs", "style", "directives"]),
+    type=click.Choice(["docstrings", "cross-refs", "style", "directives", "stale-versions"]),
     help="Run only specific checks (can be repeated). Default: all checks.",
 )
 @click.option(
@@ -1713,7 +1713,7 @@ def lint(project_path: str | None, checks: tuple[str, ...], json_output: bool) -
 
     Analyzes your package's public API for documentation issues including
     missing docstrings, broken cross-references, inconsistent formatting,
-    and malformed directives.
+    malformed directives, and stale version annotations.
 
     \b
     Checks performed:
@@ -1722,17 +1722,20 @@ def lint(project_path: str | None, checks: tuple[str, ...], json_output: bool) -
       • style-mismatch       Docstrings not matching configured style (numpy/google/sphinx)
       • unknown-directive    Unrecognized %directive names
       • empty-seealso        %seealso entries with empty references
+      • stale-badge          Version badges far behind latest release
+      • stale-callout        Version callouts that are very old
+      • stale-upcoming       upcoming: frontmatter for already-released versions
 
     \b
     Examples:
       great-docs lint                                # Run all checks
+      great-docs lint --check stale-versions         # Only check for stale annotations
       great-docs lint --check docstrings             # Only check for missing docstrings
       great-docs lint --check cross-refs --check style
       great-docs lint --json                         # JSON output for CI
       great-docs lint --json | jq '.issues[] | select(.severity == "error")'
     """
     import json
-    import shutil
     import textwrap
 
     from ._lint import run_lint
@@ -1768,31 +1771,33 @@ def lint(project_path: str | None, checks: tuple[str, ...], json_output: bool) -
                     # Count severities
                     errs = sum(1 for i in issues if i.severity == "error")
                     warns = sum(1 for i in issues if i.severity == "warning")
+                    infos = sum(1 for i in issues if i.severity == "info")
                     label_parts = []
                     if errs:
                         label_parts.append(f"{errs} error(s)")
                     if warns:
                         label_parts.append(f"{warns} warning(s)")
+                    if infos:
+                        label_parts.append(f"{infos} info")
                     label = ", ".join(label_parts)
 
                     click.echo(f"  {check_name}  [{label}]")
                     click.echo(f"{'─' * 60}")
 
                     for issue in issues:
-                        icon = "❌" if issue.severity == "error" else "⚠️ "
-                        symbol_str = f"  {issue.symbol}" if issue.symbol else ""
-                        prefix = f"  {icon}{symbol_str}: "
-                        # Wrap long messages to keep output tidy
-                        term_width = shutil.get_terminal_size((80, 24)).columns
-                        wrap_width = max(40, term_width - len(prefix))
-                        lines = textwrap.wrap(issue.message, width=wrap_width)
-                        if lines:
-                            click.echo(f"{prefix}{lines[0]}")
-                            indent = " " * len(prefix)
-                            for line in lines[1:]:
-                                click.echo(f"{indent}{line}")
+                        if issue.severity == "error":
+                            icon = "❌"
+                        elif issue.severity == "info":
+                            icon = "ℹ️ "
                         else:
-                            click.echo(prefix.rstrip())
+                            icon = "⚠️ "
+                        symbol_str = f"  {issue.symbol}" if issue.symbol else ""
+                        click.echo(f"  {icon}{symbol_str}")
+                        # Wrap long messages indented below the path
+                        msg_indent = "        "
+                        lines = textwrap.wrap(issue.message, width=56)
+                        for line in lines:
+                            click.echo(f"{msg_indent}{line}")
 
                 click.echo(f"\n{'─' * 60}")
                 n_errors = len(result.errors)
