@@ -149,7 +149,7 @@
 
     /**
      * Build menu items from the top navbar links (used on homepage).
-     * Returns an array of {text, href, active} objects.
+     * Returns an array of {text, href, active, section, html, badgeHtml} objects.
      */
     function getNavbarItems() {
         var items = [];
@@ -162,6 +162,8 @@
             if (!text) continue;
             items.push({
                 text: text.textContent.trim(),
+                html: text.innerHTML,
+                badgeHtml: '',
                 href: a.getAttribute('href') || '#',
                 active: a.classList.contains('active'),
                 section: null
@@ -173,12 +175,40 @@
     /**
      * Build menu items from the left sidebar navigation (used on content pages).
      * Handles both sectioned sidebars (User Guide) and flat sidebars (Recipes).
-     * Returns an array of {text, href, active, section} objects.
+     * Returns an array of {text, href, active, section, html, badgeHtml, upcomingHtml} objects.
+     * - html: innerHTML of .menu-text (includes icons + text)
+     * - badgeHtml: outerHTML of .gd-sidebar-status-badge (if present)
+     * - upcomingHtml: outerHTML of .gd-sidebar-upcoming rocket icon (if present)
      */
     function getSidebarItems() {
         var items = [];
         var sidebar = document.getElementById('quarto-sidebar');
         if (!sidebar) return items;
+
+        function extractItem(a, sectionTitle) {
+            var menuText = a.querySelector('.menu-text');
+            if (!menuText) return null;
+            var badge = a.querySelector('.gd-sidebar-status-badge');
+            var upcoming = a.querySelector('.gd-sidebar-upcoming');
+            return {
+                text: menuText.textContent.trim(),
+                html: menuText.innerHTML,
+                badgeHtml: badge ? badge.outerHTML : '',
+                upcomingHtml: upcoming ? upcoming.outerHTML : '',
+                href: a.getAttribute('href') || '#',
+                active: a.classList.contains('active'),
+                section: sectionTitle
+            };
+        }
+
+        function extractSectionHtml(sec) {
+            var headerEl = sec.querySelector(':scope > .sidebar-item-container .menu-text');
+            if (!headerEl) {
+                // Try sidebar-item-text for section headers without .menu-text
+                headerEl = sec.querySelector(':scope > .sidebar-item-container .sidebar-item-text');
+            }
+            return headerEl ? headerEl.innerHTML : null;
+        }
 
         var sections = sidebar.querySelectorAll('.sidebar-item-section');
 
@@ -186,36 +216,23 @@
             // Sectioned sidebar (e.g., User Guide pages)
             for (var s = 0; s < sections.length; s++) {
                 var sec = sections[s];
-                var headerEl = sec.querySelector(':scope > .sidebar-item-container .menu-text');
-                var sectionTitle = headerEl ? headerEl.textContent.trim() : null;
+                var sectionHtml = extractSectionHtml(sec);
 
                 var links = sec.querySelectorAll('.sidebar-section .sidebar-link');
                 for (var i = 0; i < links.length; i++) {
-                    var a = links[i];
-                    var text = a.querySelector('.menu-text');
-                    if (!text) continue;
-                    items.push({
-                        text: text.textContent.trim(),
-                        href: a.getAttribute('href') || '#',
-                        active: a.classList.contains('active'),
-                        section: sectionTitle
-                    });
-                    sectionTitle = null;
+                    var item = extractItem(links[i], sectionHtml);
+                    if (item) {
+                        items.push(item);
+                        sectionHtml = null;
+                    }
                 }
             }
         } else {
             // Flat sidebar (e.g., Recipes, custom sections)
             var links = sidebar.querySelectorAll('.sidebar-item .sidebar-link');
             for (var i = 0; i < links.length; i++) {
-                var a = links[i];
-                var text = a.querySelector('.menu-text');
-                if (!text) continue;
-                items.push({
-                    text: text.textContent.trim(),
-                    href: a.getAttribute('href') || '#',
-                    active: a.classList.contains('active'),
-                    section: null
-                });
+                var item = extractItem(links[i], null);
+                if (item) items.push(item);
             }
         }
 
@@ -260,16 +277,23 @@
         var currentSection = null;
         for (var i = 0; i < items.length; i++) {
             var item = items[i];
-            // Section divider
+            // Section divider — use rich HTML (with icon) when available
             if (item.section && item.section !== currentSection) {
                 currentSection = item.section;
                 html += '<li class="gd-menu-section" aria-hidden="true">' +
-                        escapeHtml(currentSection) + '</li>';
+                        (typeof currentSection === 'string' && currentSection.indexOf('<') !== -1
+                            ? currentSection
+                            : escapeHtml(currentSection)) + '</li>';
             }
             var activeClass = item.active ? ' gd-menu-item-active' : '';
+            // Use rich innerHTML (icon + text) when available, else plain text
+            var label = item.html || escapeHtml(item.text);
+            var badge = item.badgeHtml || '';
+            var upcoming = item.upcomingHtml || '';
             html += '<li><a class="gd-menu-item' + activeClass +
                     '" href="' + escapeHtml(item.href) + '">' +
-                    escapeHtml(item.text) + '</a></li>';
+                    '<span class="gd-menu-item-label">' + label + badge + '</span>' +
+                    upcoming + '</a></li>';
         }
 
         html += '</ul>';
@@ -360,15 +384,53 @@
             }
         });
 
+        // Lock body scroll and add backdrop blur on mobile
+        document.body.classList.add('gd-menu-open');
+
+        // On mobile, force headroom into the "unpinned" state so the
+        // full navbar slides up and only the Title Bar stays visible.
+        // This prevents the overlay card from appearing behind a tall
+        // header when the user is at the top of the page or has just
+        // scrolled up.
+        var header = document.querySelector('#quarto-header');
+        var didFreezeHeadroom = false;
+        if (header && window.matchMedia('(max-width: 991.98px)').matches) {
+            header.classList.remove('headroom--pinned');
+            header.classList.add('headroom--unpinned');
+            // Freeze headroom via Quarto's toggle so it doesn't re-pin
+            if (typeof window.quartoToggleHeadroom === 'function') {
+                window.quartoToggleHeadroom(); // freeze
+                didFreezeHeadroom = true;
+            }
+        }
+        // Store so hideMenu can unfreeze only if we froze
+        showMenu._frozeHeadroom = didFreezeHeadroom;
+
         // Force reflow then show
         void menuOverlay.offsetWidth;
         menuOverlay.classList.add('gd-menu-overlay-visible');
         isMenuOpen = true;
+
+        // Auto-scroll the active item into view (centered)
+        requestAnimationFrame(function() {
+            var activeItem = menuOverlay.querySelector('.gd-menu-item-active');
+            if (activeItem) {
+                activeItem.scrollIntoView({ block: 'center', behavior: 'instant' });
+            }
+        });
     }
 
     function hideMenu() {
         if (!menuOverlay) return;
         menuOverlay.classList.remove('gd-menu-overlay-visible');
+        document.body.classList.remove('gd-menu-open');
+
+        // Resume headroom so it can pin/unpin normally again
+        if (showMenu._frozeHeadroom && typeof window.quartoToggleHeadroom === 'function') {
+            window.quartoToggleHeadroom(); // unfreeze
+            showMenu._frozeHeadroom = false;
+        }
+
         isMenuOpen = false;
         menuSelectedIndex = -1;
         // Remove after transition
@@ -728,4 +790,11 @@
     } else {
         init();
     }
+
+    // Expose menu API so the sidebar toggle button can reuse it
+    window.__gdMenu = {
+        show: showMenu,
+        hide: hideMenu,
+        isOpen: function() { return isMenuOpen; }
+    };
 })();

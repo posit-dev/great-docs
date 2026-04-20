@@ -1069,6 +1069,18 @@ div.sidebar-item-container {
         min-height: 0;
         overflow-y: auto;
     }
+
+    /* Smoother open/close transition for the sidebar.
+       Bootstrap collapse-horizontal animates width; we just improve the
+       easing and prevent content reflow by pinning inner min-width. */
+    #quarto-sidebar.sidebar-navigation.collapsing {
+        transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        overflow: hidden;
+
+        > .sidebar-menu-container {
+            min-width: 280px;
+        }
+    }
 }
 
 /* ── Single-page section: expand content into sidebar space ──
@@ -1531,13 +1543,69 @@ div.sourceCode:hover > .gd-code-nav .gd-code-copy,
 
 /* Adjust mobile secondary nav positioning */
 @media (max-width: 991.98px) {
-    #quarto-header .container-fluid.d-flex {
+    #quarto-header > .navbar .container-fluid.d-flex {
         margin-left: 0;
         padding-left: 5px;
     }
 
+    /* Vertically center the toggle button and title in the secondary nav */
+    .quarto-secondary-nav .container-fluid.d-flex {
+        align-items: center;
+        padding-left: 1rem;
+    }
+
     .quarto-secondary-nav-title {
-        padding-top: 7px;
+        padding-top: 0;
+        margin-bottom: 0.5rem;
+        padding-left: 0.5rem;
+    }
+
+    /* Style the sidebar toggle to match the top-nav icon buttons */
+    .quarto-secondary-nav .quarto-btn-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        background: rgba(0, 0, 0, 0.06);
+        border: 1px solid rgba(0, 0, 0, 0.15);
+        border-radius: 6px;
+        color: #495057;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin-right: 6px;
+        flex-shrink: 0;
+
+        .bi {
+            font-size: 1.15rem;
+            line-height: 1;
+        }
+
+        &:hover {
+            background: rgba(0, 0, 0, 0.10);
+            border-color: rgba(0, 0, 0, 0.25);
+        }
+
+        &:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.15);
+        }
+    }
+
+    body.quarto-dark .quarto-secondary-nav .quarto-btn-toggle {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.18);
+        color: #dee2e6;
+
+        &:hover {
+            background: rgba(255, 255, 255, 0.14);
+            border-color: rgba(255, 255, 255, 0.28);
+        }
+
+        &:focus {
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+        }
     }
 
     /* Move margin/sidebar content below main content on mobile (like pkgdown) */
@@ -3646,6 +3714,10 @@ body.quarto-dark .source-link:hover {
         background-color: var(--gd-bg-secondary);
         border-bottom-color: var(--gd-border-color);
     }
+
+    body.quarto-dark header.headroom--unpinned .quarto-secondary-nav {
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    }
 }
 
 /* ==========================================================================
@@ -4314,6 +4386,23 @@ html[data-bs-theme="dark"] .gd-content-glow-mint  { --gd-glow-color: #00695c; }
 @media (min-width: 992px) {
     header.headroom--unpinned {
         transform: translateY(0%) !important;
+    }
+}
+
+/* Mobile: keep secondary nav (sidebar toggle + page title) always visible.
+   When headroom hides the header via translateY(-100%), the secondary nav
+   counter-translates by its own height so it stays at viewport top.
+   Math: parent moves -(navH+secH), child moves +secH → viewport y = 0. */
+@media (max-width: 991.98px) {
+    .quarto-secondary-nav {
+        position: relative;
+        z-index: 1;
+        transition: transform 200ms linear, box-shadow 200ms linear;
+    }
+
+    header.headroom--unpinned .quarto-secondary-nav {
+        transform: translateY(100%);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     }
 }
 
@@ -5571,7 +5660,8 @@ kbd {
 }
 
 .gd-menu-item {
-    display: block;
+    display: flex;
+    align-items: center;
     padding: 0.45rem 0.75rem;
     border-radius: 0.4rem;
     color: #495057;
@@ -5590,6 +5680,49 @@ kbd {
         outline-offset: -2px;
         background: rgba(0, 0, 0, 0.03);
     }
+}
+
+/* Label contains icon + text + inline badge; fills remaining space */
+.gd-menu-item-label {
+    flex: 1 1 auto;
+    min-width: 0;
+
+    /* Sidebar icons inside the overlay */
+    .gd-nav-icon {
+        flex-shrink: 0;
+        width: 15px;
+        height: 15px;
+        margin-right: 0.4em;
+        vertical-align: -0.15em;
+        opacity: 0.7;
+    }
+
+    /* Status badges sit inline right after the text */
+    .gd-sidebar-status-badge {
+        margin-left: 4px;
+        vertical-align: middle;
+    }
+}
+
+.gd-menu-item:hover .gd-nav-icon,
+.gd-menu-item-active .gd-nav-icon {
+    opacity: 1;
+}
+
+/* Upcoming rocket icon — pushed to the far right of the row */
+.gd-menu-item > .gd-sidebar-upcoming {
+    flex-shrink: 0;
+    margin-left: auto;
+    padding-left: 6px;
+}
+
+/* Section headers with icons */
+.gd-menu-section .gd-nav-icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 0.35em;
+    vertical-align: -0.1em;
+    opacity: 0.6;
 }
 
 .gd-menu-item-active {
@@ -5660,6 +5793,76 @@ kbd {
     .gd-menu-overlay,
     .gd-menu-overlay-inner {
         transition: none;
+    }
+}
+
+/* ── Mobile menu overlay refinements ──
+   When opened via the Title Bar button the overlay acts as the primary
+   sidebar navigation.  We add backdrop blur, scroll lock, keep the
+   Title Bar visible above the overlay, and use fixed-height inner
+   scrolling so the card borders stay in place for long nav lists. */
+
+/* Scroll lock: prevent body from scrolling while menu is open */
+body.gd-menu-open {
+    overflow: hidden;
+}
+
+@media (max-width: 991.98px) {
+    /* Suppress Bootstrap's collapse sidebar on mobile — the overlay
+       replaces it entirely.  The sidebar DOM stays in the page so
+       keyboard-nav.js can still read its links. */
+    #quarto-sidebar {
+        display: none !important;
+    }
+
+    #quarto-sidebar-glass {
+        display: none !important;
+    }
+
+    /* Backdrop blur behind the overlay */
+    .gd-menu-overlay {
+        -webkit-backdrop-filter: blur(6px);
+        backdrop-filter: blur(6px);
+    }
+
+    /* Keep the Title Bar above the overlay when the menu is open.
+       The Title Bar lives inside #quarto-header, so we raise the
+       header's z-index above the overlay (1090) while the menu is
+       active.  The top navbar stays behind the overlay so only the
+       Title Bar peeks through. */
+    body.gd-menu-open #quarto-header {
+        z-index: 1091;
+    }
+
+    body.gd-menu-open #quarto-header > .navbar {
+        position: relative;
+        z-index: -1;
+    }
+
+    /* Size the card to sit below the Title Bar with internal scrolling.
+       margin-top  15px → breathing room below the Title Bar
+       margin-bottom 20px → clearance for mobile Safari bottom chrome */
+    .gd-menu-overlay-inner {
+        width: calc(100% - 2rem);
+        max-width: 420px;
+        max-height: calc(100vh - 5rem - 35px);
+        margin-top: 15px;
+        margin-bottom: 20px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Fixed header, scrollable body */
+    .gd-menu-overlay-body {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 0 -1.5rem -1.5rem;
+        padding: 0 1.5rem 1.5rem;
+    }
+
+    .gd-menu-overlay-header {
+        flex-shrink: 0;
     }
 }
 
