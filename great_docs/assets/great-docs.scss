@@ -1560,6 +1560,54 @@ div.sourceCode:hover > .gd-code-nav .gd-code-copy,
         padding-left: 0.5rem;
     }
 
+    /* Reference title bar: "API / ObjectName" or "CLI / cmd" */
+    .gd-ref-title {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        padding-top: 0;
+        padding-left: 0.5rem;
+        color: #6c757d;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .gd-ref-title-prefix {
+        font-weight: 600;
+        color: #495057;
+        flex-shrink: 0;
+    }
+
+    .gd-ref-title-sep {
+        margin: 0 0.4em;
+        color: #adb5bd;
+        flex-shrink: 0;
+    }
+
+    .gd-ref-title-name {
+        font-family: $font-family-monospace;
+        font-size: 18px;
+        color: #495057;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        position: relative;
+        top: 2px;
+    }
+
+    body.quarto-dark .gd-ref-title {
+        color: #868e96;
+    }
+
+    body.quarto-dark .gd-ref-title-prefix,
+    body.quarto-dark .gd-ref-title-name {
+        color: #ced4da;
+    }
+
+    body.quarto-dark .gd-ref-title-sep {
+        color: #6c757d;
+    }
+
     /* Style the sidebar toggle to match the top-nav icon buttons */
     .quarto-secondary-nav .quarto-btn-toggle {
         display: flex;
@@ -5864,6 +5912,122 @@ body.gd-menu-open {
     .gd-menu-overlay-header {
         flex-shrink: 0;
     }
+}
+
+/* ── Reference overlay: API/CLI switcher + filter inside menu overlay ──
+   On reference pages the overlay includes the reference switcher and a
+   live-filter input above the item list. */
+.gd-menu-overlay .gd-menu-ref-switcher {
+    display: flex;
+    gap: 0.25rem;
+    background: #f0f0f0;
+    border-radius: 6px;
+    padding: 0.2rem;
+    margin-bottom: 0.75rem;
+}
+
+.gd-menu-overlay .gd-menu-ref-switcher-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.5rem;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: #666;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.gd-menu-overlay .gd-menu-ref-switcher-btn:hover {
+    background: rgba(255, 255, 255, 0.5);
+    color: #333;
+}
+
+.gd-menu-overlay .gd-menu-ref-switcher-btn.active {
+    background: #fff;
+    color: #333;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.gd-menu-overlay .gd-menu-ref-filter {
+    position: relative;
+    margin-bottom: 0.5rem;
+}
+
+.gd-menu-overlay .gd-menu-ref-filter-input {
+    width: 100%;
+    padding: 0.4rem 0.75rem 0.4rem 2rem;
+    font-size: 16px; /* prevent iOS zoom */
+    border: 1px solid #e9e9e9;
+    border-radius: 6px;
+    background-color: #fff;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.gd-menu-overlay .gd-menu-ref-filter-input:focus {
+    outline: none;
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.12);
+}
+
+.gd-menu-overlay .gd-menu-ref-filter-input::placeholder {
+    color: #999;
+}
+
+.gd-menu-overlay .gd-menu-ref-filter-icon {
+    position: absolute;
+    left: 0.6rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #999;
+    pointer-events: none;
+    font-size: 0.8rem;
+}
+
+/* Dark mode overrides for reference overlay widgets */
+[data-bs-theme="dark"] .gd-menu-overlay .gd-menu-ref-switcher {
+    background: #2a2a2a;
+}
+
+[data-bs-theme="dark"] .gd-menu-overlay .gd-menu-ref-switcher-btn {
+    color: #999;
+}
+
+[data-bs-theme="dark"] .gd-menu-overlay .gd-menu-ref-switcher-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ccc;
+}
+
+[data-bs-theme="dark"] .gd-menu-overlay .gd-menu-ref-switcher-btn.active {
+    background: #3a3a3a;
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+[data-bs-theme="dark"] .gd-menu-overlay .gd-menu-ref-filter-input {
+    background-color: #2a2a2a;
+    border-color: #3d3d3d;
+    color: #e0e0e0;
+}
+
+[data-bs-theme="dark"] .gd-menu-overlay .gd-menu-ref-filter-input:focus {
+    border-color: #6ea8fe;
+    box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.25);
+}
+
+[data-bs-theme="dark"] .gd-menu-overlay .gd-menu-ref-filter-icon {
+    color: #9e9e9e;
+}
+
+/* Reference overlay items: monospace to match the desktop sidebar */
+.gd-ref-sidebar .gd-menu-overlay .gd-menu-item {
+    font-family: $font-family-monospace;
+    font-size: 0.8rem;
 }
 
 

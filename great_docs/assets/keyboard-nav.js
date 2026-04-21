@@ -214,6 +214,19 @@
 
         if (sections.length > 0) {
             // Sectioned sidebar (e.g., User Guide pages)
+            // First, capture any top-level links outside sections (e.g., "API Index")
+            var menuContainer = sidebar.querySelector('.sidebar-menu-container');
+            if (menuContainer) {
+                var topLis = menuContainer.querySelectorAll(':scope > ul > li.sidebar-item:not(.sidebar-item-section)');
+                for (var t = 0; t < topLis.length; t++) {
+                    var topLink = topLis[t].querySelector('.sidebar-link');
+                    if (topLink) {
+                        var topItem = extractItem(topLink, null);
+                        if (topItem) items.push(topItem);
+                    }
+                }
+            }
+
             for (var s = 0; s < sections.length; s++) {
                 var sec = sections[s];
                 var sectionHtml = extractSectionHtml(sec);
@@ -240,6 +253,266 @@
     }
 
     /**
+     * Detect whether the current page is a Reference page (API or CLI).
+     */
+    function isReferencePage() {
+        return document.body.classList.contains('gd-ref-sidebar');
+    }
+
+    /**
+     * Detect whether the current page is CLI Reference (vs API Reference).
+     */
+    function isCliReferencePage() {
+        return window.location.pathname.indexOf('/reference/cli/') !== -1;
+    }
+
+    /**
+     * Check if CLI Reference docs exist (switcher should show both tabs).
+     */
+    function hasCliReference() {
+        // Check multiple signals: the reference-switcher widget (injected by
+        // reference-switcher.js into the hidden sidebar), any <a> to CLI docs,
+        // or being on a CLI page itself.
+        return !!document.querySelector('.reference-switcher-container') ||
+               !!document.querySelector('a[href*="/reference/cli/"]') ||
+               isCliReferencePage();
+    }
+
+    /**
+     * Build the reference switcher HTML (API / CLI tabs).
+     */
+    function buildRefSwitcherHtml() {
+        if (!hasCliReference()) return '';
+        var isCli = isCliReferencePage();
+        var apiLabel = _gdT('api', 'API');
+        var cliLabel = _gdT('cli', 'CLI');
+        var html = '<div class="gd-menu-ref-switcher">';
+        html += '<button class="gd-menu-ref-switcher-btn' + (isCli ? '' : ' active') + '" data-ref="api">';
+        html += '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>';
+        html += '<span>' + escapeHtml(apiLabel) + '</span></button>';
+        html += '<button class="gd-menu-ref-switcher-btn' + (isCli ? ' active' : '') + '" data-ref="cli">';
+        html += '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>';
+        html += '<span>' + escapeHtml(cliLabel) + '</span></button>';
+        html += '</div>';
+        return html;
+    }
+
+    /**
+     * Build the reference filter input HTML.
+     */
+    function buildRefFilterHtml(itemCount) {
+        if (itemCount < 15) return '';
+        var placeholder = _gdT('sidebar_filter_placeholder', 'Filter...');
+        var html = '<div class="gd-menu-ref-filter">';
+        html += '<svg class="gd-menu-ref-filter-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>';
+        html += '<input type="text" class="gd-menu-ref-filter-input" placeholder="' + escapeHtml(placeholder) + '" aria-label="' + escapeHtml(placeholder) + '">';
+        html += '</div>';
+        return html;
+    }
+
+    /**
+     * Attach filter behaviour to the overlay for reference pages.
+     */
+    function attachRefFilter(overlay) {
+        var input = overlay.querySelector('.gd-menu-ref-filter-input');
+        if (!input) return;
+
+        input.addEventListener('input', function() {
+            var query = input.value.toLowerCase().trim();
+            var items = overlay.querySelectorAll('.gd-menu-item');
+            var sections = overlay.querySelectorAll('.gd-menu-section');
+
+            // Show/hide items based on text match
+            for (var i = 0; i < items.length; i++) {
+                var text = items[i].textContent.toLowerCase();
+                items[i].parentElement.style.display = (!query || text.indexOf(query) !== -1) ? '' : 'none';
+            }
+
+            // Show section headers only if at least one child item is visible
+            for (var s = 0; s < sections.length; s++) {
+                var li = sections[s];
+                var next = li.nextElementSibling;
+                var anyVisible = false;
+                while (next && !next.classList.contains('gd-menu-section')) {
+                    if (next.style.display !== 'none') anyVisible = true;
+                    next = next.nextElementSibling;
+                }
+                li.style.display = anyVisible ? '' : 'none';
+            }
+        });
+
+        // Focus filter on open (after transition)
+        setTimeout(function() { input.focus(); }, 220);
+    }
+
+    /**
+     * Parse sidebar items from an HTML string (fetched from another page).
+     * Returns an array of {text, html, href, section} objects.
+     */
+    function parseSidebarItemsFromHtml(htmlStr, baseUrl) {
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(htmlStr, 'text/html');
+        var sidebar = doc.getElementById('quarto-sidebar');
+        if (!sidebar) return [];
+
+        var items = [];
+        var sections = sidebar.querySelectorAll('.sidebar-item-section');
+
+        // Resolve relative URLs against the fetched page's base
+        var fullBase = new URL(baseUrl, window.location.origin).href;
+        function resolveHref(href) {
+            if (!href || href === '#') return '#';
+            try { return new URL(href, fullBase).pathname; }
+            catch (e) { return href; }
+        }
+
+        function extractParsedItem(a, sectionText) {
+            var menuText = a.querySelector('.menu-text');
+            if (!menuText) return null;
+            return {
+                text: menuText.textContent.trim(),
+                html: menuText.innerHTML,
+                href: resolveHref(a.getAttribute('href')),
+                active: false,
+                section: sectionText
+            };
+        }
+
+        // Top-level links (like "CLI Index" or "API Index")
+        var menuContainer = sidebar.querySelector('.sidebar-menu-container');
+        if (menuContainer) {
+            var topLis = menuContainer.querySelectorAll(':scope > ul > li.sidebar-item:not(.sidebar-item-section)');
+            for (var t = 0; t < topLis.length; t++) {
+                var topLink = topLis[t].querySelector('.sidebar-link');
+                if (topLink) {
+                    var topItem = extractParsedItem(topLink, null);
+                    if (topItem) items.push(topItem);
+                }
+            }
+        }
+
+        if (sections.length > 0) {
+            for (var s = 0; s < sections.length; s++) {
+                var sec = sections[s];
+                var headerEl = sec.querySelector(':scope > .sidebar-item-container .menu-text') ||
+                               sec.querySelector(':scope > .sidebar-item-container .sidebar-item-text');
+                var sectionText = headerEl ? headerEl.innerHTML : null;
+                var links = sec.querySelectorAll('.sidebar-section .sidebar-link');
+                for (var i = 0; i < links.length; i++) {
+                    var item = extractParsedItem(links[i], sectionText);
+                    if (item) {
+                        items.push(item);
+                        sectionText = null;
+                    }
+                }
+            }
+        } else {
+            var flatLinks = sidebar.querySelectorAll('.sidebar-item .sidebar-link');
+            for (var i = 0; i < flatLinks.length; i++) {
+                var item = extractParsedItem(flatLinks[i], null);
+                if (item) items.push(item);
+            }
+        }
+
+        return items;
+    }
+
+    /**
+     * Render items into the overlay list (replacing current contents).
+     */
+    function renderItemsInOverlay(overlay, items) {
+        var listEl = overlay.querySelector('.gd-menu-list');
+        if (!listEl) return;
+
+        var html = '';
+        var currentSection = null;
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            if (item.section && item.section !== currentSection) {
+                currentSection = item.section;
+                html += '<li class="gd-menu-section" aria-hidden="true">' +
+                        (typeof currentSection === 'string' && currentSection.indexOf('<') !== -1
+                            ? currentSection
+                            : escapeHtml(currentSection)) + '</li>';
+            }
+            var activeClass = item.active ? ' gd-menu-item-active' : '';
+            var label = item.html || escapeHtml(item.text);
+            html += '<li><a class="gd-menu-item' + activeClass +
+                    '" href="' + escapeHtml(item.href) + '">' +
+                    '<span class="gd-menu-item-label">' + label + '</span>' +
+                    '</a></li>';
+        }
+        listEl.innerHTML = html;
+
+        // Clear filter input if present
+        var filterInput = overlay.querySelector('.gd-menu-ref-filter-input');
+        if (filterInput) {
+            filterInput.value = '';
+            filterInput.dispatchEvent(new Event('input'));
+        }
+    }
+
+    /**
+     * Attach switcher behaviour: clicking a tab fetches items from the
+     * other reference section and swaps the list in the overlay without
+     * navigating away.
+     */
+    function attachRefSwitcher(overlay) {
+        var buttons = overlay.querySelectorAll('.gd-menu-ref-switcher-btn');
+        if (!buttons.length) return;
+
+        var basePath = window.location.pathname.split('/reference/')[0];
+        var cache = {}; // cache fetched items by ref type
+
+        // Pre-populate current section's items from what's already rendered
+        var currentType = isCliReferencePage() ? 'cli' : 'api';
+        // (No need to cache — the overlay already shows these)
+
+        buttons.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var refType = btn.getAttribute('data-ref');
+
+                // Update active state on buttons
+                buttons.forEach(function(b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+
+                // If switching to the section we're already on, re-render from sidebar
+                if (refType === currentType) {
+                    var items = getSidebarItems();
+                    renderItemsInOverlay(overlay, items);
+                    return;
+                }
+
+                // If cached, render immediately
+                if (cache[refType]) {
+                    renderItemsInOverlay(overlay, cache[refType]);
+                    return;
+                }
+
+                // Fetch the other section's index page and parse its sidebar
+                var url = refType === 'cli'
+                    ? basePath + '/reference/cli/index.html'
+                    : basePath + '/reference/index.html';
+
+                fetch(url)
+                    .then(function(res) { return res.text(); })
+                    .then(function(htmlStr) {
+                        var items = parseSidebarItemsFromHtml(htmlStr, url);
+                        cache[refType] = items;
+                        // Only render if this tab is still active
+                        if (btn.classList.contains('active')) {
+                            renderItemsInOverlay(overlay, items);
+                        }
+                    })
+                    .catch(function() {
+                        // On error, fall back to navigation
+                        window.location.href = url;
+                    });
+            });
+        });
+    }
+
+    /**
      * Create the floating menu overlay element.
      */
     function createMenuOverlay() {
@@ -251,10 +524,18 @@
             _gdT('kb_show_menu', 'Show menu'));
 
         var homepage = isHomepage();
+        var refPage = isReferencePage();
         var items = homepage ? getNavbarItems() : getSidebarItems();
-        var title = homepage
-            ? _gdT('kb_menu_title_site', 'Site Navigation')
-            : _gdT('kb_menu_title_section', 'Section Navigation');
+        var title;
+        if (homepage) {
+            title = _gdT('kb_menu_title_site', 'Site Navigation');
+        } else if (refPage) {
+            title = isCliReferencePage()
+                ? _gdT('cli_reference', 'CLI Reference')
+                : _gdT('api_reference', 'API Reference');
+        } else {
+            title = _gdT('kb_menu_title_section', 'Section Navigation');
+        }
 
         var html = '<div class="gd-menu-overlay-inner">';
         html += '<div class="gd-menu-overlay-header">';
@@ -270,6 +551,12 @@
                 '</svg>';
         html += '</button>';
         html += '</div>';
+
+        // Reference pages: inject switcher + filter before the list
+        if (refPage) {
+            html += buildRefSwitcherHtml();
+            html += buildRefFilterHtml(items.length);
+        }
 
         html += '<nav class="gd-menu-overlay-body" aria-label="' + escapeHtml(title) + '">';
         html += '<ul class="gd-menu-list">';
@@ -300,6 +587,13 @@
         html += '</nav></div>';
 
         el.innerHTML = html;
+
+        // Attach reference-specific interactivity
+        if (refPage) {
+            attachRefSwitcher(el);
+            attachRefFilter(el);
+        }
+
         return el;
     }
 
