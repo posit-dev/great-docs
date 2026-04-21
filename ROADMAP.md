@@ -4,16 +4,6 @@
 
 High-value features that build on existing infrastructure.
 
-### Multi-Version Documentation
-
-A version selector dropdown backed by versioned deployments.
-
-- Deploy docs per release tag
-- Version dropdown in the navbar
-- "Outdated version" warning banners
-- Inter-version linking
-- Storage strategy: subdirectories (`/v1.2/`, `/latest/`) on GitHub Pages
-
 ### Author Attribution & Avatars
 
 Display author information with circular GitHub-style avatars on authored pages.
@@ -72,14 +62,6 @@ API-reference-style rendering for CLI applications.
 ## Planned — Medium Term
 
 Features that expand the scope of what Great Docs can produce.
-
-### API Version Badges
-
-Surface "Added in version X" and "Deprecated in version Y" badges automatically.
-
-- Parse version annotations from docstrings or decorators
-- Diff consecutive versions to detect additions, removals, signature changes
-- Deprecation warning callouts in rendered docs
 
 ### Analytics Integration
 
