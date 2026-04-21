@@ -2819,8 +2819,23 @@ for html_file in html_files:
     main_end_replacement = '</main>\n<hr style="padding: 0; margin: 0;">\n'
     content_str = re.sub(main_end_pattern, main_end_replacement, content_str)
 
-    # Remove breadcrumb navigation (redundant with sidebar)
+    # Replace breadcrumb with a "API / object_name" title bar label.
+    # Extract the display name from the doc-object-name span (includes parens
+    # for callables like methods/functions).
+    _api_label = _t("api", "API")
+    _obj_name_match = re.search(r'<span class="doc-object-name[^"]*">([^<]+)</span>', content_str)
+    _display_name = _obj_name_match.group(1) if _obj_name_match else item_name_from_file
+    _ref_title_html = (
+        f'<h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title">'
+        f'<span class="gd-ref-title-prefix">{_api_label}</span>'
+        f'<span class="gd-ref-title-sep">/</span>'
+        f'<span class="gd-ref-title-name">{html.escape(_display_name)}</span>'
+        f"</h1>"
+    )
     breadcrumb_pattern = r'<nav class="quarto-page-breadcrumbs[^"]*"[^>]*>.*?</nav>'
+    # Replace only the first breadcrumb (in the secondary nav bar, outside <main>);
+    # a second breadcrumb may exist inside the title-block-header — remove it.
+    content_str = re.sub(breadcrumb_pattern, _ref_title_html, content_str, count=1, flags=re.DOTALL)
     content_str = re.sub(breadcrumb_pattern, "", content_str, flags=re.DOTALL)
 
     # Shift all heading levels down by 1 within <main> content so that
@@ -2935,6 +2950,12 @@ if os.path.exists(index_file):
 
     # Translate renderer-rendered headings, TOC, and sidebar on the index page
     content = translate_renderer_headings(content)
+
+    # Replace breadcrumb with a "Reference" title bar label
+    _reference_label = _t("reference", "Reference")
+    _ref_idx_title = f'<h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title">{html.escape(_reference_label)}</h1>'
+    _bc_pat = r'<nav class="quarto-page-breadcrumbs[^"]*"[^>]*>.*?</nav>'
+    content = re.sub(_bc_pat, _ref_idx_title, content, flags=re.DOTALL)
 
     with open(index_file, "w", encoding="utf-8") as file:
         file.write(content)
@@ -3237,6 +3258,32 @@ def process_cli_reference_pages():
         # Add 'cli-title' class to h1.title elements
         # This matches the pattern: <h1 class="title">
         content = content.replace('<h1 class="title">', '<h1 class="title cli-title">')
+
+        # Replace breadcrumb with a "CLI / great-docs cmd" title bar label
+        cmd_name = os.path.basename(html_file).replace(".html", "")
+        _cli_label = _t("cli", "CLI")
+        _bc_pat = r'<nav class="quarto-page-breadcrumbs[^"]*"[^>]*>.*?</nav>'
+        if cmd_name != "index":
+            # Extract full command name from the page title (e.g., "great-docs init")
+            _title_match = re.search(r'<h1 class="title[^"]*">([^<]+)</h1>', content)
+            _full_cmd = _title_match.group(1).strip() if _title_match else f"great-docs {cmd_name}"
+            _cli_title_html = (
+                f'<h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title">'
+                f'<span class="gd-ref-title-prefix">{_cli_label}</span>'
+                f'<span class="gd-ref-title-sep">/</span>'
+                f'<span class="gd-ref-title-name">{html.escape(_full_cmd)}</span>'
+                f"</h1>"
+            )
+        else:
+            # CLI index: show "CLI / great-docs"
+            _cli_title_html = (
+                f'<h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title">'
+                f'<span class="gd-ref-title-prefix">{_cli_label}</span>'
+                f'<span class="gd-ref-title-sep">/</span>'
+                f'<span class="gd-ref-title-name">great-docs</span>'
+                f"</h1>"
+            )
+        content = re.sub(_bc_pat, _cli_title_html, content, flags=re.DOTALL)
 
         with open(html_file, "w", encoding="utf-8") as file:
             file.write(content)
