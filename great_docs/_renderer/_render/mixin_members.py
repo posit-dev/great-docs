@@ -325,9 +325,7 @@ class __RenderDocMembersMixin(RenderDoc):
             Attr(classes=[f"doc-{slug}"]),
         )
 
-        render_objs = [
-            Render(obj, self.level + 2, contained=True) for obj in docables
-        ]
+        render_objs = [Render(obj, self.level + 2, contained=True) for obj in docables]
 
         if self.show_members_summary and show_summary:
             rows = [row for r in render_objs for row in r.render_summary()]

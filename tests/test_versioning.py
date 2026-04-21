@@ -359,13 +359,7 @@ class TestProcessVersionFences:
         assert "Feature B content" in result
 
     def test_heading_badge_keeps_section_for_matching_version(self, versions):
-        content = (
-            "## Feature A [version-badge new 0.2]\n"
-            "\n"
-            "Feature A content.\n"
-            "\n"
-            "## Feature B\n"
-        )
+        content = "## Feature A [version-badge new 0.2]\n\nFeature A content.\n\n## Feature B\n"
         result = process_version_fences(content, "0.3", versions)
         assert "Feature A" in result
         assert "Feature A content" in result
@@ -433,13 +427,7 @@ class TestProcessVersionFences:
 
     def test_heading_badge_changed_not_removed(self, versions):
         """changed badges do NOT trigger section removal."""
-        content = (
-            "## Feature [version-badge changed 0.3]\n"
-            "\n"
-            "Content here.\n"
-            "\n"
-            "## Next\n"
-        )
+        content = "## Feature [version-badge changed 0.3]\n\nContent here.\n\n## Next\n"
         result = process_version_fences(content, "0.1", versions)
         assert "Feature" in result
         assert "Content here" in result

@@ -1358,9 +1358,7 @@ class TestCLIIntegration:
             Path("docs/_quarto.yml").write_text("project:\n  type: website\n")
             Path("user_guide/test.md").write_text("https://localhost:8000/test")
 
-            result = runner.invoke(
-                cli, ["check-links", "--docs-only", "--json-output"]
-            )
+            result = runner.invoke(cli, ["check-links", "--docs-only", "--json-output"])
 
             # Find the JSON in the output (skip any prefix messages)
             output_lines = result.output.strip().split("\n")

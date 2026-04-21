@@ -22940,6 +22940,7 @@ def test_build_prepare_and_render_flow():
         mock_builder_class.from_quarto_config.return_value = mock_builder
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_refresh_api_reference_config"),
             patch.object(docs, "_generate_llms_txt"),
@@ -22991,6 +22992,7 @@ def test_build_no_api_reference():
         (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_refresh_api_reference_config"),
             patch.object(docs, "_generate_llms_txt"),
@@ -23042,6 +23044,7 @@ def test_build_dynamic_fallback_to_static():
         mock_builder_class.from_quarto_config.return_value = mock_builder
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_refresh_api_reference_config"),
             patch.object(docs, "_generate_llms_txt"),
@@ -23096,6 +23099,7 @@ def test_build_static_mode_failure_exits():
         mock_builder_class.from_quarto_config.return_value = mock_builder
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_refresh_api_reference_config"),
             patch.object(docs, "_generate_llms_txt"),
@@ -23140,6 +23144,7 @@ def test_build_non_dynamic_failure_exits():
         mock_builder_class.from_quarto_config.return_value = mock_builder
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_refresh_api_reference_config"),
             patch.object(docs, "_generate_llms_txt"),
@@ -23179,6 +23184,7 @@ def test_build_with_changelog():
         (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
@@ -23226,6 +23232,7 @@ def test_build_changelog_error_handled():
         (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
@@ -23273,6 +23280,7 @@ def test_build_with_cli_documentation():
         cli_files = [{"path": "cli/index.qmd"}]
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
@@ -23322,6 +23330,7 @@ def test_build_with_sections():
         (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
@@ -23362,6 +23371,7 @@ def test_build_with_assets_triggers_config_update():
         (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
@@ -23402,6 +23412,7 @@ def test_build_watch_mode():
         (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
@@ -23435,6 +23446,7 @@ def test_build_quarto_render_failure():
         (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
@@ -23473,6 +23485,7 @@ def test_build_cli_error_handled():
         (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
@@ -26118,6 +26131,7 @@ def test_build_section_error_handled():
         (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
@@ -26157,6 +26171,7 @@ def test_build_user_guide_error_handled():
         (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
@@ -26195,6 +26210,7 @@ def test_build_copy_assets_error_handled():
         (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
@@ -26233,6 +26249,7 @@ def test_build_changelog_no_releases():
         (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
@@ -26276,6 +26293,7 @@ def test_build_changelog_no_repo():
         (Path(tmp_dir) / "great-docs.yml").write_text("", encoding="utf-8")
 
         with (
+            patch("great_docs.core._ensure_quarto_installed"),
             patch.object(docs, "_prepare_build_directory"),
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),

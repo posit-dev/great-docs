@@ -33,6 +33,22 @@ def _patch_griffe():
         griffe.AliasResolutionError = AliasResolutionError
 
 
+class QuartoNotFoundError(RuntimeError):
+    """Raised when the Quarto CLI is not available on the system."""
+
+
+def _ensure_quarto_installed() -> None:
+    if shutil.which("quarto") is not None:
+        return
+    raise QuartoNotFoundError(
+        "Quarto was not found on your system. Quarto is a system-level "
+        "dependency of great-docs and is not bundled with the Python package.\n\n"
+        "See the troubleshooting guide:\n"
+        "  https://posit-dev.github.io/great-docs/recipes/fix-common-build-errors.html\n\n"
+        "Or fetch the binary programmatically by using your OS package (brew, yum, winget)."
+    )
+
+
 class GreatDocs:
     """
     GreatDocs class for creating beautiful API documentation sites.
@@ -12531,6 +12547,8 @@ body-classes: "gd-homepage"
                 "great-docs.yml not found. Run 'great-docs init' first to "
                 "generate a configuration file."
             )
+
+        _ensure_quarto_installed()
 
         import re as _re_build
         import subprocess

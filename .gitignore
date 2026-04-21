@@ -166,3 +166,6 @@ test-packages/synthetic/_rendered/
 .DS_Store
 
 /.luarc.json
+
+# Bad practice to track lockfile if used as a package
+uv.lock

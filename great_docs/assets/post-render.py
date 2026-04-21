@@ -2184,7 +2184,7 @@ def translate_rst_math(html_content):
     # (original two-colon pattern from RST)
     new_content, count = re.subn(
         r"<p>\s*\.\.\s*math::\s*</p>\s*<pre><code>(.*?)</code></pre>",
-        lambda m: ('<p><span class="math display">\\[' + m.group(1).strip() + "\\]</span></p>"),
+        lambda m: '<p><span class="math display">\\[' + m.group(1).strip() + "\\]</span></p>",
         html_content,
         flags=re.DOTALL,
     )

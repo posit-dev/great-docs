@@ -5,6 +5,7 @@ import re
 from typing import TYPE_CHECKING, Protocol, Sequence
 
 if TYPE_CHECKING:
+
     class Stringable(Protocol):
         def __str__(self) -> str: ...
 
