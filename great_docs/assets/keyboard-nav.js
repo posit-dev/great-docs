@@ -346,21 +346,168 @@
     }
 
     /**
-     * Attach switcher navigation to the overlay for reference pages.
+     * Parse sidebar items from an HTML string (fetched from another page).
+     * Returns an array of {text, html, href, section} objects.
+     */
+    function parseSidebarItemsFromHtml(htmlStr, baseUrl) {
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(htmlStr, 'text/html');
+        var sidebar = doc.getElementById('quarto-sidebar');
+        if (!sidebar) return [];
+
+        var items = [];
+        var sections = sidebar.querySelectorAll('.sidebar-item-section');
+
+        // Resolve relative URLs against the fetched page's base
+        var fullBase = new URL(baseUrl, window.location.origin).href;
+        function resolveHref(href) {
+            if (!href || href === '#') return '#';
+            try { return new URL(href, fullBase).pathname; }
+            catch (e) { return href; }
+        }
+
+        function extractParsedItem(a, sectionText) {
+            var menuText = a.querySelector('.menu-text');
+            if (!menuText) return null;
+            return {
+                text: menuText.textContent.trim(),
+                html: menuText.innerHTML,
+                href: resolveHref(a.getAttribute('href')),
+                active: false,
+                section: sectionText
+            };
+        }
+
+        // Top-level links (like "CLI Index" or "API Index")
+        var menuContainer = sidebar.querySelector('.sidebar-menu-container');
+        if (menuContainer) {
+            var topLis = menuContainer.querySelectorAll(':scope > ul > li.sidebar-item:not(.sidebar-item-section)');
+            for (var t = 0; t < topLis.length; t++) {
+                var topLink = topLis[t].querySelector('.sidebar-link');
+                if (topLink) {
+                    var topItem = extractParsedItem(topLink, null);
+                    if (topItem) items.push(topItem);
+                }
+            }
+        }
+
+        if (sections.length > 0) {
+            for (var s = 0; s < sections.length; s++) {
+                var sec = sections[s];
+                var headerEl = sec.querySelector(':scope > .sidebar-item-container .menu-text') ||
+                               sec.querySelector(':scope > .sidebar-item-container .sidebar-item-text');
+                var sectionText = headerEl ? headerEl.innerHTML : null;
+                var links = sec.querySelectorAll('.sidebar-section .sidebar-link');
+                for (var i = 0; i < links.length; i++) {
+                    var item = extractParsedItem(links[i], sectionText);
+                    if (item) {
+                        items.push(item);
+                        sectionText = null;
+                    }
+                }
+            }
+        } else {
+            var flatLinks = sidebar.querySelectorAll('.sidebar-item .sidebar-link');
+            for (var i = 0; i < flatLinks.length; i++) {
+                var item = extractParsedItem(flatLinks[i], null);
+                if (item) items.push(item);
+            }
+        }
+
+        return items;
+    }
+
+    /**
+     * Render items into the overlay list (replacing current contents).
+     */
+    function renderItemsInOverlay(overlay, items) {
+        var listEl = overlay.querySelector('.gd-menu-list');
+        if (!listEl) return;
+
+        var html = '';
+        var currentSection = null;
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            if (item.section && item.section !== currentSection) {
+                currentSection = item.section;
+                html += '<li class="gd-menu-section" aria-hidden="true">' +
+                        (typeof currentSection === 'string' && currentSection.indexOf('<') !== -1
+                            ? currentSection
+                            : escapeHtml(currentSection)) + '</li>';
+            }
+            var activeClass = item.active ? ' gd-menu-item-active' : '';
+            var label = item.html || escapeHtml(item.text);
+            html += '<li><a class="gd-menu-item' + activeClass +
+                    '" href="' + escapeHtml(item.href) + '">' +
+                    '<span class="gd-menu-item-label">' + label + '</span>' +
+                    '</a></li>';
+        }
+        listEl.innerHTML = html;
+
+        // Clear filter input if present
+        var filterInput = overlay.querySelector('.gd-menu-ref-filter-input');
+        if (filterInput) {
+            filterInput.value = '';
+            filterInput.dispatchEvent(new Event('input'));
+        }
+    }
+
+    /**
+     * Attach switcher behaviour: clicking a tab fetches items from the
+     * other reference section and swaps the list in the overlay without
+     * navigating away.
      */
     function attachRefSwitcher(overlay) {
         var buttons = overlay.querySelectorAll('.gd-menu-ref-switcher-btn');
         if (!buttons.length) return;
 
         var basePath = window.location.pathname.split('/reference/')[0];
+        var cache = {}; // cache fetched items by ref type
+
+        // Pre-populate current section's items from what's already rendered
+        var currentType = isCliReferencePage() ? 'cli' : 'api';
+        // (No need to cache — the overlay already shows these)
+
         buttons.forEach(function(btn) {
             btn.addEventListener('click', function() {
                 var refType = btn.getAttribute('data-ref');
-                if (refType === 'cli') {
-                    window.location.href = basePath + '/reference/cli/index.html';
-                } else {
-                    window.location.href = basePath + '/reference/index.html';
+
+                // Update active state on buttons
+                buttons.forEach(function(b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+
+                // If switching to the section we're already on, re-render from sidebar
+                if (refType === currentType) {
+                    var items = getSidebarItems();
+                    renderItemsInOverlay(overlay, items);
+                    return;
                 }
+
+                // If cached, render immediately
+                if (cache[refType]) {
+                    renderItemsInOverlay(overlay, cache[refType]);
+                    return;
+                }
+
+                // Fetch the other section's index page and parse its sidebar
+                var url = refType === 'cli'
+                    ? basePath + '/reference/cli/index.html'
+                    : basePath + '/reference/index.html';
+
+                fetch(url)
+                    .then(function(res) { return res.text(); })
+                    .then(function(htmlStr) {
+                        var items = parseSidebarItemsFromHtml(htmlStr, url);
+                        cache[refType] = items;
+                        // Only render if this tab is still active
+                        if (btn.classList.contains('active')) {
+                            renderItemsInOverlay(overlay, items);
+                        }
+                    })
+                    .catch(function() {
+                        // On error, fall back to navigation
+                        window.location.href = url;
+                    });
             });
         });
     }
