@@ -104,9 +104,7 @@ class __RenderReferenceSection(RenderBase):
 
         from . import get_render_type
 
-        render_objs: list[RenderObjType] = [
-            get_render_type(c)(c) for c in self.section.contents
-        ]
+        render_objs: list[RenderObjType] = [get_render_type(c)(c) for c in self.section.contents]
         rows = [row for r in render_objs for row in r.render_summary()]
         items = DefinitionList(rows) if self.layout_format == "list" else html_table(rows)
         return items

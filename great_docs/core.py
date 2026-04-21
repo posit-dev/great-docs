@@ -45,8 +45,7 @@ def _ensure_quarto_installed() -> None:
         "dependency of great-docs and is not bundled with the Python package.\n\n"
         "See the troubleshooting guide:\n"
         "  https://posit-dev.github.io/great-docs/recipes/fix-common-build-errors.html\n\n"
-        "Or fetch the binary programmatically by running:\n"
-        "  great-docs install-quarto"
+        "Or fetch the binary programmatically by using your OS package (brew, yum, winget)."
     )
 
 

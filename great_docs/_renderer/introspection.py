@@ -416,7 +416,9 @@ class Builder:
         parser: str = "numpy",
         _fast_inventory: bool = False,
     ) -> None:
-        self.layout = layout.Layout(title, desc, sections=sections, package=package, options=options)
+        self.layout = layout.Layout(
+            title, desc, sections=sections, package=package, options=options
+        )
 
         self.package = package
         self.version = None
@@ -484,9 +486,7 @@ class Builder:
         from ._render.reference_page import RenderReferencePage
 
         _log.info("Summarizing docs for index page.")
-        content = str(
-            RenderReferencePage(blueprint_layout, self.header_level)
-        )
+        content = str(RenderReferencePage(blueprint_layout, self.header_level))
         _log.info(f"Writing index to directory: {self.dir}")
 
         p_index = Path(self.dir) / self.out_index
@@ -501,9 +501,7 @@ class Builder:
 
         for page in pages:
             _log.info(f"Rendering {page.path}")
-            rendered = str(
-                RenderAPIPage(page, self.header_level)
-            )
+            rendered = str(RenderAPIPage(page, self.header_level))
 
             # Merge page-navigation into existing frontmatter
             rendered = _merge_frontmatter(rendered, {"page-navigation": False})

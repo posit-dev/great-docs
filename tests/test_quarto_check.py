@@ -8,9 +8,7 @@ from great_docs import GreatDocs
 from great_docs.core import QuartoNotFoundError, _ensure_quarto_installed
 
 
-TROUBLESHOOTING_URL = (
-    "https://posit-dev.github.io/great-docs/recipes/fix-common-build-errors.html"
-)
+TROUBLESHOOTING_URL = "https://posit-dev.github.io/great-docs/recipes/fix-common-build-errors.html"
 
 
 def test_ensure_quarto_installed_passes_when_present(monkeypatch):
@@ -30,7 +28,6 @@ def test_ensure_quarto_installed_raises_when_missing(monkeypatch):
     msg = str(excinfo.value)
     assert "system-level dependency" in msg
     assert TROUBLESHOOTING_URL in msg
-    assert "great-docs install-quarto" in msg
 
 
 def test_quarto_not_found_error_is_runtime_error():
@@ -44,5 +41,5 @@ def test_build_raises_quarto_not_found_when_quarto_missing(monkeypatch):
         docs = GreatDocs(project_path=tmp_dir)
         docs.install(force=True)
 
-        with pytest.raises(QuartoNotFoundError, match="great-docs install-quarto"):
+        with pytest.raises(QuartoNotFoundError, match="great-docs"):
             docs.build()

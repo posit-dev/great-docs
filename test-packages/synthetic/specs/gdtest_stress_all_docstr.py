@@ -216,9 +216,7 @@ SPEC = {
                     """
                     return self._data
         ''',
-        "README.md": (
-            "# gdtest-stress-all-docstr\n\nStress test with every docstring feature.\n"
-        ),
+        "README.md": ("# gdtest-stress-all-docstr\n\nStress test with every docstring feature.\n"),
     },
     "expected": {
         "detected_name": "gdtest-stress-all-docstr",
