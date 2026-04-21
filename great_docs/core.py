@@ -1335,6 +1335,8 @@ class GreatDocs:
         # Map config properties to metadata dict for backward compatibility
         metadata["rich_authors"] = self._config.authors
         metadata["exclude"] = self._config.exclude
+        metadata["auto_include"] = self._config.auto_include
+        metadata["no_auto_exclude"] = self._config.no_auto_exclude
 
         # Source link configuration
         metadata["source_link_enabled"] = self._config.source_enabled
@@ -5487,9 +5489,27 @@ class GreatDocs:
             # Get config from great-docs.yml
             metadata = self._get_package_metadata()
             config_exclude = set(metadata.get("exclude", []))
+            auto_include = set(metadata.get("auto_include", []))
+            no_auto_exclude = metadata.get("no_auto_exclude", False)
+
+            # Determine effective auto-exclude set
+            if no_auto_exclude:
+                effective_auto_exclude: set[str] = set()
+                print("Auto-exclude list bypassed (no_auto_exclude: true)")
+            else:
+                effective_auto_exclude = self.AUTO_EXCLUDE - auto_include
+                if auto_include:
+                    forced = auto_include & self.AUTO_EXCLUDE
+                    if forced:
+                        print(
+                            f"Force-including {len(forced)} auto-excluded name(s): "
+                            f"{', '.join(sorted(forced))}"
+                        )
 
             # Apply auto-exclusions
-            auto_excluded_found = [name for name in public_members if name in self.AUTO_EXCLUDE]
+            auto_excluded_found = [
+                name for name in public_members if name in effective_auto_exclude
+            ]
             if auto_excluded_found:
                 print(
                     f"Auto-excluding {len(auto_excluded_found)} item(s): "
@@ -5497,7 +5517,7 @@ class GreatDocs:
                 )
 
             # Combine all exclusions (auto + user-specified)
-            all_exclude = self.AUTO_EXCLUDE | config_exclude
+            all_exclude = effective_auto_exclude | config_exclude
 
             # Filter out excluded items
             filtered = [name for name in public_members if name not in all_exclude]
@@ -5507,7 +5527,7 @@ class GreatDocs:
                 user_excluded_found = [
                     name
                     for name in public_members
-                    if name in config_exclude and name not in self.AUTO_EXCLUDE
+                    if name in config_exclude and name not in effective_auto_exclude
                 ]
                 if user_excluded_found:
                     print(
