@@ -378,20 +378,20 @@
             };
         }
 
-        // Top-level links (like "CLI Index" or "API Index")
-        var menuContainer = sidebar.querySelector('.sidebar-menu-container');
-        if (menuContainer) {
-            var topLis = menuContainer.querySelectorAll(':scope > ul > li.sidebar-item:not(.sidebar-item-section)');
-            for (var t = 0; t < topLis.length; t++) {
-                var topLink = topLis[t].querySelector('.sidebar-link');
-                if (topLink) {
-                    var topItem = extractParsedItem(topLink, null);
-                    if (topItem) items.push(topItem);
+        if (sections.length > 0) {
+            // Top-level links outside sections (like "API Index")
+            var menuContainer = sidebar.querySelector('.sidebar-menu-container');
+            if (menuContainer) {
+                var topLis = menuContainer.querySelectorAll(':scope > ul > li.sidebar-item:not(.sidebar-item-section)');
+                for (var t = 0; t < topLis.length; t++) {
+                    var topLink = topLis[t].querySelector('.sidebar-link');
+                    if (topLink) {
+                        var topItem = extractParsedItem(topLink, null);
+                        if (topItem) items.push(topItem);
+                    }
                 }
             }
-        }
 
-        if (sections.length > 0) {
             for (var s = 0; s < sections.length; s++) {
                 var sec = sections[s];
                 var headerEl = sec.querySelector(':scope > .sidebar-item-container .menu-text') ||
@@ -552,10 +552,9 @@
         html += '</button>';
         html += '</div>';
 
-        // Reference pages: inject switcher + filter before the list
+        // Reference pages: inject switcher before the list
         if (refPage) {
             html += buildRefSwitcherHtml();
-            html += buildRefFilterHtml(items.length);
         }
 
         html += '<nav class="gd-menu-overlay-body" aria-label="' + escapeHtml(title) + '">';
@@ -591,7 +590,6 @@
         // Attach reference-specific interactivity
         if (refPage) {
             attachRefSwitcher(el);
-            attachRefFilter(el);
         }
 
         return el;
