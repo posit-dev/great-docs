@@ -19,6 +19,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "jupyter": "python3",  # Default kernel for Quarto computations
     # API discovery settings
     "exclude": [],
+    "auto_include": [],  # Names to force-include even if they match AUTO_EXCLUDE
+    "no_auto_exclude": False,  # Bypass the built-in AUTO_EXCLUDE list entirely
     # GitHub integration
     "repo": None,  # GitHub repository URL override (e.g., "https://github.com/owner/repo")
     "github_style": "widget",  # "widget" (shows stars) or "icon"
@@ -453,6 +455,16 @@ class Config:
     def exclude(self) -> list[str]:
         """Get the list of items to exclude."""
         return self.get("exclude", [])
+
+    @property
+    def auto_include(self) -> list[str]:
+        """Get names to force-include even if they match AUTO_EXCLUDE."""
+        return self.get("auto_include", [])
+
+    @property
+    def no_auto_exclude(self) -> bool:
+        """Check if the built-in AUTO_EXCLUDE list should be bypassed."""
+        return self.get("no_auto_exclude", False)
 
     @property
     def repo(self) -> str | None:

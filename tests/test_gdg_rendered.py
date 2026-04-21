@@ -5962,6 +5962,38 @@ def test_DED_auto_exclude_ref_pages():
     assert (ref / "real_func.html").exists(), "real_func page missing"
 
 
+def test_DED_auto_include_ref_pages():
+    """gdtest_auto_include: auto_include forces config/logging through, main still excluded."""
+    pkg = "gdtest_auto_include"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ref = _ref_dir(pkg)
+    # Real exports present
+    assert (ref / "Widget.html").exists(), "Widget page missing"
+    assert (ref / "process.html").exists(), "process page missing"
+    # Force-included names present (overriding AUTO_EXCLUDE)
+    assert (ref / "config.html").exists(), "config page missing (should be force-included)"
+    assert (ref / "logging.html").exists(), "logging page missing (should be force-included)"
+    # main should still be auto-excluded
+    assert not (ref / "main.html").exists(), "main page exists but should be auto-excluded"
+
+
+def test_DED_no_auto_exclude_ref_pages():
+    """gdtest_no_auto_exclude: no_auto_exclude bypasses filter, all exports present."""
+    pkg = "gdtest_no_auto_exclude"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    ref = _ref_dir(pkg)
+    # All exports present — no auto-exclusion
+    assert (ref / "Adapter.html").exists(), "Adapter page missing"
+    assert (ref / "run.html").exists(), "run page missing"
+    assert (ref / "main.html").exists(), "main page missing (no_auto_exclude should keep it)"
+    assert (ref / "config.html").exists(), "config page missing (no_auto_exclude should keep it)"
+    assert (ref / "logger.html").exists(), "logger page missing (no_auto_exclude should keep it)"
+
+
 def test_DED_duplicate_all_ref_pages():
     """gdtest_duplicate_all: duplicate __all__ entries deduplicated, pages exist."""
     pkg = "gdtest_duplicate_all"

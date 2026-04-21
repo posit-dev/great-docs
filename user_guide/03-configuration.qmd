@@ -93,6 +93,28 @@ Great Docs automatically excludes these common internal names during discovery:
 | Standard library | `PackageNotFoundError`, `typing`, `annotations`, `TYPE_CHECKING` |
 | Logging | `logger`, `log`, `logging` |
 
+### Force-Including Auto-Excluded Names
+
+Some packages intentionally export names that match the auto-exclude list (e.g., a `config` or `logging` module that is part of the public API). Use `auto_include` to force specific names back into discovery:
+
+```{.yaml filename="great-docs.yml"}
+auto_include:
+  - config
+  - logging
+```
+
+Names listed in `auto_include` are removed from the auto-exclude filter while all other auto-excluded names remain filtered as usual.
+
+### Disabling Auto-Exclude Entirely
+
+If the auto-exclude list doesn't suit your package at all, you can bypass it completely:
+
+```{.yaml filename="great-docs.yml"}
+no_auto_exclude: true
+```
+
+With this setting, no names are automatically excluded. You can still use `exclude` to manually remove specific items.
+
 ## Docstring Parser
 
 Different projects use different docstring conventions, so Great Docs automatically detects your docstring style during initialization.

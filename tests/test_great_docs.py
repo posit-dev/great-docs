@@ -24082,6 +24082,112 @@ def test_discover_package_exports_load_failure():
         assert result is None
 
 
+def test_discover_package_exports_auto_include():
+    """Test auto_include forces names back through AUTO_EXCLUDE."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "autoincpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '__all__ = ["MyClass", "config", "logger"]\n'
+            "class MyClass: pass\n"
+            "class config: pass\n"
+            "import logging\n"
+            "logger = logging.getLogger()\n",
+            encoding="utf-8",
+        )
+
+        # Write a great-docs.yml that force-includes "config"
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("auto_include:\n  - config\n", encoding="utf-8")
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "autoincpkg"\n', encoding="utf-8"
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._discover_package_exports("autoincpkg")
+
+            assert result is not None
+            assert "MyClass" in result
+            # "config" should be force-included
+            assert "config" in result
+            # "logger" should still be auto-excluded
+            assert "logger" not in result
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_discover_package_exports_no_auto_exclude():
+    """Test no_auto_exclude bypasses the entire AUTO_EXCLUDE list."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "noautoexclpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '__all__ = ["MyClass", "main", "config", "logger"]\n'
+            "class MyClass: pass\n"
+            "def main(): pass\n"
+            "class config: pass\n"
+            "import logging\n"
+            "logger = logging.getLogger()\n",
+            encoding="utf-8",
+        )
+
+        # Write a great-docs.yml that disables auto-exclude
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("no_auto_exclude: true\n", encoding="utf-8")
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "noautoexclpkg"\n', encoding="utf-8"
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._discover_package_exports("noautoexclpkg")
+
+            assert result is not None
+            # All names should be present since auto-exclude is bypassed
+            assert "MyClass" in result
+            assert "main" in result
+            assert "config" in result
+            assert "logger" in result
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_discover_package_exports_auto_include_no_overlap():
+    """Test auto_include with names not in AUTO_EXCLUDE has no effect."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "nooverlappkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '__all__ = ["MyClass", "main"]\nclass MyClass: pass\ndef main(): pass\n',
+            encoding="utf-8",
+        )
+
+        # auto_include names that are NOT in AUTO_EXCLUDE
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("auto_include:\n  - MyClass\n", encoding="utf-8")
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "nooverlappkg"\n', encoding="utf-8"
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            result = docs._discover_package_exports("nooverlappkg")
+
+            assert result is not None
+            assert "MyClass" in result
+            # "main" should still be auto-excluded
+            assert "main" not in result
+        finally:
+            sys.path.remove(tmp_dir)
+
+
 def test_extract_all_directives_basic():
     """Test _extract_all_directives finds directives in docstrings."""
 

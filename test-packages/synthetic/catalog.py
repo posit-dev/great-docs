@@ -354,6 +354,9 @@ ALL_PACKAGES: list[str] = [
     "gdtest_sec_dir_titles",  # 174
     # 175: Namespace package with src/ layout and dotted module name
     "gdtest_namespace_src",  # 175
+    # 176–177: Auto-include / no-auto-exclude discovery overrides
+    "gdtest_auto_include",  # 176
+    "gdtest_no_auto_exclude",  # 177
 ]
 
 
@@ -1989,6 +1992,18 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "great-docs.yml sets module: nspkg.core. Tests discovery of "
         "namespace packages in src/ layout via griffe search_paths and "
         "dotted path resolution in _find_package_init."
+    ),
+    "gdtest_auto_include": (
+        "Module exports names that match AUTO_EXCLUDE (config, logging, main) "
+        "alongside real API (Widget, process). The auto_include config option "
+        "forces config and logging back into documentation while main remains "
+        "excluded. Tests selective override of AUTO_EXCLUDE."
+    ),
+    "gdtest_no_auto_exclude": (
+        "Module exports names that match AUTO_EXCLUDE (main, config, logger) "
+        "alongside real API (Adapter, run). The no_auto_exclude config option "
+        "is set to true, so ALL names pass through — none are automatically "
+        "excluded. Tests complete bypass of the AUTO_EXCLUDE filter."
     ),
 }
 

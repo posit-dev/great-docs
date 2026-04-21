@@ -21,6 +21,8 @@ All keys are optional. Defaults are auto-detected from `pyproject.toml`.
 | `parser`       | `str`       | `"numpy"`     | Docstring style: `"numpy"`, `"google"`, `"sphinx"`      |
 | `dynamic`      | `bool`      | `true`        | `true`: runtime introspection; `false`: static (griffe) |
 | `exclude`      | `list[str]` | `[]`          | Items to hide from API docs                             |
+| `auto_include`    | `list[str]` | `[]`          | Force-include names that match the auto-exclude list    |
+| `no_auto_exclude` | `bool`      | `false`       | Bypass the built-in auto-exclude list entirely          |
 
 ## GitHub and source links
 
