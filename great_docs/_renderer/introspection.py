@@ -257,7 +257,16 @@ def dynamic_alias(path: str, target: "str | None" = None, loader=None) -> dc.Obj
     if target:
         obj = get_object(target, loader=loader)
     else:
-        obj = get_object(canonical_path, loader=loader)
+        try:
+            obj = get_object(canonical_path, loader=loader)
+        except (KeyError, ModuleNotFoundError, ImportError):
+            # The canonical path computed via `__module__` doesn't refer to a
+            # loadable Python module, which is typical for PyO3 classes whose Rust
+            # `#[pyclass]` lacks `module = "..."` so `__module__` defaults
+            # to `"builtins"`. Fall back to the access path the user actually
+            # wrote, which by definition is importable.
+            obj = get_object(path, loader=loader)
+            canonical_path = path.replace(":", ".")
 
     replace_docstring(obj, attr)
 
@@ -279,21 +288,31 @@ def dynamic_alias(path: str, target: "str | None" = None, loader=None) -> dc.Obj
 
 def _canonical_path(crnt_part: object, qualname: str) -> str | None:
     suffix = (":" + qualname) if qualname else ""
-    if not isinstance(crnt_part, ModuleType):
-        if inspect.isclass(crnt_part) or inspect.isfunction(crnt_part):
-            _mod = getattr(crnt_part, "__module__", None)
-
-            if _mod is None:
-                return None
-            else:
-                qual_parts = [] if not qualname else qualname.split(".")
-                return _mod + ":" + ".".join([crnt_part.__qualname__, *qual_parts])
-        elif isinstance(crnt_part, ModuleType):
-            return crnt_part.__name__ + suffix
-        else:
-            return None
-    else:
+    if isinstance(crnt_part, ModuleType):
         return crnt_part.__name__ + suffix
+
+    if inspect.isclass(crnt_part) or inspect.isfunction(crnt_part):
+        _mod = getattr(crnt_part, "__module__", None)
+
+        if _mod is None:
+            return None
+
+        qual_parts = [] if not qualname else qualname.split(".")
+        return _mod + ":" + ".".join([crnt_part.__qualname__, *qual_parts])
+
+    # PyO3 / C-extension callables (e.g. `builtin_function_or_method`,
+    # `method-wrapper`) don't satisfy `inspect.isfunction` but they do carry
+    # `__module__` / `__qualname__` attributes. Treat them as function-like
+    # so `dynamic_alias` can resolve them to their canonical home rather than
+    # building a self-referential alias on the re-exporting facade module
+    # (which produces `CyclicAliasError` downstream).
+    _mod = getattr(crnt_part, "__module__", None)
+    _qn = getattr(crnt_part, "__qualname__", None)
+    if _mod and _qn and callable(crnt_part):
+        qual_parts = [] if not qualname else qualname.split(".")
+        return _mod + ":" + ".".join([_qn, *qual_parts])
+
+    return None
 
 
 def _is_valueless(obj: dc.Object) -> bool:

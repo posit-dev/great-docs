@@ -32,7 +32,7 @@ GREAT_DOCS_CMD = _find_great_docs_executable()
 # Listed in order of preference: smaller/faster packages first
 TEST_PACKAGES = [
     pkg
-    for pkg in ["python-dateutil", "time-machine", "py-shiny"]
+    for pkg in ["python-dateutil", "time-machine", "py-shiny", "ggsql-python"]
     if (TEST_PACKAGES_DIR / pkg).exists()
 ]
 

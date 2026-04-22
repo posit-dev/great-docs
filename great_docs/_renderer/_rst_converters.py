@@ -134,6 +134,16 @@ def _smart_dedent(text: str) -> str:
 
 def _convert_rst_text(text: str) -> str:
     """Apply all RST -> Markdown transforms to a docstring text section."""
+    # Defensive coercion: some docstring section types (especially those produced
+    # by dynamically-inspected PyO3 modules or by section kinds without a
+    # dedicated singledispatch handler) may pass a non-string `el.value` here
+    # (e.g. a `list` of parameter / return entries). Rather than crashing the
+    # whole reference build with `AttributeError: 'list' object has no attribute
+    # 'splitlines'`, coerce to a string so the symbol still renders (with
+    # possibly degraded markup) and the rest of the page survives.
+    if not isinstance(text, str):
+        text = str(text)
+
     # Fix docstrings where inspect.cleandoc failed to dedent (e.g. a
     # multiline string literal created a 0-indent line, preventing
     # proper margin detection).

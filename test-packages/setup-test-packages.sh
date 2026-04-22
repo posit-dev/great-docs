@@ -48,6 +48,20 @@ echo "================"
 # Setup py-shiny (large package, slower builds)
 setup_repo "https://github.com/posit-dev/py-shiny" "py-shiny"
 
+echo ""
+echo "PyO3 / Rust packages:"
+echo "====================="
+# ggsql-python is a PyO3 (Rust) package — exercises Great Docs' handling
+# of compiled extensions. Currently uses PR #2 branch (`great-docs`) which
+# adds the docs setup; switch to `main` once merged.
+setup_repo "https://github.com/posit-dev/ggsql-python" "ggsql-python"
+(cd "$TEST_PACKAGES_DIR/ggsql-python" \
+    && git fetch origin pull/2/head:great-docs 2>/dev/null || true) \
+    && (cd "$TEST_PACKAGES_DIR/ggsql-python" && git checkout great-docs 2>/dev/null || true)
+echo "  Note: ggsql-python requires a Rust build. Install with:"
+echo "    pip install -e test-packages/ggsql-python"
+echo ""
+
 # Add more test packages here as needed
 # setup_repo "https://github.com/other/package" "package-name"
 
