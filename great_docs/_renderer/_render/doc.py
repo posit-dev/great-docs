@@ -523,6 +523,21 @@ class __RenderDoc(RenderBase):
             items.append((term, ":".join(desc)))
         return DefinitionList(items)
 
+    @render_docstring_section.register(gf.DocstringSectionFunctions)
+    @render_docstring_section.register(gf.DocstringSectionClasses)
+    @render_docstring_section.register(gf.DocstringSectionModules)
+    def _(self, el):
+        """
+        Suppress collection-style sections (Methods, Functions, Classes, Modules, Attributes)
+        emitted by the numpy parser.
+
+        These sections are hand-written summaries of class/module members (e.g.,
+        `Methods\\n-------\\nfoo(x)\\n    Description.`). Great Docs already auto-generates the same
+        data from the actual members, so rendering the docstring version produces redundant content.
+        Drop them silently rather than risking duplicate / out-of-sync tables.
+        """
+        return None
+
     @property
     def summary_name(self) -> str:
         """
