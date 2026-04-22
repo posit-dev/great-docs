@@ -1,0 +1,345 @@
+---
+title: "Color Swatches"
+guide-section: "Site Content"
+tags: [Content, Theming, Extensions]
+status: experimental
+upcoming: "0.9"
+versions: ">=0.8"
+---
+
+# Color Swatches
+
+Documenting a project's colors (brand palette, theme variables, status indicators) is one of those tasks that looks simple until you actually try to do it well. Static screenshots go stale, hand-coded HTML is tedious to maintain, and plain text hex codes are meaningless without a visual reference beside them.
+
+The `{{{< color-swatch >}}}` shortcode solves this by turning a small YAML file into an interactive, accessible color palette. Each swatch displays its hex code, shows RGB/HSL breakdowns on hover, evaluates WCAG contrast ratios, and lets readers copy values with a single click. You can render individual palettes, reference the built-in Great Docs gradient presets, or combine both approaches.
+
+This guide walks through every feature (from a minimal first palette to advanced customization options) so you can present colors as clearly as you present code.
+
+## Quick Start
+
+The fastest way to get a palette on the page is to create a YAML file with your colors and reference it from a shortcode. No configuration beyond the file path is needed.
+
+Start by creating a YAML file somewhere in your project. Each entry needs a `name` and a `hex` value:
+
+```{.yaml filename="assets/colors.yml"}
+- name: Sky Blue
+  hex: "#38bdf8"
+- name: Deep Navy
+  hex: "#1e3a5f"
+- name: Coral
+  hex: "#f97316"
+```
+
+Then reference it with the shortcode in any `.qmd` page:
+
+````markdown
+{{{< color-swatch file="assets/colors.yml" >}}}
+````
+
+Here is the result (three circle swatches with names and hex labels):
+
+{{< color-swatch file="assets/color-data/demo-quick-start.yml" >}}
+
+Hover over any swatch to see its full color breakdown in a tooltip. Click a swatch to copy its hex value to the clipboard. That single shortcode line is all it takes to go from raw hex codes to a polished, interactive palette.
+
+## Display Modes
+
+The shortcode supports two display modes, controlled by the `mode` parameter. The default is `circles`, which works well for compact palettes and quick visual reference. The `rectangles` mode is better suited for detailed documentation where contrast information needs to be front and center. Additional modes (grid, gradient) are planned for future releases.
+
+### Circles (Default)
+
+Circle swatches are the default display mode. Each color appears as a filled circle with its name and hex code underneath, arranged in a responsive row that wraps as needed.
+
+To render circle swatches, simply omit the `mode` parameter (or set `mode="circles"` explicitly):
+
+````markdown
+{{{< color-swatch file="assets/brand-colors.yml" >}}}
+````
+
+Here is a five-color brand palette rendered as circles:
+
+{{< color-swatch file="assets/color-data/demo-brand.yml" >}}
+
+Circles are compact and scannable, making them ideal for showcasing a handful of brand or theme colors at a glance. Each swatch is individually interactive (hover for details, click to copy).
+
+### Rectangles
+
+Rectangle mode renders each color as a full-width horizontal strip. This is useful when you want to emphasize contrast information alongside the color itself.
+
+Set `mode="rectangles"` to switch:
+
+````markdown
+{{{< color-swatch mode="rectangles" file="assets/brand-colors.yml" >}}}
+````
+
+Here are three colors rendered as rectangular strips:
+
+{{< color-swatch mode="rectangles" file="assets/color-data/demo-rectangles.yml" >}}
+
+Each strip displays the color name on the left, the hex code on the right, and white/black "Aa" contrast samples. The "Aa" labels are marked pass or fail against WCAG AA thresholds, so you can immediately see which text colors are safe to use on each background. Rectangle mode is especially valuable for design-system documentation where accessibility compliance is a primary concern.
+
+## Built-In Palette Presets
+
+Great Docs ships with eight gradient presets that power the site's gradient theming system. Rather than listing colors manually, you can reference any preset by name and the shortcode will render its color stops as swatches.
+
+To use a preset, pass its name to the `palette` parameter instead of providing a `file`:
+
+````markdown
+{{{< color-swatch palette="sky" >}}}
+````
+
+Here is the `sky` preset:
+
+{{< color-swatch palette="sky" >}}
+
+The full set of available presets is:
+
+| Preset | Description |
+|--------|-------------|
+| `sky` | Soft sky blues |
+| `peach` | Peach and blush |
+| `prism` | Mint, sky, and lavender |
+| `lilac` | Lilac and pink |
+| `slate` | Cool grays |
+| `honey` | Warm cream and apricot |
+| `dusk` | Soft lavender-blue |
+| `mint` | Pale aqua |
+
+Each preset defines four color stops for both light and dark modes. The light-mode stops are shown by default. These are the same palettes available through the `gradient-preset` option in your site configuration, so the swatches you see here correspond exactly to the colors your site header and other gradient elements will use.
+
+### All Presets at a Glance
+
+If you want to compare every preset side by side (for example, when choosing a gradient theme for your site) use `palette="all"` to render all presets in a single view:
+
+````markdown
+{{{< color-swatch palette="all" >}}}
+````
+
+This renders every preset's light-mode color stops, grouped by preset name:
+
+{{< color-swatch palette="all" >}}
+
+The grid layout ensures each swatch is the same width, making visual comparison straightforward. This view is handy for theme selection pages or internal style guides.
+
+### Extend a Preset
+
+Sometimes a preset is close to what you need but you want to add a few extra colors. You can combine a preset with a YAML file (the file's colors are appended after the preset's stops).
+
+For example, to add a custom accent color after the `sky` preset:
+
+````markdown
+{{{< color-swatch palette="sky" file="assets/extra-colors.yml" >}}}
+````
+
+Here is the `sky` preset extended with one additional brand accent color:
+
+{{< color-swatch palette="sky" file="assets/color-data/demo-extend-accent.yml" >}}
+
+The preset colors appear first, followed by any colors from the file. This lets you document how your custom additions relate to the built-in palette without duplicating the preset definitions.
+
+## Tooltips
+
+Every swatch shows a rich tooltip on hover. Tooltips provide the detailed color information that would clutter the main display but is essential for anyone working with the values.
+
+Each tooltip contains:
+
+- A mini color preview square
+- The color name
+- Hex code with a clipboard copy button
+- RGB values
+- HSL values (rounded to integers)
+- APCA contrast ratio against white and against black (in Lc units)
+- WCAG AA pass/fail verdict for normal-size text
+
+Tooltips are powered by the Tippy.js library that is already bundled with Great Docs, so no additional dependencies are needed. The tooltips appear on hover for mouse users and on focus for keyboard users, ensuring the information is accessible to everyone.
+
+## Click to Copy
+
+One of the most common reasons to look up a color palette is to grab a specific value for use in code or design tools. The shortcode makes this effortless.
+
+Click any swatch to copy its hex value (including the `#`) to the clipboard. A brief checkmark animation confirms the copy succeeded. Inside the tooltip, each hex code also has a dedicated clipboard button for a more targeted copy action.
+
+The copied value is always the full hex code (e.g., `#38bdf8`), which is the format most commonly pasted into CSS, design tools, and configuration files.
+
+## Contrast Checks
+
+Choosing colors that look good is only half the job: they also need to be readable. The shortcode uses the APCA (Accessible Perceptual Contrast Algorithm) to evaluate every color against white (`#FFFFFF`) and black (`#000000`) text. This is the same algorithm that powers the automatic navbar text-color selection elsewhere in Great Docs.
+
+By default, contrast information appears in tooltips and in the "Aa" samples on rectangle swatches. You can control this behavior with the `show-contrast` parameter.
+
+### Display Options
+
+The `show-contrast` parameter accepts three values:
+
+| `show-contrast` value | Behavior |
+|----------------------|----------|
+| `"true"` (default) | Contrast info appears in tooltips and rectangle "Aa" samples |
+| `"inline"` | Contrast ratios also appear below the hex code on each circle swatch |
+| `"false"` | Contrast info is hidden everywhere |
+
+Setting `show-contrast="inline"` places the contrast ratios directly on the swatch, which is useful when contrast is the primary focus of the documentation:
+
+````markdown
+{{{< color-swatch show-contrast="inline" file="assets/contrast-demo.yml" >}}}
+````
+
+Here are two colors with inline contrast ratios visible beneath the hex codes:
+
+{{< color-swatch show-contrast="inline" file="assets/color-data/demo-contrast.yml" >}}
+
+The inline display shows the Lc (lightness contrast) value for both white-on-color and black-on-color combinations, along with a pass/fail indicator. Use this mode when your audience needs to evaluate contrast at a glance without hovering.
+
+## Controlling What's Shown
+
+Sometimes you want a simpler display (perhaps just the color circles with names, without hex codes cluttering the view). The shortcode provides three toggle parameters that control label visibility.
+
+| Parameter | Default | Effect |
+|-----------|---------|--------|
+| `show-names` | `"true"` | Show or hide color names below swatches |
+| `show-hex` | `"true"` | Show or hide hex codes below swatches |
+| `show-contrast` | `"true"` | Show or hide contrast info (see above) |
+
+For example, to show only the swatches and their names without hex labels:
+
+````markdown
+{{{< color-swatch show-hex="false" file="assets/colors.yml" >}}}
+````
+
+Here is a minimal palette with hex codes hidden:
+
+{{< color-swatch show-hex="false" file="assets/color-data/demo-minimal.yml" >}}
+
+The hex values are still available in the tooltip on hover (hiding them from the main display reduces visual noise when the color names alone are sufficient). You can combine these toggles freely: `show-names="false" show-hex="false"` gives you bare swatches with all information deferred to tooltips.
+
+## Customization
+
+The shortcode offers several parameters for fine-tuning the appearance of the palette container and individual swatches. These let you adapt the display to different contexts (from a prominent hero palette to a compact inline reference).
+
+### Title and Description
+
+Add a heading and optional description above the palette to give it context within your page. This is especially useful when you have multiple palettes on the same page and need to label each one.
+
+````markdown
+{{{< color-swatch title="Brand Colors" description="Our primary brand palette for 2026." file="assets/brand.yml" >}}}
+````
+
+Here is a palette with a title and description:
+
+{{< color-swatch title="Brand Colors" description="Our primary brand palette for 2026." file="assets/color-data/demo-title.yml" >}}
+
+The title renders as a heading within the palette container, and the description appears as a subtitle beneath it. Both are optional and can be used independently.
+
+### Swatch Size
+
+The default circle diameter is 56px, which works well for most layouts. For hero sections, style guides, or situations where you want the colors to be more prominent, increase the size:
+
+````markdown
+{{{< color-swatch size="80px" file="assets/colors.yml" >}}}
+````
+
+Here is a single swatch rendered at 80px:
+
+{{< color-swatch size="80px" file="assets/color-data/demo-single.yml" >}}
+
+The `size` parameter accepts any valid CSS length value. Smaller sizes (like `40px`) work well for dense reference tables, while larger sizes (like `100px`) make colors the focal point of the page.
+
+### Border
+
+By default, the palette container has a subtle border that visually groups the swatches. If you prefer a cleaner look (for example, when the palette sits inside a callout or a card that already has its own border) you can disable it:
+
+````markdown
+{{{< color-swatch border="false" palette="mint" >}}}
+````
+
+Here is the `mint` preset without a container border:
+
+{{< color-swatch border="false" palette="mint" >}}
+
+The swatches themselves are unchanged; only the outer container border is removed.
+
+### Extra CSS Classes
+
+For advanced styling, add custom CSS classes to the palette wrapper with the `class` parameter:
+
+````markdown
+{{{< color-swatch class="my-special-palette" palette="lilac" >}}}
+````
+
+You can then target `.my-special-palette` in your custom CSS to override spacing, alignment, background, or any other property. This provides an escape hatch for layouts that the built-in parameters don't cover.
+
+## Color Entry Format
+
+Every YAML color file follows a simple structure. Each entry is a list item with two required properties:
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Display name shown below the swatch |
+| `hex` | Yes | Hex color value (e.g., `"#38bdf8"`) |
+
+A minimal file looks like this:
+
+```{.yaml filename="assets/my-colors.yml"}
+- name: Primary
+  hex: "#2563eb"
+- name: Accent
+  hex: "#f97316"
+```
+
+Hex values must include the `#` prefix and can use either three-digit (`#fff`) or six-digit (`#ffffff`) notation. The shortcode normalizes all values to six digits internally for consistent display. Quoting the hex values in YAML is recommended to avoid parsing issues with the `#` character.
+
+## Accessibility
+
+The color-swatch shortcode is designed to be usable by everyone, including keyboard-only users and screen-reader users.
+
+Key accessibility features include:
+
+- **Keyboard navigation**: Every swatch is focusable via Tab and can be activated with Enter or Space to copy its hex value.
+- **ARIA labels**: Each swatch carries an `aria-label` describing the color name, hex value, and available actions.
+- **Live announcements**: Copy confirmations are announced through an `aria-live` region so screen readers report the result.
+- **Visibility safeguards**: Very light colors (nearly white) automatically receive a subtle border ring so they remain visible against the page background. Very dark colors get the same treatment in dark mode.
+- **Reduced motion**: The `prefers-reduced-motion` media query disables hover and copy animations for users who have requested reduced motion in their OS settings.
+
+These features ensure that color documentation is not just visual as the information is available through assistive technology as well.
+
+## Dark Mode
+
+Swatches adapt to the page theme automatically. When a reader toggles dark mode, the palette adjusts without any extra configuration:
+
+- Container borders and shadow intensities shift for dark backgrounds.
+- Border rings on very light and very dark colors swap direction (light rings appear around dark colors in dark mode, and dark rings appear around light colors in light mode).
+- Tooltips inherit the page's current theme context.
+
+When using a palette preset, the light-mode color stops are shown regardless of page theme. Dark-mode palette display (showing the preset's dark-mode stops when the page is in dark mode) is planned for a future release.
+
+## Responsive Behavior
+
+The swatch layout is responsive and adjusts to smaller screens automatically.
+
+On mobile viewports (below 576px):
+
+- Circle swatches shrink to 44px and grid gaps tighten to keep the layout compact.
+- Rectangle strips stack their labels vertically to avoid horizontal overflow.
+
+On wider screens, the grid expands to fill the available width with equal-size columns. No media-query configuration is needed on your part as the built-in CSS handles all breakpoints.
+
+## Parameters Reference
+
+The table below lists every parameter available on the `{{{< color-swatch >}}}` shortcode. All parameters are optional and, at minimum, you need either `file` or `palette` (or both) to provide colors.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `file` | string | — | Path to a YAML file with color definitions (relative to project root) |
+| `palette` | string | — | Preset name: `sky`, `peach`, `prism`, `lilac`, `slate`, `honey`, `dusk`, `mint`, or `all` |
+| `mode` | string | `"circles"` | Display mode: `circles` or `rectangles` |
+| `size` | string | `"56px"` | Circle swatch diameter (CSS length) |
+| `show-contrast` | string | `"true"` | `"true"`, `"false"`, or `"inline"` |
+| `show-names` | string | `"true"` | Show or hide color names |
+| `show-hex` | string | `"true"` | Show or hide hex values |
+| `copy-format` | string | `"hex"` | Clipboard format: `hex` |
+| `title` | string | — | Title above the palette |
+| `description` | string | — | Description below the title |
+| `border` | string | `"true"` | Show or hide container border |
+| `id` | string | auto | Custom HTML `id` for the wrapper |
+| `class` | string | — | Additional CSS classes |
+
+When both `file` and `palette` are provided, the preset colors appear first and the file colors are appended after them.
