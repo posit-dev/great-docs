@@ -19,6 +19,35 @@ from ._griffe import dataclasses as dc
 from ._griffe import docstrings as ds
 from ._transformers import Node, PydanticTransformer, WorkaroundKeyError, ctx_node
 from .introspection import get_parser_defaults
+
+# Dunder members inherited from `object`/`type` (or PyO3 metaclasses) that carry docstrings but are
+# never useful API documentation. Filtered out unconditionally so they do not pollute reference
+# pages for compiled extensions (PyO3, Cython, pybind11, C extensions, etc.).
+_BUILTIN_NOISE_DUNDERS = frozenset(
+    {
+        "__doc__",
+        "__module__",
+        "__dict__",
+        "__weakref__",
+        "__hash__",
+        "__class__",
+        "__class_getitem__",
+        "__init_subclass__",
+        "__subclasshook__",
+        "__match_args__",
+        "__slots__",
+        "__annotations__",
+        "__abstractmethods__",
+        "__dictoffset__",
+        "__flags__",
+        "__basicsize__",
+        "__itemsize__",
+        "__mro_entries__",
+        "__orig_bases__",
+        "__parameters__",
+    }
+)
+
 from .layout import (
     MISSING,
     Auto,
@@ -397,6 +426,11 @@ class BlueprintTransformer(PydanticTransformer):
             return el.members
 
         options = obj.all_members if el.include_inherited else obj.members
+
+        # Always filter built-in noise dunders inherited from `object`/`type`
+        # (e.g. `__doc__`, `__module__`). These show up on every PyO3 /
+        # C-extension class because their docstrings are inherited from str.
+        options = {k: v for k, v in options.items() if k not in _BUILTIN_NOISE_DUNDERS}
 
         if obj.is_module and obj.exports is not None:
             options = {k: v for k, v in options.items() if v.is_exported}

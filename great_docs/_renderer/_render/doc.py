@@ -582,9 +582,20 @@ class __RenderDoc(RenderBase):
         if not base_url or base_url == "None":
             return None
         branch = package_info("GIT_REF")
-        relative_path = self.obj.relative_package_filepath
+        try:
+            relative_path = self.obj.relative_package_filepath
+        except (ValueError, AttributeError):
+            return None
+        # Suppress source links for compiled extensions (PyO3, Cython,
+        # pybind11, C extensions). The file path points at a binary
+        # artifact and `lineno` is None, producing broken `#LNone` anchors.
+        rel_str = str(relative_path)
+        if rel_str.endswith((".so", ".pyd", ".dylib", ".abi3.so")):
+            return None
         start, end = self.obj.lineno, self.obj.endlineno
-        anchor = f"#L{start}-L{end}" if start != end else f"#L{start}"
+        if start is None:
+            return None
+        anchor = f"#L{start}-L{end}" if end is not None and start != end else f"#L{start}"
         url = f"{base_url}/blob/{branch}/{relative_path}{anchor}"
         return Link("Source", url, attr=Attr(attributes={"target": "_blank", "rel": "noopener"}))
 
