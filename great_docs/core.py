@@ -966,6 +966,14 @@ class GreatDocs:
                     # maturin projects: module name is often in module-name or derived from Cargo.toml
                     module_name = maturin.get("module-name")
                     if module_name:
+                        # If `module-name` is a dotted path (e.g. "ggsql._ggsql"),
+                        # it refers to the compiled extension submodule. The
+                        # top-level importable Python package is the prefix —
+                        # which is what we want for documentation. When
+                        # `python-source` is set, the project also ships a
+                        # pure-Python wrapper at that top-level name.
+                        if "." in module_name:
+                            return module_name.split(".", 1)[0]
                         return module_name
 
                 # Check [tool.setuptools.packages] for explicit package list
@@ -6392,8 +6400,13 @@ class GreatDocs:
                                     if member.kind.value in ("function", "method"):
                                         # Sub-classify to detect classmethod/staticmethod/property
                                         member_sub = self._sub_classify_function(member)
-                                        # Get line number for source ordering
-                                        lineno = getattr(member, "lineno", float("inf"))
+                                        # Get line number for source ordering. Dynamically inspected
+                                        # members (PyO3 / .so extensions) often have `lineno=None`;
+                                        # coerce to inf so sort() doesn't crash comparing
+                                        # `None < None`.
+                                        lineno = getattr(member, "lineno", None)
+                                        if lineno is None:
+                                            lineno = float("inf")
                                         # Validate with get_object if available
                                         if gd_get_object is not None:
                                             try:
@@ -6570,7 +6583,11 @@ class GreatDocs:
                                                 if meth.kind.value in ("function", "method"):
                                                     # Sub-classify for descriptor types
                                                     meth_sub = self._sub_classify_function(meth)
-                                                    lineno = getattr(meth, "lineno", float("inf"))
+                                                    # `lineno` may be `None` for dynamically
+                                                    # inspected (PyO3) methods.
+                                                    lineno = getattr(meth, "lineno", None)
+                                                    if lineno is None:
+                                                        lineno = float("inf")
                                                     if gd_get_object is not None:
                                                         try:
                                                             qd_m = gd_get_object(
