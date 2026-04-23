@@ -223,8 +223,8 @@ class TestHeadTail:
         display, nums, is_full = _compute_head_tail(rows, 100, 5, 5, False)
         assert is_full is False
         assert len(display) == 10
-        assert nums[:5] == [1, 2, 3, 4, 5]
-        assert nums[5:] == [96, 97, 98, 99, 100]
+        assert nums[:5] == [0, 1, 2, 3, 4]
+        assert nums[5:] == [95, 96, 97, 98, 99]
 
     def test_show_all(self):
         from great_docs._tbl_preview import _compute_head_tail
@@ -241,7 +241,7 @@ class TestHeadTail:
         display, nums, is_full = _compute_head_tail(rows, 20, 5, 0, False)
         assert is_full is False
         assert len(display) == 5
-        assert nums == [1, 2, 3, 4, 5]
+        assert nums == [0, 1, 2, 3, 4]
 
 
 # ---------------------------------------------------------------------------
@@ -1526,7 +1526,7 @@ class TestParameterComboSnapshots:
 
         html = tbl_preview(_PARAM_DATA, show_all=True, show_row_numbers=True).as_html()
         nums = _extract_row_numbers(html)
-        assert nums == [str(i) for i in range(1, 11)]
+        assert nums == [str(i) for i in range(0, 10)]
 
     def test_row_numbers_absent(self):
         from great_docs._tbl_preview import tbl_preview
@@ -1542,6 +1542,22 @@ class TestParameterComboSnapshots:
         from great_docs._tbl_preview import tbl_preview
 
         html = tbl_preview(_PARAM_DATA, n_head=2, n_tail=2).as_html()
+        nums = _extract_row_numbers(html)
+        assert nums == ["0", "1", "8", "9"]
+
+    def test_row_index_offset_one(self):
+        from great_docs._tbl_preview import tbl_preview
+
+        html = tbl_preview(
+            _PARAM_DATA, show_all=True, show_row_numbers=True, row_index_offset=1
+        ).as_html()
+        nums = _extract_row_numbers(html)
+        assert nums == [str(i) for i in range(1, 11)]
+
+    def test_row_index_offset_head_tail(self):
+        from great_docs._tbl_preview import tbl_preview
+
+        html = tbl_preview(_PARAM_DATA, n_head=2, n_tail=2, row_index_offset=1).as_html()
         nums = _extract_row_numbers(html)
         assert nums == ["1", "2", "9", "10"]
 
