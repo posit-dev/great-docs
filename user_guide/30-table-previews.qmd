@@ -1,0 +1,479 @@
+---
+title: "Table Previews"
+guide-section: "Site Content"
+tags: [Content, Extensions, Data]
+status: experimental
+upcoming: "0.9"
+versions: ">=0.8"
+---
+
+# Table Previews
+
+Documentation sites for data-oriented packages often need to show what a dataset looks like. Screenshots go stale, raw HTML tables lack context, and notebook-style output is tightly coupled to a specific runtime. The `tbl_preview()` function solves this by generating a self-contained HTML table preview from almost any data source. It works in Python code cells, Jupyter notebooks, and (via the `{{{< tbl-preview >}}}` shortcode) directly in Quarto `.qmd` pages without writing any Python at all.
+
+Each preview includes a colored type badge (Polars, Pandas, CSV, Parquet, etc.), compact dtype labels beneath every column header, row-number gutters, head/tail splitting for large tables, and automatic highlighting of missing values. The output renders identically in light mode and dark mode, requires no JavaScript, and is safe to embed in RSS feeds, emails, or static HTML.
+
+This guide walks through every feature, starting from the simplest Python call and building up to the Quarto shortcode, file format support, and advanced display options.
+
+## Quick Start
+
+The fastest way to preview a table is to pass a Python dictionary to `tbl_preview()`. No configuration or file is needed.
+
+```{python}
+from great_docs import tbl_preview
+
+tbl_preview({
+    "city": ["Tokyo", "Paris", "New York"],
+    "country": ["Japan", "France", "USA"],
+    "population": [13960000, 2161000, 8336000],
+})
+```
+
+The result is a styled HTML table with a header banner showing the row and column count, dtype labels beneath each column name, and row numbers on the left. This single function call is all it takes to go from raw data to a polished preview.
+
+## Data Sources
+
+`tbl_preview()` accepts many different input types, so you can pass whatever data structure your project already uses. Each source type gets a distinct colored badge in the header banner, making it easy to tell at a glance what kind of data is being displayed.
+
+### Dictionaries and Lists
+
+The simplest inputs are column-oriented dictionaries and row-oriented lists of dictionaries. Both produce a **Table** badge and infer dtypes from the cell values.
+
+A column-oriented dictionary (keys are column names, values are lists):
+
+```{python}
+tbl_preview({"name": ["Alice", "Bob"], "score": [95.5, 82.0]})
+```
+
+A list of row dictionaries (each dict is one row):
+
+```{python}
+tbl_preview([
+    {"name": "Alice", "score": 95.5},
+    {"name": "Bob", "score": 82.0},
+])
+```
+
+Both styles produce identical output. Use whichever matches the data you already have.
+
+### Polars DataFrames
+
+If Polars is installed, pass a `pl.DataFrame` directly. The badge shows **Polars** in blue, and dtype labels are derived from the Polars schema (e.g., `i64`, `f64`, `str`).
+
+```{python}
+import polars as pl
+
+df = pl.DataFrame({
+    "product": ["Widget", "Gadget", "Gizmo"],
+    "price": [29.99, 49.50, 12.00],
+    "in_stock": [True, False, True],
+})
+
+tbl_preview(df)
+```
+
+Polars dtypes are mapped to compact short labels (like `i64` for `Int64`, `f64` for `Float64`, `str` for `String`) so the column headers stay clean.
+
+### Pandas DataFrames
+
+Pandas DataFrames work the same way. The badge shows **Pandas** in dark purple, and dtypes come from the Pandas `.dtypes` attribute.
+
+```{python}
+import pandas as pd
+
+df = pd.DataFrame({
+    "city": ["London", "Sydney", "Toronto"],
+    "temp_c": [15.2, 22.8, -3.1],
+    "sunny": [False, True, False],
+})
+
+tbl_preview(df)
+```
+
+Both Polars and Pandas DataFrames are detected automatically (no format flag is needed).
+
+### CSV Files
+
+Pass a file path (as a string or `pathlib.Path`) to any supported format and `tbl_preview()` reads it directly. CSV files get a warm yellow **CSV** badge:
+
+```{python}
+tbl_preview("assets/tbl-preview-data/students.csv")
+```
+
+The file is read using Polars if available, falling back to Pandas. Column dtypes are inferred from the file contents.
+
+### TSV Files
+
+Tab-separated files (`.tsv` or `.tab`) are auto-detected by extension. The badge shows **TSV** in green:
+
+```{python}
+tbl_preview("assets/tbl-preview-data/products.tsv")
+```
+
+TSV support uses the same reader as CSV with the delimiter set to tab, so all the same options (column subsets, head/tail, etc.) apply.
+
+### JSONL Files
+
+Newline-delimited JSON files (`.jsonl` or `.ndjson`) are read line by line. Each line must be a valid JSON object. The badge shows **JSONL** in light blue:
+
+```{python}
+tbl_preview("assets/tbl-preview-data/server_logs.jsonl", show_all=True)
+```
+
+JSONL is a common format for log data and streaming pipelines, making `tbl_preview()` a convenient way to inspect log files in documentation.
+
+### Parquet Files
+
+Apache Parquet files (`.parquet` or `.pq`) are read via Polars or PyArrow. The badge shows **Parquet** in purple:
+
+```{python}
+tbl_preview("assets/tbl-preview-data/products.parquet", show_all=True)
+```
+
+Parquet preserves the original column types from the file schema, so dtype labels are precise (e.g., `f64` rather than a generic `float`).
+
+### Feather and Arrow IPC Files
+
+Feather files (`.feather`) and Arrow IPC files (`.arrow`, `.ipc`) are both read as Arrow IPC format. Feather files get a **Feather** badge in orange, while `.arrow`/`.ipc` files get an **Arrow** badge in indigo:
+
+```{python}
+tbl_preview("assets/tbl-preview-data/employees.feather", show_all=True)
+```
+
+Arrow IPC is the recommended format for fast local reads when you need to preserve exact column types.
+
+### PyArrow Tables
+
+If you're working with PyArrow directly, pass a `pyarrow.Table` without writing to disk. The badge shows **Arrow** in indigo:
+
+```{python}
+import pyarrow as pa
+
+table = pa.table({
+    "sensor": ["A1", "A2", "B1"],
+    "reading": [23.5, 19.8, 31.2],
+    "active": [True, True, False],
+})
+
+tbl_preview(table)
+```
+
+PyArrow's type system is fully supported, including nested types like `list<int64>` and `struct` which are displayed with their Arrow type names.
+
+### Supported File Extensions
+
+The full mapping of file extensions to format types is:
+
+| Extension | Format | Badge |
+|-----------|--------|-------|
+| `.csv` | CSV | CSV |
+| `.tsv`, `.tab` | TSV | TSV |
+| `.jsonl`, `.ndjson` | JSONL | JSONL |
+| `.parquet`, `.pq` | Parquet | Parquet |
+| `.feather` | Feather | Feather |
+| `.arrow`, `.ipc` | Arrow IPC | Arrow |
+
+Any unrecognized extension defaults to CSV parsing.
+
+## Head and Tail Splitting
+
+Large tables are automatically split into a head and tail section, connected by a visual divider row. This gives readers a sense of both the beginning and end of the data without rendering thousands of rows.
+
+### Default Split
+
+By default, the first 5 rows and last 5 rows are shown:
+
+```{python}
+import polars as pl
+
+df = pl.DataFrame({
+    "id": list(range(1, 21)),
+    "value": [x * 1.1 for x in range(1, 21)],
+    "label": [f"item-{i}" for i in range(1, 21)],
+})
+
+tbl_preview(df)
+```
+
+The divider row between head and tail is a thin colored line that visually separates the two sections while keeping the table compact.
+
+### Custom Split
+
+Adjust the `n_head` and `n_tail` parameters to control how many rows appear in each section:
+
+```{python}
+tbl_preview(df, n_head=3, n_tail=2)
+```
+
+Setting `n_tail=0` shows only the head, which is useful when the start of the data is most relevant:
+
+```{python}
+tbl_preview(df, n_head=8, n_tail=0)
+```
+
+The `limit` parameter (default 50) caps the maximum sum of `n_head + n_tail`. If you need a larger split, increase the limit explicitly.
+
+### Show All Rows
+
+For small tables where every row matters, set `show_all=True` to disable the head/tail split entirely:
+
+```{python}
+tbl_preview(
+    {"name": ["Alice", "Bob", "Charlie"], "score": [95, 82, 71]},
+    show_all=True,
+)
+```
+
+When `show_all=True` is set, the divider row is omitted and all rows are displayed in sequence. Use this for tables with fewer than ~50 rows where the full picture is important.
+
+## Column Selection
+
+By default, all columns are shown. The `columns` parameter lets you pick a subset, which is useful for wide tables where only a few columns are relevant to the discussion.
+
+```{python}
+tbl_preview(
+    "assets/tbl-preview-data/students.csv",
+    columns=["name", "score", "grade"],
+    show_all=True,
+)
+```
+
+Columns appear in the order you specify, so you can also use this to reorder columns. If a column name doesn't exist in the data, a `ValueError` is raised with a helpful message listing the available columns.
+
+## Missing Values
+
+Missing values (`None`, `NaN`, `NA`, `Inf`, `-Inf`) are highlighted with a red background and text by default. This makes it easy to spot gaps in the data at a glance.
+
+```{python}
+import math
+
+tbl_preview({
+    "sensor": ["A1", "A2", "A3", "B1"],
+    "reading": [23.5, None, math.nan, 31.2],
+    "status": ["ok", "offline", None, "ok"],
+}, show_all=True)
+```
+
+The cell text shows a representation of the missing value (`None`, `NaN`, `NA`, `Inf`), and the cell background turns light red to draw attention.
+
+To disable missing-value highlighting (for example, if your data intentionally contains `None` as a meaningful value), set `highlight_missing=False`:
+
+```{python}
+tbl_preview({
+    "sensor": ["A1", "A2", "A3"],
+    "reading": [23.5, None, 31.2],
+}, show_all=True, highlight_missing=False)
+```
+
+With highlighting off, missing values still display their text representation but use the normal cell styling.
+
+## Display Options
+
+Every visual element of the preview table can be toggled on or off independently. This lets you create anything from a fully-featured data preview to a minimal, stripped-down table.
+
+### Captions
+
+Add a descriptive caption that appears below the header banner and above the column labels:
+
+```{python}
+tbl_preview(
+    {"city": ["Tokyo", "Paris", "New York"], "population": [13960000, 2161000, 8336000]},
+    show_all=True,
+    caption="World cities by population (2024 estimates)",
+)
+```
+
+Captions are useful when multiple previews appear on the same page, giving each table a distinct label.
+
+### Row Numbers
+
+Row numbers appear in a left-hand gutter by default. They reflect the original row positions, even when head/tail splitting is active. To hide them:
+
+```{python}
+tbl_preview(
+    {"x": [1, 2, 3], "y": [4, 5, 6]},
+    show_all=True,
+    show_row_numbers=False,
+)
+```
+
+Hiding row numbers is useful for small reference tables where the row position isn't meaningful.
+
+### Dtype Labels
+
+Compact dtype labels appear beneath each column name (e.g., `str`, `i64`, `f64`). To hide them:
+
+```{python}
+tbl_preview(
+    {"name": ["Alice", "Bob"], "score": [95.5, 82.0]},
+    show_all=True,
+    show_dtypes=False,
+)
+```
+
+Hiding dtype labels produces a cleaner look when the column types are obvious from context or not relevant to the reader.
+
+### Dimensions Banner
+
+The header banner shows the table type badge, row count, and column count. To hide it:
+
+```{python}
+tbl_preview(
+    {"x": [1, 2, 3], "y": [4, 5, 6]},
+    show_all=True,
+    show_dimensions=False,
+)
+```
+
+Hiding the dimensions banner is useful when the surrounding text already describes the data size.
+
+### Minimal Chrome
+
+Combine the toggle options to create a stripped-down table with no row numbers, no dtypes, and no dimensions (just the data):
+
+```{python}
+tbl_preview(
+    {"name": ["Alice", "Bob", "Charlie"], "score": [95, 82, 71]},
+    show_all=True,
+    show_row_numbers=False,
+    show_dtypes=False,
+    show_dimensions=False,
+)
+```
+
+This minimal style works well for small inline reference tables where the chrome would be distracting.
+
+### Column Width Control
+
+The `max_col_width` parameter caps the pixel width of any single column. Long cell values are truncated with an ellipsis. The default is 250px.
+
+```{python}
+tbl_preview({
+    "description": [
+        "This is a very long description that would normally extend the column width quite far",
+        "Another lengthy entry with lots of detail about the item in question",
+        "Short one",
+    ],
+    "code": ["ABC-001", "DEF-002", "GHI-003"],
+}, show_all=True, max_col_width=150)
+```
+
+The `min_tbl_width` parameter sets a floor for the total table width (default 500px), ensuring that narrow tables don't collapse to an unreadably small size.
+
+Both width parameters accept integer values in pixels.
+
+## Quarto Shortcode
+
+The `{{{< tbl-preview >}}}` shortcode renders a table preview directly in a `.qmd` page without writing any Python code. Point it at a data file and the shortcode handles everything.
+
+### Basic Usage
+
+The simplest invocation needs only the `file` parameter:
+
+````markdown
+{{{< tbl-preview file="assets/data.csv" >}}}
+````
+
+The shortcode resolves the file path relative to the Quarto project root, reads the data, and inserts the preview HTML at render time. No code cell or Python import is needed.
+
+### Adding Options
+
+All the display options available to the Python function are also available as shortcode parameters:
+
+````markdown
+{{{< tbl-preview file="assets/data.csv" show_all="true" caption="My Dataset" >}}}
+````
+
+````markdown
+{{{< tbl-preview file="data.tsv" n_head="3" n_tail="2" show_row_numbers="false" >}}}
+````
+
+````markdown
+{{{< tbl-preview file="logs.jsonl" show_all="true" max_col_width="120" >}}}
+````
+
+Note that shortcode parameters are always strings, so boolean values must be quoted (`"true"` / `"false"`) and numeric values must be quoted (`"10"`, `"150"`).
+
+### Column Subsets
+
+To show only specific columns, pass a comma-separated list to the `columns` parameter:
+
+````markdown
+{{{< tbl-preview file="assets/students.csv" columns="name,score,grade" show_all="true" >}}}
+````
+
+Columns appear in the order listed.
+
+### Supported Parameters
+
+The full set of shortcode parameters mirrors the Python function:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `file` | string | — | Path to data file (required, relative to project root) |
+| `columns` | string | all | Comma-separated column names to display |
+| `n_head` | string | `"5"` | Number of rows from the start |
+| `n_tail` | string | `"5"` | Number of rows from the end |
+| `show_all` | string | `"false"` | Show all rows (ignores head/tail) |
+| `show_row_numbers` | string | `"true"` | Show row-number gutter |
+| `show_dtypes` | string | `"true"` | Show dtype labels under column names |
+| `show_dimensions` | string | `"true"` | Show header banner with row/column counts |
+| `max_col_width` | string | `"250"` | Maximum column width in pixels |
+| `min_tbl_width` | string | `"500"` | Minimum total table width in pixels |
+| `caption` | string | — | Caption text below the header banner |
+
+The shortcode supports every file format listed in the [Supported File Extensions](#supported-file-extensions) table.
+
+## Notebook Integration
+
+In Jupyter notebooks and Quarto `.qmd` documents with Python code cells, you can enable automatic `tbl_preview()` rendering for all DataFrames using the display hook.
+
+### Enable Auto-Preview
+
+Call `enable_tbl_preview()` once at the top of a notebook, and every Polars or Pandas DataFrame displayed afterward will render as a preview table instead of the library's default HTML:
+
+```python
+import great_docs as gd
+
+gd.enable_tbl_preview(n_head=8, n_tail=3)
+
+# Now any DataFrame as the last expression in a cell
+# renders as a tbl_preview() table automatically:
+import pandas as pd
+pd.read_csv("data.csv")  # → preview table
+```
+
+Keyword arguments passed to `enable_tbl_preview()` are forwarded to `tbl_preview()`, so you can set defaults for the entire notebook in one call.
+
+### Disable Auto-Preview
+
+To restore the default DataFrame display, call `disable_tbl_preview()`:
+
+```python
+gd.disable_tbl_preview()
+```
+
+This removes the formatter and returns to the library's built-in HTML rendering.
+
+## Parameters Reference
+
+The table below lists every parameter available on the `tbl_preview()` function. All parameters except `data` are optional.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `data` | various | — | Data source: DataFrame, file path, dict, or list of dicts |
+| `columns` | `list[str]` | `None` | Column names to display (all if `None`) |
+| `n_head` | `int` | `5` | Rows from the start |
+| `n_tail` | `int` | `5` | Rows from the end |
+| `limit` | `int` | `50` | Maximum allowed `n_head + n_tail` |
+| `show_all` | `bool` | `False` | Show all rows |
+| `show_row_numbers` | `bool` | `True` | Show row-number gutter |
+| `show_dtypes` | `bool` | `True` | Show dtype labels |
+| `show_dimensions` | `bool` | `True` | Show header banner |
+| `max_col_width` | `int` | `250` | Maximum column width (px) |
+| `min_tbl_width` | `int` | `500` | Minimum table width (px) |
+| `caption` | `str` | `None` | Caption text |
+| `highlight_missing` | `bool` | `True` | Highlight missing values |
+| `id` | `str` | auto | Custom HTML `id` for the container |
+
+The return value is a `TblPreview` object with `_repr_html_()` (for notebook display), `as_html()` (returns the HTML string), and `save(path)` (writes HTML to a file) methods.
