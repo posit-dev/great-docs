@@ -54,6 +54,7 @@ return {
             "columns", "n_head", "n_tail", "show_all",
             "show_row_numbers", "show_dtypes", "show_dimensions",
             "max_col_width", "min_tbl_width", "caption",
+            "row_index_offset",
         }
         for _, key in ipairs(forwarded) do
             local val = kwarg_str(kwargs, key)

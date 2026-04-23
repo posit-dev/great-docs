@@ -46,6 +46,7 @@ def main() -> None:
     parser.add_argument("--max_col_width", type=int, default=250)
     parser.add_argument("--min_tbl_width", type=int, default=500)
     parser.add_argument("--caption", default=None)
+    parser.add_argument("--row_index_offset", type=int, default=0)
     args = parser.parse_args()
 
     tbl_preview = _load_tbl_preview()
@@ -67,6 +68,7 @@ def main() -> None:
         max_col_width=args.max_col_width,
         min_tbl_width=args.min_tbl_width,
         caption=args.caption,
+        row_index_offset=args.row_index_offset,
     )
 
     sys.stdout.write(result.as_html())
