@@ -3,7 +3,6 @@ title: "Color Swatches"
 guide-section: "Site Content"
 tags: [Content, Theming, Extensions]
 status: experimental
-upcoming: "0.9"
 versions: ">=0.8"
 ---
 

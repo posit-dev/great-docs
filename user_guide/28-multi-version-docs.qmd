@@ -3,7 +3,6 @@ title: "Versioned Docs"
 guide-section: "Build & Deploy"
 tags: [Build, Configuration, Versioning]
 status: experimental
-upcoming: "0.8"
 versions: ">=0.7"
 ---
 

@@ -3,8 +3,8 @@ title: "Table Previews"
 guide-section: "Site Content"
 tags: [Content, Extensions, Data]
 status: experimental
-upcoming: "0.9"
-versions: ">=0.8"
+upcoming: "0.10"
+versions: ">=0.9"
 ---
 
 # Table Previews
@@ -14,6 +14,72 @@ Documentation sites for data-oriented packages often need to show what a dataset
 Each preview includes a colored type badge (Polars, Pandas, CSV, Parquet, etc.), compact dtype labels beneath every column header, row-number gutters, head/tail splitting for large tables, and automatic highlighting of missing values. The output renders identically in light mode and dark mode, requires no JavaScript, and is safe to embed in RSS feeds, emails, or static HTML.
 
 This guide walks through every feature, starting from the simplest Python call and building up to the Quarto shortcode, file format support, and advanced display options.
+
+```{python}
+#| echo: false
+#| output: false
+# Setup: create sample data files used by examples below.
+import pathlib, json
+
+_d = pathlib.Path("assets/tbl-preview-data")
+_d.mkdir(parents=True, exist_ok=True)
+
+(_d / "students.csv").write_text(
+    "name,subject,score,grade,passed\n"
+    "Alice,Math,95.5,A,true\n"
+    "Bob,Science,82.0,B,true\n"
+    "Charlie,English,71.3,C,true\n"
+    "Diana,History,60.0,D,true\n"
+    "Eve,Art,55.8,F,false\n"
+    "Frank,Math,88.2,B+,true\n"
+    "Grace,Science,79.9,C+,true\n"
+    "Hank,English,91.0,A-,true\n"
+    "Iris,History,66.4,D+,true\n"
+    "Jack,Art,73.7,C,true\n"
+)
+
+(_d / "products.tsv").write_text(
+    "product\tcategory\tprice\tstock\trating\n"
+    "Widget\tElectronics\t29.99\t150\t4.5\n"
+    "Gadget\tTools\t49.50\t80\t3.8\n"
+    "Gizmo\tKitchen\t12.00\t300\t4.9\n"
+    "Doohickey\tGarden\t8.75\t0\t4.2\n"
+    "Thingamajig\tOffice\t199.99\t25\t2.1\n"
+    "Contraption\tElectronics\t65.00\t44\t3.5\n"
+    "Apparatus\tTools\t120.00\t12\t4.7\n"
+)
+
+_logs = [
+    {"timestamp": "2025-01-15T08:30:00", "level": "INFO", "module": "auth", "message": "User login successful"},
+    {"timestamp": "2025-01-15T08:31:12", "level": "WARNING", "module": "db", "message": "Slow query detected (3.2s)"},
+    {"timestamp": "2025-01-15T08:32:45", "level": "ERROR", "module": "api", "message": "Request timeout on /v2/users"},
+    {"timestamp": "2025-01-15T08:33:01", "level": "INFO", "module": "cache", "message": "Cache miss for key user:42"},
+    {"timestamp": "2025-01-15T08:34:20", "level": "DEBUG", "module": "auth", "message": "Token refresh for session abc123"},
+    {"timestamp": "2025-01-15T08:35:55", "level": "ERROR", "module": "db", "message": "Connection pool exhausted"},
+]
+(_d / "server_logs.jsonl").write_text("\n".join(json.dumps(r) for r in _logs) + "\n")
+
+import polars as pl
+
+_products = pl.DataFrame({
+    "product": ["Widget", "Gadget", "Gizmo", "Doohickey", "Thingamajig"],
+    "category": ["Electronics", "Tools", "Kitchen", "Garden", "Office"],
+    "price": [29.99, 49.50, 12.00, 8.75, 199.99],
+    "in_stock": [True, False, True, True, False],
+    "rating": [4.5, 3.8, 4.9, 4.2, 2.1],
+})
+_products.write_parquet(str(_d / "products.parquet"))
+
+_employees = pl.DataFrame({
+    "name": ["Alice", "Bob", "Charlie", "Diana", "Eve", "Frank"],
+    "department": ["Engineering", "Marketing", "Engineering", "Sales", "Marketing", "Sales"],
+    "salary": [95000, 72000, 105000, 68000, 88000, 71000],
+    "years": [5, 3, 8, 2, 6, 4],
+})
+_employees.write_ipc(str(_d / "employees.feather"))
+
+del _d, _logs, _products, _employees
+```
 
 ## Quick Start
 
