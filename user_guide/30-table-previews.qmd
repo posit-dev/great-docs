@@ -97,6 +97,19 @@ tbl_preview({
 
 The result is a styled HTML table with a header banner showing the row and column count, dtype labels beneath each column name, and row numbers on the left. This single function call is all it takes to go from raw data to a polished preview.
 
+:::{.callout-tip}
+## Hiding the Code Cell
+
+Most of the time you'll want to show just the table itself, not the underlying generation code. Add `#| echo: false` at the top of the code cell to hide the source and display only the rendered preview:
+
+````markdown
+```{{python}}
+#| echo: false
+tbl_preview({"city": ["Tokyo", "Paris"], "country": ["Japan", "France"]})
+```
+````
+:::
+
 ## Data Sources
 
 `tbl_preview()` accepts many different input types, so you can pass whatever data structure your project already uses. Each source type gets a distinct colored badge in the header banner, making it easy to tell at a glance what kind of data is being displayed.
@@ -353,7 +366,7 @@ Captions are useful when multiple previews appear on the same page, giving each 
 
 ### Row Numbers
 
-Row numbers appear in a left-hand gutter by default. They reflect the original row positions, even when head/tail splitting is active. To hide them:
+Row numbers appear in a left-hand gutter by default, starting from 0 to match Python, Polars, and Pandas 0-based indexing. They reflect the original row positions, even when head/tail splitting is active. To hide them:
 
 ```{python}
 tbl_preview(
@@ -364,6 +377,20 @@ tbl_preview(
 ```
 
 Hiding row numbers is useful for small reference tables where the row position isn't meaningful.
+
+### Row Index Offset
+
+If you prefer 1-based numbering (or any other starting value), set `row_index_offset`:
+
+```{python}
+tbl_preview(
+    {"x": [1, 2, 3], "y": [4, 5, 6]},
+    show_all=True,
+    row_index_offset=1,
+)
+```
+
+The offset applies to all rows, including tail rows in head/tail splits. The default of `0` keeps row numbers consistent with what you see when inspecting a DataFrame in Python.
 
 ### Dtype Labels
 
@@ -487,6 +514,7 @@ The full set of shortcode parameters mirrors the Python function:
 | `max_col_width` | string | `"250"` | Maximum column width in pixels |
 | `min_tbl_width` | string | `"500"` | Minimum total table width in pixels |
 | `caption` | string | — | Caption text below the header banner |
+| `row_index_offset` | string | `"0"` | Starting row number (use `"1"` for 1-based) |
 
 The shortcode supports every file format listed in the [Supported File Extensions](#supported-file-extensions) table.
 
@@ -540,6 +568,7 @@ The table below lists every parameter available on the `tbl_preview()` function.
 | `min_tbl_width` | `int` | `500` | Minimum table width (px) |
 | `caption` | `str` | `None` | Caption text |
 | `highlight_missing` | `bool` | `True` | Highlight missing values |
+| `row_index_offset` | `int` | `0` | Starting row number (0-based by default) |
 | `id` | `str` | auto | Custom HTML `id` for the container |
 
 The return value is a `TblPreview` object with `_repr_html_()` (for notebook display), `as_html()` (returns the HTML string), and `save(path)` (writes HTML to a file) methods.
