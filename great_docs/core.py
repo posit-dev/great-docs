@@ -6925,9 +6925,6 @@ class GreatDocs:
         def _t(key: str, fallback: str) -> str:
             return get_translation(key, lang) if lang != "en" else fallback
 
-        # Use static threshold of 5 methods for large class separation
-        method_threshold = 5
-
         # ── Helper: build a class section with big-class splitting ────────
         def _make_class_section(title: str, desc: str, class_names: list) -> list[dict]:
             """Return section dicts (possibly with a Methods companion section)."""
@@ -6939,7 +6936,7 @@ class GreatDocs:
 
             for class_name in class_names:
                 method_count = categories["class_methods"].get(class_name, 0)
-                if method_count > method_threshold:
+                if self._config.should_split_methods(method_count):
                     class_contents.append({"name": class_name, "members": []})
                     separate_methods.append(class_name)
                 else:
@@ -7306,9 +7303,6 @@ class GreatDocs:
                     mod_prefix = qualified.split(".")[0]
                     module_members.setdefault(mod_prefix, []).append(qualified)
 
-        # Use the same big-class threshold as auto-discovery
-        method_threshold = 5
-
         sections = []
 
         for section_config in reference_config:
@@ -7331,7 +7325,7 @@ class GreatDocs:
                         # This is a module name — expand into its individual members
                         for member in module_members[item]:
                             method_count = categories["class_methods"].get(member, 0)
-                            if method_count > method_threshold:
+                            if self._config.should_split_methods(method_count):
                                 section_contents.append(
                                     {"name": member, "members": []}
                                 )  # pragma: no cover
@@ -7341,7 +7335,7 @@ class GreatDocs:
                     else:
                         # Regular item (class, function, etc.) — use as-is
                         method_count = categories["class_methods"].get(item, 0)
-                        if method_count > method_threshold:
+                        if self._config.should_split_methods(method_count):
                             section_contents.append({"name": item, "members": []})
                             large_classes_in_section.append(item)
                         else:
@@ -8044,9 +8038,6 @@ jupyter: python3
         class_methods = categories.get("class_methods", {})
         class_method_names = categories.get("class_method_names", {})
 
-        # Use static threshold of 5 methods for large class separation
-        threshold = 5
-
         # Track large classes that need separate method sections
         large_classes: list[str] = []
 
@@ -8072,7 +8063,7 @@ jupyter: python3
             lines.append("    contents:")
             for class_name in sorted(items):
                 method_count = class_methods.get(class_name, 0)
-                if method_count > threshold:
+                if self._config.should_split_methods(method_count):
                     lines.append(f"      - name: {class_name}")
                     lines.append(f"        members: false  # {method_count} methods listed below")
                     large_classes.append(class_name)

@@ -94,6 +94,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # API Reference configuration (explicit section ordering)
     # If not provided, auto-generates sections from discovered exports
     "reference": [],
+    # Control whether class methods get their own pages or stay inline.
+    # true: always inline methods on the class page (never split)
+    # false: always give methods their own pages (always split)
+    # int: inline up to N methods, split above N (default: 5)
+    "inline_methods": 5,
     # Logo configuration
     # str: path to a single logo file (used for all contexts)
     # dict: {"light": "...", "dark": "...", "alt": "...", "height": "...", "href": "...", "show_title": False}
@@ -788,6 +793,28 @@ class Config:
         if isinstance(val, dict):
             return val.get("desc")
         return None
+
+    def should_split_methods(self, method_count: int) -> bool:
+        """Whether a class with this many methods should split them to separate pages.
+
+        Controlled by `inline_methods` in great-docs.yml:
+        - true: never split (always inline)
+        - false: always split
+        - int N: split when method_count > N (default: 5)
+
+        Items with no methods are never split regardless of the setting.
+        """
+        if method_count == 0:
+            return False
+        val = self.get("inline_methods", 5)
+        if val is True:
+            return False
+        if val is False:
+            return True
+        try:
+            return method_count > int(val)
+        except (TypeError, ValueError):
+            return method_count > 5
 
     @property
     def authors(self) -> list[dict[str, Any]]:
