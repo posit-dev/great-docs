@@ -1,0 +1,11 @@
+name,subject,score,grade,passed
+Alice,Math,95.5,A,true
+Bob,Science,82.0,B,true
+Charlie,English,71.3,C,true
+Diana,History,60.0,D,true
+Eve,Art,55.8,F,false
+Frank,Math,88.2,B+,true
+Grace,Science,79.9,C+,true
+Hank,English,91.0,A-,true
+Iris,History,66.4,D+,true
+Jack,Art,73.7,C,true
