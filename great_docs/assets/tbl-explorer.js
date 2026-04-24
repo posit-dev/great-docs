@@ -64,10 +64,63 @@
 
     this.filteredRows = this.allRows.slice();
     this.sortCols = [];
-    this.filterQuery = "";
+    this.filterTokens = [];  // [{colIdx, op, value, id}]
+    this.filterQuery = "";   // kept for search highlight compat
     this.visibleCols = this.columns.map(function (_, i) { return i; });
     this.currentPage = 1;
     this.pageSize = this.cfg.pageSize || 20;
+    this._nextFilterId = 1;
+  }
+
+  // ── Filter operator definitions ────────────────────────────
+
+  var NUMERIC_DTYPES = {
+    i8:1,i16:1,i32:1,i64:1,u8:1,u16:1,u32:1,u64:1,
+    f16:1,f32:1,f64:1,dec:1
+  };
+
+  function isNumeric(dtype) { return !!NUMERIC_DTYPES[dtype]; }
+  function isBool(dtype) { return dtype === "bool"; }
+
+  // {key, label, needsValue, appliesTo(dtype)}
+  var FILTER_OPS = [
+    // String ops
+    {key:"contains",    label:"contains",      needsValue:true,  appliesTo:function(d){return !isNumeric(d) && !isBool(d);}},
+    {key:"not_contains",label:"doesn\u2019t contain",needsValue:true,appliesTo:function(d){return !isNumeric(d) && !isBool(d);}},
+    {key:"starts_with", label:"starts with",   needsValue:true,  appliesTo:function(d){return !isNumeric(d) && !isBool(d);}},
+    {key:"ends_with",   label:"ends with",     needsValue:true,  appliesTo:function(d){return !isNumeric(d) && !isBool(d);}},
+    {key:"eq_str",      label:"equals",        needsValue:true,  appliesTo:function(d){return !isNumeric(d) && !isBool(d);}},
+    {key:"is_empty",    label:"is empty",      needsValue:false, appliesTo:function(d){return !isNumeric(d) && !isBool(d);}},
+    {key:"not_empty",   label:"is not empty",  needsValue:false, appliesTo:function(d){return !isNumeric(d) && !isBool(d);}},
+    // Numeric ops
+    {key:"eq",  label:"\u003D",  needsValue:true, appliesTo:isNumeric},
+    {key:"neq", label:"\u2260",  needsValue:true, appliesTo:isNumeric},
+    {key:"lt",  label:"\u003C",  needsValue:true, appliesTo:isNumeric},
+    {key:"lte", label:"\u2264",  needsValue:true, appliesTo:isNumeric},
+    {key:"gt",  label:"\u003E",  needsValue:true, appliesTo:isNumeric},
+    {key:"gte", label:"\u2265",  needsValue:true, appliesTo:isNumeric},
+    {key:"between",label:"between",needsValue:"two",appliesTo:isNumeric},
+    // Bool ops
+    {key:"is_true",  label:"is true",  needsValue:false, appliesTo:isBool},
+    {key:"is_false", label:"is false", needsValue:false, appliesTo:isBool},
+    // Universal ops
+    {key:"is_null",     label:"is null",     needsValue:false, appliesTo:function(){return true;}},
+    {key:"is_not_null", label:"is not null", needsValue:false, appliesTo:function(){return true;}}
+  ];
+
+  function getOpsForDtype(dtype) {
+    var ops = [];
+    for (var i = 0; i < FILTER_OPS.length; i++) {
+      if (FILTER_OPS[i].appliesTo(dtype)) ops.push(FILTER_OPS[i]);
+    }
+    return ops;
+  }
+
+  function findOp(key) {
+    for (var i = 0; i < FILTER_OPS.length; i++) {
+      if (FILTER_OPS[i].key === key) return FILTER_OPS[i];
+    }
+    return null;
   }
 
   // ── Init ───────────────────────────────────────────────────
@@ -115,18 +168,24 @@
     bar.setAttribute("aria-label", "Table controls");
 
     if (state.cfg.filterable) {
-      var input = document.createElement("input");
-      input.type = "search";
-      input.className = "gd-tbl-filter";
-      input.placeholder = "Filter all columns\u2026";
-      input.setAttribute("aria-label", "Filter all columns");
-      input.addEventListener("input", debounce(function () {
-        state.filterQuery = input.value;
-        state.currentPage = 1;
-        applyFilter(state);
-        applyState(el, state);
-      }, DEBOUNCE_MS));
-      bar.appendChild(input);
+      var filterBar = document.createElement("div");
+      filterBar.className = "gd-tbl-filter-bar";
+
+      var tokenArea = document.createElement("span");
+      tokenArea.className = "gd-tbl-filter-tokens";
+      filterBar.appendChild(tokenArea);
+
+      var addBtn = document.createElement("button");
+      addBtn.className = "gd-tbl-btn gd-tbl-btn-icon gd-tbl-filter-add";
+      addBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="1" x2="6" y2="11"/><line x1="1" y1="6" x2="11" y2="6"/></svg>';
+      addBtn.setAttribute("aria-label", "Add filter");
+      addBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        startFilterWizard(el, state, filterBar, tokenArea);
+      });
+      filterBar.appendChild(addBtn);
+
+      bar.appendChild(filterBar);
     }
 
     if (state.cfg.columnToggle) {
@@ -163,17 +222,290 @@
     }
   }
 
+  // ── Filter Wizard (multi-step: column → operator → value) ──
+
+  function startFilterWizard(el, state, filterBar, tokenArea) {
+    // Remove any existing wizard
+    closeFilterWizard(filterBar);
+
+    var wizard = document.createElement("div");
+    wizard.className = "gd-tbl-filter-wizard";
+    wizard.addEventListener("click", function (e) { e.stopPropagation(); });
+
+    // Step 1: pick column
+    var heading = document.createElement("span");
+    heading.className = "gd-tbl-fw-label";
+    heading.textContent = "Column";
+    wizard.appendChild(heading);
+
+    var colList = document.createElement("div");
+    colList.className = "gd-tbl-fw-options";
+    state.columns.forEach(function (col, idx) {
+      var btn = document.createElement("button");
+      btn.className = "gd-tbl-fw-option";
+      btn.textContent = col.name;
+      var dtypeTag = document.createElement("span");
+      dtypeTag.className = "gd-tbl-fw-dtype";
+      dtypeTag.textContent = col.dtype;
+      btn.appendChild(dtypeTag);
+      btn.addEventListener("click", function () {
+        showOpStep(wizard, el, state, filterBar, tokenArea, idx);
+      });
+      colList.appendChild(btn);
+    });
+    wizard.appendChild(colList);
+
+    filterBar.appendChild(wizard);
+
+    // Close on outside click
+    function onDocClick() {
+      closeFilterWizard(filterBar);
+      document.removeEventListener("click", onDocClick);
+    }
+    setTimeout(function () {
+      document.addEventListener("click", onDocClick);
+    }, 0);
+  }
+
+  function showOpStep(wizard, el, state, filterBar, tokenArea, colIdx) {
+    var col = state.columns[colIdx];
+    var ops = getOpsForDtype(col.dtype);
+
+    // Clear wizard content
+    wizard.innerHTML = "";
+    var heading = document.createElement("span");
+    heading.className = "gd-tbl-fw-label";
+    heading.textContent = col.name;
+    wizard.appendChild(heading);
+
+    var opList = document.createElement("div");
+    opList.className = "gd-tbl-fw-options";
+    ops.forEach(function (op) {
+      var btn = document.createElement("button");
+      btn.className = "gd-tbl-fw-option";
+      btn.textContent = op.label;
+      btn.addEventListener("click", function () {
+        if (!op.needsValue) {
+          // No value needed — commit immediately
+          commitFilterToken(el, state, tokenArea, colIdx, op.key, null, null);
+          closeFilterWizard(filterBar);
+        } else if (op.needsValue === "two") {
+          showBetweenValueStep(wizard, el, state, filterBar, tokenArea, colIdx, op.key);
+        } else {
+          showValueStep(wizard, el, state, filterBar, tokenArea, colIdx, op.key);
+        }
+      });
+      opList.appendChild(btn);
+    });
+    wizard.appendChild(opList);
+  }
+
+  function showValueStep(wizard, el, state, filterBar, tokenArea, colIdx, opKey) {
+    var col = state.columns[colIdx];
+    var op = findOp(opKey);
+    var isText = !isNumeric(col.dtype) && !isBool(col.dtype);
+    var caseSensitive = false;
+    wizard.innerHTML = "";
+
+    var heading = document.createElement("span");
+    heading.className = "gd-tbl-fw-label";
+    heading.textContent = col.name + " " + op.label;
+    wizard.appendChild(heading);
+
+    var inputRow = document.createElement("div");
+    inputRow.className = "gd-tbl-fw-input-row";
+
+    var input = document.createElement("input");
+    input.type = isNumeric(col.dtype) ? "number" : "text";
+    input.className = "gd-tbl-fw-input";
+    input.placeholder = "Enter value\u2026";
+    input.setAttribute("aria-label", "Filter value");
+    inputRow.appendChild(input);
+
+    // Case-sensitivity toggle for text columns
+    var caseBtn = null;
+    if (isText) {
+      caseBtn = document.createElement("button");
+      caseBtn.className = "gd-tbl-fw-case";
+      caseBtn.textContent = "Aa";
+      caseBtn.setAttribute("aria-label", "Toggle case sensitivity");
+      caseBtn.title = "Case insensitive";
+      caseBtn.addEventListener("click", function () {
+        caseSensitive = !caseSensitive;
+        caseBtn.classList.toggle("active", caseSensitive);
+        caseBtn.title = caseSensitive ? "Case sensitive" : "Case insensitive";
+      });
+      inputRow.appendChild(caseBtn);
+    }
+    wizard.appendChild(inputRow);
+
+    var commitBtn = document.createElement("button");
+    commitBtn.className = "gd-tbl-btn gd-tbl-fw-commit";
+    commitBtn.textContent = "Apply";
+    commitBtn.addEventListener("click", function () {
+      var val = input.value.trim();
+      if (!val) return;
+      commitFilterToken(el, state, tokenArea, colIdx, opKey, val, null, caseSensitive);
+      closeFilterWizard(filterBar);
+    });
+    wizard.appendChild(commitBtn);
+
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commitBtn.click();
+      }
+      if (e.key === "Escape") {
+        closeFilterWizard(filterBar);
+      }
+    });
+    setTimeout(function () { input.focus(); }, 0);
+  }
+
+  function showBetweenValueStep(wizard, el, state, filterBar, tokenArea, colIdx, opKey) {
+    var col = state.columns[colIdx];
+    wizard.innerHTML = "";
+
+    var heading = document.createElement("span");
+    heading.className = "gd-tbl-fw-label";
+    heading.textContent = col.name + " between";
+    wizard.appendChild(heading);
+
+    var row = document.createElement("span");
+    row.className = "gd-tbl-fw-between";
+
+    var inputLo = document.createElement("input");
+    inputLo.type = "number";
+    inputLo.className = "gd-tbl-fw-input";
+    inputLo.placeholder = "min";
+    inputLo.setAttribute("aria-label", "Minimum value");
+    row.appendChild(inputLo);
+
+    var sep = document.createElement("span");
+    sep.textContent = " and ";
+    sep.className = "gd-tbl-fw-sep";
+    row.appendChild(sep);
+
+    var inputHi = document.createElement("input");
+    inputHi.type = "number";
+    inputHi.className = "gd-tbl-fw-input";
+    inputHi.placeholder = "max";
+    inputHi.setAttribute("aria-label", "Maximum value");
+    row.appendChild(inputHi);
+    wizard.appendChild(row);
+
+    var commitBtn = document.createElement("button");
+    commitBtn.className = "gd-tbl-btn gd-tbl-fw-commit";
+    commitBtn.textContent = "Apply";
+    commitBtn.addEventListener("click", function () {
+      var lo = inputLo.value.trim();
+      var hi = inputHi.value.trim();
+      if (!lo || !hi) return;
+      commitFilterToken(el, state, tokenArea, colIdx, opKey, lo, hi);
+      closeFilterWizard(filterBar);
+    });
+    wizard.appendChild(commitBtn);
+
+    function onKey(e) {
+      if (e.key === "Enter") { e.preventDefault(); commitBtn.click(); }
+      if (e.key === "Escape") closeFilterWizard(filterBar);
+    }
+    inputLo.addEventListener("keydown", onKey);
+    inputHi.addEventListener("keydown", onKey);
+    setTimeout(function () { inputLo.focus(); }, 0);
+  }
+
+  function commitFilterToken(el, state, tokenArea, colIdx, opKey, value, value2, caseSensitive) {
+    var token = {
+      id: state._nextFilterId++,
+      colIdx: colIdx,
+      op: opKey,
+      value: value,
+      value2: value2,
+      caseSensitive: !!caseSensitive
+    };
+    state.filterTokens.push(token);
+    renderFilterTokens(el, state, tokenArea);
+    state.currentPage = 1;
+    applyFilter(state);
+    applyState(el, state);
+  }
+
+  function removeFilterToken(el, state, tokenArea, tokenId) {
+    state.filterTokens = state.filterTokens.filter(function (t) { return t.id !== tokenId; });
+    renderFilterTokens(el, state, tokenArea);
+    state.currentPage = 1;
+    applyFilter(state);
+    applyState(el, state);
+  }
+
+  function renderFilterTokens(el, state, tokenArea) {
+    tokenArea.innerHTML = "";
+    for (var i = 0; i < state.filterTokens.length; i++) {
+      var t = state.filterTokens[i];
+      var col = state.columns[t.colIdx];
+      var op = findOp(t.op);
+      var pill = document.createElement("span");
+      pill.className = "gd-tbl-filter-token";
+
+      var label = col.name + " " + (op ? op.label : t.op);
+      if (t.value != null) {
+        if (t.value2 != null) {
+          label += " " + t.value + "\u2013" + t.value2;
+        } else {
+          var isText = !isNumeric(col.dtype);
+          label += " " + (isText ? "\u2018" + t.value + "\u2019" : t.value);
+        }
+      }
+      var text = document.createElement("span");
+      text.className = "gd-tbl-filter-token-text";
+      text.textContent = label;
+      pill.appendChild(text);
+
+      // Show case-sensitivity badge when active
+      if (t.caseSensitive) {
+        var caseBadge = document.createElement("span");
+        caseBadge.className = "gd-tbl-filter-token-case";
+        caseBadge.textContent = "Aa";
+        caseBadge.title = "Case sensitive";
+        pill.appendChild(caseBadge);
+      }
+
+      var closeBtn = document.createElement("button");
+      closeBtn.className = "gd-tbl-filter-token-x";
+      closeBtn.innerHTML = "\u00D7";
+      closeBtn.setAttribute("aria-label", "Remove filter: " + label);
+      (function (tid) {
+        closeBtn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          removeFilterToken(el, state, tokenArea, tid);
+        });
+      })(t.id);
+      pill.appendChild(closeBtn);
+      tokenArea.appendChild(pill);
+    }
+  }
+
+  function closeFilterWizard(filterBar) {
+    var w = filterBar.querySelector(".gd-tbl-filter-wizard");
+    if (w && w.parentNode) w.parentNode.removeChild(w);
+  }
+
   // ── Column Toggle ──────────────────────────────────────────
 
   function buildColumnToggle(el, state) {
     var wrap = document.createElement("span");
-    wrap.className = "gd-tbl-col-wrap";
+    wrap.className = "gd-tbl-col-wrap gd-tbl-btn-wrap";
 
     var btn = document.createElement("button");
     btn.className = "gd-tbl-btn";
     btn.setAttribute("aria-haspopup", "true");
     btn.setAttribute("aria-expanded", "false");
     updateColBtnLabel(btn, state);
+
+    var tip = document.createElement("span");
+    tip.className = "gd-tbl-tooltip";
+    tip.textContent = "Select Columns";
 
     var menu = document.createElement("div");
     menu.className = "gd-tbl-col-menu";
@@ -235,6 +567,7 @@
     });
 
     wrap.appendChild(btn);
+    wrap.appendChild(tip);
     wrap.appendChild(menu);
     return wrap;
   }
@@ -375,25 +708,88 @@
   // ── Filtering ──────────────────────────────────────────────
 
   function applyFilter(state) {
-    if (!state.filterQuery) {
+    if (state.filterTokens.length === 0) {
       state.filteredRows = state.allRows.slice();
     } else {
-      var q = state.filterQuery.toLowerCase();
       state.filteredRows = state.allRows.filter(function (row) {
-        for (var i = 0; i < state.visibleCols.length; i++) {
-          var ci = state.visibleCols[i];
-          var v = row[ci];
-          if (v != null && String(v).toLowerCase().indexOf(q) !== -1) {
-            return true;
-          }
+        for (var i = 0; i < state.filterTokens.length; i++) {
+          if (!evalToken(state.filterTokens[i], row)) return false;
         }
-        return false;
+        return true;
       });
     }
     // Re-apply sort after filter
     if (state.sortCols.length > 0) {
       applySort(state);
     }
+  }
+
+  function evalToken(tok, row) {
+    var v = row[tok.colIdx];
+    switch (tok.op) {
+      // Null checks
+      case "is_null":     return v == null;
+      case "is_not_null": return v != null;
+      // Bool
+      case "is_true":  return v === true;
+      case "is_false": return v === false;
+      // String ops (case-sensitive when tok.caseSensitive is set)
+      case "contains": {
+        if (v == null) return false;
+        var sv = String(v), fv = tok.value;
+        if (!tok.caseSensitive) { sv = sv.toLowerCase(); fv = fv.toLowerCase(); }
+        return sv.indexOf(fv) !== -1;
+      }
+      case "not_contains": {
+        if (v == null) return false;
+        var sv = String(v), fv = tok.value;
+        if (!tok.caseSensitive) { sv = sv.toLowerCase(); fv = fv.toLowerCase(); }
+        return sv.indexOf(fv) === -1;
+      }
+      case "starts_with": {
+        if (v == null) return false;
+        var sv = String(v), fv = tok.value;
+        if (!tok.caseSensitive) { sv = sv.toLowerCase(); fv = fv.toLowerCase(); }
+        return sv.indexOf(fv) === 0;
+      }
+      case "ends_with": {
+        if (v == null) return false;
+        var sv = String(v), fv = tok.value;
+        if (!tok.caseSensitive) { sv = sv.toLowerCase(); fv = fv.toLowerCase(); }
+        return sv.length >= fv.length && sv.lastIndexOf(fv) === sv.length - fv.length;
+      }
+      case "eq_str": {
+        if (v == null) return false;
+        var sv = String(v), fv = tok.value;
+        if (!tok.caseSensitive) { sv = sv.toLowerCase(); fv = fv.toLowerCase(); }
+        return sv === fv;
+      }
+      case "is_empty":
+        return v != null && String(v).trim() === "";
+      case "not_empty":
+        return v != null && String(v).trim() !== "";
+      // Numeric ops
+      case "eq":  return v != null && Number(v) === Number(tok.value);
+      case "neq": return v != null && Number(v) !== Number(tok.value);
+      case "lt":  return v != null && Number(v) <  Number(tok.value);
+      case "lte": return v != null && Number(v) <= Number(tok.value);
+      case "gt":  return v != null && Number(v) >  Number(tok.value);
+      case "gte": return v != null && Number(v) >= Number(tok.value);
+      case "between":
+        return v != null && Number(v) >= Number(tok.value) && Number(v) <= Number(tok.value2);
+      default: return true;
+    }
+  }
+
+  /** Return a highlight substring for a given column, or "" if none. */
+  function getHighlightQuery(state, colIdx) {
+    for (var i = 0; i < state.filterTokens.length; i++) {
+      var t = state.filterTokens[i];
+      if (t.colIdx === colIdx && t.op === "contains" && t.value) {
+        return t.value;
+      }
+    }
+    return "";
   }
 
   // ── Copy ───────────────────────────────────────────────────
@@ -472,14 +868,19 @@
 
   function handleReset(el, state) {
     state.filterQuery = "";
+    state.filterTokens = [];
     state.sortCols = [];
     state.currentPage = 1;
     state.visibleCols = state.columns.map(function (_, i) { return i; });
     state.filteredRows = state.allRows.slice();
 
-    // Reset filter input
-    var input = el.querySelector(".gd-tbl-filter");
-    if (input) input.value = "";
+    // Reset filter tokens display
+    var tokenArea = el.querySelector(".gd-tbl-filter-tokens");
+    if (tokenArea) tokenArea.innerHTML = "";
+
+    // Close any open filter wizard
+    var filterBar = el.querySelector(".gd-tbl-filter-bar");
+    if (filterBar) closeFilterWizard(filterBar);
 
     // Reset column checkboxes
     var cbs = el.querySelectorAll(".gd-tbl-col-menu input[type=checkbox]");
@@ -539,8 +940,10 @@
 
         var cellText = formatCell(val);
 
-        if (state.filterQuery && state.cfg.searchHighlight && !isMissing) {
-          td.innerHTML = highlightText(escapeHTML(cellText), state.filterQuery);
+        // Highlight matching "contains" filter values in relevant cells
+        var highlightQ = getHighlightQuery(state, ci);
+        if (highlightQ && state.cfg.searchHighlight && !isMissing) {
+          td.innerHTML = highlightText(escapeHTML(cellText), highlightQ);
         } else {
           td.textContent = cellText;
         }
