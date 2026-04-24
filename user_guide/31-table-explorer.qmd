@@ -1,0 +1,291 @@
+---
+title: "Table Explorer"
+guide-section: "Site Content"
+tags: [Content, Extensions, Data]
+status: experimental
+upcoming: "0.10"
+versions: ">=0.9"
+---
+
+# Table Explorer
+
+The `tbl_explorer()` function generates an interactive table widget from tabular data. Where [`tbl_preview()`](30-table-previews.qmd) produces a static, JavaScript-free snapshot of a dataset, `tbl_explorer()` embeds all rows as inline JSON and progressively enhances a static fallback table with interactive controls: sorting, token-based filtering, pagination, column toggling, copy-to-clipboard, and CSV download.
+
+Like `tbl_preview()`, `tbl_explorer()` accepts any tabular data source—Polars/Pandas DataFrames, PyArrow Tables, CSV/TSV/JSONL/Parquet/Feather files, column-oriented dicts, or row-oriented lists of dicts. The output is a self-contained HTML block that works in Python code cells, Jupyter notebooks, and (via the `{{{< tbl-explorer >}}}` shortcode) directly in Quarto `.qmd` pages.
+
+::: {.callout-note}
+For datasets larger than 10,000 rows, `tbl_explorer()` emits a warning because all data is embedded as JSON, which increases page weight. For very large datasets, consider using `tbl_preview()` with `n_head`/`n_tail` splitting instead.
+:::
+
+```{python}
+#| echo: false
+#| output: false
+from great_docs import tbl_explorer
+```
+
+## Basic Usage
+
+Pass any supported data source to `tbl_explorer()` to get a fully interactive table:
+
+```{python}
+from great_docs import tbl_explorer
+
+tbl_explorer({
+    "city": ["Tokyo", "Paris", "New York", "London", "Sydney"],
+    "population": [13960000, 2161000, 8336000, 8982000, 5312000],
+    "country": ["Japan", "France", "USA", "UK", "Australia"],
+})
+```
+
+The result includes a toolbar with a filter bar, column toggle, copy, download, and reset buttons. Column headers are sortable, and pagination appears at the bottom when the dataset exceeds the page size.
+
+:::{.callout-tip}
+## Hiding the Code Cell
+
+Most of the time you'll want to show just the table itself, not the underlying generation code. Add `#| echo: false` at the top of the code cell to hide the source and display only the rendered explorer:
+
+````markdown
+```{{python}}
+#| echo: false
+tbl_explorer("data/students.csv")
+```
+````
+:::
+
+## Sorting
+
+Click any column header to cycle through three states: **ascending → descending → unsorted**. Sort indicators appear as SVG arrows next to column names.
+
+For multi-column sorting, hold **Shift** while clicking additional columns. Each column sorts within the groups established by prior sort columns. For example, shift-clicking *department* then *salary* will group by department and sort salaries within each department.
+
+```{python}
+#| echo: false
+#| output: false
+# This example is for reference; sorting is demonstrated interactively.
+```
+
+## Token-Based Filtering
+
+The filter system uses structured, token-based filters. Each filter is a discrete token displayed as a blue pill in the filter bar, and all active tokens are ANDed together.
+
+### Adding a Filter
+
+1. Click the **+** button in the filter bar
+2. Select a **column** from the dropdown—each column shows its dtype badge
+3. Choose an **operator**—the available operators depend on the column's data type:
+
+| Column type | Operators |
+|-------------|-----------|
+| String | contains, doesn't contain, starts with, ends with, equals, is empty, is not empty |
+| Numeric | =, ≠, <, ≤, >, ≥, between |
+| Boolean | is true, is false |
+| All types | is null, is not null |
+
+4. For operators that require a value, type it in the input field and press **Enter** or click **Apply**
+
+The *between* operator for numeric columns presents two input fields for the lower and upper bounds of the range.
+
+### Understanding Filter Tokens
+
+Each token shows the column name, operator, and value. Text values appear in single quotes (e.g., `city contains 'york'`). Numeric values are shown unquoted (e.g., `salary > 80000`). Click the **×** on any token to remove that individual filter.
+
+### Case Sensitivity
+
+Text filters are **case-insensitive** by default. When entering a filter value for a text column, an **Aa** toggle button appears next to the input field. Click it to enable case-sensitive matching for that specific filter. Case-sensitive tokens display a small bordered **Aa** badge on the pill.
+
+### Combining Filters
+
+Multiple filters are ANDed together—a row must match *all* active filters to be displayed. You can add multiple filters on the same column (e.g., `salary > 70000` AND `salary < 100000`) or across different columns (e.g., `department contains 'Eng'` AND `rating > 4.0`).
+
+### Search Highlighting
+
+When a "contains" filter is active, matching text in cells is highlighted with a colored background. This makes it easy to spot why each row matched the filter. Disable this with `search_highlight=False`.
+
+## Pagination
+
+Tables are paginated at **20 rows per page** by default. The pagination bar shows:
+
+- The current range (e.g., "Showing 1–20 of 150 rows")
+- **First**, **Previous**, **Next**, and **Last** navigation buttons
+- Page number buttons with ellipsis for large page counts
+
+The row count updates to reflect any active filters (e.g., "Showing 1–5 of 5 rows (filtered from 24)").
+
+To disable pagination and show all rows at once, set `page_size=0`:
+
+```{python}
+tbl_explorer(
+    "../assets/data/students.csv",
+    page_size=0,
+)
+```
+
+Or set a custom page size:
+
+```{python}
+tbl_explorer(
+    "../assets/data/employees.csv",
+    page_size=10,
+)
+```
+
+## Column Toggle
+
+Click the **Columns** button in the toolbar to open a dropdown with checkboxes for each column. Uncheck columns to hide them from the table; check them again to restore them. At least one column must remain visible—the last visible column's checkbox is disabled.
+
+This is useful for wide datasets where you want to focus on specific columns without modifying the underlying data.
+
+## Copy and Download
+
+The toolbar includes two data-export buttons:
+
+- **Copy** (clipboard icon) — copies the currently visible page of data as tab-separated values to the clipboard. On success, the icon briefly turns into a green checkmark. The copied data includes column headers and respects the current sort and filter state.
+- **Download** (download icon) — downloads the full filtered dataset (all pages, not just the current page) as a CSV file. The filename is based on the table's `id` attribute.
+
+## Reset
+
+The **Reset** button (↺ icon) restores the table to its initial state in one click, clearing all:
+
+- Sort states
+- Filter tokens
+- Column visibility changes
+- Pagination (returns to page 1)
+
+## From a File
+
+Like `tbl_preview()`, you can pass a file path directly. The file extension determines the loader:
+
+```{python}
+tbl_explorer("../assets/data/students.csv", page_size=5)
+```
+
+Supported file formats: `.csv`, `.tsv`, `.jsonl` (or `.ndjson`), `.parquet`, `.feather`, `.arrow`.
+
+:::{.callout-tip}
+## Where to Put Data Files
+
+We recommend placing data files in an `assets/data/` directory at the root of your project. This keeps them version-controlled, easy to reference from any `.qmd` page, and separate from images and other static assets:
+
+```
+my-package/
+├── assets/
+│   └── data/
+│       ├── students.csv
+│       └── products.tsv
+├── reference/
+└── user-guide/
+```
+
+Both `tbl_explorer()` and `tbl_preview()` resolve file paths relative to the working directory, which is typically the project root during a Quarto build.
+:::
+
+## From a DataFrame
+
+Pass a Polars or Pandas DataFrame directly:
+
+```{python}
+import polars as pl
+
+df = pl.DataFrame({
+    "product": ["Widget", "Gadget", "Gizmo", "Doohickey", "Thingamajig"],
+    "category": ["Electronics", "Tools", "Kitchen", "Garden", "Office"],
+    "price": [29.99, 49.50, 12.00, 8.75, 199.99],
+    "in_stock": [True, False, True, True, False],
+    "rating": [4.5, 3.8, 4.9, 4.2, 2.1],
+})
+
+tbl_explorer(df)
+```
+
+## Column Subset
+
+Use the `columns=` parameter to show only specific columns:
+
+```{python}
+tbl_explorer(
+    "../assets/data/employees.csv",
+    columns=["name", "department", "salary"],
+)
+```
+
+## Quarto Shortcode
+
+The `{{{< tbl-explorer >}}}` shortcode brings the interactive explorer to `.qmd` pages without writing any Python. The `file=` parameter specifies the data file path relative to the `.qmd` file:
+
+```{markdown}
+{{< tbl-explorer file="data/example.csv" >}}
+```
+
+All parameters can be set as shortcode attributes:
+
+```{markdown}
+{{{< tbl-explorer file="data.csv" page_size="25" sortable="true" >}}}
+{{{< tbl-explorer file="data.csv" column_toggle="false" downloadable="false" >}}}
+{{{< tbl-explorer file="data.csv" columns="name,department,salary" >}}}
+```
+
+Boolean parameters accept `"true"` or `"false"` as strings. The `columns=` parameter accepts a comma-separated list of column names.
+
+## Minimal Chrome
+
+You can selectively disable interactive features for a cleaner, read-only presentation. For example, to show a sortable-only table with no toolbar controls:
+
+```{python}
+tbl_explorer(
+    "../assets/data/products.tsv",
+    sortable=True,
+    filterable=False,
+    column_toggle=False,
+    copyable=False,
+    downloadable=False,
+    page_size=0,
+)
+```
+
+## Progressive Enhancement
+
+The `tbl_explorer()` output is designed with **progressive enhancement** in mind. The initial HTML contains a fully rendered static table (the first page of data) that is readable without JavaScript. When JavaScript is available, the static table is enhanced with interactive controls.
+
+This means:
+
+- **RSS feeds and email** — readers see a usable static table
+- **Search engines** — table content is indexable
+- **Accessibility** — the base table works with screen readers
+- **No-JS environments** — content is still visible
+
+## Choosing Between `tbl_preview()` and `tbl_explorer()`
+
+| | `tbl_preview()` | `tbl_explorer()` |
+|---|---|---|
+| **Interactivity** | None (static HTML) | Sorting, filtering, pagination, column toggle |
+| **JavaScript** | Not required | Required for interactivity; static fallback without it |
+| **Data embedding** | Head/tail rows only | All rows as inline JSON |
+| **Best for** | Quick dataset snapshots, lightweight pages | Exploratory data docs, dashboards, reference tables |
+| **Large datasets** | Efficient (shows only head + tail) | All data embedded (watch page weight) |
+| **Dark mode** | Full support | Full support |
+
+## Parameters Reference
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `data` | various | — | Data source: DataFrame, file path, dict, or list of dicts |
+| `columns` | `list[str]` | `None` | Column subset to display (all if `None`) |
+| `show_row_numbers` | `bool` | `True` | Show row-number gutter column |
+| `show_dtypes` | `bool` | `True` | Show dtype labels under column names |
+| `show_dimensions` | `bool` | `True` | Show header banner with type badge and counts |
+| `max_col_width` | `int` | `250` | Maximum column width in pixels |
+| `min_tbl_width` | `int` | `500` | Minimum total table width in pixels |
+| `caption` | `str` | `None` | Caption text above column headers |
+| `highlight_missing` | `bool` | `True` | Highlight `None`/`NaN`/`NA` in red |
+| `page_size` | `int` | `20` | Rows per page (`0` to disable pagination) |
+| `sortable` | `bool` | `True` | Enable click-to-sort on column headers |
+| `filterable` | `bool` | `True` | Enable the token-based filter bar |
+| `column_toggle` | `bool` | `True` | Enable column visibility dropdown |
+| `copyable` | `bool` | `True` | Enable copy-to-clipboard button |
+| `downloadable` | `bool` | `True` | Enable CSV download button |
+| `resizable` | `bool` | `False` | Enable column drag-resize (reserved for future use) |
+| `sticky_header` | `bool` | `True` | Make column headers sticky on vertical scroll |
+| `search_highlight` | `bool` | `True` | Highlight matching text for "contains" filters |
+| `id` | `str` | auto | Custom HTML `id` for the container |
+
+The return value is a `TblExplorer` object with `_repr_html_()` (for notebook display), `as_html()` (returns the HTML string), and `save(path)` (writes HTML to a file) methods.
