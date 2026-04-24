@@ -341,7 +341,7 @@ def _render_explorer_css(uid: str) -> str:
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 12px;
+  padding: 5px 12px;
   border: 1px solid #ccc;
   border-radius: 4px;
   background: #f8f8f8;
@@ -349,6 +349,7 @@ def _render_explorer_css(uid: str) -> str:
   font-size: 12px;
   font-weight: 500;
   font-family: inherit;
+  line-height: 14px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
   white-space: nowrap;
