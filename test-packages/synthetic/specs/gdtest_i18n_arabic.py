@@ -275,6 +275,27 @@ SPEC = {
             print(safe)
             ```
         """,
+        "user_guide/03-table-explorer.qmd": """\
+            ---
+            title: "\u0645\u0633\u062a\u0643\u0634\u0641 \u0627\u0644\u062c\u062f\u0648\u0644"
+            guide-section: "\u0627\u0644\u0623\u0633\u0627\u0633\u064a\u0627\u062a"
+            ---
+
+            # \u0645\u0633\u062a\u0643\u0634\u0641 \u0627\u0644\u062c\u062f\u0648\u0644
+
+            \u0627\u0633\u062a\u062e\u062f\u0645 `tbl_explorer()` \u0644\u0627\u0633\u062a\u0643\u0634\u0627\u0641 \u0628\u064a\u0627\u0646\u0627\u062a\u0643 \u0628\u0634\u0643\u0644 \u062a\u0641\u0627\u0639\u0644\u064a.
+
+            ```{python}
+            #| echo: false
+            import tempfile
+            from great_docs import tbl_explorer
+            rows = "\u0627\u0644\u0627\u0633\u0645,\u0627\u0644\u0639\u0645\u0631,\u0627\u0644\u0645\u062f\u064a\u0646\u0629,\u0627\u0644\u062f\u0631\u062c\u0629\\n\u0623\u062d\u0645\u062f,28,\u0627\u0644\u0642\u0627\u0647\u0631\u0629,92.5\\n\u0641\u0627\u0637\u0645\u0629,35,\u0627\u0644\u0631\u064a\u0627\u0636,87.3\\n\u062e\u0627\u0644\u062f,22,\u062f\u0628\u064a,95.1\\n\u0646\u0648\u0631,41,\u0628\u064a\u0631\u0648\u062a,78.6\\n\u0633\u0627\u0631\u0629,30,\u0627\u0644\u062f\u0627\u0631 \u0627\u0644\u0628\u064a\u0636\u0627\u0621,88.9\\n\u0639\u0645\u0631,27,\u062a\u0648\u0646\u0633,91.2\\n\u0644\u064a\u0644\u0649,33,\u0639\u0645\u0627\u0646,84.7"
+            tf = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
+            tf.write(rows)
+            tf.close()
+            tbl_explorer(tf.name)
+            ```
+        """,
         "README.md": """\
             # gdtest-i18n-arabic
 
@@ -307,6 +328,7 @@ SPEC = {
         "user_guide_files": [
             "01-overview.qmd",
             "02-templates.qmd",
+            "03-table-explorer.qmd",
         ],
     },
 }

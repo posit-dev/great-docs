@@ -266,6 +266,28 @@ SPEC = {
             print(stats)
             ```
         """,
+        "user_guide/03-table-explorer.qmd": """\
+            ---
+            title: "Exploration de tableau"
+            guide-section: "Fondamentaux"
+            ---
+
+            # Exploration de tableau
+
+            Utilisez `tbl_explorer()` pour explorer vos donn\u00e9es de
+            mani\u00e8re interactive.
+
+            ```{python}
+            #| echo: false
+            import tempfile
+            from great_docs import tbl_explorer
+            rows = "nom,age,ville,score\\nMarie,28,Paris,92.5\\nPierre,35,Lyon,87.3\\nSophie,22,Marseille,95.1\\nJean,41,Toulouse,78.6\\nClaire,30,Nantes,88.9\\nLucas,27,Bordeaux,91.2\\nEmma,33,Lille,84.7"
+            tf = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
+            tf.write(rows)
+            tf.close()
+            tbl_explorer(tf.name)
+            ```
+        """,
         "README.md": """\
             # gdtest-i18n-french
 
@@ -298,6 +320,7 @@ SPEC = {
         "user_guide_files": [
             "01-demarrage-rapide.qmd",
             "02-configuration.qmd",
+            "03-table-explorer.qmd",
         ],
     },
 }

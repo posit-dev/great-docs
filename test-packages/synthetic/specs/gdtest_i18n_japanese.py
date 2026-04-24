@@ -261,6 +261,27 @@ SPEC = {
             | `multiply` | \u4e8c\u3064\u306e\u6570\u5024\u3092\u4e57\u7b97   |
             | `divide`   | \u4e8c\u3064\u306e\u6570\u5024\u3092\u9664\u7b97   |
         """,
+        "user_guide/03-table-explorer.qmd": """\
+            ---
+            title: "\u30c6\u30fc\u30d6\u30eb\u30a8\u30af\u30b9\u30d7\u30ed\u30fc\u30e9\u30fc"
+            guide-section: "\u306f\u3058\u3081\u306b"
+            ---
+
+            # \u30c6\u30fc\u30d6\u30eb\u30a8\u30af\u30b9\u30d7\u30ed\u30fc\u30e9\u30fc
+
+            `tbl_explorer()` \u3092\u4f7f\u3063\u3066\u30c7\u30fc\u30bf\u3092\u30a4\u30f3\u30bf\u30e9\u30af\u30c6\u30a3\u30d6\u306b\u63a2\u7d22\u3067\u304d\u307e\u3059\u3002
+
+            ```{python}
+            #| echo: false
+            import tempfile
+            from great_docs import tbl_explorer
+            rows = "\u540d\u524d,\u5e74\u9f62,\u90fd\u5e02,\u5f97\u70b9\\n\u592a\u90ce,28,\u6771\u4eac,92.5\\n\u82b1\u5b50,35,\u5927\u962a,87.3\\n\u6b21\u90ce,22,\u4eac\u90fd,95.1\\n\u7f8e\u6708,41,\u6a2a\u6d5c,78.6\\n\u5065,30,\u798f\u5ca1,88.9\\n\u3055\u304f\u3089,27,\u540d\u53e4\u5c4b,91.2\\n\u8aa0,33,\u672d\u5e4c,84.7"
+            tf = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
+            tf.write(rows)
+            tf.close()
+            tbl_explorer(tf.name)
+            ```
+        """,
         "README.md": """\
             # gdtest-i18n-japanese
 
@@ -288,6 +309,7 @@ SPEC = {
         "user_guide_files": [
             "01-quickstart.qmd",
             "02-functions.qmd",
+            "03-table-explorer.qmd",
         ],
     },
 }
