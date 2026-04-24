@@ -254,6 +254,7 @@ nav_icons:
     Versioned Docs: git-branch
     Color Swatches: pipette
     Table Previews: table
+    Table Explorer: telescope
 
 # Author Information
 # ------------------
@@ -320,3 +321,8 @@ reference:
         - tbl_preview
         - enable_tbl_preview
         - disable_tbl_preview
+
+    - title: Table Explorer
+      desc: Generate interactive HTML table explorers with sorting, filtering, and pagination
+      contents:
+        - tbl_explorer
