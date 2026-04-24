@@ -13,7 +13,7 @@ Documentation sites for data-oriented packages often need to show what a dataset
 
 Each preview includes a colored type badge (Polars, Pandas, CSV, Parquet, etc.), compact dtype labels beneath every column header, row-number gutters, head/tail splitting for large tables, and automatic highlighting of missing values. The output renders identically in light mode and dark mode, requires no JavaScript, and is safe to embed in RSS feeds, emails, or static HTML.
 
-This guide walks through every feature, starting from the simplest Python call and building up to the Quarto shortcode, file format support, and advanced display options.
+This guide walks through every feature, starting from the simplest Python call and building up to the Quarto shortcode, file format support, and advanced display options. For interactive tables with sorting, filtering, and pagination, see the companion [Table Explorer](31-table-explorer.qmd) guide.
 
 ```{python}
 #| echo: false
