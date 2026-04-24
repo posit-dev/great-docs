@@ -341,7 +341,7 @@
     var input = document.createElement("input");
     input.type = isNumeric(col.dtype) ? "number" : "text";
     input.className = "gd-tbl-fw-input";
-    input.placeholder = "Enter value\u2026";
+    input.placeholder = _gdT("tbl_filter_enter_value", "Enter value\u2026");
     input.setAttribute("aria-label", "Filter value");
     inputRow.appendChild(input);
 
@@ -352,11 +352,11 @@
       caseBtn.className = "gd-tbl-fw-case";
       caseBtn.textContent = "Aa";
       caseBtn.setAttribute("aria-label", "Toggle case sensitivity");
-      caseBtn.title = "Case insensitive";
+      caseBtn.title = _gdT("tbl_filter_case_insensitive", "Case insensitive");
       caseBtn.addEventListener("click", function () {
         caseSensitive = !caseSensitive;
         caseBtn.classList.toggle("active", caseSensitive);
-        caseBtn.title = caseSensitive ? "Case sensitive" : "Case insensitive";
+        caseBtn.title = caseSensitive ? _gdT("tbl_filter_case_sensitive", "Case sensitive") : _gdT("tbl_filter_case_insensitive", "Case insensitive");
       });
       inputRow.appendChild(caseBtn);
     }
@@ -364,7 +364,7 @@
 
     var commitBtn = document.createElement("button");
     commitBtn.className = "gd-tbl-btn gd-tbl-fw-commit";
-    commitBtn.textContent = "Apply";
+    commitBtn.textContent = _gdT("tbl_filter_apply", "Apply");
     commitBtn.addEventListener("click", function () {
       var val = input.value.trim();
       if (!val) return;
@@ -400,26 +400,26 @@
     var inputLo = document.createElement("input");
     inputLo.type = "number";
     inputLo.className = "gd-tbl-fw-input";
-    inputLo.placeholder = "min";
+    inputLo.placeholder = _gdT("tbl_filter_min", "min");
     inputLo.setAttribute("aria-label", "Minimum value");
     row.appendChild(inputLo);
 
     var sep = document.createElement("span");
-    sep.textContent = " and ";
+    sep.textContent = " " + _gdT("tbl_filter_and", "and") + " ";
     sep.className = "gd-tbl-fw-sep";
     row.appendChild(sep);
 
     var inputHi = document.createElement("input");
     inputHi.type = "number";
     inputHi.className = "gd-tbl-fw-input";
-    inputHi.placeholder = "max";
+    inputHi.placeholder = _gdT("tbl_filter_max", "max");
     inputHi.setAttribute("aria-label", "Maximum value");
     row.appendChild(inputHi);
     wizard.appendChild(row);
 
     var commitBtn = document.createElement("button");
     commitBtn.className = "gd-tbl-btn gd-tbl-fw-commit";
-    commitBtn.textContent = "Apply";
+    commitBtn.textContent = _gdT("tbl_filter_apply", "Apply");
     commitBtn.addEventListener("click", function () {
       var lo = inputLo.value.trim();
       var hi = inputHi.value.trim();
