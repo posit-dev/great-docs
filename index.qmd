@@ -52,13 +52,13 @@ Creates a GitHub Actions workflow. Every push to `main` rebuilds and publishes y
   <a href="recipes/hide-internal-symbols.html" class="gd-cta-card">
     <span class="gd-cta-icon">🍳</span>
     <span class="gd-cta-title">Recipes</span>
-    <span class="gd-cta-desc">Bite-sized guides for specific tasks — copy, paste, done.</span>
+    <span class="gd-cta-desc">Bite-sized guides for specific tasks: copy, paste, done.</span>
     <span class="gd-cta-arrow">→</span>
   </a>
   <a href="reference/index.html" class="gd-cta-card">
     <span class="gd-cta-icon">⚙️</span>
     <span class="gd-cta-title">API Reference</span>
-    <span class="gd-cta-desc">Great Docs documenting itself — every class, function, and option.</span>
+    <span class="gd-cta-desc">Great Docs documenting itself (every class, function, and option).</span>
     <span class="gd-cta-arrow">→</span>
   </a>
 </div>
