@@ -25,7 +25,7 @@ If your package has a Click CLI, that's documented as well (complete with termin
 
 Dark mode with a persistent toggle. Animated gradient navbars in eight presets. GitHub star counts in the corner. Sidebar search for large APIs. Responsive on every screen. Announcement banners when you ship something big.
 
-You get a site that looks like a funded startup's product docs, except it was built by a single `great-docs build`.
+Your package gets a site that matches the quality of the code behind it.
 
 ## AI-Native from Day One
 
