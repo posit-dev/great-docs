@@ -975,6 +975,12 @@ class Config:
         return val
 
     @property
+    def hero_starfield(self) -> bool:
+        """Whether the interactive starfield animation is enabled on the hero."""
+        hero = self.hero
+        return bool(hero.get("starfield", False)) if hero else False
+
+    @property
     def hero_badges(self) -> str | list | None:
         """Get the hero badges config.
 
