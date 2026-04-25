@@ -3963,13 +3963,67 @@ html:not(.theme-loaded) *::after {
     body[data-page="index"] .column-margin {
         grid-column: body-end / page-end !important;
     }
+
+    /* In dark mode every container gets an opaque --gd-bg-primary background
+       that hides the fixed starfield canvas (z-index: -1).  On the homepage
+       we punch all those layers transparent so the canvas shows through.
+       body/html keep their backgrounds — they sit BELOW the canvas in the
+       root stacking context and provide the base dark colour where the
+       canvas mask fades out. */
+    body.gd-homepage.quarto-dark #quarto-content,
+    body.gd-homepage.quarto-dark main.content,
+    body.gd-homepage.quarto-dark #quarto-document-content,
+    body.gd-homepage.quarto-dark .quarto-body-content,
+    body.gd-homepage.quarto-dark .page-columns,
+    body.gd-homepage.quarto-dark .page-rows-contents,
+    body.gd-homepage.quarto-dark .column-body,
+    body.gd-homepage.quarto-dark article,
+    body.gd-homepage.quarto-dark section {
+        background-color: transparent;
+    }
 }
 
 /* ── Hero Section ─────────────────────────────────────── */
 
+/* Prevent horizontal scrollbar from the 100vw starfield canvas */
+.gd-homepage {
+    overflow-x: clip;
+}
+
 .gd-hero {
     text-align: center;
     padding: 2.5rem 1rem 2rem;
+    position: relative;
+    overflow: visible;
+}
+
+/* Starfield canvas: breaks out of the hero to cover the full viewport width
+   and extends above into the navbar area and below into body content.
+   Uses fixed positioning relative to the viewport so Quarto's grid layout
+   doesn't clip or offset it. */
+#gd-starfield {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;         /* let clicks pass through to page content */
+    z-index: 0;
+    transition: opacity 0.15s ease-out;
+    mask-image: linear-gradient(to bottom, black 35%, transparent 85%);
+    -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent 85%);
+}
+
+/* Re-enable pointer events only on the homepage hero area so the
+   dark-mode starfield can track the cursor there. */
+.gd-hero #gd-starfield {
+    pointer-events: auto;
+}
+
+/* Everything in the hero except the canvas must sit above it */
+.gd-hero > *:not(#gd-starfield) {
+    position: relative;
+    z-index: 1;
 }
 
 /* When a column-margin sidebar is present, Quarto adds page-full to <main>
@@ -4045,6 +4099,217 @@ html[data-bs-theme="dark"] .navbar-logo.dark-content  { display: inline !importa
 .gd-hero + section.level1 > h1:first-child,
 .gd-hero + section.level2 > h2:first-child {
     margin-top: 0.5rem !important;
+}
+
+/* ── CTA Cards ("Go Further" section) ─────────────────── */
+
+.gd-cta-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+    margin: 1.5rem 0 2rem;
+}
+
+.gd-cta-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 1.5rem;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(248, 249, 250, 0.7));
+    text-decoration: none !important;
+    color: inherit !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    position: relative;
+    overflow: hidden;
+
+    &:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+        border-color: rgba(0, 0, 0, 0.15);
+    }
+
+    &:hover .gd-cta-arrow {
+        transform: translateX(4px);
+        opacity: 1;
+    }
+}
+
+.gd-cta-icon {
+    font-size: 2rem;
+    margin-bottom: 0.75rem;
+    line-height: 1;
+}
+
+.gd-cta-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+    line-height: 1.3;
+}
+
+.gd-cta-desc {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: #6c757d;
+    flex-grow: 1;
+}
+
+.gd-cta-arrow {
+    font-size: 1.25rem;
+    margin-top: 0.75rem;
+    opacity: 0.4;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    font-weight: 600;
+}
+
+/* Dark mode CTA cards */
+body.quarto-dark .gd-cta-card {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+
+    &:hover {
+        border-color: rgba(255, 255, 255, 0.2);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+}
+
+body.quarto-dark .gd-cta-desc {
+    color: #adb5bd;
+}
+
+@media (max-width: 768px) {
+    .gd-cta-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+}
+
+/* ── Feature Wall ("And So Much More") ────────────────── */
+
+.gd-feature-wall {
+    margin: 3rem 0 2rem;
+    hyphens: auto;
+    -webkit-hyphens: auto;
+    overflow-wrap: break-word;
+}
+
+.gd-fw-heading {
+    text-align: center;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    letter-spacing: -0.01em;
+}
+
+.gd-fw-large,
+.gd-fw-medium,
+.gd-fw-small {
+    text-align: justify;
+    text-justify: inter-word;
+}
+
+.gd-fw-large {
+    font-size: 1.65rem;
+    line-height: 1.45;
+    margin-bottom: 0.6rem;
+    letter-spacing: -0.01em;
+}
+
+.gd-fw-medium {
+    font-size: 1.15rem;
+    line-height: 1.55;
+    margin-bottom: 0.5rem;
+}
+
+.gd-fw-small {
+    font-size: 0.88rem;
+    line-height: 1.65;
+}
+
+/* Dim the middle-dot separators slightly */
+.gd-feature-wall b {
+    font-weight: 650;
+}
+
+@media (max-width: 768px) {
+    .gd-fw-large {
+        font-size: 1.35rem;
+    }
+    .gd-fw-medium {
+        font-size: 1.05rem;
+    }
+    .gd-fw-small {
+        font-size: 0.82rem;
+    }
+}
+
+/* ── Feature Wall Closing ─────────────────────────────── */
+
+.gd-fw-rule {
+    border: none;
+    height: 2px;
+    margin: 3rem auto 2rem;
+    max-width: 30rem;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        var(--gd-accent, #6366f1) 25%,
+        var(--gd-accent-secondary, #a855f7) 50%,
+        var(--gd-accent, #6366f1) 75%,
+        transparent
+    );
+    background-size: 200% 100%;
+    animation: gd-rule-shimmer 4s ease-in-out infinite;
+    opacity: 0.7;
+}
+
+@keyframes gd-rule-shimmer {
+    0%   { background-position: 100% 0; }
+    50%  { background-position: 0% 0; }
+    100% { background-position: 100% 0; }
+}
+
+.gd-fw-closing {
+    text-align: center;
+    padding: 0 1.5rem 2.5rem;
+    max-width: 38rem;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+.gd-fw-closing p {
+    font-size: 1.05rem;
+    line-height: 1.7;
+    color: #6b7280;
+    margin: 0;
+}
+
+body.quarto-dark .gd-fw-closing p {
+    color: #9ca3af;
+}
+
+.gd-fw-closing a {
+    color: var(--gd-accent, #6366f1);
+    text-decoration: none;
+    font-weight: 600;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s ease;
+}
+
+.gd-fw-closing a:hover {
+    border-bottom-color: var(--gd-accent, #6366f1);
+}
+
+@media (max-width: 768px) {
+    .gd-fw-rule {
+        max-width: 80%;
+        margin: 2rem auto 1.5rem;
+    }
+    .gd-fw-closing p {
+        font-size: 0.95rem;
+    }
 }
 
 /* ── Hero Responsive ──────────────────────────────────── */

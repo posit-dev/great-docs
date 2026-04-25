@@ -228,6 +228,8 @@ class GreatDocs:
             js_files.append("page-status-badges.js")  # pragma: no cover
         if self._config.has_versions:
             js_files.append("version-selector.js")
+        if self._config.hero_starfield:
+            js_files.append("starfield.js")
         for js_file in js_files:
             js_src = self.assets_path / js_file
             if js_src.exists():
@@ -8598,7 +8600,17 @@ jupyter: python3
         if not parts:
             return "", None  # pragma: no cover
 
-        hero_html = '<div class="gd-hero">\n' + "\n".join(parts) + "\n</div>\n\n"
+        # ── Starfield canvas (optional) ─────────────────────────────
+        starfield_html = ""
+        if self._config.hero_starfield:
+            starfield_html = '<canvas id="gd-starfield"></canvas>\n'
+
+        hero_html = '<div class="gd-hero">\n' + starfield_html + "\n".join(parts) + "\n</div>\n\n"
+
+        # Append starfield script tag after the hero div so the canvas
+        # is in the DOM when the script executes.
+        if self._config.hero_starfield:
+            hero_html += '<script src="starfield.js"></script>\n\n'
 
         return hero_html, cleaned_content
 
@@ -9830,6 +9842,8 @@ body-classes: "gd-homepage"
             js_resource_files.append("page-tags.js")  # pragma: no cover
         if self._config.page_status_enabled:
             js_resource_files.append("page-status-badges.js")  # pragma: no cover
+        if self._config.hero_starfield:
+            js_resource_files.append("starfield.js")
         for js_file in js_resource_files:
             if js_file not in config["project"]["resources"]:
                 config["project"]["resources"].append(js_file)

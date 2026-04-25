@@ -39,6 +39,14 @@ logo:
 
 favicon: assets/favicon.svg
 
+# Hero Section
+# ------------
+# The large header area on the homepage with logo, name, and tagline.
+hero:
+  enabled: true
+  tagline: "Documentation sites for Python packages. Three commands. Zero friction."
+  starfield: true
+
 # Versioned Documentation
 # -----------------------
 # Publish multiple versions of the site from a single source tree.
