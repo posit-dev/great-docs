@@ -839,3 +839,42 @@ def test_tags_index_page_false_when_disabled(tmp_path):
     """tags_index_page returns False when tags disabled."""
     cfg = Config(tmp_path)
     assert cfg.tags_index_page is False
+
+
+# ── inline_methods / should_split_methods ─────────────────────────────
+
+
+class TestShouldSplitMethods:
+    def test_default_splits_above_5(self, tmp_project: Path):
+        cfg = Config(tmp_project)
+        assert cfg.should_split_methods(5) is False
+        assert cfg.should_split_methods(6) is True
+
+    def test_true_never_splits(self, tmp_project: Path):
+        cfg = _make_config(tmp_project, "inline_methods: true\n")
+        assert cfg.should_split_methods(0) is False
+        assert cfg.should_split_methods(100) is False
+
+    def test_false_always_splits(self, tmp_project: Path):
+        cfg = _make_config(tmp_project, "inline_methods: false\n")
+        assert cfg.should_split_methods(1) is True
+        assert cfg.should_split_methods(100) is True
+
+    def test_false_does_not_split_zero_methods(self, tmp_project: Path):
+        cfg = _make_config(tmp_project, "inline_methods: false\n")
+        assert cfg.should_split_methods(0) is False
+
+    def test_custom_threshold(self, tmp_project: Path):
+        cfg = _make_config(tmp_project, "inline_methods: 10\n")
+        assert cfg.should_split_methods(10) is False
+        assert cfg.should_split_methods(11) is True
+
+    def test_invalid_value_falls_back_to_default(self, tmp_project: Path):
+        cfg = _make_config(tmp_project, 'inline_methods: "abc"\n')
+        assert cfg.should_split_methods(5) is False
+        assert cfg.should_split_methods(6) is True
+
+    def test_null_falls_back_to_default(self, tmp_project: Path):
+        cfg = _make_config(tmp_project, "inline_methods: null\n")
+        assert cfg.should_split_methods(5) is False
+        assert cfg.should_split_methods(6) is True
