@@ -14,14 +14,14 @@
   const MOUSE_INFLUENCE = 0.12;
 
   /* ── Dark-mode starfield constants ─────────────────────── */
-  const STAR_COUNT     = 340;
+  const STAR_COUNT     = 800;
   const SPEED          = 0.40;
   const DEPTH          = 950;
   const TWINKLE_SPEED  = 0.035;   // sine-wave twinkle rate
   const QUASAR_CHANCE  = 0.07;    // fraction of stars that glow
 
   /* Nebula cloud count */
-  const NEBULA_COUNT   = 5;
+  const NEBULA_COUNT   = 12;
 
   /* Star colour palette (dark mode) — cool whites, blues, warm hints */
   const STAR_COLORS = [
@@ -32,13 +32,16 @@
     [210, 180, 255],   // soft lavender
   ];
 
-  /* Nebula colour palette — magenta / purple / deep blue */
+  /* Nebula colour palette — blues and purples */
   const NEBULA_COLORS = [
-    [180,  50, 180],   // magenta
+    [ 80,  80, 255],   // royal blue
+    [100, 120, 255],   // cornflower
     [140,  40, 200],   // deep purple
     [100,  60, 220],   // violet-blue
-    [200,  60, 160],   // hot magenta
+    [ 60, 100, 240],   // medium blue
+    [160,  60, 240],   // blue-violet
     [120,  30, 180],   // dark purple
+    [ 90, 140, 255],   // soft blue
   ];
 
   /* ── Light-mode neon constants ───────────────────────────── */
@@ -148,7 +151,7 @@
 
       // Pulsate opacity
       var pulse = 0.5 + 0.5 * Math.sin(frame * 0.012 + n.phase);
-      var alpha = 0.025 + pulse * 0.04;
+      var alpha = 0.04 + pulse * 0.06;
 
       ctx.save();
       ctx.translate(n.x + ox, n.y + oy);
@@ -191,7 +194,7 @@
 
       var t      = 1 - s.z / DEPTH;                       // 0=far, 1=near
       var twinkle = 0.5 + 0.5 * Math.sin(frame * TWINKLE_SPEED + s.phase);
-      var alpha   = (0.15 + t * 0.75) * (0.55 + 0.45 * twinkle);
+      var alpha   = (0.30 + t * 0.65) * (0.65 + 0.35 * twinkle);
 
       // Dramatic size curve: stars get BIG when very close
       // Cubic easing makes close stars grow fast
