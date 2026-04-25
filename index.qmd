@@ -1,65 +1,81 @@
 # Great Docs
 
-A documentation site generator for Python packages. Run `great-docs init` in your project directory and get a complete documentation site with auto-generated API reference, CLI docs, and modern styling.
+Your Python package deserves a website that looks like you actually care about it. Great Docs turns your docstrings, README, and CLI into a polished documentation site. No templates to wrangle, no config files to debug, it's really great.
 
-## Install
+## Three Commands. One Beautiful Site.
 
 ```bash
 pip install great-docs
-```
 
-## Quick Start
-
-```bash
 cd your-python-package
-
-great-docs init      # detect your package and generate config
-great-docs build     # generate and render the site
-great-docs preview   # view at localhost:3000
+great-docs init      # scans your package, writes the config
+great-docs build     # generates everything, renders with Quarto
+great-docs preview   # live preview at localhost:3000
 ```
 
-## What It Does
+That's it. Your API reference, user guide, CLI docs, and landing page: all generated, all styled, all linked. Push to GitHub and you're live.
 
-Great Docs inspects your Python package to generate a full documentation site:
+## Your Docstrings, Finally Doing Their Job
 
-- **API Reference**: classes, functions, methods, and attributes organized into structured pages with parameter tables, return types, examples, and source links
-- **CLI Reference**: Click-based CLIs documented automatically with terminal-style help output
-- **Landing Page**: your README transformed into a homepage with a metadata sidebar
-- **User Guide**: narrative documentation from your `user_guide/` directory
-- **Custom Sections**: recipes, blog posts, tutorials, or any other content you add
+Every class, function, method, and attribute in your public API gets its own structured page. Parameter tables, return types, source links, and rendered examples. Numpy, Google, and Sphinx docstring styles all work out of the box.
 
-Everything is rendered by [Quarto](https://quarto.org/) into a static site you can host anywhere.
+If your package has a Click CLI, that's documented as well (complete with terminal-style help output and subcommand trees).
 
-## Site Features
+## Looks Good Without Trying
 
-- Dark mode toggle with persistent preference
-- Gradient navbar themes (8 presets)
-- GitHub widget with live star and fork counts
-- Sidebar search filter for large APIs
-- Source links to GitHub for every documented item
-- Responsive layout for mobile and desktop
-- Announcement banners (dismissible, styled)
-- `llms.txt` and `llms-full.txt` for AI documentation indexing
-- Agent Skills generation ([agentskills.io](https://agentskills.io/) compliant)
+Dark mode with a persistent toggle. Animated gradient navbars in eight presets. GitHub star counts in the corner. Sidebar search for large APIs. Responsive on every screen. Announcement banners when you ship something big.
 
-## Configuration
+You get a site that looks like a funded startup's product docs, except it was built by a single `great-docs build`.
 
-All options live in `great-docs.yml`. The `init` command generates this for you. See the [Configuration Guide](user-guide/configuration.qmd) for the full reference.
+## AI-Native from Day One
 
-## Deploy to GitHub Pages
+Great Docs generates `llms.txt` and `llms-full.txt` so AI coding agents can understand your library without scraping HTML. It also produces Agent Skills files: structured metadata that tells tools like Copilot, Cursor, and Claude Code *how* to use your package (not just what it exports).
+
+## Deploy in One Step
 
 ```bash
 great-docs setup-github-pages
 ```
 
-Creates a GitHub Actions workflow that builds and publishes your site on every push to `main`.
+Creates a GitHub Actions workflow. Every push to `main` rebuilds and publishes your site automatically.
 
-## Learn More
+## Go Further
 
-- [User Guide](user-guide/installation.qmd) — setup, configuration, theming, and deployment
-- [Recipes](recipes/hide-internal-symbols.qmd) — step-by-step guides for common tasks
-- [API Reference](reference/index.qmd) — Great Docs' own API documentation
+```{=html}
+<div class="gd-cta-grid">
+  <a href="user-guide/installation.html" class="gd-cta-card">
+    <span class="gd-cta-icon">📖</span>
+    <span class="gd-cta-title">User Guide</span>
+    <span class="gd-cta-desc">Installation, configuration, theming, multi-version docs, and deployment.</span>
+    <span class="gd-cta-arrow">→</span>
+  </a>
+  <a href="recipes/hide-internal-symbols.html" class="gd-cta-card">
+    <span class="gd-cta-icon">🍳</span>
+    <span class="gd-cta-title">Recipes</span>
+    <span class="gd-cta-desc">Bite-sized guides for specific tasks — copy, paste, done.</span>
+    <span class="gd-cta-arrow">→</span>
+  </a>
+  <a href="reference/index.html" class="gd-cta-card">
+    <span class="gd-cta-icon">⚙️</span>
+    <span class="gd-cta-title">API Reference</span>
+    <span class="gd-cta-desc">Great Docs documenting itself — every class, function, and option.</span>
+    <span class="gd-cta-arrow">→</span>
+  </a>
+</div>
+```
 
-## License
+```{=html}
+<div class="gd-feature-wall">
+<h2 class="gd-fw-heading">And So Much More.</h2>
+<p class="gd-fw-large"><b>Auto-Generated API Ref&shy;er&shy;ence</b>&nbsp;• Dark Mode Toggle&nbsp;• <b>llms.txt &amp; Agent Skills</b>&nbsp;• Multi-Version Docu&shy;men&shy;ta&shy;tion&nbsp;• <b>GitHub Pages in One Com&shy;mand</b>&nbsp;• Click CLI Docu&shy;men&shy;ta&shy;tion&nbsp;• <b>Animated Gradient Nav&shy;bars &amp; Ban&shy;ners</b>&nbsp;• Three Com&shy;mands to Launch&nbsp;• <b>Change&shy;log from GitHub Re&shy;leases</b>&nbsp;• Hero Section with Star&shy;field&nbsp;• <b>Rich Table Pre&shy;views for Pandas, Polars &amp; Arrow</b></p>
+<p class="gd-fw-medium"><b>Numpy, Google &amp; Sphinx Doc&shy;strings</b>&nbsp;• Version Selector Widget&nbsp;• <b>Side&shy;bar Search &amp; Fil&shy;ter&shy;ing</b>&nbsp;• Page Tags &amp; Status Badges&nbsp;• <b>Mer&shy;maid Dia&shy;gram Ren&shy;der&shy;ing</b>&nbsp;• Inter&shy;active Table Ex&shy;plor&shy;er&nbsp;• <b>Docu&shy;men&shy;ta&shy;tion Linter</b>&nbsp;• Spelling &amp; Grammar Check&shy;ing&nbsp;• <b>Twenty-Three Lan&shy;guages</b>&nbsp;• Key&shy;board Navi&shy;ga&shy;tion&nbsp;• <b>Custom Sections &amp; Recipes</b>&nbsp;• Respon&shy;sive on Every Screen&nbsp;• <b>GitHub Star Count Widget</b>&nbsp;• SEO Audit &amp; Site&shy;map Gen&shy;er&shy;a&shy;tion&nbsp;• <b>Announce&shy;ment Ban&shy;ners</b>&nbsp;• Auto-Detected Logos with Dark-Mode Vari&shy;ants&nbsp;• Copy &amp; View Page as Mark&shy;down&nbsp;• <b>API Diff Between Ver&shy;sions</b>&nbsp;• Tool&shy;tips &amp; Pop&shy;overs&nbsp;• <b>Rich Meta&shy;data Side&shy;bar with De&shy;vel&shy;oper Links</b>&nbsp;• Code Auto&shy;links in Doc&shy;strings&nbsp;• <b>Sub&shy;mod&shy;ule Intro&shy;spec&shy;tion</b></p>
+<p class="gd-fw-small"><b>APCA Contrast Algo&shy;rithm</b>&nbsp;• Fav&shy;icon Auto-Gen&shy;er&shy;a&shy;tion&nbsp;• <b>Scale-to-Fit Wide Tables</b>&nbsp;• Copy Code Buttons&nbsp;• <b>Syn&shy;tax High&shy;light&shy;ing &amp; Exe&shy;cut&shy;able Code Blocks</b>&nbsp;• <b>Version Fences &amp; Badges</b>&nbsp;• Breaking Change Detec&shy;tion&nbsp;• <b>API Sur&shy;face Time&shy;line</b>&nbsp;• Param&shy;eter Evo&shy;lu&shy;tion Tables&nbsp;• <b>JSON-LD Struc&shy;tured Data</b>&nbsp;• Canon&shy;ical URLs&nbsp;• <b>Social Cards &amp; Open Graph</b>&nbsp;• Source Links to GitHub&nbsp;• <b>1,941 Bundled Lucide Icons</b>&nbsp;• Commu&shy;nity File Pages&nbsp;• <b>SPDX License Data&shy;base</b>&nbsp;• PR Pre&shy;view Deploy&shy;ments&nbsp;• <b>Custom SCSS Theming</b>&nbsp;• Blog Sup&shy;port&nbsp;• <b>Cross-Refs, %see&shy;also &amp; In&shy;line Inter&shy;links</b>&nbsp;• Video Embeds&nbsp;• <b>Color Swatches</b>&nbsp;• Tab&shy;sets &amp; Cal&shy;louts&nbsp;• Link Checker&nbsp;• <b>Config Gen&shy;er&shy;a&shy;tion</b>&nbsp;• Robots.txt &amp; Crawl Rules&nbsp;• <b>Non-Breaking Re&shy;build Mode</b>&nbsp;• API Snap&shy;shots to JSON&nbsp;• <b>Custom Static Pages</b>&nbsp;• Object-Type Label Colors&nbsp;• <b>Styled Sig&shy;na&shy;tures &amp; Type Anno&shy;ta&shy;tions</b>&nbsp;• <b>Meth&shy;od Mem&shy;ber Con&shy;trol &amp; Ex&shy;clude Lists</b>&nbsp;• Nav&shy;bar &amp; Side&shy;bar Icons&nbsp;• In&shy;line Icons&nbsp;• Back-to-Top Button&nbsp;• <b>Verbose Build Log&shy;ging</b>&nbsp;• Custom Head In&shy;jec&shy;tion for Scripts &amp; Meta&nbsp;• And Yes, It Builds Fast</p>
+</div>
+```
 
-MIT. See [LICENSE](license.qmd) for the full text.
+```{=html}
+<hr class="gd-fw-rule">
+<div class="gd-fw-closing">
+<p>Something missing? <a href="https://github.com/posit-dev/great-docs/issues">Open an issue</a> (the wall o' text above is not done yet).</p>
+</div>
+```
