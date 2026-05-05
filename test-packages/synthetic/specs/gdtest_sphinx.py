@@ -103,9 +103,9 @@ SPEC = {
         "section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
         # These levels are intentionally not the focus of this spec:
-        # - R0:bigcl: no big class (not the archetype tested here)
-        # - R0:ug: no user guide (docstring format is the focus)
-        # - R0:supp: no supporting pages (minimal package)
-        "coverage_exclude": ["R0:bigcl", "R0:ug", "R0:supp"],
+        # - bigcl: no big class (not the archetype tested here)
+        # - ug: no user guide (docstring format is the focus)
+        # - supp: no supporting pages (minimal package)
+        "coverage_exclude": ["bigcl", "ug", "supp"],
     },
 }
