@@ -2350,8 +2350,8 @@ def create_hub_page(results: list[dict]) -> None:
                 50% {{ opacity: 0.9; }}
             }}
             .header p {{ color: #8b949e; font-size: 15px; max-width: 700px; margin: 0 auto; }}
-            .stats {{ display: flex; gap: 24px; justify-content: center; margin-top: 16px; }}
-            .stat {{ display: flex; align-items: center; gap: 6px; font-size: 14px; }}
+            .stats {{ display: flex; gap: 12px 20px; justify-content: center; margin-top: 16px; flex-wrap: wrap; padding: 0 16px; }}
+            .stat {{ display: flex; align-items: center; gap: 6px; font-size: 14px; white-space: nowrap; }}
             .stat-num {{ font-size: 22px; font-weight: 700; }}
             .stat-ok .stat-num {{ color: #a6e3a1; }}
             .stat-fail .stat-num {{ color: #f38ba8; }}
@@ -2361,6 +2361,7 @@ def create_hub_page(results: list[dict]) -> None:
             .stat-cov {{
                 background: #1e3a3a; border: 1px solid #94e2d5; border-radius: 20px;
                 padding: 4px 14px; color: #fff; transition: background 0.2s;
+                white-space: nowrap;
             }}
             .stat-cov:hover {{ background: #264d4d; }}
             .stat-cov .stat-num {{ color: #94e2d5; }}
@@ -2369,10 +2370,18 @@ def create_hub_page(results: list[dict]) -> None:
             .stat-dim {{
                 background: #1e2a3a; border: 1px solid #89b4fa; border-radius: 20px;
                 padding: 4px 14px; color: #fff; transition: background 0.2s;
+                white-space: nowrap;
             }}
             .stat-dim:hover {{ background: #263d5a; }}
             .stat-dim .stat-num {{ color: #89b4fa; }}
             .stat-dim .chevron {{ margin-left: 2px; font-size: 16px; color: #89b4fa; }}
+
+            @media (max-width: 480px) {{
+                .stats {{ gap: 8px 12px; padding: 0 8px; }}
+                .stat-num {{ font-size: 18px; }}
+                .stat {{ font-size: 12px; gap: 4px; }}
+                .stat-cov, .stat-dim {{ padding: 3px 10px; font-size: 12px; }}
+            }}
 
             .filter-bar {{
                 max-width: 1200px; margin: 20px auto 0; padding: 0 24px;
