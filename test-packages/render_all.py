@@ -1251,6 +1251,200 @@ def _create_test_coverage_page(name: str) -> str:
     """)
 
 
+def _create_dimensions_page(results: list[dict]) -> str:
+    """Create an HTML page documenting all dimension axes and codes."""
+    from collections import defaultdict
+
+    # Group dimensions by axis
+    axes: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for code, meta in DIMENSIONS.items():
+        axes[meta["axis"]].append((code, meta["label"]))
+
+    # Sort codes within each axis naturally
+    for axis in axes:
+        axes[axis].sort(key=lambda x: (x[0][0], int(x[0][1:]) if x[0][1:].isdigit() else 0))
+
+    # Count packages per dimension code
+    dim_counts: dict[str, int] = {}
+    for r in results:
+        for code in r.get("dimensions", []):
+            dim_counts[code] = dim_counts.get(code, 0) + 1
+
+    # Build per-axis sections
+    axis_sections = []
+    axis_order = [
+        "layout",
+        "exports",
+        "objects",
+        "docstrings",
+        "directives",
+        "user_guide",
+        "landing",
+        "extras",
+        "config",
+        "docstring",
+        "sections",
+        "reference",
+        "theme",
+        "skill",
+    ]
+
+    for axis in axis_order:
+        if axis not in axes:
+            continue
+        color = AXIS_COLORS.get(axis, "#6b7280")
+        codes = axes[axis]
+
+        rows = []
+        for code, label in codes:
+            count = dim_counts.get(code, 0)
+            # Get package links
+            pkg_links = []
+            for r in results:
+                if code in r.get("dimensions", []):
+                    pkg_links.append(
+                        f'<a href="_detail_{r["name"]}.html">{html.escape(r["name"])}</a>'
+                    )
+            pkgs_html = ", ".join(pkg_links) if pkg_links else '<span class="dim-none">—</span>'
+            rows.append(
+                f"<tr>"
+                f'<td class="dim-code" style="color:{color}">{html.escape(code)}</td>'
+                f'<td class="dim-label">{html.escape(label)}</td>'
+                f'<td class="dim-count">{count}</td>'
+                f'<td class="dim-pkgs">{pkgs_html}</td>'
+                f"</tr>"
+            )
+        rows_html = "\n                ".join(rows)
+
+        axis_sections.append(
+            f'<div class="axis-section">'
+            f'<h3 style="color:{color}">'
+            f'<span class="axis-dot" style="background:{color}"></span>'
+            f"{html.escape(axis.upper().replace('_', ' '))}"
+            f'<span class="axis-count">{len(codes)} codes, '
+            f"{sum(dim_counts.get(c, 0) for c, _ in codes)} uses</span></h3>"
+            f"<table>"
+            f"<thead><tr><th>Code</th><th>Label</th><th>Packages</th><th>Used By</th></tr></thead>"
+            f"<tbody>{rows_html}</tbody>"
+            f"</table></div>"
+        )
+
+    sections_html = "\n        ".join(axis_sections)
+    total_codes = len(DIMENSIONS)
+    total_axes = len(axes)
+    used_codes = sum(1 for c in DIMENSIONS if dim_counts.get(c, 0) > 0)
+
+    return textwrap.dedent(f"""\
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Dimensions Index — GDG</title>
+        <style>
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+                background: #0d1117; color: #e6edf3; min-height: 100vh;
+            }}
+            .topbar {{
+                background: #1e1e2e; border-bottom: 1px solid #30363d;
+                padding: 12px 24px; display: flex; align-items: center; gap: 12px;
+            }}
+            .topbar a {{ color: #89b4fa; text-decoration: none; font-size: 13px; }}
+            .topbar a:hover {{ text-decoration: underline; }}
+            .topbar h1 {{ font-size: 15px; font-weight: 600; color: #cba6f7; }}
+            .content {{ max-width: 1200px; margin: 32px auto; padding: 0 24px; }}
+            .intro {{
+                margin-bottom: 28px; padding: 16px 20px;
+                background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+                line-height: 1.6;
+            }}
+            .intro p {{ font-size: 14px; color: #a6adc8; margin-bottom: 8px; }}
+            .intro p:last-child {{ margin-bottom: 0; }}
+            .summary-header {{
+                display: flex; gap: 20px; flex-wrap: wrap;
+                margin-bottom: 28px;
+            }}
+            .sum-card {{
+                background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+                padding: 16px 24px; min-width: 130px; text-align: center;
+            }}
+            .sum-num {{ font-size: 28px; font-weight: 800; font-family: "SF Mono", monospace; }}
+            .sum-label {{ font-size: 12px; color: #6e7681; margin-top: 4px; text-transform: uppercase; }}
+            .axis-section {{ margin-bottom: 28px; }}
+            .axis-section h3 {{
+                font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px;
+                margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #30363d;
+            }}
+            .axis-dot {{
+                width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+            }}
+            .axis-count {{
+                font-size: 11px; font-weight: 400; color: #6e7681; margin-left: auto;
+            }}
+            table {{ width: 100%; border-collapse: collapse; margin-bottom: 8px; }}
+            th {{
+                text-align: left; padding: 6px 10px; font-size: 11px;
+                color: #6e7681; border-bottom: 1px solid #30363d; text-transform: uppercase;
+            }}
+            td {{ padding: 5px 10px; font-size: 13px; border-bottom: 1px solid #161b2280; }}
+            .dim-code {{
+                font-family: "SF Mono", monospace; font-weight: 700; font-size: 13px;
+            }}
+            .dim-label {{ color: #cdd6f4; }}
+            .dim-count {{
+                font-family: "SF Mono", monospace; font-size: 12px; color: #a6adc8;
+                text-align: center;
+            }}
+            .dim-pkgs {{ font-size: 11px; line-height: 1.6; }}
+            .dim-pkgs a {{ color: #58a6ff; text-decoration: none; }}
+            .dim-pkgs a:hover {{ text-decoration: underline; }}
+            .dim-none {{ color: #484e58; }}
+        </style>
+    </head>
+    <body>
+        <div class="topbar">
+            <a href="index.html">&larr; GDG Hub</a>
+            <span style="color:#585b70">|</span>
+            <h1>\U0001f4d0 Dimensions Index</h1>
+        </div>
+        <div class="content">
+            <div class="intro">
+                <p><strong>Dimensions</strong> describe the structural features of each GDG test
+                package. Each package is tagged with a set of dimension codes that classify its
+                layout, export style, object types, docstring format, and more.</p>
+                <p>Dimensions are orthogonal to test coverage levels — they describe <em>what</em>
+                a package is, not <em>how well</em> it's tested. Use them to find packages that
+                exercise a specific feature combination.</p>
+            </div>
+
+            <div class="summary-header">
+                <div class="sum-card">
+                    <div class="sum-num" style="color:#cba6f7">{total_axes}</div>
+                    <div class="sum-label">Axes</div>
+                </div>
+                <div class="sum-card">
+                    <div class="sum-num" style="color:#89b4fa">{total_codes}</div>
+                    <div class="sum-label">Dimension Codes</div>
+                </div>
+                <div class="sum-card">
+                    <div class="sum-num" style="color:#a6e3a1">{used_codes}</div>
+                    <div class="sum-label">Codes In Use</div>
+                </div>
+                <div class="sum-card">
+                    <div class="sum-num" style="color:#f9e2af">{total_codes - used_codes}</div>
+                    <div class="sum-label">Unused Codes</div>
+                </div>
+            </div>
+
+            {sections_html}
+        </div>
+    </body>
+    </html>
+    """)
+
+
 def _create_test_coverage_summary_page(results: list[dict]) -> str:
     """Create an HTML page showing test coverage summary for all packages."""
     from collections import Counter
