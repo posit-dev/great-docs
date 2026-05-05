@@ -2447,8 +2447,8 @@ def create_hub_page(results: list[dict]) -> None:
         <div class="header">
             <h1>Great Docs Gauntlet</h1>
             <p>
-                Rendered documentation sites for all {len(results)} synthetic test packages,
-                covering layouts, config options, docstring patterns, user guides, and more.
+                Rendered documentation sites for {len(results)} synthetic test packages,
+                covering layouts, config options, docstring patterns, user guides, and so much more.
             </p>
             <div class="stats">
                 <div class="stat stat-ok"><span class="stat-num">{len(ok_results)}</span> built</div>
