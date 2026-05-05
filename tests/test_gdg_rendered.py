@@ -1800,7 +1800,7 @@ def test_stress_packages_have_reference(pkg_name: str):
 
 
 @requires_bs4
-@pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES[:20])
+@pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
 def test_no_broken_heading_attributes(pkg_name: str):
     """Heading attributes like { #anchor } should not render as plain text."""
     ref = _ref_dir(pkg_name)
