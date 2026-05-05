@@ -9073,3 +9073,659 @@ def test_DED_ref_include_inherited_section_title():
 
     content = index_html.read_text(encoding="utf-8")
     assert "Shapes" in content, "Section title 'Shapes' should appear in reference index"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: accent_color — Site-wide accent color config + hr shortcode
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_ACCENT_COLOR_PKG = "gdtest_accent_color"
+
+
+@requires_bs4
+def test_DED_accent_color_hr_shortcode_rendered():
+    """gdtest_accent_color: hr shortcode with accent color renders gd-hr markup."""
+    pkg = _ACCENT_COLOR_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide" / "string-accent.html"
+    if not ug.exists():
+        pytest.skip("string-accent.html not found")
+    content = ug.read_text(encoding="utf-8")
+    assert "gd-hr" in content, "Should contain gd-hr shortcode markup"
+
+
+@requires_bs4
+def test_DED_accent_color_palette_vars():
+    """gdtest_accent_color: palette page has CSS custom properties for colors."""
+    pkg = _ACCENT_COLOR_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide" / "palette-vs-accent.html"
+    if not ug.exists():
+        pytest.skip("palette-vs-accent.html not found")
+    content = ug.read_text(encoding="utf-8")
+    assert "--gd-hr-color" in content, "Should have --gd-hr-color CSS variable"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: autolink — Inline code autolinked to API reference
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_AUTOLINK_PKG = "gdtest_autolink"
+
+
+@requires_bs4
+def test_DED_autolink_reference_pages_exist():
+    """gdtest_autolink: reference pages exist for exported names."""
+    pkg = _AUTOLINK_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    for name in ("Engine", "Pipeline", "Config"):
+        assert (ref / f"{name}.html").exists(), f"Reference page for {name} should exist"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: code_cells — Executable code cells in docstring examples
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_CODE_CELLS_PKG = "gdtest_code_cells"
+
+
+@requires_bs4
+def test_DED_code_cells_has_code_blocks():
+    """gdtest_code_cells: reference pages contain rendered code cells."""
+    pkg = _CODE_CELLS_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    ref_pages = [f for f in ref.glob("*.html") if f.name != "index.html"]
+    assert ref_pages, "Should have reference pages"
+    soup = _load_html(ref_pages[0])
+    code_blocks = soup.select("pre code, .sourceCode")
+    assert code_blocks, "Reference page should contain code blocks from examples"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: homepage_wide — Wide homepage with column-margin sidebar
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_HOMEPAGE_WIDE_PKG = "gdtest_homepage_wide"
+
+
+@requires_bs4
+def test_DED_homepage_wide_layout():
+    """gdtest_homepage_wide: index.html uses wide/full layout classes."""
+    pkg = _HOMEPAGE_WIDE_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    index = _site_dir(pkg) / "index.html"
+    content = index.read_text(encoding="utf-8")
+    assert "page-full" in content or "column-screen" in content or "column-page" in content, (
+        "Homepage should use page-full, column-screen, or column-page layout"
+    )
+
+
+@requires_bs4
+def test_DED_homepage_wide_margin_content():
+    """gdtest_homepage_wide: homepage has column-margin sidebar content."""
+    pkg = _HOMEPAGE_WIDE_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    index = _site_dir(pkg) / "index.html"
+    content = index.read_text(encoding="utf-8")
+    assert "column-margin" in content, "Homepage should have column-margin content"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: hr_shortcode — Decorative horizontal rule shortcode
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_HR_SHORTCODE_PKG = "gdtest_hr_shortcode"
+
+
+@requires_bs4
+def test_DED_hr_shortcode_line_styles():
+    """gdtest_hr_shortcode: line-styles page has dashed/dotted/double variants."""
+    pkg = _HR_SHORTCODE_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    page = _site_dir(pkg) / "user-guide" / "line-styles.html"
+    if not page.exists():
+        pytest.skip("line-styles.html not found")
+    content = page.read_text(encoding="utf-8")
+    for variant in ("gd-hr--dashed", "gd-hr--dotted", "gd-hr--double"):
+        assert variant in content, f"Should contain {variant}"
+
+
+@requires_bs4
+def test_DED_hr_shortcode_presets():
+    """gdtest_hr_shortcode: presets page has gradient-shimmer and other presets."""
+    pkg = _HR_SHORTCODE_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    page = _site_dir(pkg) / "user-guide" / "presets.html"
+    if not page.exists():
+        pytest.skip("presets.html not found")
+    content = page.read_text(encoding="utf-8")
+    assert "gd-hr--gradient-shimmer" in content, "Should have gradient-shimmer preset"
+    assert "gd-hr--fade" in content, "Should have fade preset"
+
+
+@requires_bs4
+def test_DED_hr_shortcode_embedded_text():
+    """gdtest_hr_shortcode: embedded-text page has text-in-rule markup."""
+    pkg = _HR_SHORTCODE_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    page = _site_dir(pkg) / "user-guide" / "embedded-text.html"
+    if not page.exists():
+        pytest.skip("embedded-text.html not found")
+    content = page.read_text(encoding="utf-8")
+    assert "gd-hr--with-text" in content, "Should have with-text variant"
+    assert "gd-hr-text" in content, "Should have text element"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: inline_threshold — Custom inline_methods threshold
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_INLINE_THRESHOLD_PKG = "gdtest_inline_threshold"
+
+
+@requires_bs4
+def test_DED_inline_threshold_compact_class_inlined():
+    """gdtest_inline_threshold: CompactClient (8 methods) is inlined at threshold 10."""
+    pkg = _INLINE_THRESHOLD_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    # CompactClient should NOT have separate method pages (inlined)
+    compact_methods = list(ref.glob("CompactClient.*.html"))
+    assert not compact_methods, (
+        f"CompactClient methods should be inlined (threshold=10, has 8), "
+        f"but found: {[f.name for f in compact_methods]}"
+    )
+
+
+@requires_bs4
+def test_DED_inline_threshold_full_client_split():
+    """gdtest_inline_threshold: FullClient (12 methods) is split at threshold 10."""
+    pkg = _INLINE_THRESHOLD_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    # FullClient SHOULD have separate method pages (exceeds threshold)
+    full_methods = list(ref.glob("FullClient.*.html"))
+    assert len(full_methods) >= 10, (
+        f"FullClient should have split method pages (12 methods > threshold 10), "
+        f"found {len(full_methods)}"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: kitchen_sink_q — Kitchen sink with qrenderer
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_KITCHEN_SINK_Q_PKG = "gdtest_kitchen_sink_q"
+
+
+@requires_bs4
+def test_DED_kitchen_sink_q_reference_pages():
+    """gdtest_kitchen_sink_q: qrenderer produces reference pages."""
+    pkg = _KITCHEN_SINK_Q_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    pages = [f for f in ref.glob("*.html") if f.name != "index.html"]
+    assert len(pages) >= 10, f"kitchen_sink_q should have many ref pages, got {len(pages)}"
+
+
+@requires_bs4
+def test_DED_kitchen_sink_q_user_guide():
+    """gdtest_kitchen_sink_q: has user guide pages."""
+    pkg = _KITCHEN_SINK_Q_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide"
+    assert ug.exists(), "User guide directory should exist"
+    pages = list(ug.glob("*.html"))
+    assert pages, "User guide should have pages"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: namespace_src — Namespace package with src/ layout
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_NAMESPACE_SRC_PKG = "gdtest_namespace_src"
+
+
+@requires_bs4
+def test_DED_namespace_src_reference_pages():
+    """gdtest_namespace_src: namespace pkg with src/ layout has reference pages."""
+    pkg = _NAMESPACE_SRC_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    assert ref.exists(), "Reference directory should exist"
+    pages = [f for f in ref.glob("*.html") if f.name != "index.html"]
+    assert pages, "Should have reference pages for namespace package"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: page_status — Page status badges
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_PAGE_STATUS_PKG = "gdtest_page_status"
+
+
+@requires_bs4
+def test_DED_page_status_js_loaded():
+    """gdtest_page_status: page-status-badges.js is loaded."""
+    pkg = _PAGE_STATUS_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide"
+    pages = list(ug.glob("*.html"))
+    assert pages, "Should have user-guide pages"
+    content = pages[0].read_text(encoding="utf-8")
+    assert "page-status" in content, "Should reference page-status script or markup"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: page_tags — Page tags with hierarchy
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_PAGE_TAGS_PKG = "gdtest_page_tags"
+
+
+@requires_bs4
+def test_DED_page_tags_js_loaded():
+    """gdtest_page_tags: page-tags.js is loaded on user-guide pages."""
+    pkg = _PAGE_TAGS_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide"
+    pages = list(ug.glob("*.html"))
+    assert pages, "Should have user-guide pages"
+    content = pages[0].read_text(encoding="utf-8")
+    assert "page-tags" in content or "page-tag" in content, (
+        "Should reference page-tags script or markup"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: sec_dir_titles — Custom section with dir_titles overrides
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SEC_DIR_TITLES_PKG = "gdtest_sec_dir_titles"
+
+
+@requires_bs4
+def test_DED_sec_dir_titles_reference_exists():
+    """gdtest_sec_dir_titles: has reference pages from dir_titles config."""
+    pkg = _SEC_DIR_TITLES_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    assert ref.exists(), "Reference directory should exist"
+    pages = [f for f in ref.glob("*.html") if f.name != "index.html"]
+    assert pages, "Should have reference pages"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: sec_index_hero — Section index pages with hero images
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SEC_INDEX_HERO_PKG = "gdtest_sec_index_hero"
+
+
+@requires_bs4
+def test_DED_sec_index_hero_reference_exists():
+    """gdtest_sec_index_hero: has reference pages for hero-section package."""
+    pkg = _SEC_INDEX_HERO_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    assert ref.exists(), "Reference directory should exist"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: sidebar_float — Floating sidebar stress test (30+ pages)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SIDEBAR_FLOAT_PKG = "gdtest_sidebar_float"
+
+
+@requires_bs4
+def test_DED_sidebar_float_many_pages():
+    """gdtest_sidebar_float: has 30+ user-guide pages for sidebar stress test."""
+    pkg = _SIDEBAR_FLOAT_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide"
+    assert ug.exists(), "User guide should exist"
+    pages = list(ug.glob("*.html"))
+    assert len(pages) >= 30, f"Should have 30+ UG pages, got {len(pages)}"
+
+
+@requires_bs4
+def test_DED_sidebar_float_js_loaded():
+    """gdtest_sidebar_float: sidebar-float.js is loaded."""
+    pkg = _SIDEBAR_FLOAT_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    index = _site_dir(pkg) / "index.html"
+    content = index.read_text(encoding="utf-8")
+    assert "sidebar-float" in content, "Should load sidebar-float.js"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: skill_default — Auto-generated skill.md
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SKILL_DEFAULT_PKG = "gdtest_skill_default"
+
+
+def test_DED_skill_default_skill_md_exists():
+    """gdtest_skill_default: auto-generated skill.md exists in _site."""
+    pkg = _SKILL_DEFAULT_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    assert skill.exists(), "skill.md should be generated"
+
+
+def test_DED_skill_default_skills_page_exists():
+    """gdtest_skill_default: skills.html page exists."""
+    pkg = _SKILL_DEFAULT_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skills = _site_dir(pkg) / "skills.html"
+    assert skills.exists(), "skills.html should exist"
+
+
+def test_DED_skill_default_has_installation():
+    """gdtest_skill_default: skill.md has Installation section."""
+    pkg = _SKILL_DEFAULT_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    content = skill.read_text(encoding="utf-8")
+    assert "# Installation" in content, "Should have Installation section"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: skill_curated — Curated skill from SKILL.md
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SKILL_CURATED_PKG = "gdtest_skill_curated"
+
+
+def test_DED_skill_curated_skill_md_exists():
+    """gdtest_skill_curated: curated skill.md exists in _site."""
+    pkg = _SKILL_CURATED_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    assert skill.exists(), "skill.md should exist"
+    content = skill.read_text(encoding="utf-8")
+    # Curated skills are longer than auto-generated ones
+    assert len(content) > 1000, "Curated skill should be substantial"
+
+
+def test_DED_skill_curated_skills_page():
+    """gdtest_skill_curated: skills.html page exists."""
+    pkg = _SKILL_CURATED_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skills = _site_dir(pkg) / "skills.html"
+    assert skills.exists(), "skills.html should exist"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: skill_disabled — Skill generation disabled
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SKILL_DISABLED_PKG = "gdtest_skill_disabled"
+
+
+def test_DED_skill_disabled_no_skill_md():
+    """gdtest_skill_disabled: skill.md should NOT exist when disabled."""
+    pkg = _SKILL_DISABLED_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    assert not skill.exists(), "skill.md should not be generated when disabled"
+
+
+def test_DED_skill_disabled_no_skills_page():
+    """gdtest_skill_disabled: skills.html should NOT exist when disabled."""
+    pkg = _SKILL_DISABLED_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skills = _site_dir(pkg) / "skills.html"
+    assert not skills.exists(), "skills.html should not exist when skill is disabled"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: skill_config — Enriched auto-generated skill with config overrides
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SKILL_CONFIG_PKG = "gdtest_skill_config"
+
+
+def test_DED_skill_config_has_gotchas():
+    """gdtest_skill_config: skill.md has Gotchas section."""
+    pkg = _SKILL_CONFIG_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    content = skill.read_text(encoding="utf-8")
+    assert "# Gotchas" in content, "Should have Gotchas section"
+
+
+def test_DED_skill_config_has_best_practices():
+    """gdtest_skill_config: skill.md has Best practices section."""
+    pkg = _SKILL_CONFIG_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    content = skill.read_text(encoding="utf-8")
+    assert "# Best practices" in content, "Should have Best practices section"
+
+
+def test_DED_skill_config_has_decision_table():
+    """gdtest_skill_config: skill.md has 'When to use what' decision table."""
+    pkg = _SKILL_CONFIG_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    content = skill.read_text(encoding="utf-8")
+    assert "# When to use what" in content, "Should have decision table section"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: skill_complex — Skill with subdirectories
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SKILL_COMPLEX_PKG = "gdtest_skill_complex"
+
+
+def test_DED_skill_complex_has_reference_files():
+    """gdtest_skill_complex: skill.md documents reference files."""
+    pkg = _SKILL_COMPLEX_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    content = skill.read_text(encoding="utf-8")
+    assert "# Reference files" in content, "Should document reference files"
+
+
+def test_DED_skill_complex_has_scripts():
+    """gdtest_skill_complex: skill.md documents scripts."""
+    pkg = _SKILL_COMPLEX_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    content = skill.read_text(encoding="utf-8")
+    assert "# Scripts" in content, "Should document scripts section"
+
+
+def test_DED_skill_complex_has_decision_table():
+    """gdtest_skill_complex: skill.md has decision table."""
+    pkg = _SKILL_COMPLEX_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    content = skill.read_text(encoding="utf-8")
+    assert "# When to use what" in content, "Should have decision table"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: skill_combo — Skill + user guide + hero + extras
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SKILL_COMBO_PKG = "gdtest_skill_combo"
+
+
+def test_DED_skill_combo_skill_md():
+    """gdtest_skill_combo: has skill.md."""
+    pkg = _SKILL_COMBO_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    assert skill.exists(), "skill.md should exist"
+
+
+def test_DED_skill_combo_skills_page():
+    """gdtest_skill_combo: has skills.html."""
+    pkg = _SKILL_COMBO_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skills = _site_dir(pkg) / "skills.html"
+    assert skills.exists(), "skills.html should exist"
+
+
+def test_DED_skill_combo_user_guide():
+    """gdtest_skill_combo: also has user guide alongside skill."""
+    pkg = _SKILL_COMBO_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide"
+    assert ug.exists(), "User guide should coexist with skill"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: skill_rich — Curated skill with rich content
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SKILL_RICH_PKG = "gdtest_skill_rich"
+
+
+def test_DED_skill_rich_substantial_content():
+    """gdtest_skill_rich: curated skill has rich content (tables, code)."""
+    pkg = _SKILL_RICH_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    assert skill.exists(), "skill.md should exist"
+    content = skill.read_text(encoding="utf-8")
+    # Rich skill should be longer with multiple sections
+    assert len(content) > 1500, f"Rich skill should be substantial, got {len(content)} chars"
+
+
+def test_DED_skill_rich_has_decision_table():
+    """gdtest_skill_rich: rich skill has Decision table section."""
+    pkg = _SKILL_RICH_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    content = skill.read_text(encoding="utf-8")
+    assert "# Decision table" in content, "Should have decision table section"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: stress_everything_q — Stress test with qrenderer
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_STRESS_Q_PKG = "gdtest_stress_everything_q"
+
+
+@requires_bs4
+def test_DED_stress_everything_q_builds():
+    """gdtest_stress_everything_q: qrenderer stress test produces reference pages."""
+    pkg = _STRESS_Q_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    pages = [f for f in ref.glob("*.html") if f.name != "index.html"]
+    assert len(pages) >= 3, f"Stress q-renderer should produce pages, got {len(pages)}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: tbl_preview — Table preview showcase
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_TBL_PREVIEW_PKG = "gdtest_tbl_preview"
+
+
+@requires_bs4
+def test_DED_tbl_preview_gt_tables():
+    """gdtest_tbl_preview: user guide pages contain gt_table markup."""
+    pkg = _TBL_PREVIEW_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide"
+    assert ug.exists(), "User guide should exist"
+    pages = list(ug.glob("*.html"))
+    assert pages, "Should have user-guide pages"
+    # At least one page should have gt_table
+    found = False
+    for page in pages:
+        content = page.read_text(encoding="utf-8")
+        if "gt_table" in content:
+            found = True
+            break
+    assert found, "At least one UG page should contain gt_table markup"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: tbl_shortcode — tbl-preview Quarto shortcode
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_TBL_SHORTCODE_PKG = "gdtest_tbl_shortcode"
+
+
+@requires_bs4
+def test_DED_tbl_shortcode_user_guide_pages():
+    """gdtest_tbl_shortcode: user guide with CSV/TSV/JSONL shortcode pages."""
+    pkg = _TBL_SHORTCODE_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide"
+    assert ug.exists(), "User guide should exist"
+    pages = {f.name for f in ug.glob("*.html")}
+    assert "csv-basics.html" in pages, "Should have csv-basics page"
+    assert "tsv-files.html" in pages, "Should have tsv-files page"
+    assert "jsonl-files.html" in pages, "Should have jsonl-files page"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: tbl_explorer — Interactive table explorer
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_TBL_EXPLORER_PKG = "gdtest_tbl_explorer"
+
+
+@requires_bs4
+def test_DED_tbl_explorer_user_guide():
+    """gdtest_tbl_explorer: has user guide pages for explorer showcase."""
+    pkg = _TBL_EXPLORER_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide"
+    assert ug.exists(), "User guide should exist"
+    pages = list(ug.glob("*.html"))
+    assert len(pages) >= 5, f"Should have several UG pages, got {len(pages)}"
