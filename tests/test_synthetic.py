@@ -272,7 +272,7 @@ def test_L1_docstring_parser_detection(pkg_name: str, tmp_path: Path):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.parametrize("pkg_name", PHASE1_PACKAGES)
+@pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
 def test_L2_init_creates_config(pkg_name: str, tmp_path: Path):
     """`great-docs init --force` produces a valid great-docs.yml."""
     pkg_dir, spec = _make_package(pkg_name, tmp_path)
@@ -293,7 +293,7 @@ def test_L2_init_creates_config(pkg_name: str, tmp_path: Path):
     assert config_data is not None, "great-docs.yml is empty"
 
 
-@pytest.mark.parametrize("pkg_name", PHASE1_PACKAGES)
+@pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
 def test_L2_init_detects_correct_exports(pkg_name: str, tmp_path: Path):
     """Init generates reference sections that include expected exports."""
     pkg_dir, spec = _make_package(pkg_name, tmp_path)
