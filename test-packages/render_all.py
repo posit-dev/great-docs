@@ -1522,10 +1522,11 @@ def _create_test_coverage_summary_page(results: list[dict]) -> str:
                 <h2>Per-Package Coverage</h2>
                 <div class="filter-row">
                     <input type="text" id="pkg-filter" placeholder="Filter packages..." oninput="filterPkgs()">
-                    <button class="filter-btn" onclick="sortPkgs('pct')">Sort: Coverage</button>
-                    <button class="filter-btn" onclick="sortPkgs('name')">Sort: Name</button>
-                    <button class="filter-btn" onclick="sortPkgs('num')">Sort: Catalog #</button>
-                    <button class="filter-btn" onclick="filterMissing()">Show Missing Only</button>
+                    <button class="filter-btn sort-btn" data-key="pct" onclick="cycleSortPkgs('pct', this)">Sort: Coverage</button>
+                    <button class="filter-btn sort-btn" data-key="name" onclick="cycleSortPkgs('name', this)">Sort: Name</button>
+                    <button class="filter-btn sort-btn" data-key="num" onclick="cycleSortPkgs('num', this)">Sort: Catalog #</button>
+                    <button class="filter-btn" id="btn-missing" onclick="filterMissing()">Show Missing Only</button>
+                    <button class="filter-btn reset-btn" onclick="resetAll()" style="margin-left:auto">Reset</button>
                 </div>
                 <table id="pkg-table">
                     <thead><tr>
@@ -1542,8 +1543,13 @@ def _create_test_coverage_summary_page(results: list[dict]) -> str:
         (function() {{
             const tbody = document.getElementById('pkg-tbody');
             const rows = Array.from(tbody.querySelectorAll('tr'));
+            const originalOrder = rows.slice();
             const input = document.getElementById('pkg-filter');
+            const btnMissing = document.getElementById('btn-missing');
             let showMissingOnly = false;
+
+            // Track sort state per key: null -> 'asc' -> 'desc' -> null
+            const sortState = {{ pct: null, name: null, num: null }};
 
             window.filterPkgs = function() {{
                 const q = input.value.toLowerCase();
@@ -1558,23 +1564,67 @@ def _create_test_coverage_summary_page(results: list[dict]) -> str:
 
             window.filterMissing = function() {{
                 showMissingOnly = !showMissingOnly;
-                const btn = event.target;
-                btn.classList.toggle('active');
+                btnMissing.classList.toggle('active');
                 filterPkgs();
             }};
 
-            window.sortPkgs = function(key) {{
+            function clearSortButtons() {{
+                document.querySelectorAll('.sort-btn').forEach(b => {{
+                    b.classList.remove('active');
+                    b.textContent = b.textContent.replace(/ [▲▼]$/, '');
+                }});
+            }}
+
+            window.cycleSortPkgs = function(key, btn) {{
+                // Cycle: null -> asc -> desc -> null
+                const prev = sortState[key];
+                // Reset all sort states
+                Object.keys(sortState).forEach(k => sortState[k] = null);
+                clearSortButtons();
+
+                if (prev === null) {{
+                    sortState[key] = 'asc';
+                }} else if (prev === 'asc') {{
+                    sortState[key] = 'desc';
+                }} else {{
+                    sortState[key] = null;
+                }}
+
+                const dir = sortState[key];
+                if (dir === null) {{
+                    // Reset to original order
+                    originalOrder.forEach(r => tbody.appendChild(r));
+                    return;
+                }}
+
+                btn.classList.add('active');
+                btn.textContent = btn.textContent.replace(/ [▲▼]$/, '') + (dir === 'asc' ? ' ▲' : ' ▼');
+                const mult = dir === 'asc' ? 1 : -1;
+
                 rows.sort((a, b) => {{
                     if (key === 'pct') {{
-                        return parseFloat(a.cells[2].textContent) - parseFloat(b.cells[2].textContent);
+                        return mult * (parseFloat(a.cells[2].textContent) - parseFloat(b.cells[2].textContent));
                     }} else if (key === 'name') {{
-                        return a.cells[1].textContent.localeCompare(b.cells[1].textContent);
+                        return mult * a.cells[1].textContent.localeCompare(b.cells[1].textContent);
                     }} else {{
-                        return parseInt(a.cells[0].textContent.replace('#','')) -
-                               parseInt(b.cells[0].textContent.replace('#',''));
+                        return mult * (parseInt(a.cells[0].textContent.replace('#','')) -
+                               parseInt(b.cells[0].textContent.replace('#','')));
                     }}
                 }});
                 rows.forEach(r => tbody.appendChild(r));
+            }};
+
+            window.resetAll = function() {{
+                // Reset filter
+                input.value = '';
+                // Reset missing toggle
+                showMissingOnly = false;
+                btnMissing.classList.remove('active');
+                // Reset sort
+                Object.keys(sortState).forEach(k => sortState[k] = null);
+                clearSortButtons();
+                // Restore original order and show all
+                originalOrder.forEach(r => {{ r.style.display = ''; tbody.appendChild(r); }});
             }};
         }})();
         </script>
