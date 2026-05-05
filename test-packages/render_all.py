@@ -1253,55 +1253,69 @@ def _create_test_coverage_page(name: str) -> str:
 
 def _create_test_coverage_summary_page(results: list[dict]) -> str:
     """Create an HTML page showing test coverage summary for all packages."""
-    # Build per-package data
+    from collections import Counter
+
+    # Build per-package data with proper per-package scoring
     pkg_data = []
     for r in results:
         name = r["name"]
         cov = _compute_coverage(name)
-        score = sum(cov.values())
+        applicable = _applicable_levels(name)
+        score = sum(1 for level in applicable if cov.get(level))
+        max_s = len(applicable)
+        pct = score / max_s if max_s > 0 else 0
+        excluded = set(_COVERAGE_LEVELS) - applicable
         pkg_data.append(
             {
                 "name": name,
                 "score": score,
+                "max": max_s,
+                "pct": pct,
+                "excluded": len(excluded),
                 "coverage": cov,
+                "applicable": applicable,
                 "status": r["status"],
             }
         )
 
-    max_score = len(_COVERAGE_LEVELS)
     total_pkgs = len(pkg_data)
-    avg_score = sum(p["score"] for p in pkg_data) / max(total_pkgs, 1)
-    full_cov = sum(1 for p in pkg_data if p["score"] == max_score)
-    zero_cov = sum(1 for p in pkg_data if p["score"] == 0)
+    avg_pct = sum(p["pct"] for p in pkg_data) / max(total_pkgs, 1)
+    full_cov = sum(1 for p in pkg_data if p["pct"] == 1.0)
+    low_cov = sum(1 for p in pkg_data if p["pct"] < 0.6)
     with_ded = sum(1 for p in pkg_data if p["coverage"].get("DED"))
 
-    # Per-level stats
+    # Per-level stats (count applicable + passing)
     level_rows = []
     for level in _COVERAGE_LEVELS:
         info = _COVERAGE_LEVEL_INFO.get(level, (level, ""))
         test_fn, desc = info
-        count = sum(1 for p in pkg_data if p["coverage"].get(level))
-        pct = count / max(total_pkgs, 1) * 100
-        bar_w = pct
+        applicable_count = sum(1 for p in pkg_data if level in p["applicable"])
+        passing_count = sum(1 for p in pkg_data if p["coverage"].get(level))
+        excluded_count = total_pkgs - applicable_count
+        lvl_pct = passing_count / max(applicable_count, 1) * 100
+        bar_w = lvl_pct
         level_rows.append(
             f"<tr>"
             f'<td class="lvl-code">{html.escape(level)}</td>'
-            f'<td class="lvl-fn">{html.escape(test_fn)}</td>'
-            f"<td>{count}/{total_pkgs}</td>"
+            f'<td class="lvl-desc">{html.escape(desc)}</td>'
+            f"<td>{passing_count}/{applicable_count}</td>"
+            f'<td class="lvl-excl">{excluded_count}</td>'
             f'<td><div class="lvl-bar"><div class="lvl-fill" style="width:{bar_w:.0f}%"></div>'
             f"</div></td>"
-            f"<td>{pct:.0f}%</td>"
+            f"<td>{lvl_pct:.0f}%</td>"
             f"</tr>"
         )
     level_table = "\n            ".join(level_rows)
 
-    # Per-package rows sorted by score ascending (worst first)
-    pkg_data_sorted = sorted(pkg_data, key=lambda p: (p["score"], p["name"]))
+    # Per-package rows sorted by catalog number (default)
+    pkg_data_sorted = sorted(
+        pkg_data,
+        key=lambda p: ALL_PACKAGES.index(p["name"]) if p["name"] in ALL_PACKAGES else 9999,
+    )
     pkg_rows = []
     for p in pkg_data_sorted:
         name = p["name"]
-        score = p["score"]
-        pct = score / max_score
+        pct = p["pct"]
         if pct >= 0.7:
             color = "#a6e3a1"
         elif pct >= 0.4:
@@ -1311,13 +1325,15 @@ def _create_test_coverage_summary_page(results: list[dict]) -> str:
         num = ALL_PACKAGES.index(name) + 1 if name in ALL_PACKAGES else 0
         ded_icon = "✓" if p["coverage"].get("DED") else ""
 
-        # Level dots
+        # Level dots (pass/miss/excluded)
         dots = []
         for level in _COVERAGE_LEVELS:
-            if p["coverage"].get(level):
+            if level not in p["applicable"]:
+                dots.append('<span class="dot dot-excl">●</span>')
+            elif p["coverage"].get(level):
                 dots.append('<span class="dot dot-pass">●</span>')
             else:
-                dots.append('<span class="dot dot-miss">·</span>')
+                dots.append('<span class="dot dot-miss">○</span>')
         dots_html = "".join(dots)
 
         pkg_rows.append(
@@ -1325,36 +1341,42 @@ def _create_test_coverage_summary_page(results: list[dict]) -> str:
             f'<td class="pkg-num">#{num:03d}</td>'
             f'<td class="pkg-lnk"><a href="_tests_{name}.html">{html.escape(name)}</a></td>'
             f'<td style="color:{color};font-weight:700;font-family:SF Mono,monospace">'
-            f"{score}/{max_score}</td>"
+            f"{pct * 100:.0f}%</td>"
+            f'<td class="pkg-score">{p["score"]}/{p["max"]}</td>'
+            f'<td class="pkg-excl">{p["excluded"]}</td>'
             f'<td class="dot-row">{dots_html}</td>'
             f'<td class="ded-icon">{ded_icon}</td>'
             f"</tr>"
         )
     pkg_table = "\n            ".join(pkg_rows)
 
-    # Score distribution histogram
-    from collections import Counter
+    # Score distribution histogram (by percentage bucket)
+    pct_buckets = Counter()
+    for p in pkg_data:
+        bucket = int(p["pct"] * 10) * 10  # 0, 10, 20, ..., 100
+        if bucket > 100:
+            bucket = 100
+        pct_buckets[bucket] += 1
 
-    score_dist = Counter(p["score"] for p in pkg_data)
-    hist_max = max(score_dist.values()) if score_dist else 1
+    hist_max = max(pct_buckets.values()) if pct_buckets else 1
     hist_bars = []
-    for s in range(max_score + 1):
-        cnt = score_dist.get(s, 0)
+    for bucket in range(0, 110, 10):
+        cnt = pct_buckets.get(bucket, 0)
         bar_h = cnt / hist_max * 100 if cnt > 0 else 0
-        if s / max_score >= 0.7:
+        if bucket >= 70:
             color = "#a6e3a1"
-        elif s / max_score >= 0.4:
+        elif bucket >= 40:
             color = "#f9e2af"
         else:
             color = "#f38ba8"
         cnt_label = f'<div class="hist-cnt">{cnt}</div>' if cnt > 0 else ""
         hist_bars.append(
-            f'<div class="hist-col" title="Score {s}: {cnt} packages">'
+            f'<div class="hist-col" title="{bucket}%: {cnt} packages">'
             f"{cnt_label}"
             f'<div class="hist-bar-area">'
             f'<div class="hist-bar" style="height:{bar_h:.0f}%;background:{color}"></div>'
             f"</div>"
-            f'<div class="hist-label">{s}</div>'
+            f'<div class="hist-label">{bucket}%</div>'
             f"</div>"
         )
     hist_html = "\n            ".join(hist_bars)
@@ -1379,7 +1401,7 @@ def _create_test_coverage_summary_page(results: list[dict]) -> str:
             .topbar a {{ color: #89b4fa; text-decoration: none; font-size: 13px; }}
             .topbar a:hover {{ text-decoration: underline; }}
             .topbar h1 {{ font-size: 15px; font-weight: 600; color: #cba6f7; }}
-            .content {{ max-width: 1100px; margin: 32px auto; padding: 0 24px; }}
+            .content {{ max-width: 1200px; margin: 32px auto; padding: 0 24px; }}
             .summary-header {{
                 display: flex; gap: 20px; flex-wrap: wrap;
                 margin-bottom: 28px;
@@ -1399,10 +1421,14 @@ def _create_test_coverage_summary_page(results: list[dict]) -> str:
             th {{
                 text-align: left; padding: 8px 10px; font-size: 11px;
                 color: #6e7681; border-bottom: 1px solid #30363d; text-transform: uppercase;
+                cursor: pointer; user-select: none; white-space: nowrap;
             }}
+            th:hover {{ color: #89b4fa; }}
+            th .sort-arrow {{ font-size: 9px; margin-left: 4px; }}
             td {{ padding: 5px 10px; font-size: 13px; border-bottom: 1px solid #161b2280; }}
             .lvl-code {{ font-family: "SF Mono", monospace; font-weight: 600; color: #cba6f7; }}
-            .lvl-fn {{ font-family: "SF Mono", monospace; font-size: 11px; color: #6e7681; }}
+            .lvl-desc {{ font-size: 12px; color: #a6adc8; }}
+            .lvl-excl {{ font-size: 12px; color: #6e7681; }}
             .lvl-bar {{
                 height: 10px; background: #21262d; border-radius: 3px;
                 overflow: hidden; width: 120px; display: inline-block;
@@ -1411,25 +1437,42 @@ def _create_test_coverage_summary_page(results: list[dict]) -> str:
             .pkg-num {{ font-family: "SF Mono", monospace; color: #6e7681; font-size: 12px; }}
             .pkg-lnk a {{ color: #58a6ff; text-decoration: none; }}
             .pkg-lnk a:hover {{ text-decoration: underline; }}
-            .dot-row {{ font-family: "SF Mono", monospace; letter-spacing: 1px; font-size: 10px; }}
+            .pkg-score {{ font-family: "SF Mono", monospace; font-size: 12px; color: #a6adc8; }}
+            .pkg-excl {{ font-family: "SF Mono", monospace; font-size: 12px; color: #6e7681; }}
+            .dot-row {{ font-family: "SF Mono", monospace; letter-spacing: 2px; font-size: 10px; }}
             .dot-pass {{ color: #a6e3a1; }}
-            .dot-miss {{ color: #30363d; }}
+            .dot-miss {{ color: #f38ba8; }}
+            .dot-excl {{ color: #30363d; }}
             .ded-icon {{ color: #a6e3a1; font-weight: 700; text-align: center; }}
             .hist-container {{
-                display: flex; align-items: flex-end; gap: 4px;
+                display: flex; align-items: flex-end; gap: 6px;
                 padding: 0 4px;
             }}
             .hist-col {{ display: flex; flex-direction: column; align-items: center; flex: 1; justify-content: flex-end; }}
-            .hist-bar-area {{ height: 100px; width: 100%; display: flex; align-items: flex-end; }}
-            .hist-bar {{ width: 100%; min-width: 8px; border-radius: 3px 3px 0 0; transition: height .3s; }}
-            .hist-cnt {{ font-size: 10px; color: #ffffff; margin-bottom: 2px; font-family: "SF Mono", monospace; font-weight: 600; }}
-            .hist-label {{ font-size: 10px; color: #ffffff; margin-top: 4px; font-family: "SF Mono", monospace; }}
+            .hist-bar-area {{ height: 120px; width: 100%; display: flex; align-items: flex-end; }}
+            .hist-bar {{ width: 100%; min-width: 12px; border-radius: 3px 3px 0 0; transition: height .3s; }}
+            .hist-cnt {{ font-size: 11px; color: #ffffff; margin-bottom: 2px; font-family: "SF Mono", monospace; font-weight: 600; }}
+            .hist-label {{ font-size: 11px; color: #a6adc8; margin-top: 4px; font-family: "SF Mono", monospace; }}
+            .filter-row {{
+                display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;
+            }}
+            .filter-row input {{
+                background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+                color: #e6edf3; padding: 6px 12px; font-size: 13px; width: 240px;
+            }}
+            .filter-row input:focus {{ outline: none; border-color: #89b4fa; }}
+            .filter-btn {{
+                background: #21262d; border: 1px solid #30363d; border-radius: 6px;
+                color: #a6adc8; padding: 5px 12px; font-size: 12px; cursor: pointer;
+            }}
+            .filter-btn:hover {{ border-color: #89b4fa; color: #89b4fa; }}
+            .filter-btn.active {{ background: #89b4fa22; border-color: #89b4fa; color: #89b4fa; }}
         </style>
     </head>
     <body>
         <div class="topbar">
-            <a href="index.html">&larr; GDG</a>
-            <span class="sep">|</span>
+            <a href="index.html">&larr; GDG Hub</a>
+            <span class="sep" style="color:#585b70">|</span>
             <h1>\U0001f9ea Test Coverage Summary</h1>
         </div>
         <div class="content">
@@ -1439,35 +1482,35 @@ def _create_test_coverage_summary_page(results: list[dict]) -> str:
                     <div class="sum-label">Packages</div>
                 </div>
                 <div class="sum-card">
-                    <div class="sum-num" style="color:#89b4fa">{avg_score:.1f}/{max_score}</div>
-                    <div class="sum-label">Avg Score</div>
-                </div>
-                <div class="sum-card">
-                    <div class="sum-num" style="color:#a6e3a1">{with_ded}</div>
-                    <div class="sum-label">With Dedicated Tests</div>
+                    <div class="sum-num" style="color:#89b4fa">{avg_pct * 100:.0f}%</div>
+                    <div class="sum-label">Avg Coverage</div>
                 </div>
                 <div class="sum-card">
                     <div class="sum-num" style="color:#a6e3a1">{full_cov}</div>
-                    <div class="sum-label">Full Coverage</div>
+                    <div class="sum-label">100% Coverage</div>
                 </div>
                 <div class="sum-card">
-                    <div class="sum-num" style="color:#f38ba8">{zero_cov}</div>
-                    <div class="sum-label">Zero Coverage</div>
+                    <div class="sum-num" style="color:#f38ba8">{low_cov}</div>
+                    <div class="sum-label">&lt;60% Coverage</div>
+                </div>
+                <div class="sum-card">
+                    <div class="sum-num" style="color:#a6e3a1">{with_ded}</div>
+                    <div class="sum-label">Dedicated Tests</div>
                 </div>
             </div>
 
             <div class="section">
-                <h2>Score Distribution</h2>
+                <h2>Coverage Distribution</h2>
                 <div class="hist-container">
                     {hist_html}
                 </div>
             </div>
 
             <div class="section">
-                <h2>Coverage by Test Level</h2>
+                <h2>Coverage by Level</h2>
                 <table>
                     <thead><tr>
-                        <th>Level</th><th>Test</th><th>Packages</th><th>Bar</th><th>%</th>
+                        <th>Level</th><th>Description</th><th>Pass / Applicable</th><th>Excluded</th><th>Bar</th><th>%</th>
                     </tr></thead>
                     <tbody>
                         {level_table}
@@ -1476,17 +1519,65 @@ def _create_test_coverage_summary_page(results: list[dict]) -> str:
             </div>
 
             <div class="section">
-                <h2>Per-Package Coverage (sorted by score)</h2>
-                <table>
+                <h2>Per-Package Coverage</h2>
+                <div class="filter-row">
+                    <input type="text" id="pkg-filter" placeholder="Filter packages..." oninput="filterPkgs()">
+                    <button class="filter-btn" onclick="sortPkgs('pct')">Sort: Coverage</button>
+                    <button class="filter-btn" onclick="sortPkgs('name')">Sort: Name</button>
+                    <button class="filter-btn" onclick="sortPkgs('num')">Sort: Catalog #</button>
+                    <button class="filter-btn" onclick="filterMissing()">Show Missing Only</button>
+                </div>
+                <table id="pkg-table">
                     <thead><tr>
-                        <th>#</th><th>Package</th><th>Score</th><th>Levels</th><th>DEDICATED TEST</th>
+                        <th>#</th><th>Package</th><th>Coverage</th><th>Score</th><th>Excluded</th><th>Levels</th><th>DED</th>
                     </tr></thead>
-                    <tbody>
+                    <tbody id="pkg-tbody">
                         {pkg_table}
                     </tbody>
                 </table>
             </div>
         </div>
+
+        <script>
+        (function() {{
+            const tbody = document.getElementById('pkg-tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const input = document.getElementById('pkg-filter');
+            let showMissingOnly = false;
+
+            window.filterPkgs = function() {{
+                const q = input.value.toLowerCase();
+                rows.forEach(r => {{
+                    const name = r.cells[1].textContent.toLowerCase();
+                    const pct = parseFloat(r.cells[2].textContent);
+                    const matchesFilter = !q || name.includes(q);
+                    const matchesMissing = !showMissingOnly || pct < 100;
+                    r.style.display = (matchesFilter && matchesMissing) ? '' : 'none';
+                }});
+            }};
+
+            window.filterMissing = function() {{
+                showMissingOnly = !showMissingOnly;
+                const btn = event.target;
+                btn.classList.toggle('active');
+                filterPkgs();
+            }};
+
+            window.sortPkgs = function(key) {{
+                rows.sort((a, b) => {{
+                    if (key === 'pct') {{
+                        return parseFloat(a.cells[2].textContent) - parseFloat(b.cells[2].textContent);
+                    }} else if (key === 'name') {{
+                        return a.cells[1].textContent.localeCompare(b.cells[1].textContent);
+                    }} else {{
+                        return parseInt(a.cells[0].textContent.replace('#','')) -
+                               parseInt(b.cells[0].textContent.replace('#',''));
+                    }}
+                }});
+                rows.forEach(r => tbody.appendChild(r));
+            }};
+        }})();
+        </script>
     </body>
     </html>
     """)
