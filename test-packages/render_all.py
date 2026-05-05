@@ -75,26 +75,26 @@ PORT = 3333
 # The score is "how many of these 21 levels does a package participate in?"
 
 _COVERAGE_LEVELS = [
-    "R0:idx",
-    "R0:srch",
-    "R0:ref",
-    "R0:nodoc",
-    "R0:bigcl",
-    "R0:ug",
-    "R0:supp",
-    "R1:title",
-    "R1:badge",
-    "R1:sig",
-    "R1:desc",
-    "R2:param",
-    "R2:pmatch",
-    "R2:ret",
-    "R4:refidx",
-    "R4:sechdg",
-    "R4:sbar",
-    "R4:sbsec",
-    "R4:land",
-    "R4:hdg",
+    "idx",
+    "srch",
+    "ref",
+    "nodoc",
+    "bigcl",
+    "ug",
+    "supp",
+    "title",
+    "badge",
+    "sig",
+    "desc",
+    "param",
+    "pmatch",
+    "ret",
+    "refidx",
+    "sechdg",
+    "sbar",
+    "sbsec",
+    "land",
+    "hdg",
     "DED",
 ]
 
@@ -132,24 +132,24 @@ def _compute_coverage(name: str) -> dict[str, bool]:
     has_exports = bool(exp.get("export_names"))
 
     # All catalog packages get basic structural tests
-    result["R0:idx"] = True
-    result["R0:srch"] = True
-    result["R4:land"] = True
+    result["idx"] = True
+    result["srch"] = True
+    result["land"] = True
 
     if has_exports:
-        result["R0:ref"] = True
-        result["R1:title"] = True
-        result["R1:badge"] = True
-        result["R1:sig"] = True
-        result["R2:pmatch"] = True
-        result["R4:refidx"] = True
+        result["ref"] = True
+        result["title"] = True
+        result["badge"] = True
+        result["sig"] = True
+        result["pmatch"] = True
+        result["refidx"] = True
 
     if exp.get("nodoc_items"):
-        result["R0:nodoc"] = True
+        result["nodoc"] = True
     if exp.get("big_class_name"):
-        result["R0:bigcl"] = True
+        result["bigcl"] = True
     if exp.get("user_guide_files"):
-        result["R0:ug"] = True
+        result["ug"] = True
     if any(
         exp.get(k)
         for k in (
@@ -159,27 +159,27 @@ def _compute_coverage(name: str) -> dict[str, bool]:
             "has_code_of_conduct_page",
         )
     ):
-        result["R0:supp"] = True
+        result["supp"] = True
     if exp.get("section_titles"):
-        result["R4:sechdg"] = True
-        result["R4:sbsec"] = True
+        result["sechdg"] = True
+        result["sbsec"] = True
 
     parser = exp.get("detected_parser", "numpy")
     if has_exports and name != "gdtest_nodocs" and parser in ("numpy", "google", "sphinx"):
-        result["R1:desc"] = True
+        result["desc"] = True
     if has_exports and name != "gdtest_nodocs":
-        result["R2:param"] = True
-        result["R2:ret"] = True
+        result["param"] = True
+        result["ret"] = True
 
     # Sidebar check
     ref = RENDERED_DIR / name / "great-docs" / "_site" / "reference"
     if ref.exists() and any(f.name != "index.html" for f in ref.glob("*.html")):
-        result["R4:sbar"] = True
+        result["sbar"] = True
 
     # Heading check (first 20 packages by catalog order)
     try:
         if ALL_PACKAGES.index(name) < 20:
-            result["R4:hdg"] = True
+            result["hdg"] = True
     except ValueError:
         pass
 
@@ -1007,29 +1007,29 @@ def _create_log_page(name: str, log_path: str | None) -> str:
 
 _COVERAGE_LEVEL_INFO: dict[str, tuple[str, str]] = {
     # level: (test function name, description)
-    "R0:idx": ("test_R0_site_index_exists", "Site has an index.html landing page"),
-    "R0:srch": ("test_R0_search_json_exists", "Site has a search.json for site search"),
-    "R0:ref": ("test_R0_reference_index_exists", "Reference index.html exists"),
-    "R0:nodoc": ("test_R0_nodoc_items_excluded", "Items marked %nodoc are excluded"),
-    "R0:bigcl": ("test_R0_big_class_has_method_pages", "Big class has separate method pages"),
-    "R0:ug": ("test_R0_user_guide_pages_exist", "User guide pages exist"),
-    "R0:supp": ("test_R0_supporting_pages_exist", "Supporting pages (license, etc.) exist"),
-    "R1:title": ("test_R1_reference_pages_have_title", "Reference pages have an <h1> title"),
-    "R1:badge": ("test_R1_reference_pages_have_type_badge", "Reference pages show a type badge"),
-    "R1:sig": ("test_R1_function_pages_have_signature", "Function pages show a call signature"),
-    "R1:desc": ("test_R1_pages_have_doc_description", "Pages include a docstring description"),
-    "R2:param": ("test_R2_parameters_section_renders", "Parameters section is rendered"),
-    "R2:pmatch": ("test_R2_parameter_names_match_signature", "Param names match the signature"),
-    "R2:ret": ("test_R2_returns_section_renders", "Returns section is rendered"),
-    "R4:refidx": ("test_R4_reference_index_lists_exports", "Reference index lists all exports"),
-    "R4:sechdg": (
-        "test_R4_reference_index_has_section_headings",
+    "idx": ("test_site_index_exists", "Site has an index.html landing page"),
+    "srch": ("test_search_json_exists", "Site has a search.json for site search"),
+    "ref": ("test_reference_index_exists", "Reference index.html exists"),
+    "nodoc": ("test_nodoc_items_excluded", "Items marked %nodoc are excluded"),
+    "bigcl": ("test_big_class_has_method_pages", "Big class has separate method pages"),
+    "ug": ("test_user_guide_pages_exist", "User guide pages exist"),
+    "supp": ("test_supporting_pages_exist", "Supporting pages (license, etc.) exist"),
+    "title": ("test_reference_pages_have_title", "Reference pages have an <h1> title"),
+    "badge": ("test_reference_pages_have_type_badge", "Reference pages show a type badge"),
+    "sig": ("test_function_pages_have_signature", "Function pages show a call signature"),
+    "desc": ("test_pages_have_doc_description", "Pages include a docstring description"),
+    "param": ("test_parameters_section_renders", "Parameters section is rendered"),
+    "pmatch": ("test_parameter_names_match_signature", "Param names match the signature"),
+    "ret": ("test_returns_section_renders", "Returns section is rendered"),
+    "refidx": ("test_reference_index_lists_exports", "Reference index lists all exports"),
+    "sechdg": (
+        "test_reference_index_has_section_headings",
         "Reference index has section headings",
     ),
-    "R4:sbar": ("test_R4_sidebar_has_reference_section", "Sidebar has a Reference section"),
-    "R4:sbsec": ("test_R4_sidebar_lists_section_titles", "Sidebar lists section titles"),
-    "R4:land": ("test_R4_landing_page_has_title", "Landing page has a package title"),
-    "R4:hdg": ("test_R4_no_broken_heading_attributes", "No broken heading attributes"),
+    "sbar": ("test_sidebar_has_reference_section", "Sidebar has a Reference section"),
+    "sbsec": ("test_sidebar_lists_section_titles", "Sidebar lists section titles"),
+    "land": ("test_landing_page_has_title", "Landing page has a package title"),
+    "hdg": ("test_no_broken_heading_attributes", "No broken heading attributes"),
     "DED": ("(dedicated tests)", "Has one or more dedicated/feature-specific tests"),
 }
 
@@ -1081,27 +1081,27 @@ def _create_test_coverage_page(name: str) -> str:
 
     # Suggestions for improving coverage (only for applicable levels)
     suggestions = []
-    if "R0:nodoc" in applicable and not coverage.get("R0:nodoc"):
+    if "nodoc" in applicable and not coverage.get("nodoc"):
         suggestions.append(
             "Add <code>nodoc_items</code> to the spec's <code>expected</code> dict "
             "to enable %nodoc exclusion testing."
         )
-    if "R0:bigcl" in applicable and not coverage.get("R0:bigcl"):
+    if "bigcl" in applicable and not coverage.get("bigcl"):
         suggestions.append(
             "Add <code>big_class_name</code> and <code>big_class_method_count</code> "
             "to the spec to enable big-class method page testing."
         )
-    if "R0:ug" in applicable and not coverage.get("R0:ug"):
+    if "ug" in applicable and not coverage.get("ug"):
         suggestions.append(
             "Add <code>user_guide_files</code> to the spec's <code>expected</code> dict "
             "to enable user guide page existence testing."
         )
-    if "R0:supp" in applicable and not coverage.get("R0:supp"):
+    if "supp" in applicable and not coverage.get("supp"):
         suggestions.append(
             "Set <code>has_license_page</code>, <code>has_citation_page</code>, etc. in the "
             "spec to enable supporting page tests."
         )
-    if "R4:sechdg" in applicable and not coverage.get("R4:sechdg"):
+    if "sechdg" in applicable and not coverage.get("sechdg"):
         suggestions.append(
             "Add <code>section_titles</code> to the spec's <code>expected</code> dict "
             "to enable section heading and sidebar section tests."
@@ -1112,7 +1112,7 @@ def _create_test_coverage_page(name: str) -> str:
             "a feature specific to this package (e.g., config behavior, badge presence, "
             "decorator handling). See the <code>gdg-add-tests</code> skill."
         )
-    if "R4:hdg" in applicable and not coverage.get("R4:hdg"):
+    if "hdg" in applicable and not coverage.get("hdg"):
         suggestions.append(
             "This package is not in the first 20 by catalog order, so heading attribute "
             "checks don't run on it. This is by design (performance)."
