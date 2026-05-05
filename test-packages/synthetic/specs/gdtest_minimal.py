@@ -98,5 +98,7 @@ SPEC = {
         "has_user_guide": False,
         "has_license_page": False,
         "has_citation_page": False,
+        # Baseline "does it work?" test — only functions, no classes/UG/extras/nodoc
+        "coverage_exclude": ["R0:nodoc", "R0:bigcl", "R0:ug", "R0:supp"],
     },
 }
