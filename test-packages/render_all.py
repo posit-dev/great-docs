@@ -95,6 +95,9 @@ _COVERAGE_LEVELS = [
     "sbsec",
     "land",
     "hdg",
+    "nav",
+    "meta",
+    "a11y",
     "DED",
 ]
 
@@ -176,12 +179,17 @@ def _compute_coverage(name: str) -> dict[str, bool]:
     if ref.exists() and any(f.name != "index.html" for f in ref.glob("*.html")):
         result["sbar"] = True
 
-    # Heading check (first 20 packages by catalog order)
-    try:
-        if ALL_PACKAGES.index(name) < 20:
-            result["hdg"] = True
-    except ValueError:
-        pass
+    # Heading check — applies to all rendered packages with reference pages
+    ref_exists = (RENDERED_DIR / name / "great-docs" / "_site" / "reference").exists()
+    if ref_exists:
+        result["hdg"] = True
+
+    # Navbar, meta, and a11y — apply to all packages with an index.html
+    site_index = RENDERED_DIR / name / "great-docs" / "_site" / "index.html"
+    if site_index.exists():
+        result["nav"] = True
+        result["meta"] = True
+        result["a11y"] = True
 
     if name in _load_dedicated_packages():
         result["DED"] = True
@@ -1030,6 +1038,9 @@ _COVERAGE_LEVEL_INFO: dict[str, tuple[str, str]] = {
     "sbsec": ("test_sidebar_lists_section_titles", "Sidebar lists section titles"),
     "land": ("test_landing_page_has_title", "Landing page has a package title"),
     "hdg": ("test_no_broken_heading_attributes", "No broken heading attributes"),
+    "nav": ("test_navbar_renders_with_links", "Navbar renders with navigation links"),
+    "meta": ("test_page_has_meta_description", "Page has meta description and OG tags"),
+    "a11y": ("test_heading_hierarchy_no_skips", "Heading hierarchy has no level skips"),
     "DED": ("(dedicated tests)", "Has one or more dedicated/feature-specific tests"),
 }
 
