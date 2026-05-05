@@ -2610,6 +2610,11 @@ def assemble_hub(
     (HUB_DIR / "_tests_summary.html").write_text(summary_page, encoding="utf-8")
     print("  Created test coverage summary page")
 
+    # Dimensions index page
+    dims_page = _create_dimensions_page(results)
+    (HUB_DIR / "_dimensions.html").write_text(dims_page, encoding="utf-8")
+    print("  Created dimensions index page")
+
     # Save results manifest
     manifest = {
         r["name"]: {
