@@ -174,5 +174,6 @@ SPEC = {
         "has_user_guide": False,
         "explicit_reference": True,
         "members_false_classes": ["MyClass"],
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
+},
 }

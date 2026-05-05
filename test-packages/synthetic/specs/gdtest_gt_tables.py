@@ -227,5 +227,6 @@ SPEC = {
             "summarize.html",
         ],
         "exports": ["make_gt_table", "summarize"],
-    },
+        "coverage_exclude": ['ref', 'nodoc', 'bigcl', 'ug', 'supp', 'title', 'badge', 'sig', 'desc', 'param', 'pmatch', 'ret', 'refidx', 'sechdg', 'sbsec', 'hdg'],
+},
 }

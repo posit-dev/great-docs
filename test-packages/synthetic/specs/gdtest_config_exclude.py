@@ -107,5 +107,6 @@ SPEC = {
         "num_exports": 2,
         "config_excluded": ["helper_func", "InternalClass"],
         "has_user_guide": False,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec'],
+},
 }

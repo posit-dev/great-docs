@@ -106,5 +106,6 @@ SPEC = {
             "great-docs/user-guide/section1/topic2/overview.html": ["Topic 2 Overview"],
             "great-docs/user-guide/section2/intro.html": ["Section 2 Introduction"],
         },
-    },
+        "coverage_exclude": ['ref', 'nodoc', 'bigcl', 'ug', 'supp', 'title', 'badge', 'sig', 'desc', 'param', 'pmatch', 'ret', 'refidx', 'sechdg', 'sbar', 'sbsec', 'hdg'],
+},
 }

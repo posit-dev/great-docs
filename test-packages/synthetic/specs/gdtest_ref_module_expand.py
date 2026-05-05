@@ -145,5 +145,6 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["main_func", "util_a", "util_b", "util_c"],
         "num_exports": 4,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
+},
 }

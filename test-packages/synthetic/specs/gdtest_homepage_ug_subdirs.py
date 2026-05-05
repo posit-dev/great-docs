@@ -201,5 +201,6 @@ SPEC = {
             "examples/data/sample.csv",
             "examples/img/diagram.txt",
         ],
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
+},
 }

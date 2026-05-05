@@ -251,5 +251,6 @@ SPEC = {
             "Exporter Methods",
         ],
         "has_user_guide": False,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
+},
 }

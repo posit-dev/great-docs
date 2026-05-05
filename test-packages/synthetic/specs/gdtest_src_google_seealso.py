@@ -114,5 +114,6 @@ SPEC = {
         "detected_parser": "google",
         "export_names": ["compress", "decode", "decompress", "encode"],
         "num_exports": 4,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
+},
 }

@@ -110,5 +110,6 @@ SPEC = {
         "has_skill_md": True,
         "has_skills_page": True,
         "skill_is_auto_generated": True,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
+},
 }

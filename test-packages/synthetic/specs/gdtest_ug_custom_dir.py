@@ -92,5 +92,6 @@ SPEC = {
             "great-docs/user-guide/getting-started.html": ["Getting Started"],
             "great-docs/user-guide/reference-guide.html": ["Reference Guide"],
         },
-    },
+        "coverage_exclude": ['ref', 'nodoc', 'bigcl', 'ug', 'supp', 'title', 'badge', 'sig', 'desc', 'param', 'pmatch', 'ret', 'refidx', 'sechdg', 'sbar', 'sbsec', 'hdg'],
+},
 }

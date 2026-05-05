@@ -160,5 +160,6 @@ SPEC = {
                 "disconnect": "Close the connection when done.",
             },
         },
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
+},
 }

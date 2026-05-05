@@ -76,5 +76,6 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["bright_func", "light_func"],
         "num_exports": 2,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
+},
 }

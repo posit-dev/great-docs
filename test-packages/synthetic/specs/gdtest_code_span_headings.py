@@ -122,5 +122,6 @@ SPEC = {
                 "expected_class": "doc-what-can-be-used-in-left-and-right",
             },
         },
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
+},
 }

@@ -142,5 +142,6 @@ SPEC = {
         "export_names": ["Adapter", "run", "main", "config", "logger"],
         "auto_excluded": [],
         "has_user_guide": False,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
+},
 }

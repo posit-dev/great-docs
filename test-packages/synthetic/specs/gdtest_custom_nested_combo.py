@@ -77,5 +77,6 @@ SPEC = {
         "export_names": ["render"],
         "num_exports": 1,
         "user_guide_files": ["start.qmd"],
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'supp', 'sechdg', 'sbsec', 'hdg'],
+},
 }

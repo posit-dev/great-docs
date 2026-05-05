@@ -75,5 +75,6 @@ SPEC = {
     "expected": {
         "export_names": ["divide", "negate"],
         "section_titles": ["Functions"],
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
+},
 }

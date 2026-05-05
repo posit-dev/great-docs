@@ -96,5 +96,6 @@ SPEC = {
         "files_not_contain": {
             "great-docs/reference/search.html": ["sidebar-filter.js", "dark-mode-toggle.js"],
         },
-    },
+        "coverage_exclude": ['ref', 'nodoc', 'bigcl', 'ug', 'supp', 'title', 'badge', 'sig', 'desc', 'param', 'pmatch', 'ret', 'refidx', 'sechdg', 'sbar', 'sbsec', 'hdg'],
+},
 }

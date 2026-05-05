@@ -124,5 +124,6 @@ SPEC = {
         "export_names": ["Registry", "create_registry", "list_keys"],
         "num_exports": 3,
         "has_user_guide": False,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec'],
+},
 }

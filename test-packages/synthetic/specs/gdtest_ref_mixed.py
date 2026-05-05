@@ -131,5 +131,6 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["connect", "disconnect", "ping", "trace"],
         "num_exports": 4,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
+},
 }

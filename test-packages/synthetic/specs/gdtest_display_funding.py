@@ -86,5 +86,6 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["fund", "report"],
         "num_exports": 2,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
+},
 }

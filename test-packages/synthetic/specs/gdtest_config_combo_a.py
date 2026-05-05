@@ -114,5 +114,6 @@ SPEC = {
         "files_contain": {
             "great-docs/index.html": ["Combo A Toolkit"],
         },
-    },
+        "coverage_exclude": ['ref', 'nodoc', 'bigcl', 'ug', 'supp', 'title', 'badge', 'sig', 'desc', 'param', 'pmatch', 'ret', 'refidx', 'sechdg', 'sbar', 'sbsec', 'hdg'],
+},
 }

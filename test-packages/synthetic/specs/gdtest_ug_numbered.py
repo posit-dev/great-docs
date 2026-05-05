@@ -94,5 +94,6 @@ SPEC = {
             "great-docs/user-guide/03-usage.html": ["Usage"],
             "great-docs/user-guide/04-advanced.html": ["Advanced"],
         },
-    },
+        "coverage_exclude": ['ref', 'nodoc', 'bigcl', 'ug', 'supp', 'title', 'badge', 'sig', 'desc', 'param', 'pmatch', 'ret', 'refidx', 'sechdg', 'sbar', 'sbsec', 'hdg'],
+},
 }

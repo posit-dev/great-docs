@@ -740,5 +740,6 @@ SPEC = {
         "has_user_guide": True,
         "has_recipes": True,
         "has_tutorials": True,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
+},
 }

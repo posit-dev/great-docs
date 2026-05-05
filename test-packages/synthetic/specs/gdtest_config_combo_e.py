@@ -106,5 +106,6 @@ SPEC = {
         "detected_parser": "sphinx",
         "export_names": ["connect", "disconnect", "receive", "send"],
         "num_exports": 4,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
+},
 }

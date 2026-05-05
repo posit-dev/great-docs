@@ -140,5 +140,6 @@ SPEC = {
         ],
         "has_user_guide": False,
         "methods_always_split": True,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
+},
 }

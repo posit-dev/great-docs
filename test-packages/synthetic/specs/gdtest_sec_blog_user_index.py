@@ -156,5 +156,6 @@ SPEC = {
         "ref_pages": ["publish.html", "draft.html"],
         "has_user_guide": False,
         "user_guide_pages": [],
-    },
+        "coverage_exclude": ['ref', 'nodoc', 'bigcl', 'ug', 'supp', 'title', 'badge', 'sig', 'desc', 'param', 'pmatch', 'ret', 'refidx', 'sechdg', 'sbsec', 'hdg'],
+},
 }

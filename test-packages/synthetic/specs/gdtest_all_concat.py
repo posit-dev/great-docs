@@ -137,5 +137,6 @@ SPEC = {
         "export_names": ["Record", "validate_record", "format_output", "parse_input"],
         "num_exports": 4,
         "has_user_guide": False,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec'],
+},
 }

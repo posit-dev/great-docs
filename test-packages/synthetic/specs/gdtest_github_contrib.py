@@ -94,5 +94,6 @@ SPEC = {
         "has_user_guide": False,
         "has_contributing_page": True,
         "contributing_in_github_dir": True,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'hdg'],
+},
 }

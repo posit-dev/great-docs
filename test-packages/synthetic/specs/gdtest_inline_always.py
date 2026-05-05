@@ -212,5 +212,6 @@ SPEC = {
         "section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
         "methods_never_split": True,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
+},
 }

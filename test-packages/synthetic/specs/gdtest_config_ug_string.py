@@ -75,5 +75,6 @@ SPEC = {
             "great-docs/user-guide/intro.html": ["Introduction", "Welcome to the guides"],
             "great-docs/user-guide/setup.html": ["Setup", "How to set up the project"],
         },
-    },
+        "coverage_exclude": ['ref', 'nodoc', 'bigcl', 'ug', 'supp', 'title', 'badge', 'sig', 'desc', 'param', 'pmatch', 'ret', 'refidx', 'sechdg', 'sbar', 'sbsec', 'hdg'],
+},
 }

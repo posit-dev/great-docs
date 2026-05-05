@@ -85,5 +85,6 @@ SPEC = {
         "has_user_guide": False,
         "has_skill_md": False,
         "has_skills_page": False,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
+},
 }

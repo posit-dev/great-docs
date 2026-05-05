@@ -246,5 +246,6 @@ SPEC = {
         "skill_has_best_practices": True,
         "skill_has_decision_table": True,
         "skill_has_extra_body": True,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
+},
 }
