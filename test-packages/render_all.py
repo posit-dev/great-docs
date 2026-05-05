@@ -103,6 +103,7 @@ _COVERAGE_LEVELS = [
 
 # Package names explicitly referenced in test_gdg_rendered.py (dedicated tests)
 _DEDICATED_PACKAGES: set[str] = set()
+_DEDICATED_COUNTS: dict[str, int] = {}
 
 
 def _load_dedicated_packages() -> set[str]:
@@ -114,6 +115,37 @@ def _load_dedicated_packages() -> set[str]:
     if test_file.exists():
         _DEDICATED_PACKAGES = set(re.findall(r"gdtest_[a-z0-9_]+", test_file.read_text()))
     return _DEDICATED_PACKAGES
+
+
+def _count_dedicated_tests(name: str) -> int:
+    """Count dedicated test functions that reference a given package.
+
+    Looks for functions decorated with ``@pytest.mark.dedicated`` and counts
+    how many reference the package name in their decorator block + body.
+    """
+    global _DEDICATED_COUNTS  # noqa: PLW0603
+    if not _DEDICATED_COUNTS:
+        test_file = _PROJECT_ROOT / "tests" / "test_gdg_rendered.py"
+        if not test_file.exists():
+            return 0
+        content = test_file.read_text()
+        # Split into function blocks
+        fn_positions = [
+            (m.start(), m.group(1))
+            for m in re.finditer(r"\ndef (test_\w+)", content)
+        ]
+        for idx, (pos, _fn_name) in enumerate(fn_positions):
+            # Look for @pytest.mark.dedicated in the decorator block
+            decorator_block = content[max(0, pos - 1500) : pos]
+            if "@pytest.mark.dedicated" not in decorator_block:
+                continue
+            # Get function body
+            end = fn_positions[idx + 1][0] if idx + 1 < len(fn_positions) else len(content)
+            fn_body = content[pos:end]
+            search_text = decorator_block + fn_body
+            for pkg in set(re.findall(r"gdtest_[a-z0-9_]+", search_text)):
+                _DEDICATED_COUNTS[pkg] = _DEDICATED_COUNTS.get(pkg, 0) + 1
+    return _DEDICATED_COUNTS.get(name, 0)
 
 
 def _compute_coverage(name: str) -> dict[str, bool]:
@@ -1062,6 +1094,7 @@ def _create_test_coverage_page(name: str) -> str:
         color = "#f38ba8"
 
     # Build the coverage table rows
+    ded_count = _count_dedicated_tests(name)
     rows = []
     for level in _COVERAGE_LEVELS:
         covered = coverage.get(level, False)
@@ -1077,10 +1110,18 @@ def _create_test_coverage_page(name: str) -> str:
         else:
             icon = "❌"
             row_class = "cov-miss"
+        # For DED, show the count badge
+        level_display = html.escape(level)
+        if level == "DED" and ded_count > 0:
+            level_display = (
+                f'{html.escape(level)}'
+                f' <span class="ded-count">×{ded_count}</span>'
+            )
+            desc = f"{ded_count} dedicated test{'s' if ded_count != 1 else ''} for this package"
         rows.append(
             f'<tr class="{row_class}">'
             f"<td>{icon}</td>"
-            f'<td class="cov-level">{html.escape(level)}</td>'
+            f'<td class="cov-level">{level_display}</td>'
             f'<td class="cov-fn">{html.escape(test_fn)}</td>'
             f'<td class="cov-desc">{html.escape(desc)}</td>'
             f"</tr>"
@@ -1197,6 +1238,11 @@ def _create_test_coverage_page(name: str) -> str:
             .cov-miss .cov-fn {{ color: #484e58; }}
             .cov-excluded .cov-fn {{ color: #484e58; }}
             .cov-desc {{ max-width: 300px; }}
+            .ded-count {{
+                display: inline-block; padding: 1px 6px; margin-left: 4px;
+                border-radius: 10px; font-size: 10px; font-weight: 700;
+                background: #a6e3a120; color: #a6e3a1; border: 1px solid #a6e3a140;
+            }}
             .counter {{ display: flex; gap: 16px; margin-bottom: 16px; }}
             .counter-item {{
                 padding: 4px 12px; border-radius: 4px; font-size: 13px; font-weight: 600;
@@ -1528,7 +1574,8 @@ def _create_test_coverage_summary_page(results: list[dict]) -> str:
         else:
             color = "#f38ba8"
         num = ALL_PACKAGES.index(name) + 1 if name in ALL_PACKAGES else 0
-        ded_icon = "✓" if p["coverage"].get("DED") else ""
+        ded_n = _count_dedicated_tests(name)
+        ded_cell = f'<span class="ded-badge">{ded_n}</span>' if ded_n > 0 else "—"
 
         # Level dots (pass/miss/excluded)
         dots = []
@@ -1550,7 +1597,7 @@ def _create_test_coverage_summary_page(results: list[dict]) -> str:
             f'<td class="pkg-score">{p["score"]}/{p["max"]}</td>'
             f'<td class="pkg-excl">{p["excluded"]}</td>'
             f'<td class="dot-row">{dots_html}</td>'
-            f'<td class="ded-icon">{ded_icon}</td>'
+            f'<td class="ded-icon">{ded_cell}</td>'
             f"</tr>"
         )
     pkg_table = "\n            ".join(pkg_rows)
@@ -1648,7 +1695,12 @@ def _create_test_coverage_summary_page(results: list[dict]) -> str:
             .dot-pass {{ color: #a6e3a1; }}
             .dot-miss {{ color: #f38ba8; }}
             .dot-excl {{ color: #30363d; }}
-            .ded-icon {{ color: #a6e3a1; font-weight: 700; text-align: center; }}
+            .ded-icon {{ text-align: center; }}
+            .ded-badge {{
+                display: inline-block; padding: 2px 7px; border-radius: 10px;
+                font-size: 11px; font-weight: 700; font-family: "SF Mono", monospace;
+                background: #a6e3a118; color: #a6e3a1; border: 1px solid #a6e3a140;
+            }}
             .hist-container {{
                 display: flex; align-items: flex-end; gap: 6px;
                 padding: 0 4px;
