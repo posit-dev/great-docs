@@ -1825,6 +1825,104 @@ def test_no_broken_heading_attributes(pkg_name: str):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# R4: Navbar Rendering (nav)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+@pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
+def test_navbar_renders_with_links(pkg_name: str):
+    """The navbar renders with at least one navigation link."""
+    index = _site_dir(pkg_name) / "index.html"
+    if not index.exists():
+        pytest.skip("No index.html")
+
+    soup = _load_html(index)
+    nav = soup.select_one("nav.navbar")
+    if nav is None:
+        pytest.fail(f"{pkg_name}: no <nav class='navbar'> element found")
+
+    links = nav.select("a[href]")
+    assert links, f"{pkg_name}: navbar has no links"
+
+    # The brand/title link should be present
+    brand = nav.select_one(".navbar-brand, .navbar-title")
+    assert brand, f"{pkg_name}: navbar missing brand/title element"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: Page Metadata / OG Tags (meta)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+@pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
+def test_page_has_meta_description(pkg_name: str):
+    """The landing page has a <meta name='description'> tag."""
+    index = _site_dir(pkg_name) / "index.html"
+    if not index.exists():
+        pytest.skip("No index.html")
+
+    soup = _load_html(index)
+    meta = soup.select_one("meta[name='description']")
+    assert meta, f"{pkg_name}: missing <meta name='description'>"
+    content = meta.get("content", "").strip()
+    assert content, f"{pkg_name}: meta description is empty"
+
+
+@requires_bs4
+@pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
+def test_page_has_og_title(pkg_name: str):
+    """The landing page has an og:title meta tag."""
+    index = _site_dir(pkg_name) / "index.html"
+    if not index.exists():
+        pytest.skip("No index.html")
+
+    soup = _load_html(index)
+    og = soup.select_one("meta[property='og:title']")
+    assert og, f"{pkg_name}: missing <meta property='og:title'>"
+    content = og.get("content", "").strip()
+    assert content, f"{pkg_name}: og:title is empty"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: Accessibility (a11y)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+@pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
+def test_heading_hierarchy_no_skips(pkg_name: str):
+    """Heading levels don't skip (e.g., h2 → h4 without h3) in main content.
+
+    Allows the initial jump from h1 to any level (Quarto sidebars/layouts
+    commonly inject headings at varying levels before the first section).
+    Only checks forward-skips: going from hN to hM where M > N+1.
+    """
+    index = _site_dir(pkg_name) / "index.html"
+    if not index.exists():
+        pytest.skip("No index.html")
+
+    soup = _load_html(index)
+    main = soup.select_one("main, #quarto-document-content, main.content")
+    if main is None:
+        pytest.skip("No main content area")
+
+    headings = main.select("h1, h2, h3, h4, h5, h6")
+    if len(headings) < 3:
+        pytest.skip("Too few headings to check hierarchy")
+
+    levels = [int(h.name[1]) for h in headings]
+    # Skip the first heading pair (h1 → h3 is common in Quarto layouts)
+    for i in range(2, len(levels)):
+        if levels[i] > levels[i - 1] + 1:
+            pytest.fail(
+                f"{pkg_name}: heading skip from h{levels[i - 1]} to h{levels[i]} "
+                f"(headings {i} to {i + 1})"
+            )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # R4: Directive Stripping
 # ═══════════════════════════════════════════════════════════════════════════════
 
