@@ -2075,7 +2075,7 @@ def create_hub_page(results: list[dict]) -> None:
                 <div class="stat stat-total"><span class="stat-num">{len(results)}</span> total</div>
                 <div class="stat stat-init"><span class="stat-num">{init_count}</span> init</div>
                 <div class="stat stat-config"><span class="stat-num">{config_count}</span> config</div>
-                <a href="_tests_summary.html" class="stat stat-cov" style="text-decoration:none;cursor:pointer"><span class="stat-num">{sum(coverage_score(r["name"]) for r in results) // max(len(results), 1)}</span> / 21 avg cov<span class="chevron">&#8250;</span></a>
+                <a href="_tests_summary.html" class="stat stat-cov" style="text-decoration:none;cursor:pointer"><span class="stat-num">{sum(coverage_score(r["name"]) / max(coverage_max(r["name"]), 1) for r in results) / max(len(results), 1) * 100:.0f}%</span> avg cov<span class="chevron">&#8250;</span></a>
             </div>
         </div>
 
