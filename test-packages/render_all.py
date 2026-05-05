@@ -2321,7 +2321,34 @@ def create_hub_page(results: list[dict]) -> None:
                 border-bottom: 1px solid #30363d;
                 padding: 32px 24px; text-align: center;
             }}
-            .header h1 {{ font-size: 28px; font-weight: 700; color: #cba6f7; margin-bottom: 8px; }}
+            .header h1 {{
+                font-size: 36px; font-weight: 800; margin-bottom: 8px;
+                background: linear-gradient(90deg, #f97316, #ef4444, #f59e0b, #ef4444, #f97316);
+                background-size: 200% auto;
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+                animation: fire-shift 3s ease-in-out infinite;
+                position: relative;
+                isolation: isolate;
+            }}
+            .header h1::before {{
+                content: '';
+                position: absolute;
+                inset: -8px -16px;
+                background: radial-gradient(ellipse at center, rgba(249,115,22,0.4) 0%, rgba(239,68,68,0.25) 40%, transparent 70%);
+                filter: blur(18px);
+                z-index: -1;
+                animation: glow-pulse 3s ease-in-out infinite;
+            }}
+            @keyframes fire-shift {{
+                0%, 100% {{ background-position: 0% center; }}
+                50% {{ background-position: 100% center; }}
+            }}
+            @keyframes glow-pulse {{
+                0%, 100% {{ opacity: 0.6; }}
+                50% {{ opacity: 0.9; }}
+            }}
             .header p {{ color: #8b949e; font-size: 15px; max-width: 700px; margin: 0 auto; }}
             .stats {{ display: flex; gap: 24px; justify-content: center; margin-top: 16px; }}
             .stat {{ display: flex; align-items: center; gap: 6px; font-size: 14px; }}
@@ -2338,6 +2365,14 @@ def create_hub_page(results: list[dict]) -> None:
             .stat-cov:hover {{ background: #264d4d; }}
             .stat-cov .stat-num {{ color: #94e2d5; }}
             .stat-cov .chevron {{ margin-left: 2px; font-size: 16px; color: #94e2d5; }}
+
+            .stat-dim {{
+                background: #1e2a3a; border: 1px solid #89b4fa; border-radius: 20px;
+                padding: 4px 14px; color: #fff; transition: background 0.2s;
+            }}
+            .stat-dim:hover {{ background: #263d5a; }}
+            .stat-dim .stat-num {{ color: #89b4fa; }}
+            .stat-dim .chevron {{ margin-left: 2px; font-size: 16px; color: #89b4fa; }}
 
             .filter-bar {{
                 max-width: 1200px; margin: 20px auto 0; padding: 0 24px;
