@@ -229,10 +229,11 @@ def coverage_max(name: str) -> int:
 
 
 def _coverage_badge_html(score: int, max_score: int | None = None) -> str:
-    """Return an HTML badge for a test coverage score."""
+    """Return an HTML badge with mini progress bar for test coverage."""
     if max_score is None:
         max_score = len(_COVERAGE_LEVELS)
     pct = score / max_score if max_score > 0 else 0
+    pct_int = int(pct * 100)
     if pct >= 0.7:
         color = "#a6e3a1"  # green
     elif pct >= 0.4:
@@ -240,12 +241,11 @@ def _coverage_badge_html(score: int, max_score: int | None = None) -> str:
     else:
         color = "#f38ba8"  # red
     return (
-        f'<span style="display:inline-block;padding:1px 6px;margin:1px;'
-        f"border-radius:3px;font-size:10px;font-weight:600;"
-        f"background:{color}22;color:{color};border:1px solid {color}40;"
-        f'font-family:&quot;SF Mono&quot;,monospace;"'
-        f' title="Test coverage: {score}/{max_score} levels">'
-        f"\U0001f9ea {score}/{max_score}</span>"
+        f'<span class="cov-chip" style="'
+        f"background:{color}15;color:{color};border:1px solid {color}40;"
+        f'"title="Test coverage: {score}/{max_score} levels ({pct_int}%)">'
+        f'<span class="cov-chip-bar" style="width:{pct_int}%;background:{color}"></span>'
+        f"{pct_int}%</span>"
     )
 
 
@@ -2023,6 +2023,10 @@ def create_hub_page(results: list[dict]) -> None:
 
         card_long = long_desc[:140] + "..." if len(long_desc) > 140 else long_desc
 
+        cov_score = coverage_score(name)
+        cov_max = coverage_max(name)
+        cov_badge = _coverage_badge_html(cov_score, cov_max)
+
         links = (
             f'<div class="card-links">'
             f'<a href="_detail_{name}.html" class="card-link" '
@@ -2031,12 +2035,9 @@ def create_hub_page(results: list[dict]) -> None:
             f'onclick="event.stopPropagation()">Build Log</a>'
             f'<a href="_tests_{name}.html" class="card-link" '
             f'onclick="event.stopPropagation()">Tests</a>'
+            f"{cov_badge}"
             f"</div>"
         )
-
-        cov_score = coverage_score(name)
-        cov_max = coverage_max(name)
-        cov_badge = _coverage_badge_html(cov_score, cov_max)
 
         init_cls = " card-init" if is_init_pkg else ""
         init_badge = '<span class="card-init-badge">INIT</span>' if is_init_pkg else ""
@@ -2051,7 +2052,7 @@ def create_hub_page(results: list[dict]) -> None:
                 </div>
                 <div class="card-desc">{desc}</div>
                 <div class="card-long">{card_long}</div>
-                <div class="card-dims">{badges} {cov_badge}</div>
+                <div class="card-dims">{badges}</div>
                 {links}
             </div>""")
         else:
@@ -2067,7 +2068,7 @@ def create_hub_page(results: list[dict]) -> None:
                 <div class="card-desc">{desc}</div>
                 <div class="card-long">{card_long}</div>
                 <div class="card-error">{error}</div>
-                <div class="card-dims">{badges} {cov_badge}</div>
+                <div class="card-dims">{badges}</div>
                 {links}
             </div>""")
 
@@ -2197,10 +2198,20 @@ def create_hub_page(results: list[dict]) -> None:
             .card-dims {{ margin-top: 4px; line-height: 1.6; }}
             .card-links {{
                 display: flex; gap: 12px; margin-top: 6px; padding-top: 6px;
-                border-top: 1px solid #21262d;
+                border-top: 1px solid #21262d; align-items: center;
             }}
             .card-link {{ font-size: 11px; color: #58a6ff !important; text-decoration: none !important; }}
             .card-link:hover {{ text-decoration: underline !important; }}
+            .cov-chip {{
+                display: inline-flex; align-items: center; position: relative;
+                padding: 1px 7px; margin-left: auto; border-radius: 3px;
+                font-size: 10px; font-weight: 700; font-family: "SF Mono", monospace;
+                overflow: hidden; white-space: nowrap;
+            }}
+            .cov-chip-bar {{
+                position: absolute; left: 0; top: 0; bottom: 0;
+                opacity: 0.15; border-radius: 3px;
+            }}
         </style>
     </head>
     <body>
