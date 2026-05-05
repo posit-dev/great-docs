@@ -189,15 +189,50 @@ def _compute_coverage(name: str) -> dict[str, bool]:
     return result
 
 
+def _applicable_levels(name: str) -> set[str]:
+    """Return the set of coverage levels that apply to a package.
+
+    Respects `coverage_exclude` (opt-out list) and `coverage_include`
+    (opt-in list) in the spec's `expected` dict.
+
+    - If `coverage_include` is set, only those levels count.
+    - If `coverage_exclude` is set, those levels are removed.
+    - If neither is set, all levels apply (backwards-compatible).
+    """
+    try:
+        spec = get_spec(name)
+        exp = spec.get("expected", {})
+    except Exception:
+        return set(_COVERAGE_LEVELS)
+
+    include = exp.get("coverage_include")
+    exclude = exp.get("coverage_exclude")
+
+    if include is not None:
+        return set(include) & set(_COVERAGE_LEVELS)
+    elif exclude is not None:
+        return set(_COVERAGE_LEVELS) - set(exclude)
+    else:
+        return set(_COVERAGE_LEVELS)
+
+
 def coverage_score(name: str) -> int:
-    """Return the test coverage score (0–21) for a package."""
-    return sum(_compute_coverage(name).values())
+    """Return the test coverage score for a package (passing / applicable)."""
+    coverage = _compute_coverage(name)
+    applicable = _applicable_levels(name)
+    return sum(1 for level in applicable if coverage.get(level))
 
 
-def _coverage_badge_html(score: int) -> str:
+def coverage_max(name: str) -> int:
+    """Return the max possible score for a package (number of applicable levels)."""
+    return len(_applicable_levels(name))
+
+
+def _coverage_badge_html(score: int, max_score: int | None = None) -> str:
     """Return an HTML badge for a test coverage score."""
-    max_score = len(_COVERAGE_LEVELS)
-    pct = score / max_score
+    if max_score is None:
+        max_score = len(_COVERAGE_LEVELS)
+    pct = score / max_score if max_score > 0 else 0
     if pct >= 0.7:
         color = "#a6e3a1"  # green
     elif pct >= 0.4:
@@ -427,11 +462,11 @@ def build_all(
 ) -> list[dict]:
     """Build all (or selected) synthetic packages.
 
-    When *run_id* and *state* are supplied each result is recorded into the
-    state dict (caller is responsible for saving to disk).
+    When *run_id* and *state* are supplied each result is recorded into the state dict (caller is
+    responsible for saving to disk).
 
-    When *skip_ok* is ``True``, packages whose status in *state* is already
-    ``"ok"`` are skipped. This lets an interrupted full build resume quickly.
+    When *skip_ok* is `True`, packages whose status in *state* is already `"ok"` are skipped. This
+    lets an interrupted full build resume quickly.
     """
     names = packages or ALL_PACKAGES
     results = []
@@ -633,12 +668,12 @@ def _build_nav_html(
 
     # Test coverage score for the current package
     cov = coverage_score(current_name)
-    max_cov = len(_COVERAGE_LEVELS)
-    cov_pct = cov / max_cov
+    max_cov = coverage_max(current_name)
+    cov_pct = cov / max_cov if max_cov > 0 else 0
     cov_color = "#a6e3a1" if cov_pct >= 0.7 else "#f9e2af" if cov_pct >= 0.4 else "#f38ba8"
     coverage_html = (
         f'<span class="gd-nav-coverage" style="color:{cov_color}"'
-        f' title="Test coverage: {cov}/{max_cov} levels">'
+        f' title="Test coverage: {cov}/{max_cov} applicable levels">'
         f"\U0001f9ea {cov}/{max_cov}</span>"
     )
 
@@ -1002,9 +1037,10 @@ _COVERAGE_LEVEL_INFO: dict[str, tuple[str, str]] = {
 def _create_test_coverage_page(name: str) -> str:
     """Create an HTML page showing test coverage details for a single package."""
     coverage = _compute_coverage(name)
-    score = sum(coverage.values())
-    max_score = len(_COVERAGE_LEVELS)
-    pct = score / max_score
+    applicable = _applicable_levels(name)
+    score = sum(1 for level in applicable if coverage.get(level))
+    max_score = len(applicable)
+    pct = score / max_score if max_score > 0 else 0
     num = ALL_PACKAGES.index(name) + 1 if name in ALL_PACKAGES else 0
 
     if pct >= 0.7:
@@ -1018,10 +1054,18 @@ def _create_test_coverage_page(name: str) -> str:
     rows = []
     for level in _COVERAGE_LEVELS:
         covered = coverage.get(level, False)
+        excluded = level not in applicable
         info = _COVERAGE_LEVEL_INFO.get(level, (level, ""))
         test_fn, desc = info
-        icon = "✅" if covered else "❌"
-        row_class = "cov-pass" if covered else "cov-miss"
+        if excluded:
+            icon = "⊘"
+            row_class = "cov-excluded"
+        elif covered:
+            icon = "✅"
+            row_class = "cov-pass"
+        else:
+            icon = "❌"
+            row_class = "cov-miss"
         rows.append(
             f'<tr class="{row_class}">'
             f"<td>{icon}</td>"
@@ -1033,41 +1077,42 @@ def _create_test_coverage_page(name: str) -> str:
     table_rows = "\n            ".join(rows)
     covered_count = score
     missing_count = max_score - score
+    excluded_count = len(_COVERAGE_LEVELS) - max_score
 
-    # Suggestions for improving coverage
+    # Suggestions for improving coverage (only for applicable levels)
     suggestions = []
-    if not coverage.get("R0:nodoc"):
+    if "R0:nodoc" in applicable and not coverage.get("R0:nodoc"):
         suggestions.append(
             "Add <code>nodoc_items</code> to the spec's <code>expected</code> dict "
             "to enable %nodoc exclusion testing."
         )
-    if not coverage.get("R0:bigcl"):
+    if "R0:bigcl" in applicable and not coverage.get("R0:bigcl"):
         suggestions.append(
             "Add <code>big_class_name</code> and <code>big_class_method_count</code> "
             "to the spec to enable big-class method page testing."
         )
-    if not coverage.get("R0:ug"):
+    if "R0:ug" in applicable and not coverage.get("R0:ug"):
         suggestions.append(
             "Add <code>user_guide_files</code> to the spec's <code>expected</code> dict "
             "to enable user guide page existence testing."
         )
-    if not coverage.get("R0:supp"):
+    if "R0:supp" in applicable and not coverage.get("R0:supp"):
         suggestions.append(
             "Set <code>has_license_page</code>, <code>has_citation_page</code>, etc. in the "
             "spec to enable supporting page tests."
         )
-    if not coverage.get("R4:sechdg"):
+    if "R4:sechdg" in applicable and not coverage.get("R4:sechdg"):
         suggestions.append(
             "Add <code>section_titles</code> to the spec's <code>expected</code> dict "
             "to enable section heading and sidebar section tests."
         )
-    if not coverage.get("DED"):
+    if "DED" in applicable and not coverage.get("DED"):
         suggestions.append(
             "Write a dedicated test in <code>test_gdg_rendered.py</code> that asserts "
             "a feature specific to this package (e.g., config behavior, badge presence, "
             "decorator handling). See the <code>gdg-add-tests</code> skill."
         )
-    if not coverage.get("R4:hdg"):
+    if "R4:hdg" in applicable and not coverage.get("R4:hdg"):
         suggestions.append(
             "This package is not in the first 20 by catalog order, so heading attribute "
             "checks don't run on it. This is by design (performance)."
@@ -1135,9 +1180,11 @@ def _create_test_coverage_page(name: str) -> str:
             td {{ padding: 6px 10px; font-size: 13px; border-bottom: 1px solid #161b2280; }}
             .cov-pass td {{ color: #c9d1d9; }}
             .cov-miss td {{ color: #6e7681; }}
+            .cov-excluded td {{ color: #484e58; font-style: italic; text-decoration: line-through; text-decoration-color: #484e5880; }}
             .cov-level {{ font-family: "SF Mono", monospace; font-weight: 600; }}
             .cov-fn {{ font-family: "SF Mono", monospace; font-size: 11px; color: #89b4fa; }}
             .cov-miss .cov-fn {{ color: #484e58; }}
+            .cov-excluded .cov-fn {{ color: #484e58; }}
             .cov-desc {{ max-width: 300px; }}
             .counter {{ display: flex; gap: 16px; margin-bottom: 16px; }}
             .counter-item {{
@@ -1145,6 +1192,7 @@ def _create_test_coverage_page(name: str) -> str:
             }}
             .counter-pass {{ background: #a6e3a122; color: #a6e3a1; border: 1px solid #a6e3a140; }}
             .counter-miss {{ background: #f38ba822; color: #f38ba8; border: 1px solid #f38ba840; }}
+            .counter-excluded {{ background: #6e768122; color: #6e7681; border: 1px solid #6e768140; }}
             .suggestions {{ list-style: none; }}
             .suggestions li {{
                 padding: 8px 12px; margin-bottom: 6px; font-size: 13px;
@@ -1173,7 +1221,7 @@ def _create_test_coverage_page(name: str) -> str:
                 </div>
                 <div class="score-detail">
                     <strong>#{num:03d} {html.escape(name)}</strong><br>
-                    {covered_count} coverage levels hit, {missing_count} missing
+                    {covered_count} of {max_score} applicable levels covered{f", {excluded_count} excluded" if excluded_count else ""}
                 </div>
             </div>
 
@@ -1182,6 +1230,7 @@ def _create_test_coverage_page(name: str) -> str:
                 <div class="counter">
                     <span class="counter-item counter-pass">✅ {covered_count} covered</span>
                     <span class="counter-item counter-miss">❌ {missing_count} missing</span>
+                    {"" if excluded_count == 0 else f'<span class="counter-item counter-excluded">⊘ {excluded_count} excluded</span>'}
                 </div>
                 <table>
                     <thead>
@@ -1845,7 +1894,8 @@ def create_hub_page(results: list[dict]) -> None:
         )
 
         cov_score = coverage_score(name)
-        cov_badge = _coverage_badge_html(cov_score)
+        cov_max = coverage_max(name)
+        cov_badge = _coverage_badge_html(cov_score, cov_max)
 
         init_cls = " card-init" if is_init_pkg else ""
         init_badge = '<span class="card-init-badge">INIT</span>' if is_init_pkg else ""
