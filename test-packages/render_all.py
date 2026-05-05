@@ -32,6 +32,7 @@ import subprocess
 import sys
 import textwrap
 import time
+from datetime import datetime
 from pathlib import Path
 
 from yaml12 import format_yaml
@@ -2513,6 +2514,35 @@ def create_hub_page(results: list[dict]) -> None:
                 position: absolute; left: 0; top: 0; bottom: 0;
                 opacity: 0.15; border-radius: 3px;
             }}
+            .hub-footer {{
+                margin-top: 64px;
+                border-top: 1px solid #30363d;
+                padding: 32px 24px;
+                text-align: center;
+                color: #8b949e;
+                font-size: 13px;
+            }}
+            .hub-footer-inner {{
+                max-width: 600px;
+                margin: 0 auto;
+            }}
+            .hub-footer-links {{
+                margin-bottom: 12px;
+            }}
+            .hub-footer-links a {{
+                color: #58a6ff;
+                text-decoration: none;
+            }}
+            .hub-footer-links a:hover {{
+                text-decoration: underline;
+            }}
+            .hub-footer-sep {{
+                margin: 0 8px;
+                color: #484f58;
+            }}
+            .hub-footer-copy {{
+                color: #6e7681;
+            }}
         </style>
     </head>
     <body>
@@ -2585,6 +2615,18 @@ def create_hub_page(results: list[dict]) -> None:
             }});
         }})();
         </script>
+    <footer class="hub-footer">
+        <div class="hub-footer-inner">
+            <div class="hub-footer-links">
+                <a href="https://github.com/posit-dev/gdg" target="_blank" rel="noopener">GDG on GitHub</a>
+                <span class="hub-footer-sep">&middot;</span>
+                <a href="https://github.com/posit-dev/great-docs" target="_blank" rel="noopener">Great Docs on GitHub</a>
+            </div>
+            <div class="hub-footer-copy">
+                &copy; {datetime.now().year} Posit Software, PBC. All rights reserved.
+            </div>
+        </div>
+    </footer>
     </body>
     </html>
     """)
