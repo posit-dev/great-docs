@@ -219,28 +219,28 @@ _PKGS_WITH_DOCSTRINGS = [
 
 
 @pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
-def test_R0_site_index_exists(pkg_name: str):
+def test_site_index_exists(pkg_name: str):
     """Every rendered site has an index.html landing page."""
     index = _site_dir(pkg_name) / "index.html"
     assert index.exists(), f"Missing {index}"
 
 
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_EXPORTS)
-def test_R0_reference_index_exists(pkg_name: str):
+def test_reference_index_exists(pkg_name: str):
     """Rendered sites with exports have a reference/index.html."""
     ref_index = _ref_dir(pkg_name) / "index.html"
     assert ref_index.exists(), f"Missing {ref_index}"
 
 
 @pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
-def test_R0_search_json_exists(pkg_name: str):
+def test_search_json_exists(pkg_name: str):
     """Every rendered site has a search.json for site search."""
     search = _site_dir(pkg_name) / "search.json"
     assert search.exists(), f"Missing {search}"
 
 
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_EXPORTS)
-def test_R0_reference_pages_match_exports(pkg_name: str):
+def test_reference_pages_match_exports(pkg_name: str):
     """Each exported symbol has a corresponding .html page in reference/."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected["export_names"]
@@ -274,7 +274,7 @@ def test_R0_reference_pages_match_exports(pkg_name: str):
 
 
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_NODOC)
-def test_R0_nodoc_items_excluded(pkg_name: str):
+def test_nodoc_items_excluded(pkg_name: str):
     """Items marked %nodoc should NOT have reference pages."""
     expected = _EXPECTED_CACHE[pkg_name]
     nodoc_items = expected["nodoc_items"]
@@ -286,7 +286,7 @@ def test_R0_nodoc_items_excluded(pkg_name: str):
 
 
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_BIG_CLASS)
-def test_R0_big_class_has_method_pages(pkg_name: str):
+def test_big_class_has_method_pages(pkg_name: str):
     """Big classes (>5 methods) should have separate method .html pages."""
     expected = _EXPECTED_CACHE[pkg_name]
     big_class = expected["big_class_name"]
@@ -308,7 +308,7 @@ def test_R0_big_class_has_method_pages(pkg_name: str):
 
 
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_UG_FILES)
-def test_R0_user_guide_pages_exist(pkg_name: str):
+def test_user_guide_pages_exist(pkg_name: str):
     """User guide pages render to HTML when user_guide_files is specified."""
     expected = _EXPECTED_CACHE[pkg_name]
     ug_files = expected["user_guide_files"]
@@ -342,7 +342,7 @@ def test_R0_user_guide_pages_exist(pkg_name: str):
 
 
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_SUPPORTING)
-def test_R0_supporting_pages_exist(pkg_name: str):
+def test_supporting_pages_exist(pkg_name: str):
     """Supporting pages (license, citation, etc.) render when expected."""
     expected = _EXPECTED_CACHE[pkg_name]
     site = _site_dir(pkg_name)
@@ -367,7 +367,7 @@ def test_R0_supporting_pages_exist(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_EXPORTS)
-def test_R1_reference_pages_have_title(pkg_name: str):
+def test_reference_pages_have_title(pkg_name: str):
     """Every reference page has a .title element (h1 or h2)."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected["export_names"]
@@ -391,7 +391,7 @@ def test_R1_reference_pages_have_title(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_EXPORTS)
-def test_R1_reference_pages_have_type_badge(pkg_name: str):
+def test_reference_pages_have_type_badge(pkg_name: str):
     """Every reference page has a type badge (function, class, enum, etc.)."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected["export_names"]
@@ -431,7 +431,7 @@ def test_R1_reference_pages_have_type_badge(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_EXPORTS)
-def test_R1_function_pages_have_signature(pkg_name: str):
+def test_function_pages_have_signature(pkg_name: str):
     """Function/method pages have a USAGE section with a signature block."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected["export_names"]
@@ -464,7 +464,7 @@ def test_R1_function_pages_have_signature(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_DOCSTRINGS)
-def test_R1_pages_have_doc_description(pkg_name: str):
+def test_pages_have_doc_description(pkg_name: str):
     """Pages with docstrings should have a <p class='doc-description'>."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected["export_names"]
@@ -494,7 +494,7 @@ def test_R1_pages_have_doc_description(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_REF_PAGES)
-def test_R1_footer_text_not_in_header(pkg_name: str):
+def test_footer_text_not_in_header(pkg_name: str):
     """Footer text (e.g. 'Developed by ...') must never appear in doc-description.
 
     When an object has no docstring, the post-render script must not pick up
@@ -528,7 +528,7 @@ def test_R1_footer_text_not_in_header(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_NOT_NODOCS)
-def test_R2_parameters_section_renders(pkg_name: str):
+def test_parameters_section_renders(pkg_name: str):
     """Functions with parameters have a rendered Parameters section."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected.get("export_names")
@@ -566,7 +566,7 @@ def test_R2_parameters_section_renders(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_EXPORTS)
-def test_R2_parameter_names_match_signature(pkg_name: str):
+def test_parameter_names_match_signature(pkg_name: str):
     """Parameter names in the Parameters section match the signature."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected["export_names"]
@@ -624,7 +624,7 @@ def test_R2_parameter_names_match_signature(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_NOT_NODOCS)
-def test_R2_returns_section_renders(pkg_name: str):
+def test_returns_section_renders(pkg_name: str):
     """Functions with return type annotations have a Returns section."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected.get("export_names")
@@ -658,7 +658,7 @@ def test_R2_returns_section_renders(pkg_name: str):
         "gdtest_google_rich",
     ],
 )
-def test_R2_raises_section_renders(pkg_name: str):
+def test_raises_section_renders(pkg_name: str):
     """Packages with Raises docstrings have rendered Raises sections."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -690,7 +690,7 @@ def test_R2_raises_section_renders(pkg_name: str):
         "gdtest_docstring_examples",
     ],
 )
-def test_R2_examples_section_renders(pkg_name: str):
+def test_examples_section_renders(pkg_name: str):
     """Packages with Examples docstrings have rendered Examples sections."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -719,7 +719,7 @@ def test_R2_examples_section_renders(pkg_name: str):
 
 
 @requires_bs4
-def test_R3_overload_signatures_render():
+def test_overload_signatures_render():
     """Overloaded functions show multiple signatures with overload-spacer."""
     pkg = "gdtest_overloads"
     if not _has_rendered_site(pkg):
@@ -753,7 +753,7 @@ def test_R3_overload_signatures_render():
         ("gdtest_rst_versionadded", None),
     ],
 )
-def test_R3_rst_directives_render_as_callouts(pkg_name: str, expected_items):
+def test_rst_directives_render_as_callouts(pkg_name: str, expected_items):
     """RST directives (.. note::, .. warning::, etc.) render as styled callout divs."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -833,7 +833,7 @@ def test_R3_rst_directives_render_as_callouts(pkg_name: str, expected_items):
 
 
 @requires_bs4
-def test_R3_constant_pages_show_value():
+def test_constant_pages_show_value():
     """Constant pages display the value (e.g., `DEFAULT_TIMEOUT: int = 30`)."""
     pkg = "gdtest_constants"
     if not _has_rendered_site(pkg):
@@ -861,7 +861,7 @@ def test_R3_constant_pages_show_value():
 
 
 @requires_bs4
-def test_R3_enum_pages_have_attributes_table():
+def test_enum_pages_have_attributes_table():
     """Enum pages have an Attributes table listing members."""
     pkg = "gdtest_enums"
     if not _has_rendered_site(pkg):
@@ -888,7 +888,7 @@ def test_R3_enum_pages_have_attributes_table():
 
 
 @requires_bs4
-def test_R3_dunder_methods_render_without_bold():
+def test_dunder_methods_render_without_bold():
     """Dunder method names don't get interpreted as bold by Pandoc."""
     pkg = "gdtest_dunders"
     if not _has_rendered_site(pkg):
@@ -910,7 +910,7 @@ def test_R3_dunder_methods_render_without_bold():
 
 
 @requires_bs4
-def test_R3_dataclass_fields_render():
+def test_dataclass_fields_render():
     """Dataclass pages show all fields (including str/list/dict types)."""
     pkg = "gdtest_dataclasses"
     if not _has_rendered_site(pkg):
@@ -930,7 +930,7 @@ def test_R3_dataclass_fields_render():
 
 
 @requires_bs4
-def test_R3_async_functions_have_badge():
+def test_async_functions_have_badge():
     """Async functions have an 'async' or 'function' badge."""
     pkg = "gdtest_async_funcs"
     if not _has_rendered_site(pkg):
@@ -951,7 +951,7 @@ def test_R3_async_functions_have_badge():
 
 
 @requires_bs4
-def test_R3_exception_classes_have_badge():
+def test_exception_classes_have_badge():
     """Exception classes have appropriate badges."""
     pkg = "gdtest_exceptions"
     if not _has_rendered_site(pkg):
@@ -972,7 +972,7 @@ def test_R3_exception_classes_have_badge():
 
 
 @requires_bs4
-def test_R3_protocol_classes_have_badge():
+def test_protocol_classes_have_badge():
     """Protocol/ABC classes have appropriate badges."""
     pkg = "gdtest_protocols"
     if not _has_rendered_site(pkg):
@@ -1001,7 +1001,7 @@ def test_R3_protocol_classes_have_badge():
 
 
 @requires_bs4
-def test_R3_sphinx_params_render_as_structured_dl():
+def test_sphinx_params_render_as_structured_dl():
     """Sphinx :param: fields render as structured <dl> elements, not raw text."""
     pkg = "gdtest_sphinx"
     if not _has_rendered_site(pkg):
@@ -1030,7 +1030,7 @@ def test_R3_sphinx_params_render_as_structured_dl():
 
 
 @requires_bs4
-def test_R3_google_params_render_as_structured_dl():
+def test_google_params_render_as_structured_dl():
     """Google Args: fields render as structured <dl> elements, not raw text."""
     pkg = "gdtest_google"
     if not _has_rendered_site(pkg):
@@ -1054,7 +1054,7 @@ def test_R3_google_params_render_as_structured_dl():
 
 
 @requires_bs4
-def test_R3_sphinx_rich_multiple_raises():
+def test_sphinx_rich_multiple_raises():
     """Rich Sphinx docstrings with multiple :raises: render properly."""
     pkg = "gdtest_sphinx_rich"
     if not _has_rendered_site(pkg):
@@ -1080,7 +1080,7 @@ def test_R3_sphinx_rich_multiple_raises():
 
 
 @requires_bs4
-def test_R3_seealso_links_render():
+def test_seealso_links_render():
     """Functions with %seealso have See Also sections in the rendered output."""
     pkg = "gdtest_seealso"
     if not _has_rendered_site(pkg):
@@ -1115,7 +1115,7 @@ def test_R3_seealso_links_render():
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_EXPORTS)
-def test_R4_reference_index_lists_exports(pkg_name: str):
+def test_reference_index_lists_exports(pkg_name: str):
     """The reference index page lists all exported symbols."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected["export_names"]
@@ -1146,7 +1146,7 @@ def test_R4_reference_index_lists_exports(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_SECTION_TITLES)
-def test_R4_reference_index_has_section_headings(pkg_name: str):
+def test_reference_index_has_section_headings(pkg_name: str):
     """The reference index page has section headings matching spec."""
     expected = _EXPECTED_CACHE[pkg_name]
     section_titles = expected["section_titles"]
@@ -1182,7 +1182,7 @@ def test_R4_reference_index_has_section_headings(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_REF_PAGES)
-def test_R4_sidebar_has_reference_section(pkg_name: str):
+def test_sidebar_has_reference_section(pkg_name: str):
     """The sidebar contains reference/API navigation items."""
     ref = _ref_dir(pkg_name)
     ref_pages = [f for f in ref.glob("*.html") if f.name != "index.html"]
@@ -1199,7 +1199,7 @@ def test_R4_sidebar_has_reference_section(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_SECTION_TITLES)
-def test_R4_sidebar_lists_section_titles(pkg_name: str):
+def test_sidebar_lists_section_titles(pkg_name: str):
     """Sidebar section headers match expected section titles."""
     expected = _EXPECTED_CACHE[pkg_name]
     section_titles = expected["section_titles"]
@@ -1236,7 +1236,7 @@ def test_R4_sidebar_lists_section_titles(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
-def test_R4_landing_page_has_title(pkg_name: str):
+def test_landing_page_has_title(pkg_name: str):
     """The index.html landing page has a title heading."""
     index = _site_dir(pkg_name) / "index.html"
     if not index.exists():
@@ -1272,7 +1272,7 @@ def test_R4_landing_page_has_title(pkg_name: str):
         "gdtest_sphinx_mixed_roles",
     ],
 )
-def test_R4_sphinx_roles_stripped(pkg_name: str):
+def test_sphinx_roles_stripped(pkg_name: str):
     """Sphinx cross-reference roles (:func:, :class:, etc.) should be stripped."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -1317,7 +1317,7 @@ def test_R4_sphinx_roles_stripped(pkg_name: str):
         "gdtest_numpy_rich",
     ],
 )
-def test_R4_rst_code_blocks_converted(pkg_name: str):
+def test_rst_code_blocks_converted(pkg_name: str):
     """RST :: code blocks should be converted to proper <pre><code> blocks."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -1347,7 +1347,7 @@ def test_R4_rst_code_blocks_converted(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", ["gdtest_docstring_tables"])
-def test_R4_rst_tables_converted(pkg_name: str):
+def test_rst_tables_converted(pkg_name: str):
     """RST tables should be converted to valid HTML tables."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -1384,7 +1384,7 @@ def test_R4_rst_tables_converted(pkg_name: str):
 
 
 @requires_bs4
-def test_R4_logo_replaces_title():
+def test_logo_replaces_title():
     """Logo config injects navbar logo and suppresses the text title."""
     pkg = "gdtest_logo"
     if not _has_rendered_site(pkg):
@@ -1424,7 +1424,7 @@ def test_R4_logo_replaces_title():
 
 
 @requires_bs4
-def test_R4_logo_in_rendered_html():
+def test_logo_in_rendered_html():
     """Rendered HTML should contain the logo image in the navbar."""
     pkg = "gdtest_logo"
     if not _has_rendered_site(pkg):
@@ -1446,7 +1446,7 @@ def test_R4_logo_in_rendered_html():
 
 
 @requires_bs4
-def test_R4_display_name_in_title():
+def test_display_name_in_title():
     """Config display_name appears in the site navbar/title."""
     pkg = "gdtest_display_name"
     if not _has_rendered_site(pkg):
@@ -1458,7 +1458,7 @@ def test_R4_display_name_in_title():
 
 
 @requires_bs4
-def test_R4_no_darkmode_toggle():
+def test_no_darkmode_toggle():
     """When dark_mode_toggle is disabled, the toggle element is absent."""
     pkg = "gdtest_no_darkmode"
     if not _has_rendered_site(pkg):
@@ -1481,7 +1481,7 @@ def test_R4_no_darkmode_toggle():
         ("gdtest_theme_cerulean", "cerulean"),
     ],
 )
-def test_R4_theme_applied(pkg_name: str, theme: str):
+def test_theme_applied(pkg_name: str, theme: str):
     """Theme configuration produces a valid rendered site."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -1498,7 +1498,7 @@ def test_R4_theme_applied(pkg_name: str, theme: str):
 
 
 @requires_bs4
-def test_R4_cli_pages_generated():
+def test_cli_pages_generated():
     """When CLI is enabled, reference pages are generated for the package."""
     pkg = "gdtest_cli_click"
     if not _has_rendered_site(pkg):
@@ -1511,7 +1511,7 @@ def test_R4_cli_pages_generated():
 
 
 @requires_bs4
-def test_R4_cli_reference_directory_exists():
+def test_cli_reference_directory_exists():
     """CLI-enabled packages should have a reference/cli/ directory."""
     pkg = "gdtest_cli_click"
     if not _has_rendered_site(pkg):
@@ -1523,7 +1523,7 @@ def test_R4_cli_reference_directory_exists():
 
 
 @requires_bs4
-def test_R4_cli_index_page_content():
+def test_cli_index_page_content():
     """CLI index page should contain command name and help text."""
     pkg = "gdtest_cli_click"
     if not _has_rendered_site(pkg):
@@ -1543,7 +1543,7 @@ def test_R4_cli_index_page_content():
 
 
 @requires_bs4
-def test_R4_cli_nested_groups_rendered():
+def test_cli_nested_groups_rendered():
     """Nested Click groups should produce subcommand pages."""
     pkg = "gdtest_cli_nested"
     if not _has_rendered_site(pkg):
@@ -1558,7 +1558,7 @@ def test_R4_cli_nested_groups_rendered():
 
 
 @requires_bs4
-def test_R4_cli_nested_subcommand_pages():
+def test_cli_nested_subcommand_pages():
     """Nested subcommands should have their own pages."""
     pkg = "gdtest_cli_nested"
     if not _has_rendered_site(pkg):
@@ -1576,7 +1576,7 @@ def test_R4_cli_nested_subcommand_pages():
 
 
 @requires_bs4
-def test_R4_cli_sidebar_has_cli_section():
+def test_cli_sidebar_has_cli_section():
     """Rendered reference pages should have a CLI Reference sidebar section."""
     pkg = "gdtest_cli_click"
     if not _has_rendered_site(pkg):
@@ -1603,7 +1603,7 @@ def test_R4_cli_sidebar_has_cli_section():
     )
 
 
-def test_R4_cli_sidebar_structure_flat():
+def test_cli_sidebar_structure_flat():
     """Flat CLI sidebar in _quarto.yml should contain only path strings."""
     pkg = "gdtest_cli_click"
     if not _has_rendered_site(pkg):
@@ -1629,7 +1629,7 @@ def test_R4_cli_sidebar_structure_flat():
         assert isinstance(item, str), f"Flat CLI sidebar should only have path strings, got: {item}"
 
 
-def test_R4_cli_sidebar_structure_nested():
+def test_cli_sidebar_structure_nested():
     """Nested CLI sidebar in _quarto.yml should use section/contents hierarchy."""
     pkg = "gdtest_cli_nested"
     if not _has_rendered_site(pkg):
@@ -1693,7 +1693,7 @@ def test_R4_cli_sidebar_structure_nested():
             )
 
 
-def test_R4_cli_sidebar_no_raw_qmd_paths_in_nested():
+def test_cli_sidebar_no_raw_qmd_paths_in_nested():
     """Nested CLI sidebar must not have bare reference/cli/<leaf>.qmd paths for subcommands."""
     pkg = "gdtest_cli_nested"
     if not _has_rendered_site(pkg):
@@ -1732,7 +1732,7 @@ def test_R4_cli_sidebar_no_raw_qmd_paths_in_nested():
 
 
 @requires_bs4
-def test_R4_math_blocks_render():
+def test_math_blocks_render():
     """RST math directives or LaTeX should render (KaTeX or display math)."""
     pkg = "gdtest_docstring_math"
     if not _has_rendered_site(pkg):
@@ -1783,7 +1783,7 @@ def test_R4_math_blocks_render():
         "gdtest_kitchen_sink",
     ],
 )
-def test_R4_stress_packages_have_reference(pkg_name: str):
+def test_stress_packages_have_reference(pkg_name: str):
     """Stress test packages have reference pages."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -1801,7 +1801,7 @@ def test_R4_stress_packages_have_reference(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES[:20])
-def test_R4_no_broken_heading_attributes(pkg_name: str):
+def test_no_broken_heading_attributes(pkg_name: str):
     """Heading attributes like { #anchor } should not render as plain text."""
     ref = _ref_dir(pkg_name)
     if not ref.exists():
@@ -1830,7 +1830,7 @@ def test_R4_no_broken_heading_attributes(pkg_name: str):
 
 
 @requires_bs4
-def test_R4_multi_module_no_duplicate_entries():
+def test_multi_module_no_duplicate_entries():
     """Re-exported symbols should not appear twice (short + qualified name).
 
     When a package re-exports submodule symbols via __init__.py (e.g.,
@@ -1884,7 +1884,7 @@ def test_R4_multi_module_no_duplicate_entries():
 
 
 @requires_bs4
-def test_R4_config_all_on_builds_with_dict_reference():
+def test_config_all_on_builds_with_dict_reference():
     """A reference config that is a dict (title override) should not crash init.
 
     The gdtest_config_all_on spec uses ``reference: {title: "API Reference"}``
@@ -1912,7 +1912,7 @@ def test_R4_config_all_on_builds_with_dict_reference():
 
 
 @requires_bs4
-def test_R4_ref_title_custom_title_and_desc():
+def test_ref_title_custom_title_and_desc():
     """Custom reference title and description should appear on the index page.
 
     The gdtest_ref_title spec uses ``reference: {title: "API Docs", desc: ...}``
@@ -1962,7 +1962,7 @@ def test_R4_ref_title_custom_title_and_desc():
 
 
 @requires_bs4
-def test_R4_ref_module_expand_uses_short_names():
+def test_ref_module_expand_uses_short_names():
     """Reference config with a submodule name should render successfully.
 
     The gdtest_ref_module_expand spec references ``utils`` (a submodule) in the
@@ -1989,7 +1989,7 @@ def test_R4_ref_module_expand_uses_short_names():
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", ["gdtest_seealso", "gdtest_nodoc"])
-def test_R4_directives_stripped_from_html(pkg_name: str):
+def test_directives_stripped_from_html(pkg_name: str):
     """Great Docs directives (%seealso, %nodoc) should not appear in HTML."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -2021,7 +2021,7 @@ def _load_quarto_yml(pkg_name: str) -> dict:
 
 
 @requires_bs4
-def test_R4_toc_disabled_config():
+def test_toc_disabled_config():
     """When site.toc is false, _quarto.yml should have toc: false."""
     pkg = "gdtest_toc_disabled"
     if not _has_rendered_site(pkg):
@@ -2035,7 +2035,7 @@ def test_R4_toc_disabled_config():
 
 
 @requires_bs4
-def test_R4_toc_depth_config():
+def test_toc_depth_config():
     """When site.toc-depth is set, _quarto.yml should reflect the custom depth."""
     pkg = "gdtest_toc_depth"
     if not _has_rendered_site(pkg):
@@ -2049,7 +2049,7 @@ def test_R4_toc_depth_config():
 
 
 @requires_bs4
-def test_R4_toc_title_config():
+def test_toc_title_config():
     """When site.toc-title is customized, _quarto.yml should use the custom title."""
     pkg = "gdtest_toc_title"
     if not _has_rendered_site(pkg):
@@ -2067,7 +2067,7 @@ def test_R4_toc_title_config():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def test_R4_source_disabled_no_links_file():
+def test_source_disabled_no_links_file():
     """When source.enabled is false, _source_links.json should not be generated."""
     pkg = "gdtest_source_disabled"
     if not _has_rendered_site(pkg):
@@ -2085,7 +2085,7 @@ def test_R4_source_disabled_no_links_file():
 
 
 @requires_bs4
-def test_R4_display_badges_index_has_badge_images():
+def test_display_badges_index_has_badge_images():
     """A README with shields.io badges should render badge <img> tags on index."""
     pkg = "gdtest_display_badges"
     if not _has_rendered_site(pkg):
@@ -2104,7 +2104,7 @@ def test_R4_display_badges_index_has_badge_images():
 
 
 @requires_bs4
-def test_R4_display_badges_index_has_table():
+def test_display_badges_index_has_table():
     """A README with a markdown table should render as an HTML <table>."""
     pkg = "gdtest_display_badges"
     if not _has_rendered_site(pkg):
@@ -2117,7 +2117,7 @@ def test_R4_display_badges_index_has_table():
 
 
 @requires_bs4
-def test_R4_display_authors_names_in_index():
+def test_display_authors_names_in_index():
     """Author names from config should appear in the rendered index page."""
     pkg = "gdtest_display_authors"
     if not _has_rendered_site(pkg):
@@ -2132,7 +2132,7 @@ def test_R4_display_authors_names_in_index():
 
 
 @requires_bs4
-def test_R4_display_authors_roles_in_index():
+def test_display_authors_roles_in_index():
     """Author roles from config should appear in the rendered index page."""
     pkg = "gdtest_display_authors"
     if not _has_rendered_site(pkg):
@@ -2147,7 +2147,7 @@ def test_R4_display_authors_roles_in_index():
 
 
 @requires_bs4
-def test_R4_display_funding_name_in_index():
+def test_display_funding_name_in_index():
     """Funding organization name should appear in the rendered index page."""
     pkg = "gdtest_display_funding"
     if not _has_rendered_site(pkg):
@@ -2163,7 +2163,7 @@ def test_R4_display_funding_name_in_index():
 
 
 @requires_bs4
-def test_R4_display_funding_link_in_index():
+def test_display_funding_link_in_index():
     """Funding organization homepage link should appear in the rendered site."""
     pkg = "gdtest_display_funding"
     if not _has_rendered_site(pkg):
@@ -2182,7 +2182,7 @@ def test_R4_display_funding_link_in_index():
 
 
 @requires_bs4
-def test_R3_decorator_pages_exist():
+def test_decorator_pages_exist():
     """Decorator functions should have reference pages."""
     pkg = "gdtest_decorators"
     if not _has_rendered_site(pkg):
@@ -2195,7 +2195,7 @@ def test_R3_decorator_pages_exist():
 
 
 @requires_bs4
-def test_R3_decorator_retry_has_params():
+def test_decorator_retry_has_params():
     """The retry decorator page should document max_retries and delay parameters."""
     pkg = "gdtest_decorators"
     if not _has_rendered_site(pkg):
@@ -2217,7 +2217,7 @@ def test_R3_decorator_retry_has_params():
 
 
 @requires_bs4
-def test_R3_generator_pages_exist():
+def test_generator_pages_exist():
     """Generator functions should have reference pages."""
     pkg = "gdtest_generators"
     if not _has_rendered_site(pkg):
@@ -2230,7 +2230,7 @@ def test_R3_generator_pages_exist():
 
 
 @requires_bs4
-def test_R3_generator_return_types_show_iterator():
+def test_generator_return_types_show_iterator():
     """Generator function pages should show Iterator in return type."""
     pkg = "gdtest_generators"
     if not _has_rendered_site(pkg):
@@ -2254,7 +2254,7 @@ def test_R3_generator_return_types_show_iterator():
 
 
 @requires_bs4
-def test_R3_generic_class_pages_exist():
+def test_generic_class_pages_exist():
     """Generic classes (Stack, Pair) should have reference pages."""
     pkg = "gdtest_generics"
     if not _has_rendered_site(pkg):
@@ -2272,7 +2272,7 @@ def test_R3_generic_class_pages_exist():
 
 
 @requires_bs4
-def test_R3_frozen_dc_section_title():
+def test_frozen_dc_section_title():
     """Frozen dataclasses should use 'Dataclasses' as the section heading."""
     pkg = "gdtest_frozen_dc"
     if not _has_rendered_site(pkg):
@@ -2288,7 +2288,7 @@ def test_R3_frozen_dc_section_title():
 
 
 @requires_bs4
-def test_R3_frozen_dc_pages_have_fields():
+def test_frozen_dc_pages_have_fields():
     """Frozen dataclass pages should document their fields as parameters."""
     pkg = "gdtest_frozen_dc"
     if not _has_rendered_site(pkg):
@@ -2310,7 +2310,7 @@ def test_R3_frozen_dc_pages_have_fields():
 
 
 @requires_bs4
-def test_R3_reexports_all_symbols_have_pages():
+def test_reexports_all_symbols_have_pages():
     """Re-exported symbols from submodules should each have a reference page."""
     pkg = "gdtest_reexports"
     if not _has_rendered_site(pkg):
@@ -2323,7 +2323,7 @@ def test_R3_reexports_all_symbols_have_pages():
 
 
 @requires_bs4
-def test_R3_reexports_ref_index_has_sections():
+def test_reexports_ref_index_has_sections():
     """Re-exports reference index should have both Classes and Functions sections."""
     pkg = "gdtest_reexports"
     if not _has_rendered_site(pkg):
@@ -2345,7 +2345,7 @@ def test_R3_reexports_ref_index_has_sections():
 
 
 @requires_bs4
-def test_R3_abstract_class_pages_exist():
+def test_abstract_class_pages_exist():
     """Abstract base classes and their subclasses should have reference pages."""
     pkg = "gdtest_abstract_props"
     if not _has_rendered_site(pkg):
@@ -2358,7 +2358,7 @@ def test_R3_abstract_class_pages_exist():
 
 
 @requires_bs4
-def test_R3_abstract_shape_documents_properties():
+def test_abstract_shape_documents_properties():
     """Abstract Shape class should document area and perimeter properties."""
     pkg = "gdtest_abstract_props"
     if not _has_rendered_site(pkg):
@@ -2375,7 +2375,7 @@ def test_R3_abstract_shape_documents_properties():
 
 
 @requires_bs4
-def test_R3_abstract_circle_documents_radius():
+def test_abstract_circle_documents_radius():
     """Circle subclass should document the radius parameter."""
     pkg = "gdtest_abstract_props"
     if not _has_rendered_site(pkg):
@@ -2396,7 +2396,7 @@ def test_R3_abstract_circle_documents_radius():
 
 
 @requires_bs4
-def test_R3_deep_nesting_pages_exist():
+def test_deep_nesting_pages_exist():
     """Deeply nested exports (3 levels) should still get reference pages."""
     pkg = "gdtest_deep_nesting"
     if not _has_rendered_site(pkg):
@@ -2416,7 +2416,7 @@ def test_R3_deep_nesting_pages_exist():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def test_R4_changelog_config_propagated():
+def test_changelog_config_propagated():
     """Changelog config should be written to great-docs.yml with enabled + max_releases."""
     from yaml12 import parse_yaml, read_yaml
 
@@ -2439,7 +2439,7 @@ def test_R4_changelog_config_propagated():
 
 
 @requires_bs4
-def test_R4_config_combo_a_display_name_and_authors():
+def test_config_combo_a_display_name_and_authors():
     """Combo A: display_name in title, authors in footer, landing page content."""
     pkg = "gdtest_config_combo_a"
     if not _has_rendered_site(pkg):
@@ -2469,7 +2469,7 @@ def test_R4_config_combo_a_display_name_and_authors():
 
 
 @requires_bs4
-def test_R4_config_combo_b_opt_out_flags():
+def test_config_combo_b_opt_out_flags():
     """Combo B: sidebar_filter, dark_mode_toggle, and source all disabled."""
     pkg = "gdtest_config_combo_b"
     if not _has_rendered_site(pkg):
@@ -2497,7 +2497,7 @@ def test_R4_config_combo_b_opt_out_flags():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def test_R4_config_ug_list_sections_in_yml():
+def test_config_ug_list_sections_in_yml():
     """user_guide as list of section dicts should propagate to great-docs.yml."""
     from yaml12 import parse_yaml, read_yaml
 
@@ -2524,7 +2524,7 @@ def test_R4_config_ug_list_sections_in_yml():
 
 
 @requires_bs4
-def test_R4_config_ug_string_pages_rendered():
+def test_config_ug_string_pages_rendered():
     """user_guide as string pointing to 'guides' dir should render user guide pages."""
     pkg = "gdtest_config_ug_string"
     if not _has_rendered_site(pkg):
@@ -2553,7 +2553,7 @@ def test_R4_config_ug_string_pages_rendered():
 
 
 @requires_bs4
-def test_R4_empty_module_no_reference_dir():
+def test_empty_module_no_reference_dir():
     """A package with zero exports should build without a reference directory."""
     pkg = "gdtest_empty_module"
     if not _has_rendered_site(pkg):
@@ -2579,7 +2579,7 @@ def test_R4_empty_module_no_reference_dir():
 
 
 @requires_bs4
-def test_R4_ug_auto_pages_exist_with_content():
+def test_ug_auto_pages_exist_with_content():
     """Auto-discovered user guide should render all .qmd files with correct titles."""
     pkg = "gdtest_ug_auto"
     if not _has_rendered_site(pkg):
@@ -2614,7 +2614,7 @@ def test_R4_ug_auto_pages_exist_with_content():
 
 
 @requires_bs4
-def test_R4_ug_combo_subdirs_and_sections():
+def test_ug_combo_subdirs_and_sections():
     """Complex user guide should render pages in subdirectories with sidebar sections."""
     pkg = "gdtest_ug_combo"
     if not _has_rendered_site(pkg):
@@ -2648,7 +2648,7 @@ def test_R4_ug_combo_subdirs_and_sections():
 
 
 @requires_bs4
-def test_R4_ug_custom_dir_pages_from_docs():
+def test_ug_custom_dir_pages_from_docs():
     """User guide sourced from 'docs/' should render pages under user-guide/."""
     pkg = "gdtest_ug_custom_dir"
     if not _has_rendered_site(pkg):
@@ -2676,7 +2676,7 @@ def test_R4_ug_custom_dir_pages_from_docs():
 
 
 @requires_bs4
-def test_R4_ug_deep_nest_multi_level_structure():
+def test_ug_deep_nest_multi_level_structure():
     """Deeply nested user guide should render pages at multiple directory levels."""
     pkg = "gdtest_ug_deep_nest"
     if not _has_rendered_site(pkg):
@@ -2711,7 +2711,7 @@ def test_R4_ug_deep_nest_multi_level_structure():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def test_R4_ug_explicit_order_config_sections():
+def test_ug_explicit_order_config_sections():
     """Explicit user guide ordering should produce titled sections in great-docs.yml."""
     from yaml12 import parse_yaml, read_yaml
 
@@ -2738,7 +2738,7 @@ def test_R4_ug_explicit_order_config_sections():
 
 
 @requires_bs4
-def test_R4_ug_hyphen_dir_pages_rendered():
+def test_ug_hyphen_dir_pages_rendered():
     """User guide from user-guide/ (hyphenated) should render pages correctly."""
     pkg = "gdtest_ug_hyphen_dir"
     if not _has_rendered_site(pkg):
@@ -2766,7 +2766,7 @@ def test_R4_ug_hyphen_dir_pages_rendered():
 
 
 @requires_bs4
-def test_R4_ug_many_pages_all_twelve_rendered():
+def test_ug_many_pages_all_twelve_rendered():
     """User guide with 12 numbered pages should render all of them."""
     pkg = "gdtest_ug_many_pages"
     if not _has_rendered_site(pkg):
@@ -2806,7 +2806,7 @@ def test_R4_ug_many_pages_all_twelve_rendered():
 
 
 @requires_bs4
-def test_R4_ug_mixed_ext_both_formats_render():
+def test_ug_mixed_ext_both_formats_render():
     """User guide with mixed .qmd and .md files should render all pages."""
     pkg = "gdtest_ug_mixed_ext"
     if not _has_rendered_site(pkg):
@@ -2839,7 +2839,7 @@ def test_R4_ug_mixed_ext_both_formats_render():
 
 
 @requires_bs4
-def test_R4_ug_no_frontmatter_pages_render():
+def test_ug_no_frontmatter_pages_render():
     """User guide pages without YAML frontmatter should still render."""
     pkg = "gdtest_ug_no_frontmatter"
     if not _has_rendered_site(pkg):
@@ -2864,7 +2864,7 @@ def test_R4_ug_no_frontmatter_pages_render():
 
 
 @requires_bs4
-def test_R4_ug_numbered_pages_in_order():
+def test_ug_numbered_pages_in_order():
     """Numbered user guide pages should render and appear in sidebar order."""
     pkg = "gdtest_ug_numbered"
     if not _has_rendered_site(pkg):
@@ -2893,7 +2893,7 @@ def test_R4_ug_numbered_pages_in_order():
 
 
 @requires_bs4
-def test_R4_ug_sections_fm_sidebar_grouping():
+def test_ug_sections_fm_sidebar_grouping():
     """guide-section frontmatter should group pages into sidebar sections."""
     pkg = "gdtest_ug_sections_fm"
     if not _has_rendered_site(pkg):
@@ -2921,7 +2921,7 @@ def test_R4_ug_sections_fm_sidebar_grouping():
 
 
 @requires_bs4
-def test_R4_ug_single_page_renders():
+def test_ug_single_page_renders():
     """Single-page user guide should still render with sidebar."""
     pkg = "gdtest_ug_single_page"
     if not _has_rendered_site(pkg):
@@ -2950,7 +2950,7 @@ def test_R4_ug_single_page_renders():
 
 
 @requires_bs4
-def test_R4_ug_subdirs_pages_and_sections():
+def test_ug_subdirs_pages_and_sections():
     """Subdirectory-organized user guide should render pages with sidebar sections."""
     pkg = "gdtest_ug_subdirs"
     if not _has_rendered_site(pkg):
@@ -2984,7 +2984,7 @@ def test_R4_ug_subdirs_pages_and_sections():
 
 
 @requires_bs4
-def test_R4_ug_with_images_renders_img_tags():
+def test_ug_with_images_renders_img_tags():
     """User guide referencing assets should render with <img> tags."""
     pkg = "gdtest_ug_with_images"
     if not _has_rendered_site(pkg):
@@ -3011,7 +3011,7 @@ def test_R4_ug_with_images_renders_img_tags():
 
 
 @requires_bs4
-def test_R4_hero_basic_has_hero_div():
+def test_hero_basic_has_hero_div():
     """Landing page should contain the hero section div when logo is configured."""
     pkg = "gdtest_hero_basic"
     if not _has_rendered_site(pkg):
@@ -3040,7 +3040,7 @@ def test_R4_hero_basic_has_hero_div():
 
 
 @requires_bs4
-def test_R4_hero_basic_badges_stripped_from_body():
+def test_hero_basic_badges_stripped_from_body():
     """Badges extracted into the hero should not appear in the landing page body."""
     pkg = "gdtest_hero_basic"
     if not _has_rendered_site(pkg):
@@ -3074,7 +3074,7 @@ def test_R4_hero_basic_badges_stripped_from_body():
 
 
 @requires_bs4
-def test_R4_hero_readme_badges_centered_div_stripped():
+def test_hero_readme_badges_centered_div_stripped():
     """A README with <div align=center> badges should have the div stripped and badges in hero."""
     pkg = "gdtest_hero_readme_badges"
     if not _has_rendered_site(pkg):
@@ -3121,7 +3121,7 @@ def test_R4_hero_readme_badges_centered_div_stripped():
 
 
 @requires_bs4
-def test_R4_hero_disabled_no_hero_div():
+def test_hero_disabled_no_hero_div():
     """Setting hero: false should prevent the hero section from appearing."""
     pkg = "gdtest_hero_disabled"
     if not _has_rendered_site(pkg):
@@ -3137,7 +3137,7 @@ def test_R4_hero_disabled_no_hero_div():
 
 
 @requires_bs4
-def test_R4_hero_custom_overrides():
+def test_hero_custom_overrides():
     """Hero sub-options should override defaults (name, tagline, height, badges)."""
     pkg = "gdtest_hero_custom"
     if not _has_rendered_site(pkg):
@@ -3168,7 +3168,7 @@ def test_R4_hero_custom_overrides():
 
 
 @requires_bs4
-def test_R4_hero_wordmark_separate_logos():
+def test_hero_wordmark_separate_logos():
     """Hero should use wordmark logo while navbar uses lettermark."""
     pkg = "gdtest_hero_wordmark"
     if not _has_rendered_site(pkg):
@@ -3199,7 +3199,7 @@ def test_R4_hero_wordmark_separate_logos():
 
 
 @requires_bs4
-def test_R4_hero_no_logo_text_only():
+def test_hero_no_logo_text_only():
     """hero.logo: false should suppress the logo but keep name/tagline/badges."""
     pkg = "gdtest_hero_no_logo"
     if not _has_rendered_site(pkg):
@@ -3226,7 +3226,7 @@ def test_R4_hero_no_logo_text_only():
 
 
 @requires_bs4
-def test_R4_hero_explicit_badges_list():
+def test_hero_explicit_badges_list():
     """Explicit badge list should appear in hero instead of auto-extracted ones."""
     pkg = "gdtest_hero_explicit_badges"
     if not _has_rendered_site(pkg):
@@ -3252,7 +3252,7 @@ def test_R4_hero_explicit_badges_list():
 
 
 @requires_bs4
-def test_R4_hero_index_qmd_source():
+def test_hero_index_qmd_source():
     """Hero should work when landing page source is index.qmd (not README)."""
     pkg = "gdtest_hero_index_qmd"
     if not _has_rendered_site(pkg):
@@ -3280,7 +3280,7 @@ def test_R4_hero_index_qmd_source():
 
 
 @requires_bs4
-def test_R4_hero_auto_logo_detection():
+def test_hero_auto_logo_detection():
     """Auto-detected logo-hero.svg / logo-hero-dark.svg in assets/ should
     be used without explicit hero.logo config."""
     pkg = "gdtest_hero_auto_logo"
@@ -3997,7 +3997,7 @@ def test_md_no_widget_gd_options():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def test_R4_announce_simple_meta_tag():
+def test_announce_simple_meta_tag():
     """gdtest_announce_simple: meta tag with announcement content is present."""
     pkg = "gdtest_announce_simple"
     if not _has_rendered_site(pkg):
@@ -4009,7 +4009,7 @@ def test_R4_announce_simple_meta_tag():
     assert 'data-content="This is a test announcement!"' in content
 
 
-def test_R4_announce_simple_script_included():
+def test_announce_simple_script_included():
     """gdtest_announce_simple: announcement-banner.js is loaded."""
     pkg = "gdtest_announce_simple"
     if not _has_rendered_site(pkg):
@@ -4020,7 +4020,7 @@ def test_R4_announce_simple_script_included():
     assert "announcement-banner.js" in content
 
 
-def test_R4_announce_simple_defaults():
+def test_announce_simple_defaults():
     """gdtest_announce_simple: string config gets default type=info, dismissable=true."""
     pkg = "gdtest_announce_simple"
     if not _has_rendered_site(pkg):
@@ -4032,7 +4032,7 @@ def test_R4_announce_simple_defaults():
     assert 'data-dismissable="true"' in content
 
 
-def test_R4_announce_simple_js_file_exists():
+def test_announce_simple_js_file_exists():
     """gdtest_announce_simple: announcement-banner.js is deployed to _site/."""
     pkg = "gdtest_announce_simple"
     if not _has_rendered_site(pkg):
@@ -4042,7 +4042,7 @@ def test_R4_announce_simple_js_file_exists():
     assert js_file.exists(), "announcement-banner.js not found in _site/"
 
 
-def test_R4_announce_simple_quarto_resources():
+def test_announce_simple_quarto_resources():
     """gdtest_announce_simple: _quarto.yml includes announcement-banner.js in resources."""
     pkg = "gdtest_announce_simple"
     if not _has_rendered_site(pkg):
@@ -4053,7 +4053,7 @@ def test_R4_announce_simple_quarto_resources():
     assert "announcement-banner.js" in resources
 
 
-def test_R4_announce_simple_on_all_pages():
+def test_announce_simple_on_all_pages():
     """gdtest_announce_simple: meta tag appears on reference pages too (site-wide)."""
     pkg = "gdtest_announce_simple"
     if not _has_rendered_site(pkg):
@@ -4070,7 +4070,7 @@ def test_R4_announce_simple_on_all_pages():
         )
 
 
-def test_R4_announce_dict_content():
+def test_announce_dict_content():
     """gdtest_announce_dict: dict config renders correct content and type."""
     pkg = "gdtest_announce_dict"
     if not _has_rendered_site(pkg):
@@ -4082,7 +4082,7 @@ def test_R4_announce_dict_content():
     assert 'data-type="success"' in content
 
 
-def test_R4_announce_dict_dismissable_false():
+def test_announce_dict_dismissable_false():
     """gdtest_announce_dict: dismissable=False is passed through."""
     pkg = "gdtest_announce_dict"
     if not _has_rendered_site(pkg):
@@ -4093,7 +4093,7 @@ def test_R4_announce_dict_dismissable_false():
     assert 'data-dismissable="false"' in content
 
 
-def test_R4_announce_dict_url():
+def test_announce_dict_url():
     """gdtest_announce_dict: url attribute is included in the meta tag."""
     pkg = "gdtest_announce_dict"
     if not _has_rendered_site(pkg):
@@ -4104,7 +4104,7 @@ def test_R4_announce_dict_url():
     assert 'data-url="https://example.com/changelog"' in content
 
 
-def test_R4_announce_disabled_no_meta():
+def test_announce_disabled_no_meta():
     """gdtest_announce_disabled: no announcement meta tag when disabled."""
     pkg = "gdtest_announce_disabled"
     if not _has_rendered_site(pkg):
@@ -4115,7 +4115,7 @@ def test_R4_announce_disabled_no_meta():
     assert 'name="gd-announcement"' not in content
 
 
-def test_R4_announce_disabled_no_script():
+def test_announce_disabled_no_script():
     """gdtest_announce_disabled: no announcement-banner.js when disabled."""
     pkg = "gdtest_announce_disabled"
     if not _has_rendered_site(pkg):
@@ -4126,7 +4126,7 @@ def test_R4_announce_disabled_no_script():
     assert "announcement-banner.js" not in content
 
 
-def test_R4_announce_disabled_no_js_file():
+def test_announce_disabled_no_js_file():
     """gdtest_announce_disabled: announcement-banner.js is not in _site/."""
     pkg = "gdtest_announce_disabled"
     if not _has_rendered_site(pkg):
@@ -4377,7 +4377,7 @@ def test_R5_no_dismiss_no_navbar_js():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def test_R4_header_text_meta_tag_injected():
+def test_header_text_meta_tag_injected():
     """gdtest_header_text: inline string config injects a custom meta tag."""
     pkg = "gdtest_header_text"
     if not _has_rendered_site(pkg):
@@ -4388,7 +4388,7 @@ def test_R4_header_text_meta_tag_injected():
     assert 'content="header-text-injected"' in content
 
 
-def test_R4_header_text_quarto_yml():
+def test_header_text_quarto_yml():
     """gdtest_header_text: _quarto.yml contains the user entry in include-in-header."""
     pkg = "gdtest_header_text"
     if not _has_rendered_site(pkg):
@@ -4400,7 +4400,7 @@ def test_R4_header_text_quarto_yml():
     assert any("gd-custom-test" in t for t in texts), "User entry missing from include-in-header"
 
 
-def test_R4_header_text_coexists_with_font_awesome():
+def test_header_text_coexists_with_font_awesome():
     """gdtest_header_text: user entry coexists with auto-injected Font Awesome."""
     pkg = "gdtest_header_text"
     if not _has_rendered_site(pkg):
@@ -4411,7 +4411,7 @@ def test_R4_header_text_coexists_with_font_awesome():
     assert "font-awesome" in content, "Font Awesome CDN missing"
 
 
-def test_R4_header_list_both_items_injected():
+def test_header_list_both_items_injected():
     """gdtest_header_list: list config injects multiple meta tags."""
     pkg = "gdtest_header_list"
     if not _has_rendered_site(pkg):
@@ -4422,7 +4422,7 @@ def test_R4_header_list_both_items_injected():
     assert 'name="gd-list-item-two"' in content, "Second list entry not injected"
 
 
-def test_R4_header_list_quarto_yml():
+def test_header_list_quarto_yml():
     """gdtest_header_list: _quarto.yml contains both user entries."""
     pkg = "gdtest_header_list"
     if not _has_rendered_site(pkg):
@@ -4436,7 +4436,7 @@ def test_R4_header_list_quarto_yml():
     assert "gd-list-item-two" in combined, "Second entry missing from include-in-header"
 
 
-def test_R4_header_file_content_injected():
+def test_header_file_content_injected():
     """gdtest_header_file: file-referenced content appears in rendered HTML."""
     pkg = "gdtest_header_file"
     if not _has_rendered_site(pkg):
@@ -4447,7 +4447,7 @@ def test_R4_header_file_content_injected():
     assert 'content="from-external-file"' in content
 
 
-def test_R4_header_file_quarto_yml():
+def test_header_file_quarto_yml():
     """gdtest_header_file: _quarto.yml contains the file entry."""
     pkg = "gdtest_header_file"
     if not _has_rendered_site(pkg):
@@ -6158,7 +6158,7 @@ def test_DED_google_seealso_ref():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def test_R4_attribution_on_in_footer():
+def test_attribution_on_in_footer():
     """Attribution enabled (default): _quarto.yml footer should contain Great Docs text."""
     pkg = "gdtest_attribution_on"
     if not _has_rendered_site(pkg):
@@ -6173,7 +6173,7 @@ def test_R4_attribution_on_in_footer():
     assert "Test&nbsp;Author" in footer_center, "Footer should still contain author name"
 
 
-def test_R4_attribution_off_not_in_footer():
+def test_attribution_off_not_in_footer():
     """Attribution disabled: _quarto.yml footer should NOT contain Great Docs text."""
     pkg = "gdtest_attribution_off"
     if not _has_rendered_site(pkg):
