@@ -1,0 +1,469 @@
+---
+title: "Freeze & Caching"
+guide-section: "Build & Deploy"
+tags: [Build, Deployment, CI/CD]
+status: experimental
+upcoming: "0.11.0"
+versions: ">=0.10"
+---
+
+# Freeze & Caching
+
+When your documentation includes computationally expensive pages (large simulations, extensive
+benchmarks, etc.) you don't want to re-execute them on every build. The **freeze** feature lets you
+cache execution outputs and reuse them across builds, cutting build times from 30+ minutes to
+seconds.
+
+This guide covers everything you need to know about freeze: how it works under the hood, how to
+enable it on individual pages or project-wide, how to use the `great-docs freeze` CLI command to
+manage your cache, and how the workflow fits into CI/CD pipelines. By the end, you'll be able to
+freeze expensive pages with confidence and understand exactly when the cache will be used or
+invalidated.
+
+## How Freeze Works
+
+The freeze mechanism stores the rendered output of executable code cells in a `_freeze/` directory.
+When a page is frozen:
+
+- **`freeze: auto`**: the page is only re-executed when its source code changes. If the `.qmd` file
+hasn't changed since the last execution, the cached output is reused.
+- **`freeze: true`**: the page is never re-executed during a project render. You must explicitly
+render it to update its outputs.
+
+::: {.callout-tip}
+## Choosing `auto` vs `true`
+
+Use **`freeze: auto`** for most pages. It strikes the right balance by re-executing only when the
+source changes. Use **`freeze: true`** when you need absolute control: pages with non-deterministic
+output (random seeds, API calls), pages requiring hardware you only have locally (GPUs, licensed
+software), or pages where accidental re-execution could produce confusing diffs. With `true`, the
+only way to update the cache is an explicit `great-docs freeze`.
+:::
+
+The `_freeze/` directory should be committed to version control so that CI builds can render the
+site without needing to reproduce your computational environment.
+
+## Page-Level Freeze
+
+The most common approach is to freeze only the specific pages that are expensive to render. This
+keeps your fast pages rendering fresh (so you see changes immediately) while expensive pages load
+from the cache. To freeze a specific page, add `freeze:` to its YAML frontmatter:
+
+```{.yaml filename="user_guide/benchmarks.qmd"}
+---
+title: "Benchmarks"
+freeze: auto
+---
+```
+
+```{{python}}
+# This cell takes 20 minutes to run
+import my_package
+results = my_package.run_full_benchmark_suite()
+results.summary()
+```
+
+Great Docs normalizes this shorthand into the nested form that Quarto requires
+(`execute: freeze: auto`) automatically during the build. You can also use the full Quarto syntax if
+you prefer:
+
+```{.yaml filename="user_guide/benchmarks.qmd"}
+---
+title: "Benchmarks"
+execute:
+  freeze: auto
+---
+```
+
+Both forms are equivalent. The shorthand version is recommended since it's more concise and Great
+Docs handles the translation automatically.
+
+## Project-Level Freeze
+
+If you want to freeze *all* executable pages by default, add `freeze` to `great-docs.yml`:
+
+```{.yaml filename="great-docs.yml"}
+freeze: auto
+```
+
+This is useful for large projects where most pages have expensive computations. You can then
+override individual pages to always execute with `freeze: false` in their frontmatter.
+
+::: {.callout-note}
+## Project-level freeze is optional
+
+Most users only need page-level freeze on their expensive pages. You don't need to set anything in
+`great-docs.yml` for page-level freeze to work. Just add `freeze: auto` to the page's frontmatter
+and run `great-docs freeze`.
+:::
+
+## How the Cache Is Restored
+
+You might wonder: if Great Docs recreates the build directory from scratch on each build, how does
+the freeze cache survive? The answer is that Great Docs handles this transparently. Whenever a
+`_freeze/` directory exists at your project root, a built-in pre-render script copies it into the
+build directory before rendering. You don't need to create or manage any scripts; it's all handled
+internally.
+
+## The `great-docs freeze` Command
+
+The `great-docs freeze` command is your primary tool for managing frozen page outputs. It handles
+the full lifecycle: executing code, capturing outputs, and persisting the cache to a location you
+can commit. You never need to manually copy files or interact with the freeze internals directly.
+
+### Freeze a Page
+
+```{.bash filename="Terminal"}
+great-docs freeze user_guide/benchmarks.qmd
+```
+
+This:
+
+1. prepares the build directory (ensuring file transformations match a full build)
+2. renders the specified page(s), always executing code regardless of cache state
+3. copies updated `_freeze/` entries back to your project root
+4. prints a ready-to-use `git add` + `git commit` command
+
+```{.default filename="Example output"}
+Preparing build directory...
+
+  Rendering user_guide/benchmarks.qmd → user-guide/benchmarks.qmd ...
+  ✓ user_guide/benchmarks.qmd
+
+Persisting _freeze/ → _freeze/
+  Updated 3 cached file(s)
+
+To commit the updated freeze cache:
+  git add _freeze/
+  git commit -m "Update freeze cache for user_guide/benchmarks.qmd"
+```
+
+The suggested `git` commands at the end make it easy to commit the cache in a single copy-paste
+step.
+
+### Freeze Multiple Pages
+
+You can pass any number of pages in a single invocation. Each page is rendered and its outputs are
+persisted together, so you only need one `git add _freeze/` afterwards:
+
+```{.bash filename="Terminal"}
+great-docs freeze user_guide/benchmarks.qmd user_guide/mcmc-demo.qmd
+```
+
+### Full Refresh with `--clean`
+
+Sometimes you want to start completely fresh. For example, after a major dependency upgrade that
+changes plot styling or output format. The `--clean` flag deletes the entire `_freeze/` cache before
+re-executing:
+
+```{.bash filename="Terminal"}
+great-docs freeze --clean user_guide/benchmarks.qmd user_guide/sampling.qmd
+```
+
+This deletes and regenerates only the entries for the specified pages, leaving any other cached
+pages intact.
+
+### Check Freeze Status with `--info`
+
+Not sure which pages are frozen or whether they've been cached yet? The `--info` flag gives you a
+quick dashboard:
+
+```{.bash filename="Terminal"}
+great-docs freeze --info
+```
+
+```{.default filename="Example output"}
+  Freeze cache: _freeze/
+
+  ✓  cached  recipes/24-freeze-demo.qmd
+           mode: auto │ frozen at 2026-05-06 13:26:41
+
+  ⚠️  not cached  user_guide/benchmarks.qmd
+           mode: auto │ Run: great-docs freeze user_guide/benchmarks.qmd
+
+  1/2 page(s) cached
+
+  ℹ Run 'great-docs freeze <page>' to cache uncached pages.
+  ℹ To re-freeze a stale page: great-docs freeze <page>
+```
+
+This is especially useful after adding freeze to a new page. The `--info` flag reminds you to run
+the initial freeze. It's also a good way to identify pages that may benefit from a re-freeze, for
+instance after updating dependencies or input data that the source hash won't detect.
+
+### Custom Persist Location
+
+By default the cache is written to `_freeze/` at your project root. If your project layout requires
+a different location (for example, a monorepo where docs live in a subdirectory), use `--freeze-dir`
+to override:
+
+```{.bash filename="Terminal"}
+great-docs freeze user_guide/benchmarks.qmd --freeze-dir docs/_freeze
+```
+
+The build will look for the cache in the specified directory when restoring.
+
+## Complete Workflow
+
+Putting it all together, here's the full workflow for freezing an expensive page, from initial setup
+through day-to-day usage:
+
+### Initial Setup
+
+1. **Add freeze frontmatter** to your expensive page:
+
+    ```{.yaml filename="user_guide/benchmarks.qmd"}
+    ---
+    title: "Benchmarks"
+    freeze: auto
+    ---
+    ```
+
+2. **Run the initial freeze** to execute the page and capture outputs:
+
+    ```{.bash filename="Terminal"}
+    great-docs freeze user_guide/benchmarks.qmd
+    ```
+
+3. **Commit** the freeze cache:
+
+    ```{.bash filename="Terminal"}
+    git add _freeze/
+    git commit -m "Add freeze cache for benchmarks page"
+    ```
+
+These three steps don't require any configuration files to be edited (nor any scripts to write).
+
+### Day-to-Day
+
+After initial setup, `great-docs build` skips the frozen page automatically. Builds are fast because
+only cheap pages render fresh.
+
+### Updating Frozen Pages
+
+When you edit the frozen page's source code, update its input data, or want to refresh outputs for
+any other reason:
+
+```{.bash filename="Terminal"}
+great-docs freeze user_guide/benchmarks.qmd
+git add _freeze/
+git commit -m "Refresh benchmarks freeze cache"
+```
+
+### In CI
+
+No special CI configuration is needed. Since `_freeze/` is committed to the repo, Great Docs
+automatically restores it into the build directory during `great-docs build`:
+
+```{.yaml filename=".github/workflows/docs.yml"}
+- name: Build documentation
+  run: great-docs build
+```
+
+## Mixing Frozen and Fresh Pages
+
+Freeze is designed to coexist with normal pages. You can freeze some pages while others render fresh
+on every build. Only pages with `freeze:` in their frontmatter are cached. All other pages execute
+normally, so you still get immediate feedback when editing non-frozen content.
+
+If you use project-level freeze (`freeze: auto` in `great-docs.yml`), override individual pages
+with:
+
+```{.yaml filename="a-page-that-must-always-run.qmd"}
+---
+title: "Live Status"
+freeze: false
+---
+```
+
+This is useful for pages that pull live data or display current status information.
+
+## When to Refresh the Cache
+
+With `freeze: auto`, Great Docs automatically re-executes when the source `.qmd` changes. But some
+triggers aren't captured by a source hash (external data files, upstream package changes, or
+environment updates). Here's a quick reference for when manual intervention is needed:
+
+| Trigger | Action |
+|---------|--------|
+| Source code of frozen page changes | `great-docs freeze <page>` |
+| Input data files change | `great-docs freeze <page>` |
+| Package API changes affect output | `great-docs freeze <page>` |
+| Dependencies update (new plots, etc.) | `great-docs freeze <page>` |
+| Full refresh needed | `great-docs freeze --clean <pages>` |
+
+Use `great-docs freeze --info` at any time to check which pages need attention.
+
+## Where Does `_freeze/` Live?
+
+The `_freeze/` directory always lives at your **project root**, the same directory as
+`great-docs.yml`. You never need to create it manually; `great-docs freeze` generates it for you and
+places it in the right spot.
+
+```{.default filename="Your project"}
+my-package/
+├── great-docs.yml
+├── _freeze/              ← always here, at the top level
+│   └── ...
+├── user_guide/
+│   └── benchmarks.qmd
+└── ...
+```
+
+::: {.callout-note}
+## You don't need to look inside `_freeze/`
+
+The contents of `_freeze/` are managed. Treat it as an opaque cache. You'll never need to edit,
+inspect, or understand the JSON files inside. The only operations you perform on it are:
+
+- **`git add _freeze/`**: commit it so CI and collaborators get the cache
+- **`great-docs freeze --clean <pages>`**: wipe and rebuild when you need a fresh start
+
+Think of it like a compiled artifact: you commit it for reproducibility, but you regenerate it with
+`great-docs freeze` rather than editing it by hand.
+:::
+
+### What's Actually Inside (for the curious)
+
+The directory mirrors your site structure with one JSON file per frozen page:
+
+```{.default filename="_freeze/ structure"}
+_freeze/
+├── site_libs/                # Shared JS/CSS libraries (e.g., clipboard.min.js)
+├── user-guide/
+│   └── benchmarks/
+│       └── execute-results/
+│           └── html.json     # Cached cell outputs + content hash
+└── recipes/
+    └── mcmc-demo/
+        └── execute-results/
+            └── html.json
+```
+
+Each `html.json` contains the rendered cell outputs and a hash of the source file. This hash is
+compared against the current `.qmd`. If they match, the cached output is used; if they differ (i.e.,
+perhaps you edited the source), the page is re-executed. These files are typically small (a few KB
+to a few MB depending on plot complexity).
+
+## Advanced Configuration
+
+The freeze feature works out of the box for most projects. The options below let you customize the
+workflow for more complex setups, such as projects that need data generation before rendering or
+monorepos with non-standard directory layouts.
+
+### Additional Pre-Render Scripts
+
+Pre-render scripts run once before any page rendering occurs. They are useful for tasks that prepare
+shared data or assets that your `.qmd` pages depend on (e.g., downloading a dataset, generating
+fixture files, or validating inputs). These scripts don't interact with individual page authoring
+directly; they simply ensure that prerequisites are in place before the render starts.
+
+Each script is run with the **build directory** as the working directory. This means scripts can
+create files directly into the build tree where pages will pick them up. If a script exits with a
+non-zero exit code, the build fails immediately with an error, which is useful for enforcing
+preconditions.
+
+If you have pre-render scripts of your own, add them via the `pre_render` key in `great-docs.yml`:
+
+```{.yaml filename="great-docs.yml"}
+pre_render:
+  - scripts/generate-data.py
+  - scripts/validate-inputs.py
+```
+
+Great Docs runs these scripts in order before rendering. The built-in freeze cache restore always
+runs first (automatically), followed by your scripts. You don't need to include the restore script
+in this list.
+
+For example, we could generate a data file for pages to read:
+
+```{.python filename="scripts/generate-data.py"}
+"""Download latest metrics and write them where pages can find them."""
+import json
+import sys
+from pathlib import Path
+
+# CWD is the build directory; assets/data/ is accessible from pages
+output = Path("assets/data/metrics.json")
+output.parent.mkdir(parents=True, exist_ok=True)
+
+try:
+    # Your data-fetching logic here
+    metrics = {"downloads": 142_000, "stars": 3_200}
+    output.write_text(json.dumps(metrics, indent=2))
+except Exception as e:
+    print(f"ERROR: Failed to generate metrics: {e}", file=sys.stderr)
+    sys.exit(1)  # Non-zero exit fails the build
+```
+
+A page can then read from that path:
+
+````{.yaml filename="user_guide/dashboard.qmd"}
+---
+title: "Project Metrics"
+---
+
+```{{python}}
+import json
+from pathlib import Path
+
+metrics = json.loads(Path("assets/data/metrics.json").read_text())
+print(f"Downloads: {metrics['downloads']:,}")
+```
+````
+
+As another example, we could validate that required files exist:
+
+```{.python filename="scripts/validate-inputs.py"}
+"""Fail the build early if expected input files are missing."""
+import sys
+from pathlib import Path
+
+required = [
+    Path("assets/data/benchmark-results.csv"),
+    Path("assets/data/changelog-entries.json"),
+]
+
+missing = [str(p) for p in required if not p.exists()]
+if missing:
+    print("Build aborted. Missing required files:", file=sys.stderr)
+    for m in missing:
+        print(f"  - {m}", file=sys.stderr)
+    sys.exit(1)
+```
+
+This pattern is helpful when frozen pages depend on external data files that must be present but
+aren't generated by the freeze process itself.
+
+## Build Log
+
+When freeze is active, the build log includes a dedicated step showing which pages will use cached
+outputs:
+
+```{.default filename="Build log excerpt (Step 15)"}
+━━ Step 15/18 ─ Prepare freeze cache ━━━━━━━━━━━━━━━━━━━━
+   ✔ Using 1 page(s) from the freeze cache       <0.1s
+      - recipes/freeze-demo.qmd
+```
+
+If no pages have `freeze:` in their frontmatter and no `_freeze/` directory exists, this step is
+skipped:
+
+```{.default filename="Build log excerpt (no frozen pages)"}
+━━ Step 15/18 ─ Prepare freeze cache ━━━━━━━━━━━━━━━━━━━━
+   ⊘ Skipped (no frozen pages)
+```
+
+This makes it easy to confirm at a glance whether your freeze cache is being picked up.
+
+## Next Steps
+
+Freeze eliminates re-execution overhead for expensive pages, making builds fast and CI pipelines
+reliable. Once your cache is committed, collaborators and CI runners can build the full site without
+needing your computational environment.
+
+- [Use Freeze to Cache Expensive Notebooks](../recipes/use-freeze-cache.qmd): a recipe with more
+detailed examples and CI patterns
+- [Freeze Demo](../recipes/freeze-demo.qmd): a live page with frozen outputs you can inspect
+- [Configuration](configuration.qmd): all `great-docs.yml` options including `pre_render`
+- [Publishing](publishing.qmd): deploying your site to GitHub Pages, Netlify, or other hosts
