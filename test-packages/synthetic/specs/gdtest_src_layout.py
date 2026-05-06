@@ -138,5 +138,6 @@ SPEC = {
         "nodoc_items": ["destroy_widget"],
         "section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
-    },
+        "coverage_exclude": ['bigcl', 'ug', 'supp'],
+},
 }

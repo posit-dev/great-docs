@@ -257,5 +257,6 @@ SPEC = {
         "inline_class_name": "SmallWidget",
         "inline_class_method_count": 3,
         "has_user_guide": False,
-    },
+        "coverage_exclude": ['nodoc', 'ug', 'supp', 'hdg'],
+},
 }

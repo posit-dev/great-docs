@@ -115,5 +115,6 @@ SPEC = {
             "03-customization.qmd",
             "04-plugins.qmd",
         ],
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'supp', 'sechdg', 'sbsec', 'hdg'],
+},
 }

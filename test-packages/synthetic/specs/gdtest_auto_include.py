@@ -153,5 +153,6 @@ SPEC = {
         "auto_excluded": ["main"],
         "force_included": ["config", "logging"],
         "has_user_guide": False,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
+},
 }

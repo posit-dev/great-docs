@@ -219,28 +219,30 @@ _PKGS_WITH_DOCSTRINGS = [
 
 
 @pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
-def test_R0_site_index_exists(pkg_name: str):
+def test_site_index_exists(pkg_name: str):
     """Every rendered site has an index.html landing page."""
     index = _site_dir(pkg_name) / "index.html"
     assert index.exists(), f"Missing {index}"
 
 
+@pytest.mark.dedicated
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_EXPORTS)
-def test_R0_reference_index_exists(pkg_name: str):
+def test_reference_index_exists(pkg_name: str):
     """Rendered sites with exports have a reference/index.html."""
     ref_index = _ref_dir(pkg_name) / "index.html"
     assert ref_index.exists(), f"Missing {ref_index}"
 
 
 @pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
-def test_R0_search_json_exists(pkg_name: str):
+def test_search_json_exists(pkg_name: str):
     """Every rendered site has a search.json for site search."""
     search = _site_dir(pkg_name) / "search.json"
     assert search.exists(), f"Missing {search}"
 
 
+@pytest.mark.dedicated
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_EXPORTS)
-def test_R0_reference_pages_match_exports(pkg_name: str):
+def test_reference_pages_match_exports(pkg_name: str):
     """Each exported symbol has a corresponding .html page in reference/."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected["export_names"]
@@ -274,7 +276,7 @@ def test_R0_reference_pages_match_exports(pkg_name: str):
 
 
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_NODOC)
-def test_R0_nodoc_items_excluded(pkg_name: str):
+def test_nodoc_items_excluded(pkg_name: str):
     """Items marked %nodoc should NOT have reference pages."""
     expected = _EXPECTED_CACHE[pkg_name]
     nodoc_items = expected["nodoc_items"]
@@ -286,7 +288,7 @@ def test_R0_nodoc_items_excluded(pkg_name: str):
 
 
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_BIG_CLASS)
-def test_R0_big_class_has_method_pages(pkg_name: str):
+def test_big_class_has_method_pages(pkg_name: str):
     """Big classes (>5 methods) should have separate method .html pages."""
     expected = _EXPECTED_CACHE[pkg_name]
     big_class = expected["big_class_name"]
@@ -308,7 +310,7 @@ def test_R0_big_class_has_method_pages(pkg_name: str):
 
 
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_UG_FILES)
-def test_R0_user_guide_pages_exist(pkg_name: str):
+def test_user_guide_pages_exist(pkg_name: str):
     """User guide pages render to HTML when user_guide_files is specified."""
     expected = _EXPECTED_CACHE[pkg_name]
     ug_files = expected["user_guide_files"]
@@ -342,7 +344,7 @@ def test_R0_user_guide_pages_exist(pkg_name: str):
 
 
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_SUPPORTING)
-def test_R0_supporting_pages_exist(pkg_name: str):
+def test_supporting_pages_exist(pkg_name: str):
     """Supporting pages (license, citation, etc.) render when expected."""
     expected = _EXPECTED_CACHE[pkg_name]
     site = _site_dir(pkg_name)
@@ -367,7 +369,7 @@ def test_R0_supporting_pages_exist(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_EXPORTS)
-def test_R1_reference_pages_have_title(pkg_name: str):
+def test_reference_pages_have_title(pkg_name: str):
     """Every reference page has a .title element (h1 or h2)."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected["export_names"]
@@ -391,7 +393,7 @@ def test_R1_reference_pages_have_title(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_EXPORTS)
-def test_R1_reference_pages_have_type_badge(pkg_name: str):
+def test_reference_pages_have_type_badge(pkg_name: str):
     """Every reference page has a type badge (function, class, enum, etc.)."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected["export_names"]
@@ -431,7 +433,7 @@ def test_R1_reference_pages_have_type_badge(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_EXPORTS)
-def test_R1_function_pages_have_signature(pkg_name: str):
+def test_function_pages_have_signature(pkg_name: str):
     """Function/method pages have a USAGE section with a signature block."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected["export_names"]
@@ -464,7 +466,7 @@ def test_R1_function_pages_have_signature(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_DOCSTRINGS)
-def test_R1_pages_have_doc_description(pkg_name: str):
+def test_pages_have_doc_description(pkg_name: str):
     """Pages with docstrings should have a <p class='doc-description'>."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected["export_names"]
@@ -494,7 +496,7 @@ def test_R1_pages_have_doc_description(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_REF_PAGES)
-def test_R1_footer_text_not_in_header(pkg_name: str):
+def test_footer_text_not_in_header(pkg_name: str):
     """Footer text (e.g. 'Developed by ...') must never appear in doc-description.
 
     When an object has no docstring, the post-render script must not pick up
@@ -528,7 +530,7 @@ def test_R1_footer_text_not_in_header(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_NOT_NODOCS)
-def test_R2_parameters_section_renders(pkg_name: str):
+def test_parameters_section_renders(pkg_name: str):
     """Functions with parameters have a rendered Parameters section."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected.get("export_names")
@@ -566,7 +568,7 @@ def test_R2_parameters_section_renders(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_EXPORTS)
-def test_R2_parameter_names_match_signature(pkg_name: str):
+def test_parameter_names_match_signature(pkg_name: str):
     """Parameter names in the Parameters section match the signature."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected["export_names"]
@@ -622,9 +624,10 @@ def test_R2_parameter_names_match_signature(pkg_name: str):
             )
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_NOT_NODOCS)
-def test_R2_returns_section_renders(pkg_name: str):
+def test_returns_section_renders(pkg_name: str):
     """Functions with return type annotations have a Returns section."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected.get("export_names")
@@ -648,6 +651,7 @@ def test_R2_returns_section_renders(pkg_name: str):
             assert len(content) > len("Returns"), f"{name}.html: returns section appears empty"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize(
     "pkg_name",
@@ -658,7 +662,7 @@ def test_R2_returns_section_renders(pkg_name: str):
         "gdtest_google_rich",
     ],
 )
-def test_R2_raises_section_renders(pkg_name: str):
+def test_raises_section_renders(pkg_name: str):
     """Packages with Raises docstrings have rendered Raises sections."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -681,6 +685,7 @@ def test_R2_raises_section_renders(pkg_name: str):
     assert found_raises > 0, f"No Raises sections found in {pkg_name}"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize(
     "pkg_name",
@@ -690,7 +695,7 @@ def test_R2_raises_section_renders(pkg_name: str):
         "gdtest_docstring_examples",
     ],
 )
-def test_R2_examples_section_renders(pkg_name: str):
+def test_examples_section_renders(pkg_name: str):
     """Packages with Examples docstrings have rendered Examples sections."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -718,8 +723,9 @@ def test_R2_examples_section_renders(pkg_name: str):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_overload_signatures_render():
+def test_overload_signatures_render():
     """Overloaded functions show multiple signatures with overload-spacer."""
     pkg = "gdtest_overloads"
     if not _has_rendered_site(pkg):
@@ -742,6 +748,7 @@ def test_R3_overload_signatures_render():
         assert len(spacers) >= 1, "No overload-spacer spans found"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize(
     "pkg_name,expected_items",
@@ -753,7 +760,7 @@ def test_R3_overload_signatures_render():
         ("gdtest_rst_versionadded", None),
     ],
 )
-def test_R3_rst_directives_render_as_callouts(pkg_name: str, expected_items):
+def test_rst_directives_render_as_callouts(pkg_name: str, expected_items):
     """RST directives (.. note::, .. warning::, etc.) render as styled callout divs."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -832,8 +839,9 @@ def test_R3_rst_directives_render_as_callouts(pkg_name: str, expected_items):
     assert found_callouts > 0, f"No callout content with label {label!r} found in {pkg_name}"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_constant_pages_show_value():
+def test_constant_pages_show_value():
     """Constant pages display the value (e.g., `DEFAULT_TIMEOUT: int = 30`)."""
     pkg = "gdtest_constants"
     if not _has_rendered_site(pkg):
@@ -860,8 +868,9 @@ def test_R3_constant_pages_show_value():
         assert name_found, f"{const_name}.html: constant name not found in code elements"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_enum_pages_have_attributes_table():
+def test_enum_pages_have_attributes_table():
     """Enum pages have an Attributes table listing members."""
     pkg = "gdtest_enums"
     if not _has_rendered_site(pkg):
@@ -887,8 +896,9 @@ def test_R3_enum_pages_have_attributes_table():
             assert len(tables) > 0, f"{enum_name}.html: no attributes table found"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_dunder_methods_render_without_bold():
+def test_dunder_methods_render_without_bold():
     """Dunder method names don't get interpreted as bold by Pandoc."""
     pkg = "gdtest_dunders"
     if not _has_rendered_site(pkg):
@@ -909,8 +919,9 @@ def test_R3_dunder_methods_render_without_bold():
         )
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_dataclass_fields_render():
+def test_dataclass_fields_render():
     """Dataclass pages show all fields (including str/list/dict types)."""
     pkg = "gdtest_dataclasses"
     if not _has_rendered_site(pkg):
@@ -929,8 +940,9 @@ def test_R3_dataclass_fields_render():
         assert "name" in param_names, f"Config.html: 'name' field not in parameters: {param_names}"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_async_functions_have_badge():
+def test_async_functions_have_badge():
     """Async functions have an 'async' or 'function' badge."""
     pkg = "gdtest_async_funcs"
     if not _has_rendered_site(pkg):
@@ -950,8 +962,9 @@ def test_R3_async_functions_have_badge():
         )
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_exception_classes_have_badge():
+def test_exception_classes_have_badge():
     """Exception classes have appropriate badges."""
     pkg = "gdtest_exceptions"
     if not _has_rendered_site(pkg):
@@ -971,8 +984,9 @@ def test_R3_exception_classes_have_badge():
         )
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_protocol_classes_have_badge():
+def test_protocol_classes_have_badge():
     """Protocol/ABC classes have appropriate badges."""
     pkg = "gdtest_protocols"
     if not _has_rendered_site(pkg):
@@ -1000,8 +1014,9 @@ def test_R3_protocol_classes_have_badge():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_sphinx_params_render_as_structured_dl():
+def test_sphinx_params_render_as_structured_dl():
     """Sphinx :param: fields render as structured <dl> elements, not raw text."""
     pkg = "gdtest_sphinx"
     if not _has_rendered_site(pkg):
@@ -1029,8 +1044,9 @@ def test_R3_sphinx_params_render_as_structured_dl():
         )
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_google_params_render_as_structured_dl():
+def test_google_params_render_as_structured_dl():
     """Google Args: fields render as structured <dl> elements, not raw text."""
     pkg = "gdtest_google"
     if not _has_rendered_site(pkg):
@@ -1053,8 +1069,9 @@ def test_R3_google_params_render_as_structured_dl():
         )
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_sphinx_rich_multiple_raises():
+def test_sphinx_rich_multiple_raises():
     """Rich Sphinx docstrings with multiple :raises: render properly."""
     pkg = "gdtest_sphinx_rich"
     if not _has_rendered_site(pkg):
@@ -1079,8 +1096,9 @@ def test_R3_sphinx_rich_multiple_raises():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_seealso_links_render():
+def test_seealso_links_render():
     """Functions with %seealso have See Also sections in the rendered output."""
     pkg = "gdtest_seealso"
     if not _has_rendered_site(pkg):
@@ -1113,9 +1131,10 @@ def test_R3_seealso_links_render():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_EXPORTS)
-def test_R4_reference_index_lists_exports(pkg_name: str):
+def test_reference_index_lists_exports(pkg_name: str):
     """The reference index page lists all exported symbols."""
     expected = _EXPECTED_CACHE[pkg_name]
     export_names = expected["export_names"]
@@ -1146,7 +1165,7 @@ def test_R4_reference_index_lists_exports(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_SECTION_TITLES)
-def test_R4_reference_index_has_section_headings(pkg_name: str):
+def test_reference_index_has_section_headings(pkg_name: str):
     """The reference index page has section headings matching spec."""
     expected = _EXPECTED_CACHE[pkg_name]
     section_titles = expected["section_titles"]
@@ -1182,7 +1201,7 @@ def test_R4_reference_index_has_section_headings(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_REF_PAGES)
-def test_R4_sidebar_has_reference_section(pkg_name: str):
+def test_sidebar_has_reference_section(pkg_name: str):
     """The sidebar contains reference/API navigation items."""
     ref = _ref_dir(pkg_name)
     ref_pages = [f for f in ref.glob("*.html") if f.name != "index.html"]
@@ -1199,7 +1218,7 @@ def test_R4_sidebar_has_reference_section(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_SECTION_TITLES)
-def test_R4_sidebar_lists_section_titles(pkg_name: str):
+def test_sidebar_lists_section_titles(pkg_name: str):
     """Sidebar section headers match expected section titles."""
     expected = _EXPECTED_CACHE[pkg_name]
     section_titles = expected["section_titles"]
@@ -1236,7 +1255,7 @@ def test_R4_sidebar_lists_section_titles(pkg_name: str):
 
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
-def test_R4_landing_page_has_title(pkg_name: str):
+def test_landing_page_has_title(pkg_name: str):
     """The index.html landing page has a title heading."""
     index = _site_dir(pkg_name) / "index.html"
     if not index.exists():
@@ -1261,6 +1280,7 @@ def test_R4_landing_page_has_title(pkg_name: str):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize(
     "pkg_name",
@@ -1272,7 +1292,7 @@ def test_R4_landing_page_has_title(pkg_name: str):
         "gdtest_sphinx_mixed_roles",
     ],
 )
-def test_R4_sphinx_roles_stripped(pkg_name: str):
+def test_sphinx_roles_stripped(pkg_name: str):
     """Sphinx cross-reference roles (:func:, :class:, etc.) should be stripped."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -1308,6 +1328,7 @@ def test_R4_sphinx_roles_stripped(pkg_name: str):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize(
     "pkg_name",
@@ -1317,7 +1338,7 @@ def test_R4_sphinx_roles_stripped(pkg_name: str):
         "gdtest_numpy_rich",
     ],
 )
-def test_R4_rst_code_blocks_converted(pkg_name: str):
+def test_rst_code_blocks_converted(pkg_name: str):
     """RST :: code blocks should be converted to proper <pre><code> blocks."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -1345,9 +1366,10 @@ def test_R4_rst_code_blocks_converted(pkg_name: str):
                 pytest.fail(f"{html_file.name}: raw RST '::' code block marker in <p>: {text!r}")
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", ["gdtest_docstring_tables"])
-def test_R4_rst_tables_converted(pkg_name: str):
+def test_rst_tables_converted(pkg_name: str):
     """RST tables should be converted to valid HTML tables."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -1383,8 +1405,9 @@ def test_R4_rst_tables_converted(pkg_name: str):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_logo_replaces_title():
+def test_logo_replaces_title():
     """Logo config injects navbar logo and suppresses the text title."""
     pkg = "gdtest_logo"
     if not _has_rendered_site(pkg):
@@ -1423,8 +1446,9 @@ def test_R4_logo_replaces_title():
         assert (build_dir / "apple-touch-icon.png").exists(), "apple-touch-icon.png should exist"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_logo_in_rendered_html():
+def test_logo_in_rendered_html():
     """Rendered HTML should contain the logo image in the navbar."""
     pkg = "gdtest_logo"
     if not _has_rendered_site(pkg):
@@ -1445,8 +1469,9 @@ def test_R4_logo_in_rendered_html():
     )
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_display_name_in_title():
+def test_display_name_in_title():
     """Config display_name appears in the site navbar/title."""
     pkg = "gdtest_display_name"
     if not _has_rendered_site(pkg):
@@ -1457,8 +1482,9 @@ def test_R4_display_name_in_title():
     soup.get_text()  # Verify page loads without error
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_no_darkmode_toggle():
+def test_no_darkmode_toggle():
     """When dark_mode_toggle is disabled, the toggle element is absent."""
     pkg = "gdtest_no_darkmode"
     if not _has_rendered_site(pkg):
@@ -1472,6 +1498,7 @@ def test_R4_no_darkmode_toggle():
     assert soup.select_one("main.content") is not None, f"{pkg}: site did not render properly"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize(
     "pkg_name,theme",
@@ -1481,7 +1508,7 @@ def test_R4_no_darkmode_toggle():
         ("gdtest_theme_cerulean", "cerulean"),
     ],
 )
-def test_R4_theme_applied(pkg_name: str, theme: str):
+def test_theme_applied(pkg_name: str, theme: str):
     """Theme configuration produces a valid rendered site."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -1497,8 +1524,9 @@ def test_R4_theme_applied(pkg_name: str, theme: str):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_cli_pages_generated():
+def test_cli_pages_generated():
     """When CLI is enabled, reference pages are generated for the package."""
     pkg = "gdtest_cli_click"
     if not _has_rendered_site(pkg):
@@ -1510,8 +1538,9 @@ def test_R4_cli_pages_generated():
     assert len(ref_pages) > 0, "No reference pages generated for gdtest_cli_click"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_cli_reference_directory_exists():
+def test_cli_reference_directory_exists():
     """CLI-enabled packages should have a reference/cli/ directory."""
     pkg = "gdtest_cli_click"
     if not _has_rendered_site(pkg):
@@ -1522,8 +1551,9 @@ def test_R4_cli_reference_directory_exists():
     assert (cli_dir / "index.html").exists(), "No CLI index.html page"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_cli_index_page_content():
+def test_cli_index_page_content():
     """CLI index page should contain command name and help text."""
     pkg = "gdtest_cli_click"
     if not _has_rendered_site(pkg):
@@ -1542,8 +1572,9 @@ def test_R4_cli_index_page_content():
     )
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_cli_nested_groups_rendered():
+def test_cli_nested_groups_rendered():
     """Nested Click groups should produce subcommand pages."""
     pkg = "gdtest_cli_nested"
     if not _has_rendered_site(pkg):
@@ -1557,8 +1588,9 @@ def test_R4_cli_nested_groups_rendered():
     assert (cli_dir / "config.html").exists(), "No config group page"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_cli_nested_subcommand_pages():
+def test_cli_nested_subcommand_pages():
     """Nested subcommands should have their own pages."""
     pkg = "gdtest_cli_nested"
     if not _has_rendered_site(pkg):
@@ -1575,8 +1607,9 @@ def test_R4_cli_nested_subcommand_pages():
     assert (cli_dir / "config" / "set.html").exists(), "No config/set.html page"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_cli_sidebar_has_cli_section():
+def test_cli_sidebar_has_cli_section():
     """Rendered reference pages should have a CLI Reference sidebar section."""
     pkg = "gdtest_cli_click"
     if not _has_rendered_site(pkg):
@@ -1603,7 +1636,8 @@ def test_R4_cli_sidebar_has_cli_section():
     )
 
 
-def test_R4_cli_sidebar_structure_flat():
+@pytest.mark.dedicated
+def test_cli_sidebar_structure_flat():
     """Flat CLI sidebar in _quarto.yml should contain only path strings."""
     pkg = "gdtest_cli_click"
     if not _has_rendered_site(pkg):
@@ -1629,7 +1663,8 @@ def test_R4_cli_sidebar_structure_flat():
         assert isinstance(item, str), f"Flat CLI sidebar should only have path strings, got: {item}"
 
 
-def test_R4_cli_sidebar_structure_nested():
+@pytest.mark.dedicated
+def test_cli_sidebar_structure_nested():
     """Nested CLI sidebar in _quarto.yml should use section/contents hierarchy."""
     pkg = "gdtest_cli_nested"
     if not _has_rendered_site(pkg):
@@ -1693,7 +1728,8 @@ def test_R4_cli_sidebar_structure_nested():
             )
 
 
-def test_R4_cli_sidebar_no_raw_qmd_paths_in_nested():
+@pytest.mark.dedicated
+def test_cli_sidebar_no_raw_qmd_paths_in_nested():
     """Nested CLI sidebar must not have bare reference/cli/<leaf>.qmd paths for subcommands."""
     pkg = "gdtest_cli_nested"
     if not _has_rendered_site(pkg):
@@ -1731,8 +1767,9 @@ def test_R4_cli_sidebar_no_raw_qmd_paths_in_nested():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_math_blocks_render():
+def test_math_blocks_render():
     """RST math directives or LaTeX should render (KaTeX or display math)."""
     pkg = "gdtest_docstring_math"
     if not _has_rendered_site(pkg):
@@ -1772,6 +1809,7 @@ def test_R4_math_blocks_render():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @pytest.mark.parametrize(
     "pkg_name",
     [
@@ -1783,7 +1821,7 @@ def test_R4_math_blocks_render():
         "gdtest_kitchen_sink",
     ],
 )
-def test_R4_stress_packages_have_reference(pkg_name: str):
+def test_stress_packages_have_reference(pkg_name: str):
     """Stress test packages have reference pages."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -1800,8 +1838,8 @@ def test_R4_stress_packages_have_reference(pkg_name: str):
 
 
 @requires_bs4
-@pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES[:20])
-def test_R4_no_broken_heading_attributes(pkg_name: str):
+@pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
+def test_no_broken_heading_attributes(pkg_name: str):
     """Heading attributes like { #anchor } should not render as plain text."""
     ref = _ref_dir(pkg_name)
     if not ref.exists():
@@ -1825,12 +1863,110 @@ def test_R4_no_broken_heading_attributes(pkg_name: str):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# R4: Navbar Rendering (nav)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+@pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
+def test_navbar_renders_with_links(pkg_name: str):
+    """The navbar renders with at least one navigation link."""
+    index = _site_dir(pkg_name) / "index.html"
+    if not index.exists():
+        pytest.skip("No index.html")
+
+    soup = _load_html(index)
+    nav = soup.select_one("nav.navbar")
+    if nav is None:
+        pytest.fail(f"{pkg_name}: no <nav class='navbar'> element found")
+
+    links = nav.select("a[href]")
+    assert links, f"{pkg_name}: navbar has no links"
+
+    # The brand/title link should be present
+    brand = nav.select_one(".navbar-brand, .navbar-title")
+    assert brand, f"{pkg_name}: navbar missing brand/title element"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: Page Metadata / OG Tags (meta)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+@pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
+def test_page_has_meta_description(pkg_name: str):
+    """The landing page has a <meta name='description'> tag."""
+    index = _site_dir(pkg_name) / "index.html"
+    if not index.exists():
+        pytest.skip("No index.html")
+
+    soup = _load_html(index)
+    meta = soup.select_one("meta[name='description']")
+    assert meta, f"{pkg_name}: missing <meta name='description'>"
+    content = meta.get("content", "").strip()
+    assert content, f"{pkg_name}: meta description is empty"
+
+
+@requires_bs4
+@pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
+def test_page_has_og_title(pkg_name: str):
+    """The landing page has an og:title meta tag."""
+    index = _site_dir(pkg_name) / "index.html"
+    if not index.exists():
+        pytest.skip("No index.html")
+
+    soup = _load_html(index)
+    og = soup.select_one("meta[property='og:title']")
+    assert og, f"{pkg_name}: missing <meta property='og:title'>"
+    content = og.get("content", "").strip()
+    assert content, f"{pkg_name}: og:title is empty"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R4: Accessibility (a11y)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@requires_bs4
+@pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
+def test_heading_hierarchy_no_skips(pkg_name: str):
+    """Heading levels don't skip (e.g., h2 → h4 without h3) in main content.
+
+    Allows the initial jump from h1 to any level (Quarto sidebars/layouts
+    commonly inject headings at varying levels before the first section).
+    Only checks forward-skips: going from hN to hM where M > N+1.
+    """
+    index = _site_dir(pkg_name) / "index.html"
+    if not index.exists():
+        pytest.skip("No index.html")
+
+    soup = _load_html(index)
+    main = soup.select_one("main, #quarto-document-content, main.content")
+    if main is None:
+        pytest.skip("No main content area")
+
+    headings = main.select("h1, h2, h3, h4, h5, h6")
+    if len(headings) < 3:
+        pytest.skip("Too few headings to check hierarchy")
+
+    levels = [int(h.name[1]) for h in headings]
+    # Skip the first heading pair (h1 → h3 is common in Quarto layouts)
+    for i in range(2, len(levels)):
+        if levels[i] > levels[i - 1] + 1:
+            pytest.fail(
+                f"{pkg_name}: heading skip from h{levels[i - 1]} to h{levels[i]} "
+                f"(headings {i} to {i + 1})"
+            )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # R4: Directive Stripping
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
 @requires_bs4
-def test_R4_multi_module_no_duplicate_entries():
+def test_multi_module_no_duplicate_entries():
     """Re-exported symbols should not appear twice (short + qualified name).
 
     When a package re-exports submodule symbols via __init__.py (e.g.,
@@ -1883,8 +2019,9 @@ def test_R4_multi_module_no_duplicate_entries():
                 )
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_config_all_on_builds_with_dict_reference():
+def test_config_all_on_builds_with_dict_reference():
     """A reference config that is a dict (title override) should not crash init.
 
     The gdtest_config_all_on spec uses ``reference: {title: "API Reference"}``
@@ -1911,8 +2048,9 @@ def test_R4_config_all_on_builds_with_dict_reference():
     assert len(headings) > 0, "Reference index has no headings"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_ref_title_custom_title_and_desc():
+def test_ref_title_custom_title_and_desc():
     """Custom reference title and description should appear on the index page.
 
     The gdtest_ref_title spec uses ``reference: {title: "API Docs", desc: ...}``
@@ -1961,8 +2099,9 @@ def test_R4_ref_title_custom_title_and_desc():
     )
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_ref_module_expand_uses_short_names():
+def test_ref_module_expand_uses_short_names():
     """Reference config with a submodule name should render successfully.
 
     The gdtest_ref_module_expand spec references ``utils`` (a submodule) in the
@@ -1987,9 +2126,10 @@ def test_R4_ref_module_expand_uses_short_names():
         assert func in text, f"Function '{func}' not found on utils.html reference page"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize("pkg_name", ["gdtest_seealso", "gdtest_nodoc"])
-def test_R4_directives_stripped_from_html(pkg_name: str):
+def test_directives_stripped_from_html(pkg_name: str):
     """Great Docs directives (%seealso, %nodoc) should not appear in HTML."""
     if not _has_rendered_site(pkg_name):
         pytest.skip(f"{pkg_name} not rendered")
@@ -2020,8 +2160,9 @@ def _load_quarto_yml(pkg_name: str) -> dict:
         return read_yaml(f)
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_toc_disabled_config():
+def test_toc_disabled_config():
     """When site.toc is false, _quarto.yml should have toc: false."""
     pkg = "gdtest_toc_disabled"
     if not _has_rendered_site(pkg):
@@ -2034,8 +2175,9 @@ def test_R4_toc_disabled_config():
     )
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_toc_depth_config():
+def test_toc_depth_config():
     """When site.toc-depth is set, _quarto.yml should reflect the custom depth."""
     pkg = "gdtest_toc_depth"
     if not _has_rendered_site(pkg):
@@ -2048,8 +2190,9 @@ def test_R4_toc_depth_config():
     )
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_toc_title_config():
+def test_toc_title_config():
     """When site.toc-title is customized, _quarto.yml should use the custom title."""
     pkg = "gdtest_toc_title"
     if not _has_rendered_site(pkg):
@@ -2067,7 +2210,8 @@ def test_R4_toc_title_config():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def test_R4_source_disabled_no_links_file():
+@pytest.mark.dedicated
+def test_source_disabled_no_links_file():
     """When source.enabled is false, _source_links.json should not be generated."""
     pkg = "gdtest_source_disabled"
     if not _has_rendered_site(pkg):
@@ -2084,8 +2228,9 @@ def test_R4_source_disabled_no_links_file():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_display_badges_index_has_badge_images():
+def test_display_badges_index_has_badge_images():
     """A README with shields.io badges should render badge <img> tags on index."""
     pkg = "gdtest_display_badges"
     if not _has_rendered_site(pkg):
@@ -2103,8 +2248,9 @@ def test_R4_display_badges_index_has_badge_images():
     )
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_display_badges_index_has_table():
+def test_display_badges_index_has_table():
     """A README with a markdown table should render as an HTML <table>."""
     pkg = "gdtest_display_badges"
     if not _has_rendered_site(pkg):
@@ -2116,8 +2262,9 @@ def test_R4_display_badges_index_has_table():
     assert len(tables) >= 1, "Expected at least one HTML table from markdown table"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_display_authors_names_in_index():
+def test_display_authors_names_in_index():
     """Author names from config should appear in the rendered index page."""
     pkg = "gdtest_display_authors"
     if not _has_rendered_site(pkg):
@@ -2131,8 +2278,9 @@ def test_R4_display_authors_names_in_index():
     assert "John Smith" in text, "Author 'John Smith' not found on index page"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_display_authors_roles_in_index():
+def test_display_authors_roles_in_index():
     """Author roles from config should appear in the rendered index page."""
     pkg = "gdtest_display_authors"
     if not _has_rendered_site(pkg):
@@ -2146,8 +2294,9 @@ def test_R4_display_authors_roles_in_index():
     assert "Lead Developer" in text, "Role 'Lead Developer' not found"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_display_funding_name_in_index():
+def test_display_funding_name_in_index():
     """Funding organization name should appear in the rendered index page."""
     pkg = "gdtest_display_funding"
     if not _has_rendered_site(pkg):
@@ -2162,8 +2311,9 @@ def test_R4_display_funding_name_in_index():
     )
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_display_funding_link_in_index():
+def test_display_funding_link_in_index():
     """Funding organization homepage link should appear in the rendered site."""
     pkg = "gdtest_display_funding"
     if not _has_rendered_site(pkg):
@@ -2181,8 +2331,9 @@ def test_R4_display_funding_link_in_index():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_decorator_pages_exist():
+def test_decorator_pages_exist():
     """Decorator functions should have reference pages."""
     pkg = "gdtest_decorators"
     if not _has_rendered_site(pkg):
@@ -2194,8 +2345,9 @@ def test_R3_decorator_pages_exist():
         assert page.exists(), f"Missing decorator reference page: {name}.html"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_decorator_retry_has_params():
+def test_decorator_retry_has_params():
     """The retry decorator page should document max_retries and delay parameters."""
     pkg = "gdtest_decorators"
     if not _has_rendered_site(pkg):
@@ -2216,8 +2368,9 @@ def test_R3_decorator_retry_has_params():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_generator_pages_exist():
+def test_generator_pages_exist():
     """Generator functions should have reference pages."""
     pkg = "gdtest_generators"
     if not _has_rendered_site(pkg):
@@ -2229,8 +2382,9 @@ def test_R3_generator_pages_exist():
         assert page.exists(), f"Missing generator reference page: {name}.html"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_generator_return_types_show_iterator():
+def test_generator_return_types_show_iterator():
     """Generator function pages should show Iterator in return type."""
     pkg = "gdtest_generators"
     if not _has_rendered_site(pkg):
@@ -2253,8 +2407,9 @@ def test_R3_generator_return_types_show_iterator():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_generic_class_pages_exist():
+def test_generic_class_pages_exist():
     """Generic classes (Stack, Pair) should have reference pages."""
     pkg = "gdtest_generics"
     if not _has_rendered_site(pkg):
@@ -2271,8 +2426,9 @@ def test_R3_generic_class_pages_exist():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_frozen_dc_section_title():
+def test_frozen_dc_section_title():
     """Frozen dataclasses should use 'Dataclasses' as the section heading."""
     pkg = "gdtest_frozen_dc"
     if not _has_rendered_site(pkg):
@@ -2287,8 +2443,9 @@ def test_R3_frozen_dc_section_title():
     assert "Dataclasses" in headings, f"Expected 'Dataclasses' section heading, got: {headings}"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_frozen_dc_pages_have_fields():
+def test_frozen_dc_pages_have_fields():
     """Frozen dataclass pages should document their fields as parameters."""
     pkg = "gdtest_frozen_dc"
     if not _has_rendered_site(pkg):
@@ -2309,8 +2466,9 @@ def test_R3_frozen_dc_pages_have_fields():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_reexports_all_symbols_have_pages():
+def test_reexports_all_symbols_have_pages():
     """Re-exported symbols from submodules should each have a reference page."""
     pkg = "gdtest_reexports"
     if not _has_rendered_site(pkg):
@@ -2322,8 +2480,9 @@ def test_R3_reexports_all_symbols_have_pages():
         assert page.exists(), f"Re-exported symbol '{name}' should have a reference page"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_reexports_ref_index_has_sections():
+def test_reexports_ref_index_has_sections():
     """Re-exports reference index should have both Classes and Functions sections."""
     pkg = "gdtest_reexports"
     if not _has_rendered_site(pkg):
@@ -2344,8 +2503,9 @@ def test_R3_reexports_ref_index_has_sections():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_abstract_class_pages_exist():
+def test_abstract_class_pages_exist():
     """Abstract base classes and their subclasses should have reference pages."""
     pkg = "gdtest_abstract_props"
     if not _has_rendered_site(pkg):
@@ -2357,8 +2517,9 @@ def test_R3_abstract_class_pages_exist():
         assert page.exists(), f"Missing class page: {name}.html"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_abstract_shape_documents_properties():
+def test_abstract_shape_documents_properties():
     """Abstract Shape class should document area and perimeter properties."""
     pkg = "gdtest_abstract_props"
     if not _has_rendered_site(pkg):
@@ -2374,8 +2535,9 @@ def test_R3_abstract_shape_documents_properties():
     assert "perimeter" in text, "Shape page should document 'perimeter' property"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_abstract_circle_documents_radius():
+def test_abstract_circle_documents_radius():
     """Circle subclass should document the radius parameter."""
     pkg = "gdtest_abstract_props"
     if not _has_rendered_site(pkg):
@@ -2395,8 +2557,9 @@ def test_R3_abstract_circle_documents_radius():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R3_deep_nesting_pages_exist():
+def test_deep_nesting_pages_exist():
     """Deeply nested exports (3 levels) should still get reference pages."""
     pkg = "gdtest_deep_nesting"
     if not _has_rendered_site(pkg):
@@ -2416,7 +2579,8 @@ def test_R3_deep_nesting_pages_exist():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def test_R4_changelog_config_propagated():
+@pytest.mark.dedicated
+def test_changelog_config_propagated():
     """Changelog config should be written to great-docs.yml with enabled + max_releases."""
     from yaml12 import parse_yaml, read_yaml
 
@@ -2438,8 +2602,9 @@ def test_R4_changelog_config_propagated():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_config_combo_a_display_name_and_authors():
+def test_config_combo_a_display_name_and_authors():
     """Combo A: display_name in title, authors in footer, landing page content."""
     pkg = "gdtest_config_combo_a"
     if not _has_rendered_site(pkg):
@@ -2468,8 +2633,9 @@ def test_R4_config_combo_a_display_name_and_authors():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_config_combo_b_opt_out_flags():
+def test_config_combo_b_opt_out_flags():
     """Combo B: sidebar_filter, dark_mode_toggle, and source all disabled."""
     pkg = "gdtest_config_combo_b"
     if not _has_rendered_site(pkg):
@@ -2497,7 +2663,8 @@ def test_R4_config_combo_b_opt_out_flags():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def test_R4_config_ug_list_sections_in_yml():
+@pytest.mark.dedicated
+def test_config_ug_list_sections_in_yml():
     """user_guide as list of section dicts should propagate to great-docs.yml."""
     from yaml12 import parse_yaml, read_yaml
 
@@ -2523,8 +2690,9 @@ def test_R4_config_ug_list_sections_in_yml():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_config_ug_string_pages_rendered():
+def test_config_ug_string_pages_rendered():
     """user_guide as string pointing to 'guides' dir should render user guide pages."""
     pkg = "gdtest_config_ug_string"
     if not _has_rendered_site(pkg):
@@ -2552,8 +2720,9 @@ def test_R4_config_ug_string_pages_rendered():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_empty_module_no_reference_dir():
+def test_empty_module_no_reference_dir():
     """A package with zero exports should build without a reference directory."""
     pkg = "gdtest_empty_module"
     if not _has_rendered_site(pkg):
@@ -2578,8 +2747,9 @@ def test_R4_empty_module_no_reference_dir():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_ug_auto_pages_exist_with_content():
+def test_ug_auto_pages_exist_with_content():
     """Auto-discovered user guide should render all .qmd files with correct titles."""
     pkg = "gdtest_ug_auto"
     if not _has_rendered_site(pkg):
@@ -2613,8 +2783,9 @@ def test_R4_ug_auto_pages_exist_with_content():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_ug_combo_subdirs_and_sections():
+def test_ug_combo_subdirs_and_sections():
     """Complex user guide should render pages in subdirectories with sidebar sections."""
     pkg = "gdtest_ug_combo"
     if not _has_rendered_site(pkg):
@@ -2647,8 +2818,9 @@ def test_R4_ug_combo_subdirs_and_sections():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_ug_custom_dir_pages_from_docs():
+def test_ug_custom_dir_pages_from_docs():
     """User guide sourced from 'docs/' should render pages under user-guide/."""
     pkg = "gdtest_ug_custom_dir"
     if not _has_rendered_site(pkg):
@@ -2675,8 +2847,9 @@ def test_R4_ug_custom_dir_pages_from_docs():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_ug_deep_nest_multi_level_structure():
+def test_ug_deep_nest_multi_level_structure():
     """Deeply nested user guide should render pages at multiple directory levels."""
     pkg = "gdtest_ug_deep_nest"
     if not _has_rendered_site(pkg):
@@ -2711,7 +2884,8 @@ def test_R4_ug_deep_nest_multi_level_structure():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def test_R4_ug_explicit_order_config_sections():
+@pytest.mark.dedicated
+def test_ug_explicit_order_config_sections():
     """Explicit user guide ordering should produce titled sections in great-docs.yml."""
     from yaml12 import parse_yaml, read_yaml
 
@@ -2737,8 +2911,9 @@ def test_R4_ug_explicit_order_config_sections():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_ug_hyphen_dir_pages_rendered():
+def test_ug_hyphen_dir_pages_rendered():
     """User guide from user-guide/ (hyphenated) should render pages correctly."""
     pkg = "gdtest_ug_hyphen_dir"
     if not _has_rendered_site(pkg):
@@ -2765,8 +2940,9 @@ def test_R4_ug_hyphen_dir_pages_rendered():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_ug_many_pages_all_twelve_rendered():
+def test_ug_many_pages_all_twelve_rendered():
     """User guide with 12 numbered pages should render all of them."""
     pkg = "gdtest_ug_many_pages"
     if not _has_rendered_site(pkg):
@@ -2805,8 +2981,9 @@ def test_R4_ug_many_pages_all_twelve_rendered():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_ug_mixed_ext_both_formats_render():
+def test_ug_mixed_ext_both_formats_render():
     """User guide with mixed .qmd and .md files should render all pages."""
     pkg = "gdtest_ug_mixed_ext"
     if not _has_rendered_site(pkg):
@@ -2838,8 +3015,9 @@ def test_R4_ug_mixed_ext_both_formats_render():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_ug_no_frontmatter_pages_render():
+def test_ug_no_frontmatter_pages_render():
     """User guide pages without YAML frontmatter should still render."""
     pkg = "gdtest_ug_no_frontmatter"
     if not _has_rendered_site(pkg):
@@ -2863,8 +3041,9 @@ def test_R4_ug_no_frontmatter_pages_render():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_ug_numbered_pages_in_order():
+def test_ug_numbered_pages_in_order():
     """Numbered user guide pages should render and appear in sidebar order."""
     pkg = "gdtest_ug_numbered"
     if not _has_rendered_site(pkg):
@@ -2892,8 +3071,9 @@ def test_R4_ug_numbered_pages_in_order():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_ug_sections_fm_sidebar_grouping():
+def test_ug_sections_fm_sidebar_grouping():
     """guide-section frontmatter should group pages into sidebar sections."""
     pkg = "gdtest_ug_sections_fm"
     if not _has_rendered_site(pkg):
@@ -2920,8 +3100,9 @@ def test_R4_ug_sections_fm_sidebar_grouping():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_ug_single_page_renders():
+def test_ug_single_page_renders():
     """Single-page user guide should still render with sidebar."""
     pkg = "gdtest_ug_single_page"
     if not _has_rendered_site(pkg):
@@ -2949,8 +3130,9 @@ def test_R4_ug_single_page_renders():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_ug_subdirs_pages_and_sections():
+def test_ug_subdirs_pages_and_sections():
     """Subdirectory-organized user guide should render pages with sidebar sections."""
     pkg = "gdtest_ug_subdirs"
     if not _has_rendered_site(pkg):
@@ -2983,8 +3165,9 @@ def test_R4_ug_subdirs_pages_and_sections():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_ug_with_images_renders_img_tags():
+def test_ug_with_images_renders_img_tags():
     """User guide referencing assets should render with <img> tags."""
     pkg = "gdtest_ug_with_images"
     if not _has_rendered_site(pkg):
@@ -3010,8 +3193,9 @@ def test_R4_ug_with_images_renders_img_tags():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_hero_basic_has_hero_div():
+def test_hero_basic_has_hero_div():
     """Landing page should contain the hero section div when logo is configured."""
     pkg = "gdtest_hero_basic"
     if not _has_rendered_site(pkg):
@@ -3039,8 +3223,9 @@ def test_R4_hero_basic_has_hero_div():
     assert len(badge_imgs) >= 2, f"Expected ≥2 badge images, got {len(badge_imgs)}"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_hero_basic_badges_stripped_from_body():
+def test_hero_basic_badges_stripped_from_body():
     """Badges extracted into the hero should not appear in the landing page body."""
     pkg = "gdtest_hero_basic"
     if not _has_rendered_site(pkg):
@@ -3073,8 +3258,9 @@ def test_R4_hero_basic_badges_stripped_from_body():
     assert "Features" in body_text, "Body content should still contain 'Features'"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_hero_readme_badges_centered_div_stripped():
+def test_hero_readme_badges_centered_div_stripped():
     """A README with <div align=center> badges should have the div stripped and badges in hero."""
     pkg = "gdtest_hero_readme_badges"
     if not _has_rendered_site(pkg):
@@ -3120,8 +3306,9 @@ def test_R4_hero_readme_badges_centered_div_stripped():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_hero_disabled_no_hero_div():
+def test_hero_disabled_no_hero_div():
     """Setting hero: false should prevent the hero section from appearing."""
     pkg = "gdtest_hero_disabled"
     if not _has_rendered_site(pkg):
@@ -3136,8 +3323,9 @@ def test_R4_hero_disabled_no_hero_div():
     assert nav_logo is not None, "Navbar logo should still be present"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_hero_custom_overrides():
+def test_hero_custom_overrides():
     """Hero sub-options should override defaults (name, tagline, height, badges)."""
     pkg = "gdtest_hero_custom"
     if not _has_rendered_site(pkg):
@@ -3167,8 +3355,9 @@ def test_R4_hero_custom_overrides():
     assert badges is None, "badges: false should suppress badges"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_hero_wordmark_separate_logos():
+def test_hero_wordmark_separate_logos():
     """Hero should use wordmark logo while navbar uses lettermark."""
     pkg = "gdtest_hero_wordmark"
     if not _has_rendered_site(pkg):
@@ -3198,8 +3387,9 @@ def test_R4_hero_wordmark_separate_logos():
     assert "lettermark" in nav_logo.get("src", ""), "Navbar should use lettermark"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_hero_no_logo_text_only():
+def test_hero_no_logo_text_only():
     """hero.logo: false should suppress the logo but keep name/tagline/badges."""
     pkg = "gdtest_hero_no_logo"
     if not _has_rendered_site(pkg):
@@ -3225,8 +3415,9 @@ def test_R4_hero_no_logo_text_only():
     assert badges is not None, "Badges should still be shown"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_hero_explicit_badges_list():
+def test_hero_explicit_badges_list():
     """Explicit badge list should appear in hero instead of auto-extracted ones."""
     pkg = "gdtest_hero_explicit_badges"
     if not _has_rendered_site(pkg):
@@ -3251,8 +3442,9 @@ def test_R4_hero_explicit_badges_list():
     assert "README Badge" not in alts, "README badges should not be auto-extracted"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_hero_index_qmd_source():
+def test_hero_index_qmd_source():
     """Hero should work when landing page source is index.qmd (not README)."""
     pkg = "gdtest_hero_index_qmd"
     if not _has_rendered_site(pkg):
@@ -3279,8 +3471,9 @@ def test_R4_hero_index_qmd_source():
     assert "Overview" in body_text, "index.qmd body content should be preserved"
 
 
+@pytest.mark.dedicated
 @requires_bs4
-def test_R4_hero_auto_logo_detection():
+def test_hero_auto_logo_detection():
     """Auto-detected logo-hero.svg / logo-hero-dark.svg in assets/ should
     be used without explicit hero.logo config."""
     pkg = "gdtest_hero_auto_logo"
@@ -3319,6 +3512,7 @@ def test_R4_hero_auto_logo_detection():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 def test_md_files_exist_for_html_pages():
     """Every non-homepage HTML page should have a corresponding .md file."""
     pkg = "gdtest_long_names"
@@ -3345,6 +3539,7 @@ def test_md_files_exist_for_html_pages():
     assert not missing, f"Missing .md files for: {missing}"
 
 
+@pytest.mark.dedicated
 def test_md_homepage_excluded():
     """The homepage (index.html) should NOT have a corresponding .md file."""
     pkg = "gdtest_long_names"
@@ -3355,6 +3550,7 @@ def test_md_homepage_excluded():
     assert not (site / "index.md").exists(), "index.md should not exist (homepage excluded)"
 
 
+@pytest.mark.dedicated
 def test_md_no_html_link_artifacts():
     """Generated .md files should not contain relative .html links."""
     pkg = "gdtest_long_names"
@@ -3377,6 +3573,7 @@ def test_md_no_html_link_artifacts():
     assert not bad_links, f".md files with .html links: {bad_links}"
 
 
+@pytest.mark.dedicated
 def test_md_no_redundant_parent_dir_links():
     """Links within .md files should not redundantly traverse ../same-dir/."""
     pkg = "gdtest_long_names"
@@ -3404,6 +3601,7 @@ def test_md_no_redundant_parent_dir_links():
     assert not bad_paths, f".md files with redundant ../same-dir/ links: {bad_paths}"
 
 
+@pytest.mark.dedicated
 def test_md_no_parameter_annotation_spans():
     """Generated .md files should not contain raw <span class='parameter-...'> HTML."""
     pkg = "gdtest_long_names"
@@ -3424,6 +3622,7 @@ def test_md_no_parameter_annotation_spans():
     assert not bad_files, f".md files with parameter-* spans: {bad_files}"
 
 
+@pytest.mark.dedicated
 def test_md_reference_pages_have_heading():
     """Reference .md pages should start with a markdown heading."""
     pkg = "gdtest_long_names"
@@ -3443,6 +3642,7 @@ def test_md_reference_pages_have_heading():
     assert not missing_heading, f"Reference .md files without heading: {missing_heading}"
 
 
+@pytest.mark.dedicated
 def test_md_code_blocks_have_language():
     """Python code blocks in .md should have ``` python, not bare ```."""
     pkg = "gdtest_long_names"
@@ -3470,6 +3670,7 @@ def test_md_code_blocks_have_language():
     )
 
 
+@pytest.mark.dedicated
 def test_md_long_names_produce_valid_filenames():
     """Long object names should produce valid .md filenames that match the .html names."""
     pkg = "gdtest_long_names"
@@ -3493,6 +3694,7 @@ def test_md_long_names_produce_valid_filenames():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_copy_page_script_present_on_reference_pages():
     """Reference pages (non-homepage) should include the copy-page.js script."""
@@ -3511,6 +3713,7 @@ def test_copy_page_script_present_on_reference_pages():
     assert "copy-page.js" in content, f"{page.name} should include copy-page.js script"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_copy_page_script_absent_from_homepage():
     """The homepage (index.html) should NOT include the copy-page.js script."""
@@ -3527,6 +3730,7 @@ def test_copy_page_script_absent_from_homepage():
     assert "copy-page.js" not in content, "Homepage should not include copy-page.js script"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_copy_page_widget_does_not_overlap_long_titles():
     """On pages with long object names, the widget should not cause layout issues.
@@ -3569,6 +3773,7 @@ def test_copy_page_widget_does_not_overlap_long_titles():
         )
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_copy_page_md_url_derivable_from_html():
     """The .md URL should be derivable by replacing .html with .md in the path.
@@ -3596,6 +3801,7 @@ def test_copy_page_md_url_derivable_from_html():
 # coverage scorer credits the package with a DED (dedicated) test.
 
 
+@pytest.mark.dedicated
 def test_md_big_class_method_pages():
     """gdtest_big_class: method .md pages have correct structure.
 
@@ -3644,6 +3850,7 @@ def test_md_big_class_method_pages():
         assert '<div class="doc-section' not in content, f"{md_file.name}: leftover <div> HTML"
 
 
+@pytest.mark.dedicated
 def test_md_ref_sectioned_index_has_sections():
     """gdtest_ref_sectioned: reference index.md preserves section headings.
 
@@ -3687,6 +3894,7 @@ def test_md_ref_sectioned_index_has_sections():
         assert func_md.exists(), f"{func}.md missing"
 
 
+@pytest.mark.dedicated
 def test_md_ug_with_code_executable_blocks():
     """gdtest_ug_with_code: executable code blocks get correct language hints.
 
@@ -3719,6 +3927,7 @@ def test_md_ug_with_code_executable_blocks():
     assert "transform" in content
 
 
+@pytest.mark.dedicated
 def test_md_namespace_ug_nested_dirs():
     """gdtest_namespace_ug: .md files are generated in nested user-guide dirs.
 
@@ -3761,6 +3970,7 @@ def test_md_namespace_ug_nested_dirs():
     assert len(content_mds) == 10, f"Expected 10 content .md files, found {len(content_mds)}"
 
 
+@pytest.mark.dedicated
 def test_md_cli_name_subcommand_pages():
     """gdtest_cli_name: CLI subcommand .md pages exist under reference/cli/.
 
@@ -3798,6 +4008,7 @@ def test_md_cli_name_subcommand_pages():
     assert (ref / "summarize.md").exists(), "reference/summarize.md missing"
 
 
+@pytest.mark.dedicated
 def test_md_rst_mixed_dirs_clean_output():
     """gdtest_rst_mixed_dirs: RST-sourced docs produce clean .md without HTML.
 
@@ -3844,6 +4055,7 @@ def test_md_rst_mixed_dirs_clean_output():
 # -- gdtest_md_disabled dedicated tests ----------------------------------------
 
 
+@pytest.mark.dedicated
 def test_md_disabled_no_md_files():
     """gdtest_md_disabled: No content .md files when markdown_pages is false.
 
@@ -3861,6 +4073,7 @@ def test_md_disabled_no_md_files():
     assert content_mds == [], f"Expected no content .md files but found: {content_mds}"
 
 
+@pytest.mark.dedicated
 def test_md_disabled_no_copy_page_script():
     """gdtest_md_disabled: No copy-page.js script tag in HTML pages."""
     pkg = "gdtest_md_disabled"
@@ -3875,6 +4088,7 @@ def test_md_disabled_no_copy_page_script():
         )
 
 
+@pytest.mark.dedicated
 def test_md_disabled_config_written():
     """gdtest_md_disabled: great-docs.yml has markdown_pages: false."""
     pkg = "gdtest_md_disabled"
@@ -3888,6 +4102,7 @@ def test_md_disabled_config_written():
     assert cfg["markdown_pages"] is False
 
 
+@pytest.mark.dedicated
 def test_md_disabled_gd_options():
     """gdtest_md_disabled: _gd_options.json has markdown_pages: false."""
     pkg = "gdtest_md_disabled"
@@ -3901,6 +4116,7 @@ def test_md_disabled_gd_options():
     assert opts["markdown_pages"] is False
 
 
+@pytest.mark.dedicated
 def test_md_disabled_html_pages_still_exist():
     """gdtest_md_disabled: HTML reference pages are still generated."""
     pkg = "gdtest_md_disabled"
@@ -3916,6 +4132,7 @@ def test_md_disabled_html_pages_still_exist():
 # -- gdtest_md_no_widget dedicated tests ---------------------------------------
 
 
+@pytest.mark.dedicated
 def test_md_no_widget_md_files_exist():
     """gdtest_md_no_widget: .md files generated even with widget disabled."""
     pkg = "gdtest_md_no_widget"
@@ -3928,6 +4145,7 @@ def test_md_no_widget_md_files_exist():
     assert (ref / "decode.md").exists(), "reference/decode.md missing"
 
 
+@pytest.mark.dedicated
 def test_md_no_widget_md_content_quality():
     """gdtest_md_no_widget: .md files have proper Markdown content."""
     pkg = "gdtest_md_no_widget"
@@ -3947,6 +4165,7 @@ def test_md_no_widget_md_content_quality():
     assert "`str`" in content or "`bytes`" in content
 
 
+@pytest.mark.dedicated
 def test_md_no_widget_no_copy_page_script():
     """gdtest_md_no_widget: No copy-page.js script tag in HTML pages."""
     pkg = "gdtest_md_no_widget"
@@ -3961,6 +4180,7 @@ def test_md_no_widget_no_copy_page_script():
         )
 
 
+@pytest.mark.dedicated
 def test_md_no_widget_config_written():
     """gdtest_md_no_widget: great-docs.yml has markdown_pages dict form."""
     pkg = "gdtest_md_no_widget"
@@ -3975,6 +4195,7 @@ def test_md_no_widget_config_written():
     assert cfg["markdown_pages"]["widget"] is False
 
 
+@pytest.mark.dedicated
 def test_md_no_widget_gd_options():
     """gdtest_md_no_widget: _gd_options.json has markdown_pages: true.
 
@@ -3997,7 +4218,8 @@ def test_md_no_widget_gd_options():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def test_R4_announce_simple_meta_tag():
+@pytest.mark.dedicated
+def test_announce_simple_meta_tag():
     """gdtest_announce_simple: meta tag with announcement content is present."""
     pkg = "gdtest_announce_simple"
     if not _has_rendered_site(pkg):
@@ -4009,7 +4231,8 @@ def test_R4_announce_simple_meta_tag():
     assert 'data-content="This is a test announcement!"' in content
 
 
-def test_R4_announce_simple_script_included():
+@pytest.mark.dedicated
+def test_announce_simple_script_included():
     """gdtest_announce_simple: announcement-banner.js is loaded."""
     pkg = "gdtest_announce_simple"
     if not _has_rendered_site(pkg):
@@ -4020,7 +4243,8 @@ def test_R4_announce_simple_script_included():
     assert "announcement-banner.js" in content
 
 
-def test_R4_announce_simple_defaults():
+@pytest.mark.dedicated
+def test_announce_simple_defaults():
     """gdtest_announce_simple: string config gets default type=info, dismissable=true."""
     pkg = "gdtest_announce_simple"
     if not _has_rendered_site(pkg):
@@ -4032,7 +4256,8 @@ def test_R4_announce_simple_defaults():
     assert 'data-dismissable="true"' in content
 
 
-def test_R4_announce_simple_js_file_exists():
+@pytest.mark.dedicated
+def test_announce_simple_js_file_exists():
     """gdtest_announce_simple: announcement-banner.js is deployed to _site/."""
     pkg = "gdtest_announce_simple"
     if not _has_rendered_site(pkg):
@@ -4042,7 +4267,8 @@ def test_R4_announce_simple_js_file_exists():
     assert js_file.exists(), "announcement-banner.js not found in _site/"
 
 
-def test_R4_announce_simple_quarto_resources():
+@pytest.mark.dedicated
+def test_announce_simple_quarto_resources():
     """gdtest_announce_simple: _quarto.yml includes announcement-banner.js in resources."""
     pkg = "gdtest_announce_simple"
     if not _has_rendered_site(pkg):
@@ -4053,7 +4279,8 @@ def test_R4_announce_simple_quarto_resources():
     assert "announcement-banner.js" in resources
 
 
-def test_R4_announce_simple_on_all_pages():
+@pytest.mark.dedicated
+def test_announce_simple_on_all_pages():
     """gdtest_announce_simple: meta tag appears on reference pages too (site-wide)."""
     pkg = "gdtest_announce_simple"
     if not _has_rendered_site(pkg):
@@ -4070,7 +4297,8 @@ def test_R4_announce_simple_on_all_pages():
         )
 
 
-def test_R4_announce_dict_content():
+@pytest.mark.dedicated
+def test_announce_dict_content():
     """gdtest_announce_dict: dict config renders correct content and type."""
     pkg = "gdtest_announce_dict"
     if not _has_rendered_site(pkg):
@@ -4082,7 +4310,8 @@ def test_R4_announce_dict_content():
     assert 'data-type="success"' in content
 
 
-def test_R4_announce_dict_dismissable_false():
+@pytest.mark.dedicated
+def test_announce_dict_dismissable_false():
     """gdtest_announce_dict: dismissable=False is passed through."""
     pkg = "gdtest_announce_dict"
     if not _has_rendered_site(pkg):
@@ -4093,7 +4322,8 @@ def test_R4_announce_dict_dismissable_false():
     assert 'data-dismissable="false"' in content
 
 
-def test_R4_announce_dict_url():
+@pytest.mark.dedicated
+def test_announce_dict_url():
     """gdtest_announce_dict: url attribute is included in the meta tag."""
     pkg = "gdtest_announce_dict"
     if not _has_rendered_site(pkg):
@@ -4104,7 +4334,8 @@ def test_R4_announce_dict_url():
     assert 'data-url="https://example.com/changelog"' in content
 
 
-def test_R4_announce_disabled_no_meta():
+@pytest.mark.dedicated
+def test_announce_disabled_no_meta():
     """gdtest_announce_disabled: no announcement meta tag when disabled."""
     pkg = "gdtest_announce_disabled"
     if not _has_rendered_site(pkg):
@@ -4115,7 +4346,8 @@ def test_R4_announce_disabled_no_meta():
     assert 'name="gd-announcement"' not in content
 
 
-def test_R4_announce_disabled_no_script():
+@pytest.mark.dedicated
+def test_announce_disabled_no_script():
     """gdtest_announce_disabled: no announcement-banner.js when disabled."""
     pkg = "gdtest_announce_disabled"
     if not _has_rendered_site(pkg):
@@ -4126,7 +4358,8 @@ def test_R4_announce_disabled_no_script():
     assert "announcement-banner.js" not in content
 
 
-def test_R4_announce_disabled_no_js_file():
+@pytest.mark.dedicated
+def test_announce_disabled_no_js_file():
     """gdtest_announce_disabled: announcement-banner.js is not in _site/."""
     pkg = "gdtest_announce_disabled"
     if not _has_rendered_site(pkg):
@@ -4154,6 +4387,7 @@ _GRADIENT_PRESETS = [
 ]
 
 
+@pytest.mark.dedicated
 @pytest.mark.parametrize("pkg,preset", _GRADIENT_PRESETS, ids=[p for _, p in _GRADIENT_PRESETS])
 def test_R5_gradient_meta_tag_has_style(pkg, preset):
     """Each gradient preset site has data-style='<preset>' in the meta tag."""
@@ -4163,6 +4397,7 @@ def test_R5_gradient_meta_tag_has_style(pkg, preset):
     assert f'data-style="{preset}"' in content
 
 
+@pytest.mark.dedicated
 @pytest.mark.parametrize("pkg,preset", _GRADIENT_PRESETS, ids=[p for _, p in _GRADIENT_PRESETS])
 def test_R5_gradient_meta_tag_present(pkg, preset):
     """Each gradient preset site has the gd-announcement meta tag."""
@@ -4172,6 +4407,7 @@ def test_R5_gradient_meta_tag_present(pkg, preset):
     assert 'name="gd-announcement"' in content
 
 
+@pytest.mark.dedicated
 @pytest.mark.parametrize("pkg,preset", _GRADIENT_PRESETS, ids=[p for _, p in _GRADIENT_PRESETS])
 def test_R5_gradient_banner_js_present(pkg, preset):
     """Each gradient preset site deploys announcement-banner.js."""
@@ -4180,6 +4416,7 @@ def test_R5_gradient_banner_js_present(pkg, preset):
     assert (_site_dir(pkg) / "announcement-banner.js").exists()
 
 
+@pytest.mark.dedicated
 @pytest.mark.parametrize("pkg,preset", _GRADIENT_PRESETS, ids=[p for _, p in _GRADIENT_PRESETS])
 def test_R5_gradient_css_has_preset_class(pkg, preset):
     """The deployed CSS contains the .gd-gradient-<preset> class."""
@@ -4227,6 +4464,7 @@ def test_R5_gradient_on_all_pages(pkg, preset):
 # ── Navbar-only gradient tests ──────────────────────────────────────────────
 
 
+@pytest.mark.dedicated
 def test_R5_navbar_meta_tag():
     """gdtest_gradient_navbar: gd-navbar-style meta tag with preset=peach."""
     pkg = "gdtest_gradient_navbar"
@@ -4237,6 +4475,7 @@ def test_R5_navbar_meta_tag():
     assert 'data-preset="peach"' in content
 
 
+@pytest.mark.dedicated
 def test_R5_navbar_script_loaded():
     """gdtest_gradient_navbar: navbar-style.js is loaded."""
     pkg = "gdtest_gradient_navbar"
@@ -4246,6 +4485,7 @@ def test_R5_navbar_script_loaded():
     assert "navbar-style.js" in content
 
 
+@pytest.mark.dedicated
 def test_R5_navbar_js_file_exists():
     """gdtest_gradient_navbar: navbar-style.js is deployed to _site/."""
     pkg = "gdtest_gradient_navbar"
@@ -4254,6 +4494,7 @@ def test_R5_navbar_js_file_exists():
     assert (_site_dir(pkg) / "navbar-style.js").exists()
 
 
+@pytest.mark.dedicated
 def test_R5_navbar_banner_no_style():
     """gdtest_gradient_navbar: banner has no data-style (plain banner)."""
     pkg = "gdtest_gradient_navbar"
@@ -4264,6 +4505,7 @@ def test_R5_navbar_banner_no_style():
     assert 'data-style=""' in content
 
 
+@pytest.mark.dedicated
 def test_R5_navbar_quarto_resources():
     """gdtest_gradient_navbar: _quarto.yml lists navbar-style.js in resources."""
     pkg = "gdtest_gradient_navbar"
@@ -4277,6 +4519,7 @@ def test_R5_navbar_quarto_resources():
 # ── Both gradient (same preset) tests ───────────────────────────────────────
 
 
+@pytest.mark.dedicated
 def test_R5_both_banner_style():
     """gdtest_gradient_both: banner has data-style=prism."""
     pkg = "gdtest_gradient_both"
@@ -4286,6 +4529,7 @@ def test_R5_both_banner_style():
     assert 'data-style="prism"' in content
 
 
+@pytest.mark.dedicated
 def test_R5_both_navbar_style():
     """gdtest_gradient_both: navbar meta tag has preset=prism."""
     pkg = "gdtest_gradient_both"
@@ -4295,6 +4539,7 @@ def test_R5_both_navbar_style():
     assert 'data-preset="prism"' in content
 
 
+@pytest.mark.dedicated
 def test_R5_both_js_files():
     """gdtest_gradient_both: both JS files are deployed."""
     pkg = "gdtest_gradient_both"
@@ -4307,6 +4552,7 @@ def test_R5_both_js_files():
 # ── Mixed presets (different banner vs navbar) ───────────────────────────────
 
 
+@pytest.mark.dedicated
 def test_R5_mixed_banner_lilac():
     """gdtest_gradient_mixed: banner has data-style=lilac."""
     pkg = "gdtest_gradient_mixed"
@@ -4316,6 +4562,7 @@ def test_R5_mixed_banner_lilac():
     assert 'data-style="lilac"' in content
 
 
+@pytest.mark.dedicated
 def test_R5_mixed_navbar_dusk():
     """gdtest_gradient_mixed: navbar meta tag has preset=dusk."""
     pkg = "gdtest_gradient_mixed"
@@ -4325,6 +4572,7 @@ def test_R5_mixed_navbar_dusk():
     assert 'data-preset="dusk"' in content
 
 
+@pytest.mark.dedicated
 def test_R5_mixed_both_js_deployed():
     """gdtest_gradient_mixed: both announcement-banner.js and navbar-style.js exist."""
     pkg = "gdtest_gradient_mixed"
@@ -4337,6 +4585,7 @@ def test_R5_mixed_both_js_deployed():
 # ── Gradient with dismissable: false ─────────────────────────────────────────
 
 
+@pytest.mark.dedicated
 def test_R5_no_dismiss_style():
     """gdtest_gradient_no_dismiss: banner has data-style=honey."""
     pkg = "gdtest_gradient_no_dismiss"
@@ -4346,6 +4595,7 @@ def test_R5_no_dismiss_style():
     assert 'data-style="honey"' in content
 
 
+@pytest.mark.dedicated
 def test_R5_no_dismiss_dismissable_false():
     """gdtest_gradient_no_dismiss: data-dismissable is false."""
     pkg = "gdtest_gradient_no_dismiss"
@@ -4355,6 +4605,7 @@ def test_R5_no_dismiss_dismissable_false():
     assert 'data-dismissable="false"' in content
 
 
+@pytest.mark.dedicated
 def test_R5_no_dismiss_no_navbar_meta():
     """gdtest_gradient_no_dismiss: no navbar-style meta tag (banner only)."""
     pkg = "gdtest_gradient_no_dismiss"
@@ -4364,6 +4615,7 @@ def test_R5_no_dismiss_no_navbar_meta():
     assert 'name="gd-navbar-style"' not in content
 
 
+@pytest.mark.dedicated
 def test_R5_no_dismiss_no_navbar_js():
     """gdtest_gradient_no_dismiss: navbar-style.js is NOT deployed."""
     pkg = "gdtest_gradient_no_dismiss"
@@ -4377,7 +4629,8 @@ def test_R5_no_dismiss_no_navbar_js():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def test_R4_header_text_meta_tag_injected():
+@pytest.mark.dedicated
+def test_header_text_meta_tag_injected():
     """gdtest_header_text: inline string config injects a custom meta tag."""
     pkg = "gdtest_header_text"
     if not _has_rendered_site(pkg):
@@ -4388,7 +4641,8 @@ def test_R4_header_text_meta_tag_injected():
     assert 'content="header-text-injected"' in content
 
 
-def test_R4_header_text_quarto_yml():
+@pytest.mark.dedicated
+def test_header_text_quarto_yml():
     """gdtest_header_text: _quarto.yml contains the user entry in include-in-header."""
     pkg = "gdtest_header_text"
     if not _has_rendered_site(pkg):
@@ -4400,7 +4654,8 @@ def test_R4_header_text_quarto_yml():
     assert any("gd-custom-test" in t for t in texts), "User entry missing from include-in-header"
 
 
-def test_R4_header_text_coexists_with_font_awesome():
+@pytest.mark.dedicated
+def test_header_text_coexists_with_font_awesome():
     """gdtest_header_text: user entry coexists with auto-injected Font Awesome."""
     pkg = "gdtest_header_text"
     if not _has_rendered_site(pkg):
@@ -4411,7 +4666,8 @@ def test_R4_header_text_coexists_with_font_awesome():
     assert "font-awesome" in content, "Font Awesome CDN missing"
 
 
-def test_R4_header_list_both_items_injected():
+@pytest.mark.dedicated
+def test_header_list_both_items_injected():
     """gdtest_header_list: list config injects multiple meta tags."""
     pkg = "gdtest_header_list"
     if not _has_rendered_site(pkg):
@@ -4422,7 +4678,8 @@ def test_R4_header_list_both_items_injected():
     assert 'name="gd-list-item-two"' in content, "Second list entry not injected"
 
 
-def test_R4_header_list_quarto_yml():
+@pytest.mark.dedicated
+def test_header_list_quarto_yml():
     """gdtest_header_list: _quarto.yml contains both user entries."""
     pkg = "gdtest_header_list"
     if not _has_rendered_site(pkg):
@@ -4436,7 +4693,8 @@ def test_R4_header_list_quarto_yml():
     assert "gd-list-item-two" in combined, "Second entry missing from include-in-header"
 
 
-def test_R4_header_file_content_injected():
+@pytest.mark.dedicated
+def test_header_file_content_injected():
     """gdtest_header_file: file-referenced content appears in rendered HTML."""
     pkg = "gdtest_header_file"
     if not _has_rendered_site(pkg):
@@ -4447,7 +4705,8 @@ def test_R4_header_file_content_injected():
     assert 'content="from-external-file"' in content
 
 
-def test_R4_header_file_quarto_yml():
+@pytest.mark.dedicated
+def test_header_file_quarto_yml():
     """gdtest_header_file: _quarto.yml contains the file entry."""
     pkg = "gdtest_header_file"
     if not _has_rendered_site(pkg):
@@ -4464,6 +4723,7 @@ def test_R4_header_file_quarto_yml():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_navbar_color_css_injected():
     """gdtest_navbar_color: navbar color CSS custom properties are injected."""
@@ -4475,6 +4735,7 @@ def test_DED_navbar_color_css_injected():
     assert "--gd-navbar" in content, "Navbar color CSS variables not injected"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_navbar_color_dark_css_injected():
     """gdtest_navbar_color_dark: dark-only navbar color CSS is injected."""
@@ -4486,6 +4747,7 @@ def test_DED_navbar_color_dark_css_injected():
     assert "--gd-navbar" in content, "Dark navbar color CSS variables not injected"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_navbar_color_light_css_injected():
     """gdtest_navbar_color_light: light-only navbar color CSS is injected."""
@@ -4497,6 +4759,7 @@ def test_DED_navbar_color_light_css_injected():
     assert "--gd-navbar" in content, "Light navbar color CSS variables not injected"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_navbar_color_same_css_injected():
     """gdtest_navbar_color_same: single-string navbar color CSS is injected."""
@@ -4508,6 +4771,7 @@ def test_DED_navbar_color_same_css_injected():
     assert "--gd-navbar" in content, "Same-mode navbar color CSS not injected"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_navbar_color_split_css_injected():
     """gdtest_navbar_color_split: warm/cool split navbar CSS is injected."""
@@ -4524,6 +4788,7 @@ def test_DED_navbar_color_split_css_injected():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 def test_DED_config_combo_c_ref_sections():
     """gdtest_config_combo_c: reference index shows section titles."""
     pkg = "gdtest_config_combo_c"
@@ -4537,6 +4802,7 @@ def test_DED_config_combo_c_ref_sections():
     assert "Operations" in content, "Section 'Operations' missing from ref index"
 
 
+@pytest.mark.dedicated
 def test_DED_config_combo_c_ref_pages():
     """gdtest_config_combo_c: explicit reference pages exist."""
     pkg = "gdtest_config_combo_c"
@@ -4548,6 +4814,7 @@ def test_DED_config_combo_c_ref_pages():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 def test_DED_config_combo_c_section_dirs():
     """gdtest_config_combo_c: examples and tutorials section dirs exist."""
     pkg = "gdtest_config_combo_c"
@@ -4559,6 +4826,7 @@ def test_DED_config_combo_c_section_dirs():
     assert (site / "tutorials" / "step1.html").exists(), "tutorials/step1.html missing"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_config_combo_d_display_name():
     """gdtest_config_combo_d: display_name override appears in index."""
@@ -4570,6 +4838,7 @@ def test_DED_config_combo_d_display_name():
     assert "Combo D Toolkit" in content, "Display name 'Combo D Toolkit' missing"
 
 
+@pytest.mark.dedicated
 def test_DED_config_combo_d_user_guide():
     """gdtest_config_combo_d: user guide pages exist."""
     pkg = "gdtest_config_combo_d"
@@ -4580,6 +4849,7 @@ def test_DED_config_combo_d_user_guide():
     assert ug.exists(), "User guide directory missing"
 
 
+@pytest.mark.dedicated
 def test_DED_config_combo_e_ref_pages():
     """gdtest_config_combo_e: reference pages exist for sphinx-parsed exports."""
     pkg = "gdtest_config_combo_e"
@@ -4591,6 +4861,7 @@ def test_DED_config_combo_e_ref_pages():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 def test_DED_config_combo_f_ref_pages():
     """gdtest_config_combo_f: reference pages exist with dynamic=false and exclude."""
     pkg = "gdtest_config_combo_f"
@@ -4607,6 +4878,7 @@ def test_DED_config_combo_f_ref_pages():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_config_display_name_and_authors():
     """gdtest_config_display: display_name and authors appear in index."""
@@ -4620,6 +4892,7 @@ def test_DED_config_display_name_and_authors():
     assert "Open Source Foundation" in content, "Funding org missing"
 
 
+@pytest.mark.dedicated
 def test_DED_config_exclude_hides_items():
     """gdtest_config_exclude: excluded items don't have ref pages."""
     pkg = "gdtest_config_exclude"
@@ -4633,6 +4906,7 @@ def test_DED_config_exclude_hides_items():
     assert not (ref / "InternalClass.html").exists(), "Excluded InternalClass should not have page"
 
 
+@pytest.mark.dedicated
 def test_DED_config_extra_keys_builds():
     """gdtest_config_extra_keys: site builds despite unrecognized config keys."""
     pkg = "gdtest_config_extra_keys"
@@ -4644,6 +4918,7 @@ def test_DED_config_extra_keys_builds():
     assert (ref / "identity.html").exists(), "identity page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_config_minimal_source_disabled():
     """gdtest_config_minimal: source disabled means no _source_links.json."""
     pkg = "gdtest_config_minimal"
@@ -4654,6 +4929,7 @@ def test_DED_config_minimal_source_disabled():
     assert not source_links.exists(), "_source_links.json should not exist when source disabled"
 
 
+@pytest.mark.dedicated
 def test_DED_config_parser_google():
     """gdtest_config_parser: ref pages exist with google parser override."""
     pkg = "gdtest_config_parser"
@@ -4665,6 +4941,7 @@ def test_DED_config_parser_google():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 def test_DED_config_reference_sections():
     """gdtest_config_reference: reference index has named sections."""
     pkg = "gdtest_config_reference"
@@ -4677,6 +4954,7 @@ def test_DED_config_reference_sections():
     assert "Utilities" in content, "Section 'Utilities' missing"
 
 
+@pytest.mark.dedicated
 def test_DED_config_reference_pages():
     """gdtest_config_reference: explicit reference pages exist."""
     pkg = "gdtest_config_reference"
@@ -4688,6 +4966,7 @@ def test_DED_config_reference_pages():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 def test_DED_config_sections_examples_dir():
     """gdtest_config_sections: examples section directory exists."""
     pkg = "gdtest_config_sections"
@@ -4703,6 +4982,7 @@ def test_DED_config_sections_examples_dir():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 def test_DED_source_branch_no_links():
     """gdtest_source_branch: _source_links.json not present (no repo URL)."""
     pkg = "gdtest_source_branch"
@@ -4716,6 +4996,7 @@ def test_DED_source_branch_no_links():
     assert (ref / "write_data.html").exists(), "write_data page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_source_path_ref_pages():
     """gdtest_source_path: reference pages exist with custom source path."""
     pkg = "gdtest_source_path"
@@ -4727,6 +5008,7 @@ def test_DED_source_path_ref_pages():
     assert (ref / "format_output.html").exists(), "format_output page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_source_title_ref_pages():
     """gdtest_source_title: reference pages exist with title placement."""
     pkg = "gdtest_source_title"
@@ -4743,6 +5025,7 @@ def test_DED_source_title_ref_pages():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 def test_DED_dynamic_false_ref_pages():
     """gdtest_dynamic_false: site builds with dynamic=false."""
     pkg = "gdtest_dynamic_false"
@@ -4754,6 +5037,7 @@ def test_DED_dynamic_false_ref_pages():
     assert (ref / "farewell.html").exists(), "farewell page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_sidebar_disabled_builds():
     """gdtest_sidebar_disabled: site builds with sidebar_filter.enabled=false."""
     pkg = "gdtest_sidebar_disabled"
@@ -4764,6 +5048,7 @@ def test_DED_sidebar_disabled_builds():
     assert _ref_dir(pkg).exists(), "Reference dir missing"
 
 
+@pytest.mark.dedicated
 def test_DED_sidebar_min_items_builds():
     """gdtest_sidebar_min_items: site builds with sidebar_filter.min_items=3."""
     pkg = "gdtest_sidebar_min_items"
@@ -4775,6 +5060,7 @@ def test_DED_sidebar_min_items_builds():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 def test_DED_jupyter_kernel_ref_pages():
     """gdtest_jupyter_kernel: site builds with jupyter kernel config."""
     pkg = "gdtest_jupyter_kernel"
@@ -4786,6 +5072,7 @@ def test_DED_jupyter_kernel_ref_pages():
     assert (ref / "evaluate.html").exists(), "evaluate page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_site_combo_config():
     """gdtest_site_combo: _quarto.yml reflects custom site config."""
     pkg = "gdtest_site_combo"
@@ -4805,6 +5092,7 @@ def test_DED_site_combo_config():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 def test_DED_github_icon_ref_pages():
     """gdtest_github_icon: site builds with github_style=icon."""
     pkg = "gdtest_github_icon"
@@ -4816,6 +5104,7 @@ def test_DED_github_icon_ref_pages():
     assert (ref / "store.html").exists(), "store page missing"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_funding_in_index():
     """gdtest_funding: funding organization appears in index."""
@@ -4827,6 +5116,7 @@ def test_DED_funding_in_index():
     assert "Science Foundation" in content, "Funding org 'Science Foundation' missing"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_authors_multi_all_names():
     """gdtest_authors_multi: all three author names appear in rendered site."""
@@ -4840,6 +5130,7 @@ def test_DED_authors_multi_all_names():
     assert "Carol Lee" in content, "Author 'Carol Lee' missing"
 
 
+@pytest.mark.dedicated
 def test_DED_github_contrib_page():
     """gdtest_github_contrib: contributing page exists from .github/ dir."""
     pkg = "gdtest_github_contrib"
@@ -4854,6 +5145,7 @@ def test_DED_github_contrib_page():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 def test_DED_exclude_list_hides_items():
     """gdtest_exclude_list: excluded symbols don't have ref pages."""
     pkg = "gdtest_exclude_list"
@@ -4869,6 +5161,7 @@ def test_DED_exclude_list_hides_items():
     )
 
 
+@pytest.mark.dedicated
 def test_DED_exclude_cli_ref_and_cli():
     """gdtest_exclude_cli: CLI docs exist and excluded items are absent."""
     pkg = "gdtest_exclude_cli"
@@ -4889,6 +5182,7 @@ def test_DED_exclude_cli_ref_and_cli():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 def test_DED_parser_google_ref_pages():
     """gdtest_parser_google: reference pages exist with google parser."""
     pkg = "gdtest_parser_google"
@@ -4900,6 +5194,7 @@ def test_DED_parser_google_ref_pages():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 def test_DED_parser_sphinx_ref_pages():
     """gdtest_parser_sphinx: reference pages exist with sphinx parser."""
     pkg = "gdtest_parser_sphinx"
@@ -4916,6 +5211,7 @@ def test_DED_parser_sphinx_ref_pages():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 def test_DED_sec_blog_dir_exists():
     """gdtest_sec_blog: blog section directory exists."""
     pkg = "gdtest_sec_blog"
@@ -4925,6 +5221,7 @@ def test_DED_sec_blog_dir_exists():
     assert (_site_dir(pkg) / "blog").exists(), "Blog section dir missing"
 
 
+@pytest.mark.dedicated
 def test_DED_sec_deep_tutorials_dir():
     """gdtest_sec_deep: tutorials section with nested subdirs exists."""
     pkg = "gdtest_sec_deep"
@@ -4934,6 +5231,7 @@ def test_DED_sec_deep_tutorials_dir():
     assert (_site_dir(pkg) / "tutorials").exists(), "Tutorials section dir missing"
 
 
+@pytest.mark.dedicated
 def test_DED_sec_examples_dir():
     """gdtest_sec_examples: examples section directory exists."""
     pkg = "gdtest_sec_examples"
@@ -4943,6 +5241,7 @@ def test_DED_sec_examples_dir():
     assert (_site_dir(pkg) / "examples").exists(), "Examples section dir missing"
 
 
+@pytest.mark.dedicated
 def test_DED_sec_faq_dir():
     """gdtest_sec_faq: FAQ section directory exists."""
     pkg = "gdtest_sec_faq"
@@ -4952,6 +5251,7 @@ def test_DED_sec_faq_dir():
     assert (_site_dir(pkg) / "faq").exists(), "FAQ section dir missing"
 
 
+@pytest.mark.dedicated
 def test_DED_sec_index_opt_section_dirs():
     """gdtest_sec_index_opt: examples and tutorials section dirs exist."""
     pkg = "gdtest_sec_index_opt"
@@ -4963,6 +5263,7 @@ def test_DED_sec_index_opt_section_dirs():
     assert (site / "tutorials").exists(), "Tutorials section dir missing"
 
 
+@pytest.mark.dedicated
 def test_DED_sec_multi_three_sections():
     """gdtest_sec_multi: three custom sections exist."""
     pkg = "gdtest_sec_multi"
@@ -4975,6 +5276,7 @@ def test_DED_sec_multi_three_sections():
     assert (site / "recipes").exists(), "Recipes section missing"
 
 
+@pytest.mark.dedicated
 def test_DED_sec_navbar_after_cookbook():
     """gdtest_sec_navbar_after: cookbook section directory exists."""
     pkg = "gdtest_sec_navbar_after"
@@ -4984,6 +5286,7 @@ def test_DED_sec_navbar_after_cookbook():
     assert (_site_dir(pkg) / "cookbook").exists(), "Cookbook section dir missing"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_custom_passthrough_navbar_link():
     """gdtest_custom_passthrough_navbar: custom passthrough page appears in navbar HTML."""
@@ -5011,6 +5314,7 @@ def test_DED_custom_passthrough_navbar_link():
     assert shiny_link is not None, "Navbar should contain a link to the passthrough custom page"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_custom_raw_navbar_after_order_and_output():
     """gdtest_custom_raw_navbar_after: raw custom page is linked after User Guide and served raw."""
@@ -5040,6 +5344,7 @@ def test_DED_custom_raw_navbar_after_order_and_output():
     )
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_custom_mixed_modes_outputs_and_navbar():
     """gdtest_custom_mixed_modes: mixed custom pages deploy correctly and only opted-in pages appear in navbar."""
@@ -5083,6 +5388,7 @@ def test_DED_custom_mixed_modes_outputs_and_navbar():
     assert "!demos/widget.html" in render
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_custom_nested_combo_navbar_order_and_path():
     """gdtest_custom_nested_combo: nested custom page path and navbar order coexist with user guide and sections."""
@@ -5114,6 +5420,7 @@ def test_DED_custom_nested_combo_navbar_order_and_path():
     assert "quarto-header" in html, "Nested passthrough page should include the Great Docs shell"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_custom_basename_output_uses_nested_string_basename():
     """gdtest_custom_basename_output: nested string config uses the source basename as output."""
@@ -5152,6 +5459,7 @@ def test_DED_custom_basename_output_uses_nested_string_basename():
     assert link is not None, "Navbar should point to the basename-derived output path"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_custom_nested_output_prefix_deploys_under_nested_path():
     """gdtest_custom_nested_output: nested output prefixes are preserved in config and rendered files."""
@@ -5175,6 +5483,7 @@ def test_DED_custom_nested_output_prefix_deploys_under_nested_path():
     assert asset.exists(), "Assets should be copied under the nested output prefix"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_custom_missing_dir_combo_skips_absent_source():
     """gdtest_custom_missing_dir_combo: missing source dirs are skipped without affecting valid outputs."""
@@ -5199,6 +5508,7 @@ def test_DED_custom_missing_dir_combo_skips_absent_source():
     assert "Only the existing custom dir should render." in html
 
 
+@pytest.mark.dedicated
 def test_DED_sec_recipes_dir():
     """gdtest_sec_recipes: recipes section directory exists."""
     pkg = "gdtest_sec_recipes"
@@ -5208,6 +5518,7 @@ def test_DED_sec_recipes_dir():
     assert (_site_dir(pkg) / "recipes").exists(), "Recipes section dir missing"
 
 
+@pytest.mark.dedicated
 def test_DED_sec_sidebar_single_sections():
     """gdtest_sec_sidebar_single: guides and faq sections exist."""
     pkg = "gdtest_sec_sidebar_single"
@@ -5219,6 +5530,7 @@ def test_DED_sec_sidebar_single_sections():
     assert (site / "faq").exists(), "FAQ section missing"
 
 
+@pytest.mark.dedicated
 def test_DED_sec_tutorials_dir():
     """gdtest_sec_tutorials: tutorials section directory exists."""
     pkg = "gdtest_sec_tutorials"
@@ -5228,6 +5540,7 @@ def test_DED_sec_tutorials_dir():
     assert (_site_dir(pkg) / "tutorials").exists(), "Tutorials section dir missing"
 
 
+@pytest.mark.dedicated
 def test_DED_sec_with_ref_tutorials_and_ref():
     """gdtest_sec_with_ref: tutorials section and explicit ref pages coexist."""
     pkg = "gdtest_sec_with_ref"
@@ -5241,6 +5554,7 @@ def test_DED_sec_with_ref_tutorials_and_ref():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 def test_DED_sec_with_ug_examples_and_guide():
     """gdtest_sec_with_ug: examples section and user guide coexist."""
     pkg = "gdtest_sec_with_ug"
@@ -5258,6 +5572,7 @@ def test_DED_sec_with_ug_examples_and_guide():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 def test_DED_ref_explicit_section_pages():
     """gdtest_ref_explicit: explicit reference sections with named pages."""
     pkg = "gdtest_ref_explicit"
@@ -5269,6 +5584,7 @@ def test_DED_ref_explicit_section_pages():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 def test_DED_ref_reorder_pages():
     """gdtest_ref_reorder: reordered reference pages exist."""
     pkg = "gdtest_ref_reorder"
@@ -5280,6 +5596,7 @@ def test_DED_ref_reorder_pages():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 def test_DED_ref_single_section_pages():
     """gdtest_ref_single_section: single section with all exports."""
     pkg = "gdtest_ref_single_section"
@@ -5291,6 +5608,7 @@ def test_DED_ref_single_section_pages():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 def test_DED_ref_big_class_pages():
     """gdtest_ref_big_class: big class with members=true has page."""
     pkg = "gdtest_ref_big_class"
@@ -5302,6 +5620,7 @@ def test_DED_ref_big_class_pages():
     assert (ref / "create_manager.html").exists(), "create_manager page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_ref_members_false_pages():
     """gdtest_ref_members_false: Engine page exists with members suppressed."""
     pkg = "gdtest_ref_members_false"
@@ -5313,6 +5632,7 @@ def test_DED_ref_members_false_pages():
     assert (ref / "start_engine.html").exists(), "start_engine page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_ref_mixed_pages():
     """gdtest_ref_mixed: mixed explicit and auto-discovered ref pages."""
     pkg = "gdtest_ref_mixed"
@@ -5324,6 +5644,7 @@ def test_DED_ref_mixed_pages():
     assert (ref / "disconnect.html").exists(), "disconnect page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_ref_multi_big_pages():
     """gdtest_ref_multi_big: multiple big classes have pages."""
     pkg = "gdtest_ref_multi_big"
@@ -5340,6 +5661,7 @@ def test_DED_ref_multi_big_pages():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 def test_DED_context_mgr_pages():
     """gdtest_context_mgr: context manager classes have ref pages."""
     pkg = "gdtest_context_mgr"
@@ -5351,6 +5673,7 @@ def test_DED_context_mgr_pages():
     assert (ref / "Timer.html").exists(), "Timer page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_descriptors_pages():
     """gdtest_descriptors: descriptor class has ref page."""
     pkg = "gdtest_descriptors"
@@ -5361,6 +5684,7 @@ def test_DED_descriptors_pages():
     assert (ref / "Resource.html").exists(), "Resource page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_nested_class_pages():
     """gdtest_nested_class: nested class has ref page."""
     pkg = "gdtest_nested_class"
@@ -5371,6 +5695,7 @@ def test_DED_nested_class_pages():
     assert (ref / "Tree.html").exists(), "Tree page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_slots_class_pages():
     """gdtest_slots_class: __slots__ class has ref page."""
     pkg = "gdtest_slots_class"
@@ -5381,6 +5706,7 @@ def test_DED_slots_class_pages():
     assert (ref / "SlottedPoint.html").exists(), "SlottedPoint page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_multi_inherit_pages():
     """gdtest_multi_inherit: diamond inheritance classes have ref pages."""
     pkg = "gdtest_multi_inherit"
@@ -5392,6 +5718,7 @@ def test_DED_multi_inherit_pages():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 def test_DED_typed_containers_pages():
     """gdtest_typed_containers: NamedTuple and TypedDict have ref pages."""
     pkg = "gdtest_typed_containers"
@@ -5403,6 +5730,7 @@ def test_DED_typed_containers_pages():
     assert (ref / "UserProfile.html").exists(), "UserProfile page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_small_class_pages():
     """gdtest_small_class: small classes (<=5 methods) have ref pages."""
     pkg = "gdtest_small_class"
@@ -5419,6 +5747,7 @@ def test_DED_small_class_pages():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 def test_DED_docstring_notes_pages():
     """gdtest_docstring_notes: functions with Notes sections have ref pages."""
     pkg = "gdtest_docstring_notes"
@@ -5430,6 +5759,7 @@ def test_DED_docstring_notes_pages():
     assert (ref / "merge_dicts.html").exists(), "merge_dicts page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_docstring_seealso_pages():
     """gdtest_docstring_seealso: functions with See Also have ref pages."""
     pkg = "gdtest_docstring_seealso"
@@ -5441,6 +5771,7 @@ def test_DED_docstring_seealso_pages():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 def test_DED_docstring_warnings_pages():
     """gdtest_docstring_warnings: functions with Warnings have ref pages."""
     pkg = "gdtest_docstring_warnings"
@@ -5452,6 +5783,7 @@ def test_DED_docstring_warnings_pages():
     assert (ref / "unsafe_eval.html").exists(), "unsafe_eval page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_docstring_references_pages():
     """gdtest_docstring_references: functions with References have ref pages."""
     pkg = "gdtest_docstring_references"
@@ -5463,6 +5795,7 @@ def test_DED_docstring_references_pages():
     assert (ref / "quicksort.html").exists(), "quicksort page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_docstring_combo_pages():
     """gdtest_docstring_combo: combo docstring functions have ref pages."""
     pkg = "gdtest_docstring_combo"
@@ -5479,6 +5812,7 @@ def test_DED_docstring_combo_pages():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 def test_DED_flit_ref_pages():
     """gdtest_flit: flit-built package has ref pages."""
     pkg = "gdtest_flit"
@@ -5490,6 +5824,7 @@ def test_DED_flit_ref_pages():
     assert (ref / "publish.html").exists(), "publish page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_flit_enums_ref_pages():
     """gdtest_flit_enums: flit with enums has ref pages."""
     pkg = "gdtest_flit_enums"
@@ -5502,6 +5837,7 @@ def test_DED_flit_enums_ref_pages():
     assert color_page is not None, "Color enum page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_pdm_ref_pages():
     """gdtest_pdm: PDM-built package has ref pages."""
     pkg = "gdtest_pdm"
@@ -5513,6 +5849,7 @@ def test_DED_pdm_ref_pages():
     assert (ref / "remove.html").exists(), "remove page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_pdm_big_class_pages():
     """gdtest_pdm_big_class: PDM with big class has ref pages."""
     pkg = "gdtest_pdm_big_class"
@@ -5525,6 +5862,7 @@ def test_DED_pdm_big_class_pages():
     assert pipeline_page is not None, "Pipeline page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_hatch_ref_pages():
     """gdtest_hatch: hatch-built package has ref pages."""
     pkg = "gdtest_hatch"
@@ -5536,6 +5874,7 @@ def test_DED_hatch_ref_pages():
     assert (ref / "build.html").exists(), "build page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_hatch_nodoc_ref_pages():
     """gdtest_hatch_nodoc: hatch-built with %nodoc has ref pages."""
     pkg = "gdtest_hatch_nodoc"
@@ -5548,6 +5887,7 @@ def test_DED_hatch_nodoc_ref_pages():
     assert config_page is not None, "Config page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_monorepo_ref_pages():
     """gdtest_monorepo: monorepo layout has ref pages."""
     pkg = "gdtest_monorepo"
@@ -5559,6 +5899,7 @@ def test_DED_monorepo_ref_pages():
     assert (ref / "deploy.html").exists(), "deploy page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_lib_layout_ref_pages():
     """gdtest_lib_layout: lib/ layout has ref pages."""
     pkg = "gdtest_lib_layout"
@@ -5570,6 +5911,7 @@ def test_DED_lib_layout_ref_pages():
     assert (ref / "close_connection.html").exists(), "close_connection page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_python_layout_ref_pages():
     """gdtest_python_layout: python/ layout has ref pages."""
     pkg = "gdtest_python_layout"
@@ -5581,6 +5923,7 @@ def test_DED_python_layout_ref_pages():
     assert (ref / "write_file.html").exists(), "write_file page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_setup_cfg_ref_pages():
     """gdtest_setup_cfg: setup.cfg-only package has ref pages."""
     pkg = "gdtest_setup_cfg"
@@ -5592,6 +5935,7 @@ def test_DED_setup_cfg_ref_pages():
     assert (ref / "pong.html").exists(), "pong page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_setup_cfg_src_ref_pages():
     """gdtest_setup_cfg_src: setup.cfg + src/ layout has ref pages."""
     pkg = "gdtest_setup_cfg_src"
@@ -5603,6 +5947,7 @@ def test_DED_setup_cfg_src_ref_pages():
     assert (ref / "format_text.html").exists(), "format_text page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_setup_py_ref_pages():
     """gdtest_setup_py: setup.py-only package has ref pages."""
     pkg = "gdtest_setup_py"
@@ -5614,6 +5959,7 @@ def test_DED_setup_py_ref_pages():
     assert (ref / "reverse.html").exists(), "reverse page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_setuptools_find_ref_pages():
     """gdtest_setuptools_find: setuptools find_packages has ref pages."""
     pkg = "gdtest_setuptools_find"
@@ -5624,6 +5970,7 @@ def test_DED_setuptools_find_ref_pages():
     assert (ref / "Scanner.html").exists(), "Scanner page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_src_layout_ref_pages():
     """gdtest_src_layout: src/ layout has ref pages."""
     pkg = "gdtest_src_layout"
@@ -5635,6 +5982,7 @@ def test_DED_src_layout_ref_pages():
     assert (ref / "create_widget.html").exists(), "create_widget page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_src_big_class_ref_pages():
     """gdtest_src_big_class: src/ layout with big class has ref pages."""
     pkg = "gdtest_src_big_class"
@@ -5646,6 +5994,7 @@ def test_DED_src_big_class_ref_pages():
     assert pipeline_page is not None, "Pipeline page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_src_explicit_ref_pages():
     """gdtest_src_explicit_ref: src/ with explicit ref config has pages."""
     pkg = "gdtest_src_explicit_ref"
@@ -5658,6 +6007,7 @@ def test_DED_src_explicit_ref_pages():
     assert (ref / "format_result.html").exists(), "format_result page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_src_google_seealso_ref_pages():
     """gdtest_src_google_seealso: src/ with google+seealso has ref pages."""
     pkg = "gdtest_src_google_seealso"
@@ -5670,6 +6020,7 @@ def test_DED_src_google_seealso_ref_pages():
     assert encode_page is not None, "encode page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_src_legacy_ref_pages():
     """gdtest_src_legacy: src/ + setup.py legacy layout has ref pages."""
     pkg = "gdtest_src_legacy"
@@ -5681,6 +6032,7 @@ def test_DED_src_legacy_ref_pages():
     assert (ref / "legacy_run.html").exists(), "legacy_run page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_src_no_all_ref_pages():
     """gdtest_src_no_all: src/ without __all__ has griffe-discovered ref pages."""
     pkg = "gdtest_src_no_all"
@@ -5698,6 +6050,7 @@ def test_DED_src_no_all_ref_pages():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 def test_DED_user_guide_auto_pages():
     """gdtest_user_guide_auto: auto-discovered user guide pages exist."""
     pkg = "gdtest_user_guide_auto"
@@ -5710,6 +6063,7 @@ def test_DED_user_guide_auto_pages():
     assert len(ug_files) >= 2, f"Expected >=2 UG pages, got {len(ug_files)}"
 
 
+@pytest.mark.dedicated
 def test_DED_user_guide_cli_pages():
     """gdtest_user_guide_cli: user guide + CLI docs coexist."""
     pkg = "gdtest_user_guide_cli"
@@ -5722,6 +6076,7 @@ def test_DED_user_guide_cli_pages():
     assert cli_dir.exists(), "CLI dir missing"
 
 
+@pytest.mark.dedicated
 def test_DED_user_guide_custom_dir_pages():
     """gdtest_user_guide_custom_dir: custom dir user guide pages exist."""
     pkg = "gdtest_user_guide_custom_dir"
@@ -5735,6 +6090,7 @@ def test_DED_user_guide_custom_dir_pages():
     assert "advanced.html" in ug_files, "advanced.html missing from user guide"
 
 
+@pytest.mark.dedicated
 def test_DED_user_guide_explicit_pages():
     """gdtest_user_guide_explicit: explicit user guide ordering produces pages."""
     pkg = "gdtest_user_guide_explicit"
@@ -5749,6 +6105,7 @@ def test_DED_user_guide_explicit_pages():
     assert "advanced.html" in ug_files, "advanced.html missing"
 
 
+@pytest.mark.dedicated
 def test_DED_user_guide_hyphen_dir():
     """gdtest_user_guide_hyphen: user-guide/ (hyphenated) dir fallback works."""
     pkg = "gdtest_user_guide_hyphen"
@@ -5760,6 +6117,7 @@ def test_DED_user_guide_hyphen_dir():
     assert (ug / "intro.html").exists(), "intro.html missing from user guide"
 
 
+@pytest.mark.dedicated
 def test_DED_user_guide_sections_pages():
     """gdtest_user_guide_sections: sectioned user guide pages exist."""
     pkg = "gdtest_user_guide_sections"
@@ -5772,6 +6130,7 @@ def test_DED_user_guide_sections_pages():
     assert len(ug_files) >= 3, f"Expected >=3 UG pages, got {len(ug_files)}"
 
 
+@pytest.mark.dedicated
 def test_DED_user_guide_subdirs_pages():
     """gdtest_user_guide_subdirs: user guide with subdirs produces pages."""
     pkg = "gdtest_user_guide_subdirs"
@@ -5784,6 +6143,7 @@ def test_DED_user_guide_subdirs_pages():
     assert len(ug_files) >= 3, f"Expected >=3 UG pages, got {len(ug_files)}"
 
 
+@pytest.mark.dedicated
 def test_DED_ug_subdir_numbered_pages():
     """gdtest_ug_subdir_numbered: numbered subdirectory user guide has pages."""
     pkg = "gdtest_ug_subdir_numbered"
@@ -5796,6 +6156,7 @@ def test_DED_ug_subdir_numbered_pages():
     assert len(ug_files) >= 3, f"Expected >=3 UG pages, got {len(ug_files)}"
 
 
+@pytest.mark.dedicated
 def test_DED_many_guides_ug_pages():
     """gdtest_many_guides: 10-page user guide produces all pages."""
     pkg = "gdtest_many_guides"
@@ -5808,6 +6169,7 @@ def test_DED_many_guides_ug_pages():
     assert len(ug_files) >= 8, f"Expected >=8 UG pages, got {len(ug_files)}"
 
 
+@pytest.mark.dedicated
 def test_DED_mixed_guide_ext_pages():
     """gdtest_mixed_guide_ext: mixed .qmd/.md user guide produces pages."""
     pkg = "gdtest_mixed_guide_ext"
@@ -5820,6 +6182,7 @@ def test_DED_mixed_guide_ext_pages():
     assert len(ug_files) >= 2, f"Expected >=2 UG pages, got {len(ug_files)}"
 
 
+@pytest.mark.dedicated
 def test_DED_extras_guide_ug_and_supporting():
     """gdtest_extras_guide: user guide + all supporting pages exist."""
     pkg = "gdtest_extras_guide"
@@ -5835,6 +6198,7 @@ def test_DED_extras_guide_ug_and_supporting():
     assert (site / "code-of-conduct.html").exists(), "code-of-conduct page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_full_extras_all_pages():
     """gdtest_full_extras: user guide + all 4 supporting pages exist."""
     pkg = "gdtest_full_extras"
@@ -5852,6 +6216,7 @@ def test_DED_full_extras_all_pages():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_homepage_ug_content():
     """gdtest_homepage_ug: user guide homepage has expected content."""
@@ -5864,6 +6229,7 @@ def test_DED_homepage_ug_content():
     assert "gd-meta-sidebar" in content, "gd-meta-sidebar marker missing"
 
 
+@pytest.mark.dedicated
 def test_DED_index_md_ref_pages():
     """gdtest_index_md: index.md package builds with ref pages."""
     pkg = "gdtest_index_md"
@@ -5873,6 +6239,7 @@ def test_DED_index_md_ref_pages():
     assert (ref := _ref_dir(pkg)) and (ref / "greet.html").exists(), "greet page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_index_qmd_ref_pages():
     """gdtest_index_qmd: index.qmd package builds with ref pages."""
     pkg = "gdtest_index_qmd"
@@ -5882,6 +6249,7 @@ def test_DED_index_qmd_ref_pages():
     assert (_ref_dir(pkg) / "hello.html").exists(), "hello page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_index_wins_ref_pages():
     """gdtest_index_wins: index.qmd wins over README.md with ref pages."""
     pkg = "gdtest_index_wins"
@@ -5891,6 +6259,7 @@ def test_DED_index_wins_ref_pages():
     assert (_ref_dir(pkg) / "winner.html").exists(), "winner page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_no_readme_builds():
     """gdtest_no_readme: package with no README still builds."""
     pkg = "gdtest_no_readme"
@@ -5901,6 +6270,7 @@ def test_DED_no_readme_builds():
     assert (_ref_dir(pkg) / "noop.html").exists(), "noop page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_readme_rst_builds():
     """gdtest_readme_rst: RST README converts and builds."""
     pkg = "gdtest_readme_rst"
@@ -5917,6 +6287,7 @@ def test_DED_readme_rst_builds():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 def test_DED_all_concat_ref_pages():
     """gdtest_all_concat: __all__ concatenation produces ref pages."""
     pkg = "gdtest_all_concat"
@@ -5929,6 +6300,7 @@ def test_DED_all_concat_ref_pages():
         assert page is not None, f"Ref page for {name} missing"
 
 
+@pytest.mark.dedicated
 def test_DED_all_private_ref_pages():
     """gdtest_all_private: only public items have ref pages."""
     pkg = "gdtest_all_private"
@@ -5939,6 +6311,7 @@ def test_DED_all_private_ref_pages():
     assert (ref / "public_api.html").exists(), "public_api page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_auto_discover_ref_pages():
     """gdtest_auto_discover: pure auto-discovery produces ref pages."""
     pkg = "gdtest_auto_discover"
@@ -5951,6 +6324,7 @@ def test_DED_auto_discover_ref_pages():
         assert page is not None, f"Ref page for {name} missing"
 
 
+@pytest.mark.dedicated
 def test_DED_auto_exclude_ref_pages():
     """gdtest_auto_exclude: auto-excluded framework names absent, real exports present."""
     pkg = "gdtest_auto_exclude"
@@ -5962,6 +6336,7 @@ def test_DED_auto_exclude_ref_pages():
     assert (ref / "real_func.html").exists(), "real_func page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_auto_include_ref_pages():
     """gdtest_auto_include: auto_include forces config/logging through, main still excluded."""
     pkg = "gdtest_auto_include"
@@ -5979,6 +6354,7 @@ def test_DED_auto_include_ref_pages():
     assert not (ref / "main.html").exists(), "main page exists but should be auto-excluded"
 
 
+@pytest.mark.dedicated
 def test_DED_no_auto_exclude_ref_pages():
     """gdtest_no_auto_exclude: no_auto_exclude bypasses filter, all exports present."""
     pkg = "gdtest_no_auto_exclude"
@@ -5994,6 +6370,7 @@ def test_DED_no_auto_exclude_ref_pages():
     assert (ref / "logger.html").exists(), "logger page missing (no_auto_exclude should keep it)"
 
 
+@pytest.mark.dedicated
 def test_DED_duplicate_all_ref_pages():
     """gdtest_duplicate_all: duplicate __all__ entries deduplicated, pages exist."""
     pkg = "gdtest_duplicate_all"
@@ -6005,6 +6382,7 @@ def test_DED_duplicate_all_ref_pages():
     assert (ref / "validate.html").exists(), "validate page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_no_all_ref_pages():
     """gdtest_no_all: no __all__ griffe fallback produces ref pages."""
     pkg = "gdtest_no_all"
@@ -6016,6 +6394,7 @@ def test_DED_no_all_ref_pages():
     assert (ref / "create_registry.html").exists(), "create_registry page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_namespace_ref_pages():
     """gdtest_namespace: namespace package produces ref pages."""
     pkg = "gdtest_namespace"
@@ -6027,6 +6406,7 @@ def test_DED_namespace_ref_pages():
     assert (ref / "farewell.html").exists(), "farewell page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_name_mismatch_ref_pages():
     """gdtest_name_mismatch: mismatched name/module builds with ref pages."""
     pkg = "gdtest_name_mismatch"
@@ -6043,6 +6423,7 @@ def test_DED_name_mismatch_ref_pages():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 def test_DED_badge_readme_ref_pages():
     """gdtest_badge_readme: README with badges builds with ref pages."""
     pkg = "gdtest_badge_readme"
@@ -6052,6 +6433,7 @@ def test_DED_badge_readme_ref_pages():
     assert (_ref_dir(pkg) / "greet.html").exists(), "greet page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_unicode_docs_ref_pages():
     """gdtest_unicode_docs: unicode docstrings build with ref pages."""
     pkg = "gdtest_unicode_docs"
@@ -6063,6 +6445,7 @@ def test_DED_unicode_docs_ref_pages():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 def test_DED_long_docs_ref_pages():
     """gdtest_long_docs: long docstrings build with ref pages."""
     pkg = "gdtest_long_docs"
@@ -6074,6 +6457,7 @@ def test_DED_long_docs_ref_pages():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 def test_DED_mixed_docs_ref_pages():
     """gdtest_mixed_docs: mixed docstring styles build with ref pages."""
     pkg = "gdtest_mixed_docs"
@@ -6086,6 +6470,7 @@ def test_DED_mixed_docs_ref_pages():
     assert (ref / "decode.html").exists(), "decode page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_many_exports_ref_pages():
     """gdtest_many_exports: 30 exported functions all have ref pages."""
     pkg = "gdtest_many_exports"
@@ -6097,6 +6482,7 @@ def test_DED_many_exports_ref_pages():
     assert len(ref_htmls) == 30, f"Expected 30 ref pages, got {len(ref_htmls)}"
 
 
+@pytest.mark.dedicated
 def test_DED_many_big_classes_ref_pages():
     """gdtest_many_big_classes: five big classes all have ref pages."""
     pkg = "gdtest_many_big_classes"
@@ -6108,6 +6494,7 @@ def test_DED_many_big_classes_ref_pages():
         assert (ref / f"{cls}.html").exists(), f"{cls} page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_explicit_big_class_ref():
     """gdtest_explicit_big_class: explicit big class config with members=false."""
     pkg = "gdtest_explicit_big_class"
@@ -6120,6 +6507,7 @@ def test_DED_explicit_big_class_ref():
     assert (ref / "helper_b.html").exists(), "helper_b page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_explicit_ref_section_pages():
     """gdtest_explicit_ref: explicit ref sections with named pages."""
     pkg = "gdtest_explicit_ref"
@@ -6131,6 +6519,7 @@ def test_DED_explicit_ref_section_pages():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 def test_DED_google_big_class_ref():
     """gdtest_google_big_class: google big class has ref pages."""
     pkg = "gdtest_google_big_class"
@@ -6142,6 +6531,7 @@ def test_DED_google_big_class_ref():
     assert (ref / "load_data.html").exists(), "load_data page missing"
 
 
+@pytest.mark.dedicated
 def test_DED_google_seealso_ref():
     """gdtest_google_seealso: google seealso functions have ref pages."""
     pkg = "gdtest_google_seealso"
@@ -6158,7 +6548,8 @@ def test_DED_google_seealso_ref():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def test_R4_attribution_on_in_footer():
+@pytest.mark.dedicated
+def test_attribution_on_in_footer():
     """Attribution enabled (default): _quarto.yml footer should contain Great Docs text."""
     pkg = "gdtest_attribution_on"
     if not _has_rendered_site(pkg):
@@ -6173,7 +6564,8 @@ def test_R4_attribution_on_in_footer():
     assert "Test&nbsp;Author" in footer_center, "Footer should still contain author name"
 
 
-def test_R4_attribution_off_not_in_footer():
+@pytest.mark.dedicated
+def test_attribution_off_not_in_footer():
     """Attribution disabled: _quarto.yml footer should NOT contain Great Docs text."""
     pkg = "gdtest_attribution_off"
     if not _has_rendered_site(pkg):
@@ -6196,6 +6588,7 @@ def test_R4_attribution_off_not_in_footer():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_seealso_desc_pages_exist():
     """gdtest_seealso_desc: all exports have reference pages."""
@@ -6208,6 +6601,7 @@ def test_DED_seealso_desc_pages_exist():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_seealso_desc_links_render():
     """gdtest_seealso_desc: See Also sections have correct link targets."""
@@ -6234,6 +6628,7 @@ def test_DED_seealso_desc_links_render():
             )
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_seealso_desc_descriptions_render():
     """gdtest_seealso_desc: descriptions from %seealso appear in output."""
@@ -6264,6 +6659,7 @@ def test_DED_seealso_desc_descriptions_render():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_numpy_seealso_desc_pages_exist():
     """gdtest_numpy_seealso_desc: all exports have reference pages."""
@@ -6276,6 +6672,7 @@ def test_DED_numpy_seealso_desc_pages_exist():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_numpy_seealso_desc_links_render():
     """gdtest_numpy_seealso_desc: See Also sections have correct targets."""
@@ -6302,6 +6699,7 @@ def test_DED_numpy_seealso_desc_links_render():
             )
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_numpy_seealso_desc_descriptions_render():
     """gdtest_numpy_seealso_desc: descriptions from See Also survive post-render."""
@@ -6330,6 +6728,7 @@ def test_DED_numpy_seealso_desc_descriptions_render():
 # ── gdtest_interlinks_prose tests ─────────────────────────────────────────────
 
 
+@pytest.mark.dedicated
 def test_DED_interlinks_prose_pages_exist():
     """gdtest_interlinks_prose: all exports have reference pages."""
     pkg = "gdtest_interlinks_prose"
@@ -6341,6 +6740,7 @@ def test_DED_interlinks_prose_pages_exist():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_interlinks_prose_links_resolved():
     """gdtest_interlinks_prose: interlinks in prose are resolved to <a> tags."""
@@ -6367,6 +6767,7 @@ def test_DED_interlinks_prose_links_resolved():
             )
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_interlinks_prose_hrefs_valid():
     """gdtest_interlinks_prose: interlink hrefs point to valid reference pages."""
@@ -6401,6 +6802,7 @@ def test_DED_interlinks_prose_hrefs_valid():
 # ── Language attribute on <html> ──────────────────────────────────────────────
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize(
     "pkg, expected_lang",
@@ -6426,6 +6828,7 @@ def test_DED_i18n_html_lang_attribute(pkg, expected_lang):
 # ── i18n translation meta tag ────────────────────────────────────────────────
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize(
     "pkg, key, expected_value",
@@ -6463,6 +6866,7 @@ def test_DED_i18n_meta_tag_translations(pkg, key, expected_value):
 # ── Translated section headings on reference pages ────────────────────────────
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize(
     "pkg, page, heading_class, expected_text",
@@ -6499,6 +6903,7 @@ def test_DED_i18n_translated_section_headings(pkg, page, heading_class, expected
 # ── Arabic RTL support ────────────────────────────────────────────────────────
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_i18n_arabic_rtl_direction():
     """Arabic site has dir='rtl' on <html> and gd-rtl meta tag."""
@@ -6518,6 +6923,7 @@ def test_DED_i18n_arabic_rtl_direction():
     assert rtl_meta["content"] == "true"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_i18n_non_arabic_no_rtl():
     """Non-RTL sites should NOT have dir='rtl' or gd-rtl meta."""
@@ -6535,6 +6941,7 @@ def test_DED_i18n_non_arabic_no_rtl():
 # ── Announcement banner translation ──────────────────────────────────────────
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize(
     "pkg, expected_fragment",
@@ -6561,6 +6968,7 @@ def test_DED_i18n_announcement_translated(pkg, expected_fragment):
 # ── Search tooltip translation ────────────────────────────────────────────────
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize(
     "pkg",
@@ -6579,6 +6987,7 @@ def test_DED_i18n_search_no_duplicate_tooltip(pkg):
     )
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize(
     "pkg, expected_title",
@@ -6612,6 +7021,7 @@ def test_DED_i18n_search_button_title_translated(pkg, expected_title):
 # ── Quarto search-label in options JSON ───────────────────────────────────────
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize(
     "pkg, expected_label",
@@ -6642,6 +7052,7 @@ def test_DED_i18n_search_options_label(pkg, expected_label):
 # ── Navbar translated link text ───────────────────────────────────────────────
 
 
+@pytest.mark.dedicated
 @requires_bs4
 @pytest.mark.parametrize(
     "pkg, expected_texts",
@@ -6681,6 +7092,7 @@ def test_DED_i18n_navbar_translated(pkg, expected_texts):
 _NAV_ICONS_PKG = "gdtest_nav_icons"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_nav_icons_inline_data_on_homepage():
     """Homepage should contain the inline JSON icon-map script element."""
@@ -6692,6 +7104,7 @@ def test_DED_nav_icons_inline_data_on_homepage():
     assert data_el is not None, "Missing <script id='gd-nav-icons-data'> on homepage"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_nav_icons_inline_data_on_subpage():
     """User-guide subpage should contain the inline JSON icon-map (not just homepage)."""
@@ -6707,6 +7120,7 @@ def test_DED_nav_icons_inline_data_on_subpage():
     assert data_el is not None, "Missing <script id='gd-nav-icons-data'> on subpage"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_nav_icons_inline_data_on_reference_page():
     """Reference subpage should also have the inline icon-map."""
@@ -6914,6 +7328,7 @@ def test_DED_nav_icons_incomplete_coverage():
         )
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_nav_icons_tutorials_navbar_icon():
     """The Tutorials navbar entry should have an icon."""
@@ -6939,6 +7354,7 @@ def test_DED_nav_icons_tutorials_navbar_icon():
 _TAG_LOC_PKG = "gdtest_tag_location"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_tag_location_tags_json_has_default_location():
     """_tags.json should contain default_location set to 'bottom'."""
@@ -6953,6 +7369,7 @@ def test_DED_tag_location_tags_json_has_default_location():
     assert data["default_location"] == "bottom", "Global default_location should be 'bottom'"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_tag_location_tags_json_has_page_overrides():
     """_tags.json should include per-page tag-location overrides."""
@@ -7048,6 +7465,7 @@ def test_DED_tag_location_untagged_page_still_has_data():
     )
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_tag_location_tags_index_page_generated():
     """A tags/index.html should be generated listing all tags."""
@@ -7071,6 +7489,7 @@ def test_DED_tag_location_tags_index_page_generated():
 _ICON_PKG = "gdtest_icon_shortcode"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_ICON_showcase_page_exists():
     """The icon-showcase user guide page should be rendered."""
@@ -7081,6 +7500,7 @@ def test_ICON_showcase_page_exists():
     assert html_path.exists(), "icon-showcase.html not found"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_ICON_gallery_page_exists():
     """The icon-gallery user guide page should be rendered."""
@@ -7091,6 +7511,7 @@ def test_ICON_gallery_page_exists():
     assert html_path.exists(), "icon-gallery.html not found"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_ICON_showcase_contains_svgs():
     """The showcase page should contain multiple inline SVG icons."""
@@ -7106,6 +7527,7 @@ def test_ICON_showcase_contains_svgs():
     assert len(svgs) >= 20, f"Expected ≥20 gd-icon SVGs, found {len(svgs)}"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_ICON_gallery_contains_svgs():
     """The gallery page should contain inline SVG icons."""
@@ -7259,6 +7681,7 @@ def test_ICON_gallery_sized_icons():
         assert icon is not None, f"No icon with height:{em_val} found in gallery"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_ICON_no_shortcode_errors():
     """No icon shortcode error comments should appear in the rendered HTML."""
@@ -7280,6 +7703,7 @@ def test_ICON_no_shortcode_errors():
 _HOMEPAGE_UG_SUBDIRS_PKG = "gdtest_homepage_ug_subdirs"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_HOMEPAGE_SUBDIRS_blended_index_exists():
     """Blended homepage: index.html exists at site root with UG content."""
@@ -7298,6 +7722,7 @@ def test_HOMEPAGE_SUBDIRS_blended_index_exists():
     assert "project documentation" in text, "Homepage should contain UG root content"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_HOMEPAGE_SUBDIRS_metadata_sidebar_present():
     """Blended homepage should include the metadata sidebar."""
@@ -7312,6 +7737,7 @@ def test_HOMEPAGE_SUBDIRS_metadata_sidebar_present():
     assert "gd-meta-sidebar" in content, "Blended homepage should have gd-meta-sidebar"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_HOMEPAGE_SUBDIRS_root_index_not_duplicated():
     """The promoted root index.qmd should NOT remain in user-guide/."""
@@ -7404,6 +7830,7 @@ def test_HOMEPAGE_SUBDIRS_section_asset_dirs_copied():
     assert diagram_file.exists(), "examples/img/diagram.txt not copied"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_HOMEPAGE_SUBDIRS_examples_section_rendered():
     """Custom Examples section pages should be rendered in the site."""
@@ -7423,6 +7850,7 @@ def test_HOMEPAGE_SUBDIRS_examples_section_rendered():
 _GT_TABLES_PKG = "gdtest_gt_tables"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_GT_TABLES_gt_page_rendered():
     """The GT tables user-guide page should exist with GT table elements."""
@@ -7437,6 +7865,7 @@ def test_GT_TABLES_gt_page_rendered():
     assert len(gt_tables) >= 2, f"Expected at least 2 GT tables, found {len(gt_tables)}"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_GT_TABLES_markdown_page_rendered():
     """The Markdown tables user-guide page should exist with standard tables."""
@@ -7452,6 +7881,7 @@ def test_GT_TABLES_markdown_page_rendered():
     assert len(md_tables) >= 2, f"Expected at least 2 Markdown tables, found {len(md_tables)}"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_GT_TABLES_gt_not_wrapped_responsive():
     """GT tables should NOT be wrapped in gd-table-responsive by post-render."""
@@ -7657,6 +8087,7 @@ def test_GT_TABLES_page_level_no_processing_colgroup():
         assert len(colgroups) == 1, "GT table with cols_width should preserve its colgroup"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_GT_TABLES_page_level_no_processing_md_table():
     """Markdown table on page with html-table-processing: none should lack Bootstrap add-ons."""
@@ -7698,6 +8129,7 @@ def _stf_skip():
 # ── Meta tag presence ────────────────────────────────────────────────────────
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_SCALE_TO_FIT_global_meta_on_all_pages():
     """All user-guide pages should have the global gd-scale-to-fit meta tag."""
@@ -7719,6 +8151,7 @@ def test_SCALE_TO_FIT_global_meta_on_all_pages():
         assert "#custom_html" in selectors, f"#custom_html not in global selectors on {page_name}"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_SCALE_TO_FIT_page_override_meta_present():
     """The page-override page should have a gd-scale-to-fit-page meta tag."""
@@ -8045,6 +8478,7 @@ def test_SCALE_TO_FIT_page_override_min_scale():
     assert ms == "mobile", f"Expected page-level data-min-scale='mobile', got '{ms}'"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_SCALE_TO_FIT_non_override_pages_no_page_min_scale():
     """Pages without page-level frontmatter should NOT have data-min-scale on a page meta."""
@@ -8075,6 +8509,7 @@ def _sms_skip():
 # ── Global meta tag ──────────────────────────────────────────────────────────
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_SCALE_MIN_SCALE_global_meta_on_all_pages():
     """All pages should carry the global gd-scale-to-fit meta with data-min-scale='desktop'."""
@@ -8091,6 +8526,7 @@ def test_SCALE_MIN_SCALE_global_meta_on_all_pages():
         )
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_SCALE_MIN_SCALE_global_selectors_correct():
     """The global meta should target #stf_wide, #stf_styled, #summary_card."""
@@ -8299,6 +8735,7 @@ def test_SCALE_MIN_SCALE_tablet_page_selectors():
     assert "#stf_styled" in selectors
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_SCALE_MIN_SCALE_float_page_selectors():
     """float-override.html page meta should target all three IDs."""
@@ -8326,6 +8763,7 @@ def _ilu_site():
     return _site_dir("gdtest_interlinks_userguide")
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_interlinks_userguide_ref_pages_exist():
     """gdtest_interlinks_userguide: all exports have reference pages."""
@@ -8335,6 +8773,7 @@ def test_DED_interlinks_userguide_ref_pages_exist():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_interlinks_userguide_ug_pages_exist():
     """gdtest_interlinks_userguide: user-guide pages exist."""
@@ -8344,6 +8783,7 @@ def test_DED_interlinks_userguide_ug_pages_exist():
     assert (ug / "advanced.html").exists(), "Advanced page missing"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_interlinks_userguide_shortened_links():
     """gdtest_interlinks_userguide: [](`~pkg.Name`) in user-guide resolves to links."""
@@ -8364,6 +8804,7 @@ def test_DED_interlinks_userguide_shortened_links():
         )
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_interlinks_userguide_hrefs_relative():
     """gdtest_interlinks_userguide: user-guide interlink hrefs use ../reference/ paths."""
@@ -8383,6 +8824,7 @@ def test_DED_interlinks_userguide_hrefs_relative():
         )
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_interlinks_userguide_full_qualified():
     """gdtest_interlinks_userguide: [](`pkg.Name`) renders full qualified name."""
@@ -8402,6 +8844,7 @@ def test_DED_interlinks_userguide_full_qualified():
     )
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_interlinks_userguide_custom_text():
     """gdtest_interlinks_userguide: [custom text](`pkg.Name`) preserves display text."""
@@ -8423,6 +8866,7 @@ def test_DED_interlinks_userguide_custom_text():
     )
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_interlinks_userguide_autolinked_code():
     """gdtest_interlinks_userguide: `Engine`, `execute()` autolinked in user-guide."""
@@ -8458,6 +8902,7 @@ def _csh_ref():
     return _ref_dir("gdtest_code_span_headings")
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_code_span_headings_pages_exist():
     """gdtest_code_span_headings: reference pages exist for both functions."""
@@ -8467,6 +8912,7 @@ def test_DED_code_span_headings_pages_exist():
         assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_code_span_headings_slug_sanitized():
     """gdtest_code_span_headings: heading CSS class has no backticks or special chars."""
@@ -8491,6 +8937,7 @@ def test_DED_code_span_headings_slug_sanitized():
                     assert "?" not in cls, f"Question mark in class: {cls}"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_code_span_headings_code_preserved():
     """gdtest_code_span_headings: heading text preserves code spans as <code> elements."""
@@ -8521,6 +8968,7 @@ def test_DED_code_span_headings_code_preserved():
     assert codes[1].get_text() == "right=", f"Expected 'right=', got {codes[1].get_text()!r}"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_code_span_headings_title_case_outside_code():
     """gdtest_code_span_headings: text outside code spans is title-cased."""
@@ -8546,6 +8994,7 @@ def test_DED_code_span_headings_title_case_outside_code():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_sec_blog_user_index_has_body_class():
     """gdtest_sec_blog_user_index: blog index has gd-blog-index body class."""
@@ -8563,6 +9012,7 @@ def test_DED_sec_blog_user_index_has_body_class():
     assert "gd-blog-index" in classes, f"Expected gd-blog-index in body classes, got {classes}"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_sec_blog_user_index_no_toc():
     """gdtest_sec_blog_user_index: blog index has fullcontent (no TOC sidebar)."""
@@ -8580,6 +9030,7 @@ def test_DED_sec_blog_user_index_no_toc():
     assert "fullcontent" in classes, f"Expected fullcontent in body classes, got {classes}"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_sec_blog_user_index_preserves_user_listing():
     """gdtest_sec_blog_user_index: user-provided listing type is preserved."""
@@ -8596,6 +9047,7 @@ def test_DED_sec_blog_user_index_preserves_user_listing():
     assert listing is not None, "Expected table-type listing container"
 
 
+@pytest.mark.dedicated
 def test_DED_sec_blog_user_index_copies_root_image():
     """gdtest_sec_blog_user_index: co-located root image is copied to site."""
     pkg = "gdtest_sec_blog_user_index"
@@ -8606,6 +9058,7 @@ def test_DED_sec_blog_user_index_copies_root_image():
     assert img.exists(), "Root-level blog image blog-header.svg not copied"
 
 
+@pytest.mark.dedicated
 def test_DED_sec_blog_user_index_copies_post_image():
     """gdtest_sec_blog_user_index: co-located post image is copied to site."""
     pkg = "gdtest_sec_blog_user_index"
@@ -8623,6 +9076,7 @@ def test_DED_sec_blog_user_index_copies_post_image():
 _KBD_PKG = "gdtest_keys_shortcode"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_KBD_single_keys_page_exists():
     """The single-keys user guide page should be rendered."""
@@ -8633,6 +9087,7 @@ def test_KBD_single_keys_page_exists():
     assert html_path.exists(), "single-keys.html not found"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_KBD_shortcut_combos_page_exists():
     """The shortcut-combos user guide page should be rendered."""
@@ -8643,6 +9098,7 @@ def test_KBD_shortcut_combos_page_exists():
     assert html_path.exists(), "shortcut-combos.html not found"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_KBD_platform_aware_page_exists():
     """The platform-aware user guide page should be rendered."""
@@ -8653,6 +9109,7 @@ def test_KBD_platform_aware_page_exists():
     assert html_path.exists(), "platform-aware.html not found"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_KBD_keys_in_context_page_exists():
     """The keys-in-context user guide page should be rendered."""
@@ -8663,6 +9120,7 @@ def test_KBD_keys_in_context_page_exists():
     assert html_path.exists(), "keys-in-context.html not found"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_KBD_single_keys_contains_kbd_elements():
     """Single keys page should contain <kbd> elements with gd-keys class."""
@@ -8708,6 +9166,7 @@ def test_KBD_platform_mac_has_symbols():
     assert "⌘" in content, "Expected ⌘ (Command) symbol for mac platform"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_KBD_no_shortcode_errors():
     """No keys shortcode should produce an error HTML comment."""
@@ -8732,6 +9191,7 @@ _INLINE_ALWAYS_PKG = "gdtest_inline_always"
 _INLINE_NEVER_PKG = "gdtest_inline_never"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_inline_methods_default_splits_big_class():
     """gdtest_inline_methods: BigProcessor (8 methods) gets a companion method section."""
@@ -8747,6 +9207,7 @@ def test_DED_inline_methods_default_splits_big_class():
     assert len(method_pages) > 0, "BigProcessor should have separate method pages"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_inline_methods_default_keeps_small_class_inline():
     """gdtest_inline_methods: SmallWidget (3 methods) stays inline."""
@@ -8761,6 +9222,7 @@ def test_DED_inline_methods_default_keeps_small_class_inline():
     assert len(method_pages) == 0, "SmallWidget should not have separate method pages"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_inline_methods_default_sidebar_has_method_section():
     """gdtest_inline_methods: sidebar should list BigProcessor Methods section."""
@@ -8776,6 +9238,7 @@ def test_DED_inline_methods_default_sidebar_has_method_section():
     assert "BigProcessor Methods" in content, "Reference index should list BigProcessor Methods"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_inline_always_no_method_pages():
     """gdtest_inline_always: inline_methods=true means no separate method pages."""
@@ -8790,6 +9253,7 @@ def test_DED_inline_always_no_method_pages():
     assert len(method_pages) == 0, "LargeAPI should NOT have separate method pages"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_inline_always_methods_on_class_page():
     """gdtest_inline_always: methods are documented inline on the class page."""
@@ -8807,6 +9271,7 @@ def test_DED_inline_always_methods_on_class_page():
     assert "get" in content, "Method 'get' should be on class page"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_inline_always_no_methods_section_in_sidebar():
     """gdtest_inline_always: sidebar should NOT have a 'Methods' companion section."""
@@ -8822,6 +9287,7 @@ def test_DED_inline_always_no_methods_section_in_sidebar():
     assert "LargeAPI Methods" not in content, "Should NOT have LargeAPI Methods section"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_inline_never_small_class_split():
     """gdtest_inline_never: TinyWidget (2 methods) is split despite being small."""
@@ -8836,6 +9302,7 @@ def test_DED_inline_never_small_class_split():
     assert len(method_pages) > 0, "TinyWidget should have separate method pages"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_inline_never_medium_class_split():
     """gdtest_inline_never: MediumService (4 methods) is split despite being below default."""
@@ -8849,6 +9316,7 @@ def test_DED_inline_never_medium_class_split():
     assert len(method_pages) > 0, "MediumService should have separate method pages"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_inline_never_both_methods_sections_in_sidebar():
     """gdtest_inline_never: sidebar should have Methods sections for both classes."""
@@ -8873,6 +9341,7 @@ _INHERITED_EXPLICIT_PKG = "gdtest_ref_inherited_explicit"
 _INCLUDE_INHERITED_PKG = "gdtest_ref_include_inherited"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_ref_inherited_explicit_page_exists():
     """gdtest_ref_inherited_explicit: AdvancedProcessor page exists."""
@@ -8884,6 +9353,7 @@ def test_DED_ref_inherited_explicit_page_exists():
     assert (ref / "AdvancedProcessor.html").exists(), "AdvancedProcessor page should exist"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_ref_inherited_explicit_own_method():
     """gdtest_ref_inherited_explicit: own method 'process' documented."""
@@ -8896,6 +9366,7 @@ def test_DED_ref_inherited_explicit_own_method():
     assert "process" in text, "Own method 'process' should appear on page"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_ref_inherited_explicit_inherited_methods():
     """gdtest_ref_inherited_explicit: inherited methods 'validate' and 'reset' documented."""
@@ -8909,6 +9380,7 @@ def test_DED_ref_inherited_explicit_inherited_methods():
     assert "reset" in text, "Inherited method 'reset' should appear on page"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_ref_inherited_explicit_section_title():
     """gdtest_ref_inherited_explicit: reference index has 'Core' section title."""
@@ -8924,6 +9396,7 @@ def test_DED_ref_inherited_explicit_section_title():
     assert "Core" in content, "Section title 'Core' should appear in reference index"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_ref_include_inherited_page_exists():
     """gdtest_ref_include_inherited: Circle page exists."""
@@ -8935,6 +9408,7 @@ def test_DED_ref_include_inherited_page_exists():
     assert (ref / "Circle.html").exists(), "Circle page should exist"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_ref_include_inherited_own_methods():
     """gdtest_ref_include_inherited: own methods 'area' and 'perimeter' documented."""
@@ -8948,6 +9422,7 @@ def test_DED_ref_include_inherited_own_methods():
     assert "perimeter" in text, "Own method 'perimeter' should appear on page"
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_ref_include_inherited_inherited_method():
     """gdtest_ref_include_inherited: inherited method 'describe' auto-documented."""
@@ -8962,6 +9437,7 @@ def test_DED_ref_include_inherited_inherited_method():
     )
 
 
+@pytest.mark.dedicated
 @requires_bs4
 def test_DED_ref_include_inherited_section_title():
     """gdtest_ref_include_inherited: reference index has 'Shapes' section title."""
@@ -8975,3 +9451,701 @@ def test_DED_ref_include_inherited_section_title():
 
     content = index_html.read_text(encoding="utf-8")
     assert "Shapes" in content, "Section title 'Shapes' should appear in reference index"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: accent_color — Site-wide accent color config + hr shortcode
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_ACCENT_COLOR_PKG = "gdtest_accent_color"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_accent_color_hr_shortcode_rendered():
+    """gdtest_accent_color: hr shortcode with accent color renders gd-hr markup."""
+    pkg = _ACCENT_COLOR_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide" / "string-accent.html"
+    if not ug.exists():
+        pytest.skip("string-accent.html not found")
+    content = ug.read_text(encoding="utf-8")
+    assert "gd-hr" in content, "Should contain gd-hr shortcode markup"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_accent_color_palette_vars():
+    """gdtest_accent_color: palette page has CSS custom properties for colors."""
+    pkg = _ACCENT_COLOR_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide" / "palette-vs-accent.html"
+    if not ug.exists():
+        pytest.skip("palette-vs-accent.html not found")
+    content = ug.read_text(encoding="utf-8")
+    assert "--gd-hr-color" in content, "Should have --gd-hr-color CSS variable"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: autolink — Inline code autolinked to API reference
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_AUTOLINK_PKG = "gdtest_autolink"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_autolink_reference_pages_exist():
+    """gdtest_autolink: reference pages exist for exported names."""
+    pkg = _AUTOLINK_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    for name in ("Engine", "Pipeline", "Config"):
+        assert (ref / f"{name}.html").exists(), f"Reference page for {name} should exist"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: code_cells — Executable code cells in docstring examples
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_CODE_CELLS_PKG = "gdtest_code_cells"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_code_cells_has_code_blocks():
+    """gdtest_code_cells: reference pages contain rendered code cells."""
+    pkg = _CODE_CELLS_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    ref_pages = [f for f in ref.glob("*.html") if f.name != "index.html"]
+    assert ref_pages, "Should have reference pages"
+    soup = _load_html(ref_pages[0])
+    code_blocks = soup.select("pre code, .sourceCode")
+    assert code_blocks, "Reference page should contain code blocks from examples"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: homepage_wide — Wide homepage with column-margin sidebar
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_HOMEPAGE_WIDE_PKG = "gdtest_homepage_wide"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_homepage_wide_layout():
+    """gdtest_homepage_wide: index.html uses wide/full layout classes."""
+    pkg = _HOMEPAGE_WIDE_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    index = _site_dir(pkg) / "index.html"
+    content = index.read_text(encoding="utf-8")
+    assert "page-full" in content or "column-screen" in content or "column-page" in content, (
+        "Homepage should use page-full, column-screen, or column-page layout"
+    )
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_homepage_wide_margin_content():
+    """gdtest_homepage_wide: homepage has column-margin sidebar content."""
+    pkg = _HOMEPAGE_WIDE_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    index = _site_dir(pkg) / "index.html"
+    content = index.read_text(encoding="utf-8")
+    assert "column-margin" in content, "Homepage should have column-margin content"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: hr_shortcode — Decorative horizontal rule shortcode
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_HR_SHORTCODE_PKG = "gdtest_hr_shortcode"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_hr_shortcode_line_styles():
+    """gdtest_hr_shortcode: line-styles page has dashed/dotted/double variants."""
+    pkg = _HR_SHORTCODE_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    page = _site_dir(pkg) / "user-guide" / "line-styles.html"
+    if not page.exists():
+        pytest.skip("line-styles.html not found")
+    content = page.read_text(encoding="utf-8")
+    for variant in ("gd-hr--dashed", "gd-hr--dotted", "gd-hr--double"):
+        assert variant in content, f"Should contain {variant}"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_hr_shortcode_presets():
+    """gdtest_hr_shortcode: presets page has gradient-shimmer and other presets."""
+    pkg = _HR_SHORTCODE_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    page = _site_dir(pkg) / "user-guide" / "presets.html"
+    if not page.exists():
+        pytest.skip("presets.html not found")
+    content = page.read_text(encoding="utf-8")
+    assert "gd-hr--gradient-shimmer" in content, "Should have gradient-shimmer preset"
+    assert "gd-hr--fade" in content, "Should have fade preset"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_hr_shortcode_embedded_text():
+    """gdtest_hr_shortcode: embedded-text page has text-in-rule markup."""
+    pkg = _HR_SHORTCODE_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    page = _site_dir(pkg) / "user-guide" / "embedded-text.html"
+    if not page.exists():
+        pytest.skip("embedded-text.html not found")
+    content = page.read_text(encoding="utf-8")
+    assert "gd-hr--with-text" in content, "Should have with-text variant"
+    assert "gd-hr-text" in content, "Should have text element"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: inline_threshold — Custom inline_methods threshold
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_INLINE_THRESHOLD_PKG = "gdtest_inline_threshold"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_inline_threshold_compact_class_inlined():
+    """gdtest_inline_threshold: CompactClient (8 methods) is inlined at threshold 10."""
+    pkg = _INLINE_THRESHOLD_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    # CompactClient should NOT have separate method pages (inlined)
+    compact_methods = list(ref.glob("CompactClient.*.html"))
+    assert not compact_methods, (
+        f"CompactClient methods should be inlined (threshold=10, has 8), "
+        f"but found: {[f.name for f in compact_methods]}"
+    )
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_inline_threshold_full_client_split():
+    """gdtest_inline_threshold: FullClient (12 methods) is split at threshold 10."""
+    pkg = _INLINE_THRESHOLD_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    # FullClient SHOULD have separate method pages (exceeds threshold)
+    full_methods = list(ref.glob("FullClient.*.html"))
+    assert len(full_methods) >= 10, (
+        f"FullClient should have split method pages (12 methods > threshold 10), "
+        f"found {len(full_methods)}"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: kitchen_sink_q — Kitchen sink with qrenderer
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_KITCHEN_SINK_Q_PKG = "gdtest_kitchen_sink_q"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_kitchen_sink_q_reference_pages():
+    """gdtest_kitchen_sink_q: qrenderer produces reference pages."""
+    pkg = _KITCHEN_SINK_Q_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    pages = [f for f in ref.glob("*.html") if f.name != "index.html"]
+    assert len(pages) >= 10, f"kitchen_sink_q should have many ref pages, got {len(pages)}"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_kitchen_sink_q_user_guide():
+    """gdtest_kitchen_sink_q: has user guide pages."""
+    pkg = _KITCHEN_SINK_Q_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide"
+    assert ug.exists(), "User guide directory should exist"
+    pages = list(ug.glob("*.html"))
+    assert pages, "User guide should have pages"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: namespace_src — Namespace package with src/ layout
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_NAMESPACE_SRC_PKG = "gdtest_namespace_src"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_namespace_src_reference_pages():
+    """gdtest_namespace_src: namespace pkg with src/ layout has reference pages."""
+    pkg = _NAMESPACE_SRC_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    assert ref.exists(), "Reference directory should exist"
+    pages = [f for f in ref.glob("*.html") if f.name != "index.html"]
+    assert pages, "Should have reference pages for namespace package"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: page_status — Page status badges
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_PAGE_STATUS_PKG = "gdtest_page_status"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_page_status_js_loaded():
+    """gdtest_page_status: page-status-badges.js is loaded."""
+    pkg = _PAGE_STATUS_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide"
+    pages = list(ug.glob("*.html"))
+    assert pages, "Should have user-guide pages"
+    content = pages[0].read_text(encoding="utf-8")
+    assert "page-status" in content, "Should reference page-status script or markup"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: page_tags — Page tags with hierarchy
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_PAGE_TAGS_PKG = "gdtest_page_tags"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_page_tags_js_loaded():
+    """gdtest_page_tags: page-tags.js is loaded on user-guide pages."""
+    pkg = _PAGE_TAGS_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide"
+    pages = list(ug.glob("*.html"))
+    assert pages, "Should have user-guide pages"
+    content = pages[0].read_text(encoding="utf-8")
+    assert "page-tags" in content or "page-tag" in content, (
+        "Should reference page-tags script or markup"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: sec_dir_titles — Custom section with dir_titles overrides
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SEC_DIR_TITLES_PKG = "gdtest_sec_dir_titles"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_sec_dir_titles_reference_exists():
+    """gdtest_sec_dir_titles: has reference pages from dir_titles config."""
+    pkg = _SEC_DIR_TITLES_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    assert ref.exists(), "Reference directory should exist"
+    pages = [f for f in ref.glob("*.html") if f.name != "index.html"]
+    assert pages, "Should have reference pages"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: sec_index_hero — Section index pages with hero images
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SEC_INDEX_HERO_PKG = "gdtest_sec_index_hero"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_sec_index_hero_reference_exists():
+    """gdtest_sec_index_hero: has reference pages for hero-section package."""
+    pkg = _SEC_INDEX_HERO_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    assert ref.exists(), "Reference directory should exist"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: sidebar_float — Floating sidebar stress test (30+ pages)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SIDEBAR_FLOAT_PKG = "gdtest_sidebar_float"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_sidebar_float_many_pages():
+    """gdtest_sidebar_float: has 30+ user-guide pages for sidebar stress test."""
+    pkg = _SIDEBAR_FLOAT_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide"
+    assert ug.exists(), "User guide should exist"
+    pages = list(ug.glob("*.html"))
+    assert len(pages) >= 30, f"Should have 30+ UG pages, got {len(pages)}"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_sidebar_float_js_loaded():
+    """gdtest_sidebar_float: sidebar-float.js is loaded."""
+    pkg = _SIDEBAR_FLOAT_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    index = _site_dir(pkg) / "index.html"
+    content = index.read_text(encoding="utf-8")
+    assert "sidebar-float" in content, "Should load sidebar-float.js"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: skill_default — Auto-generated skill.md
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SKILL_DEFAULT_PKG = "gdtest_skill_default"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_default_skill_md_exists():
+    """gdtest_skill_default: auto-generated skill.md exists in _site."""
+    pkg = _SKILL_DEFAULT_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    assert skill.exists(), "skill.md should be generated"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_default_skills_page_exists():
+    """gdtest_skill_default: skills.html page exists."""
+    pkg = _SKILL_DEFAULT_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skills = _site_dir(pkg) / "skills.html"
+    assert skills.exists(), "skills.html should exist"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_default_has_installation():
+    """gdtest_skill_default: skill.md has Installation section."""
+    pkg = _SKILL_DEFAULT_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    content = skill.read_text(encoding="utf-8")
+    assert "# Installation" in content, "Should have Installation section"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: skill_curated — Curated skill from SKILL.md
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SKILL_CURATED_PKG = "gdtest_skill_curated"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_curated_skill_md_exists():
+    """gdtest_skill_curated: curated skill.md exists in _site."""
+    pkg = _SKILL_CURATED_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    assert skill.exists(), "skill.md should exist"
+    content = skill.read_text(encoding="utf-8")
+    # Curated skills are longer than auto-generated ones
+    assert len(content) > 1000, "Curated skill should be substantial"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_curated_skills_page():
+    """gdtest_skill_curated: skills.html page exists."""
+    pkg = _SKILL_CURATED_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skills = _site_dir(pkg) / "skills.html"
+    assert skills.exists(), "skills.html should exist"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: skill_disabled — Skill generation disabled
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SKILL_DISABLED_PKG = "gdtest_skill_disabled"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_disabled_no_skill_md():
+    """gdtest_skill_disabled: skill.md should NOT exist when disabled."""
+    pkg = _SKILL_DISABLED_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    assert not skill.exists(), "skill.md should not be generated when disabled"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_disabled_no_skills_page():
+    """gdtest_skill_disabled: skills.html should NOT exist when disabled."""
+    pkg = _SKILL_DISABLED_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skills = _site_dir(pkg) / "skills.html"
+    assert not skills.exists(), "skills.html should not exist when skill is disabled"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: skill_config — Enriched auto-generated skill with config overrides
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SKILL_CONFIG_PKG = "gdtest_skill_config"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_config_has_gotchas():
+    """gdtest_skill_config: skill.md has Gotchas section."""
+    pkg = _SKILL_CONFIG_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    content = skill.read_text(encoding="utf-8")
+    assert "# Gotchas" in content, "Should have Gotchas section"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_config_has_best_practices():
+    """gdtest_skill_config: skill.md has Best practices section."""
+    pkg = _SKILL_CONFIG_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    content = skill.read_text(encoding="utf-8")
+    assert "# Best practices" in content, "Should have Best practices section"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_config_has_decision_table():
+    """gdtest_skill_config: skill.md has 'When to use what' decision table."""
+    pkg = _SKILL_CONFIG_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    content = skill.read_text(encoding="utf-8")
+    assert "# When to use what" in content, "Should have decision table section"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: skill_complex — Skill with subdirectories
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SKILL_COMPLEX_PKG = "gdtest_skill_complex"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_complex_has_reference_files():
+    """gdtest_skill_complex: skill.md documents reference files."""
+    pkg = _SKILL_COMPLEX_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    content = skill.read_text(encoding="utf-8")
+    assert "# Reference files" in content, "Should document reference files"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_complex_has_scripts():
+    """gdtest_skill_complex: skill.md documents scripts."""
+    pkg = _SKILL_COMPLEX_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    content = skill.read_text(encoding="utf-8")
+    assert "# Scripts" in content, "Should document scripts section"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_complex_has_decision_table():
+    """gdtest_skill_complex: skill.md has decision table."""
+    pkg = _SKILL_COMPLEX_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    content = skill.read_text(encoding="utf-8")
+    assert "# When to use what" in content, "Should have decision table"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: skill_combo — Skill + user guide + hero + extras
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SKILL_COMBO_PKG = "gdtest_skill_combo"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_combo_skill_md():
+    """gdtest_skill_combo: has skill.md."""
+    pkg = _SKILL_COMBO_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    assert skill.exists(), "skill.md should exist"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_combo_skills_page():
+    """gdtest_skill_combo: has skills.html."""
+    pkg = _SKILL_COMBO_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skills = _site_dir(pkg) / "skills.html"
+    assert skills.exists(), "skills.html should exist"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_combo_user_guide():
+    """gdtest_skill_combo: also has user guide alongside skill."""
+    pkg = _SKILL_COMBO_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide"
+    assert ug.exists(), "User guide should coexist with skill"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: skill_rich — Curated skill with rich content
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SKILL_RICH_PKG = "gdtest_skill_rich"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_rich_substantial_content():
+    """gdtest_skill_rich: curated skill has rich content (tables, code)."""
+    pkg = _SKILL_RICH_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    assert skill.exists(), "skill.md should exist"
+    content = skill.read_text(encoding="utf-8")
+    # Rich skill should be longer with multiple sections
+    assert len(content) > 1500, f"Rich skill should be substantial, got {len(content)} chars"
+
+
+@pytest.mark.dedicated
+def test_DED_skill_rich_has_decision_table():
+    """gdtest_skill_rich: rich skill has Decision table section."""
+    pkg = _SKILL_RICH_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    skill = _site_dir(pkg) / "skill.md"
+    content = skill.read_text(encoding="utf-8")
+    assert "# Decision table" in content, "Should have decision table section"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: stress_everything_q — Stress test with qrenderer
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_STRESS_Q_PKG = "gdtest_stress_everything_q"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_stress_everything_q_builds():
+    """gdtest_stress_everything_q: qrenderer stress test produces reference pages."""
+    pkg = _STRESS_Q_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ref = _ref_dir(pkg)
+    pages = [f for f in ref.glob("*.html") if f.name != "index.html"]
+    assert len(pages) >= 3, f"Stress q-renderer should produce pages, got {len(pages)}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: tbl_preview — Table preview showcase
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_TBL_PREVIEW_PKG = "gdtest_tbl_preview"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_tbl_preview_gt_tables():
+    """gdtest_tbl_preview: user guide pages contain gt_table markup."""
+    pkg = _TBL_PREVIEW_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide"
+    assert ug.exists(), "User guide should exist"
+    pages = list(ug.glob("*.html"))
+    assert pages, "Should have user-guide pages"
+    # At least one page should have gt_table
+    found = False
+    for page in pages:
+        content = page.read_text(encoding="utf-8")
+        if "gt_table" in content:
+            found = True
+            break
+    assert found, "At least one UG page should contain gt_table markup"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: tbl_shortcode — tbl-preview Quarto shortcode
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_TBL_SHORTCODE_PKG = "gdtest_tbl_shortcode"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_tbl_shortcode_user_guide_pages():
+    """gdtest_tbl_shortcode: user guide with CSV/TSV/JSONL shortcode pages."""
+    pkg = _TBL_SHORTCODE_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide"
+    assert ug.exists(), "User guide should exist"
+    pages = {f.name for f in ug.glob("*.html")}
+    assert "csv-basics.html" in pages, "Should have csv-basics page"
+    assert "tsv-files.html" in pages, "Should have tsv-files page"
+    assert "jsonl-files.html" in pages, "Should have jsonl-files page"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: tbl_explorer — Interactive table explorer
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_TBL_EXPLORER_PKG = "gdtest_tbl_explorer"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_tbl_explorer_user_guide():
+    """gdtest_tbl_explorer: has user guide pages for explorer showcase."""
+    pkg = _TBL_EXPLORER_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide"
+    assert ug.exists(), "User guide should exist"
+    pages = list(ug.glob("*.html"))
+    assert len(pages) >= 5, f"Should have several UG pages, got {len(pages)}"

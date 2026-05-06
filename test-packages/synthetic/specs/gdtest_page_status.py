@@ -265,5 +265,6 @@ SPEC = {
             "10-subtitle-and-description.qmd",
             "11-neither.qmd",
         ],
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'supp', 'hdg'],
+},
 }

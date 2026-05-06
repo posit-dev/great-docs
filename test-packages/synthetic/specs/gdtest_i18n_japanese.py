@@ -311,5 +311,6 @@ SPEC = {
             "02-functions.qmd",
             "03-table-explorer.qmd",
         ],
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'supp', 'hdg'],
+},
 }

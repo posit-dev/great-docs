@@ -364,5 +364,6 @@ SPEC = {
         },
         # Pages that should NOT have gd-scale-to-fit-page
         "no_page_override": ["no-override.html"],
-    },
+        "coverage_exclude": ['ref', 'nodoc', 'bigcl', 'ug', 'supp', 'title', 'badge', 'sig', 'desc', 'param', 'pmatch', 'ret', 'refidx', 'sechdg', 'sbsec', 'hdg'],
+},
 }

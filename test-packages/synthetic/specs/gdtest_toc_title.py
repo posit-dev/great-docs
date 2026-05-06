@@ -79,5 +79,6 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["index", "lookup"],
         "num_exports": 2,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
+},
 }

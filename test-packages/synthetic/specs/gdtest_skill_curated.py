@@ -209,5 +209,6 @@ SPEC = {
         "has_skill_md": True,
         "has_skills_page": True,
         "skill_is_curated": True,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
+},
 }

@@ -42,5 +42,6 @@ SPEC = {
         "num_exports": 0,
         "section_titles": [],
         "has_user_guide": False,
-    },
+        "coverage_exclude": ['ref', 'nodoc', 'bigcl', 'ug', 'supp', 'title', 'badge', 'sig', 'desc', 'param', 'pmatch', 'ret', 'refidx', 'sechdg', 'sbar', 'sbsec', 'hdg'],
+},
 }

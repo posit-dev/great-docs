@@ -94,6 +94,9 @@ addopts = [
     "--strict-markers",
     "--strict-config",
 ]
+markers = [
+    "dedicated: test targets one or more specific gdtest_* packages (not a generic sweep)",
+]
 
 [tool.coverage.run]
 source = ["great_docs"]

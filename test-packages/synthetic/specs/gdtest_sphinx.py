@@ -102,5 +102,10 @@ SPEC = {
         "nodoc_items": ["format_duration"],
         "section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
+        # These levels are intentionally not the focus of this spec:
+        # - bigcl: no big class (not the archetype tested here)
+        # - ug: no user guide (docstring format is the focus)
+        # - supp: no supporting pages (minimal package)
+        "coverage_exclude": ["bigcl", "ug", "supp"],
     },
 }

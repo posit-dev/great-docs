@@ -112,5 +112,6 @@ SPEC = {
         "nodoc_items": ["clean"],
         "section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
-    },
+        "coverage_exclude": ['bigcl', 'ug', 'supp'],
+},
 }

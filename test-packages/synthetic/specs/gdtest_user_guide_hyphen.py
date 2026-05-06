@@ -74,5 +74,6 @@ SPEC = {
         "section_titles": ["Functions"],
         "has_user_guide": True,
         "user_guide_files": ["01-intro.qmd"],
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'supp', 'hdg'],
+},
 }

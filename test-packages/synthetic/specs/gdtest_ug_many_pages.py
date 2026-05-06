@@ -166,5 +166,6 @@ SPEC = {
             "great-docs/user-guide/06-advanced-usage.html": ["Advanced Usage"],
             "great-docs/user-guide/12-appendix.html": ["Appendix"],
         },
-    },
+        "coverage_exclude": ['ref', 'nodoc', 'bigcl', 'ug', 'supp', 'title', 'badge', 'sig', 'desc', 'param', 'pmatch', 'ret', 'refidx', 'sechdg', 'sbar', 'sbsec', 'hdg'],
+},
 }

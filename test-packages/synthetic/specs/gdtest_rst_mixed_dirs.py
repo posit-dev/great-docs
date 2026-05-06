@@ -111,5 +111,6 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["process_v2", "safe_delete", "transform_legacy"],
         "num_exports": 3,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
+},
 }

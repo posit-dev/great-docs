@@ -124,5 +124,6 @@ SPEC = {
             "great-docs/user-guide/advanced/01-config.html": ["Configuration", "Advanced"],
             "great-docs/user-guide/advanced/02-extend.html": ["Extending", "plugins"],
         },
-    },
+        "coverage_exclude": ['ref', 'nodoc', 'bigcl', 'ug', 'supp', 'title', 'badge', 'sig', 'desc', 'param', 'pmatch', 'ret', 'refidx', 'sechdg', 'sbar', 'sbsec', 'hdg'],
+},
 }

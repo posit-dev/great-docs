@@ -88,5 +88,7 @@ SPEC = {
         "nodoc_items": ["disconnect"],
         "section_titles": ["Functions"],
         "has_user_guide": False,
+        # Functions-only docstring test — no big classes, UG, or extras
+        "coverage_exclude": ["bigcl", "ug", "supp"],
     },
 }

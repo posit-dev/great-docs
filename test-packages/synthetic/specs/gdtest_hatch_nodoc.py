@@ -135,5 +135,6 @@ SPEC = {
         "export_names": ["Config", "InternalState", "UserProfile", "create_config"],
         "nodoc_items": ["InternalState"],
         "num_exports": 4,
-    },
+        "coverage_exclude": ['bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
+},
 }

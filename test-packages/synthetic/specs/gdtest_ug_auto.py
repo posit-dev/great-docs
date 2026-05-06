@@ -81,5 +81,6 @@ SPEC = {
             "great-docs/user-guide/configuration.html": ["Configuration", "configure the library"],
             "great-docs/user-guide/deployment.html": ["Deployment", "deploy your application"],
         },
-    },
+        "coverage_exclude": ['ref', 'nodoc', 'bigcl', 'ug', 'supp', 'title', 'badge', 'sig', 'desc', 'param', 'pmatch', 'ret', 'refidx', 'sechdg', 'sbar', 'sbsec', 'hdg'],
+},
 }

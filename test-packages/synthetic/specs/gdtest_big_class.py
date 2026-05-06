@@ -217,5 +217,6 @@ SPEC = {
         "big_class_name": "DataProcessor",
         "big_class_method_count": 8,
         "has_user_guide": False,
-    },
+        "coverage_exclude": ['nodoc', 'ug', 'supp'],
+},
 }

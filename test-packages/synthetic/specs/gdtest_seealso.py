@@ -140,5 +140,6 @@ SPEC = {
             "decode": ["encode", "validate"],
             "validate": ["encode", "decode"],
         },
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
+},
 }

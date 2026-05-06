@@ -192,5 +192,6 @@ SPEC = {
         "has_user_guide": False,
         "has_license_page": False,
         "has_citation_page": False,
-    },
+        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
+},
 }

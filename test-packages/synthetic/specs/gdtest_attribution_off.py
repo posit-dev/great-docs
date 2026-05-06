@@ -52,5 +52,6 @@ SPEC = {
             "great-docs/reference/index.html",
             "great-docs/reference/greet.html",
         ],
-    },
+        "coverage_exclude": ['ref', 'nodoc', 'bigcl', 'ug', 'supp', 'title', 'badge', 'sig', 'desc', 'param', 'pmatch', 'ret', 'refidx', 'sechdg', 'sbar', 'sbsec', 'hdg'],
+},
 }
