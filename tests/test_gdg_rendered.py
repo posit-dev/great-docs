@@ -2087,8 +2087,8 @@ def test_ref_title_custom_title_and_desc():
         pytest.skip("reference/index.html not found")
 
     soup = _load_html(ref_index)
-    h1 = soup.select_one("h1")
-    assert h1 is not None, "No h1 on reference index page"
+    h1 = soup.select_one("h1.title")
+    assert h1 is not None, "No h1.title on reference index page"
     assert "API Docs" in h1.get_text(), f"Expected 'API Docs' in h1, got {h1.get_text()!r}"
 
     # 4. Description paragraph should appear on the page
