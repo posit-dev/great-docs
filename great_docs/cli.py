@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -658,6 +659,348 @@ def scan(project_path: str | None, docs_dir: str | None, verbose: bool) -> None:
 
 
 cli.add_command(scan)
+
+
+def _freeze_info(project_root: Path, persist_dir: Path) -> None:
+    """Display freeze status for all pages with freeze frontmatter."""
+    import json
+    import re as _re
+    from datetime import datetime
+
+    # Scan source .qmd files for freeze declarations in frontmatter only
+    freeze_re = _re.compile(r"^freeze:\s+(.+)$", re.MULTILINE)
+    exec_freeze_re = _re.compile(r"^execute:\s*\n\s+freeze:\s+(.+)$", re.MULTILINE)
+
+    def _extract_frontmatter(text: str) -> str:
+        """Return only the YAML frontmatter (between --- delimiters)."""
+        if not text.startswith("---"):
+            return ""
+        end = text.find("\n---", 3)
+        if end == -1:
+            return ""
+        return text[3:end]
+
+    # Collect all .qmd files from source directories
+    source_dirs = ["recipes", "user_guide"]
+    frozen_pages: list[dict] = []
+
+    for src_dir in source_dirs:
+        src_path = project_root / src_dir
+        if not src_path.is_dir():
+            continue
+        for qmd_file in sorted(src_path.rglob("*.qmd")):
+            content = qmd_file.read_text(encoding="utf-8", errors="replace")
+            frontmatter = _extract_frontmatter(content)
+            # Check for freeze in frontmatter only
+            match = freeze_re.search(frontmatter) or exec_freeze_re.search(frontmatter)
+            if match:
+                mode = match.group(1).strip()
+                rel_path = qmd_file.relative_to(project_root)
+                frozen_pages.append(
+                    {
+                        "source": str(rel_path),
+                        "mode": mode,
+                    }
+                )
+
+    if not frozen_pages:
+        click.echo("No pages with freeze frontmatter found.")
+        return
+
+    # Check cache status for each frozen page
+    click.echo()
+    click.echo(f"  Freeze cache: {persist_dir.relative_to(project_root)}/")
+    click.echo()
+
+    has_cache = persist_dir.is_dir()
+
+    for page in frozen_pages:
+        source = page["source"]
+        mode = page["mode"]
+
+        # Determine the cache path — strip numeric prefix and map dirs
+        page_path = Path(source)
+        # Strip numeric prefix from filename
+        cache_name = _re.sub(r"^\d+[-_]", "", page_path.stem)
+        # Map directory (user_guide -> user-guide)
+        cache_dir = str(page_path.parent).replace("_", "-")
+        cache_json = persist_dir / cache_dir / cache_name / "execute-results" / "html.json"
+
+        # Status determination
+        if not has_cache or not cache_json.exists():
+            status = "⚠️  not cached"
+            timestamp = ""
+            detail = "Run: great-docs freeze " + source
+        else:
+            # Read cache to get timestamp
+            try:
+                data = json.loads(cache_json.read_text(encoding="utf-8"))
+                # Try to extract execution timestamp from markdown output
+                ts_match = _re.search(
+                    r"Executed at: ([\d-]+ [\d:]+)",
+                    data.get("result", {}).get("markdown", ""),
+                )
+                if ts_match:
+                    timestamp = ts_match.group(1)
+                else:
+                    # Fall back to file modification time
+                    mtime = cache_json.stat().st_mtime
+                    timestamp = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+
+                # Check if source has changed (hash mismatch)
+                cached_hash = data.get("hash", "")
+                # We can't easily compute what the build would produce without
+                # running prep, so just report the cache exists
+                status = "✓  cached"
+                detail = f"frozen at {timestamp}"
+            except Exception:
+                status = "?  unreadable"
+                detail = "Cache file exists but could not be parsed"
+
+        click.echo(f"  {status}  {source}")
+        click.echo(f"           mode: {mode} │ {detail}")
+        click.echo()
+
+    # Summary
+    cached = (
+        sum(
+            1
+            for p in frozen_pages
+            if (
+                persist_dir
+                / str(Path(p["source"]).parent).replace("_", "-")
+                / _re.sub(r"^\d+[-_]", "", Path(p["source"]).stem)
+                / "execute-results"
+                / "html.json"
+            ).exists()
+        )
+        if has_cache
+        else 0
+    )
+    total = len(frozen_pages)
+    click.echo(f"  {cached}/{total} page(s) cached")
+    if cached < total:
+        click.echo()
+        click.echo("  ℹ Run 'great-docs freeze <page>' to cache uncached pages.")
+    if cached > 0:
+        click.echo()
+        click.echo("  ℹ To re-freeze a stale page: great-docs freeze <page>")
+
+
+@click.command()
+@click.argument("pages", nargs=-1, required=False)
+@click.option(
+    "--project-path",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Path to your project root directory (default: current directory)",
+)
+@click.option(
+    "--freeze-dir",
+    type=str,
+    default=None,
+    help="Where to persist _freeze/ (default: project root '_freeze/')",
+)
+@click.option(
+    "--clean",
+    is_flag=True,
+    default=False,
+    help="Delete existing _freeze/ before re-executing (forces full refresh).",
+)
+@click.option(
+    "--info",
+    is_flag=True,
+    default=False,
+    help="Show freeze status for all pages (which are frozen, cached, stale).",
+)
+def freeze(
+    pages: tuple[str, ...],
+    project_path: str | None,
+    freeze_dir: str | None,
+    clean: bool,
+    info: bool,
+) -> None:
+    """Execute specific pages and persist their freeze cache.
+
+    Renders one or more QMD pages (always executing their code), then copies
+    the resulting _freeze/ entries back to a persistent location so they
+    survive future builds.
+
+    PAGES are paths to .qmd files relative to your project root (e.g.,
+    'user_guide/benchmarks.qmd'). Quarto always executes code when rendering
+    individual files, even with freeze enabled — this is how you update
+    frozen outputs.
+
+    Use --clean to wipe the entire _freeze/ cache before re-executing.
+    This forces a full refresh of all specified pages from scratch.
+
+    Use --info to see the freeze status of all pages without rendering.
+
+    After running, the updated _freeze/ entries are ready to commit to
+    version control.
+
+    \b
+    Examples:
+      great-docs freeze user_guide/benchmarks.qmd
+      great-docs freeze user_guide/benchmarks.qmd user_guide/mcmc-demo.qmd
+      great-docs freeze user_guide/benchmarks.qmd --freeze-dir docs/_freeze
+      great-docs freeze user_guide/benchmarks.qmd --clean
+      great-docs freeze --info
+    """
+    import shutil
+    import subprocess
+
+    project_root = Path(project_path) if project_path else Path.cwd()
+    build_dir = project_root / "great-docs"
+    persist_dir = Path(freeze_dir) if freeze_dir else project_root / "_freeze"
+
+    if info:
+        _freeze_info(project_root, persist_dir)
+        return
+
+    if not pages:
+        click.echo("Error: Specify at least one PAGE, or use --info.", err=True)
+        sys.exit(1)
+
+    # --clean: wipe existing cache
+    if clean:
+        if persist_dir.exists():
+            shutil.rmtree(persist_dir)
+            click.echo(f"Cleaned {persist_dir.relative_to(project_root)}/")
+        build_freeze = build_dir / "_freeze"
+        if build_freeze.exists():
+            shutil.rmtree(build_freeze)
+
+    # Validate pages exist
+    missing = [p for p in pages if not (project_root / p).is_file()]
+    if missing:
+        for m in missing:
+            click.echo(f"Error: Page not found: {m}", err=True)
+        sys.exit(1)
+
+    # Always re-prepare the build directory so file hashes match what a full
+    # build would produce (frontmatter normalization, tag expansion, etc.).
+    # This is fast (steps 1-14 only, no render) and ensures the freeze cache
+    # will be valid for subsequent full builds.
+    click.echo("Preparing build directory...")
+    try:
+        docs = GreatDocs(project_path=project_path)
+        docs._prepare_for_freeze()
+    except SystemExit:
+        pass  # Build prep may exit but that's OK
+    except Exception as e:
+        click.echo(f"Error during build prep: {e}", err=True)
+        sys.exit(1)
+
+    if not (build_dir / "_quarto.yml").exists():
+        click.echo("Error: Build directory is not ready. Run 'great-docs build' first.", err=True)
+        sys.exit(1)
+
+    # Render each page individually (forces execution even with freeze)
+    click.echo()
+    rendered: list[str] = []
+    failed: list[str] = []
+
+    for page in pages:
+        # Find the page's location in the build directory
+        # Pages from user_guide/ are copied into great-docs/user-guide/
+        # Numeric prefixes are stripped (e.g., 24-freeze-demo.qmd -> freeze-demo.qmd)
+        page_path = Path(page)
+        qmd_name = page_path.name
+
+        # Search for the file in the build directory
+        candidates = list(build_dir.rglob(qmd_name))
+        if not candidates:
+            # Try replacing underscores with hyphens (user_guide -> user-guide)
+            alt_path = str(page_path).replace("_", "-")
+            candidates = list(build_dir.rglob(Path(alt_path).name))
+        if not candidates:
+            # Try stripping numeric prefix (e.g., 24-freeze-demo.qmd -> freeze-demo.qmd)
+            import re as _re
+
+            stripped_name = _re.sub(r"^\d+[-_]", "", qmd_name)
+            if stripped_name != qmd_name:
+                candidates = list(build_dir.rglob(stripped_name))
+        if not candidates:
+            # Try both: underscores to hyphens AND stripped prefix
+            stripped_alt = _re.sub(r"^\d+[-_]", "", Path(alt_path).name)
+            if stripped_alt != Path(alt_path).name:
+                candidates = list(build_dir.rglob(stripped_alt))
+
+        if not candidates:
+            click.echo(f"  ✗ {page} — not found in build directory", err=True)
+            click.echo(
+                "    Hint: Run 'great-docs build' first to set up the build directory.",
+                err=True,
+            )
+            failed.append(page)
+            continue
+
+        # Use the first match
+        target = candidates[0]
+        rel_target = target.relative_to(build_dir)
+
+        click.echo(f"  Rendering {page} → {rel_target} ...")
+        freeze_env = {**os.environ, "GD_FREEZE_ONLY": "1"}
+        result = subprocess.run(
+            ["quarto", "render", str(rel_target)],
+            cwd=build_dir,
+            capture_output=True,
+            text=True,
+            env=freeze_env,
+        )
+
+        if result.returncode != 0:
+            click.echo(f"  ✗ {page} — render failed", err=True)
+            if result.stderr:
+                # Show last few lines of error
+                err_lines = result.stderr.strip().splitlines()[-5:]
+                for line in err_lines:
+                    click.echo(f"    {line}", err=True)
+            failed.append(page)
+        else:
+            rendered.append(page)
+            click.echo(f"  ✓ {page}")
+
+    # Copy _freeze/ from build dir to persistent location
+    build_freeze = build_dir / "_freeze"
+    if build_freeze.is_dir() and rendered:
+        click.echo()
+        click.echo(f"Persisting _freeze/ → {persist_dir.relative_to(project_root)}/")
+        persist_dir.mkdir(parents=True, exist_ok=True)
+
+        # Merge: copy only updated entries (don't wipe existing cache for other pages)
+        updated_files = 0
+        for item in build_freeze.iterdir():
+            dest = persist_dir / item.name
+            if item.is_dir():
+                if dest.exists():
+                    shutil.rmtree(dest)
+                shutil.copytree(item, dest)
+            else:
+                shutil.copy2(item, dest)
+            updated_files += sum(1 for _ in (dest.rglob("*") if dest.is_dir() else [dest]))
+
+        click.echo(f"  Updated {updated_files} cached file(s)")
+
+        # Show git status hint
+        click.echo()
+        click.echo("To commit the updated freeze cache:")
+        click.echo(f"  git add {persist_dir.relative_to(project_root)}/")
+        click.echo(f'  git commit -m "Update freeze cache for {", ".join(rendered)}"')
+    elif not rendered:
+        click.echo()
+        click.echo("No pages rendered successfully.")
+    else:
+        click.echo()
+        click.echo("No _freeze/ directory produced (pages may not have executable code).")
+
+    if failed:
+        click.echo()
+        click.echo(f"{len(failed)} page(s) failed to render.", err=True)
+        sys.exit(1)
+
+
+cli.add_command(freeze)
 
 
 @click.command(name="setup-github-pages")

@@ -203,6 +203,21 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # str: inline HTML text (e.g., a <script> or <link> tag)
     # list[str | dict]: list of inline text strings or {"text": ...} / {"file": ...} entries
     "include_in_header": [],
+    # Freeze configuration for Quarto code execution caching
+    # Controls whether computational documents are re-executed during builds.
+    # None/False: disabled (default) — all documents are executed on every build
+    # "auto": re-render only when source changes (execute: freeze: auto)
+    # True: never re-render during project render (execute: freeze: true)
+    # dict: {"mode": "auto"|true, "pre_render": str|list[str]}
+    #   mode: freeze mode ("auto" or true)
+    #   pre_render: script(s) to run before Quarto render (e.g., to copy _freeze/ into build dir)
+    "freeze": None,
+    # Pre-render scripts (alternative to freeze.pre_render)
+    # Scripts run before Quarto's render step (Quarto's native pre-render hook).
+    # str: single script path (relative to project root)
+    # list[str]: multiple script paths
+    # These are copied into the build directory and configured in _quarto.yml.
+    "pre_render": None,
     # Agent Skills (skill.md) generation
     # Generates a SKILL.md file conforming to the Agent Skills specification
     # (https://agentskills.io/) so coding agents can learn to use the package.
@@ -1129,6 +1144,63 @@ class Config:
                     result.append(item)
             return result
         return []
+
+    @property
+    def freeze(self) -> str | bool | None:
+        """Get the freeze mode for Quarto code execution caching.
+
+        Returns
+        -------
+        str | bool | None
+            - None or False: freeze disabled
+            - "auto": re-render only when source changes
+            - True: never re-render during project render
+        """
+        raw = self.get("freeze")
+        if raw is None or raw is False:
+            return None
+        if isinstance(raw, dict):
+            return raw.get("mode", "auto")
+        if raw is True or raw == "auto":
+            return raw
+        # Accept string "true" as True
+        if isinstance(raw, str) and raw.lower() == "true":
+            return True
+        return None
+
+    @property
+    def pre_render(self) -> list[str]:
+        """Get the normalized list of pre-render script paths.
+
+        Combines scripts from both ``freeze.pre_render`` and the top-level ``pre_render`` key.
+
+        Returns
+        -------
+        list[str]
+            List of script paths relative to the project root.
+        """
+        scripts: list[str] = []
+
+        # Check freeze dict form for pre_render
+        raw_freeze = self.get("freeze")
+        if isinstance(raw_freeze, dict):
+            freeze_scripts = raw_freeze.get("pre_render")
+            if isinstance(freeze_scripts, str):
+                scripts.append(freeze_scripts)
+            elif isinstance(freeze_scripts, list):
+                scripts.extend(s for s in freeze_scripts if isinstance(s, str))
+
+        # Check top-level pre_render
+        raw_pre = self.get("pre_render")
+        if isinstance(raw_pre, str):
+            if raw_pre not in scripts:
+                scripts.append(raw_pre)
+        elif isinstance(raw_pre, list):
+            for s in raw_pre:
+                if isinstance(s, str) and s not in scripts:
+                    scripts.append(s)
+
+        return scripts
 
     @property
     def nav_icons(self) -> dict[str, dict[str, str]] | None:
