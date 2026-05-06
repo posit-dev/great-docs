@@ -152,6 +152,7 @@ sections:
           - add-custom-domain.qmd
           - enable-multi-version-docs.qmd
           - use-version-fences-and-badges.qmd
+          - use-freeze-cache.qmd
       - section: AI & LLMs
         contents:
           - install-great-docs-skill.qmd
@@ -162,6 +163,7 @@ sections:
         contents:
           - fix-common-build-errors.qmd
           - proofread-documentation.qmd
+          - freeze-demo.qmd
 
 # Sidebar Filter
 # --------------
@@ -255,6 +257,7 @@ nav_icons:
     Diagrams: shapes
     Videos: video
     Building & Previewing: hammer
+    Freeze & Caching: snowflake
     Deployment: cloud-upload
     SEO Optimization: search
     Social Cards: share-2
