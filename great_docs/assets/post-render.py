@@ -1,8 +1,15 @@
+from __future__ import annotations
+
 import glob
 import html
 import json
 import os
 import re
+
+# Skip post-render processing during freeze-only renders
+if os.environ.get("GD_FREEZE_ONLY"):
+    print("Skipping post-render (freeze-only mode)")
+    raise SystemExit(0)
 
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
@@ -4263,6 +4270,11 @@ def generate_markdown_pages():
 
         # Skip search.json and other non-page files
         if not html_file.endswith(".html"):
+            continue
+
+        # Skip skill.html as the raw skill.md is served directly as a resource
+        # and should not be overwritten by a generated .md from rendered HTML
+        if rel == "skill.html" or rel == os.path.join("skill.html"):
             continue
 
         try:

@@ -608,6 +608,176 @@ class TestIncludeInHeader:
         assert cfg.include_in_header == []
 
 
+class TestFreeze:
+    def test_default_none(self, tmp_project: Path):
+        assert Config(tmp_project).freeze is None
+
+    def test_auto_string(self, tmp_project: Path):
+        cfg = _make_config(tmp_project, "freeze: auto\n")
+        assert cfg.freeze == "auto"
+
+    def test_true_bool(self, tmp_project: Path):
+        cfg = _make_config(tmp_project, "freeze: true\n")
+        assert cfg.freeze is True
+
+    def test_false_disabled(self, tmp_project: Path):
+        cfg = _make_config(tmp_project, "freeze: false\n")
+        assert cfg.freeze is None
+
+    def test_dict_form_mode(self, tmp_project: Path):
+        cfg = _make_config(tmp_project, "freeze:\n  mode: auto\n  pre_render: restore.py\n")
+        assert cfg.freeze == "auto"
+
+    def test_dict_form_mode_true(self, tmp_project: Path):
+        cfg = _make_config(tmp_project, "freeze:\n  mode: true\n")
+        # YAML parses `mode: true` as boolean True
+        assert cfg.freeze is True
+
+    def test_string_true(self, tmp_project: Path):
+        """String 'true' is normalized to boolean True."""
+        cfg = Config(tmp_project)
+        cfg._config["freeze"] = "true"
+        assert cfg.freeze is True
+
+
+class TestPreRender:
+    def test_default_empty(self, tmp_project: Path):
+        assert Config(tmp_project).pre_render == []
+
+    def test_single_string(self, tmp_project: Path):
+        cfg = _make_config(tmp_project, "pre_render: scripts/restore.py\n")
+        assert cfg.pre_render == ["scripts/restore.py"]
+
+    def test_list(self, tmp_project: Path):
+        cfg = _make_config(tmp_project, "pre_render:\n  - scripts/a.py\n  - scripts/b.py\n")
+        assert cfg.pre_render == ["scripts/a.py", "scripts/b.py"]
+
+    def test_from_freeze_dict(self, tmp_project: Path):
+        cfg = _make_config(tmp_project, "freeze:\n  mode: auto\n  pre_render: scripts/restore.py\n")
+        assert cfg.pre_render == ["scripts/restore.py"]
+
+    def test_freeze_dict_list(self, tmp_project: Path):
+        cfg = _make_config(
+            tmp_project,
+            "freeze:\n  mode: auto\n  pre_render:\n    - a.py\n    - b.py\n",
+        )
+        assert cfg.pre_render == ["a.py", "b.py"]
+
+    def test_combined_no_duplicates(self, tmp_project: Path):
+        cfg = _make_config(
+            tmp_project,
+            "freeze:\n  mode: auto\n  pre_render: scripts/restore.py\npre_render: scripts/restore.py\n",
+        )
+        assert cfg.pre_render == ["scripts/restore.py"]
+
+    def test_combined_different_scripts(self, tmp_project: Path):
+        cfg = _make_config(
+            tmp_project,
+            "freeze:\n  mode: auto\n  pre_render: a.py\npre_render: b.py\n",
+        )
+        assert cfg.pre_render == ["a.py", "b.py"]
+
+
+class TestNormalizeFreezeShorthand:
+    """Test the page-level `freeze:` → `execute: freeze:` transformation."""
+
+    def _make_docs(self, tmp_path: Path):
+        """Create a minimal GreatDocs instance with a build directory."""
+        from great_docs.core import GreatDocs
+
+        (tmp_path / "great-docs.yml").write_text("freeze: auto\n")
+        # Minimal pyproject.toml so GreatDocs doesn't error
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "testpkg"\nversion = "0.1"\n')
+        docs = GreatDocs(project_path=str(tmp_path))
+        # Create build dir manually for testing
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        return docs
+
+    def test_shorthand_auto(self, tmp_project: Path):
+        docs = self._make_docs(tmp_project)
+        qmd = docs.project_path / "page.qmd"
+        qmd.write_text("---\ntitle: Test\nfreeze: auto\n---\n\n# Hello\n")
+
+        count = docs._normalize_freeze_shorthand()
+
+        assert len(count) == 1
+        result = qmd.read_text()
+        assert "freeze: auto" not in result.split("---")[1].split("\n")[0:5] or "execute:" in result
+        # Verify proper nesting
+        assert "execute:\n  freeze: auto" in result
+
+    def test_shorthand_true(self, tmp_project: Path):
+        docs = self._make_docs(tmp_project)
+        qmd = docs.project_path / "page.qmd"
+        qmd.write_text("---\ntitle: Test\nfreeze: true\n---\n\n# Hello\n")
+
+        count = docs._normalize_freeze_shorthand()
+
+        assert len(count) == 1
+        result = qmd.read_text()
+        assert "execute:\n  freeze: true" in result
+
+    def test_already_nested_unchanged(self, tmp_project: Path):
+        docs = self._make_docs(tmp_project)
+        qmd = docs.project_path / "page.qmd"
+        original = "---\ntitle: Test\nexecute:\n  freeze: auto\n---\n\n# Hello\n"
+        qmd.write_text(original)
+
+        count = docs._normalize_freeze_shorthand()
+
+        assert len(count) == 0
+        assert qmd.read_text() == original
+
+    def test_no_frontmatter_skipped(self, tmp_project: Path):
+        docs = self._make_docs(tmp_project)
+        qmd = docs.project_path / "page.qmd"
+        qmd.write_text("# No frontmatter\n")
+
+        count = docs._normalize_freeze_shorthand()
+        assert len(count) == 0
+
+    def test_no_freeze_key_skipped(self, tmp_project: Path):
+        docs = self._make_docs(tmp_project)
+        qmd = docs.project_path / "page.qmd"
+        original = "---\ntitle: Normal Page\n---\n\n# Hello\n"
+        qmd.write_text(original)
+
+        count = docs._normalize_freeze_shorthand()
+
+        assert len(count) == 0
+        assert qmd.read_text() == original
+
+    def test_existing_execute_block_gets_freeze_added(self, tmp_project: Path):
+        docs = self._make_docs(tmp_project)
+        qmd = docs.project_path / "page.qmd"
+        qmd.write_text("---\ntitle: Test\nexecute:\n  echo: false\nfreeze: auto\n---\n\n# Hi\n")
+
+        count = docs._normalize_freeze_shorthand()
+
+        assert len(count) == 1
+        result = qmd.read_text()
+        # freeze: auto is inserted under execute: block
+        assert "execute:" in result
+        assert "  freeze: auto" in result
+        assert "  echo: false" in result
+        # The standalone freeze: line should be gone
+        lines = result.split("---")[1].strip().split("\n")
+        top_level_freeze = [l for l in lines if l == "freeze: auto"]
+        assert top_level_freeze == []
+
+    def test_multiple_files(self, tmp_project: Path):
+        docs = self._make_docs(tmp_project)
+        subdir = docs.project_path / "user-guide"
+        subdir.mkdir()
+        (docs.project_path / "a.qmd").write_text("---\nfreeze: auto\n---\n\n# A\n")
+        (subdir / "b.qmd").write_text("---\nfreeze: true\n---\n\n# B\n")
+        (docs.project_path / "c.qmd").write_text("---\ntitle: No freeze\n---\n\n# C\n")
+
+        count = docs._normalize_freeze_shorthand()
+
+        assert len(count) == 2
+
+
 class TestNavbarStyle:
     def test_default_none(self, tmp_project: Path):
         assert Config(tmp_project).navbar_style is None

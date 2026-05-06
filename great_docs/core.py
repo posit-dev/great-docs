@@ -172,6 +172,22 @@ class GreatDocs:
         post_render_dst = scripts_dir / "post-render.py"
         shutil.copy2(post_render_src, post_render_dst)
 
+        # Copy restore-freeze script when freeze is configured OR _freeze/ exists
+        has_freeze_cache = (self.project_root / "_freeze").is_dir()
+        if self._config.freeze or has_freeze_cache:
+            restore_freeze_src = self.assets_path / "restore-freeze.py"
+            restore_freeze_dst = scripts_dir / "restore-freeze.py"
+            shutil.copy2(restore_freeze_src, restore_freeze_dst)
+
+        # Copy user-provided pre-render scripts
+        for script_path in self._config.pre_render:
+            src = self.project_root / script_path
+            if src.is_file():
+                dst = scripts_dir / src.name
+                shutil.copy2(src, dst)
+            else:
+                print(f"Warning: Pre-render script not found: {script_path}")
+
         # Copy qrenderer assets
         renderer_src = self.assets_path / "_renderer.py"
         if renderer_src.exists():
@@ -4404,6 +4420,63 @@ class GreatDocs:
 
         # No frontmatter, create one
         return f"---\n{key}: {yaml_value}\n---\n\n{content}"
+
+    # Regex for detecting a top-level `freeze:` key in YAML frontmatter
+    _FREEZE_FM_RE = re.compile(r"^freeze:\s+(.+)$", re.MULTILINE)
+
+    def _normalize_freeze_shorthand(self) -> list[str]:
+        """Rewrite page-level `freeze: auto|true` to `execute: freeze: auto|true`.
+
+        Scans all `.qmd` files in the build directory and transforms the Great Docs shorthand into
+        the nested form that Quarto understands.
+
+        Returns the list of relative file paths that were modified.
+        """
+        modified: list[str] = []
+        for qmd in self.project_path.rglob("*.qmd"):
+            content = qmd.read_text(encoding="utf-8")
+            if not content.startswith("---"):
+                continue
+
+            parts = content.split("---", 2)
+            if len(parts) < 3:
+                continue
+
+            frontmatter = parts[1]
+
+            # Check for top-level `freeze:` (not indented under `execute:`)
+            # The regex uses ^ with MULTILINE, so it only matches `freeze:` at column 0
+            m = self._FREEZE_FM_RE.search(frontmatter)
+            if not m:
+                continue
+
+            freeze_value = m.group(1).strip()
+
+            # Remove the standalone `freeze:` line
+            new_frontmatter = frontmatter[: m.start()] + frontmatter[m.end() :]
+
+            # Check if `execute:` block already exists
+            exec_match = re.search(r"^execute:\s*$", new_frontmatter, re.MULTILINE)
+            if exec_match:
+                # Insert `  freeze: <value>` after the `execute:` line
+                insert_pos = exec_match.end()
+                new_frontmatter = (
+                    new_frontmatter[:insert_pos]
+                    + f"\n  freeze: {freeze_value}"
+                    + new_frontmatter[insert_pos:]
+                )
+            else:
+                # Add a new `execute:` block
+                new_frontmatter = (
+                    new_frontmatter.rstrip() + f"\nexecute:\n  freeze: {freeze_value}\n"
+                )
+
+            content = f"---{new_frontmatter}---{parts[2]}"
+            qmd.write_text(content, encoding="utf-8")
+            rel_path = str(qmd.relative_to(self.project_path))
+            modified.append(rel_path)
+
+        return modified
 
     def _generate_user_guide_sidebar(self, user_guide_info: dict) -> dict:
         """
@@ -9826,6 +9899,33 @@ body-classes: "gd-homepage"
         # Add post-render script
         config["project"]["post-render"] = "scripts/post-render.py"
 
+        # Build pre-render script list
+        pre_render_entries: list[str] = []
+
+        # Auto-inject restore-freeze when freeze is configured OR _freeze/ exists
+        freeze_mode = self._config.freeze
+        has_freeze_cache = (self.project_root / "_freeze").is_dir()
+        if freeze_mode is not None or has_freeze_cache:
+            pre_render_entries.append("scripts/restore-freeze.py")
+
+        # Add user-provided pre-render scripts
+        for s in self._config.pre_render:
+            entry = f"scripts/{Path(s).name}"
+            if entry not in pre_render_entries:
+                pre_render_entries.append(entry)
+
+        if pre_render_entries:
+            if len(pre_render_entries) == 1:
+                config["project"]["pre-render"] = pre_render_entries[0]
+            else:
+                config["project"]["pre-render"] = pre_render_entries
+
+        # Add freeze configuration (execute: freeze:)
+        if freeze_mode is not None:
+            if "execute" not in config:
+                config["execute"] = {}
+            config["execute"]["freeze"] = freeze_mode
+
         # Add resources to copy static JS files to _site
         if "resources" not in config["project"]:
             config["project"]["resources"] = []
@@ -12631,6 +12731,103 @@ body-classes: "gd-homepage"
 
         print("✅ Great-docs uninstalled successfully!")
 
+    def _prepare_for_freeze(self) -> None:
+        """Run the build preparation steps (1–14 + normalization) without rendering.
+
+        This ensures the build directory contains files in exactly the same state
+        as a full ``build()`` would produce, so that freeze cache hashes remain valid
+        across subsequent full builds.
+        """
+        import os
+        from contextlib import redirect_stdout
+
+        devnull = open(os.devnull, "w")
+
+        # Step 1: Prepare build directory (copies files, applies transformations)
+        with redirect_stdout(devnull):
+            self._prepare_build_directory()
+
+        # Change to build directory for subsequent steps
+        original_dir = os.getcwd()
+        try:
+            os.chdir(self.project_path)
+
+            # Steps 2-13: Process user guide, sections, pages, tags, etc.
+            # These can modify .qmd files (add breadcrumbs, expand tags, etc.)
+            with redirect_stdout(devnull):
+                try:
+                    self._refresh_api_reference_config()
+                except Exception:
+                    pass
+                try:
+                    self._generate_llms_txt()
+                    self._generate_llms_full_txt()
+                except Exception:
+                    pass
+                try:
+                    self._generate_skill_md()
+                except Exception:
+                    pass
+                try:
+                    self._generate_source_links()
+                except Exception:
+                    pass
+                try:
+                    self._generate_changelog()
+                except Exception:
+                    pass
+                try:
+                    self._generate_cli_reference()
+                except Exception:
+                    pass
+                try:
+                    self._process_user_guide()
+                except Exception:
+                    pass
+                try:
+                    self._process_sections()
+                except Exception:
+                    pass
+                try:
+                    self._process_custom_pages()
+                except Exception:
+                    pass
+                try:
+                    self._process_page_tags()
+                except Exception:
+                    pass
+                try:
+                    self._process_page_status()
+                except Exception:
+                    pass
+                try:
+                    self._copy_assets()
+                except Exception:
+                    pass
+
+            # Step 14: Generate API reference
+            try:
+                from quartodoc import Builder
+
+                with redirect_stdout(devnull):
+                    quarto_yml = self.project_path / "_quarto.yml"
+                    if quarto_yml.exists():
+                        builder = Builder.from_quarto_config(str(quarto_yml))
+                        builder.build()
+            except Exception:
+                pass
+
+            # Normalize freeze shorthand (runs right before render in a full build)
+            self._normalize_freeze_shorthand()
+
+            # Update quarto config (ensures _quarto.yml has pre-render, freeze, etc.)
+            with redirect_stdout(devnull):
+                self._update_quarto_config()
+
+        finally:
+            os.chdir(original_dir)
+            devnull.close()
+
     def build(
         self,
         watch: bool = False,
@@ -12804,7 +13001,7 @@ body-classes: "gd-homepage"
         except Exception:
             pass  # never let estimation crash the build
 
-        total_steps = 17
+        total_steps = 18
         est_seconds = estimate_build_time(
             n_api_items=n_api_items,
             n_total_pages=n_total_pages,
@@ -12923,6 +13120,16 @@ body-classes: "gd-homepage"
         with _quiet_prints():
             self._prepare_build_directory()
         log.step_done("Ready")
+
+        # Log freeze/pre-render configuration
+        freeze_mode = self._config.freeze
+        pre_render_scripts = self._config.pre_render
+        if freeze_mode is not None:
+            mode_label = "auto" if freeze_mode == "auto" else "true"
+            log.detail(f"Freeze mode: {mode_label}")
+        if pre_render_scripts:
+            for script in pre_render_scripts:
+                log.detail(f"Pre-render script: {script}")
 
         # Change to build directory
         original_dir = os.getcwd()
@@ -13159,10 +13366,29 @@ body-classes: "gd-homepage"
             else:
                 log.step_skip(step, "API reference disabled")
 
+            # ── Step 15: Prepare freeze cache ──────────────────────────
+            step += 1
+            log.step_start(step, "Prepare freeze cache")
+
+            # Normalize page-level freeze shorthand before Quarto render
+            frozen_pages = self._normalize_freeze_shorthand()
+            has_freeze_cache = (self.project_root / "_freeze").is_dir()
+
+            if frozen_pages or has_freeze_cache:
+                if frozen_pages:
+                    n = len(frozen_pages)
+                    log.step_done(f"Using {n} page(s) from the freeze cache")
+                    for p in frozen_pages:
+                        log.detail(f"  - {p}")
+                else:
+                    log.step_done("Freeze cache will be restored during render")
+            else:
+                log.step_skip(step, "no frozen pages")
+
             # Get environment with QUARTO_PYTHON set
             quarto_env = self._get_quarto_env()
 
-            # ── Step 15: Build site with Quarto ────────────────────────
+            # ── Step 16: Build site with Quarto ────────────────────────
             step += 1
             log.step_start(step, "Build site with Quarto")
             if watch:
@@ -13223,7 +13449,7 @@ body-classes: "gd-homepage"
                     if not vb_result["versions_built"]:
                         log.step_fail("All version builds failed")
 
-                        # Skip steps 16, 17
+                        # Skip steps 17, 18
                         step += 1
                         log.step_start(step, "Post-render processing")
                         log.step_skip(step, "build failed")
@@ -13241,12 +13467,12 @@ body-classes: "gd-homepage"
                     n_ok = len(vb_result["versions_built"])
                     log.step_done(f"{n_ok} version(s) rendered")
 
-                # ── Step 16: Post-render processing ────────────────
+                # ── Step 17: Post-render processing ────────────────
                 step += 1
                 log.step_start(step, "Post-render processing")
                 log.step_done("Version assembly complete")
 
-                # ── Step 17: Generate SEO files ────────────────────
+                # ── Step 18: Generate SEO files ────────────────────
                 step += 1
                 log.step_start(step, "Generate SEO files")
                 try:
@@ -13328,7 +13554,7 @@ body-classes: "gd-homepage"
                             f"{n} transforms applied"  # pragma: no cover
                         )  # pragma: no cover
 
-                    # ── Step 17: Generate SEO files ────────────────────
+                    # ── Step 18: Generate SEO files ────────────────────
                     step += 1  # pragma: no cover
                     log.step_start(step, "Generate SEO files")  # pragma: no cover
                     try:  # pragma: no cover

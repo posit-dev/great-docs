@@ -612,10 +612,10 @@ class TestBuildLogHeader:
         assert "great-docs build" in output
 
     def test_header_contains_step_count(self):
-        log, stream = _make_log(total_steps=17)
+        log, stream = _make_log(total_steps=18)
         log.header()
         output = stream.getvalue()
-        assert "17 steps" in output
+        assert "18 steps" in output
 
     def test_header_contains_estimate(self):
         log, stream = _make_log(estimated_seconds=252)
@@ -696,16 +696,16 @@ class TestBuildLogStepStart:
         assert "━" in output
 
     def test_step_start_pads_number(self):
-        log, stream = _make_log(force_color=False, total_steps=17)
+        log, stream = _make_log(force_color=False, total_steps=18)
         log.step_start(1, "First step")
         output = stream.getvalue()
-        assert "Step  1/17" in output
+        assert "Step  1/18" in output
 
     def test_step_start_double_digit(self):
-        log, stream = _make_log(force_color=False, total_steps=17)
+        log, stream = _make_log(force_color=False, total_steps=18)
         log.step_start(15, "Build site")
         output = stream.getvalue()
-        assert "Step 15/17" in output
+        assert "Step 15/18" in output
 
     def test_step_start_resets_warnings(self):
         log, stream = _make_log()
