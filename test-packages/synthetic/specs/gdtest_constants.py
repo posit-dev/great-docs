@@ -84,8 +84,9 @@ SPEC = {
             "HandlerFunc",
             "process",
         ],
+        "nodoc_items": ["HandlerFunc"],
         "num_exports": 5,
         "has_user_guide": False,
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "sechdg", "sbsec", "hdg"],
+    },
 }
