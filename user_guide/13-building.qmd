@@ -201,6 +201,73 @@ If Great Docs reports an error during dynamic introspection, it will automatical
 
 If your site looks correct in some places but outdated in others, the most reliable fix is a clean rebuild: delete the `great-docs/` directory and run `great-docs build` again. The output directory is fully regenerated each time, so there is no risk in deleting it.
 
+## Build Timings [version-badge new 0.12] {#build-timings}
+
+Every time `great-docs build` runs, it records how long each page takes to render and writes the results to `great-docs/_site/build-timings.json`. This helps you identify slow pages that are bottlenecks in your build.
+
+### Viewing Timings
+
+Use the `great-docs timings` command to display a sorted table (slowest pages first):
+
+```{.bash filename="Terminal"}
+great-docs timings
+```
+
+```{.default}
+  Build time: 2026-05-06 14:32:01
+  Total: 47.2s across 38 pages
+
+  Page                              Time
+  ─────────────────────────────────────────────────
+  reference/GT.qmd                  12.4s  ████████████
+  reference/GT.tab_style.qmd         6.1s  ██████
+  user-guide/theming.qmd             4.8s  █████
+  reference/GT.fmt_number.qmd        3.9s  ████
+  ...
+```
+
+Pages served from the [Quarto freeze cache](freeze.qmd) are marked with a ❄ indicator. This view makes it easy to spot which pages are worth optimizing or splitting up.
+
+### Filtering Results
+
+Show only the top N slowest pages:
+
+```{.bash filename="Terminal"}
+great-docs timings --top 5
+```
+
+For multi-version builds, filter by version:
+
+```{.bash filename="Terminal"}
+great-docs timings --version 0.10
+```
+
+These filters are useful when you only care about a specific slice of the build.
+
+### Custom Output Directories
+
+If you built with a custom `--output-dir`, pass the same path:
+
+```{.bash filename="Terminal"}
+great-docs timings --output-dir ./public
+```
+
+This ensures the command can locate `build-timings.json` regardless of where the site was rendered.
+
+### JSON Output
+
+For scripting or CI integration, use `--json` to get the raw data:
+
+```{.bash filename="Terminal"}
+great-docs timings --json
+```
+
+The JSON format is convenient for piping into other tools like `jq` or for building custom dashboards.
+
+### CI Integration
+
+The `great-docs setup-github-pages` workflow automatically uploads `build-timings.json` as a separate artifact named **build-timings** in each CI run. You can download it from the workflow run's Artifacts section on GitHub to compare build performance over time. This makes it straightforward to track regressions and monitor improvements across commits.
+
 ## Next Steps
 
 The build pipeline is designed to be fast and predictable. For most projects, `great-docs build` is all you need. When something goes wrong, the troubleshooting tips above cover the most common causes.
