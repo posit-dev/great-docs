@@ -11179,6 +11179,13 @@ body-classes: "gd-homepage"
             print("No GitHub repository info available; skipping version badge metadata")
             meta_path.unlink(missing_ok=True)
 
+        # Register Quarto extension filters (output-title wraps cell
+        # outputs in a titled container when #| output-title: is set)
+        if "filters" not in config:
+            config["filters"] = []
+        if "output-title" not in config["filters"]:
+            config["filters"].append("output-title")
+
         # Write back to file
         self._write_quarto_yml(quarto_yml, config)
 
@@ -12897,6 +12904,11 @@ body-classes: "gd-homepage"
             # Normalize freeze shorthand (runs right before render in a full build)
             self._normalize_freeze_shorthand()
 
+            # Expand source-code: mock cells
+            from great_docs._mock_code import process_directory as _expand_mock
+
+            _expand_mock(self.project_path)
+
             # Update quarto config (ensures _quarto.yml has pre-render, freeze, etc.)
             with redirect_stdout(devnull):
                 self._update_quarto_config()
@@ -13482,6 +13494,16 @@ body-classes: "gd-homepage"
                     log.step_done("Freeze cache will be restored during render")
             else:
                 log.step_skip(step, "no frozen pages")
+
+            # Expand source-code: mock cells before Quarto sees them
+            from great_docs._mock_code import process_directory as _expand_mock_cells
+
+            mock_modified = _expand_mock_cells(self.project_path)
+            if mock_modified:
+                log.detail(
+                    f"Expanded {len(mock_modified)} mock-code cell(s): "
+                    + ", ".join(mock_modified)
+                )
 
             # Get environment with QUARTO_PYTHON set
             quarto_env = self._get_quarto_env()
