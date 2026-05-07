@@ -38310,7 +38310,7 @@ api-reference:
 
 
 def test_generate_skill_md_well_known():
-    """Test that SKILL.md is copied to .well-known/ directory."""
+    """Test that SKILL.md is copied to .well-known/ directories with index.json."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
@@ -38339,13 +38339,29 @@ api-reference:
 
         docs._generate_skill_md()
 
-        # Check .well-known placement
+        # Check legacy .well-known/skills/default placement
         well_known = great_docs_dir / ".well-known" / "skills" / "default" / "SKILL.md"
         assert well_known.exists()
 
         # Content should match skill.md
         skill_md = great_docs_dir / "skill.md"
         assert skill_md.read_text() == well_known.read_text()
+
+        # Check preferred .well-known/agent-skills/{name}/SKILL.md placement
+        agent_skill = great_docs_dir / ".well-known" / "agent-skills" / "test-package" / "SKILL.md"
+        assert agent_skill.exists()
+        assert skill_md.read_text() == agent_skill.read_text()
+
+        # Check index.json discovery manifest
+        index_json = great_docs_dir / ".well-known" / "agent-skills" / "index.json"
+        assert index_json.exists()
+        import json
+
+        index_data = json.loads(index_json.read_text())
+        assert "skills" in index_data
+        assert len(index_data["skills"]) == 1
+        assert index_data["skills"][0]["name"] == "test-package"
+        assert "SKILL.md" in index_data["skills"][0]["files"]
 
 
 def test_generate_skill_md_disabled():
