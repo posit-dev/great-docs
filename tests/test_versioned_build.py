@@ -2620,7 +2620,7 @@ class TestRunVersionedBuild:
                 site_dir = d / "_site"
                 site_dir.mkdir(parents=True, exist_ok=True)
                 (site_dir / "index.html").write_text("<html>hi</html>")
-                results.append((str(d), 0, "", ""))
+                results.append((str(d), 0, "", "", []))
             return results
 
         with patch(
@@ -2654,7 +2654,7 @@ class TestRunVersionedBuild:
                 site_dir = d / "_site"
                 site_dir.mkdir(parents=True, exist_ok=True)
                 (site_dir / "index.html").write_text("<html/>")
-                results.append((str(d), 0, "", ""))
+                results.append((str(d), 0, "", "", []))
             return results
 
         with patch(
@@ -2686,7 +2686,7 @@ class TestRunVersionedBuild:
                 site_dir = d / "_site"
                 site_dir.mkdir(parents=True, exist_ok=True)
                 (site_dir / "index.html").write_text("<html/>")
-                results.append((str(d), 0, "", ""))
+                results.append((str(d), 0, "", "", []))
             return results
 
         with patch(
@@ -2714,7 +2714,7 @@ class TestRunVersionedBuild:
 
         def mock_render(build_dirs, **kwargs):
             # All versions fail
-            return [(str(d), 1, "", "ERROR: something broke") for d in build_dirs]
+            return [(str(d), 1, "", "ERROR: something broke", []) for d in build_dirs]
 
         with patch(
             "great_docs._versioned_build.render_versions_parallel",
@@ -2748,7 +2748,7 @@ class TestRunVersionedBuild:
                 site_dir = d / "_site"
                 site_dir.mkdir(parents=True, exist_ok=True)
                 (site_dir / "index.html").write_text("<html/>")
-                results.append((str(d), 0, "", ""))
+                results.append((str(d), 0, "", "", []))
             return results
 
         with patch(
@@ -2782,7 +2782,7 @@ class TestRunVersionedBuild:
                 site_dir = d / "_site"
                 site_dir.mkdir(parents=True, exist_ok=True)
                 (site_dir / "index.html").write_text("<html/>")
-                results.append((str(d), 0, "", ""))
+                results.append((str(d), 0, "", "", []))
             return results
 
         with patch(
@@ -3263,7 +3263,7 @@ class TestRenderVersionsParallelSingleNonStreaming:
             results = render_versions_parallel([d1])  # No callback, single dir
 
         assert len(results) == 1
-        assert results[0] == (str(d1), 0, "output", "")
+        assert results[0] == (str(d1), 0, "output", "", [])
 
 
 # ---------------------------------------------------------------------------
