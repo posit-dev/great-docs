@@ -227,7 +227,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "skill": {
         "enabled": True,
         "file": None,  # Path to a hand-written SKILL.md (overrides auto-generation)
-        "well_known": True,  # Also serve at /.well-known/skills/default/SKILL.md
+        "well_known": True,  # Also serve at /.well-known/agent-skills/{name}/SKILL.md + index.json
         "gotchas": [],  # List of gotcha strings for the Gotchas section
         "best_practices": [],  # List of best-practice strings
         "decision_table": [],  # Manual rows: [{"need": "...", "use": "..."}]
@@ -567,7 +567,7 @@ class Config:
 
     @property
     def skill_well_known(self) -> bool:
-        """Check if .well-known/skills/default/SKILL.md should be generated."""
+        """Check if .well-known/agent-skills/ discovery files should be generated."""
         return self.get("skill.well_known", True)
 
     @property
