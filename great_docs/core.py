@@ -14,8 +14,8 @@ from .config import Config
 def _patch_griffe():
     """Ensure griffe has CyclicAliasError and AliasResolutionError at top level.
 
-    Older griffe versions don't re-export these from the top-level package.
-    This patches them in so `griffe.CyclicAliasError` etc. work everywhere.
+    Older griffe versions don't re-export these from the top-level package. This patches them in so
+    `griffe.CyclicAliasError` etc. work everywhere.
     """
     import griffe
 
@@ -12552,6 +12552,79 @@ body-classes: "gd-homepage"
         self._generate_sitemap_xml()
         self._generate_robots_txt()
 
+    def _write_build_timing(
+        self,
+        page_timings: list[dict[str, object]] | None = None,
+        timings_by_version: dict[str, list[dict[str, object]]] | None = None,
+    ) -> Path | None:
+        """
+        Write `_site/build-timing.json` with per-page render durations.
+
+        For single-version builds, *page_timings* is a flat list. For multi-version builds,
+        *timings_by_version* is a `{tag: [timings]}` dict. Returns the path written, or `None` if
+        there was nothing to write.
+        """
+        import json
+        from datetime import datetime, timezone
+
+        site_dir = self.project_path / "_site"
+        if not site_dir.exists():
+            return None  # pragma: no cover
+
+        # Discover which pages had freeze cache entries.
+        # Check both the project root (where users persist _freeze/) and the
+        # build/project path (where it's restored during rendering).
+        frozen_stems: set[str] = set()
+        for freeze_dir in (self.project_root / "_freeze", self.project_path / "_freeze"):
+            if freeze_dir.is_dir():
+                for html_json in freeze_dir.rglob("execute-results/html.json"):
+                    # _freeze/user-guide/benchmarks/execute-results/html.json
+                    # → relative stem is "user-guide/benchmarks"
+                    rel = html_json.relative_to(freeze_dir)
+                    # Drop the last two parts (execute-results/html.json)
+                    stem = str(rel.parent.parent)
+                    frozen_stems.add(stem)
+
+        def _annotate(pages: list[dict[str, object]]) -> list[dict[str, object]]:
+            """Add 'frozen' boolean to each page entry."""
+            for p in pages:
+                page_str = str(p["page"])
+                # Strip .qmd/.html extension to get the stem
+                stem = page_str.rsplit(".", 1)[0] if "." in page_str else page_str
+                p["frozen"] = stem in frozen_stems
+            return pages
+
+        payload: dict[str, object] = {
+            "build_time": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+
+        if timings_by_version:
+            versions_payload: dict[str, object] = {}
+            total_seconds = 0.0
+            for tag, timings in timings_by_version.items():
+                ver_total = round(sum(t["seconds"] for t in timings), 3)
+                total_seconds += ver_total
+                versions_payload[tag] = {
+                    "seconds": ver_total,
+                    "pages": sorted(
+                        _annotate(timings), key=lambda t: t["seconds"], reverse=True
+                    ),
+                }
+            payload["total_seconds"] = round(total_seconds, 3)
+            payload["versions"] = versions_payload
+        elif page_timings:
+            total_seconds = round(sum(t["seconds"] for t in page_timings), 3)
+            payload["total_seconds"] = total_seconds
+            payload["pages"] = sorted(
+                _annotate(page_timings), key=lambda t: t["seconds"], reverse=True
+            )
+        else:
+            return None  # pragma: no cover
+
+        out_path = site_dir / "build-timing.json"
+        out_path.write_text(json.dumps(payload, indent=2) + "\n")
+        return out_path
+
     def _get_cli_help_text_for_llms(self) -> str:
         """
         Get CLI help text formatted for llms-full.txt.
@@ -12732,11 +12805,11 @@ body-classes: "gd-homepage"
         print("✅ Great-docs uninstalled successfully!")
 
     def _prepare_for_freeze(self) -> None:
-        """Run the build preparation steps (1–14 + normalization) without rendering.
+        """Run the build preparation steps (1-14 + normalization) without rendering.
 
-        This ensures the build directory contains files in exactly the same state
-        as a full ``build()`` would produce, so that freeze cache hashes remain valid
-        across subsequent full builds.
+        This ensures the build directory contains files in exactly the same state as a full
+        `build()` would produce, so that freeze cache hashes remain valid across subsequent full
+        builds.
         """
         import os
         from contextlib import redirect_stdout
@@ -13030,7 +13103,13 @@ body-classes: "gd-homepage"
             Lines starting with `##GD:PASS:` are collected into `result.passes` (a list of label
             strings). If *on_pass* is provided it is called with each label as it arrives. If
             *on_bar_done* is provided it is called once when the progress bar reaches 100%.
+
+            Page-level timing is recorded automatically: each `[i/N] page.qmd` progress line from
+            Quarto is timestamped so that per-page render durations can be computed after the
+            process exits.
             """
+            import time as _time_mod
+
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -13044,7 +13123,9 @@ body-classes: "gd-homepage"
             pass_labels: list[str] = []
             quarto_warnings: list[str] = []
             bar_finished = [False]  # mutable flag for closure
-            page_re = _re_build.compile(r"\[\s*(\d+)/(\d+)\]")
+            page_re = _re_build.compile(r"\[\s*(\d+)/(\d+)\]\s+(.+)")
+            # Each entry: (page_path, timestamp)
+            _page_timestamps: list[tuple[str, float]] = []
 
             def _finish_bar():
                 """Finish the progress bar, emit warnings, and notify caller."""
@@ -13069,6 +13150,8 @@ body-classes: "gd-homepage"
                         m = page_re.search(stripped)
                         if m:
                             cur, tot = int(m.group(1)), int(m.group(2))
+                            page_path = _ansi_re.sub("", m.group(3)).strip()
+                            _page_timestamps.append((page_path, _time_mod.monotonic()))
                             if tot != progress_bar.total:
                                 progress_bar.total = tot
                             progress_bar.update(cur)
@@ -13104,6 +13187,16 @@ body-classes: "gd-homepage"
             process.wait()
             stderr_thread.join(timeout=5)
 
+            # Compute per-page durations from consecutive timestamps
+            page_timings: list[dict[str, Any]] = []
+            for i, (page_path, ts) in enumerate(_page_timestamps):
+                if i + 1 < len(_page_timestamps):
+                    duration = _page_timestamps[i + 1][1] - ts
+                else:
+                    # Last page: measure until process exit
+                    duration = _time_mod.monotonic() - ts
+                page_timings.append({"page": page_path, "seconds": round(duration, 3)})
+
             class Result:
                 pass
 
@@ -13112,6 +13205,7 @@ body-classes: "gd-homepage"
             r.stderr = "".join(stderr_lines)
             r.stdout = ""
             r.passes = pass_labels
+            r.page_timings = page_timings
             return r
 
         # ── Step 1: Prepare build directory ────────────────────────────
@@ -13483,6 +13577,13 @@ body-classes: "gd-homepage"
                     log.warn(f"Error generating SEO files: {e}")
                     log.step_done("SEO files had issues")
 
+                # ── Write build-timing.json ────────────────────────
+                timing_path = self._write_build_timing(
+                    timings_by_version=vb_result.get("timings_by_version"),
+                )
+                if timing_path:
+                    log.detail(f"Wrote {timing_path.name}")
+
                 # ── Auto-save API snapshot (Strategy C) ────────────
                 try:
                     self._auto_save_snapshot()
@@ -13564,6 +13665,13 @@ body-classes: "gd-homepage"
                     except Exception as e:  # pragma: no cover
                         log.warn(f"Error generating SEO files: {e}")  # pragma: no cover
                         log.step_done("SEO files had issues")  # pragma: no cover
+
+                    # ── Write build-timing.json ────────────────────────
+                    timing_path = self._write_build_timing(  # pragma: no cover
+                        page_timings=result.page_timings,  # pragma: no cover
+                    )  # pragma: no cover
+                    if timing_path:  # pragma: no cover
+                        log.detail(f"Wrote {timing_path.name}")  # pragma: no cover
 
                     # ── Auto-save API snapshot (Strategy C) ────────────
                     if self._config.has_versions:  # pragma: no cover
