@@ -599,7 +599,7 @@ reference:
 
 Great Docs supports the [Agent Skills](https://agentskills.io/) open standard, which gives AI coding agents (Claude Code, GitHub Copilot, Cursor, Codex, Gemini CLI, and 30+ others) structured context about your package so they can write better code when using it.
 
-During the build, a `skill.md` file is placed in your docs directory (and at `.well-known/skills/default/SKILL.md` for auto-discovery). Users of your package can then install the skill into their agent of choice:
+During the build, a `skill.md` file is placed in your docs directory and published at `.well-known/agent-skills/<name>/SKILL.md` with a discovery manifest at `.well-known/agent-skills/index.json` (plus a legacy copy at `.well-known/skills/default/SKILL.md`). Users of your package can then install the skill into their agent of choice:
 
 ```bash
 npx skills add https://your-docs-site.com
