@@ -168,6 +168,49 @@ The built site is in `great-docs/_site/`. Upload this directory to your hosting 
 - **AWS S3**: Sync the `great-docs/_site/` folder to your bucket
 - **Any static host**: Copy contents of `great-docs/_site/`
 
+## Subdirectory Deployments
+
+If your site is hosted at a subpath rather than a domain root (for example,
+`https://internal.example.com/docs/mypackage/`), you need to tell Quarto the base URL so it
+generates correct root-relative paths for CSS, JS, and navigation links.
+
+Set `site_url` in `great-docs.yml`:
+
+```{.yaml filename="great-docs.yml"}
+site_url: "https://internal.example.com/docs/mypackage/"
+```
+
+This writes `website.site-url` into the generated `_quarto.yml` during every
+build, so you never have to patch the config manually.
+
+### What it fixes
+
+Without `site_url`, Quarto generates root-relative asset paths like `/site_libs/...` and
+`/reference/...`. When the site lives at a subpath, those paths resolve to the wrong location and
+the site appears broken (missing styles, broken navigation, 404s on the reference section, etc.).
+
+### Versioned sites
+
+For multi-version builds, Great Docs automatically appends the version prefix to `site-url` for
+non-latest versions. If your `site_url` is:
+
+```
+https://internal.example.com/docs/mypackage/
+```
+
+then version `0.2` (served at `/v/0.2/`) will use:
+
+```
+https://internal.example.com/docs/mypackage/v/0.2/
+```
+
+No extra configuration is needed.
+
+### When you don't need it
+
+If you deploy to a domain root (e.g., `https://yourpackage.github.io/` or a custom domain), you do
+not need to set `site_url`. Quarto's defaults work correctly in that case.
+
 ## Custom Domain
 
 To use a custom domain with GitHub Pages:
