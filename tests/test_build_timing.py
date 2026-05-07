@@ -87,7 +87,7 @@ class TestWriteBuildTiming:
 
         result = gd._write_build_timing(page_timings=timings)
         assert result is not None
-        assert result.name == "build-timing.json"
+        assert result.name == "build-timings.json"
 
         data = json.loads(result.read_text())
         assert "build_time" in data
