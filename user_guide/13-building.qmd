@@ -7,37 +7,58 @@ tags: [Build]
 
 # Building & Previewing
 
-The `great-docs build` command is the main way you interact with Great Docs on a day-to-day basis. It reads your `great-docs.yml` configuration, discovers your package's API, generates Quarto source files, and renders everything into a static HTML site. This page explains what happens during a build, how to preview your site locally, and how to troubleshoot common issues.
+The `great-docs build` command is the main way you interact with Great Docs on a day-to-day basis.
+It reads your `great-docs.yml` configuration, discovers your package's API, generates Quarto source
+files, and renders everything into a static HTML site. This page explains what happens during a
+build, how to preview your site locally, and how to troubleshoot common issues.
 
 ## The Build Pipeline
 
 When you run `great-docs build`, the following steps execute in order:
 
-1. The `great-docs/` output directory is created (or refreshed) with all required assets: stylesheets, JavaScript files for dark mode toggling, sidebar filtering, the GitHub stars widget, and other interactive features.
+1. The `great-docs/` output directory is created (or refreshed) with all required assets:
+stylesheets, JavaScript files for dark mode toggling, sidebar filtering, the GitHub stars widget,
+and other interactive features.
 
-2. Your `great-docs.yml` is read. A `_quarto.yml` file is generated (or updated) in the output directory with the Quarto project configuration, including navbar links, sidebar structure, and theme settings.
+2. Your `great-docs.yml` is read. A `_quarto.yml` file is generated (or updated) in the output
+directory with the Quarto project configuration, including navbar links, sidebar structure, and
+theme settings.
 
-3. A landing page (`index.qmd`) is generated from your project's `README.md`. If you have a logo configured, a hero section with the logo, package name, tagline, and badges is added automatically.
+3. A landing page (`index.qmd`) is generated from your project's `README.md`. If you have a logo
+configured, a hero section with the logo, package name, tagline, and badges is added automatically.
 
-4. If a user guide directory exists (by default `user_guide/`), all `.qmd` files are copied into the output directory with numeric prefixes stripped from filenames. The sidebar is organized by `guide-section` frontmatter metadata.
+4. If a user guide directory exists (by default `user_guide/`), all `.qmd` files are copied into
+the output directory with numeric prefixes stripped from filenames. The sidebar is organized by
+`guide-section` frontmatter metadata.
 
-5. If Click CLI documentation is enabled, Great Docs discovers your CLI commands and generates a reference page for each one.
+5. If Click CLI documentation is enabled, Great Docs discovers your CLI commands and generates a
+reference page for each one.
 
-6. Custom sections defined in `great-docs.yml` (examples, tutorials, blog posts, etc.) are processed and copied to the output directory.
+6. Custom sections defined in `great-docs.yml` (examples, tutorials, blog posts, etc.) are processed
+and copied to the output directory.
 
 ::: {.version-only versions=">=0.6"}
-7. If `custom_pages` is configured, or if the fallback `custom/` directory exists, custom HTML pages are discovered. Passthrough pages are converted into generated `.qmd` files and raw pages are copied through unchanged.
+7. If `custom_pages` is configured, or if the fallback `custom/` directory exists, custom HTML pages
+are discovered. Passthrough pages are converted into generated `.qmd` files and raw pages are copied
+through unchanged.
 :::
 
-8. If the changelog is enabled and a GitHub repository URL exists in `pyproject.toml`, GitHub Releases are fetched and a `changelog.qmd` file is generated.
+8. If the changelog is enabled and a GitHub repository URL exists in `pyproject.toml`, GitHub
+Releases are fetched and a `changelog.qmd` file is generated.
 
-9. The Agent Skills file (`skill.md`) is generated or copied. If you have a curated `SKILL.md` in `skills/<package-name>/`, it is used directly. Otherwise, a skill file is auto-generated from your package metadata.
+9. The Agent Skills file (`skill.md`) is generated or copied. If you have a curated `SKILL.md` in
+`skills/<package-name>/`, it is used directly. Otherwise, a skill file is auto-generated from your
+package metadata.
 
-10. `llms.txt` and `llms-full.txt` files are generated. These provide AI-friendly summaries of your package documentation.
+10. `llms.txt` and `llms-full.txt` files are generated. These provide AI-friendly summaries of your
+package documentation.
 
-11. Source link metadata (`_source_links.json`) is generated, mapping each documented symbol to its file and line numbers on GitHub.
+11. Source link metadata (`_source_links.json`) is generated, mapping each documented symbol to its
+file and line numbers on GitHub.
 
-12. Quarto renders all the source files into HTML. A post-render script runs to apply final transformations: injecting source links, processing cross-references (GDLS), cleaning up Sphinx/RST artifacts, and generating companion Markdown (`.md`) files for each page.
+12. Quarto renders all the source files into HTML. A post-render script runs to apply final
+transformations: injecting source links, processing cross-references (GDLS), cleaning up Sphinx/RST
+artifacts, and generating companion Markdown (`.md`) files for each page.
 
 After all steps complete, the finished site is in `great-docs/_site/`.
 
@@ -49,9 +70,12 @@ To view your site locally with live reload:
 great-docs preview
 ```
 
-This starts a local development server and opens your default browser. When you edit source files (user guide pages, docstrings, configuration), the site rebuilds automatically and the browser refreshes to show your changes.
+This starts a local development server and opens your default browser. When you edit source files
+(user guide pages, docstrings, configuration), the site rebuilds automatically and the browser
+refreshes to show your changes.
 
-Preview mode is ideal during the writing process because it lets you see how content will look in the final rendered site without committing or deploying anything.
+Preview mode is ideal during the writing process because it lets you see how content will look in
+the final rendered site without committing or deploying anything.
 
 ## Build Options
 
@@ -59,23 +83,27 @@ The `great-docs build` command accepts several options that control its behavior
 
 ### Watch Mode
 
-Watch mode keeps the build process running and automatically rebuilds when files change. This is similar to preview mode but without starting a local server:
+Watch mode keeps the build process running and automatically rebuilds when files change. This is
+similar to preview mode but without starting a local server:
 
 ```{.bash filename="Terminal"}
 great-docs build --watch
 ```
 
-This is useful when you want to rebuild continuously but view the output in a different way (for example, opening the HTML files directly or using a separate static file server).
+This is useful when you want to rebuild continuously but view the output in a different way (for
+example, opening the HTML files directly or using a separate static file server).
 
 ### Clean Build
 
-If you suspect stale files in the output directory are causing issues, you can force a completely fresh build. Delete the `great-docs/` directory and rebuild:
+If you suspect stale files in the output directory are causing issues, you can force a completely
+fresh build. Delete the `great-docs/` directory and rebuild:
 
 ```{.bash filename="Terminal"}
 rm -rf great-docs/ && great-docs build
 ```
 
-Since the `great-docs/` directory is ephemeral and fully generated from `great-docs.yml` plus your source files, deleting it is always safe.
+Since the `great-docs/` directory is ephemeral and fully generated from `great-docs.yml` plus your
+source files, deleting it is always safe.
 
 ## Build Output Structure
 
@@ -104,19 +132,25 @@ great-docs/
     └── ...
 ```
 
-The `_site/` subdirectory contains the final HTML output. This is the directory you deploy to your hosting service (GitHub Pages, Netlify, Vercel, etc.).
+The `_site/` subdirectory contains the final HTML output. This is the directory you deploy to your
+hosting service (GitHub Pages, Netlify, Vercel, etc.).
 
-Everything outside of `_site/` is intermediate Quarto source. You generally do not need to inspect these files, but they can be useful for debugging rendering issues.
+Everything outside of `_site/` is intermediate Quarto source. You generally do not need to inspect
+these files, but they can be useful for debugging rendering issues.
 
 ## Building from a Remote Repository [version-badge new 0.11] {#from-repo}
 
-The `--from-repo` flag lets you build documentation for any Git-hosted package without cloning it yourself. Great Docs handles the entire workflow: cloning the repository, creating an isolated virtual environment, installing the package and its dependencies, running the full build pipeline, and copying the finished site to a local directory.
+The `--from-repo` flag lets you build documentation for any Git-hosted package without cloning it
+yourself. Great Docs handles the entire workflow: cloning the repository, creating an isolated
+virtual environment, installing the package and its dependencies, running the full build pipeline,
+and copying the finished site to a local directory.
 
 ```{.bash filename="Terminal"}
 great-docs build --from-repo https://github.com/owner/package.git
 ```
 
-The built site is copied to `./great-docs/_site/` by default. Use `--output-dir` to put it somewhere else:
+The built site is copied to `./great-docs/_site/` by default. Use `--output-dir` to put it somewhere
+else:
 
 ```{.bash filename="Terminal"}
 great-docs build --from-repo https://github.com/owner/package.git --output-dir /tmp/my-site
@@ -124,7 +158,8 @@ great-docs build --from-repo https://github.com/owner/package.git --output-dir /
 
 ### Branch or Tag
 
-By default the repository's default branch is cloned. Use `--branch` to check out a specific branch or tag:
+By default the repository's default branch is cloned. Use `--branch` to check out a specific branch
+or tag:
 
 ```{.bash filename="Terminal"}
 great-docs build --from-repo https://github.com/owner/package.git --branch v2.0.0
@@ -132,9 +167,12 @@ great-docs build --from-repo https://github.com/owner/package.git --branch v2.0.
 
 ### Clone Depth
 
-Great Docs inspects the target project's `great-docs.yml` to decide how much Git history to fetch. If the project uses multi-version docs or page dates, a full clone is performed automatically. Otherwise a lightweight tag-only clone is used.
+Great Docs inspects the target project's `great-docs.yml` to decide how much Git history to fetch.
+If the project uses multi-version docs or page dates, a full clone is performed automatically.
+Otherwise a lightweight tag-only clone is used.
 
-Use `--shallow` to force a minimal `--depth 1` clone. This is the fastest option but disables versioned documentation and page dates:
+Use `--shallow` to force a minimal `--depth 1` clone. This is the fastest option but disables
+versioned documentation and page dates:
 
 ```{.bash filename="Terminal"}
 great-docs build --from-repo https://github.com/owner/package.git --shallow
@@ -142,7 +180,8 @@ great-docs build --from-repo https://github.com/owner/package.git --shallow
 
 ### Previewing After Build
 
-Add `--preview` to start a local server and open the site in your browser as soon as the build finishes:
+Add `--preview` to start a local server and open the site in your browser as soon as the build
+finishes:
 
 ```{.bash filename="Terminal"}
 great-docs build --from-repo https://github.com/owner/package.git --preview
@@ -150,13 +189,15 @@ great-docs build --from-repo https://github.com/owner/package.git --preview
 
 ### Previewing a Previously Built Site
 
-If you have already built a site with `--from-repo` (or received a site directory from someone else), use `great-docs preview --site-dir` to serve it without any project context:
+If you have already built a site with `--from-repo` (or received a site directory from someone
+else), use `great-docs preview --site-dir` to serve it without any project context:
 
 ```{.bash filename="Terminal"}
 great-docs preview --site-dir /tmp/my-site
 ```
 
-This starts the same local HTTP server and opens your browser, just like the regular `great-docs preview` command.
+This starts the same local HTTP server and opens your browser, just like the regular
+`great-docs preview` command.
 
 ## Using the Python API
 
@@ -171,7 +212,8 @@ docs.build()     # Run the full build pipeline
 docs.preview()   # Start the preview server
 ```
 
-The `GreatDocs` class accepts a `project_path` argument if your working directory is not the project root:
+The `GreatDocs` class accepts a `project_path` argument if your working directory is not the project
+root:
 
 ```{.python filename="Python"}
 docs = GreatDocs(project_path="/path/to/my-project")
@@ -183,27 +225,113 @@ docs.build()
 
 ### Quarto Errors
 
-If the build fails during the Quarto rendering step, the error output will include Quarto's own messages. Common causes include:
+If the build fails during the Quarto rendering step, the error output will include Quarto's own
+messages. Common causes include:
 
-- A `.qmd` file with invalid YAML frontmatter. Check that all frontmatter blocks are enclosed between `---` markers and that the YAML is well-formed.
-- A reference to a file that does not exist. If you renamed or deleted a user guide page, make sure the `guide-section` frontmatter in other files does not depend on it.
-- A Quarto version incompatibility. Great Docs is tested with Quarto 1.4 and later. Run `quarto --version` to check your installed version.
+- A `.qmd` file with invalid YAML frontmatter. Check that all frontmatter blocks are enclosed
+between `---` markers and that the YAML is well-formed.
+- A reference to a file that does not exist. If you renamed or deleted a user guide page, make
+sure the `guide-section` frontmatter in other files does not depend on it.
+- A Quarto version incompatibility. Great Docs is tested with Quarto 1.4 and later. Run
+`quarto --version` to check your installed version.
 
 ### Missing API Reference Pages
 
-If some symbols are missing from the rendered API reference, run `great-docs scan` to see what Great Docs discovers. Items that appear in the scan output but not in the reference may be excluded by the `exclude` list in `great-docs.yml` or may not be listed in the `reference` config sections.
+If some symbols are missing from the rendered API reference, run `great-docs scan` to see what Great
+Docs discovers. Items that appear in the scan output but not in the reference may be excluded by the
+`exclude` list in `great-docs.yml` or may not be listed in the `reference` config sections.
 
 ### Dynamic Introspection Failures
 
-If Great Docs reports an error during dynamic introspection, it will automatically retry with static analysis. If you see this retry message frequently, you can set `dynamic: false` in `great-docs.yml` to skip the dynamic pass entirely. See [Configuration](configuration.qmd) for details.
+If Great Docs reports an error during dynamic introspection, it will automatically retry with static
+analysis. If you see this retry message frequently, you can set `dynamic: false` in `great-docs.yml`
+to skip the dynamic pass entirely. See [Configuration](configuration.qmd) for details.
 
 ### Stale Output
 
-If your site looks correct in some places but outdated in others, the most reliable fix is a clean rebuild: delete the `great-docs/` directory and run `great-docs build` again. The output directory is fully regenerated each time, so there is no risk in deleting it.
+If your site looks correct in some places but outdated in others, the most reliable fix is a clean
+rebuild: delete the `great-docs/` directory and run `great-docs build` again. The output directory
+is fully regenerated each time, so there is no risk in deleting it.
+
+## Build Timings [version-badge new 0.12] {#build-timings}
+
+Every time `great-docs build` runs, it records how long each page takes to render and writes the
+results to `great-docs/_site/build-timings.json`. This helps you identify slow pages that are
+bottlenecks in your build.
+
+### Viewing Timings
+
+Use the `great-docs timings` command to display a sorted table (slowest pages first):
+
+```{.bash filename="Terminal"}
+great-docs timings
+```
+
+```{.default}
+  Build time: 2026-05-06 14:32:01
+  Total: 47.2s across 38 pages
+
+  Page                              Time
+  ─────────────────────────────────────────────────
+  reference/GT.qmd                  12.4s  ████████████
+  reference/GT.tab_style.qmd         6.1s  ██████
+  user-guide/theming.qmd             4.8s  █████
+  reference/GT.fmt_number.qmd        3.9s  ████
+  ...
+```
+
+Pages served from the [Quarto freeze cache](freeze.qmd) are marked with a ❄ indicator. This view
+makes it easy to spot which pages are worth optimizing or splitting up.
+
+### Filtering Results
+
+Show only the top N slowest pages:
+
+```{.bash filename="Terminal"}
+great-docs timings --top 5
+```
+
+For multi-version builds, filter by version:
+
+```{.bash filename="Terminal"}
+great-docs timings --version 0.10
+```
+
+These filters are useful when you only care about a specific slice of the build.
+
+### Custom Output Directories
+
+If you built with a custom `--output-dir`, pass the same path:
+
+```{.bash filename="Terminal"}
+great-docs timings --output-dir ./public
+```
+
+This ensures the command can locate `build-timings.json` regardless of where the site was rendered.
+
+### JSON Output
+
+For scripting or CI integration, use `--json` to get the raw data:
+
+```{.bash filename="Terminal"}
+great-docs timings --json
+```
+
+The JSON format is convenient for piping into other tools like `jq` or for building custom
+dashboards.
+
+### CI Integration
+
+The `great-docs setup-github-pages` workflow automatically uploads `build-timings.json` as a
+separate artifact named **build-timings** in each CI run. You can download it from the workflow
+run's Artifacts section on GitHub to compare build performance over time. This makes it easier to
+track regressions and monitor improvements across commits.
 
 ## Next Steps
 
-The build pipeline is designed to be fast and predictable. For most projects, `great-docs build` is all you need. When something goes wrong, the troubleshooting tips above cover the most common causes.
+The build pipeline is designed to be fast and predictable. For most projects, `great-docs build` is
+really all you need. When something goes wrong, the troubleshooting tips above probably cover the
+most common causes.
 
 - [Deployment](deployment.qmd) covers publishing your built site to GitHub Pages
 - [Configuration](configuration.qmd) covers all `great-docs.yml` options

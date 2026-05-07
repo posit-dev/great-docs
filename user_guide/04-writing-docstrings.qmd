@@ -251,7 +251,7 @@ guidelines help you get the most from them while keeping your builds fast and re
   configuration, use a hidden code cell at the top of the Examples section. Mark it with
   `#| echo: false` and `#| output: false` so readers see only the meaningful examples:
 
-    ```python
+    ````python
     """
     Examples
     --------
@@ -269,7 +269,7 @@ guidelines help you get the most from them while keeping your builds fast and re
     result
     ```
     """
-    ```
+    ````
 
 - **Add prose between code cells.** Docstring examples don't have to be just code. Intersperse
   explanatory paragraphs that guide readers through what each example demonstrates and what the

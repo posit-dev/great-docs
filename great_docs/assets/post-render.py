@@ -1518,13 +1518,13 @@ def translate_sphinx_roles(html_content):
     """
     Convert Sphinx cross-reference roles into clean HTML.
 
-    The renderer sometimes passes through Sphinx-style roles verbatim.  The most
-    common rendered patterns are:
+    The renderer sometimes passes through Sphinx-style roles verbatim. The most common rendered
+    patterns are:
 
     * `:py:exc:<code>ValueError</code>` ->  `<code>ValueError</code>`
     * `:class:<code>Foo</code>`         ->  `<code>Foo</code>`
     * `:func:<code>bar</code>`          ->  `<code>bar()</code>`
-    * `:func:`bar```  (inside `<pre>`)  ->  `<code>bar()</code>`
+    * `:func:`bar``  (inside `<pre>`)   ->  `<code>bar()</code>`
 
     For *function* and *method* roles the name gets trailing `()` so the reader can tell it is
     callable.
