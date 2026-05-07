@@ -1017,21 +1017,26 @@ def _format_seconds(s: float) -> str:
     return f"{m}m {sec:.1f}s"
 
 
-def _find_build_timing(project_path: Path) -> Path | None:
-    """Locate build-timing.json in the site output directory."""
+def _find_build_timing(project_path: Path, output_dir: Path | None = None) -> Path | None:
+    """Locate build-timings.json in the site output directory."""
+    # Explicit output-dir takes priority
+    if output_dir is not None:
+        candidate = output_dir / "build-timings.json"
+        if candidate.exists():
+            return candidate
     # Multi-version: built into great-docs/_site/
-    candidate = project_path / "great-docs" / "_site" / "build-timing.json"
+    candidate = project_path / "great-docs" / "_site" / "build-timings.json"
     if candidate.exists():
         return candidate
     # Single-version or build dir fallback
-    candidate = project_path / "_site" / "build-timing.json"
+    candidate = project_path / "_site" / "build-timings.json"
     if candidate.exists():
         return candidate
     return None
 
 
 def _print_timing_table(data: dict, top: int | None, version_filter: str | None) -> None:
-    """Print an ASCII table from build-timing.json data."""
+    """Print an ASCII table from build-timings.json data."""
 
     build_time = data.get("build_time", "unknown")
     total = data.get("total_seconds", 0)
@@ -1135,28 +1140,37 @@ def _print_page_table(pages: list[dict]) -> None:
     is_flag=True,
     help="Output raw JSON instead of a table.",
 )
-def timing(project_path, top, version_filter, output_json):
+@click.option(
+    "--output-dir",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    default=None,
+    help="Path to the build output directory (if different from default _site).",
+)
+def timings(project_path, top, version_filter, output_json, output_dir):
     """Show page-level build timings from the last build.
 
-    Reads the build-timing.json artifact generated during 'great-docs build' and
+    Reads the build-timings.json artifact generated during 'great-docs build' and
     displays per-page render durations as a sorted table. Pages are listed
     slowest-first to help identify bottlenecks.
 
     Run 'great-docs build' first to generate the timing data.
 
+    \b
     Examples:
-      great-docs timing
-      great-docs timing --top 10
-      great-docs timing --version 0.10
-      great-docs timing --json
+      great-docs timings
+      great-docs timings --top 10
+      great-docs timings --version 0.10
+      great-docs timings --output-dir ./public
+      great-docs timings --json
     """
     import json
 
     project_root = Path(project_path) if project_path else Path.cwd()
-    timing_path = _find_build_timing(project_root)
+    out_dir = Path(output_dir) if output_dir else None
+    timing_path = _find_build_timing(project_root, output_dir=out_dir)
 
     if not timing_path:
-        click.echo("No build-timing.json found.", err=True)
+        click.echo("No build-timings.json found.", err=True)
         click.echo("Run 'great-docs build' first to generate timing data.", err=True)
         sys.exit(1)
 
@@ -1169,7 +1183,7 @@ def timing(project_path, top, version_filter, output_json):
     _print_timing_table(data, top=top, version_filter=version_filter)
 
 
-cli.add_command(timing)
+cli.add_command(timings)
 
 
 @click.command(name="setup-github-pages")

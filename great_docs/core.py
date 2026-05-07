@@ -12558,7 +12558,7 @@ body-classes: "gd-homepage"
         timings_by_version: dict[str, list[dict[str, object]]] | None = None,
     ) -> Path | None:
         """
-        Write `_site/build-timing.json` with per-page render durations.
+        Write `_site/build-timings.json` with per-page render durations.
 
         For single-version builds, *page_timings* is a flat list. For multi-version builds,
         *timings_by_version* is a `{tag: [timings]}` dict. Returns the path written, or `None` if
@@ -12621,7 +12621,7 @@ body-classes: "gd-homepage"
         else:
             return None  # pragma: no cover
 
-        out_path = site_dir / "build-timing.json"
+        out_path = site_dir / "build-timings.json"
         out_path.write_text(json.dumps(payload, indent=2) + "\n")
         return out_path
 
@@ -13577,7 +13577,7 @@ body-classes: "gd-homepage"
                     log.warn(f"Error generating SEO files: {e}")
                     log.step_done("SEO files had issues")
 
-                # ── Write build-timing.json ────────────────────────
+                # ── Write build-timings.json ───────────────────────
                 timing_path = self._write_build_timing(
                     timings_by_version=vb_result.get("timings_by_version"),
                 )
@@ -13666,7 +13666,7 @@ body-classes: "gd-homepage"
                         log.warn(f"Error generating SEO files: {e}")  # pragma: no cover
                         log.step_done("SEO files had issues")  # pragma: no cover
 
-                    # ── Write build-timing.json ────────────────────────
+                    # ── Write build-timings.json ───────────────────────
                     timing_path = self._write_build_timing(  # pragma: no cover
                         page_timings=result.page_timings,  # pragma: no cover
                     )  # pragma: no cover
