@@ -11199,9 +11199,8 @@ body-classes: "gd-homepage"
         """
         Inject the version selector widget into the Quarto config.
 
-        Adds the version-selector.js script and a `<meta name="gd-version-map">`
-        tag containing the serialized `_version_map.json` data so the widget
-        can resolve versions client-side.
+        Adds the version-selector.js script and a `<meta name="gd-version-map">` tag containing the
+        serialized `_version_map.json` data so the widget can resolve versions client-side.
         """
         import html as html_mod
 
@@ -11721,15 +11720,16 @@ body-classes: "gd-homepage"
         """
         Generate a SKILL.md file conforming to the Agent Skills specification.
 
-        Creates a skill file that gives AI coding agents structured context about the
-        documented package — its capabilities, API decision table, gotchas, and links
-        to comprehensive documentation.
+        Creates a skill file that gives AI coding agents structured context about the documented
+        package: its capabilities, API decision table, gotchas, and links to comprehensive
+        documentation.
 
-        If the user has provided a hand-written SKILL.md via `skill.file` in
-        `great-docs.yml`, that file is copied verbatim instead of generating one.
+        If the user has provided a hand-written SKILL.md via `skill.file` in `great-docs.yml`, that
+        file is copied verbatim instead of generating one.
 
-        The generated file is written to `<docs>/skill.md` and optionally copied to
-        `<docs>/.well-known/skills/default/SKILL.md` for auto-discovery.
+        The generated file is written to `<docs>/skill.md` and optionally published at
+        `<docs>/.well-known/agent-skills/<name>/SKILL.md` with a discovery manifest at
+        `<docs>/.well-known/agent-skills/index.json` for `npx skills add` auto-discovery.
         """
         import shutil
 
@@ -11939,25 +11939,24 @@ body-classes: "gd-homepage"
 
     def _generate_skills_page(self, skill_path: "Path", *, skill_dir: "Path | None" = None) -> None:
         """
-        Generate a `skills.qmd` page that renders the raw SKILL.md content in a
-        styled, human-readable format.
+        Generate a `skills.qmd` page that renders the raw SKILL.md content in a styled,
+        human-readable format.
 
-        The page displays the skill's YAML frontmatter as a highlighted block and
-        the Markdown body with color-coded headings and monospaced font — a halfway
-        point between raw Markdown and fully rendered HTML.
+        The page displays the skill's YAML frontmatter as a highlighted block and the Markdown body
+        with color-coded headings and monospaced font: a halfway point between raw Markdown and
+        fully rendered HTML.
 
-        When *skill_dir* points to a curated skill directory that contains companion
-        subdirectories (`references/`, `scripts/`, `assets/`), a directory
-        tree is rendered before the SKILL.md and each `.md` / `.sh` file is
-        displayed in its own text area with anchor links.
+        When *skill_dir* points to a curated skill directory that contains companion subdirectories
+        (`references/`, `scripts/`, `assets/`), a directory tree is rendered before the SKILL.md and
+        each `.md` / `.sh` file is displayed in its own text area with anchor links.
 
         Parameters
         ----------
         skill_path
             Path to the skill.md file to render.
         skill_dir
-            Optional path to the curated skill directory containing SKILL.md and
-            its companion subdirectories.
+            Optional path to the curated skill directory containing SKILL.md and its companion
+            subdirectories.
         """
         import re
 
@@ -12257,7 +12256,13 @@ body-classes: "gd-homepage"
 
     def _place_well_known_skill(self, skill_path: "Path") -> None:
         """
-        Copy the SKILL.md to .well-known/skills/default/ for auto-discovery.
+        Copy the SKILL.md to .well-known/ directories for auto-discovery.
+
+        Places the skill at two well-known locations:
+
+        1. `.well-known/agent-skills/{name}/SKILL.md` with an `index.json` discovery manifest: the
+        preferred path used by `npx skills add`.
+        2. `.well-known/skills/default/SKILL.md`: legacy fallback.
 
         Parameters
         ----------
@@ -12269,11 +12274,37 @@ body-classes: "gd-homepage"
         if not self._config.skill_well_known:
             return
 
+        # Parse frontmatter to extract skill name and description
+        content = skill_path.read_text(encoding="utf-8")
+        fm, _ = self._split_frontmatter(content)
+        skill_name = fm.get("name", "default")
+        skill_description = fm.get("description", "")
+        if isinstance(skill_description, str):
+            skill_description = skill_description.strip()
+
+        # --- Preferred: .well-known/agent-skills/{name}/SKILL.md + index.json ---
+        agent_skills_dir = self.project_path / ".well-known" / "agent-skills" / skill_name
+        agent_skills_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(skill_path, agent_skills_dir / "SKILL.md")
+
+        index_data = {
+            "skills": [
+                {
+                    "name": skill_name,
+                    "description": skill_description,
+                    "files": ["SKILL.md"],
+                }
+            ]
+        }
+        index_path = self.project_path / ".well-known" / "agent-skills" / "index.json"
+        with open(index_path, "w", encoding="utf-8") as f:
+            json.dump(index_data, f, indent=2)
+            f.write("\n")
+
+        # --- Legacy: .well-known/skills/default/SKILL.md ---
         well_known_dir = self.project_path / ".well-known" / "skills" / "default"
         well_known_dir.mkdir(parents=True, exist_ok=True)
-
-        dest = well_known_dir / "SKILL.md"
-        shutil.copy2(skill_path, dest)
+        shutil.copy2(skill_path, well_known_dir / "SKILL.md")
 
     # ══════════════════════════════════════════════════════════════════════════
     # SEO GENERATION METHODS
@@ -12337,8 +12368,8 @@ body-classes: "gd-homepage"
         """
         Generate a sitemap.xml file for search engine indexing.
 
-        Creates an XML sitemap at _site/sitemap.xml with proper priorities
-        and change frequencies based on page type.
+        Creates an XML sitemap at _site/sitemap.xml with proper priorities and change frequencies
+        based on page type.
         """
         if not self._config.sitemap_enabled:
             return  # pragma: no cover
@@ -12476,9 +12507,9 @@ body-classes: "gd-homepage"
         """
         Resolve the social card image to an absolute URL.
 
-        If the configured image is a local file path, copies it to the build
-        directory and returns the site-relative path. If it's already a URL,
-        returns it as-is. If no image is configured, returns None.
+        If the configured image is a local file path, copies it to the build directory and returns
+        the site-relative path. If it's already a URL, returns it as-is. If no image is configured,
+        returns `None`.
 
         Returns
         -------
@@ -12617,9 +12648,7 @@ body-classes: "gd-homepage"
                 total_seconds += ver_total
                 versions_payload[tag] = {
                     "seconds": ver_total,
-                    "pages": sorted(
-                        _annotate(timings), key=lambda t: t["seconds"], reverse=True
-                    ),
+                    "pages": sorted(_annotate(timings), key=lambda t: t["seconds"], reverse=True),
                 }
             payload["total_seconds"] = round(total_seconds, 3)
             payload["versions"] = versions_payload
@@ -12696,8 +12725,8 @@ body-classes: "gd-homepage"
         """
         Get User Guide content formatted for llms-full.txt.
 
-        Reads all user guide .qmd files in order and extracts their content,
-        stripping YAML frontmatter but preserving the document structure.
+        Reads all user guide .qmd files in order and extracts their content, stripping YAML
+        frontmatter but preserving the document structure.
 
         Returns
         -------
@@ -13501,8 +13530,7 @@ body-classes: "gd-homepage"
             mock_modified = _expand_mock_cells(self.project_path)
             if mock_modified:
                 log.detail(
-                    f"Expanded {len(mock_modified)} mock-code cell(s): "
-                    + ", ".join(mock_modified)
+                    f"Expanded {len(mock_modified)} mock-code cell(s): " + ", ".join(mock_modified)
                 )
 
             # Get environment with QUARTO_PYTHON set
