@@ -533,10 +533,99 @@ Common hash-pipe options:
 | `#| warning: false` | Suppress warning messages |
 | `#| fig-cap: "..."` | Add a caption to figure output |
 | `#| label: fig-name` | Create a referenceable label for the figure |
+| `#| output-title: "..."` | Wrap the output in a labelled container |
+| `#| output-frame: true` | Wrap the output in a bordered container (no title) |
+| `#| source-code: mock` | Display one code block but execute another (see below) |
 
 Executable code blocks are what make `.qmd` files more powerful than plain Markdown. They ensure
 that your documentation's code examples are always tested: if the code breaks, the build fails, so
 your docs stay in sync with your actual API.
+
+### Output Titles and Frames
+
+Cell output can be wrapped in a styled container using `#| output-title` and `#| output-frame`.
+These options work on any executable code cell and compose with `source-code: mock`.
+
+**Adding a title.** Use `#| output-title` to wrap output in a bordered container with a label
+displayed above it. This is useful for marking chat responses, returned values, or any output that
+benefits from a heading:
+
+````markdown
+```{{python}}
+#| output-title: "Response"
+chat.chat("Tell me a joke.")
+```
+````
+
+**Adding a frame without a title.** Use `#| output-frame: true` to wrap output in a bordered
+container *without* a title label. This gives text-based output visual containment that it doesn't
+normally have:
+
+````markdown
+```{{python}}
+#| output-frame: true
+from mypackage import greet
+greet("World")
+```
+````
+
+**Rich HTML outputs.** When the output is a rich HTML object (such as a GT table or a styled
+DataFrame), the frame is automatically removed to avoid a double-border — these objects already
+carry their own visual structure. With `output-title`, the title appears as a floating label above
+the output; with `output-frame`, the container is effectively invisible since the object supplies
+its own styling.
+
+**Composing with mock cells.** Both `output-title` and `output-frame` work naturally with
+`source-code: mock`. The title or frame applies to the eval cell's output:
+
+````markdown
+```{{python}}
+#| source-code: mock
+#| output-title: "Response"
+chat.chat("I need your help.")
+# ---
+chat.chat("I need your help.", debug=True, header=False)
+```
+````
+
+### Mocked Code Cells
+
+Sometimes you need the code the reader *sees* to differ from the code that actually *runs*. Common
+reasons include:
+
+- an output requires a debug parameter that shouldn't be shown
+- the displayed code uses simplified imports
+- you want to hide boilerplate setup
+
+Normally this requires two separate code cells: one for display (`eval: false`) and one for
+execution (`echo: false`). The `source-code: mock` option collapses these into a single cell.
+
+Place `#| source-code: mock` at the top and separate the display code from the eval code with a
+`# ---` delimiter:
+
+````markdown
+```{{python}}
+#| source-code: mock
+import chatlas as ctl
+
+chat = ctl.ChatOpenAI()
+chat.chat("I need your help.")
+# ---
+import chatlas as ctl
+chat = ctl.ChatOpenAI(debug=True)
+chat.chat("I need your help.", header=False)
+```
+````
+
+The reader sees only the clean code above `# ---`, while the code below `# ---` runs and produces
+the output. Other hash-pipe options (`output-title`, `output-frame`, `warning`, etc.) compose
+naturally — see [Output Titles and Frames] above for examples.
+
+**Edge cases:**
+
+- **No delimiter**: the entire cell is display-only (equivalent to `eval: false`)
+- **Multiple `# ---`**: only the first one splits; subsequent ones are part of the eval code
+- **Empty eval section**: display-only cell (no output produced)
 
 ### Inline Code
 

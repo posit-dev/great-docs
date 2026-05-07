@@ -378,6 +378,8 @@ ALL_PACKAGES: list[str] = [
     # 188–189: Inherited member documentation
     "gdtest_ref_inherited_explicit",  # 188
     "gdtest_ref_include_inherited",  # 189
+    # 190: Mock code cells and output-title containers
+    "gdtest_mock_code",  # 190
 ]
 
 
@@ -2117,6 +2119,14 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "Reference config using include_inherited: true on Circle. The renderer "
         "should automatically include inherited methods (describe) from Shape "
         "without the user listing them explicitly."
+    ),
+    # ── 190: Mock code cells and output-title containers ───────────────────
+    "gdtest_mock_code": (
+        "Mock code cells (source-code: mock) and output-title containers. "
+        "Tests that the preprocessor splits mock cells into display + eval pairs, "
+        "output-title wraps output in titled containers on both mock and regular "
+        "cells, mock cells with no delimiter are display-only, and multiple mock "
+        "cells work on a single page."
     ),
 }
 
