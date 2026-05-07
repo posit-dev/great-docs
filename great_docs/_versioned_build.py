@@ -1260,6 +1260,13 @@ def _rewrite_quarto_yml_for_version(
     # (it defaults to _site anyway, but be explicit)
     config.setdefault("project", {})["output-dir"] = "_site"
 
+    # Adjust site-url for non-latest versions: append the /v/<tag>/ prefix
+    # so that Quarto generates correct root-relative asset paths for versioned subpaths.
+    existing_site_url = config.get("website", {}).get("site-url")
+    if entry.tag != latest_tag and not entry.latest and existing_site_url:
+        base = existing_site_url.rstrip("/")
+        config.setdefault("website", {})["site-url"] = f"{base}/v/{entry.tag}/"
+
     # Set a version-specific title suffix
     if entry.tag != latest_tag and not entry.latest:
         title = config.get("website", {}).get("title", "")
