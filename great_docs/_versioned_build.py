@@ -1080,8 +1080,8 @@ def expand_version_badges(
     expiry: "BadgeExpiry | None" = None,
 ) -> str:
     """
-    Expand `[version-badge new]` and `[version-badge changed 0.3]` inline markers into HTML
-    `<span>` badges.
+    Expand `[version-badge new]` and `[version-badge changed 0.3]` inline markers into HTML `<span>`
+    badges.
 
     If no version is specified in the marker, the current entry's label is used.
 
@@ -1303,7 +1303,7 @@ def _rewrite_quarto_yml_for_version(
 # Stage 2: Parallel Quarto renders
 # ---------------------------------------------------------------------------
 
-_PAGE_RE = re.compile(r"\[\s*(\d+)/(\d+)\]")
+_PAGE_RE = re.compile(r"\[\s*(\d+)/(\d+)\]\s+(.+)")
 
 
 def _render_single_version(
@@ -1340,14 +1340,16 @@ def _render_single_version_streaming(
     build_dir: str,
     env_vars: dict[str, str] | None,
     on_progress: Callable[[int, int], None] | None = None,
-) -> tuple[str, int, str, str]:
+) -> tuple[str, int, str, str, list[dict[str, Any]]]:
     """
     Render a single version with streaming progress.
 
-    Like :func:`_render_single_version` but streams stderr to parse Quarto `[cur/total]` progress
-    lines and calls *on_progress(current, total)* for each update. Returns the same
-    `(build_dir, returncode, stdout, stderr)` tuple.
+    Like :func:`_render_single_version` but streams stderr to parse Quarto `[cur/total] page`
+    progress lines and calls *on_progress(current, total)* for each update. Returns
+    `(build_dir, returncode, stdout, stderr, page_timings)`.
     """
+    import time as _time_mod
+
     env = os.environ.copy()
     if env_vars:
         env.update(env_vars)
@@ -1363,16 +1365,21 @@ def _render_single_version_streaming(
             bufsize=1,
         )
     except Exception as e:
-        return (build_dir, -1, "", str(e))
+        return (build_dir, -1, "", str(e), [])
 
     stderr_lines: list[str] = []
+    # Each entry: (page_path, timestamp)
+    _page_timestamps: list[tuple[str, float]] = []
+    _ansi_re = re.compile(r"\033\[[0-9;]*m")
 
     def _read_stderr():
         for line in proc.stderr:  # type: ignore[union-attr]
             stderr_lines.append(line)
-            if on_progress:
-                m = _PAGE_RE.search(line)
-                if m:
+            m = _PAGE_RE.search(line)
+            if m:
+                page_path = _ansi_re.sub("", m.group(3)).strip()
+                _page_timestamps.append((page_path, _time_mod.monotonic()))
+                if on_progress:
                     on_progress(int(m.group(1)), int(m.group(2)))
 
     stderr_thread = threading.Thread(target=_read_stderr, daemon=True)
@@ -1382,7 +1389,16 @@ def _render_single_version_streaming(
     proc.wait()
     stderr_thread.join(timeout=10)
 
-    return (build_dir, proc.returncode, stdout_data, "".join(stderr_lines))
+    # Compute per-page durations from consecutive timestamps
+    page_timings: list[dict[str, Any]] = []
+    for i, (page_path, ts) in enumerate(_page_timestamps):
+        if i + 1 < len(_page_timestamps):
+            duration = _page_timestamps[i + 1][1] - ts
+        else:
+            duration = _time_mod.monotonic() - ts
+        page_timings.append({"page": page_path, "seconds": round(duration, 3)})
+
+    return (build_dir, proc.returncode, stdout_data, "".join(stderr_lines), page_timings)
 
 
 def render_versions_parallel(
@@ -1390,7 +1406,7 @@ def render_versions_parallel(
     env_vars: dict[str, str] | None = None,
     max_workers: int | None = None,
     progress_callback: Callable[[int, int, int], None] | None = None,
-) -> list[tuple[str, int, str, str]]:
+) -> list[tuple[str, int, str, str, list[dict[str, Any]]]]:
     """
     Run `quarto render` in parallel for each version build directory.
 
@@ -1408,32 +1424,36 @@ def render_versions_parallel(
 
     Returns
     -------
-    list[tuple[str, int, str, str]]
-        List of `(build_dir, returncode, stdout, stderr)` tuples in the same order as `build_dirs`.
+    list[tuple[str, int, str, str, list[dict[str, Any]]]]
+        List of `(build_dir, returncode, stdout, stderr, page_timings)` tuples in the same order
+        as `build_dirs`.
     """
     if max_workers is None:
         max_workers = min(os.cpu_count() or 4, 4)
 
     if progress_callback is None:
         # Original fire-and-forget mode (ProcessPoolExecutor)
-        results: list[tuple[str, int, str, str]] = []
+        results: list[tuple[str, int, str, str, list[dict[str, Any]]]] = []
 
         if len(build_dirs) == 1:
             r = _render_single_version(str(build_dirs[0]), env_vars)
-            results.append(r)
+            # Non-streaming mode has no page timings
+            results.append((*r, []))
             return results
 
         with ProcessPoolExecutor(max_workers=max_workers) as pool:
             futures = {pool.submit(_render_single_version, str(d), env_vars): d for d in build_dirs}
             for future in as_completed(futures):
-                results.append(future.result())
+                results.append((*future.result(), []))
         return results
 
     # Streaming mode: use threads so callbacks can update the parent process.
     dir_to_idx = {str(d): i for i, d in enumerate(build_dirs)}
-    ordered_results: list[tuple[str, int, str, str] | None] = [None] * len(build_dirs)
+    ordered_results: list[tuple[str, int, str, str, list[dict[str, Any]]] | None] = [None] * len(
+        build_dirs
+    )
 
-    def _run(build_dir: Path) -> tuple[str, int, str, str]:
+    def _run(build_dir: Path) -> tuple[str, int, str, str, list[dict[str, Any]]]:
         idx = dir_to_idx[str(build_dir)]
 
         def _on_progress(current: int, total: int) -> None:
@@ -1712,14 +1732,17 @@ def run_versioned_build(
 
     errors: list[str] = []
     versions_built: list[str] = []
+    timings_by_version: dict[str, list[dict[str, Any]]] = {}
 
     # Map build dir back to version tag
     dir_to_tag = {str(_version_build_dir(build_root, e, latest_tag)): e.tag for e in targets}
 
-    for build_dir, returncode, stdout, stderr in render_results:
+    for build_dir, returncode, stdout, stderr, page_timings in render_results:
         tag = dir_to_tag.get(build_dir, build_dir)
         if returncode == 0:
             versions_built.append(tag)
+            if page_timings:
+                timings_by_version[tag] = page_timings
         else:
             errors.append(f"Version {tag}: Quarto render failed (exit {returncode})\n{stderr}")
 
@@ -1732,6 +1755,7 @@ def run_versioned_build(
             "success": False,
             "versions_built": [],
             "pages_by_version": pages_by_version,
+            "timings_by_version": {},
             "errors": errors,
         }
 
@@ -1752,6 +1776,7 @@ def run_versioned_build(
         "success": len(errors) == 0,
         "versions_built": versions_built,
         "pages_by_version": pages_by_version,
+        "timings_by_version": timings_by_version,
         "errors": errors,
     }
 
