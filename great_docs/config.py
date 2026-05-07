@@ -23,6 +23,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "no_auto_exclude": False,  # Bypass the built-in AUTO_EXCLUDE list entirely
     # GitHub integration
     "repo": None,  # GitHub repository URL override (e.g., "https://github.com/owner/repo")
+    # Site URL for subdirectory deployments (sets website.site-url in _quarto.yml)
+    # e.g., "http://myserver:3838/data-team/mypackage/"
+    "site_url": None,
     "github_style": "widget",  # "widget" (shows stars) or "icon"
     # Source link configuration
     "source": {
@@ -496,6 +499,11 @@ class Config:
     def repo(self) -> str | None:
         """Get the GitHub repository URL override."""
         return self.get("repo")
+
+    @property
+    def site_url(self) -> str | None:
+        """Get the site URL for subdirectory deployments."""
+        return self.get("site_url")
 
     @property
     def github_style(self) -> str:
