@@ -893,6 +893,9 @@ exclude:
 repo: https://github.com/your-org/your-package  # Override auto-detect
 github_style: widget
 
+# Site URL (for subdirectory deployments)
+# site_url: "https://internal.example.com/docs/mypackage/"
+
 # Source Links
 source:
   enabled: true
