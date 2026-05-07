@@ -37,6 +37,12 @@ jobs:
           name: docs-html
           path: great-docs/_site
 
+      - name: Upload build timings
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-timings
+          path: great-docs/_site/build-timings.json
+
   publish-docs:
     name: "Publish Docs"
     runs-on: ubuntu-latest
