@@ -7809,6 +7809,77 @@ html[data-bs-theme="dark"] {
 }
 
 
+/* ── Output Title Container ─────────────────────────────────────────
+   Wraps code cell output with a labelled header.
+   Used by #| output-title: "..." hash-pipe option.
+*/
+.gd-output-title-container {
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 0.375rem;
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.gd-output-title-header {
+    background: rgba(0, 0, 0, 0.03);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: rgba(0, 0, 0, 0.55);
+    letter-spacing: 0.02em;
+}
+
+.gd-output-title-body {
+    padding: 0.5rem 0.75rem;
+}
+
+.gd-output-title-body .cell-output {
+    margin: 0;
+    padding: 0;
+}
+
+.gd-output-title-body .cell-output pre {
+    margin: 0;
+    border: none;
+    background: transparent;
+    padding: 0;
+}
+
+/* Frameless variant for rich HTML outputs (GT tables, styled DataFrames, etc.)
+   These objects carry their own visual structure; a surrounding frame creates
+   an ugly double-border.  We keep the title label but drop the container
+   border and body padding so the HTML output breathes.
+   We target display outputs that contain a child div (rich HTML wrapper)
+   rather than just a <pre> block (which is a plain return value). */
+.gd-output-title-container:has(.gd-output-title-body .cell-output-display > div) {
+    border: none;
+}
+
+.gd-output-title-container:has(.gd-output-title-body .cell-output-display > div)
+    .gd-output-title-header {
+    background: transparent;
+    border-bottom: none;
+    padding-left: 0;
+}
+
+.gd-output-title-container:has(.gd-output-title-body .cell-output-display > div)
+    .gd-output-title-body {
+    padding: 0;
+}
+
+body.quarto-dark .gd-output-title-container {
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+body.quarto-dark .gd-output-title-header {
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom-color: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.55);
+}
+
+
 /*-- scss:functions --*/
 
 /*-- scss:uses --*/
