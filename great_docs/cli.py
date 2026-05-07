@@ -1003,6 +1003,175 @@ def freeze(
 cli.add_command(freeze)
 
 
+# ---------------------------------------------------------------------------
+# great-docs timing
+# ---------------------------------------------------------------------------
+
+
+def _format_seconds(s: float) -> str:
+    """Format seconds as a human-readable duration string."""
+    if s < 60:
+        return f"{s:.1f}s"
+    m = int(s) // 60
+    sec = s - m * 60
+    return f"{m}m {sec:.1f}s"
+
+
+def _find_build_timing(project_path: Path) -> Path | None:
+    """Locate build-timing.json in the site output directory."""
+    # Multi-version: built into great-docs/_site/
+    candidate = project_path / "great-docs" / "_site" / "build-timing.json"
+    if candidate.exists():
+        return candidate
+    # Single-version or build dir fallback
+    candidate = project_path / "_site" / "build-timing.json"
+    if candidate.exists():
+        return candidate
+    return None
+
+
+def _print_timing_table(data: dict, top: int | None, version_filter: str | None) -> None:
+    """Print an ASCII table from build-timing.json data."""
+
+    build_time = data.get("build_time", "unknown")
+    total = data.get("total_seconds", 0)
+
+    click.echo()
+    click.echo(f"  Build time: {build_time}")
+    click.echo(f"  Total: {_format_seconds(total)}")
+    click.echo()
+
+    if "versions" in data:
+        versions = data["versions"]
+        if version_filter:
+            if version_filter not in versions:
+                click.echo(f"  Version '{version_filter}' not found.", err=True)
+                click.echo(f"  Available: {', '.join(sorted(versions.keys()))}", err=True)
+                sys.exit(1)
+            versions = {version_filter: versions[version_filter]}
+
+        for tag, vdata in versions.items():
+            pages = vdata["pages"]
+            if top:
+                pages = pages[:top]
+            click.echo(f"  Version: {tag} ({_format_seconds(vdata['seconds'])})")
+            _print_page_table(pages)
+            click.echo()
+    elif "pages" in data:
+        pages = data["pages"]
+        if top:
+            pages = pages[:top]
+        _print_page_table(pages)
+        click.echo()
+
+
+def _print_page_table(pages: list[dict]) -> None:
+    """Print a page timing table."""
+    if not pages:
+        click.echo("  No page timings recorded.")
+        return
+
+    # Check if any pages have freeze info
+    has_frozen = any(p.get("frozen") for p in pages)
+
+    # Compute column widths
+    max_page = max(len(p["page"]) for p in pages)
+    max_page = max(max_page, 4)  # minimum width for "Page" header
+    time_col = 10  # width for time column
+    bar_col = 20  # width for bar chart
+
+    slowest = pages[0]["seconds"] if pages else 1
+
+    # Header
+    if has_frozen:
+        header = f"  {'Page':<{max_page}}  {'Time':>{time_col}}    Bar"
+        click.echo(header)
+        click.echo(f"  {'─' * max_page}  {'─' * time_col}  {'─' * (bar_col + 2)}")
+    else:
+        header = f"  {'Page':<{max_page}}  {'Time':>{time_col}}  Bar"
+        click.echo(header)
+        click.echo(f"  {'─' * max_page}  {'─' * time_col}  {'─' * bar_col}")
+
+    # Rows
+    for p in pages:
+        page = p["page"]
+        secs = p["seconds"]
+        time_str = _format_seconds(secs)
+        bar_len = int((secs / slowest) * bar_col) if slowest > 0 else 0
+        bar = "█" * bar_len
+        if has_frozen:
+            marker = "❄" if p.get("frozen") else " "
+            click.echo(f"  {page:<{max_page}}  {time_str:>{time_col}} {marker} {bar}")
+        else:
+            click.echo(f"  {page:<{max_page}}  {time_str:>{time_col}}  {bar}")
+
+    if has_frozen:
+        click.echo()
+        click.echo("  ❄ = served from freeze cache")
+
+
+@click.command()
+@click.option(
+    "--project-path",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Path to your project root directory (default: current directory)",
+)
+@click.option(
+    "--top",
+    type=int,
+    default=None,
+    help="Show only the N slowest pages.",
+)
+@click.option(
+    "--version",
+    "version_filter",
+    type=str,
+    default=None,
+    help="Show timings for a specific version only (multi-version builds).",
+)
+@click.option(
+    "--json",
+    "output_json",
+    is_flag=True,
+    help="Output raw JSON instead of a table.",
+)
+def timing(project_path, top, version_filter, output_json):
+    """Show page-level build timings from the last build.
+
+    Reads the build-timing.json artifact generated during 'great-docs build' and
+    displays per-page render durations as a sorted table. Pages are listed
+    slowest-first to help identify bottlenecks.
+
+    Run 'great-docs build' first to generate the timing data.
+
+    Examples:
+      great-docs timing
+      great-docs timing --top 10
+      great-docs timing --version 0.10
+      great-docs timing --json
+    """
+    import json
+
+    project_root = Path(project_path) if project_path else Path.cwd()
+    timing_path = _find_build_timing(project_root)
+
+    if not timing_path:
+        click.echo("No build-timing.json found.", err=True)
+        click.echo("Run 'great-docs build' first to generate timing data.", err=True)
+        sys.exit(1)
+
+    data = json.loads(timing_path.read_text())
+
+    if output_json:
+        click.echo(json.dumps(data, indent=2))
+        return
+
+    _print_timing_table(data, top=top, version_filter=version_filter)
+
+
+cli.add_command(timing)
+
+
 @click.command(name="setup-github-pages")
 @click.option(
     "--project-path",
