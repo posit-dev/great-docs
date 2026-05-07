@@ -15497,6 +15497,71 @@ def test_update_quarto_config_version_badge_no_releases():
         assert not meta_path.exists()
 
 
+def test_update_quarto_config_site_url():
+    """Test _update_quarto_config injects site-url from great-docs.yml."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text(
+            'site_url: "http://myserver:3838/data-team/mypackage/"\n',
+            encoding="utf-8",
+        )
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website", "resources": []},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            write_yaml(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = read_yaml(f)
+
+        assert result["website"]["site-url"] == "http://myserver:3838/data-team/mypackage/"
+
+
+def test_update_quarto_config_site_url_not_set():
+    """Test _update_quarto_config does not inject site-url when not configured."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        base_config = {
+            "project": {"type": "website", "resources": []},
+            "website": {"navbar": {"left": []}, "sidebar": []},
+            "format": {"html": {}},
+        }
+
+        with open(quarto_yml, "w") as f:
+            write_yaml(base_config, f)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = read_yaml(f)
+
+        assert "site-url" not in result["website"]
+
+
 def test_create_index_from_readme_citation_parsing():
     """Test _create_index_from_readme produces citation.qmd from CITATION.cff."""
 

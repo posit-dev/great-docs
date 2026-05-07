@@ -10055,6 +10055,10 @@ body-classes: "gd-homepage"
         if "website" not in config:
             config["website"] = {}
 
+        # Set site-url for subdirectory deployments (from great-docs.yml)
+        if self._config.site_url:
+            config["website"]["site-url"] = self._config.site_url
+
         # Enable page navigation for TOC
         if "page-navigation" not in config["website"]:
             config["website"]["page-navigation"] = True
@@ -13532,6 +13536,7 @@ body-classes: "gd-homepage"
                     quarto_env=quarto_env,
                     version_tags=version_tags,
                     latest_only=latest_only,
+                    site_url=self._config.site_url,
                     progress_callback=_progress_cb,
                     on_renders_done=_on_renders_done,
                     badge_expiry_raw=self._config.get("new_is_old"),

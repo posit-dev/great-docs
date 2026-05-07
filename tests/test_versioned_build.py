@@ -1189,6 +1189,82 @@ class TestCanonicalUrlInjection:
 
 
 # ---------------------------------------------------------------------------
+# site-url adjustment for versioned builds
+# ---------------------------------------------------------------------------
+
+
+class TestSiteUrlVersionAdjustment:
+    def test_non_latest_adjusts_site_url(self, tmp_path: Path):
+        """Non-latest versions get site-url with /v/<tag>/ appended."""
+        from great_docs._versioned_build import _rewrite_quarto_yml_for_version
+
+        dest = tmp_path / "v02"
+        dest.mkdir()
+        (dest / "_quarto.yml").write_text(
+            "project:\n  type: website\n  output-dir: _site\n"
+            "format:\n  html: {}\nwebsite:\n  title: Test\n"
+            "  site-url: 'http://myserver:3838/data-team/mypkg/'\n",
+            encoding="utf-8",
+        )
+        entry = _make_entry("0.2")
+        _rewrite_quarto_yml_for_version(
+            dest, entry, "0.3", site_url="http://myserver:3838/data-team/mypkg/"
+        )
+
+        from yaml12 import read_yaml
+
+        with open(dest / "_quarto.yml") as f:
+            result = read_yaml(f)
+
+        assert result["website"]["site-url"] == "http://myserver:3838/data-team/mypkg/v/0.2/"
+
+    def test_latest_keeps_site_url_unchanged(self, tmp_path: Path):
+        """Latest version keeps the original site-url as-is."""
+        from great_docs._versioned_build import _rewrite_quarto_yml_for_version
+
+        dest = tmp_path / "root"
+        dest.mkdir()
+        (dest / "_quarto.yml").write_text(
+            "project:\n  type: website\n  output-dir: _site\n"
+            "format:\n  html: {}\nwebsite:\n  title: Test\n"
+            "  site-url: 'http://myserver:3838/data-team/mypkg/'\n",
+            encoding="utf-8",
+        )
+        entry = _make_entry("0.3", latest=True)
+        _rewrite_quarto_yml_for_version(
+            dest, entry, "0.3", site_url="http://myserver:3838/data-team/mypkg/"
+        )
+
+        from yaml12 import read_yaml
+
+        with open(dest / "_quarto.yml") as f:
+            result = read_yaml(f)
+
+        assert result["website"]["site-url"] == "http://myserver:3838/data-team/mypkg/"
+
+    def test_no_site_url_in_config_no_adjustment(self, tmp_path: Path):
+        """When site-url is not in _quarto.yml, nothing is injected."""
+        from great_docs._versioned_build import _rewrite_quarto_yml_for_version
+
+        dest = tmp_path / "v02"
+        dest.mkdir()
+        (dest / "_quarto.yml").write_text(
+            "project:\n  type: website\n  output-dir: _site\n"
+            "format:\n  html: {}\nwebsite:\n  title: Test\n",
+            encoding="utf-8",
+        )
+        entry = _make_entry("0.2")
+        _rewrite_quarto_yml_for_version(dest, entry, "0.3")
+
+        from yaml12 import read_yaml
+
+        with open(dest / "_quarto.yml") as f:
+            result = read_yaml(f)
+
+        assert "site-url" not in result.get("website", {})
+
+
+# ---------------------------------------------------------------------------
 # Snapshot cache path
 # ---------------------------------------------------------------------------
 
