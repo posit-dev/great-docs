@@ -8,6 +8,7 @@ try:  # pragma: no cover
 except PackageNotFoundError:  # pragma: no cover
     __version__ = "0.0.0"
 
+from ._skill_install import check_skill, install_skill, list_skills
 from ._tbl_display import disable_tbl_preview, enable_tbl_preview
 from ._tbl_explorer import tbl_explorer
 from ._tbl_preview import tbl_preview
@@ -18,9 +19,12 @@ from .core import GreatDocs
 __all__ = [
     "Config",
     "GreatDocs",
+    "check_skill",
     "create_default_config",
     "disable_tbl_preview",
     "enable_tbl_preview",
+    "install_skill",
+    "list_skills",
     "load_config",
     "main",
     "render_evolution_table",

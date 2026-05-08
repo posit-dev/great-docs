@@ -1,0 +1,552 @@
+---
+title: "Agent Skills"
+guide-section: "AI & Agents"
+tags: [AI, Skills, Agents, CLI]
+---
+
+# Agent Skills
+
+AI coding agents (Claude Code, GitHub Copilot, Cursor, Windsurf, Codex, and many others) produce
+better code when they have structured context about the libraries they're using. The
+[Agent Skills](https://agentskills.io/) open standard provides that context through a `SKILL.md`
+file: a concise cheat sheet that tells agents what a package does, how to use it correctly, and
+what mistakes to avoid.
+
+Great Docs has two roles in this ecosystem:
+
+- **For package authors**: Great Docs generates, bundles, and serves `SKILL.md` files as part of
+  your documentation site, making your package's skill discoverable by anyone.
+- **For package users**: Great Docs provides a CLI (`great-docs skill install`) and Python API to
+  install skills into your local project, keep them up to date, and manage them across different
+  agents.
+
+This guide covers both sides. If you maintain a Python package and want to ship a skill with it,
+start with [Publishing Skills (for Authors)](#publishing-skills-for-authors). If you use a package
+that ships a skill and want to install it into your project, skip ahead to
+[Installing Skills (for Users)](#installing-skills-for-users).
+
+## Publishing Skills (for Authors) {#publishing-skills-for-authors}
+
+When you build a documentation site with Great Docs, a `SKILL.md` is automatically included.
+During the build, Great Docs:
+
+1. Resolves the skill content (hand-written, curated, or auto-generated)
+2. Copies it to `skill.md` in the docs output directory
+3. Places it at `.well-known/agent-skills/<name>/SKILL.md` with a discovery manifest at
+   `.well-known/agent-skills/index.json`
+4. Creates a legacy copy at `.well-known/skills/default/SKILL.md`
+
+Once deployed, anyone can install the skill using the standard discovery protocol:
+
+```bash
+npx skills add https://your-docs-site.com
+```
+
+Or install directly from an installed Python package (if you bundle the skill in `skills/`):
+
+```bash
+great-docs skill install your-package
+```
+
+Great Docs never modifies a hand-written skill. If you provide one, it is copied and served
+exactly as written. The content-hash stamping described later in
+[How Freshness Checking Works](#how-freshness-checking-works) only happens on the *consumer* side
+when a user installs the skill (it does not alter the published artifact).
+
+### Writing Your Own Skill (Recommended)
+
+The best results come from a hand-crafted skill written by someone who knows the package well.
+Auto-generated skills capture the API surface, but only a human author can encode the tribal
+knowledge (gotchas, decision tables, opinionated best practices) that makes an agent genuinely
+useful.
+
+Create a `SKILL.md` file in `skills/<package-name>/` at your project root:
+
+```
+my-package/
+├── skills/
+│   └── my-package/
+│       └── SKILL.md    ← Your curated skill
+├── pyproject.toml
+└── great-docs.yml
+```
+
+Great Docs automatically detects this file and uses it instead of generating one. The following
+sections explain what goes inside a `SKILL.md` and how to structure it effectively.
+
+### YAML Frontmatter
+
+Every `SKILL.md` must start with YAML frontmatter (required by the
+[specification](https://agentskills.io/specification)):
+
+```markdown
+---
+name: my-package
+description: >
+  Build widgets with my-package. Use when creating, configuring, or
+  troubleshooting widgets in Python.
+license: MIT
+compatibility: Requires Python >=3.10.
+---
+```
+
+| Field           | Required | Constraints                                       |
+|-----------------|----------|---------------------------------------------------|
+| `name`          | Yes      | ≤64 chars, lowercase + hyphens, matches dir name  |
+| `description`   | Yes      | ≤1024 chars, what it does + when to use it         |
+| `license`       | No       | SPDX identifier                                   |
+| `compatibility` | No       | Runtime requirements                               |
+| `metadata`      | No       | Arbitrary key-value map                            |
+
+The `name` field must match the directory name under `skills/`. The `description` should answer
+two questions in one sentence: *what does the skill do?* and *when should an agent activate it?*
+
+### Recommended Body Sections
+
+A good skill is a **cheat sheet for agents**: concise, opinionated, and focused on the decisions
+and mistakes that matter most.
+
+| Section                      | Purpose                                          |
+|------------------------------|--------------------------------------------------|
+| **Installation**             | `pip install` command                            |
+| **Decision table**           | Map common tasks → the right class/function      |
+| **Gotchas**                  | Mistakes agents make repeatedly without guidance |
+| **Capabilities & boundaries**| What agents can configure vs. what needs human setup |
+| **Resources**                | Links to `llms.txt`, `llms-full.txt`, full docs  |
+
+**Example decision table:**
+
+```markdown
+| Need                    | Use                |
+|-------------------------|--------------------|
+| Create a widget         | `Widget()`         |
+| Style a widget          | `Widget.style()`   |
+| Export to HTML          | `Widget.to_html()` |
+```
+
+**Example gotchas:**
+
+```markdown
+1. Always call `init()` before `process()` (order matters).
+2. The module name is `my_pkg`, not `my-package`.
+3. Use `dynamic: false` for packages with circular imports.
+```
+
+Keep the file under 500 lines. Link out to `llms-full.txt` for anything that needs more detail.
+
+### Extra Reference Files
+
+You can include companion files alongside `SKILL.md` in the same directory. These are copied to
+the `.well-known/agent-skills/<name>/` output and are available for agents to reference:
+
+```
+skills/
+└── my-package/
+    ├── SKILL.md
+    ├── recipes.md        ← Additional reference material
+    └── migration-v2.md   ← Upgrade guide for agents
+```
+
+These companion files are particularly useful for migration guides, code recipes, or schema
+references that are too detailed for the main `SKILL.md` but valuable when an agent needs them.
+
+### Automatic Generation (Fallback)
+
+If no curated skill exists in `skills/<package-name>/`, Great Docs auto-generates one from your
+package metadata and API reference. The generated file includes:
+
+- Package name, description, and `pip install` command
+- An API overview with section titles and docstring summaries
+- Links to `llms.txt` and `llms-full.txt`
+
+This is a reasonable starting point, but a hand-written skill will always produce better results
+because you can encode knowledge that can't be inferred from docstrings alone.
+
+### Enriching the Generated Skill
+
+If you'd rather let Great Docs generate the base skill but want to add your own sections, use the
+`skill` configuration options in `great-docs.yml`:
+
+```{.yaml filename="great-docs.yml"}
+skill:
+  gotchas:
+    - "Always call init() before process()"
+    - "The config file must use YAML, not JSON"
+    - "Module name is 'my_pkg', not 'my-pkg'"
+  best_practices:
+    - "Use context managers for resource cleanup"
+    - "Prefer keyword arguments for clarity"
+  decision_table:
+    - need: "Parse a CSV file"
+      use: "read_csv()"
+    - need: "Write results to disk"
+      use: "Writer()"
+  extra_body: skill-extra.md  # Append extra Markdown from this file
+```
+
+These options only apply to the *auto-generated* skill. If you provide a hand-written skill
+(via `skill.file` or `skills/<name>/SKILL.md`), these options are ignored and your file is used
+as-is.
+
+### Resolution Order
+
+Great Docs resolves the skill file in this priority order:
+
+1. **Multi-skill mode** (`skill.skills` list): each entry is a separate named skill
+2. **`skill.file`** in `great-docs.yml`: explicit path to a single `SKILL.md`
+3. **`skills/<package-name>/SKILL.md`**: curated skill in the repo (checked with both hyphenated
+   and underscored package name variants)
+4. **Auto-generated**: built from package metadata and API sections
+
+In all cases except auto-generation, Great Docs copies your file verbatim. It does not inject
+metadata or modify the content.
+
+### Multi-Skill Mode
+
+Some packages have distinct functional areas that benefit from separate skills. For example, a
+data visualization library might have one skill for building charts and another for theming. The
+`skill.skills` configuration lets you publish multiple named skills from a single package:
+
+```{.yaml filename="great-docs.yml"}
+skill:
+  skills:
+    - name: my-package
+      file: skills/my-package/SKILL.md
+    - name: my-package-themes
+      file: skills/my-package-themes/SKILL.md
+```
+
+Each entry must have a `name` and a `file` path (relative to the project root). During the build:
+
+- the first skill in the list becomes the primary `skill.md` in the docs output
+- all skills are aggregated into a single `.well-known/agent-skills/index.json` manifest
+- each skill gets its own directory under `.well-known/agent-skills/<name>/SKILL.md`
+
+Users can then discover and install all skills at once:
+
+```bash
+npx skills add https://your-docs-site.com
+```
+
+Multi-skill mode is optional. Most packages need only a single skill, which Great Docs handles
+automatically through the standard resolution order.
+
+### Deployment Considerations {#deployment-considerations}
+
+The `.well-known/` directory is a dotfile directory. Some deployment platforms strip dotfiles
+by default. If you deploy to GitHub Pages, make sure both artifact upload steps in your workflow
+include `include-hidden-files: true`:
+
+```{.yaml filename=".github/workflows/docs.yml"}
+# In the build job:
+- uses: actions/upload-artifact@v4
+  with:
+    name: docs-site
+    path: <docs-output-dir>/_site
+    include-hidden-files: true    # Required
+
+# In the deploy job:
+- uses: actions/upload-pages-artifact@v4
+  with:
+    path: <docs-output-dir>/_site
+    include-hidden-files: true    # Required
+```
+
+Without this, the `.well-known/agent-skills/` directory is silently dropped and `npx skills add`
+will return a 404.
+
+::: {.callout-tip}
+Great Docs generates this workflow for you with the correct settings. See the
+[Deployment](14-deployment.qmd) guide for the full workflow template.
+:::
+
+### Configuration Reference
+
+```{.yaml filename="great-docs.yml"}
+skill:
+  enabled: true          # Set to false to disable skill.md entirely
+  file: null             # Path to a SKILL.md (overrides curated and generated)
+  well_known: true       # Serve at /.well-known/ discovery endpoints
+  gotchas: []            # Gotcha strings (for auto-generated skill only)
+  best_practices: []     # Best-practice strings (for auto-generated skill only)
+  decision_table: []     # Rows: [{need: "...", use: "..."}]
+  extra_body: null       # Path to extra Markdown to append (auto-generated only)
+  skills: []             # Multi-skill mode: [{name: "...", file: "..."}]
+```
+
+All of these options are documented in detail in the sections above. For a quick setup, the only
+required step is placing a `SKILL.md` in `skills/<package-name>/` (everything else has sensible
+defaults).
+
+## Installing Skills (for Users) {#installing-skills-for-users}
+
+If you're a *user* of a Python package that ships a skill, you can install it into your local
+project so your AI coding agent has context about the package whenever you're writing code.
+
+::: {.callout-tip}
+## Install the Great Docs skill itself
+
+Great Docs ships its own skill. If you're building documentation sites with Great Docs, installing
+it gives your AI agent context about `great-docs.yml` configuration, the build pipeline, CLI
+commands, and common pitfalls:
+
+```bash
+great-docs skill install great-docs
+```
+:::
+
+Great Docs provides three ways to install skills:
+
+1. The **`great-docs skill` CLI**: the recommended approach for most users
+2. The **Python API** (`great_docs.install_skill()`): for programmatic use or CI integration
+3. **`npx skills add`**: the standard Agent Skills protocol (works without Great Docs installed)
+
+The first two are covered in detail below. The third is the community standard and works with any
+skills-compatible tool.
+
+### `great-docs skill install`
+
+Installs a skill from a Python package, a documentation site URL, or the current project:
+
+```bash
+# Install from an installed Python package
+great-docs skill install great-tables
+
+# Install from a documentation site URL
+great-docs skill install https://posit-dev.github.io/great-tables/
+
+# Install from the current project (auto-detects package from pyproject.toml)
+great-docs skill install
+```
+
+Great Docs auto-detects which AI coding agents you have configured by scanning for marker files
+(`.claude/`, `.github/`, `.cursor/`, etc.) and installs the skill into the correct directory. If
+no agent is detected, it defaults to Claude Code (`.claude/skills/<name>/`).
+
+You can also target a specific agent or a custom path:
+
+```bash
+# Target a specific agent
+great-docs skill install great-tables --agent copilot
+
+# Install to a custom path
+great-docs skill install great-tables --path .claude/skills/my-gt
+
+# Install globally (to ~/ instead of the current repo)
+great-docs skill install great-tables --global
+
+# Update all existing installations in place
+great-docs skill install --detect
+```
+
+**Supported agents:**
+
+| Agent           | Flag         | Default directory              |
+|-----------------|--------------|--------------------------------|
+| Claude Code     | `--agent claude`   | `.claude/skills/<name>/` |
+| GitHub Copilot  | `--agent copilot`  | `.github/skills/<name>/` |
+| Cursor          | `--agent cursor`   | `.cursor/skills/<name>/` |
+| Windsurf        | `--agent windsurf` | `.windsurf/skills/<name>/` |
+| OpenCode        | `--agent opencode` | `.opencode/skills/<name>/` |
+| Codex           | `--agent codex`    | `.codex/skills/<name>/`  |
+
+When multiple agents are detected (e.g., both `.claude/` and `.cursor/` exist), the skill is
+installed into all of them in a single command.
+
+### `great-docs skill check`
+
+Checks whether installed skills are current or outdated:
+
+```bash
+# Check all installed skills
+great-docs skill check
+
+# Check a specific package
+great-docs skill check great-tables
+
+# Check and auto-update any outdated skills
+great-docs skill check --update
+
+# Check global installations only
+great-docs skill check --global
+```
+
+Example output:
+
+```
+Checking installed skills...
+  ✓ great-tables (Claude Code): v0.15.0 [current]
+  ⚠ plotnine (Claude Code): v0.14.2 → v0.15.0 [outdated]
+  · my-local-skill (Cursor) [local]
+
+Summary: 1 current, 1 outdated, 1 local
+```
+
+The status labels mean:
+
+| Status       | Meaning                                                        |
+|--------------|----------------------------------------------------------------|
+| **current**  | Installed skill matches the content in the installed package   |
+| **outdated** | The package has newer skill content available                  |
+| **local**    | Hand-written skill with no matching package (not checked)      |
+
+Add `--update` to automatically replace any outdated skills with the latest content from the
+installed package.
+
+### `great-docs skill list`
+
+Lists the skills bundled inside a package or available at a URL:
+
+```bash
+# List skills from an installed package
+great-docs skill list great-tables
+
+# List skills from a documentation site
+great-docs skill list https://posit-dev.github.io/great-tables/
+
+# List skills from the current project
+great-docs skill list
+```
+
+This is useful for discovering what skills a package provides before installing them.
+
+### How Freshness Checking Works {#how-freshness-checking-works}
+
+When you install a skill from a Python package, Great Docs stamps two pieces of metadata into the
+installed `SKILL.md`'s frontmatter:
+
+- **`metadata.package_version`**: the Python package version at install time (e.g., `"0.15.0"`)
+- **`metadata.content_hash`**: a SHA-256 prefix of the *original* skill content (before stamping)
+
+When you later run `great-docs skill check`, the tool:
+
+1. finds the bundled `SKILL.md` inside the currently installed Python package
+2. hashes its content
+3. compares that hash against the `content_hash` stored in the installed copy
+
+If the hashes match, the skill is **current** (even if the package version has changed). This
+eliminates false positives: if you upgrade from v0.10.0 to v0.11.1 and the skill text didn't
+change, `check` correctly reports `current` instead of `outdated`.
+
+This stamping only happens on the **consumer** side (during `skill install`). Published skills on
+documentation sites are never modified and Great Docs copies them verbatim.
+
+::: {.callout-note}
+## What about hand-written skills?
+
+If you create a `SKILL.md` manually (not via `great-docs skill install`), there is no matching
+Python package to compare against. These skills are reported as `[local]` and are never flagged
+as outdated. Great Docs leaves them entirely alone.
+:::
+
+### Python API
+
+For programmatic use (CI scripts, setup automation, downstream package wrappers), the same
+functionality is available as Python functions:
+
+```python
+from great_docs import install_skill, check_skill, list_skills
+
+# Install a skill
+paths = install_skill(package="great-tables")
+
+# Check installed skills
+results = check_skill(package="great-tables")
+for r in results:
+    print(f"{r['name']}: {r['status']}")
+
+# List available skills
+skills = list_skills(package="great-tables")
+```
+
+`install_skill()` accepts the same options as the CLI:
+
+```python
+install_skill(
+    package="great-tables",    # or url="https://...", or skill_content="..."
+    agent="claude",            # target agent (auto-detected if omitted)
+    global_=False,             # install to ~/ instead of repo
+    path=None,                 # explicit target path
+    detect=False,              # update existing installations
+    skill_name=None,           # override the skill name
+    quiet=False,               # suppress output
+)
+```
+
+All three functions return lists. The `install_skill()` function returns the paths of installed `SKILL.md`
+files, `check_skill()` returns status dictionaries, and `list_skills()` returns skill metadata.
+
+## How It All Fits Together
+
+Here is the full lifecycle from authoring to consumption:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     AUTHOR SIDE                             │
+│                                                             │
+│  1. Write SKILL.md in skills/<pkg>/                         │
+│     (or let Great Docs auto-generate one)                   │
+│                                                             │
+│  2. great-docs build                                        │
+│     → copies SKILL.md to docs output                        │
+│     → places at .well-known/agent-skills/<name>/SKILL.md    │
+│     → writes index.json discovery manifest                  │
+│                                                             │
+│  3. Deploy docs site                                        │
+│     → skill is discoverable at the published URL            │
+│                                                             │
+│  4. pip install / pip publish                               │
+│     → skill is bundled inside the Python package            │
+│       (in skills/<name>/)                                   │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      USER SIDE                              │
+│                                                             │
+│  Install:                                                   │
+│    great-docs skill install <package>                       │
+│    great-docs skill install https://docs-site.com           │
+│    npx skills add https://docs-site.com                     │
+│    → stamps content_hash + package_version                  │
+│    → writes to .claude/skills/<name>/SKILL.md (or other)    │
+│                                                             │
+│  Check:                                                     │
+│    great-docs skill check                                   │
+│    → hashes bundled SKILL.md from installed package         │
+│    → compares against stored content_hash                   │
+│    → reports current / outdated / local                     │
+│                                                             │
+│  Update:                                                    │
+│    great-docs skill check --update                          │
+│    → replaces outdated skills with latest content           │
+│    → re-stamps content_hash + package_version               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+The key insight is that Great Docs never touches the *authored* skill content. The content-hash
+stamping, version tracking, and freshness checking all happen exclusively on the consumer side.
+Authors write a `SKILL.md`, and it is published and bundled exactly as written.
+
+### Disabling Skills
+
+If you don't want Great Docs to generate or serve a `SKILL.md` at all:
+
+```{.yaml filename="great-docs.yml"}
+skill:
+  enabled: false
+```
+
+This suppresses both the `skill.md` generation and the `.well-known/` discovery endpoints.
+
+## Next Steps
+
+Agent Skills bridge the gap between your package's documentation and the AI coding agents that
+help people use it. Whether you author a hand-crafted skill or let Great Docs generate one, the
+result is a discoverable, installable cheat sheet that makes agents more effective.
+
+- [Agent Skills Specification](https://agentskills.io/specification): the full open standard
+- [llms.txt](39-llms-txt.qmd): the auto-generated LLM context files that complement skills
+- [Configuration](05-configuration.qmd): all `great-docs.yml` options including the `skill` block
+- [Deployment](14-deployment.qmd): deploying your site to GitHub Pages (with the `include-hidden-files` setting)
+- [Building](13-building.qmd): the full build pipeline, including how skill generation fits in

@@ -1,0 +1,145 @@
+---
+title: "llms.txt"
+guide-section: "AI & Agents"
+tags: [AI, LLM, Context]
+---
+
+# llms.txt
+
+Large language models work best when they have accurate, structured context about the libraries
+they're working with. The [llms.txt convention](https://llmstxt.org/) gives LLM-based tools a
+machine-friendly summary of your package: what it does, what its API looks like, and where to find
+the full documentation. Great Docs generates two files automatically during every build:
+
+- **`llms.txt`**: a compact index of your API reference with one-line descriptions and links to
+  each documented item
+- **`llms-full.txt`**: a comprehensive document containing full function/class signatures,
+  docstrings, CLI help text, and user guide content
+
+Both files are placed in the root of your documentation site and are available at predictable URLs
+(e.g., `https://your-docs-site.com/llms.txt`). No configuration is needed so if your project has an
+API reference defined in `great-docs.yml`, the files are generated automatically.
+
+## What Goes Into Each File
+
+Great Docs generates both files from the same source data but at different levels of detail. The
+compact `llms.txt` is a quick-reference index whereas `llms-full.txt` is the complete picture.
+
+### `llms.txt`
+
+The compact index follows the [llms.txt format](https://llmstxt.org/):
+
+```markdown
+# my_package
+
+> A short description of the package
+
+## Docs
+
+### API Reference
+
+#### Data Processing
+> Functions for loading and transforming data
+
+- [read_csv](https://example.com/reference/read_csv.html): Read a CSV file into a DataFrame
+- [to_parquet](https://example.com/reference/to_parquet.html): Write a DataFrame to Parquet format
+
+#### Visualization
+> Plotting and display utilities
+
+- [plot](https://example.com/reference/plot.html): Create a plot from a DataFrame
+- [show](https://example.com/reference/show.html): Display a plot in the browser
+```
+
+The content is derived from:
+
+- **Package name and description** from `pyproject.toml`
+- **Section titles and descriptions** from the `api-reference.sections` block in `great-docs.yml`
+- **One-line docstring summaries** extracted by importing the package at build time
+- **URLs** constructed from the `site-url` in `great-docs.yml` or the `Documentation` URL in
+  `pyproject.toml`
+
+This file is typically small (a few KB) and is designed to give an LLM a quick overview of the
+API surface without overwhelming its context window.
+
+### `llms-full.txt`
+
+The comprehensive file includes everything in `llms.txt` plus:
+
+- **Full function and class signatures** with all parameters and type annotations
+- **Complete docstrings** (not just the first line)
+- **CLI help text** for all commands and subcommands (if CLI documentation is enabled)
+- **User guide content** from all user guide pages, with YAML frontmatter stripped
+
+This file can be large (tens of KB to hundreds of KB depending on your API surface and user guide
+size). It's intended for tools that can handle larger context windows or that retrieve sections
+selectively.
+
+## How It Works
+
+Both files are generated during Step 3 of the build pipeline (`great-docs build`), right after the
+API reference configuration is refreshed and before the `SKILL.md` is generated. The generation
+requires an `api-reference` block in `great-docs.yml`. Without one, both files are silently skipped.
+
+Great Docs imports your package at build time to extract docstrings and signatures. This means the
+package must be importable in the build environment. For CI builds, make sure your package is
+installed before running `great-docs build`.
+
+The build log shows the generation as a single step:
+
+```
+━━ Step 3/18 ─ Generate llms.txt / llms-full.txt ━━━━━━━━
+   ✔ Created llms.txt + llms-full.txt                <0.2s
+```
+
+## Relationship to Agent Skills
+
+The `llms.txt` files and [Agent Skills](38-agent-skills.qmd) serve complementary purposes:
+
+| | `llms.txt` / `llms-full.txt` | `SKILL.md` |
+|---|---|---|
+| **Audience** | Any LLM-based tool | AI coding agents specifically |
+| **Content** | Auto-generated from code | Hand-written (recommended) or auto-generated |
+| **Scope** | Full API surface + docs | Curated cheat sheet: gotchas, decisions, patterns |
+| **Size** | Can be very large | Under 500 lines (recommended) |
+| **Protocol** | Direct URL fetch | `.well-known` discovery + install CLI |
+
+A typical setup uses both: `llms-full.txt` for comprehensive reference and `SKILL.md` for
+opinionated guidance that can't be inferred from code alone. Skills often link to `llms-full.txt`
+in their Resources section so agents can pull in more detail when needed.
+
+## Verifying the Output
+
+After a build, you can inspect the generated files directly:
+
+```bash
+# Check that both files were created
+ls -la great-docs/llms.txt great-docs/llms-full.txt
+
+# Preview the compact index
+head -30 great-docs/llms.txt
+
+# Check the size of the full file
+wc -l great-docs/llms-full.txt
+```
+
+Or visit them on your deployed site:
+
+```
+https://your-docs-site.com/llms.txt
+https://your-docs-site.com/llms-full.txt
+```
+
+If the files are missing after a build, check that your `great-docs.yml` has an `api-reference` block
+with at least one section and that the package is importable in the build environment.
+
+## Next Steps
+
+The `llms.txt` files are generated automatically with no configuration required. For more targeted
+AI agent context, consider authoring a `SKILL.md` alongside them.
+
+- [Agent Skills](38-agent-skills.qmd): hand-crafted context for AI coding agents
+- [Configuration](05-configuration.qmd): all `great-docs.yml` options
+- [Building](13-building.qmd): the full build pipeline and step order
+- [API Documentation](06-api-documentation.qmd): configuring the `api-reference` sections that
+  feed into `llms.txt`

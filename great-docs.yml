@@ -244,7 +244,8 @@ nav_icons:
     Theming & Appearance: palette
     Content & API: file-text
     Publishing: upload
-    AI & LLMs: wand-sparkles
+    Agent Skills: brain-circuit
+    "llms.txt": file-text
     Build & Quality: circle-check
     Cross-Referencing: link
     Internationalization: globe
@@ -322,13 +323,13 @@ reference:
     documentation sites.
   sections:
     - title: Classes
-      desc: Core classes and types
+      desc: Core classes and types.
       contents:
         - name: GreatDocs
           members: false
 
     - title: GreatDocs Methods
-      desc: Methods for the GreatDocs class
+      desc: Methods for the GreatDocs class.
       contents:
         - GreatDocs.install
         - GreatDocs.uninstall
@@ -345,3 +346,11 @@ reference:
         - enable_tbl_preview
         - disable_tbl_preview
         - tbl_explorer
+
+    - title: Agent Skills
+      desc: >-
+        Install, check, and list Agent Skills from the Python API.
+      contents:
+        - install_skill
+        - check_skill
+        - list_skills
