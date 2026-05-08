@@ -54,6 +54,13 @@ h1.title {
    font-weight: 600 !important;
 }
 
+// Title headings get a larger font size on desktop
+@media (min-width: 992px) {
+   h1.title, .title.h1 {
+      font-size: 2.3rem;
+   }
+}
+
 // Remove h2 underline (Quarto/Bootstrap adds border-bottom to h2 elements)
 h2, .h2 {
    border-bottom: none;
