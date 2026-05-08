@@ -132,6 +132,7 @@ jobs:
         uses: actions/upload-pages-artifact@v5
         with:
           path: great-docs/_site
+          include-hidden-files: true
 
   publish-docs:
     needs: build-docs
