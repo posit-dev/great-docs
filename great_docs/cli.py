@@ -2961,6 +2961,256 @@ def api_snapshot_cmd(
 cli.add_command(api_snapshot_cmd)
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# SKILL MANAGEMENT COMMANDS
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+@click.group(cls=OrderedGroup)
+def skill():
+    """Manage AI coding agent skills.
+
+    Install, check, and list SKILL.md files so AI coding agents can
+    learn to use your Python package.
+
+    \b
+    • great-docs skill install  — Install skills into your project
+    • great-docs skill check    — Check if installed skills are current
+    • great-docs skill list     — List available skills from a package or URL
+    """
+
+
+@click.command(name="install")
+@click.argument("source", required=False)
+@click.option(
+    "-g",
+    "--global",
+    "global_",
+    is_flag=True,
+    help="Install the skill globally (~/) instead of in the current repository.",
+)
+@click.option(
+    "-p",
+    "--path",
+    type=str,
+    help="Custom path where to install the skill.",
+)
+@click.option(
+    "-d",
+    "--detect",
+    is_flag=True,
+    help="Automatically detect and update existing installations.",
+)
+@click.option(
+    "--agent",
+    type=click.Choice(["claude", "copilot", "cursor", "windsurf", "opencode", "codex"]),
+    help="Target agent format (auto-detected if not specified).",
+)
+@click.option(
+    "--name",
+    "skill_name",
+    type=str,
+    help="Override the skill name.",
+)
+def skill_install(
+    source: str | None,
+    global_: bool,
+    path: str | None,
+    detect: bool,
+    agent: str | None,
+    skill_name: str | None,
+) -> None:
+    """Install skills for AI coding agents.
+
+    SOURCE can be a Python package name or a documentation site URL.
+    If omitted, looks for skills in the current package.
+
+    \b
+    Examples:
+      great-docs skill install                    # install from current package
+      great-docs skill install great-tables       # install from a package
+      great-docs skill install https://posit-dev.github.io/great-docs/
+      great-docs skill install --global           # install to ~/
+      great-docs skill install --agent claude     # target Claude Code specifically
+      great-docs skill install --path .claude/skills/my-pkg
+      great-docs skill install --detect           # update existing installations
+    """
+    from ._skill_install import install_skill as _install_skill
+
+    kwargs: dict = {
+        "global_": global_,
+        "path": path,
+        "detect": detect,
+        "skill_name": skill_name,
+    }
+
+    if agent:
+        kwargs["agent"] = agent
+
+    if source:
+        if source.startswith(("http://", "https://")):
+            kwargs["url"] = source
+        else:
+            kwargs["package"] = source
+    else:
+        # Try to detect current package from pyproject.toml
+        project_root = Path.cwd()
+        pkg_name = _detect_current_package(project_root)
+        if pkg_name:
+            kwargs["package"] = pkg_name
+        else:
+            click.echo(
+                "Error: No source specified and no package found in current directory.", err=True
+            )
+            click.echo("Usage: great-docs skill install <package-or-url>", err=True)
+            sys.exit(1)
+
+    results = _install_skill(**kwargs)
+    if not results:
+        sys.exit(1)
+
+
+@click.command(name="check")
+@click.argument("package", required=False)
+@click.option(
+    "-g",
+    "--global",
+    "global_",
+    is_flag=True,
+    help="Only check global installations (in home directory).",
+)
+@click.option(
+    "-l",
+    "--local",
+    is_flag=True,
+    default=True,
+    help="Only check local installations (in current repository).",
+)
+@click.option(
+    "-u",
+    "--update",
+    is_flag=True,
+    help="Automatically update any outdated skills found.",
+)
+def skill_check(
+    package: str | None,
+    global_: bool,
+    local: bool,
+    update: bool,
+) -> None:
+    """Check if installed skills are up to date.
+
+    Scans for installed SKILL.md files and compares their version
+    with the currently installed Python package version.
+
+    \b
+    Examples:
+      great-docs skill check                # check all installed skills
+      great-docs skill check great-tables   # check a specific package
+      great-docs skill check --update       # auto-update outdated skills
+      great-docs skill check --global       # check global installations only
+    """
+    from ._skill_install import check_skill as _check_skill
+
+    click.echo("Checking installed skills...")
+    results = _check_skill(
+        package=package,
+        global_=global_,
+        local=local,
+        update=update,
+    )
+
+    if not results:
+        click.echo("No installed skills found.")
+    else:
+        current = sum(1 for r in results if r["status"] == "current")
+        outdated = sum(1 for r in results if r["status"] == "outdated")
+        updated = sum(1 for r in results if r["status"] == "updated")
+        local = sum(1 for r in results if r["status"] == "local")
+
+        click.echo()
+        parts = []
+        if current:
+            parts.append(f"{current} current")
+        if outdated:
+            parts.append(f"{outdated} outdated")
+        if updated:
+            parts.append(f"{updated} updated")
+        if local:
+            parts.append(f"{local} local")
+        click.echo(f"Summary: {', '.join(parts)}")
+
+
+@click.command(name="list")
+@click.argument("source", required=False)
+@click.option(
+    "--url",
+    type=str,
+    help="Documentation site URL to query for available skills.",
+)
+def skill_list(source: str | None, url: str | None) -> None:
+    """List available skills from a package or URL.
+
+    \b
+    Examples:
+      great-docs skill list                   # list from current package
+      great-docs skill list great-tables      # list from an installed package
+      great-docs skill list --url https://posit-dev.github.io/great-docs/
+    """
+    from ._skill_install import list_skills as _list_skills
+
+    if source:
+        if source.startswith(("http://", "https://")):
+            url = source
+            source = None
+
+    if url:
+        click.echo(f"Skills available at {url}:")
+        results = _list_skills(url=url)
+    elif source:
+        click.echo(f"Skills bundled in '{source}':")
+        results = _list_skills(package=source)
+    else:
+        project_root = Path.cwd()
+        pkg_name = _detect_current_package(project_root)
+        if pkg_name:
+            click.echo(f"Skills bundled in '{pkg_name}':")
+            results = _list_skills(package=pkg_name)
+        else:
+            click.echo("Error: No source specified and no package found.", err=True)
+            sys.exit(1)
+
+    if not results:
+        click.echo("No skills found.")
+        sys.exit(1)
+
+
+def _detect_current_package(project_root: Path) -> str | None:
+    """Detect the current package name from pyproject.toml."""
+    pyproject_path = project_root / "pyproject.toml"
+    if not pyproject_path.exists():
+        return None
+
+    try:
+        try:
+            import tomllib
+        except ImportError:
+            import tomli as tomllib  # type: ignore[no-redef]
+
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
+
+        return data.get("project", {}).get("name")
+    except Exception:
+        return None
+
+
+skill.add_command(skill_install)
+skill.add_command(skill_check)
+skill.add_command(skill_list)
+cli.add_command(skill)
+
+
 def main() -> None:
     """Main CLI entry point for great-docs."""
     cli()
