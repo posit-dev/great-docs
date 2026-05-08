@@ -2974,9 +2974,13 @@ def skill():
     learn to use your Python package.
 
     \b
-    • great-docs skill install  — Install skills into your project
-    • great-docs skill check    — Check if installed skills are current
-    • great-docs skill list     — List available skills from a package or URL
+    Quick start:
+      great-docs skill install great-docs      # install Great Docs' own skill
+      great-docs skill install great-tables    # install from PyPI package
+      great-docs skill install pointblank      # works with any GD-powered package
+      great-docs skill check                   # verify freshness
+      great-docs skill check --update          # auto-update outdated skills
+      great-docs skill list great-tables       # see what's bundled
     """
 
 
@@ -3027,13 +3031,15 @@ def skill_install(
 
     \b
     Examples:
-      great-docs skill install                    # install from current package
-      great-docs skill install great-tables       # install from a package
-      great-docs skill install https://posit-dev.github.io/great-docs/
-      great-docs skill install --global           # install to ~/
-      great-docs skill install --agent claude     # target Claude Code specifically
-      great-docs skill install --path .claude/skills/my-pkg
-      great-docs skill install --detect           # update existing installations
+      great-docs skill install                    # current package (pyproject.toml)
+      great-docs skill install great-tables       # any installed package
+      great-docs skill install polars pointblank  # multiple packages at once
+      great-docs skill install https://posit-dev.github.io/great-tables/
+      great-docs skill install great-tables --agent claude           # Claude Code
+      great-docs skill install great-tables --agent copilot          # GitHub Copilot
+      great-docs skill install great-tables --global                 # install to ~/
+      great-docs skill install great-tables --path .claude/skills/gt # custom path
+      great-docs skill install --detect           # find and refresh all skills
     """
     from ._skill_install import install_skill as _install_skill
 
@@ -3100,15 +3106,15 @@ def skill_check(
 ) -> None:
     """Check if installed skills are up to date.
 
-    Scans for installed SKILL.md files and compares their version
-    with the currently installed Python package version.
+    Scans for installed SKILL.md files and compares their content hash
+    with the currently installed package to detect changes.
 
     \b
     Examples:
       great-docs skill check                # check all installed skills
       great-docs skill check great-tables   # check a specific package
-      great-docs skill check --update       # auto-update outdated skills
       great-docs skill check --global       # check global installations only
+      great-docs skill check --update       # reinstall any that have changed
     """
     from ._skill_install import check_skill as _check_skill
 
@@ -3151,11 +3157,14 @@ def skill_check(
 def skill_list(source: str | None, url: str | None) -> None:
     """List available skills from a package or URL.
 
+    Shows all SKILL.md files bundled in a package or discoverable at a URL,
+    including their names and file paths.
+
     \b
     Examples:
-      great-docs skill list                   # list from current package
-      great-docs skill list great-tables      # list from an installed package
-      great-docs skill list --url https://posit-dev.github.io/great-docs/
+      great-docs skill list                   # current package (pyproject.toml)
+      great-docs skill list great-tables      # any installed package
+      great-docs skill list https://posit-dev.github.io/great-tables/
     """
     from ._skill_install import list_skills as _list_skills
 
