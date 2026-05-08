@@ -48,10 +48,10 @@ Releases are fetched and a `changelog.qmd` file is generated.
 
 9. The Agent Skills file (`skill.md`) is generated or copied. If you have a curated `SKILL.md` in
 `skills/<package-name>/`, it is used directly. Otherwise, a skill file is auto-generated from your
-package metadata.
+package metadata. See [Agent Skills](38-agent-skills.qmd) for details.
 
 10. `llms.txt` and `llms-full.txt` files are generated. These provide AI-friendly summaries of your
-package documentation.
+package documentation. See [llms.txt](39-llms-txt.qmd) for details.
 
 11. Source link metadata (`_source_links.json`) is generated, mapping each documented symbol to its
 file and line numbers on GitHub.
