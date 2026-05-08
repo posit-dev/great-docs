@@ -244,7 +244,8 @@ nav_icons:
     Theming & Appearance: palette
     Content & API: file-text
     Publishing: upload
-    AI & LLMs: wand-sparkles
+    Agent Skills: brain-circuit
+    "llms.txt": file-text
     Build & Quality: circle-check
     Cross-Referencing: link
     Internationalization: globe
