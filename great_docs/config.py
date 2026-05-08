@@ -232,6 +232,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "best_practices": [],  # List of best-practice strings
         "decision_table": [],  # Manual rows: [{"need": "...", "use": "..."}]
         "extra_body": None,  # Path to extra Markdown to append to the generated body
+        # Multiple named skills (overrides 'file' when set):
+        # skills:
+        #   - name: my-package
+        #     file: skills/my-package/SKILL.md
+        #   - name: authoring-pages
+        #     file: skills/authoring-pages/SKILL.md
+        "skills": [],
     },
     # Social Cards & Open Graph
     # Auto-generate <meta> tags for social media previews (LinkedIn, Discord, Slack,
@@ -591,6 +598,15 @@ class Config:
         return self.get("skill.extra_body")
 
     @property
+    def skill_skills(self) -> list[dict]:
+        """Get the list of named skills for multi-skill distribution.
+
+        Each entry should have `name` and `file` keys. When non-empty, this overrides the single
+        `skill.file` setting.
+        """
+        return self.get("skill.skills", [])
+
+    @property
     def changelog_enabled(self) -> bool:
         """Check if changelog generation from GitHub Releases is enabled."""
         return self.get("changelog.enabled", True)
@@ -609,15 +625,14 @@ class Config:
     def custom_pages(self) -> list[dict[str, str]]:
         """Get normalized custom static page source directories.
 
-        Returns a list of dicts with ``dir`` and ``output`` keys.
+        Returns a list of dicts with `dir` and `output` keys.
 
-        - When ``custom_pages`` is omitted, falls back to ``custom/``.
-        - When ``custom_pages`` is ``false``, returns an empty list.
-        - When ``custom_pages`` is a string, that path is used and the output
-          prefix defaults to the basename of the path.
-        - When ``custom_pages`` is a dict, it may specify ``dir`` and optional
-          ``output``.
-        - When ``custom_pages`` is a list, each entry may be a string or dict.
+        - When `custom_pages` is omitted, falls back to `custom/`.
+        - When `custom_pages` is `false`, returns an empty list.
+        - When `custom_pages` is a string, that path is used and the output prefix defaults to the
+          basename of the path.
+        - When `custom_pages` is a dict, it may specify `dir` and optional `output`.
+        - When `custom_pages` is a list, each entry may be a string or dict.
         """
         raw = self.get("custom_pages")
 
