@@ -34,6 +34,7 @@ jobs:
         with:
           name: docs-html
           path: great-docs/_site
+          include-hidden-files: true
 
       - name: Upload build timings
         uses: actions/upload-artifact@v7
