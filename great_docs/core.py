@@ -11727,6 +11727,10 @@ body-classes: "gd-homepage"
         If the user has provided a hand-written SKILL.md via `skill.file` in `great-docs.yml`, that
         file is copied verbatim instead of generating one.
 
+        When `skill.skills` is configured with multiple named skills, each is placed at its own
+        `.well-known/agent-skills/<name>/SKILL.md` path and aggregated into a single `index.json`
+        discovery manifest. The first skill is also written to `<docs>/skill.md`.
+
         The generated file is written to `<docs>/skill.md` and optionally published at
         `<docs>/.well-known/agent-skills/<name>/SKILL.md` with a discovery manifest at
         `<docs>/.well-known/agent-skills/index.json` for `npx skills add` auto-discovery.
@@ -11737,6 +11741,11 @@ body-classes: "gd-homepage"
             return
 
         package_root = self._find_package_root()
+
+        # --- Multi-skill mode: skill.skills is configured ---
+        if self._config.skill_skills:
+            self._generate_multi_skills(package_root)
+            return
 
         # If user provided a hand-written SKILL.md via config, copy it
         if self._config.skill_file:
@@ -12254,6 +12263,54 @@ body-classes: "gd-homepage"
         with open(skills_page, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
 
+    def _generate_multi_skills(self, package_root: "Path") -> None:
+        """
+        Generate multiple named skills from the `skill.skills` config list.
+
+        Each entry in `skill.skills` must have `name` and `file` keys. The first skill is also
+        written to `<docs>/skill.md` and used for the skills page. All skills are aggregated into a
+        single `.well-known/agent-skills/index.json` discovery manifest.
+        """
+        import shutil
+
+        skill_entries = self._config.skill_skills
+        if not skill_entries:
+            return
+
+        placed_skills: list[tuple["Path", "Path"]] = []
+        # list of (skill_path_in_docs, source_dir)
+
+        for i, entry in enumerate(skill_entries):
+            name = entry.get("name")
+            file_path = entry.get("file")
+            if not name or not file_path:
+                print(f"Warning: skill.skills[{i}] missing 'name' or 'file', skipping")
+                continue
+
+            src = package_root / file_path
+            if not src.exists():
+                print(f"Warning: skill file '{src}' not found, skipping")
+                continue
+
+            # First skill becomes the primary skill.md
+            if i == 0:
+                dest = self.project_path / "skill.md"
+                shutil.copy2(src, dest)
+                print(f"Copied primary skill '{name}' from {src}")
+                placed_skills.append((dest, src.parent))
+            else:
+                placed_skills.append((src, src.parent))
+
+        if not placed_skills:
+            return
+
+        # Place all skills in .well-known with a combined index.json
+        self._place_well_known_skills(placed_skills)
+
+        # Generate the skills page from the primary skill
+        primary_path, primary_dir = placed_skills[0]
+        self._generate_skills_page(primary_path, skill_dir=primary_dir)
+
     def _place_well_known_skill(self, skill_path: "Path") -> None:
         """
         Copy the SKILL.md to .well-known/ directories for auto-discovery.
@@ -12269,42 +12326,78 @@ body-classes: "gd-homepage"
         skill_path
             Path to the skill.md file to copy.
         """
+        self._place_well_known_skills([(skill_path, None)])
+
+    def _place_well_known_skills(
+        self,
+        skill_entries: "list[tuple[Path, Path | None]]",
+    ) -> None:
+        """
+        Place one or more skills at .well-known/ directories for auto-discovery.
+
+        Creates individual `SKILL.md` files under `.well-known/agent-skills/{name}/` and a combined
+        `index.json` discovery manifest listing all skills.
+
+        Parameters
+        ----------
+        skill_entries
+            List of `(skill_path, source_dir)` tuples. `source_dir` may be `None`
+            and is used to copy additional reference files alongside the `SKILL.md`.
+        """
         import shutil
 
         if not self._config.skill_well_known:
             return
 
-        # Parse frontmatter to extract skill name and description
-        content = skill_path.read_text(encoding="utf-8")
-        fm, _ = self._split_frontmatter(content)
-        skill_name = fm.get("name", "default")
-        skill_description = fm.get("description", "")
-        if isinstance(skill_description, str):
-            skill_description = skill_description.strip()
+        index_skills: list[dict] = []
 
-        # --- Preferred: .well-known/agent-skills/{name}/SKILL.md + index.json ---
-        agent_skills_dir = self.project_path / ".well-known" / "agent-skills" / skill_name
-        agent_skills_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(skill_path, agent_skills_dir / "SKILL.md")
+        for skill_path, source_dir in skill_entries:
+            # Parse frontmatter to extract skill name and description
+            content = skill_path.read_text(encoding="utf-8")
+            fm, _ = self._split_frontmatter(content)
+            skill_name = fm.get("name", "default")
+            skill_description = fm.get("description", "")
+            if isinstance(skill_description, str):
+                skill_description = skill_description.strip()
 
-        index_data = {
-            "skills": [
+            # --- Preferred: .well-known/agent-skills/{name}/SKILL.md ---
+            agent_skills_dir = self.project_path / ".well-known" / "agent-skills" / skill_name
+            agent_skills_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(skill_path, agent_skills_dir / "SKILL.md")
+
+            # Copy additional reference files from the source directory
+            extra_files = ["SKILL.md"]
+            if source_dir and source_dir.is_dir():
+                for extra in source_dir.rglob("*"):
+                    if extra.is_file() and extra.name != "SKILL.md":
+                        rel = extra.relative_to(source_dir)
+                        dest = agent_skills_dir / rel
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(extra, dest)
+                        extra_files.append(str(rel))
+
+            index_skills.append(
                 {
                     "name": skill_name,
                     "description": skill_description,
-                    "files": ["SKILL.md"],
+                    "files": extra_files,
                 }
-            ]
-        }
-        index_path = self.project_path / ".well-known" / "agent-skills" / "index.json"
-        with open(index_path, "w", encoding="utf-8") as f:
-            json.dump(index_data, f, indent=2)
-            f.write("\n")
+            )
 
-        # --- Legacy: .well-known/skills/default/SKILL.md ---
-        well_known_dir = self.project_path / ".well-known" / "skills" / "default"
-        well_known_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(skill_path, well_known_dir / "SKILL.md")
+        # --- Combined index.json for all skills ---
+        if index_skills:
+            index_data = {"skills": index_skills}
+            index_path = self.project_path / ".well-known" / "agent-skills" / "index.json"
+            with open(index_path, "w", encoding="utf-8") as f:
+                json.dump(index_data, f, indent=2)
+                f.write("\n")
+
+        # --- Legacy: .well-known/skills/default/SKILL.md (first skill only) ---
+        if skill_entries:
+            first_skill_path = skill_entries[0][0]
+            well_known_dir = self.project_path / ".well-known" / "skills" / "default"
+            well_known_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(first_skill_path, well_known_dir / "SKILL.md")
 
     # ══════════════════════════════════════════════════════════════════════════
     # SEO GENERATION METHODS
