@@ -41023,6 +41023,223 @@ def test_generate_skills_page_with_companions():
         assert "SKILL LAYOUT" in content
 
 
+def test_generate_skills_page_multi_skill_switcher():
+    """_generate_skills_page renders a sticky switcher bar when multiple skills are provided."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp)
+        (project / "great-docs.yml").write_text("display_name: MyPkg\n")
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = project
+
+        # Create primary skill
+        skill_dir_a = project / "skill-a"
+        skill_dir_a.mkdir()
+        skill_md_a = skill_dir_a / "SKILL.md"
+        skill_md_a.write_text(
+            "---\nname: write_user_guide\ndescription: Write user guide pages\n---\n\n"
+            "# Write User Guide\n\nHelps write guide pages."
+        )
+        refs_a = skill_dir_a / "references"
+        refs_a.mkdir()
+        (refs_a / "guide-style.md").write_text("# Guide Style")
+
+        # Create secondary skill
+        skill_dir_b = project / "skill-b"
+        skill_dir_b.mkdir()
+        skill_md_b = skill_dir_b / "SKILL.md"
+        skill_md_b.write_text(
+            "---\nname: revise_docstrings\ndescription: Revise docstrings\n---\n\n"
+            "# Revise Docstrings\n\nHelps fix docstrings."
+        )
+
+        gd._generate_skills_page(
+            skill_md_a,
+            skill_dir=skill_dir_a,
+            extra_skills=[(skill_md_b, skill_dir_b)],
+        )
+
+        skills_page = project / "skills.qmd"
+        assert skills_page.exists()
+        content = skills_page.read_text()
+
+        # Switcher bar should exist with both skill pills
+        assert 'class="gd-skill-switcher"' in content
+        assert "write_user_guide" in content
+        assert "revise_docstrings" in content
+        assert "gd-skill-pill" in content
+
+        # Two panels should exist
+        assert content.count('class="gd-skill-panel"') == 2
+
+        # First panel visible, second hidden
+        assert '<div class="gd-skill-panel">' in content
+        assert '<div class="gd-skill-panel" hidden>' in content
+
+        # Each panel has its own content
+        assert "Write User Guide" in content
+        assert "Revise Docstrings" in content
+
+        # Multi-skill intro text
+        assert "multiple skills" in content
+
+        # Script tag for the switcher JS
+        assert 'src="skill-switcher.js"' in content
+
+        # Companion files appear in the first panel
+        assert "guide-style.md" in content
+
+
+def test_generate_skills_page_multi_skill_install_section():
+    """Multi-skill install section uses 'install all' phrasing and lists per-skill URLs."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp)
+        (project / "great-docs.yml").write_text("display_name: MyPkg\n")
+        # pyproject.toml so _detect_package_name works
+        (project / "pyproject.toml").write_text('[project]\nname = "test-pkg"\n')
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = project
+
+        # _quarto.yml with site-url so URLs are generated
+        (project / "_quarto.yml").write_text("website:\n  site-url: https://example.com/docs/\n")
+
+        skill_dir_a = project / "skill-a"
+        skill_dir_a.mkdir()
+        skill_md_a = skill_dir_a / "SKILL.md"
+        skill_md_a.write_text("---\nname: alpha\ndescription: Skill alpha\n---\n\n# Alpha\n")
+
+        skill_dir_b = project / "skill-b"
+        skill_dir_b.mkdir()
+        skill_md_b = skill_dir_b / "SKILL.md"
+        skill_md_b.write_text("---\nname: beta\ndescription: Skill beta\n---\n\n# Beta\n")
+
+        gd._generate_skills_page(
+            skill_md_a,
+            skill_dir=skill_dir_a,
+            extra_skills=[(skill_md_b, skill_dir_b)],
+        )
+
+        content = (project / "skills.qmd").read_text()
+
+        # npx line uses "install all with"
+        assert "install all with" in content
+        assert "npx skills add https://example.com/docs/" in content
+
+        # CLI install line present with detected package name
+        assert "great-docs skill install test-pkg" in content
+
+        # Codex/OpenCode lists per-skill .well-known URLs
+        assert ".well-known/agent-skills/alpha/SKILL.md" in content
+        assert ".well-known/agent-skills/beta/SKILL.md" in content
+
+        # Plural install label
+        assert "Install these skills" in content
+
+        # No Manual/curl section in multi-skill mode
+        assert "curl -O" not in content
+
+        # Browse label for multi-skill
+        assert "browse the skill files below" in content
+
+
+def test_generate_skills_page_multi_skill_no_cli_without_package_name():
+    """Multi-skill install omits CLI line when package name cannot be detected."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp)
+        (project / "great-docs.yml").write_text("display_name: MyPkg\n")
+        # No pyproject.toml -> _detect_package_name returns None
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = project
+
+        skill_dir_a = project / "skill-a"
+        skill_dir_a.mkdir()
+        skill_md_a = skill_dir_a / "SKILL.md"
+        skill_md_a.write_text("---\nname: alpha\ndescription: Skill alpha\n---\n\n# Alpha\n")
+
+        skill_dir_b = project / "skill-b"
+        skill_dir_b.mkdir()
+        skill_md_b = skill_dir_b / "SKILL.md"
+        skill_md_b.write_text("---\nname: beta\ndescription: Skill beta\n---\n\n# Beta\n")
+
+        gd._generate_skills_page(
+            skill_md_a,
+            skill_dir=skill_dir_a,
+            extra_skills=[(skill_md_b, skill_dir_b)],
+        )
+
+        content = (project / "skills.qmd").read_text()
+
+        # CLI install line should NOT appear
+        assert "great-docs skill install" not in content
+
+        # Other install methods still present
+        assert "npx skills add" in content
+        assert ".well-known/agent-skills/alpha/SKILL.md" in content
+
+
+def test_generate_skills_page_single_skill_install_section():
+    """Single-skill install section uses singular phrasing and includes Manual/curl."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp)
+        (project / "great-docs.yml").write_text("display_name: MyPkg\n")
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = project
+
+        (project / "_quarto.yml").write_text("website:\n  site-url: https://example.com/docs/\n")
+
+        skill_dir = project / "skill-solo"
+        skill_dir.mkdir()
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text("---\nname: solo\ndescription: A solo skill\n---\n\n# Solo\n")
+
+        gd._generate_skills_page(skill_md, skill_dir=skill_dir)
+
+        content = (project / "skills.qmd").read_text()
+
+        # Singular install label
+        assert "Install this skill" in content
+
+        # Single-skill npx uses "install with" (not "install all with")
+        assert "install with" in content
+        assert "install all with" not in content
+
+        # Codex/OpenCode points to skill.md directly
+        assert "Fetch the skill file at" in content
+        assert "example.com/docs/skill.md" in content
+
+        # Manual/curl section present
+        assert "curl -O" in content
+        assert "Manual" in content
+
+        # No CLI install line (that's multi-skill only)
+        assert "great-docs skill install" not in content
+
+
+def test_generate_skills_page_single_skill_no_switcher():
+    """_generate_skills_page does NOT render a switcher when only one skill is present."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp)
+        (project / "great-docs.yml").write_text("display_name: MyPkg\n")
+        gd = GreatDocs(project_path=tmp)
+        gd.project_path = project
+
+        skill_dir = project / "skill-solo"
+        skill_dir.mkdir()
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text("---\nname: solo_skill\ndescription: A lone skill\n---\n\n# Solo\n")
+
+        gd._generate_skills_page(skill_md, skill_dir=skill_dir)
+
+        content = (project / "skills.qmd").read_text()
+
+        # No switcher bar or panels
+        assert "gd-skill-switcher" not in content
+        assert "gd-skill-panel" not in content
+        assert "skill-switcher.js" not in content
+
+        # Content is still rendered
+        assert "Solo" in content
+
+
 # ── _generate_sitemap_xml ────────────────────────────────────────────
 
 
