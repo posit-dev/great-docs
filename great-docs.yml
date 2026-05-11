@@ -354,3 +354,22 @@ reference:
         - install_skill
         - check_skill
         - list_skills
+
+# Agent Skills
+# ------------
+# Multiple named skills for the documentation site. Each entry maps
+# a human-readable name to a SKILL.md file path. All skills appear
+# on the Skills page with a switcher bar and are placed in
+# .well-known/agent-skills/ for auto-discovery.
+skill:
+  skills:
+    - name: great-docs
+      file: skills/great-docs/SKILL.md
+    - name: write-user-guide
+      file: skills/write-user-guide/SKILL.md
+    - name: revise-docstrings
+      file: skills/revise-docstrings/SKILL.md
+    - name: configure-site
+      file: skills/configure-site/SKILL.md
+    - name: author-skills
+      file: skills/author-skills/SKILL.md
