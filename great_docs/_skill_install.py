@@ -135,15 +135,15 @@ def _find_package_skills(package: str) -> list[Path]:
     return skill_files
 
 
-def _find_skill_from_url(url: str) -> tuple[str, str] | None:
-    """Fetch a SKILL.md from a well-known URL.
+def _find_skill_from_url(url: str) -> list[tuple[str, str]] | None:
+    """Fetch skills from a well-known URL.
 
     Tries the agent-skills discovery protocol:
 
-    1. `{url}/.well-known/agent-skills/index.json`
-    2. falls back to `{url}/skill.md`
+    1. `{url}/.well-known/agent-skills/index.json` — fetches *all* listed skills
+    2. falls back to `{url}/skill.md` (single skill)
 
-    Returns `(skill_name, content)` or `None` on failure.
+    Returns a list of `(skill_name, content)` tuples, or `None` on failure.
     """
     import urllib.error
     import urllib.request
@@ -158,12 +158,18 @@ def _find_skill_from_url(url: str) -> tuple[str, str] | None:
 
         skills = index_data.get("skills", [])
         if skills:
-            skill_entry = skills[0]  # Take first skill
-            name = skill_entry.get("name", "default")
-            skill_url = f"{base}/.well-known/agent-skills/{name}/SKILL.md"
-            with urllib.request.urlopen(skill_url, timeout=10) as resp:  # noqa: S310
-                content = resp.read().decode("utf-8")
-            return name, content
+            results: list[tuple[str, str]] = []
+            for skill_entry in skills:
+                name = skill_entry.get("name", "default")
+                skill_url = f"{base}/.well-known/agent-skills/{name}/SKILL.md"
+                try:
+                    with urllib.request.urlopen(skill_url, timeout=10) as resp:  # noqa: S310
+                        content = resp.read().decode("utf-8")
+                    results.append((name, content))
+                except (urllib.error.URLError, OSError):
+                    pass  # Skip skills that fail to download
+            if results:
+                return results
     except (urllib.error.URLError, json.JSONDecodeError, KeyError, OSError):
         pass
 
@@ -174,7 +180,7 @@ def _find_skill_from_url(url: str) -> tuple[str, str] | None:
             content = resp.read().decode("utf-8")
         fm, _ = _parse_frontmatter(content)
         name = fm.get("name", "default")
-        return name, content
+        return [(name, content)]
     except (urllib.error.URLError, OSError):
         pass
 
@@ -316,14 +322,14 @@ def install_skill(
         skills_to_install.append((name, skill_content, extra_files or {}))
 
     elif url:
-        result = _find_skill_from_url(url)
-        if result is None:
+        results = _find_skill_from_url(url)
+        if results is None:
             if not quiet:
                 print(f"Error: Could not find skills at {url}")
             return []
-        name, content = result
-        name = skill_name or name
-        skills_to_install.append((name, content, extra_files or {}))
+        for name, content in results:
+            name = skill_name or name
+            skills_to_install.append((name, content, extra_files or {}))
 
     elif package:
         skill_files = _find_package_skills(package)
