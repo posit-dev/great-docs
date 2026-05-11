@@ -5581,6 +5581,109 @@ html[data-bs-theme="dark"] .gd-skills-file-heading {
     color: $gray-300;
 }
 
+/*---------------------------------- Skill Switcher ----------------------------------------*/
+// Sticky pill bar for choosing between multiple skills on the Skills page.
+
+.gd-skill-switcher-sentinel {
+    height: 0;          // grows dynamically when the bar is stuck
+}
+
+.gd-skill-switcher {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 0.75rem;
+    margin: 0 0 1.75rem;
+    background: $gray-100;
+    border: 1px solid $gray-300;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    z-index: 1019;       // just below the Quarto navbar (1030)
+    transition: box-shadow 0.2s ease, border-radius 0.2s ease;
+
+    &--stuck {
+        position: fixed;
+        left: 0;
+        right: 0;
+        margin: 0;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        padding-left: max(0.75rem, env(safe-area-inset-left));
+        padding-right: max(0.75rem, env(safe-area-inset-right));
+    }
+}
+
+.gd-skill-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 1rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: transparent;
+    color: $gray-600;
+    font-size: 0.88rem;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    line-height: 1.4;
+
+    &:hover {
+        background: tint-color($primary, 90%);
+        color: $primary;
+    }
+
+    &--active,
+    &[aria-selected="true"] {
+        background: $white;
+        color: $primary;
+        border-color: tint-color($primary, 55%);
+        font-weight: 600;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+}
+
+.gd-skill-pill__icon {
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+}
+
+// Hidden panels: the JS toggles the `hidden` attribute.
+.gd-skill-panel[hidden] {
+    display: none !important;
+}
+
+html[data-bs-theme="dark"] {
+    .gd-skill-switcher {
+        background: $gray-900;
+        border-color: $gray-700;
+
+        &--stuck {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+        }
+    }
+
+    .gd-skill-pill {
+        color: $gray-400;
+
+        &:hover {
+            background: shade-color($primary, 75%);
+            color: tint-color($primary, 45%);
+        }
+
+        &--active,
+        &[aria-selected="true"] {
+            background: $gray-800;
+            color: tint-color($primary, 45%);
+            border-color: shade-color($primary, 45%);
+        }
+    }
+}
+
 
 /*---------------------------------- Page Metadata Footer -----------------------------------*/
 // Displays creation/modification dates and optional author avatars at the bottom of pages.

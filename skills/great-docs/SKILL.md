@@ -301,6 +301,18 @@ annotated options. Copy it as `great-docs.yml` and customize.
 - Custom domain DNS
 - GitHub access tokens (for changelog)
 
+## Related skills
+
+This is the general-purpose skill for Great Docs. For deeper
+guidance on specific tasks, use these companion skills:
+
+| Task                        | Skill               | When to use                                                   |
+| --------------------------- | ------------------- | ------------------------------------------------------------- |
+| Write user guide pages      | `write-user-guide`  | Creating or editing `.qmd` pages in `user_guide/`             |
+| Improve docstrings          | `revise-docstrings` | Auditing or rewriting Python docstrings for the API reference |
+| Configure the site          | `configure-site`    | Customizing `great-docs.yml` theming, features, and layout    |
+| Create or distribute skills | `author-skills`     | Writing SKILL.md files, setting up multi-skill distribution   |
+
 ## Resources
 
 - [Full documentation](https://posit-dev.github.io/great-docs/)
