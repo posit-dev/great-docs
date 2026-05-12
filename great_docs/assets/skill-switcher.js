@@ -65,8 +65,10 @@
     var header = document.getElementById("quarto-header") || document.querySelector("nav.navbar");
     if (!header) return 0;
 
-    // When headroom has unpinned the header, only the secondary nav is visible
-    if (header.classList.contains("headroom--unpinned")) {
+    // On mobile (<992px) when headroom has unpinned the header, only the
+    // secondary nav is visible. On desktop the CSS keeps the navbar pinned
+    // via translateY(0%) !important, so ignore the class there.
+    if (window.innerWidth < 992 && header.classList.contains("headroom--unpinned")) {
       var secNav = header.querySelector(".quarto-secondary-nav");
       return secNav ? secNav.offsetHeight : 0;
     }
