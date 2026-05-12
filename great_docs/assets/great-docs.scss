@@ -5618,6 +5618,7 @@ html[data-bs-theme="dark"] .gd-skills-file-heading {
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
         padding-left: max(0.75rem, env(safe-area-inset-left));
         padding-right: max(0.75rem, env(safe-area-inset-right));
+        transition: top 200ms linear, box-shadow 0.2s ease, border-radius 0.2s ease;
     }
 }
 

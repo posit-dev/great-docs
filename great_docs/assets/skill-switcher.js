@@ -53,9 +53,29 @@
   sentinel.className = "gd-skill-switcher-sentinel";
   bar.parentNode.insertBefore(sentinel, bar);
 
+  /**
+   * Compute the visible height of the navbar area above the page content.
+   *
+   * On mobile, headroom.js hides the header via `transform: translateY(-100%)`
+   * while the `.quarto-secondary-nav` counter-translates to stay visible. In
+   * that state the full `#quarto-header.offsetHeight` is wrong because the
+   * element is off-screen; the effective top is just the secondary nav height.
+   */
+  function visibleNavHeight() {
+    var header = document.getElementById("quarto-header") || document.querySelector("nav.navbar");
+    if (!header) return 0;
+
+    // When headroom has unpinned the header, only the secondary nav is visible
+    if (header.classList.contains("headroom--unpinned")) {
+      var secNav = header.querySelector(".quarto-secondary-nav");
+      return secNav ? secNav.offsetHeight : 0;
+    }
+
+    return header.offsetHeight;
+  }
+
   function updateSticky() {
-    var navbarEl = document.getElementById("quarto-header") || document.querySelector("nav.navbar");
-    var navH = navbarEl ? navbarEl.offsetHeight : 0;
+    var navH = visibleNavHeight();
     var rect = sentinel.getBoundingClientRect();
     if (rect.top <= navH) {
       bar.classList.add("gd-skill-switcher--stuck");
@@ -71,6 +91,8 @@
 
   window.addEventListener("scroll", updateSticky, { passive: true });
   window.addEventListener("resize", updateSticky, { passive: true });
+  // Re-evaluate when headroom pins/unpins the navbar
+  window.addEventListener("quarto-hrChanged", updateSticky);
   updateSticky();
 
   // Activate the first pill on load
