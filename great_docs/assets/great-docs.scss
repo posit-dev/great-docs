@@ -541,6 +541,12 @@ dt a.doc-method-name::after {
 // Dark mode overrides
 // Uses both selectors to match Bootstrap 5 (data-bs-theme) and Quarto (body class)
 [data-bs-theme="dark"] {
+  // Right sidebar (TOC) code: inherit text color, no background
+  .sidebar nav li > a > code {
+    color: inherit;
+    background-color: transparent;
+  }
+
   // Parameter/return/raises dt code blocks: use light text on dark background
   // The generic 'dt code span' rule is critical: Quarto's syntax highlighting CSS
   // sets 'code span { color: #003B4F }' which overrides inherited colors on all spans
