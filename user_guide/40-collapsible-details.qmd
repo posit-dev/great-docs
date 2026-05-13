@@ -1,0 +1,494 @@
+---
+title: "Collapsible Details"
+guide-section: "Site Content"
+tags: [Content, Extensions, Interactivity]
+status: experimental
+upcoming: "0.11.0"
+versions: ">=0.10"
+---
+
+# Collapsible Details
+
+Long pages benefit from progressive disclosure: show a heading, let the reader decide whether to
+expand the content beneath it. The `::: {.details}` fenced div turns any block of Markdown into a
+collapsible `<details>` element with smooth open/close animation, optional type styling, gradient
+backgrounds, accordion grouping, and a gleaming animated border effect.
+
+## Quick Start
+
+Wrap content in a fenced div with the `.details` class:
+
+````markdown
+::: {.details summary="Click to expand"}
+This content is hidden until the reader clicks the summary.
+:::
+````
+
+::: {.details summary="Click to expand"}
+This content is hidden until the reader clicks the summary.
+:::
+
+The `summary` attribute sets the clickable heading text. If omitted it defaults to "Details".
+That's all you need for a basic collapsible section. Everything else on this page is optional
+enhancement.
+
+## Open by Default
+
+Add the `.open` class to render the section already expanded:
+
+````markdown
+::: {.details .open summary="Already visible"}
+This section starts expanded. The reader can still collapse it.
+:::
+````
+
+::: {.details .open summary="Already visible"}
+This section starts expanded. The reader can still collapse it.
+:::
+
+Use `.open` for content that most readers will want to see immediately but that you still want
+to be collapsible for a cleaner page layout when scanning.
+
+## Callout Types
+
+Four semantic types are available via the `type` attribute. Each applies a distinct color scheme
+that matches common documentation conventions for notes, warnings, tips, and danger callouts.
+
+````markdown
+::: {.details summary="A note" type="note"}
+Informational content highlighted in blue.
+:::
+
+::: {.details summary="A warning" type="warning"}
+Caution-level content highlighted in amber.
+:::
+
+::: {.details summary="A tip" type="tip"}
+Helpful suggestion highlighted in green.
+:::
+
+::: {.details summary="Danger zone" type="danger"}
+Critical warning highlighted in red.
+:::
+````
+
+::: {.details summary="A note" type="note"}
+Informational content highlighted in blue.
+:::
+
+::: {.details summary="A warning" type="warning"}
+Caution-level content highlighted in amber.
+:::
+
+::: {.details summary="A tip" type="tip"}
+Helpful suggestion highlighted in green.
+:::
+
+::: {.details summary="Danger zone" type="danger"}
+Critical warning highlighted in red.
+:::
+
+Types give readers an immediate visual signal about the nature of the hidden content before they
+expand it. They pair well with icons (covered next) for even stronger affordance.
+
+## Icons
+
+Add a Lucide icon to the summary row with the `icon` attribute. The value should be any valid
+[Lucide icon name](https://lucide.dev/icons):
+
+````markdown
+::: {.details summary="Database migrations" icon="database"}
+Run `alembic upgrade head` to apply all pending migrations.
+:::
+
+::: {.details summary="Rocket launch checklist" icon="rocket"}
+Ensure all pre-flight checks pass before deploying.
+:::
+````
+
+::: {.details summary="Database migrations" icon="database"}
+Run `alembic upgrade head` to apply all pending migrations.
+:::
+
+::: {.details summary="Rocket launch checklist" icon="rocket"}
+Ensure all pre-flight checks pass before deploying.
+:::
+
+Icons are rendered inline at 16px and inherit the summary text color. They work with any
+combination of type, gradient, and gleam.
+
+## Accordion Groups
+
+When multiple details elements share the same `group` attribute, they form an accordion: opening
+one automatically closes the others. This is useful for FAQ sections, step-by-step flows, or any
+context where only one panel should be visible at a time.
+
+````markdown
+::: {.details summary="Step 1: Install" group="steps"}
+Install the package with `pip install great-docs`.
+:::
+
+::: {.details summary="Step 2: Configure" group="steps"}
+Create a `_quarto.yml` and add the Great Docs format.
+:::
+
+::: {.details summary="Step 3: Build" group="steps"}
+Run `quarto render` to produce the site.
+:::
+````
+
+::: {.details summary="Step 1: Install" group="steps"}
+Install the package with `pip install great-docs`.
+:::
+
+::: {.details summary="Step 2: Configure" group="steps"}
+Create a `_quarto.yml` and add the Great Docs format.
+:::
+
+::: {.details summary="Step 3: Build" group="steps"}
+Run `quarto render` to produce the site.
+:::
+
+Accordion behavior is particularly effective for FAQ pages, multi-step tutorials, and settings
+panels where showing all options at once would overwhelm the reader.
+
+## Nesting
+
+Details elements can be nested to create hierarchical disclosure:
+
+````markdown
+:::: {.details summary="Outer section"}
+This is the outer content.
+
+::: {.details summary="Inner section"}
+This is nested inside the first section.
+:::
+::::
+````
+
+:::: {.details summary="Outer section"}
+This is the outer content.
+
+::: {.details summary="Inner section"}
+This is nested inside the first section.
+:::
+::::
+
+Nested details work to any depth. Each level animates independently and can carry its own type,
+gradient, or gleam styling.
+
+## Rich Content
+
+The body supports any Markdown: code blocks, lists, tables, images, and other shortcodes.
+
+````markdown
+::: {.details summary="Code example" type="tip" icon="code"}
+Here's a Python snippet:
+
+```python
+from great_docs import build
+build("my-project")
+```
+
+And a bullet list:
+
+- First item
+- Second item
+- Third item
+:::
+````
+
+::: {.details summary="Code example" type="tip" icon="code"}
+Here's a Python snippet:
+
+```python
+from great_docs import build
+build("my-project")
+```
+
+And a bullet list:
+
+- First item
+- Second item
+- Third item
+:::
+
+Anything you can write in a `.qmd` file works inside the body. The collapsible wrapper is
+transparent to Quarto's rendering pipeline, so code highlighting, cross-references, shortcodes,
+and math all render normally.
+
+## Theme Gradient
+
+Set `type="gradient"` to apply an animated gradient background that uses your site's accent colors
+(configured via `--gd-accent` and `--gd-accent-secondary` in your theme):
+
+````markdown
+::: {.details summary="Gradient background" type="gradient"}
+The background shifts slowly through your accent palette.
+:::
+````
+
+::: {.details summary="Gradient background" type="gradient"}
+The background shifts slowly through your accent palette.
+:::
+
+The theme gradient pulls from `--gd-accent` and `--gd-accent-secondary`, so it automatically
+matches your site's branding without any extra configuration.
+
+## Gradient Presets
+
+Eight named gradient presets are available via the `gradient` attribute. Each provides a
+hand-crafted color palette with full dark-mode support:
+
+| Preset   | Description                        |
+|----------|------------------------------------|
+| `sky`    | Soft sky blues                     |
+| `peach`  | Warm peach and blush tones         |
+| `prism`  | Multi-spectral mint and lavender   |
+| `lilac`  | Elegant lilac and pink             |
+| `slate`  | Understated cool grays             |
+| `honey`  | Rich cream and apricot             |
+| `dusk`   | Twilight lavender-blue             |
+| `mint`   | Fresh pale aqua                    |
+
+````markdown
+::: {.details summary="Sky gradient" gradient="sky"}
+A soft blue animated gradient.
+:::
+
+::: {.details summary="Peach gradient" gradient="peach"}
+Warm peach and blush.
+:::
+
+::: {.details summary="Prism gradient" gradient="prism"}
+Multi-spectral shimmer.
+:::
+````
+
+::: {.details summary="Sky gradient" gradient="sky"}
+A soft blue animated gradient.
+:::
+
+::: {.details summary="Peach gradient" gradient="peach"}
+Warm peach and blush.
+:::
+
+::: {.details summary="Prism gradient" gradient="prism"}
+Multi-spectral shimmer.
+:::
+
+::: {.details summary="Lilac gradient" gradient="lilac"}
+Elegant lilac and pink.
+:::
+
+::: {.details summary="Slate gradient" gradient="slate"}
+Understated cool grays.
+:::
+
+::: {.details summary="Honey gradient" gradient="honey"}
+Rich cream and apricot.
+:::
+
+::: {.details summary="Dusk gradient" gradient="dusk"}
+Twilight lavender-blue.
+:::
+
+::: {.details summary="Mint gradient" gradient="mint"}
+Fresh pale aqua.
+:::
+
+Every preset includes carefully tuned dark-mode colors. The background animation is a slow
+15-second cycle that adds visual texture without being distracting.
+
+## Gleam Effect
+
+Add the `.gleam` class to give the details frame a continuously animated border glow. A bright
+spot of light traces the entire outer border in a smooth loop.
+
+````markdown
+::: {.details .gleam summary="Gleaming border"}
+A subtle light sweeps around this frame.
+:::
+````
+
+::: {.details .gleam summary="Gleaming border"}
+A subtle light sweeps around this frame.
+:::
+
+The gleam completes a full revolution every six seconds. In light mode it appears as a white
+highlight traveling along a colored border; in dark mode it appears as a colored highlight on
+a transparent border. The effect respects `prefers-reduced-motion` and is completely disabled
+when the user has motion sensitivity enabled.
+
+### Gleam + Callout Types
+
+The gleam color automatically matches the callout type:
+
+````markdown
+::: {.details .gleam summary="Note with gleam" type="note"}
+Blue gleam matching the note style.
+:::
+
+::: {.details .gleam summary="Warning with gleam" type="warning"}
+Amber gleam matching the warning style.
+:::
+
+::: {.details .gleam summary="Tip with gleam" type="tip"}
+Green gleam matching the tip style.
+:::
+
+::: {.details .gleam summary="Danger with gleam" type="danger"}
+Red gleam matching the danger style.
+:::
+````
+
+::: {.details .gleam summary="Note with gleam" type="note"}
+Blue gleam matching the note style.
+:::
+
+::: {.details .gleam summary="Warning with gleam" type="warning"}
+Amber gleam matching the warning style.
+:::
+
+::: {.details .gleam summary="Tip with gleam" type="tip"}
+Green gleam matching the tip style.
+:::
+
+::: {.details .gleam summary="Danger with gleam" type="danger"}
+Red gleam matching the danger style.
+:::
+
+No extra configuration is needed. The gleam picks up the type's color automatically, so each
+variant feels intentional rather than generic.
+
+### Gleam + Gradient Presets
+
+Combine `.gleam` with any gradient preset for animated backgrounds with a matching border glow:
+
+````markdown
+::: {.details .gleam summary="Sky with gleam" gradient="sky"}
+Animated sky gradient plus a cyan border gleam.
+:::
+
+::: {.details .gleam summary="Dusk with gleam" gradient="dusk"}
+Twilight gradient plus a purple border gleam.
+:::
+
+::: {.details .gleam summary="Mint with gleam" gradient="mint"}
+Fresh aqua gradient plus a teal border gleam.
+:::
+````
+
+::: {.details .gleam summary="Sky with gleam" gradient="sky"}
+Animated sky gradient plus a cyan border gleam.
+:::
+
+::: {.details .gleam summary="Dusk with gleam" gradient="dusk"}
+Twilight gradient plus a purple border gleam.
+:::
+
+::: {.details .gleam summary="Mint with gleam" gradient="mint"}
+Fresh aqua gradient plus a teal border gleam.
+:::
+
+All eight presets work with gleam. The border color is derived from the preset's primary hue,
+creating a unified look where the border and background feel like parts of the same design.
+
+### Gleam + Theme Gradient
+
+Pair `.gleam` with `type="gradient"` to use your site accent colors for both the background and
+border animation:
+
+````markdown
+::: {.details .gleam summary="Theme accent gleam" type="gradient"}
+Both the animated gradient and the gleam use your site's accent palette.
+:::
+````
+
+::: {.details .gleam summary="Theme accent gleam" type="gradient"}
+Both the animated gradient and the gleam use your site's accent palette.
+:::
+
+The gleam adapts its color to match whatever variant it's paired with (type colors, gradient
+presets, or site accent), so the border always feels cohesive rather than bolted on.
+
+## Combining Options
+
+All options can be freely combined. Here are three panels in an accordion group, each using a
+different gradient preset with the gleam effect and a custom icon:
+
+````markdown
+::: {.details .open .gleam summary="Design" gradient="prism" icon="sparkles" group="showcase"}
+Prism gradient, gleam border, icon, and starts expanded.
+:::
+
+::: {.details .gleam summary="Development" gradient="sky" icon="code" group="showcase"}
+Sky gradient with gleam, in the same accordion group.
+:::
+
+::: {.details .gleam summary="Deployment" gradient="mint" icon="cloud-upload" group="showcase"}
+Mint gradient with gleam, also in the accordion.
+:::
+````
+
+::: {.details .open .gleam summary="Design" gradient="prism" icon="sparkles" group="showcase"}
+Prism gradient, gleam border, icon, and starts expanded.
+:::
+
+::: {.details .gleam summary="Development" gradient="sky" icon="code" group="showcase"}
+Sky gradient with gleam, in the same accordion group.
+:::
+
+::: {.details .gleam summary="Deployment" gradient="mint" icon="cloud-upload" group="showcase"}
+Mint gradient with gleam, also in the accordion.
+:::
+
+There are no invalid combinations. Every attribute and class can coexist. The rendering
+layers compose naturally: structural behavior (open, group), visual theming (type, gradient),
+and effects (gleam, icon) are independent concerns.
+
+## Accessibility
+
+Collapsible details are built on native HTML semantics, so they work out of the box with
+assistive technologies and respect user preferences for motion.
+
+- The native `<details>`/`<summary>` HTML elements provide built-in keyboard navigation and screen
+  reader support.
+- The expand/collapse animation respects `prefers-reduced-motion: reduce`. All animations
+  (including gleam and gradient shifts) are disabled when the user prefers reduced motion.
+- Type variants use semantic color schemes consistent with standard documentation conventions.
+
+Because the implementation uses standard HTML elements rather than custom JavaScript widgets,
+screen readers announce the expanded/collapsed state automatically without any ARIA attributes.
+
+## Attribute Reference
+
+The following table summarizes every attribute and class recognized by the details fenced div.
+All are optional and can be combined freely.
+
+| Attribute   | Values                                                   | Description                                      |
+|-------------|----------------------------------------------------------|--------------------------------------------------|
+| `summary`   | Any text                                                 | Clickable heading (default: "Details")           |
+| `type`      | `note`, `warning`, `tip`, `danger`, `gradient`           | Semantic color variant                           |
+| `gradient`  | `sky`, `peach`, `prism`, `lilac`, `slate`, `honey`, `dusk`, `mint` | Named gradient preset                  |
+| `icon`      | Any Lucide icon name                                     | Icon shown before the summary text               |
+| `group`     | Any string                                               | Accordion group name                             |
+| `.open`     | Class                                                    | Start expanded                                   |
+| `.gleam`    | Class                                                    | Animated border glow                             |
+
+When `type` is set and no explicit `icon` is provided, a default icon is applied automatically
+(speech bubble for note, lightning bolt for warning, light bulb for tip, and ban symbol for
+danger). You can always override this by specifying the `icon` attribute directly.
+
+## Next Steps
+
+Collapsible details give you a flexible building block for progressive disclosure, from simple
+hide/reveal panels to richly styled, animated sections that draw the reader's eye. Combined with
+accordion groups and the gleam effect, they can structure complex pages without overwhelming
+first-time visitors.
+
+- [Theming](11-theming.qmd): customize `--gd-accent` colors that drive the gradient and gleam effects
+- [Configuration](05-configuration.qmd): all `great-docs.yml` options for extensions and filters
+- [Horizontal Rules](34-horizontal-rules.qmd): another styled content divider with gradient presets
+- [Color Swatches](36-color-swatches.qmd): interactive color palettes using a similar shortcode pattern
+- [Building](13-building.qmd): how Lua filters like Details fit into the Quarto build pipeline

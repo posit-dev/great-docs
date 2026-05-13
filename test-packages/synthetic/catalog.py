@@ -380,6 +380,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_ref_include_inherited",  # 189
     # 190: Mock code cells and output-title containers
     "gdtest_mock_code",  # 190
+    # 191: Collapsible details shortcode showcase
+    "gdtest_details_shortcode",  # 191
 ]
 
 
@@ -2127,6 +2129,16 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "output-title wraps output in titled containers on both mock and regular "
         "cells, mock cells with no delimiter are display-only, and multiple mock "
         "cells work on a single page."
+    ),
+    # ── 191: Collapsible details shortcode showcase ─────────────────────────
+    "gdtest_details_shortcode": (
+        "Collapsible details shortcode showcase exercising the {{< details >}} "
+        "shortcode in seven user-guide pages: basic usage (expand/collapse, "
+        "open-by-default), callout types (note, warning, tip, danger), Lucide "
+        "icons (custom and type-default), accordion groups (single-open "
+        "behavior, multiple independent groups), nesting (2–3 levels, mixed "
+        "types), rich content (code blocks, lists, tables, blockquotes), and "
+        "combinations (typed accordion, icon+type+open, nested accordion)."
     ),
 }
 

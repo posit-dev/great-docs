@@ -3578,6 +3578,14 @@ def fix_script_paths():
             content = content.replace(old_mermaid, new_mermaid)
             modified = True
 
+        # Fix details.js path
+        old_details = '<script src="details.js"></script>'
+        new_details = f'<script src="{prefix}details.js"></script>'
+
+        if old_details in content:
+            content = content.replace(old_details, new_details)
+            modified = True
+
         # Fix page-tags.js path
         old_page_tags = '<script src="page-tags.js"></script>'
         new_page_tags = f'<script src="{prefix}page-tags.js"></script>'

@@ -7996,6 +7996,686 @@ body.quarto-dark .gd-output-title-header {
     color: rgba(255, 255, 255, 0.55);
 }
 
+/*------------------------------- Collapsible Details --------------------------------*/
+
+// Base details element
+.gd-details {
+    border: 1px solid tint-color($primary, 70%);
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    overflow: hidden;
+    transition: height 0.3s ease;
+
+    // Remove the default marker/triangle from <summary>
+    > summary {
+        list-style: none;
+        &::-webkit-details-marker { display: none; }
+        &::marker { display: none; }
+    }
+}
+
+// Summary bar (the clickable title row)
+.gd-details-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.75rem 0.75rem;
+    background: tint-color($primary, 93%);
+    color: $primary;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+
+    &:hover {
+        background: tint-color($primary, 87%);
+    }
+
+    // Show bottom border when open
+    .gd-details[open] & {
+        border-bottom: 1px solid tint-color($primary, 70%);
+    }
+}
+
+// Chevron indicator (CSS-only rotating arrow)
+.gd-details-chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+    transition: transform 0.25s ease;
+
+    &::before {
+        content: "";
+        display: block;
+        width: 0.45rem;
+        height: 0.45rem;
+        border-right: 2px solid currentColor;
+        border-bottom: 2px solid currentColor;
+        transform: rotate(-45deg);
+        transition: transform 0.25s ease;
+    }
+
+    .gd-details[open] &::before,
+    .gd-details--open &::before {
+        transform: rotate(45deg);
+    }
+}
+
+// Icon wrapper (Lucide icon before the title)
+.gd-details-icon-wrap {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.gd-details-icon {
+    width: 1em;
+    height: 1em;
+}
+
+// Title text
+.gd-details-title {
+    flex: 1 1 auto;
+}
+
+// Body content area
+.gd-details-body {
+    padding: 0.75rem 1.0rem 0.75rem;
+    background: tint-color($primary, 97%);
+
+    > :last-child {
+        margin-bottom: 0;
+    }
+
+    // Code blocks inside details
+    .sourceCode {
+        margin: 0.35rem 0 0.75rem;
+    }
+
+    pre.sourceCode {
+        padding: 0.5rem 2.5rem 0.5rem 0.75rem;
+        font-size: 0.88rem;
+
+        code {
+            padding: 0 !important;
+        }
+    }
+}
+
+// Animation state classes (managed by details.js)
+.gd-details--animating {
+    overflow: hidden;
+    transition: height 0.3s ease;
+}
+
+// ── Type variants (callout-like styling) ─────────────────────────────
+
+.gd-details--note {
+    border-color: #3b82f6;
+
+    .gd-details-summary {
+        background: tint-color(#3b82f6, 90%);
+        color: shade-color(#3b82f6, 20%);
+
+        &:hover { background: tint-color(#3b82f6, 83%); }
+    }
+    .gd-details[open] > .gd-details-summary,
+    &[open] > .gd-details-summary {
+        border-bottom-color: tint-color(#3b82f6, 70%);
+    }
+    .gd-details-body { background: tint-color(#3b82f6, 96%); }
+}
+
+.gd-details--warning {
+    border-color: #f59e0b;
+
+    .gd-details-summary {
+        background: tint-color(#f59e0b, 90%);
+        color: shade-color(#f59e0b, 30%);
+
+        &:hover { background: tint-color(#f59e0b, 83%); }
+    }
+    &[open] > .gd-details-summary {
+        border-bottom-color: tint-color(#f59e0b, 70%);
+    }
+    .gd-details-body { background: tint-color(#f59e0b, 96%); }
+}
+
+.gd-details--tip {
+    border-color: #10b981;
+
+    .gd-details-summary {
+        background: tint-color(#10b981, 90%);
+        color: shade-color(#10b981, 20%);
+
+        &:hover { background: tint-color(#10b981, 83%); }
+    }
+    &[open] > .gd-details-summary {
+        border-bottom-color: tint-color(#10b981, 70%);
+    }
+    .gd-details-body { background: tint-color(#10b981, 96%); }
+}
+
+.gd-details--danger {
+    border-color: #ef4444;
+
+    .gd-details-summary {
+        background: tint-color(#ef4444, 90%);
+        color: shade-color(#ef4444, 20%);
+
+        &:hover { background: tint-color(#ef4444, 83%); }
+    }
+    &[open] > .gd-details-summary {
+        border-bottom-color: tint-color(#ef4444, 70%);
+    }
+    .gd-details-body { background: tint-color(#ef4444, 96%); }
+}
+
+// ── Gradient variant (animated theme gradient) ───────────────────────
+
+.gd-details--gradient {
+    border-color: color-mix(in srgb, var(--gd-accent, #6366f1) 40%, transparent);
+
+    .gd-details-summary {
+        background: linear-gradient(
+            -45deg,
+            color-mix(in srgb, var(--gd-accent, #6366f1) 15%, white),
+            color-mix(in srgb, var(--gd-accent-secondary, #a855f7) 12%, white),
+            color-mix(in srgb, var(--gd-accent, #6366f1) 10%, white),
+            color-mix(in srgb, var(--gd-accent-secondary, #a855f7) 15%, white)
+        );
+        background-size: 400% 400%;
+        animation: gd-gradient-shift 15s ease infinite;
+        color: color-mix(in srgb, var(--gd-accent, #6366f1) 85%, black);
+
+        &:hover {
+            background: linear-gradient(
+                -45deg,
+                color-mix(in srgb, var(--gd-accent, #6366f1) 22%, white),
+                color-mix(in srgb, var(--gd-accent-secondary, #a855f7) 18%, white),
+                color-mix(in srgb, var(--gd-accent, #6366f1) 15%, white),
+                color-mix(in srgb, var(--gd-accent-secondary, #a855f7) 22%, white)
+            );
+            background-size: 400% 400%;
+            animation: gd-gradient-shift 15s ease infinite;
+        }
+    }
+
+    &[open] > .gd-details-summary {
+        border-bottom-color: color-mix(in srgb, var(--gd-accent, #6366f1) 30%, transparent);
+    }
+
+    .gd-details-body {
+        background: linear-gradient(
+            -45deg,
+            color-mix(in srgb, var(--gd-accent, #6366f1) 4%, white),
+            color-mix(in srgb, var(--gd-accent-secondary, #a855f7) 3%, white),
+            color-mix(in srgb, var(--gd-accent, #6366f1) 2%, white),
+            color-mix(in srgb, var(--gd-accent-secondary, #a855f7) 4%, white)
+        );
+        background-size: 400% 400%;
+        animation: gd-gradient-shift 15s ease infinite;
+    }
+}
+
+// ── Gradient preset variants ─────────────────────────────────────────
+// Each preset reuses gd-details--gradient base and overrides colors.
+
+// Shared base for all named gradient presets
+.gd-details--gradient-sky,
+.gd-details--gradient-peach,
+.gd-details--gradient-prism,
+.gd-details--gradient-lilac,
+.gd-details--gradient-slate,
+.gd-details--gradient-honey,
+.gd-details--gradient-dusk,
+.gd-details--gradient-mint {
+    .gd-details-summary,
+    .gd-details-body {
+        background-size: 400% 400%;
+        animation: gd-gradient-shift 15s ease infinite;
+    }
+}
+
+.gd-details--gradient-sky {
+    border-color: #90cdf4;
+    .gd-details-summary {
+        background: linear-gradient(-45deg, #d0ecf9, #e0f4ff, #c5e8f7, #b8e0f5);
+        color: #023e8a;
+        &:hover { filter: brightness(0.96); }
+    }
+    &[open] > .gd-details-summary { border-bottom-color: #90cdf4; }
+    .gd-details-body { background: linear-gradient(-45deg, #edf7fd, #f2faff, #eaf6fc, #e7f4fb); }
+}
+
+.gd-details--gradient-peach {
+    border-color: #f9b89a;
+    .gd-details-summary {
+        background: linear-gradient(-45deg, #ffddc1, #ffe4cc, #fdd0d8, #fbc4d4);
+        color: #7c2d12;
+        &:hover { filter: brightness(0.96); }
+    }
+    &[open] > .gd-details-summary { border-bottom-color: #f9b89a; }
+    .gd-details-body { background: linear-gradient(-45deg, #fff4ec, #fff7f0, #fef0f2, #fdedf3); }
+}
+
+.gd-details--gradient-prism {
+    border-color: #a7d8c8;
+    .gd-details-summary {
+        background: linear-gradient(-45deg, #c4f0e0, #d0e8f5, #e4d4f4, #d8cef0);
+        color: #1e3a5f;
+        &:hover { filter: brightness(0.96); }
+    }
+    &[open] > .gd-details-summary { border-bottom-color: #a7d8c8; }
+    .gd-details-body { background: linear-gradient(-45deg, #ecfaf4, #eff5fb, #f5eefc, #f2eefa); }
+}
+
+.gd-details--gradient-lilac {
+    border-color: #d8a8e8;
+    .gd-details-summary {
+        background: linear-gradient(-45deg, #e8d0f0, #f5d0e0, #f0d4f8, #eac8ee);
+        color: #4a1462;
+        &:hover { filter: brightness(0.96); }
+    }
+    &[open] > .gd-details-summary { border-bottom-color: #d8a8e8; }
+    .gd-details-body { background: linear-gradient(-45deg, #f7eefc, #fdf0f5, #faeefb, #f8ecf9); }
+}
+
+.gd-details--gradient-slate {
+    border-color: #b0b8c1;
+    .gd-details-summary {
+        background: linear-gradient(-45deg, #e0e4e8, #eceff1, #dde2e6, #d5dadf);
+        color: #263238;
+        &:hover { filter: brightness(0.96); }
+    }
+    &[open] > .gd-details-summary { border-bottom-color: #b0b8c1; }
+    .gd-details-body { background: linear-gradient(-45deg, #f4f5f7, #f8f9fa, #f3f4f6, #f1f2f4); }
+}
+
+.gd-details--gradient-honey {
+    border-color: #f5c97a;
+    .gd-details-summary {
+        background: linear-gradient(-45deg, #ffe0c2, #ffedcc, #ffe5b4, #ffd6a8);
+        color: #7c2d12;
+        &:hover { filter: brightness(0.96); }
+    }
+    &[open] > .gd-details-summary { border-bottom-color: #f5c97a; }
+    .gd-details-body { background: linear-gradient(-45deg, #fff6ec, #fffaf0, #fff5e6, #fff2e0); }
+}
+
+.gd-details--gradient-dusk {
+    border-color: #b0b4d8;
+    .gd-details-summary {
+        background: linear-gradient(-45deg, #d8daf0, #dddff5, #d4d0ee, #dad4f2);
+        color: #1a1050;
+        &:hover { filter: brightness(0.96); }
+    }
+    &[open] > .gd-details-summary { border-bottom-color: #b0b4d8; }
+    .gd-details-body { background: linear-gradient(-45deg, #f0f1fa, #f2f3fc, #eeedf9, #f0eefb); }
+}
+
+.gd-details--gradient-mint {
+    border-color: #80cbc4;
+    .gd-details-summary {
+        background: linear-gradient(-45deg, #ccece8, #d5f0ec, #c4e8e4, #d0f2ee);
+        color: #004d40;
+        &:hover { filter: brightness(0.96); }
+    }
+    &[open] > .gd-details-summary { border-bottom-color: #80cbc4; }
+    .gd-details-body { background: linear-gradient(-45deg, #ebf8f6, #eff9f8, #e9f7f5, #ecfaf8); }
+}
+
+// ── Nesting ──────────────────────────────────────────────────────────
+
+.gd-details .gd-details {
+    margin: 0.5rem 0;
+    border-radius: 0.375rem;
+
+    .gd-details-summary {
+        padding: 0.5rem 1rem;
+        font-size: 0.92rem;
+    }
+
+    .gd-details-body {
+        padding: 0.75rem 1rem 0.5rem;
+    }
+}
+
+// ── Dark mode ────────────────────────────────────────────────────────
+
+html[data-bs-theme="dark"] {
+
+    .gd-details {
+        border-color: shade-color($primary, 50%);
+    }
+
+    .gd-details-summary {
+        background: shade-color($primary, 80%);
+        color: tint-color($primary, 50%);
+
+        &:hover {
+            background: shade-color($primary, 72%);
+        }
+    }
+
+    .gd-details[open] > .gd-details-summary {
+        border-bottom-color: shade-color($primary, 50%);
+    }
+
+    .gd-details-body {
+        background: shade-color($primary, 88%);
+
+        .code-copy-outer-scaffold,
+        .sourceCode,
+        pre.sourceCode {
+            background: transparent;
+        }
+    }
+
+    // Type variants — dark mode
+    .gd-details--note {
+        border-color: shade-color(#3b82f6, 40%);
+
+        .gd-details-summary {
+            background: shade-color(#3b82f6, 75%);
+            color: tint-color(#3b82f6, 55%);
+            &:hover { background: shade-color(#3b82f6, 65%); }
+        }
+        &[open] > .gd-details-summary { border-bottom-color: shade-color(#3b82f6, 40%); }
+        .gd-details-body { background: shade-color(#3b82f6, 88%); }
+    }
+
+    .gd-details--warning {
+        border-color: shade-color(#f59e0b, 50%);
+
+        .gd-details-summary {
+            background: shade-color(#f59e0b, 75%);
+            color: tint-color(#f59e0b, 55%);
+            &:hover { background: shade-color(#f59e0b, 65%); }
+        }
+        &[open] > .gd-details-summary { border-bottom-color: shade-color(#f59e0b, 50%); }
+        .gd-details-body { background: shade-color(#f59e0b, 88%); }
+    }
+
+    .gd-details--tip {
+        border-color: shade-color(#10b981, 50%);
+
+        .gd-details-summary {
+            background: shade-color(#10b981, 75%);
+            color: tint-color(#10b981, 55%);
+            &:hover { background: shade-color(#10b981, 65%); }
+        }
+        &[open] > .gd-details-summary { border-bottom-color: shade-color(#10b981, 50%); }
+        .gd-details-body { background: shade-color(#10b981, 88%); }
+    }
+
+    .gd-details--danger {
+        border-color: shade-color(#ef4444, 50%);
+
+        .gd-details-summary {
+            background: shade-color(#ef4444, 75%);
+            color: tint-color(#ef4444, 55%);
+            &:hover { background: shade-color(#ef4444, 65%); }
+        }
+        &[open] > .gd-details-summary { border-bottom-color: shade-color(#ef4444, 50%); }
+        .gd-details-body { background: shade-color(#ef4444, 88%); }
+    }
+
+    .gd-details--gradient {
+        border-color: color-mix(in srgb, var(--gd-accent, #818cf8) 35%, transparent);
+
+        .gd-details-summary {
+            background: linear-gradient(
+                -45deg,
+                color-mix(in srgb, var(--gd-accent, #818cf8) 25%, black),
+                color-mix(in srgb, var(--gd-accent-secondary, #c084fc) 20%, black),
+                color-mix(in srgb, var(--gd-accent, #818cf8) 18%, black),
+                color-mix(in srgb, var(--gd-accent-secondary, #c084fc) 25%, black)
+            );
+            background-size: 400% 400%;
+            animation: gd-gradient-shift 15s ease infinite;
+            color: #ffffff;
+
+            &:hover {
+                background: linear-gradient(
+                    -45deg,
+                    color-mix(in srgb, var(--gd-accent, #818cf8) 32%, black),
+                    color-mix(in srgb, var(--gd-accent-secondary, #c084fc) 28%, black),
+                    color-mix(in srgb, var(--gd-accent, #818cf8) 25%, black),
+                    color-mix(in srgb, var(--gd-accent-secondary, #c084fc) 32%, black)
+                );
+                background-size: 400% 400%;
+                animation: gd-gradient-shift 15s ease infinite;
+            }
+        }
+
+        &[open] > .gd-details-summary {
+            border-bottom-color: color-mix(in srgb, var(--gd-accent, #818cf8) 25%, transparent);
+        }
+
+        .gd-details-body {
+            background: linear-gradient(
+                -45deg,
+                color-mix(in srgb, var(--gd-accent, #818cf8) 8%, black),
+                color-mix(in srgb, var(--gd-accent-secondary, #c084fc) 6%, black),
+                color-mix(in srgb, var(--gd-accent, #818cf8) 5%, black),
+                color-mix(in srgb, var(--gd-accent-secondary, #c084fc) 8%, black)
+            );
+            background-size: 400% 400%;
+            animation: gd-gradient-shift 15s ease infinite;
+        }
+    }
+
+    // Named gradient presets — dark mode
+    .gd-details--gradient-sky {
+        border-color: #0077b6;
+        .gd-details-summary {
+            background: linear-gradient(-45deg, #023e8a, #0077b6, #005f73, #0096c7);
+            color: #ffffff;
+            &:hover { filter: brightness(1.15); }
+        }
+        &[open] > .gd-details-summary { border-bottom-color: #005f73; }
+        .gd-details-body { background: linear-gradient(-45deg, #021c3d, #012e4a, #012a38, #01374b); }
+    }
+
+    .gd-details--gradient-peach {
+        border-color: #cc4a1a;
+        .gd-details-summary {
+            background: linear-gradient(-45deg, #cc4a1a, #c7760f, #b84a5f, #a33560);
+            color: #ffffff;
+            &:hover { filter: brightness(1.15); }
+        }
+        &[open] > .gd-details-summary { border-bottom-color: #a33560; }
+        .gd-details-body { background: linear-gradient(-45deg, #3d160a, #3b2405, #37161d, #31101d); }
+    }
+
+    .gd-details--gradient-prism {
+        border-color: #048a65;
+        .gd-details-summary {
+            background: linear-gradient(-45deg, #048a65, #0c6a8a, #52077d, #2a0978);
+            color: #ffffff;
+            &:hover { filter: brightness(1.15); }
+        }
+        &[open] > .gd-details-summary { border-bottom-color: #0c6a8a; }
+        .gd-details-body { background: linear-gradient(-45deg, #02291e, #042029, #180225, #0d0224); }
+    }
+
+    .gd-details--gradient-lilac {
+        border-color: #561e64;
+        .gd-details-summary {
+            background: linear-gradient(-45deg, #561e64, #8b1140, #a02db3, #6e1a7d);
+            color: #ffffff;
+            &:hover { filter: brightness(1.15); }
+        }
+        &[open] > .gd-details-summary { border-bottom-color: #8b1140; }
+        .gd-details-body { background: linear-gradient(-45deg, #1a091e, #290613, #300e35, #210826); }
+    }
+
+    .gd-details--gradient-slate {
+        border-color: #455a64;
+        .gd-details-summary {
+            background: linear-gradient(-45deg, #37474f, #455a64, #3e525e, #263238);
+            color: #ffffff;
+            &:hover { filter: brightness(1.15); }
+        }
+        &[open] > .gd-details-summary { border-bottom-color: #3e525e; }
+        .gd-details-body { background: linear-gradient(-45deg, #111518, #15191e, #13181b, #0c0f11); }
+    }
+
+    .gd-details--gradient-honey {
+        border-color: #bf360c;
+        .gd-details-summary {
+            background: linear-gradient(-45deg, #bf360c, #e65100, #ef6c00, #b71c1c);
+            color: #ffffff;
+            &:hover { filter: brightness(1.15); }
+        }
+        &[open] > .gd-details-summary { border-bottom-color: #e65100; }
+        .gd-details-body { background: linear-gradient(-45deg, #391004, #441800, #482000, #370808); }
+    }
+
+    .gd-details--gradient-dusk {
+        border-color: #1a0f52;
+        .gd-details-summary {
+            background: linear-gradient(-45deg, #0d1244, #141b55, #1a0f52, #261560);
+            color: #ffffff;
+            &:hover { filter: brightness(1.15); }
+        }
+        &[open] > .gd-details-summary { border-bottom-color: #141b55; }
+        .gd-details-body { background: linear-gradient(-45deg, #040514, #060819, #080518, #0b061c); }
+    }
+
+    .gd-details--gradient-mint {
+        border-color: #00695c;
+        .gd-details-summary {
+            background: linear-gradient(-45deg, #00695c, #00796b, #004d40, #00897b);
+            color: #ffffff;
+            &:hover { filter: brightness(1.15); }
+        }
+        &[open] > .gd-details-summary { border-bottom-color: #004d40; }
+        .gd-details-body { background: linear-gradient(-45deg, #001f1b, #002420, #001713, #002924); }
+    }
+}
+
+// ── Gleam border effect ──────────────────────────────────────────────
+// A traveling light that sweeps around the outer border of the details frame.
+// Uses a background-layering trick: a conic-gradient background clipped to
+// border-box shows through a transparent border, while a solid fill covers
+// the padding-box (content area). Animation is JS-driven via --gd-gleam-angle.
+//
+// Light mode: subtle colored border with a bright white highlight sweeping.
+// Dark mode: transparent border with a colored highlight sweeping.
+
+.gd-details--gleam {
+    --gd-gleam-color: #{tint-color($primary, 20%)};
+    --gd-gleam-angle: 0deg;
+    border: 2px solid transparent;
+    background:
+        linear-gradient(var(--gd-gleam-bg, var(--bs-body-bg, #ffffff)), var(--gd-gleam-bg, var(--bs-body-bg, #ffffff))) padding-box,
+        conic-gradient(
+            from var(--gd-gleam-angle),
+            var(--gd-gleam-color) 0%,
+            var(--gd-gleam-color) 60%,
+            white 75%,
+            white 82%,
+            var(--gd-gleam-color) 92%,
+            var(--gd-gleam-color) 100%
+        ) border-box;
+}
+
+// Gleam + gradient preset combinations
+.gd-details--gleam.gd-details--gradient-sky { --gd-gleam-color: #38bdf8; }
+.gd-details--gleam.gd-details--gradient-peach { --gd-gleam-color: #fb923c; }
+.gd-details--gleam.gd-details--gradient-prism { --gd-gleam-color: #a78bfa; }
+.gd-details--gleam.gd-details--gradient-lilac { --gd-gleam-color: #c084fc; }
+.gd-details--gleam.gd-details--gradient-slate { --gd-gleam-color: #94a3b8; }
+.gd-details--gleam.gd-details--gradient-honey { --gd-gleam-color: #fbbf24; }
+.gd-details--gleam.gd-details--gradient-dusk { --gd-gleam-color: #818cf8; }
+.gd-details--gleam.gd-details--gradient-mint { --gd-gleam-color: #2dd4bf; }
+.gd-details--gleam.gd-details--gradient { --gd-gleam-color: var(--gd-accent, #6366f1); }
+
+// Type-based gleam colors
+.gd-details--gleam.gd-details--note { --gd-gleam-color: #60a5fa; }
+.gd-details--gleam.gd-details--warning { --gd-gleam-color: #fbbf24; }
+.gd-details--gleam.gd-details--tip { --gd-gleam-color: #34d399; }
+.gd-details--gleam.gd-details--danger { --gd-gleam-color: #f87171; }
+
+// Dark mode gleam adjustments — inverted: transparent base, colored highlight
+html[data-bs-theme="dark"] {
+    .gd-details--gleam {
+        --gd-gleam-color: #{tint-color($primary, 55%)};
+        border-color: transparent;
+        background:
+            linear-gradient(var(--bs-body-bg, #212529), var(--bs-body-bg, #212529)) padding-box,
+            conic-gradient(
+                from var(--gd-gleam-angle),
+                transparent 0%,
+                transparent 60%,
+                var(--gd-gleam-color) 75%,
+                color-mix(in srgb, var(--gd-gleam-color) 60%, white) 80%,
+                var(--gd-gleam-color) 85%,
+                transparent 95%,
+                transparent 100%
+            ) border-box;
+    }
+
+    .gd-details--gleam.gd-details--gradient-sky { --gd-gleam-color: #7dd3fc; }
+    .gd-details--gleam.gd-details--gradient-peach { --gd-gleam-color: #fdba74; }
+    .gd-details--gleam.gd-details--gradient-prism { --gd-gleam-color: #c4b5fd; }
+    .gd-details--gleam.gd-details--gradient-lilac { --gd-gleam-color: #d8b4fe; }
+    .gd-details--gleam.gd-details--gradient-slate { --gd-gleam-color: #cbd5e1; }
+    .gd-details--gleam.gd-details--gradient-honey { --gd-gleam-color: #fde68a; }
+    .gd-details--gleam.gd-details--gradient-dusk { --gd-gleam-color: #a5b4fc; }
+    .gd-details--gleam.gd-details--gradient-mint { --gd-gleam-color: #5eead4; }
+    .gd-details--gleam.gd-details--gradient { --gd-gleam-color: var(--gd-accent, #818cf8); }
+    .gd-details--gleam.gd-details--note { --gd-gleam-color: #93c5fd; }
+    .gd-details--gleam.gd-details--warning { --gd-gleam-color: #fde68a; }
+    .gd-details--gleam.gd-details--tip { --gd-gleam-color: #6ee7b7; }
+    .gd-details--gleam.gd-details--danger { --gd-gleam-color: #fca5a5; }
+}
+
+// ── Reduced motion ───────────────────────────────────────────────────
+
+@media (prefers-reduced-motion: reduce) {
+    .gd-details {
+        transition: none;
+    }
+    .gd-details--animating {
+        transition: none;
+    }
+    .gd-details-chevron::before {
+        transition: none;
+    }
+    .gd-details-summary {
+        transition: none;
+    }
+    .gd-details--gradient .gd-details-summary,
+    .gd-details--gradient .gd-details-body,
+    .gd-details--gradient-sky .gd-details-summary,
+    .gd-details--gradient-sky .gd-details-body,
+    .gd-details--gradient-peach .gd-details-summary,
+    .gd-details--gradient-peach .gd-details-body,
+    .gd-details--gradient-prism .gd-details-summary,
+    .gd-details--gradient-prism .gd-details-body,
+    .gd-details--gradient-lilac .gd-details-summary,
+    .gd-details--gradient-lilac .gd-details-body,
+    .gd-details--gradient-slate .gd-details-summary,
+    .gd-details--gradient-slate .gd-details-body,
+    .gd-details--gradient-honey .gd-details-summary,
+    .gd-details--gradient-honey .gd-details-body,
+    .gd-details--gradient-dusk .gd-details-summary,
+    .gd-details--gradient-dusk .gd-details-body,
+    .gd-details--gradient-mint .gd-details-summary,
+    .gd-details--gradient-mint .gd-details-body {
+        animation: none;
+    }
+}
+
 
 /*-- scss:functions --*/
 
