@@ -224,6 +224,7 @@ class GreatDocs:
             "responsive-tables.js",
             "video-embed.js",
             "navbar-widgets.js",
+            "details.js",
         ]
         if self._config.markdown_pages_widget:
             js_files.append("copy-page.js")
@@ -9956,6 +9957,7 @@ body-classes: "gd-homepage"
             "responsive-tables.js",
             "video-embed.js",
             "navbar-widgets.js",
+            "details.js",
         ]
         if self._config.markdown_pages_widget:
             js_resource_files.append("copy-page.js")
@@ -10470,6 +10472,14 @@ body-classes: "gd-homepage"
         )
         if not has_copy_code:
             config["format"]["html"]["include-after-body"].append(copy_code_entry)
+
+        # Add collapsible details script (accordion + smooth animation)
+        details_entry = {"text": '<script src="details.js"></script>'}
+        has_details = any(
+            "details.js" in str(item) for item in config["format"]["html"]["include-after-body"]
+        )
+        if not has_details:
+            config["format"]["html"]["include-after-body"].append(details_entry)
 
             # Add early theme detection script in header to prevent flash of wrong theme
             if "include-in-header" not in config["format"]["html"]:
@@ -11196,6 +11206,8 @@ body-classes: "gd-homepage"
             config["filters"] = []
         if "output-title" not in config["filters"]:
             config["filters"].append("output-title")
+        if "details" not in config["filters"]:
+            config["filters"].append("details")
 
         # Write back to file
         self._write_quarto_yml(quarto_yml, config)
@@ -12119,10 +12131,7 @@ body-classes: "gd-homepage"
             if multi_skill
             else _t("install_this_skill", "Install this skill")
         )
-        lines.append(
-            '    <span class="gd-skills-install-icon">&#9654;</span>    '
-            + _install_label
-        )
+        lines.append('    <span class="gd-skills-install-icon">&#9654;</span>    ' + _install_label)
         lines.append("  </button>")
         lines.append('  <div class="gd-skills-install-body" id="gd-skills-install-body">')
         lines.append('    <div class="gd-skills-install-inner">')
@@ -12187,9 +12196,7 @@ body-classes: "gd-homepage"
             for meta in skill_meta:
                 sname = meta["name"]
                 if site_url:
-                    _skill_url_lines.append(
-                        f"{site_url}.well-known/agent-skills/{sname}/SKILL.md"
-                    )
+                    _skill_url_lines.append(f"{site_url}.well-known/agent-skills/{sname}/SKILL.md")
                 else:
                     _skill_url_lines.append(
                         f"&lt;site-url&gt;/.well-known/agent-skills/{sname}/SKILL.md"
@@ -12202,9 +12209,7 @@ body-classes: "gd-homepage"
             )
             lines.append("```")
             lines.append("")
-            _browse_label = _t(
-                "browse_skill_files", "Or browse the skill files below"
-            )
+            _browse_label = _t("browse_skill_files", "Or browse the skill files below")
             lines.append("```{=html}")
             lines.append(f"<p>{_browse_label}.</p>")
             lines.append("```")
@@ -12213,9 +12218,7 @@ body-classes: "gd-homepage"
         else:
             # ── Codex / OpenCode (single skill) ──
             skill_file_url = f"{site_url}skill.md" if site_url else ""
-            lines.append(
-                f"**Codex / OpenCode** --- {_t('tell_the_agent', 'tell the agent')}:"
-            )
+            lines.append(f"**Codex / OpenCode** --- {_t('tell_the_agent', 'tell the agent')}:")
             lines.append("")
             _fetch_verb = _t("fetch_skill_file_at", "Fetch the skill file at")
             _fetch_from_verb = _t("fetch_skill_file_from", "Fetch the skill file from")
@@ -12240,9 +12243,7 @@ body-classes: "gd-homepage"
 
             # ── Manual (curl + raw links, single skill only) ──
             _download_label = _t("download_skill_file", "download the skill file")
-            lines.append(
-                f"**{_t('manual_download', 'Manual')}** --- {_download_label}:"
-            )
+            lines.append(f"**{_t('manual_download', 'Manual')}** --- {_download_label}:")
             lines.append("")
             if skill_file_url:
                 _curl_cmd = f"curl -O {skill_file_url}"
@@ -12287,8 +12288,9 @@ body-classes: "gd-homepage"
         # ── Multi-skill switcher bar ──
         if multi_skill:
             lines.append("```{=html}")
-            lines.append('<div class="gd-skill-switcher" role="tablist" '
-                         'aria-label="Skill selector">')
+            lines.append(
+                '<div class="gd-skill-switcher" role="tablist" aria-label="Skill selector">'
+            )
             for idx, meta in enumerate(skill_meta):
                 active_cls = " gd-skill-pill--active" if idx == 0 else ""
                 selected = "true" if idx == 0 else "false"
@@ -12311,7 +12313,7 @@ body-classes: "gd-homepage"
             sd = meta["dir"]
 
             if multi_skill:
-                hidden_attr = ' hidden' if panel_idx > 0 else ''
+                hidden_attr = " hidden" if panel_idx > 0 else ""
                 lines.append("```{=html}")
                 lines.append(f'<div class="gd-skill-panel"{hidden_attr}>')
                 lines.append("```")
@@ -12522,9 +12524,7 @@ body-classes: "gd-homepage"
         # Generate the skills page with all skills
         primary_path, primary_dir = placed_skills[0]
         extra = placed_skills[1:] if len(placed_skills) > 1 else None
-        self._generate_skills_page(
-            primary_path, skill_dir=primary_dir, extra_skills=extra
-        )
+        self._generate_skills_page(primary_path, skill_dir=primary_dir, extra_skills=extra)
 
     def _place_well_known_skill(self, skill_path: "Path") -> None:
         """
