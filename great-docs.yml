@@ -7,7 +7,7 @@
 # Simple form: announcement: "Your message here"
 # Dict form with options:
 announcement:
-  content: "📝 Read the introductory blog post: <a href='https://opensource.posit.co/blog/2026-04-15_great-docs-introduction/'>Introducing Great Docs</a>"
+  content: "🎉 New post: [Ten Great Things We Added to Great Docs](https://opensource.posit.co/blog/2026-05-13_great-docs-ten-things/)"
   type: info
   style: mint
   dismissable: true
