@@ -238,6 +238,7 @@ class GreatDocs:
             js_files.append("page-metadata.js")  # pragma: no cover
         if self._config.back_to_top:
             js_files.append("back-to-top.js")
+            js_files.append("on-this-page.js")
         if self._config.keyboard_nav:
             js_files.append("keyboard-nav.js")
         if self._config.tags_show_on_pages:
@@ -10004,6 +10005,7 @@ body-classes: "gd-homepage"
             js_resource_files.append("page-metadata.js")  # pragma: no cover
         if self._config.back_to_top:
             js_resource_files.append("back-to-top.js")
+            js_resource_files.append("on-this-page.js")
         if self._config.keyboard_nav:
             js_resource_files.append("keyboard-nav.js")
         if self._config.tags_show_on_pages:
@@ -10479,6 +10481,23 @@ body-classes: "gd-homepage"
             )
             if not has_back_to_top:
                 config["format"]["html"]["include-after-body"].append(back_to_top_entry)
+
+            on_this_page_entry = {
+                "text": (
+                    "<script>(function(){var s=document.createElement('script');"
+                    "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
+                    "s.src=(m?m.content:'')+'on-this-page.js';"
+                    "document.body.appendChild(s);})();</script>"
+                )
+            }
+            has_on_this_page = any(
+                "on-this-page.js" in str(item)
+                for item in config["format"]["html"]["include-after-body"]
+            )
+            if not has_on_this_page:
+                config["format"]["html"]["include-after-body"].append(
+                    on_this_page_entry
+                )
 
         # Add keyboard navigation script (if enabled)
         if metadata.get("keyboard_nav_enabled", True):
