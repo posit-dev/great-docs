@@ -101,6 +101,12 @@ back_to_top: false   # Disable the button
 The button respects the visitor's `prefers-reduced-motion` setting: when reduced motion is
 preferred, scrolling is instant rather than animated.
 
+When `back_to_top` is enabled, a companion **On this page** button also appears on mobile
+viewports (below 768 px). This round floating button sits directly above the back-to-top button
+and opens a compact table-of-contents panel. Tapping a heading scrolls to that section and
+dismisses the panel whereas tapping outside the panel dismisses it without navigating. The button is
+hidden on tablet and desktop widths where the sidebar TOC is already visible.
+
 ## Keyboard Navigation [version-badge new 0.5]
 
 Great Docs includes built-in keyboard shortcuts that let visitors navigate the site and access
