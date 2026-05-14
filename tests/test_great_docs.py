@@ -40200,6 +40200,169 @@ def test_back_to_top_scss_styles_exist():
     assert "prefers-reduced-motion" in content
 
 
+# On-this-page mobile widget tests ---------------------------------------------
+
+
+def test_on_this_page_enabled_by_default():
+    """on-this-page.js is in resources and include-after-body by default."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        resources = result["project"].get("resources", [])
+
+        assert "on-this-page.js" in resources
+
+        after_body = result["format"]["html"].get("include-after-body", [])
+        has_on_this_page = any("on-this-page.js" in str(item) for item in after_body)
+
+        assert has_on_this_page
+
+
+def test_on_this_page_disabled_via_config():
+    """on-this-page.js is excluded when back_to_top is false."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="back_to_top: false\n",
+        )
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        resources = result["project"].get("resources", [])
+
+        assert "on-this-page.js" not in resources
+
+        after_body = result["format"]["html"].get("include-after-body", [])
+        has_on_this_page = any("on-this-page.js" in str(item) for item in after_body)
+
+        assert not has_on_this_page
+
+
+def test_on_this_page_script_tag_uses_quarto_offset():
+    """The on-this-page include-after-body entry uses the quarto:offset pattern."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        after_body = result["format"]["html"]["include-after-body"]
+        otp_entries = [item for item in after_body if "on-this-page.js" in str(item)]
+
+        assert len(otp_entries) == 1
+        assert "quarto:offset" in str(otp_entries[0])
+
+
+def test_on_this_page_not_duplicated():
+    """Running _update_quarto_config twice does not duplicate the script tag."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+
+        docs._update_quarto_config()
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        after_body = result["format"]["html"]["include-after-body"]
+        otp_count = sum(1 for item in after_body if "on-this-page.js" in str(item))
+
+        assert otp_count == 1
+
+
+def test_on_this_page_js_copied_to_project():
+    """on-this-page.js is copied from assets to the project directory."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, _ = _make_uqc_docs(tmp_dir)
+        docs._prepare_build_directory()
+
+        js_file = docs.project_path / "on-this-page.js"
+
+        assert js_file.exists()
+
+
+def test_on_this_page_js_not_copied_when_disabled():
+    """on-this-page.js is not copied when back_to_top is disabled."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, _ = _make_uqc_docs(
+            tmp_dir,
+            gd_yml_content="back_to_top: false\n",
+        )
+        docs._prepare_build_directory()
+
+        js_file = docs.project_path / "on-this-page.js"
+
+        assert not js_file.exists()
+
+
+def test_on_this_page_js_file_has_expected_content():
+    """The on-this-page.js asset exists and contains the expected patterns."""
+
+    js_path = Path(__file__).parent.parent / "great_docs" / "assets" / "on-this-page.js"
+
+    assert js_path.exists()
+
+    content = js_path.read_text()
+
+    # Verify IIFE wrapping
+    assert "(function ()" in content
+    assert "})();" in content
+
+    # Verify mobile-only media query
+    assert "max-width: 767.98px" in content
+
+    # Verify TOC collection uses data-scroll-target
+    assert "data-scroll-target" in content
+
+    # Verify key DOM creation
+    assert "gd-otp-btn" in content
+    assert "gd-otp-panel" in content
+    assert "gd-otp-backdrop" in content
+    assert "aria-label" in content
+
+    # Verify reduced motion support
+    assert "prefers-reduced-motion" in content
+
+    # Verify page nav collision avoidance (same logic as back-to-top)
+    assert ".page-navigation" in content
+    assert ".gd-back-to-top" in content
+
+
+def test_on_this_page_scss_styles_exist():
+    """The SCSS file contains on-this-page widget styles."""
+
+    scss_path = Path(__file__).parent.parent / "great_docs" / "assets" / "great-docs.scss"
+    content = scss_path.read_text()
+
+    assert ".gd-otp-btn {" in content
+    assert ".gd-otp-panel {" in content
+    assert ".gd-otp-backdrop {" in content
+    assert ".gd-otp-panel-visible {" in content
+
+    # Dark mode
+    assert '[data-bs-theme="dark"] .gd-otp-btn' in content
+    assert '[data-bs-theme="dark"] .gd-otp-panel' in content
+
+    # Reduced motion
+    assert ".gd-otp-btn," in content  # in the reduced-motion block
+
+
 # Keyboard navigation tests ----------------------------------------------------
 
 
