@@ -2671,6 +2671,116 @@ def test_strip_numeric_prefix_preserves_internal_numbers():
         assert docs._strip_numeric_prefix("02-chapter-10.qmd") == "chapter-10.qmd"
 
 
+def test_fix_numeric_prefix_links_basic():
+    """Test that basic .qmd links with numeric prefixes are rewritten."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = "- [Theming](11-theming.qmd): customize colors"
+        result = docs._fix_numeric_prefix_links(content)
+        assert result == "- [Theming](theming.qmd): customize colors"
+
+
+def test_fix_numeric_prefix_links_with_anchors():
+    """Test that anchors and query strings are preserved."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        assert (
+            docs._fix_numeric_prefix_links("[Config](05-configuration.qmd#options)")
+            == "[Config](configuration.qmd#options)"
+        )
+        assert (
+            docs._fix_numeric_prefix_links("[Config](05-configuration.qmd?v=2)")
+            == "[Config](configuration.qmd?v=2)"
+        )
+
+
+def test_fix_numeric_prefix_links_skips_absolute_urls():
+    """Test that absolute URLs are not modified."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = "[Docs](https://example.com/11-theming.qmd)"
+        assert docs._fix_numeric_prefix_links(content) == content
+
+        content_http = "[Docs](http://example.com/05-config.qmd)"
+        assert docs._fix_numeric_prefix_links(content_http) == content_http
+
+        content_abs = "[Docs](/root/11-theming.qmd)"
+        assert docs._fix_numeric_prefix_links(content_abs) == content_abs
+
+
+def test_fix_numeric_prefix_links_no_prefix():
+    """Test that links without numeric prefixes are unchanged."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = "[Theming](theming.qmd)"
+        assert docs._fix_numeric_prefix_links(content) == content
+
+
+def test_fix_numeric_prefix_links_subdirectory():
+    """Test that numeric prefixes are stripped from subdirectory components too."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = "[Guide](01-getting-started/02-install.qmd)"
+        result = docs._fix_numeric_prefix_links(content)
+        assert result == "[Guide](getting-started/install.qmd)"
+
+
+def test_fix_numeric_prefix_links_multiple():
+    """Test that multiple links in the same content are all fixed."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = (
+            "- [Theming](11-theming.qmd): colors\n"
+            "- [Config](05-configuration.qmd): options\n"
+            "- [Building](13-building.qmd): build pipeline"
+        )
+        result = docs._fix_numeric_prefix_links(content)
+        assert result == (
+            "- [Theming](theming.qmd): colors\n"
+            "- [Config](configuration.qmd): options\n"
+            "- [Building](building.qmd): build pipeline"
+        )
+
+
+def test_fix_numeric_prefix_links_ignores_non_qmd():
+    """Test that non-.qmd links are not affected."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = "[Image](11-diagram.png)"
+        assert docs._fix_numeric_prefix_links(content) == content
+
+        content_html = "[Page](11-theming.html)"
+        assert docs._fix_numeric_prefix_links(content_html) == content_html
+
+
 def test_user_guide_files_renamed_on_copy():
     """Test that user guide files are renamed when copied to docs directory."""
     with tempfile.TemporaryDirectory() as tmp_dir:
