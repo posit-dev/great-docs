@@ -2688,6 +2688,9 @@ class GreatDocs:
 
             content = src_file.read_text(encoding="utf-8")
 
+            # Fix links to .qmd files with numeric prefixes
+            content = self._fix_numeric_prefix_links(content)
+
             # Parse frontmatter for metadata
             title = clean_name.replace(".qmd", "").replace(".md", "").replace("-", " ").title()
             description = ""
@@ -4305,6 +4308,38 @@ class GreatDocs:
         pattern = r"^\d+-|^\d+_"
         return re.sub(pattern, "", filename)
 
+    def _fix_numeric_prefix_links(self, content: str) -> str:
+        """
+        Rewrite relative Markdown links to `.qmd` files, stripping numeric prefixes.
+
+        When numeric prefixes are stripped from filenames during the copy step (e.g.,
+        `11-theming.qmd` -> `theming.qmd`), any cross-references between pages that use the original
+        prefixed names would break. This method fixes those links so authors can write
+        `[Theming](11-theming.qmd)` in source and it resolves correctly in the rendered site.
+
+        Only relative links to `.qmd` files are affected; absolute URLs and anchors are left
+        untouched.
+        """
+
+        def _rewrite(m: re.Match) -> str:
+            path = m.group(1)
+            # Split off anchor / query string
+            anchor = ""
+            for sep in ("#", "?"):
+                idx = path.find(sep)
+                if idx != -1:
+                    anchor = path[idx:]
+                    path = path[:idx]
+                    break
+            # Strip numeric prefix from each path component
+            parts = path.split("/")
+            clean_parts = [re.sub(r"^\d+[-_]", "", p) for p in parts]
+            return "](" + "/".join(clean_parts) + anchor + ")"
+
+        # Match markdown link targets that are relative paths ending in .qmd
+        # (skip absolute URLs starting with http://, https://, or /)
+        return re.sub(r"\]\((?!https?://|/)([^)]+\.qmd(?:[#?][^)]*)?)\)", _rewrite, content)
+
     def _copy_user_guide_to_docs(self, user_guide_info: dict) -> list[str]:
         """
         Copy user guide files from project root to docs directory.
@@ -4359,6 +4394,10 @@ class GreatDocs:
             # Read the source file and modify frontmatter
             with open(src_path, "r", encoding="utf-8") as f:
                 content = f.read()
+
+            # In auto-discovery mode, fix links to .qmd files with numeric prefixes
+            if not is_explicit:
+                content = self._fix_numeric_prefix_links(content)
 
             # Add bread-crumbs: false to frontmatter
             content = self._add_frontmatter_option(content, "bread-crumbs", False)
