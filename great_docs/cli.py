@@ -130,7 +130,7 @@ class OrderedGroup(click.Group):
 @click.group(cls=OrderedGroup)
 @click.version_option(version=__version__, prog_name="great-docs")
 def cli():
-    """Great Docs - Beautiful documentation for Python packages.
+    """Great Docs: Beautiful documentation for Python packages.
 
     Great Docs generates professional documentation sites with auto-generated
     API references, CLI documentation, smart navigation, and modern styling.
@@ -155,19 +155,20 @@ def cli():
 def init(project_path: str | None, force: bool) -> None:
     """Initialize great-docs in your project (one-time bootstrap).
 
-    Creates a fresh great-docs.yml configuration file with discovered
+    Creates a fresh 'great-docs.yml' configuration file with discovered
     package exports and sensible defaults. Refuses to run if
-    great-docs.yml already exists (use --force to reset).
+    'great-docs.yml' already exists (use '--force' to reset).
 
     \b
-    • Creates great-docs.yml with discovered API exports
+    • Creates 'great-docs.yml' with discovered API exports
     • Auto-detects your package name and public API
     • Updates .gitignore to exclude the build directory
     • Detects docstring style (numpy, google, sphinx)
 
-    After init, customize great-docs.yml then use 'great-docs build'
-    for all subsequent builds. You should never need to run init again
-    unless you want to completely reset your configuration.
+    After init, customize 'great-docs.yml' then use 'great-docs build'
+    for all subsequent builds. You should never need to run
+    'great-docs init' again unless you want to completely reset your
+    configuration.
 
     \b
     Examples:
@@ -255,29 +256,30 @@ def build(
 ) -> None:
     """Build your documentation site.
 
-    Requires great-docs.yml to exist (run 'great-docs init' first).
+    Requires 'great-docs.yml' to exist (run 'great-docs init' first).
     This is the only command you need day-to-day and in CI.
 
     Creates the 'great-docs/' build directory, copies all assets,
     and builds the documentation site. The build directory is ephemeral and
     should not be committed to version control.
 
-    Use --project-path to point to a project in a different directory.
-    Use --watch to automatically rebuild when source files change.
+    Use '--project-path' to point to a project in a different directory.
+    Use '--watch' to automatically rebuild when source files change.
 
-    Use --no-refresh to skip API discovery for faster rebuilds when your
+    Use '--no-refresh' to skip API discovery for faster rebuilds when your
     package's public API hasn't changed.
 
-    When multi-version documentation is configured, use --versions to build
-    only specific versions, or --latest-only to skip historical versions.
+    When multi-version documentation is configured, use '--versions' to
+    build only specific versions, or '--latest-only' to skip historical
+    versions.
 
-    Use --from-repo to build documentation from a remote Git repository.
+    Use '--from-repo' to build documentation from a remote Git repository.
     This clones the repo into a temporary directory, creates an isolated
     virtual environment, installs the package and great-docs, builds the
-    site, and copies the output to --output-dir (or ./great-docs/_site).
+    site, and copies the output to '--output-dir' (or './great-docs/_site').
 
-    Add --preview to automatically start a local server after a --from-repo
-    build completes, opening the site in your browser.
+    Add '--preview' to automatically start a local server after a
+    '--from-repo' build completes, opening the site in your browser.
 
     \b
     Examples:
@@ -358,10 +360,10 @@ def uninstall(project_path: str | None) -> None:
     This command removes the great-docs configuration and build directory:
 
     \b
-    • Deletes great-docs.yml configuration file
-    • Removes great-docs/ build directory
+    • Deletes the 'great-docs.yml' configuration file
+    • Removes the 'great-docs/' build directory
 
-    Your source files (user_guide/, README.md, etc.) are preserved.
+    Your source files ('user_guide/', 'README.md', etc.) are preserved.
 
     \b
     Examples:
@@ -400,11 +402,11 @@ def preview(project_path: str | None, port: int, site_dir: str | None) -> None:
     Starts a local HTTP server and opens the built documentation site in your
     default browser. If the site hasn't been built yet, it will build it first.
 
-    The site is served from great-docs/_site/. Use 'great-docs build' to
+    The site is served from 'great-docs/_site/'. Use 'great-docs build' to
     rebuild if you've made changes.
 
-    Use --site-dir to preview a site from any directory (e.g. output from
-    a --from-repo build).
+    Use '--site-dir' to preview a site from any directory (e.g. output from
+    a '--from-repo' build).
 
     \b
     Examples:
@@ -444,7 +446,7 @@ def preview(project_path: str | None, port: int, site_dir: str | None) -> None:
 def config(project_path: str | None, force: bool) -> None:
     """Generate a great-docs.yml configuration file.
 
-    Creates a great-docs.yml file with all available options documented.
+    Creates a 'great-docs.yml' file with all available options documented.
     The generated file contains commented examples for each setting.
 
     \b
@@ -822,20 +824,20 @@ def freeze(
     """Execute specific pages and persist their freeze cache.
 
     Renders one or more QMD pages (always executing their code), then copies
-    the resulting _freeze/ entries back to a persistent location so they
+    the resulting '_freeze/' entries back to a persistent location so they
     survive future builds.
 
     PAGES are paths to .qmd files relative to your project root (e.g.,
     'user_guide/benchmarks.qmd'). Quarto always executes code when rendering
-    individual files, even with freeze enabled — this is how you update
-    frozen outputs.
+    individual files, even with freeze enabled (this is how you update
+    frozen outputs).
 
-    Use --clean to wipe the entire _freeze/ cache before re-executing.
+    Use '--clean' to wipe the entire '_freeze/' cache before re-executing.
     This forces a full refresh of all specified pages from scratch.
 
-    Use --info to see the freeze status of all pages without rendering.
+    Use '--info' to see the freeze status of all pages without rendering.
 
-    After running, the updated _freeze/ entries are ready to commit to
+    After running, the updated '_freeze/' entries are ready to commit to
     version control.
 
     \b
@@ -1241,15 +1243,16 @@ def setup_github_pages(
     • Install dev dependencies (auto-detected from your package manager)
 
     The Python version is automatically detected from your pyproject.toml's
-    `requires-python` field. Use --python-version to override.
+    `requires-python` field. Use '--python-version' to override.
 
     The package manager is auto-detected by checking for lock files:
-    • uv.lock → uses uv (installs dev dependencies automatically)
-    • poetry.lock → uses poetry (installs with dev dependencies)
-    • Otherwise → uses pip with optional extras like [dev,docs]
+    • uv.lock -> uses uv (installs dev dependencies automatically)
+    • poetry.lock -> uses poetry (installs with dev dependencies)
+    • Otherwise -> uses pip with optional extras like [dev,docs]
 
     After running this command, commit the workflow file and enable GitHub
-    Pages in your repository settings (Settings → Pages → Source: GitHub Actions).
+    Pages in your repository settings (Settings -> Pages ->
+    Source: GitHub Actions).
 
     \b
     Examples:
@@ -1439,7 +1442,7 @@ def check_links(
 ) -> None:
     """Check for broken links in source code and documentation.
 
-    This command scans Python source files and documentation (`.qmd`, `.md`)
+    This command scans Python source files and documentation ('.qmd', '.md')
     for URLs and checks their HTTP status. It reports broken links (404s)
     and warns about redirects.
 
@@ -1581,12 +1584,12 @@ def changelog(project_path: str | None, max_releases: int | None) -> None:
     """Generate a Changelog page from GitHub Releases.
 
     Fetches published releases from the GitHub API and renders them as a
-    changelog.qmd page in the build directory. The page is also linked in
+    'changelog.qmd' page in the build directory. The page is also linked in
     the navbar automatically.
 
     \b
-    Requires the project to have a GitHub repository URL in pyproject.toml.
-    Set GITHUB_TOKEN or GH_TOKEN to avoid API rate limits.
+    Requires the project to have a GitHub repository URL in 'pyproject.toml'.
+    Set 'GITHUB_TOKEN' or 'GH_TOKEN' to avoid API rate limits.
     """
     try:
         docs = GreatDocs(project_path=project_path)
@@ -1736,8 +1739,8 @@ def proofread(
     \b
     By default, checks all documentation files (.qmd, .md) in the project.
     Uses smart defaults to reduce noise in technical documentation:
-      - Ignores formatting rules that conflict with code/YAML (unless --strict)
-      - Includes a built-in dictionary of technical terms (unless --no-builtin-dictionary)
+      - Ignores formatting rules that conflict with code/YAML (unless '--strict')
+      - Includes a built-in dictionary of technical terms (unless '--no-builtin-dictionary')
 
     \b
     Examples:
@@ -2336,13 +2339,13 @@ def lint(project_path: str | None, checks: tuple[str, ...], json_output: bool) -
     \b
     Checks performed:
       • missing-docstring    Public exports or methods without docstrings
-      • broken-xref          %seealso references to unknown symbols
+      • broken-xref          '%seealso' references to unknown symbols
       • style-mismatch       Docstrings not matching configured style (numpy/google/sphinx)
-      • unknown-directive    Unrecognized %directive names
-      • empty-seealso        %seealso entries with empty references
+      • unknown-directive    Unrecognized '%directive' names
+      • empty-seealso        '%seealso' entries with empty references
       • stale-badge          Version badges far behind latest release
       • stale-callout        Version callouts that are very old
-      • stale-upcoming       upcoming: frontmatter for already-released versions
+      • stale-upcoming       'upcoming:' frontmatter for already-released versions
 
     \b
     Examples:
@@ -2502,12 +2505,13 @@ def api_diff_cmd(
 ) -> None:
     """Compare the public API between two versions.
 
-    Analyzes how the API surface changed between OLD_VERSION and NEW_VERSION
-    (git tags). Detects added, removed, and changed symbols, tracks parameter
-    changes, and flags breaking changes with migration hints.
+    Analyzes how the API surface changed between 'OLD_VERSION' and
+    'NEW_VERSION' (git tags). Detects added, removed, and changed symbols,
+    tracks parameter changes, and flags breaking changes with migration
+    hints.
 
     \b
-    Use "HEAD" as NEW_VERSION to compare against the working tree.
+    Use 'HEAD' as 'NEW_VERSION' to compare against the working tree.
 
     \b
     Examples:
@@ -2759,7 +2763,7 @@ cli.add_command(api_diff_cmd)
 def versions(project_path: str | None, check: bool) -> None:
     """List configured documentation versions.
 
-    Shows the multi-version documentation configuration from great-docs.yml,
+    Shows the multi-version documentation configuration from 'great-docs.yml',
     including version tags, labels, and status indicators.
 
     \b
@@ -2835,13 +2839,13 @@ cli.add_command(versions)
 )
 @click.option(
     "--package",
-    help="Python package name (auto-detected from pyproject.toml if omitted)",
+    help="Python package name (auto-detected from 'pyproject.toml' if omitted)",
 )
 @click.option(
     "--output",
     "-o",
     type=click.Path(dir_okay=False),
-    help="Output file path (default: .great-docs/snapshots/<version>.json)",
+    help="Output file path (default: '.great-docs/snapshots/<version>.json')",
 )
 @click.option(
     "--all-tags",
@@ -2869,18 +2873,18 @@ def api_snapshot_cmd(
 
     \b
     With no arguments, snapshot the *current* working-tree API:
-      great-docs api-snapshot
+      'great-docs api-snapshot'
 
     \b
     Snapshot a specific git tag:
-      great-docs api-snapshot v1.0.0
+      'great-docs api-snapshot v1.0.0'
 
     \b
     Snapshot all version tags at once:
-      great-docs api-snapshot --all-tags
+      'great-docs api-snapshot --all-tags'
 
     \b
-    Snapshots are saved to .great-docs/snapshots/<version>.json by default.
+    Snapshots are saved to '.great-docs/snapshots/<version>.json' by default.
     """
     from ._api_diff import (
         _detect_package_name,
