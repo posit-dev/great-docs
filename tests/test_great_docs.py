@@ -11204,6 +11204,14 @@ def test_extract_click_command_simple():
         assert result["help"] == "Say hello."
         assert result["is_group"] is False
         assert result["commands"] == []
+        # New structured fields
+        assert isinstance(result["options"], list)
+        assert len(result["options"]) == 1
+        assert result["options"][0]["names"] == ["--name"]
+        assert result["options"][0]["help"] == "Your name"
+        assert result["arguments"] == []
+        assert result["description"] == "Say hello."
+        assert result["examples"] == []
 
 
 def test_extract_click_command_group():
@@ -11269,6 +11277,111 @@ def test_extract_click_command_with_parent_path():
         assert result["full_path"] == "tool sub"
 
 
+def test_extract_click_option():
+    """_extract_click_option extracts option metadata."""
+    pytest.importorskip("click")
+
+    @click.command()
+    @click.option("--name", "-n", help="Your name", required=True)
+    @click.option("--verbose", is_flag=True, help="Be verbose")
+    @click.option("--count", type=int, default=5, show_default=True, help="Repeat count")
+    def cmd(name, verbose, count):
+        pass
+
+    options = [GreatDocs._extract_click_option(p) for p in cmd.params if hasattr(p, "opts")]
+    options = [o for o in options if o is not None]
+
+    # --name
+    name_opt = next(o for o in options if "--name" in o["names"])
+    assert name_opt["required"] is True
+    assert "-n" in name_opt["names"]
+    assert name_opt["help"] == "Your name"
+    assert name_opt["is_flag"] is False
+
+    # --verbose (flag)
+    verbose_opt = next(o for o in options if "--verbose" in o["names"])
+    assert verbose_opt["is_flag"] is True
+
+    # --count (with default)
+    count_opt = next(o for o in options if "--count" in o["names"])
+    assert count_opt["default"] == 5
+    assert count_opt["type"] == "INTEGER"
+
+
+def test_extract_click_option_skips_help():
+    """_extract_click_option returns None for --help."""
+    pytest.importorskip("click")
+
+    @click.command(add_help_option=True)
+    @click.option("--name", help="Your name")
+    def cmd(name):
+        pass
+
+    # The help param is automatically added; filter to find it
+    help_param = next(
+        (p for p in cmd.params if getattr(p, "name", None) == "help"),
+        None,
+    )
+    if help_param is not None:
+        assert GreatDocs._extract_click_option(help_param) is None
+    else:
+        # Click version may not expose help as a param; just verify
+        # that --name is extracted and help is not in the result
+        options = [GreatDocs._extract_click_option(p) for p in cmd.params if hasattr(p, "opts")]
+        options = [o for o in options if o is not None]
+        names = [n for o in options for n in o["names"]]
+        assert "--help" not in names
+
+
+def test_extract_click_argument():
+    """_extract_click_argument extracts argument metadata."""
+    pytest.importorskip("click")
+
+    @click.command()
+    @click.argument("source", required=False)
+    def cmd(source):
+        pass
+
+    arg_param = next(p for p in cmd.params if isinstance(p, click.Argument))
+    result = GreatDocs._extract_click_argument(arg_param)
+
+    assert result["name"] == "source"
+    assert result["required"] is False
+
+
+def test_parse_click_help_parts_no_examples():
+    """_parse_click_help_parts with no examples section."""
+    desc, examples = GreatDocs._parse_click_help_parts("Build the documentation site.")
+
+    assert desc == "Build the documentation site."
+    assert examples == []
+
+
+def test_parse_click_help_parts_with_examples():
+    """_parse_click_help_parts splits description from examples."""
+    help_text = (
+        "Build the documentation site.\n\n"
+        "\\b\n"
+        "Examples:\n"
+        "  great-docs build\n"
+        "  great-docs build --watch\n"
+    )
+    desc, examples = GreatDocs._parse_click_help_parts(help_text)
+
+    assert "Build the documentation" in desc
+    assert len(examples) == 2
+    assert "great-docs build" in examples[0]
+    assert "--watch" in examples[1]
+
+
+def test_parse_click_help_parts_empty():
+    """_parse_click_help_parts handles empty string."""
+    desc, examples = GreatDocs._parse_click_help_parts("")
+
+    assert desc == ""
+    assert examples == []
+
+
 def test_get_click_help_text():
     """_get_click_help_text returns formatted --help output."""
     pytest.importorskip("click")
@@ -11288,20 +11401,30 @@ def test_get_click_help_text():
 
 
 def test_generate_cli_command_page_main():
-    """_generate_cli_command_page generates main CLI page."""
+    """_generate_cli_command_page generates structured main CLI page."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         cmd_info = {
             "name": "my-tool",
             "full_path": "my-tool",
+            "help": "My tool help.",
             "help_text": "Usage: my-tool [OPTIONS]\n\n  My tool help.\n",
+            "description": "My tool help.",
+            "examples": [],
+            "options": [],
+            "arguments": [],
+            "commands": [],
+            "is_group": False,
         }
         result = docs._generate_cli_command_page(cmd_info, is_main=True)
 
-        assert 'title: "my-tool"' in result
+        assert "my-tool" in result
         assert "sidebar: cli-reference" in result
-        assert "Usage: my-tool" in result
         assert ".cli-manpage" in result
+        assert '.details summary="Full --help output"' in result
+        assert "doc-api-page" in result
+        assert ".doc-signature" in result
+        assert ".doc-subject" in result
 
 
 def test_generate_cli_command_page_subcommand():
@@ -11311,11 +11434,98 @@ def test_generate_cli_command_page_subcommand():
         cmd_info = {
             "name": "build",
             "full_path": "my-tool build",
+            "help": "Build the site.",
             "help_text": "Usage: my-tool build [OPTIONS]\n",
+            "description": "Build the site.",
+            "examples": [],
+            "options": [
+                {
+                    "names": ["--watch"],
+                    "name_display": "--watch",
+                    "help": "Watch for changes.",
+                    "type": None,
+                    "default": None,
+                    "required": False,
+                    "is_flag": True,
+                    "multiple": False,
+                    "envvar": None,
+                    "show_default": False,
+                    "is_eager": False,
+                    "hidden": False,
+                },
+            ],
+            "arguments": [],
+            "commands": [],
+            "is_group": False,
         }
         result = docs._generate_cli_command_page(cmd_info, is_main=False)
 
-        assert 'title: "my-tool build"' in result
+        assert "my-tool build" in result
+        assert "## Options" in result
+        assert "--watch" in result
+        assert "Watch for changes." in result
+
+
+def test_generate_cli_command_page_with_arguments():
+    """_generate_cli_command_page renders arguments section."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        cmd_info = {
+            "name": "install",
+            "full_path": "my-tool install",
+            "help": "Install a package.",
+            "help_text": "Usage: my-tool install [SOURCE]\n",
+            "description": "Install a package.",
+            "examples": ["my-tool install foo", "my-tool install bar"],
+            "options": [],
+            "arguments": [
+                {
+                    "name": "source",
+                    "name_display": "SOURCE",
+                    "type": None,
+                    "required": False,
+                    "nargs": 1,
+                },
+            ],
+            "commands": [],
+            "is_group": False,
+        }
+        result = docs._generate_cli_command_page(cmd_info, is_main=False)
+
+        assert "## Arguments" in result
+        assert "SOURCE" in result
+        assert "## Examples" in result
+        assert "my-tool install foo" in result
+
+
+def test_generate_cli_command_page_group_with_subcommands():
+    """_generate_cli_command_page renders subcommands section for groups."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        cmd_info = {
+            "name": "my-tool",
+            "full_path": "my-tool",
+            "help": "My CLI.",
+            "help_text": "Usage: my-tool COMMAND\n",
+            "description": "My CLI.",
+            "examples": [],
+            "options": [],
+            "arguments": [],
+            "is_group": True,
+            "commands": [
+                {
+                    "name": "build",
+                    "full_path": "my-tool build",
+                    "short_help": "Build stuff.",
+                },
+            ],
+        }
+        result = docs._generate_cli_command_page(cmd_info, is_main=True)
+
+        assert "## Commands" in result
+        assert "build" in result
+        assert "Build stuff." in result
+        assert "cli-group" in result
 
 
 def test_generate_cli_reference_pages_empty():
