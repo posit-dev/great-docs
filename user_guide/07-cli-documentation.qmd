@@ -9,9 +9,10 @@ tags: [CLI, Content]
 
 If your Python package includes a command-line interface built with
 [Click](https://click.palletsprojects.com/), Great Docs can generate reference pages for it
-automatically. Each command and subcommand gets its own page showing the full `--help` output in a
-terminal-style format. This means your CLI documentation stays perfectly in sync with your code,
-because the help text is captured directly from Click at build time.
+automatically. Each command and subcommand gets its own structured page showing the usage signature,
+description, typed options, and examples, all using the same layout as API reference pages. This means
+your CLI documentation stays perfectly in sync with your code, because everything is extracted
+directly from Click at build time.
 
 This page covers how to enable CLI documentation, how Great Docs discovers your commands, what the
 generated pages look like, and how to write CLI help text that produces clear, useful reference
@@ -37,8 +38,10 @@ documentation: discover, extract, generate, and integrate. Here's what happens d
 
 1. **Finds your CLI**: looks for Click commands in common locations
 2. **Discovers entry point**: reads `[project.scripts]` from `pyproject.toml`
-3. **Extracts help text**: captures `--help` output for each command and subcommand
-4. **Generates pages**: creates `.qmd` files in `reference/cli/`
+3. **Extracts metadata**: introspects each command for its description, options, arguments,
+   subcommands, and examples
+4. **Generates structured pages**: creates `.qmd` files in `reference/cli/` with the same layout
+   as API reference pages
 5. **Updates navigation**: adds a CLI section to the sidebar
 
 The pipeline runs as part of `great-docs build`, so CLI pages are always regenerated from the
@@ -106,43 +109,45 @@ Reference
 
 ### Page Format
 
-Each CLI page displays the `--help` output in a terminal-style format:
+Each CLI page uses the same structured layout as API reference pages, making the site feel cohesive.
+A generated page contains these sections in order:
 
-```
-Usage: my-cli build [OPTIONS] PATH
+1. **Title** with a colored label badge (`cli` or `cli-group`)
+2. **Subject**: the first paragraph of your docstring (the short description)
+3. **Usage signature**: a `bash` code block showing the invocation pattern
+4. **Extended description**: remaining paragraphs from your docstring, formatted as prose
+5. **Collapsible `--help` output**: the full raw `--help` text, tucked inside a disclosure widget
+6. **Arguments**: if the command takes positional arguments
+7. **Options**: a definition list with name, type, default, and help text
+8. **Subcommands**: for groups, each subcommand links to its own page
+9. **Examples**: if your docstring includes an `Examples:` section
 
-  Build the project at PATH.
+This structured layout gives readers quick access to what they need (usage, options, examples)
+while preserving the full `--help` output for those who want the raw reference.
 
-  This command compiles all source files and generates output
-  in the specified directory.
+#### Text enhancements
 
-Options:
-  --output DIR    Output directory (default: ./dist)
-  --verbose       Enable verbose output
-  --help          Show this message and exit.
-```
+Within the description and option help text, Great Docs automatically applies two enhancements:
 
-The styling mimics a terminal with:
+- **Single-quoted text → code**: `'great-docs build'` in your docstring renders as
+  `great-docs build` in inline code
+- **Option names → code**: references to options like `--watch` or `--from-repo` are rendered as
+  inline code automatically
 
-- Dark background
-- Monospace font
-- Proper spacing for readability
-
-The result is a set of browsable reference pages that feel familiar to anyone who has used `--help`
-in a terminal, but with the convenience of being searchable and navigable within your documentation
-site.
+These enhancements are applied automatically during page generation. You don't need to use
+backticks or any special markup in your Click docstrings or `help=` strings.
 
 ## Writing Good CLI Help
 
-The quality of your CLI documentation depends entirely on the help text you write in your Click
-decorators and docstrings. Great Docs displays this text as-is, so investing in clear, descriptive
-help strings pays off directly in the generated pages.
+The quality of your CLI documentation depends on the help text you write in your Click decorators
+and docstrings. Great Docs parses your docstrings into structured sections, so following a few
+conventions produces the best results.
 
 ### Use Descriptive Help Text
 
-Every Click command should have a docstring that explains what it does. The first line becomes the
-short description shown in `--help` listings, and the full text appears on the command's dedicated
-reference page:
+Every Click command should have a docstring that explains what it does. The first paragraph becomes
+the **subject** (displayed prominently at the top of the page), and remaining paragraphs form the
+**extended description**:
 
 ```{.python filename="cli.py"}
 @click.command()
@@ -150,8 +155,7 @@ reference page:
 @click.option("--output", "-o", help="Output directory for generated files")
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
 def build(path, output, verbose):
-    """
-    Build the project at PATH.
+    """Build the project at PATH.
 
     This command compiles all source files and generates output
     in the specified directory. Use --verbose to see detailed
@@ -160,10 +164,14 @@ def build(path, output, verbose):
     ...
 ```
 
+The first paragraph is especially important because it also appears as the short description in
+the parent group's **Commands** list and in search results.
+
 ### Document All Options
 
 Every `@click.option()` should include a `help=` string. Options without help text appear in the
-reference page but give readers no indication of what they do:
+reference page but give readers no indication of what they do. Use single quotes around file names
+or values to have them rendered as inline code:
 
 ```{.python filename="cli.py"}
 @click.option(
@@ -172,7 +180,14 @@ reference page but give readers no indication of what they do:
     default="json",
     help="Output format (default: json)"
 )
+@click.option(
+    "--config",
+    help="Path to config file (default: 'pyproject.toml')"
+)
 ```
+
+In the generated page, `'pyproject.toml'` in the second option's help text becomes inline code
+automatically, so the rendered description reads "Path to config file (default: `pyproject.toml`)".
 
 ### Use Click Groups for Subcommands
 
@@ -199,61 +214,92 @@ def build():
 Well-structured Click groups produce the clearest documentation. Each subcommand becomes its own
 page, and the group's docstring serves as the overview for the CLI section.
 
+### Include Examples
+
+If your docstring contains a paragraph starting with `Examples:`, Great Docs extracts it into a
+dedicated **Examples** section rendered as a `bash` code block. Use Click's `\b` marker to prevent
+paragraph rewrapping:
+
+```{.python filename="cli.py"}
+@click.command()
+def deploy():
+    """Deploy the built site.
+
+    Uploads the contents of _site/ to your configured host.
+
+    \b
+    Examples:
+      my-cli deploy                  # Deploy to production
+      my-cli deploy --dry-run        # Preview what would happen
+      my-cli deploy --target staging # Deploy to staging
+    """
+    ...
+```
+
+Without the `\b` marker, Click joins continuation lines into a single paragraph, which would
+collapse the example lines together. Always place `\b` on its own line before `Examples:` to
+preserve the formatting.
+
 ## Example: Great Docs CLI
 
-Great Docs uses this feature to document its own CLI. The generated pages show how the main command
-and its subcommands appear in the reference section:
+Great Docs uses this feature to document its own CLI. Here's what the generated page for
+`great-docs build` looks like (simplified):
 
-**Main command (`great-docs`):**
+**Subject and usage:**
 
-```
-Usage: great-docs [OPTIONS] COMMAND [ARGS]...
+> Build your documentation site.
 
-  Great Docs - Beautiful documentation for Python packages.
-
-  Generate professional documentation sites with auto-discovered API
-  references, CLI documentation, and smart navigation.
-
-Commands:
-  init              Initialize great-docs in your project
-  build             Build documentation site
-  preview           Build and preview locally
-  scan              Scan package exports
-  setup-github-pages  Create GitHub Pages workflow
-  uninstall         Remove great-docs from project
+```bash
+great-docs build [OPTIONS]
 ```
 
-**Subcommand (`great-docs build`):**
+**Extended description (formatted as prose):**
 
+> Requires `great-docs.yml` to exist (run `great-docs init` first). This is the only command you
+> need day-to-day and in CI.
+
+**Collapsible `--help` output:**
+
+The full raw terminal output is available inside a disclosure widget labeled "Full --help output".
+Readers can expand it when they want the complete reference, but it doesn't dominate the page.
+
+**Options (structured definition list):**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `--watch` | flag | Watch for changes and rebuild automatically |
+| `--no-refresh` | flag | Skip re-discovering package exports |
+| `--versions` | TEXT | Build only specific versions (comma-separated) |
+| `--from-repo` | TEXT | Clone a remote Git repository and build its docs |
+
+**Examples (bash code block):**
+
+```bash
+great-docs build                      # Full build with API refresh
+great-docs build --no-refresh         # Fast rebuild (skip API discovery)
+great-docs build --watch              # Rebuild on file changes
 ```
-Usage: great-docs build [OPTIONS]
 
-  Build your documentation site.
-
-  Generates API reference pages and runs quarto render
-  to build the HTML site.
-
-Options:
-  --no-refresh  Skip API discovery refresh (faster rebuild)
-  --watch       Watch for changes and rebuild
-  --help        Show this message and exit.
-```
-
-You can see these pages live in the Great Docs reference section. They are regenerated on every
-build from the actual Click commands, so they always reflect the current set of options and
-subcommands.
+The main group page (`great-docs`) additionally includes a **Commands** section that links to each
+subcommand's dedicated page. You can see these pages live in the Great Docs reference section.
+All of these sections are generated from the same Click decorators and docstrings shown earlier
+in this guide.
 
 ## Styling
 
-CLI reference pages use a distinct visual treatment that sets them apart from API reference pages:
+CLI reference pages share the same visual system as API reference pages:
 
-- disables the sidebar filter (CLIs are usually small)
-- removes breadcrumb navigation
-- uses a wider content area on large screens
-- maintains responsive design on mobile
+- **Colored label badges**: `cli` (blue) and `cli-group` (teal) distinguish commands from groups
+- **Structured definition lists**: options are displayed with the same parameter styling used for
+  function signatures in API docs
+- **Consistent layout**: subject, signature, description, and parameters mirror the API page
+  structure
+- **Responsive design**: pages adapt to mobile and desktop viewports
+- **Collapsible details**: the raw `--help` output is available but doesn't clutter the page
 
-These styling choices keep CLI pages clean and focused, matching the terminal-centric nature of the
-content.
+This shared design language means readers moving between API docs and CLI docs see the same
+patterns: a short subject at the top, a signature block, extended prose, and a structured parameter
+list.
 
 ## Troubleshooting
 
@@ -276,6 +322,9 @@ cli:
   name: cli   # The Click command object name
 ```
 
+If auto-discovery finds a Click command but it's the wrong one, explicit configuration lets you
+point to the correct object directly.
+
 ### Help Text Missing
 
 If commands show minimal help:
@@ -283,6 +332,9 @@ If commands show minimal help:
 1. add docstrings to your Click functions
 2. add `help=` to all options
 3. use `@click.argument()` with proper names
+
+The generated page will still show the command's usage signature and options, but the subject and
+extended description sections will be empty without a docstring.
 
 ## Next Steps
 

@@ -3654,7 +3654,7 @@ class GreatDocs:
 
     def _get_cli_entry_point_name(self, package_name: str) -> str | None:
         """
-        Get the CLI entry point name from pyproject.toml.
+        Get the CLI entry point name from `pyproject.toml`.
 
         Parameters
         ----------
@@ -3664,8 +3664,8 @@ class GreatDocs:
         Returns
         -------
         str | None
-            The entry point name (e.g., "great-docs" from "[project.scripts]"),
-            or None if not found.
+            The entry point name (e.g., `"great-docs"` from `"[project.scripts]"`), or `None` if not
+            found.
         """
         package_root = self._find_package_root()
         pyproject_path = package_root / "pyproject.toml"
@@ -3711,7 +3711,8 @@ class GreatDocs:
         Returns
         -------
         dict
-            Dictionary containing command information.
+            Dictionary containing command information including options, arguments, and parsed
+            examples.
         """
         import click
 
@@ -3720,16 +3721,42 @@ class GreatDocs:
         # Get the actual --help output from Click
         help_text = self._get_click_help_text(cmd, full_path)
 
+        # Extract options and arguments from Click params
+        options = []
+        arguments = []
+        for param in cmd.params:
+            if isinstance(param, click.Option):
+                opt_info = self._extract_click_option(param)
+                if opt_info:
+                    options.append(opt_info)
+            elif isinstance(param, click.Argument):
+                arg_info = self._extract_click_argument(param)
+                if arg_info:
+                    arguments.append(arg_info)
+
+        # Parse description and examples from the help text
+        description, examples = self._parse_click_help_parts(cmd.help or "")
+
+        # Extract the short help (Click may auto-derive it, but sometimes it's
+        # empty for subcommands).  Fall back to the first line/sentence of help.
+        short_help = getattr(cmd, "short_help", "") or ""
+        if not short_help and cmd.help:
+            short_help = cmd.get_short_help_str(limit=150)
+
         info = {
             "name": name,
             "full_path": full_path,
             "help": cmd.help or "",
-            "short_help": getattr(cmd, "short_help", "") or "",
+            "short_help": short_help,
             "help_text": help_text,  # The actual --help output
             "deprecated": getattr(cmd, "deprecated", False),
             "hidden": getattr(cmd, "hidden", False),
             "commands": [],
             "is_group": isinstance(cmd, click.Group),
+            "options": options,
+            "arguments": arguments,
+            "description": description,
+            "examples": examples,
         }
 
         # Extract subcommands if this is a group
@@ -3741,21 +3768,169 @@ class GreatDocs:
 
         return info
 
+    @staticmethod
+    def _extract_click_option(param) -> dict | None:
+        """Extract structured info from a Click Option parameter."""
+        # Skip the --help option itself
+        if param.name == "help":
+            return None
+
+        decls = param.opts + param.secondary_opts
+        names = sorted(decls, key=len)  # short first, long second
+
+        type_name = param.type.name if hasattr(param.type, "name") else str(param.type)
+
+        # Normalise the default: Click uses sentinel objects for unset values
+        default = param.default
+        if default is None or (
+            type(default).__name__ in ("Sentinel", "_DEFAULT_SENTINEL")
+            or repr(default).startswith("Sentinel")
+        ):
+            default = None
+
+        return {
+            "names": names,
+            "name_display": ", ".join(names),
+            "help": param.help or "",
+            "type": type_name.upper() if type_name != "BOOL" else None,
+            "default": default,
+            "required": param.required,
+            "is_flag": param.is_flag,
+            "multiple": param.multiple,
+            "envvar": param.envvar,
+            "show_default": getattr(param, "show_default", False),
+            "is_eager": param.is_eager,
+            "hidden": getattr(param, "hidden", False),
+        }
+
+    @staticmethod
+    def _extract_click_argument(param) -> dict | None:
+        """Extract structured info from a Click Argument parameter."""
+        type_name = param.type.name if hasattr(param.type, "name") else str(param.type)
+
+        return {
+            "name": param.name,
+            "name_display": param.human_readable_name,
+            "type": type_name.upper() if type_name != "TEXT" else None,
+            "required": param.required,
+            "nargs": param.nargs,
+        }
+
+    @staticmethod
+    def _parse_click_help_parts(help_text: str) -> tuple[str, list[str]]:
+        """
+        Parse a Click command's help string into description and examples.
+
+        Parameters
+        ----------
+        help_text
+            The raw help string from `cmd.help`.
+
+        Returns
+        -------
+        tuple[str, list[str]]
+            A (description, examples) pair. `description` is the prose before the examples block;
+            `examples` is a list of example lines (without the `Examples:` header).
+        """
+        if not help_text:
+            return "", []
+
+        lines = help_text.split("\n")
+        desc_lines: list[str] = []
+        example_lines: list[str] = []
+        in_examples = False
+
+        for line in lines:
+            stripped = line.strip()
+
+            # Click uses \x08 (literal backspace) as the "don't rewrap" marker;
+            # skip lines that are just that marker.
+            if stripped in ("\x08", "\\b"):
+                continue
+
+            # Detect the examples block header
+            if stripped.lower() == "examples:" and not in_examples:
+                in_examples = True
+                continue
+
+            if in_examples:
+                # Strip common Click indentation (2 or 4 spaces)
+                dedented = line
+                if line.startswith("    "):
+                    dedented = line[4:]
+                elif line.startswith("  "):
+                    dedented = line[2:]
+                example_lines.append(dedented)
+            else:
+                desc_lines.append(line)
+
+        # Clean up: strip leading/trailing blank lines
+        description = "\n".join(desc_lines).strip()
+        # Remove any remaining \x08 bytes from the description
+        description = description.replace("\x08", "")
+        # Remove literal \b if present
+        description = description.replace("\\b", "")
+        # Collapse runs of blank lines to a single blank line
+        import re
+
+        description = re.sub(r"\n{3,}", "\n\n", description)
+
+        # Clean trailing blanks from examples
+        while example_lines and not example_lines[-1].strip():
+            example_lines.pop()
+
+        return description, example_lines
+
+    @staticmethod
+    def _backtick_cli_prose(text: str, option_names: set[str]) -> str:
+        """Wrap CLI option names and single-quoted tokens in backticks.
+
+        Handles two cases:
+
+        1. Known option names (e.g. `--watch`) -> `--watch`
+        2. Single-quoted text (e.g. `'great-docs/'`) -> `great-docs/`
+
+        Only wraps tokens not already inside backticks.  Avoids matching
+        apostrophes in contractions/possessives (e.g. "package's", "hasn't").
+        """
+        import re
+
+        if not text:
+            return text
+
+        # 1. Wrap single-quoted text in backticks.
+        # Require the opening quote to be preceded by whitespace or start-of-string
+        # and the content to be at least 2 chars (avoids possessives like package's).
+        text = re.sub(r"(?<=\s)'([^']{2,})'(?=[\s,.\)!?;:]|$)", r"`\1`", text)
+        text = re.sub(r"^'([^']{2,})'(?=[\s,.\)!?;:]|$)", r"`\1`", text)
+
+        # 2. Wrap known option names
+        if option_names:
+            sorted_names = sorted(option_names, key=len, reverse=True)
+            pattern = "|".join(re.escape(n) for n in sorted_names)
+            text = re.sub(
+                rf"(?<!`)({pattern})(?!`)",
+                r"`\1`",
+                text,
+            )
+
+        return text
+
     def _get_click_help_text(self, cmd: "click.Command", full_path: str) -> str:
         """
-        Get the formatted --help output from a Click command.
+        Get the formatted `--help` output from a Click command.
 
         Parameters
         ----------
         cmd
             The Click Command object.
         full_path
-            The full command path (e.g., "great-docs build").
+            The full command path (e.g., `"great-docs build"`).
 
         Returns
         -------
         str
-            The formatted help text as it would appear from --help.
+            The formatted help text as it would appear from `--help`.
         """
         import click
 
@@ -3770,12 +3945,12 @@ class GreatDocs:
         Parameters
         ----------
         cli_info
-            Dictionary containing CLI structure from _discover_click_cli.
+            Dictionary containing CLI structure from `_discover_click_cli`.
 
         Returns
         -------
         list[str | dict]
-            Sidebar items — plain path strings for leaf commands, or
+            Sidebar items: plain path strings for leaf commands, or
             `{"section": ..., "contents": [...]}` dicts for groups.
         """
         if not cli_info:
@@ -3825,13 +4000,13 @@ class GreatDocs:
         output_dir
             Directory to write pages to.
         rel_prefix
-            The relative path prefix for sidebar entries (e.g. `reference/cli`
-            or `reference/cli/task` for nested groups).
+            The relative path prefix for sidebar entries (e.g. `reference/cli` or
+            `reference/cli/task` for nested groups).
 
         Returns
         -------
         list[str | dict]
-            Sidebar items — plain path strings for leaf commands, or
+            Sidebar items: plain path strings for leaf commands, or
             `{"section": ..., "contents": [...]}` dicts for groups.
         """
         sidebar_items: list[str | dict] = []
@@ -3864,40 +4039,242 @@ class GreatDocs:
 
     def _generate_cli_command_page(self, cmd_info: dict, is_main: bool = False) -> str:
         """
-        Generate Quarto page content for a CLI command showing --help output.
+        Generate a structured Quarto reference page for a CLI command.
+
+        Produces output modelled on the API reference pages: a title with semantic class labels, a
+        short description, a usage/signature block, structured Options / Arguments / Subcommands
+        sections, an examples block, and a collapsible `<details>` containing the raw `--help`
+        output.
 
         Parameters
         ----------
         cmd_info
-            Command information dictionary.
+            Command information dictionary (from `_extract_click_command`).
         is_main
             Whether this is the main CLI entry point.
 
         Returns
         -------
         str
-            Quarto markdown content with the CLI help output.
+            Quarto markdown content.
         """
-        lines = []
+        lines: list[str] = []
 
-        # Front matter: use just the command name/path as title
         title = cmd_info["full_path"] if not is_main else cmd_info["name"]
+        label_class = "doc-label-cli-group" if cmd_info.get("is_group") else "doc-label-cli"
+
+        # --- Front matter ---
         lines.append("---")
-        lines.append(f'title: "{title}"')
+        lines.append(
+            f'title: "[{title}]{{.doc-object-name .doc-function .doc-label .{label_class}}}"'
+        )
+        lines.append("body-classes: doc-api-page")
         lines.append("sidebar: cli-reference")
         lines.append("page-navigation: false")
         lines.append("---")
         lines.append("")
 
-        # Output the help text in a styled div
-        lines.append("::: {.cli-manpage}")
+        # --- Heading ---
+        lines.append(f"# [{title}]{{.doc-object-name .doc-function .doc-label .{label_class}}}")
         lines.append("")
+
+        # --- Description ---
+        description = cmd_info.get("description", "") or cmd_info.get("help", "")
+        # Collect option names for auto-backticking in prose
+        option_names = set()
+        for opt in cmd_info.get("options", []):
+            for n in opt.get("names", []):
+                option_names.add(n)
+        if description:
+            # Take first paragraph as the short subject
+            paragraphs = description.split("\n\n")
+            short_desc = paragraphs[0].replace("\n", " ").strip()
+            short_desc = self._backtick_cli_prose(short_desc, option_names)
+            lines.append("::: {.doc-subject}")
+            lines.append(short_desc)
+            lines.append(":::")
+            lines.append("")
+
+        # --- Usage / Signature ---
+        # Build the usage string from the command path + arguments
+        arguments = cmd_info.get("arguments", [])
+        options = cmd_info.get("options", [])
+        usage_parts = [title]
+        if options:
+            usage_parts.append("[OPTIONS]")
+        for arg in arguments:
+            arg_display = arg.get("name_display", arg.get("name", "")).upper()
+            if not arg.get("required", True):
+                arg_display = f"[{arg_display}]"
+            if arg.get("nargs", 1) == -1:
+                arg_display += "..."
+            usage_parts.append(arg_display)
+        if cmd_info.get("is_group") and cmd_info.get("commands"):
+            usage_parts.append("COMMAND [ARGS]...")
+
+        lines.append("::: {.doc-signature .doc-Kind.FUNCTION}")
+        lines.append("```bash")
+        lines.append(" ".join(usage_parts))
         lines.append("```")
-        lines.append(cmd_info.get("help_text", "").rstrip())
-        lines.append("```")
-        lines.append("")
         lines.append(":::")
         lines.append("")
+
+        # --- Extended description ---
+        if description:
+            paragraphs = description.split("\n\n")
+            extra = [p.strip() for p in paragraphs[1:] if p.strip()]
+            if extra:
+                lines.append("::: {.doc-text}")
+                for para in extra:
+                    para_lines = para.split("\n")
+                    # Handle bullet lists (Click uses • or - )
+                    if any(
+                        line.strip().startswith(("•", "- ", "* "))
+                        for line in para_lines
+                        if line.strip()
+                    ):
+                        for bline in para_lines:
+                            stripped = bline.strip()
+                            if not stripped:
+                                continue
+                            # Normalise • bullets to markdown -
+                            if stripped.startswith("•"):
+                                stripped = stripped[1:].strip()
+                            elif stripped.startswith(("- ", "* ")):
+                                stripped = stripped[2:].strip()
+                            if stripped:
+                                stripped = self._backtick_cli_prose(stripped, option_names)
+                                lines.append(f"- {stripped}")
+                    # Preserve blocks with indented content (e.g. "Quick start:")
+                    elif any(line.startswith("  ") for line in para_lines):
+                        for bline in para_lines:
+                            bline = self._backtick_cli_prose(bline, option_names)
+                            lines.append(bline)
+                    else:
+                        text = para.replace("\n", " ")
+                        text = self._backtick_cli_prose(text, option_names)
+                        lines.append(text)
+                    lines.append("")
+                lines.append(":::")
+                lines.append("")
+
+        # --- Collapsible --help output ---
+        help_text = cmd_info.get("help_text", "")
+        if help_text:
+            lines.append('::: {.details summary="Full --help output"}')
+            lines.append("")
+            lines.append("::: {.cli-manpage}")
+            lines.append("")
+            lines.append("```")
+            lines.append(help_text.rstrip())
+            lines.append("```")
+            lines.append("")
+            lines.append(":::")
+            lines.append("")
+            lines.append(":::")
+            lines.append("")
+
+        # --- Arguments section ---
+        if arguments:
+            lines.append("## Arguments {.doc-parameters}")
+            lines.append("")
+            lines.append("::: {.doc-definition-items}")
+            for arg in arguments:
+                display = arg.get("name_display", arg.get("name", "")).upper()
+                type_str = arg.get("type")
+                if type_str:
+                    lines.append(
+                        f'<code><span class="doc-parameter-name">{display}</span>'
+                        f'<span class="doc-parameter-annotation-sep">:</span>'
+                        f' <span class="doc-parameter-annotation">{type_str}</span></code>'
+                    )
+                else:
+                    lines.append(f'<code><span class="doc-parameter-name">{display}</span></code>')
+                req = "Required." if arg.get("required", True) else "Optional."
+                lines.append(f":   {req}")
+                lines.append("")
+            lines.append(":::")
+            lines.append("")
+
+        # --- Options section ---
+        if options:
+            lines.append("## Options {.doc-parameters}")
+            lines.append("")
+            lines.append("::: {.doc-definition-items}")
+            for opt in options:
+                if opt.get("hidden"):
+                    continue
+                name_display = opt.get("name_display", "")
+                type_str = opt.get("type")
+
+                # Build the <code> element with HTML spans
+                code_parts = [f'<span class="doc-parameter-name">{name_display}</span>']
+                if type_str and not opt.get("is_flag"):
+                    code_parts.append(
+                        f'<span class="doc-parameter-annotation-sep">:</span>'
+                        f' <span class="doc-parameter-annotation">{type_str}</span>'
+                    )
+                if opt.get("default") is not None and not opt.get("is_flag"):
+                    default_val = opt["default"]
+                    code_parts.append(
+                        f' <span class="doc-parameter-default-sep op">=</span>'
+                        f' <span class="doc-parameter-default">{default_val}</span>'
+                    )
+
+                lines.append(f"<code>{''.join(code_parts)}</code>")
+
+                # Description line
+                help_str = opt.get("help", "")
+                if opt.get("required"):
+                    help_str = f"**Required.** {help_str}" if help_str else "**Required.**"
+                if opt.get("envvar"):
+                    envvar = opt["envvar"]
+                    if isinstance(envvar, (list, tuple)):
+                        envvar = ", ".join(envvar)
+                    help_str += f" Environment variable: `{envvar}`."
+                help_str = self._backtick_cli_prose(help_str.strip(), option_names)
+
+                lines.append(f":   {help_str}")
+                lines.append("")
+
+            lines.append(":::")
+            lines.append("")
+
+        # --- Subcommands section ---
+        commands = cmd_info.get("commands", [])
+        if commands:
+            lines.append("## Commands {.doc-parameters}")
+            lines.append("")
+            lines.append("::: {.doc-definition-items}")
+            for subcmd in commands:
+                subcmd_name = subcmd["name"]
+                safe_name = subcmd_name.replace("-", "_")
+                # Link to the subcommand page
+                short_help = subcmd.get("short_help", "") or ""
+                # For the main page, subcommands are at cli/<name>.qmd
+                # For group pages, subcommands are at <group>/<name>.qmd
+                if is_main:
+                    href = f"{safe_name}.qmd"
+                else:
+                    parent_safe = cmd_info["name"].replace("-", "_")
+                    href = f"{parent_safe}/{safe_name}.qmd"
+                lines.append(f"<code>[{subcmd_name}]{{.doc-parameter-name}}</code>")
+                link_text = f"[{short_help}]({href})" if short_help else f"[Details]({href})"
+                lines.append(f":   {link_text}")
+                lines.append("")
+            lines.append(":::")
+            lines.append("")
+
+        # --- Examples section ---
+        examples = cmd_info.get("examples", [])
+        if examples:
+            lines.append("## Examples {.doc-examples}")
+            lines.append("")
+            lines.append("```bash")
+            for ex in examples:
+                lines.append(ex)
+            lines.append("```")
+            lines.append("")
 
         return "\n".join(lines)
 
@@ -10495,9 +10872,7 @@ body-classes: "gd-homepage"
                 for item in config["format"]["html"]["include-after-body"]
             )
             if not has_on_this_page:
-                config["format"]["html"]["include-after-body"].append(
-                    on_this_page_entry
-                )
+                config["format"]["html"]["include-after-body"].append(on_this_page_entry)
 
         # Add keyboard navigation script (if enabled)
         if metadata.get("keyboard_nav_enabled", True):

@@ -19,6 +19,8 @@ $label-exception-color: mix($primary, $red-600, 20%);
 $label-property-color: mix($primary, $teal-600, 20%);
 $label-constant-color: mix($primary, $orange-500, 20%);
 $label-typealias-color: mix($primary, $yellow-500, 20%);
+$label-cli-color: mix($primary, $green-600, 20%);
+$label-cli-group-color: mix($primary, $green-600, 20%);
 
 $signature-background-color: shade-color(tint-color($primary, 96%), 2%);
 
@@ -463,7 +465,9 @@ $all_labels: (
   exception,
   property,
   constant,
-  typealias
+  typealias,
+  cli,
+  cli-group
 );
 $class-like-labels: (class, dataclass, namedtuple, typeddict, protocol, abc, enum);
 $method-like-labels: (method, classmethod, staticmethod);
@@ -530,6 +534,19 @@ $method-like-labels: (method, classmethod, staticmethod);
   color: $label-typealias-color;
   border-color: $label-typealias-color;
   background-color: tint-color($label-typealias-color, 95%);
+}
+
+.content span.doc-label-cli::after {
+  color: $label-cli-color;
+  border-color: $label-cli-color;
+  background-color: tint-color($label-cli-color, 95%);
+}
+
+.content span.doc-label-cli-group::after {
+  content: "cli-group";
+  color: $label-cli-group-color;
+  border-color: $label-cli-group-color;
+  background-color: tint-color($label-cli-group-color, 95%);
 }
 
 // Adorn callables with ()
@@ -2750,8 +2767,6 @@ h1.title.cli-title {
 }
 
 .cli-manpage {
-    max-width: 90ch;
-    margin: 0 auto;
     width: 100%;
 }
 
@@ -2789,37 +2804,20 @@ h1.title.cli-title {
 /* On large screens, expand CLI content area into the unused right margin space */
 /* The right sidebar ("On this page") is ~250px; we use half of that */
 @media (min-width: 992px) and (max-width: 1199.98px) {
-    /* Expand the main content area on pages with CLI help */
-    main.content:has(.cli-manpage) {
-        width: calc(90ch + 30px);
-        max-width: none;
-    }
-
     .cli-manpage {
-        width: calc(90ch + 30px);
-        max-width: none;
         margin-top: 1.5rem;
     }
 }
 
-/* On extra large screens, we can use a bit more of that space */
 @media (min-width: 1200px) {
-    main.content:has(.cli-manpage) {
-        width: calc(90ch + 50px);
-        max-width: none;
-    }
-
     .cli-manpage {
-        width: calc(90ch + 50px);
-        max-width: none;
+        margin-top: 1.5rem;
     }
 }
 
 /* Responsive adjustments for CLI docs */
 @media (min-width: 768px) and (max-width: 991.98px) {
     .cli-manpage {
-        width: calc(100% + 150px);
-        max-width: none;
         margin-top: 1.5rem;
     }
 
