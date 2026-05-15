@@ -25,6 +25,13 @@ local function escape_html(s)
     return s:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"):gsub('"', "&quot;")
 end
 
+--- Render inline backtick code in summary text as <code> elements.
+--- First escapes HTML, then converts `...` to <code>...</code>.
+local function render_summary(s)
+    local escaped = escape_html(s)
+    return escaped:gsub("`([^`]+)`", "<code>%1</code>")
+end
+
 --- Read a named attribute from a Pandoc Div, returning "" if absent.
 local function attr_str(div, key)
     local val = div.attributes[key]
@@ -152,7 +159,7 @@ function Div(div)
         .. '<span class="gd-details-chevron" aria-hidden="true"></span>'
         .. icon_html
         .. '<span class="gd-details-title">'
-        .. escape_html(summary) .. '</span>'
+        .. render_summary(summary) .. '</span>'
         .. '</summary>\n'
         .. '<div class="gd-details-body">'
     local html_close = '</div>\n</details>'
