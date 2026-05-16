@@ -12620,12 +12620,10 @@ body-classes: "gd-homepage"
                 lines.append("")
 
             # ── Codex / OpenCode (multi-skill: list all URLs) ──
-            lines.append(
-                f"**Codex / OpenCode** --- "
-                f"{_t('tell_the_agent_to_fetch', 'tell the agent to fetch these skill files')}:"
-            )
+            lines.append("**Codex / OpenCode**")
             lines.append("")
-            _skill_url_lines = []
+            _tell_line = _t('tell_the_agent_to_fetch', 'Tell the agent to fetch these skill files')
+            _skill_url_lines = [f"{_tell_line}:"]
             for meta in skill_meta:
                 sname = meta["name"]
                 if site_url:
@@ -12651,8 +12649,9 @@ body-classes: "gd-homepage"
         else:
             # ── Codex / OpenCode (single skill) ──
             skill_file_url = f"{site_url}skill.md" if site_url else ""
-            lines.append(f"**Codex / OpenCode** --- {_t('tell_the_agent', 'tell the agent')}:")
+            lines.append("**Codex / OpenCode**")
             lines.append("")
+            _tell_the_agent = _t("tell_the_agent", "Tell the agent")
             _fetch_verb = _t("fetch_skill_file_at", "Fetch the skill file at")
             _fetch_from_verb = _t("fetch_skill_file_from", "Fetch the skill file from")
             if skill_file_url:
@@ -12666,10 +12665,11 @@ body-classes: "gd-homepage"
             else:
                 _follow = _t("and_follow_instructions", "and follow the instructions.")
                 _prompt_text = f"{_fetch_verb} &lt;site-url&gt;/skill.md {_follow}"
+            _code_content = f"{_tell_the_agent}:<br>{_prompt_text}"
             lines.append("```{=html}")
             lines.append(
                 f'<div class="sourceCode"><pre class="sourceCode text code-with-copy" style="padding-bottom: 0;">'
-                f"<code>{_prompt_text}</code></pre></div>"
+                f"<code>{_code_content}</code></pre></div>"
             )
             lines.append("```")
             lines.append("")
