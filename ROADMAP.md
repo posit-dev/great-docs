@@ -140,6 +140,21 @@ First-class blogging integrated with documentation.
 - Pagination for post listings
 - Blog-only mode (documentation optional)
 
+### MCP Server Documentation
+
+Generate documentation for Model Context Protocol (MCP) server projects.
+
+- Auto-discover tools, resources, and prompts from MCP server source code
+- Render tool schemas (input/output JSON Schema) in styled parameter tables
+- Document resource URI templates with examples
+- Display prompt templates with argument descriptions
+- Support for multiple transport types (stdio, SSE, streamable HTTP)
+- Cross-reference between tools and resources
+- "Try it" links or copy-able JSON-RPC examples for each tool
+- Server capability summary page (tools count, resources, prompts)
+- Configuration reference for server setup (env vars, auth, endpoints)
+- Compatible with Python (`mcp` SDK), TypeScript (`@modelcontextprotocol/sdk`), and other MCP implementations
+
 ### Instant Loading
 
 SPA-like navigation without full page reloads.
