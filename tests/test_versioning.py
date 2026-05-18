@@ -315,6 +315,22 @@ class TestEvaluateVersionExpr:
         # >=0.5,<0.9 should NOT match 0.9
         assert evaluate_version_expr(">=0.5,<0.9", "0.9", vers) is False
 
+    def test_three_part_version_in_expr(self):
+        """>=0.11.0 should work the same as >=0.11 when target is 0.11."""
+        vers = parse_versions_config(
+            [
+                {"tag": "dev", "version": "0.12", "prerelease": True},
+                {"tag": "0.11", "latest": True},
+                {"tag": "0.10"},
+            ]
+        )
+        assert evaluate_version_expr(">=0.11.0", "0.11", vers) is True
+        assert evaluate_version_expr(">=0.11.0", "dev", vers) is True
+        assert evaluate_version_expr(">=0.11.0", "0.10", vers) is False
+        # Equality with different segment counts
+        assert evaluate_version_expr("=0.11.0", "0.11", vers) is True
+        assert evaluate_version_expr(">=0.10.0", "0.11", vers) is True
+
 
 # ---------------------------------------------------------------------------
 # process_version_fences
