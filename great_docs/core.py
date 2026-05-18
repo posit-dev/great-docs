@@ -134,11 +134,78 @@ class GreatDocs:
         # Whether API reference was successfully configured (set during build)
         self._has_api_reference = True
 
+        # Per-build caches (reset on each build, shared across steps)
+        self._griffe_pkg_cache: dict | None = None  # {normalized_name: griffe Package}
+        self._cached_exports: list | None = None
+        self._cached_categories: dict | None = None
+        self._cached_package_name: str | None = None
+
         # Set environment variables needed by the qrenderer
         _, _, url = self._get_github_repo_info()
         if url:
             os.environ["GITHUB_REPO_URL"] = str(url)
         os.environ["GIT_REF"] = self._detect_git_ref()
+
+    def _get_griffe_package(self, package_name: str):
+        """Load a griffe package, using a per-build cache to avoid redundant loads.
+
+        Parameters
+        ----------
+        package_name
+            The normalized (underscored) package name.
+
+        Returns
+        -------
+        griffe.Object
+            The loaded griffe package object.
+        """
+        import griffe
+
+        _patch_griffe()
+
+        if self._griffe_pkg_cache is None:
+            self._griffe_pkg_cache = {}
+
+        normalized = package_name.replace("-", "_")
+        if normalized not in self._griffe_pkg_cache:
+            self._griffe_pkg_cache[normalized] = griffe.load(
+                normalized, search_paths=self._griffe_search_paths()
+            )
+        return self._griffe_pkg_cache[normalized]
+
+    def _get_source_location_from_pkg(self, pkg, item_name: str) -> dict | None:
+        """Get source location by navigating an already-loaded griffe package tree.
+
+        Parameters
+        ----------
+        pkg
+            A griffe package object (already loaded).
+        item_name
+            Dotted name relative to the package (e.g., "ClassName.method_name").
+
+        Returns
+        -------
+        dict | None
+            Dictionary with file, start_line, end_line or None if not found.
+        """
+        parts = item_name.split(".")
+        obj = pkg
+        for part in parts:
+            if part not in obj.members:
+                return None
+            obj = obj.members[part]
+
+        if not hasattr(obj, "lineno") or obj.lineno is None:
+            return None
+        if not hasattr(obj, "filepath") or not obj.filepath:
+            return None
+
+        end_lineno = getattr(obj, "endlineno", obj.lineno)
+        return {
+            "file": str(obj.filepath),
+            "start_line": obj.lineno,
+            "end_line": end_lineno or obj.lineno,
+        }
 
     def _prepare_build_directory(self) -> None:
         """
@@ -5416,6 +5483,7 @@ class GreatDocs:
         Get source file and line numbers for a class, method, or function.
 
         Uses griffe for static analysis to avoid import side effects.
+        Leverages the per-build griffe cache to avoid redundant package loads.
 
         Parameters
         ----------
@@ -5430,50 +5498,11 @@ class GreatDocs:
             Dictionary with file path and line numbers, or None if not found.
         """
         try:
-            import griffe
-
-            _patch_griffe()
-
             normalized_name = package_name.replace("-", "_")
-
-            # Load the package with griffe
-            try:
-                pkg = griffe.load(normalized_name, search_paths=self._griffe_search_paths())
-            except Exception:
-                return None
-
-            # Navigate to the item (handle dotted names like "ClassName.method")
-            parts = item_name.split(".")
-            obj = pkg
-
-            for part in parts:
-                if part not in obj.members:
-                    return None
-                obj = obj.members[part]
-
-            # Get source information
-            if not hasattr(obj, "lineno") or obj.lineno is None:
-                return None  # pragma: no cover
-
-            # Get the file path relative to package root
-            if hasattr(obj, "filepath") and obj.filepath:
-                filepath = str(obj.filepath)
-            else:
-                return None  # pragma: no cover
-
-            # Get end line number
-            end_lineno = getattr(obj, "endlineno", obj.lineno)
-
-            return {
-                "file": filepath,
-                "start_line": obj.lineno,
-                "end_line": end_lineno or obj.lineno,
-            }
-
-        except ImportError:  # pragma: no cover
-            return None  # pragma: no cover
-        except Exception:  # pragma: no cover
-            return None  # pragma: no cover
+            pkg = self._get_griffe_package(normalized_name)
+            return self._get_source_location_from_pkg(pkg, item_name)
+        except Exception:
+            return None
 
     def _build_github_source_url(
         self, source_location: dict, branch: str | None = None
@@ -5628,7 +5657,18 @@ class GreatDocs:
         branch = self._detect_git_ref()
         print(f"Using git ref: {branch}")
 
-        # Generate source links for each export
+        # Pre-warm the griffe cache so _get_source_location doesn't reload per-item
+        try:
+            self._get_griffe_package(normalized_name)
+        except Exception:
+            pass  # _get_source_location will handle failures gracefully
+
+        # Categorize ALL exports in a single batch call (instead of per-export)
+        categories = self._categorize_api_objects(package_name, exports)
+        all_classes = set(categories.get("all_classes", []))
+        class_method_names = categories.get("class_method_names", {})
+
+        # Generate source links for each export (uses cached griffe pkg internally)
         for item_name in exports:
             source_loc = self._get_source_location(normalized_name, item_name)
             if source_loc:
@@ -5642,9 +5682,8 @@ class GreatDocs:
                     }
 
             # Also get source links for methods of classes
-            categories = self._categorize_api_objects(package_name, [item_name])
-            if item_name in categories.get("all_classes", []):
-                method_names = categories.get("class_method_names", {}).get(item_name, [])
+            if item_name in all_classes:
+                method_names = class_method_names.get(item_name, [])
                 for method_name in method_names:
                     full_name = f"{item_name}.{method_name}"
                     method_loc = self._get_source_location(normalized_name, full_name)
@@ -5969,13 +6008,9 @@ class GreatDocs:
             # Normalize package name (replace dashes with underscores)
             normalized_name = package_name.replace("-", "_")
 
-            # Build search_paths for griffe so it can find packages in
-            # src/, python/, lib/ layouts without them being on sys.path
-            griffe_search_paths = self._griffe_search_paths()
-
-            # Load the package using griffe
+            # Load the package using the per-build griffe cache
             try:
-                pkg = griffe.load(normalized_name, search_paths=griffe_search_paths)
+                pkg = self._get_griffe_package(normalized_name)
             except Exception as e:
                 print(f"Warning: Could not load package with griffe ({type(e).__name__})")
                 if package_name != normalized_name:
@@ -6062,13 +6097,16 @@ class GreatDocs:
             failed_exports = {}  # name -> error type for reporting
 
             # Try to use the renderer's `get_object()` for validation
+            # Note: we intentionally do NOT share a loader here because the
+            # re-export detection (canonical_path check) gives false positives
+            # when the loader has extra modules pre-loaded (e.g., type aliases
+            # like `HandlerFunc = Callable[..., None]` get traced back to typing).
             gd_get_object = None
             try:
                 from functools import partial
 
                 from great_docs._renderer.introspection import get_object as qd_get_object
 
-                # uses `parser="numpy"` by default which affects alias resolution
                 gd_get_object = partial(qd_get_object, dynamic=True, parser="numpy")
             except ImportError:  # pragma: no cover
                 pass
@@ -6208,9 +6246,9 @@ class GreatDocs:
             # Normalize package name
             normalized_name = package_name.replace("-", "_")
 
-            # Load the package using griffe
+            # Load the package using the per-build griffe cache
             try:
-                pkg = griffe.load(normalized_name, search_paths=self._griffe_search_paths())
+                pkg = self._get_griffe_package(normalized_name)
             except Exception as e:
                 print(
                     f"Warning: Could not load package for docstring detection ({type(e).__name__})"
@@ -6358,7 +6396,7 @@ class GreatDocs:
 
         # Get a sample of exports to test
         try:
-            pkg = griffe.load(normalized_name, search_paths=self._griffe_search_paths())
+            pkg = self._get_griffe_package(normalized_name)
             exports = [
                 name
                 for name in list(pkg.members.keys())[:10]  # Test first 10
@@ -6825,19 +6863,37 @@ class GreatDocs:
             normalized_name = package_name.replace("-", "_")
 
             # Try to use the renderer's `get_object()` for validation
+            # Use a shared loader to avoid re-loading the module on every call
             gd_get_object = None
             try:
                 from functools import partial
 
-                from great_docs._renderer.introspection import get_object as qd_get_object
+                from great_docs._renderer.introspection import (
+                    GriffeLoader,
+                    LinesCollection,
+                    ModulesCollection,
+                    Parser,
+                    get_parser_defaults,
+                )
+                from great_docs._renderer.introspection import (
+                    get_object as qd_get_object,
+                )
 
-                gd_get_object = partial(qd_get_object, dynamic=True, parser="numpy")
+                _shared_loader = GriffeLoader(
+                    docstring_parser=Parser("numpy"),
+                    docstring_options=get_parser_defaults("numpy"),
+                    modules_collection=ModulesCollection(),
+                    lines_collection=LinesCollection(),
+                )
+                gd_get_object = partial(
+                    qd_get_object, dynamic=True, parser="numpy", loader=_shared_loader
+                )
             except ImportError:  # pragma: no cover
                 pass  # pragma: no cover
 
-            # Try to load the package with griffe
+            # Try to load the package with griffe (uses per-build cache)
             try:
-                pkg = griffe.load(normalized_name, search_paths=self._griffe_search_paths())
+                pkg = self._get_griffe_package(normalized_name)
             except Exception as e:
                 print(f"Warning: Could not load package with griffe ({type(e).__name__})")
                 # Fallback: use importlib + inspect to categorize exports
@@ -7612,7 +7668,7 @@ class GreatDocs:
             normalized_name = package_name.replace("-", "_")
 
             try:
-                pkg = griffe.load(normalized_name, search_paths=self._griffe_search_paths())
+                pkg = self._get_griffe_package(normalized_name)
             except Exception as e:
                 print(f"Warning: Could not load package with griffe ({type(e).__name__})")
                 return {}
@@ -9992,6 +10048,9 @@ body-classes: "gd-homepage"
         # Prioritizes explicit reference config from great-docs.yml over auto-discovery
         sections = self._create_api_sections_with_config(importable_name)
 
+        # Mark that discovery was performed this build (so Step 2 can skip re-doing it)
+        self._api_discovery_done = True
+
         # If no documentable exports were found, skip API reference entirely
         if not sections:
             print("No documentable exports found — skipping API reference")
@@ -10087,6 +10146,11 @@ body-classes: "gd-homepage"
 
         Only the 'sections' key in API reference config is regenerated.
         """
+        # If _add_api_reference_config already ran discovery this build, skip redundant work
+        if getattr(self, "_api_discovery_done", False):
+            print("API reference already configured in this build, skipping re-discovery")
+            return
+
         quarto_yml = self.project_path / "_quarto.yml"
 
         if not quarto_yml.exists():
@@ -12626,7 +12690,7 @@ body-classes: "gd-homepage"
             # ── Codex / OpenCode (multi-skill: list all URLs) ──
             lines.append("**Codex / OpenCode**")
             lines.append("")
-            _tell_line = _t('tell_the_agent_to_fetch', 'Tell the agent to fetch these skill files')
+            _tell_line = _t("tell_the_agent_to_fetch", "Tell the agent to fetch these skill files")
             _skill_url_lines = [f"{_tell_line}:"]
             for meta in skill_meta:
                 sname = meta["name"]
