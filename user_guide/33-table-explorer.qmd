@@ -2,9 +2,7 @@
 title: "Table Explorer"
 guide-section: "Site Content"
 tags: [Content, Extensions, Data]
-status: experimental
-upcoming: "0.10"
-versions: ">=0.9"
+versions: ">=0.10"
 ---
 
 # Table Explorer

@@ -3,8 +3,7 @@ title: "Freeze & Caching"
 guide-section: "Build & Deploy"
 tags: [Build, Deployment, CI/CD]
 status: experimental
-upcoming: "0.11.0"
-versions: ">=0.10"
+versions: ">=0.11.0"
 ---
 
 # Freeze & Caching

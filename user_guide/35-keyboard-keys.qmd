@@ -2,9 +2,7 @@
 title: "Keyboard Keys"
 guide-section: "Site Content"
 tags: [Content, Extensions]
-status: experimental
-upcoming: "0.10"
-versions: ">=0.9"
+versions: ">=0.10"
 ---
 
 # Keyboard Keys
