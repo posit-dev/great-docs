@@ -6104,31 +6104,17 @@ class GreatDocs:
             failed_exports = {}  # name -> error type for reporting
 
             # Try to use the renderer's `get_object()` for validation
-            # Use a shared loader to avoid re-loading the module on every call
+            # Note: we intentionally do NOT share a loader here because the
+            # re-export detection (canonical_path check) gives false positives
+            # when the loader has extra modules pre-loaded (e.g., type aliases
+            # like `HandlerFunc = Callable[..., None]` get traced back to typing).
             gd_get_object = None
             try:
                 from functools import partial
 
-                from great_docs._renderer.introspection import (
-                    GriffeLoader,
-                    LinesCollection,
-                    ModulesCollection,
-                    Parser,
-                    get_parser_defaults,
-                )
-                from great_docs._renderer.introspection import (
-                    get_object as qd_get_object,
-                )
+                from great_docs._renderer.introspection import get_object as qd_get_object
 
-                _shared_loader = GriffeLoader(
-                    docstring_parser=Parser("numpy"),
-                    docstring_options=get_parser_defaults("numpy"),
-                    modules_collection=ModulesCollection(),
-                    lines_collection=LinesCollection(),
-                )
-                gd_get_object = partial(
-                    qd_get_object, dynamic=True, parser="numpy", loader=_shared_loader
-                )
+                gd_get_object = partial(qd_get_object, dynamic=True, parser="numpy")
             except ImportError:  # pragma: no cover
                 pass
 
