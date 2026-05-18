@@ -3,7 +3,7 @@ title: "Collapsible Details"
 guide-section: "Site Content"
 tags: [Content, Extensions, Interactivity]
 status: experimental
-versions: ">=0.11.0"
+versions: ">=0.11"
 ---
 
 # Collapsible Details
