@@ -5657,27 +5657,20 @@ class GreatDocs:
         branch = self._detect_git_ref()
         print(f"Using git ref: {branch}")
 
-        # Load griffe package ONCE for all source-location lookups
-        pkg = None
+        # Pre-warm the griffe cache so _get_source_location doesn't reload per-item
         try:
-            pkg = self._get_griffe_package(normalized_name)
+            self._get_griffe_package(normalized_name)
         except Exception:
-            pass  # Fall back to per-item _get_source_location below
+            pass  # _get_source_location will handle failures gracefully
 
         # Categorize ALL exports in a single batch call (instead of per-export)
         categories = self._categorize_api_objects(package_name, exports)
         all_classes = set(categories.get("all_classes", []))
         class_method_names = categories.get("class_method_names", {})
 
-        def _resolve_source(name: str) -> dict | None:
-            """Get source location using cached pkg tree, or fallback."""
-            if pkg is not None:
-                return self._get_source_location_from_pkg(pkg, name)
-            return self._get_source_location(normalized_name, name)
-
-        # Generate source links for each export using the cached package tree
+        # Generate source links for each export (uses cached griffe pkg internally)
         for item_name in exports:
-            source_loc = _resolve_source(item_name)
+            source_loc = self._get_source_location(normalized_name, item_name)
             if source_loc:
                 github_url = self._build_github_source_url(source_loc, branch)
                 if github_url:
@@ -5693,7 +5686,7 @@ class GreatDocs:
                 method_names = class_method_names.get(item_name, [])
                 for method_name in method_names:
                     full_name = f"{item_name}.{method_name}"
-                    method_loc = _resolve_source(full_name)
+                    method_loc = self._get_source_location(normalized_name, full_name)
                     if method_loc:
                         method_url = self._build_github_source_url(method_loc, branch)
                         if method_url:
