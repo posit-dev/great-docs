@@ -11462,7 +11462,7 @@ def test_generate_cli_command_page_subcommand():
 
         assert "my-tool build" in result
         assert "## Options" in result
-        assert "--watch" in result
+        assert "&#45;&#45;watch" in result
         assert "Watch for changes." in result
 
 
