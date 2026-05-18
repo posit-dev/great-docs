@@ -195,6 +195,17 @@ def _parse_version_tuple(tag: str) -> tuple[int, ...] | None:
         return None
 
 
+def _normalize_version_tuples(
+    a: tuple[int, ...], b: tuple[int, ...]
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Pad version tuples with trailing zeros so they have equal length.
+
+    This ensures `(0, 11)` and `(0, 11, 0)` are treated as equal when compared.
+    """
+    max_len = max(len(a), len(b))
+    return (a + (0,) * (max_len - len(a)), b + (0,) * (max_len - len(b)))
+
+
 def _resolve_version_str(tag: str, versions: list[VersionEntry]) -> str:
     """Return the best semantic version string for *tag*.
 
@@ -279,6 +290,7 @@ def evaluate_version_expr(
             ref_tup = _parse_version_tuple(ref_tag)
             if target_tup is None or ref_tup is None:
                 return False
+            target_tup, ref_tup = _normalize_version_tuples(target_tup, ref_tup)
             if op == "" or op == "=":
                 if target_tup != ref_tup:
                     return False
