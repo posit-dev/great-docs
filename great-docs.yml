@@ -51,14 +51,17 @@ hero:
 # -----------------------
 # Publish multiple versions of the site from a single source tree.
 versions:
-  - label: "0.11.0 (dev)"
+  - label: "0.12.0 (dev)"
     tag: dev
-    version: "0.11.0"
+    version: "0.12.0"
     prerelease: true
+  - label: "0.11"
+    tag: "0.11"
+    git_ref: v0.11.0
+    latest: true
   - label: "0.10"
     tag: "0.10"
     git_ref: v0.10.0
-    latest: true
   - label: "0.9"
     tag: "0.9"
     git_ref: v0.9
