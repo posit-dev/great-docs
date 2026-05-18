@@ -14489,6 +14489,29 @@ body-classes: "gd-homepage"
                 )
                 bar.finish()  # no-op if auto-finished at 100%
 
+                # Retry once on transient Quarto filesystem race conditions
+                # (e.g., "No such file or directory: rename ..." during output
+                # copying in large projects)
+                _TRANSIENT_PATTERNS = (
+                    "No such file or directory",
+                    "renameSync",
+                    "os error 2",
+                )
+                if result.returncode != 0 and any(p in result.stderr for p in _TRANSIENT_PATTERNS):
+                    log.warn("Quarto hit a transient filesystem error — retrying render...")
+                    # Reset progress state for retry
+                    bar = log.progress("Rendering pages (retry)", 1)
+                    step16_started[0] = False
+                    pass_count[0] = 0
+                    result = run_streaming(
+                        ["quarto", "render"],
+                        env=quarto_env,
+                        progress_bar=bar,
+                        on_pass=_on_pass,
+                        on_bar_done=_start_step16,
+                    )
+                    bar.finish()
+
                 if result.returncode != 0:
                     log.step_fail("Quarto render failed")
                     log.error_detail(result.stderr)

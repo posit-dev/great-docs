@@ -1327,20 +1327,36 @@ def _render_single_version(
     if env_vars:
         env.update(env_vars)
 
-    try:
-        result = subprocess.run(
-            ["quarto", "render"],
-            cwd=build_dir,
-            capture_output=True,
-            text=True,
-            env=env,
-            timeout=600,
-        )
-        return (build_dir, result.returncode, result.stdout, result.stderr)
-    except subprocess.TimeoutExpired:
-        return (build_dir, -1, "", "Quarto render timed out after 600 seconds")
-    except Exception as e:
-        return (build_dir, -1, "", str(e))
+    _TRANSIENT_PATTERNS = (
+        "No such file or directory",
+        "renameSync",
+        "os error 2",
+    )
+
+    for attempt in range(2):
+        try:
+            result = subprocess.run(
+                ["quarto", "render"],
+                cwd=build_dir,
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=600,
+            )
+            # Retry once on transient filesystem race conditions
+            if (
+                result.returncode != 0
+                and attempt == 0
+                and any(p in result.stderr for p in _TRANSIENT_PATTERNS)
+            ):
+                continue
+            return (build_dir, result.returncode, result.stdout, result.stderr)
+        except subprocess.TimeoutExpired:
+            return (build_dir, -1, "", "Quarto render timed out after 600 seconds")
+        except Exception as e:
+            return (build_dir, -1, "", str(e))
+
+    return (build_dir, result.returncode, result.stdout, result.stderr)  # type: ignore[possibly-undefined]
 
 
 def _render_single_version_streaming(
@@ -1405,7 +1421,48 @@ def _render_single_version_streaming(
             duration = _time_mod.monotonic() - ts
         page_timings.append({"page": page_path, "seconds": round(duration, 3)})
 
-    return (build_dir, proc.returncode, stdout_data, "".join(stderr_lines), page_timings)
+    # Retry once on transient filesystem race conditions
+    _TRANSIENT_PATTERNS = (
+        "No such file or directory",
+        "renameSync",
+        "os error 2",
+    )
+    full_stderr = "".join(stderr_lines)
+    if proc.returncode != 0 and any(p in full_stderr for p in _TRANSIENT_PATTERNS):
+        # Reset and retry
+        stderr_lines.clear()
+        _page_timestamps.clear()
+
+        try:
+            proc = subprocess.Popen(
+                ["quarto", "render"],
+                cwd=build_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=env,
+                bufsize=1,
+            )
+        except Exception as e:
+            return (build_dir, -1, "", str(e), [])
+
+        stderr_thread = threading.Thread(target=_read_stderr, daemon=True)
+        stderr_thread.start()
+        stdout_data = proc.stdout.read() if proc.stdout else ""  # type: ignore[union-attr]
+        proc.wait()
+        stderr_thread.join(timeout=10)
+
+        page_timings = []
+        for i, (page_path, ts) in enumerate(_page_timestamps):
+            if i + 1 < len(_page_timestamps):
+                duration = _page_timestamps[i + 1][1] - ts
+            else:
+                duration = _time_mod.monotonic() - ts
+            page_timings.append({"page": page_path, "seconds": round(duration, 3)})
+
+        return (build_dir, proc.returncode, stdout_data, "".join(stderr_lines), page_timings)
+
+    return (build_dir, proc.returncode, stdout_data, full_stderr, page_timings)
 
 
 def render_versions_parallel(
