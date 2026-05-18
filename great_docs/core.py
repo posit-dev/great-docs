@@ -4207,8 +4207,12 @@ class GreatDocs:
                 name_display = opt.get("name_display", "")
                 type_str = opt.get("type")
 
+                # Escape double-dashes as HTML entities to prevent Pandoc's smart
+                # extension from converting "--" to an en-dash inside inline HTML.
+                name_display_html = name_display.replace("--", "&#45;&#45;")
+
                 # Build the <code> element with HTML spans
-                code_parts = [f'<span class="doc-parameter-name">{name_display}</span>']
+                code_parts = [f'<span class="doc-parameter-name">{name_display_html}</span>']
                 if type_str and not opt.get("is_flag"):
                     code_parts.append(
                         f'<span class="doc-parameter-annotation-sep">:</span>'
