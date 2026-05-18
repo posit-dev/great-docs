@@ -57,6 +57,28 @@ API-reference-style rendering for CLI applications.
 - Environment variable documentation
 - Alternative to raw `--help` output: richer formatting, navigation, and discoverability
 
+### Docstring Coverage Report
+
+Audit which public symbols have complete documentation.
+
+- `great-docs coverage` command outputs a per-module/class report
+- Flags symbols missing docstrings, undocumented parameters, and missing examples
+- Badge-ready percentage score (e.g., "Docs Coverage: 87%")
+- Configurable thresholds for CI pass/fail
+- Integrates with `great-docs lint` for unified quality checking
+- JSON/Markdown output for CI artifact publishing
+
+### Migration Guide Generation
+
+Auto-generate version migration guides from API diffs.
+
+- Builds on `api-diff` to detect breaking changes between tagged versions
+- Generates a `.qmd` page per version bump with renamed/removed/changed symbols
+- Suggested replacement code snippets where possible
+- Deprecation timeline showing when deprecated symbols will be removed
+- Links to relevant changelog entries
+- `great-docs migration-guide v1.0 v2.0` CLI command
+
 ---
 
 ## Planned — Medium Term
@@ -236,6 +258,64 @@ Improve the built-in search with modern capabilities.
 - Keyboard navigation in search results
 - Recent searches history
 
+### OpenAPI / REST API Documentation
+
+Generate reference pages for HTTP APIs alongside Python API docs.
+
+- Parse OpenAPI/Swagger specs (JSON or YAML) to generate endpoint pages
+- Auto-discover routes from FastAPI, Flask, or Starlette decorators
+- Render request/response schemas in styled parameter tables
+- Authentication and header documentation
+- Example `curl` commands and request bodies
+- Status code reference per endpoint
+- Grouped by tags or URL path prefix
+- Try-it-out links to external tools (Swagger UI, Redoc)
+
+### Documentation Freshness Tracking
+
+Flag documentation pages that may be stale relative to code changes.
+
+- Correlate git history between source modules and their corresponding doc pages
+- Surface stale pages in `great-docs lint` output with last-modified delta
+- Configurable staleness threshold (e.g., 90 days since source changed)
+- Per-page freshness badge (optional)
+- Ignore list for stable pages that rarely need updates
+- JSON report for CI integration
+
+### User Feedback Widget
+
+Inline "Was this page helpful?" ratings on documentation pages.
+
+- Thumbs up/down widget at page bottom
+- Optional free-text comment field
+- Data stored via GitHub Discussions, a JSON endpoint, or static file export
+- Dashboard view of feedback aggregated per page
+- Theme-aware styling matching dark/light mode
+- Per-page disable via frontmatter
+- Privacy-friendly: no cookies, no tracking scripts
+
+### Redirects Management
+
+Graceful handling of URL changes across versions and restructuring.
+
+- `redirects:` section in `great-docs.yml` mapping old paths to new paths
+- Generates HTML meta-refresh redirect stubs for static hosting
+- Outputs `_redirects` (Netlify) or `vercel.json` rules for edge hosting
+- Auto-detect moved pages from git rename history (optional)
+- Warning in `great-docs lint` for redirect chains or loops
+- Supports glob patterns for bulk redirects (e.g., `/old-section/*` → `/new-section/*`)
+
+### Incremental Builds
+
+Skip re-rendering unchanged pages for faster iteration.
+
+- Track content hashes of source files, config, and theme assets
+- Only re-render pages whose inputs changed since last build
+- Full rebuild triggered automatically on config or theme changes
+- `great-docs build --full` to force complete rebuild
+- Build manifest (`.great-docs-cache/manifest.json`) persists across runs
+- Significant speedup for large sites (100+ pages) during development
+
 ---
 
 ## Planned — Long Term
@@ -331,6 +411,20 @@ Tools for data privacy regulation compliance.
 - External link rewriting to proxy through local assets
 - One-line config for privacy mode
 - Audit report of external requests
+
+### Documentation Health Dashboard
+
+A comprehensive post-build quality report aggregating all documentation metrics.
+
+- Docstring coverage percentage per module and overall
+- Broken internal links and orphaned pages (no sidebar entry)
+- Pages with no examples or missing sections
+- Readability scores (Flesch-Kincaid or similar)
+- Build time trends across recent builds
+- Freshness scores correlated with source changes
+- Publishable as a standalone HTML page or CI artifact
+- `great-docs health` CLI command with pass/fail exit codes
+- Configurable quality gates for CI pipelines
 
 ---
 
