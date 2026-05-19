@@ -27,8 +27,9 @@ Writing documentation shouldn't be harder than writing the code it describes. Mo
 - **Instant setup**: `great-docs init` inspects your package and generates a complete config
 - **Smart defaults**: API reference pages are created automatically from your code (no manual authoring needed)
 - **Real documentation, not stubs**: renders full parameter tables, return types, examples, and cross-references from your existing docstrings
-- **Looks great out of the box**: gradient navbars, dark mode, responsive layout, GitHub widget, sidebar search
-- **Deep when you need it**: user guides, multi-version docs, link checking, proofreading, SEO, internationalization, and more (all opt-in)
+- **Looks great out of the box**: gradient navbars, dark mode, responsive layout, GitHub widget, sidebar search, keyboard navigation
+- **Deep when you need it**: user guides, multi-version docs, freeze caching, link checking, proofreading, SEO, internationalization (20+ languages), and more (all opt-in)
+- **AI-ready**: auto-generates `llms.txt`, agent skills, and markdown pages for LLM consumption
 - **Deploys anywhere**: one command creates a GitHub Actions workflow for GitHub Pages
 
 ## Get Started in 60 Seconds
@@ -111,6 +112,8 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 - Custom HTML pages with passthrough or raw layouts
 - Multi-version documentation with version selector
 - Video embeds (YouTube, Vimeo, local files)
+- Mermaid diagram pre-rendering (light + dark variants)
+- Freeze/cache support for expensive computations
 
 </td>
 <td width="50%" valign="top">
@@ -127,6 +130,10 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 - Page status badges (experimental, stable, deprecated)
 - API evolution annotations (new, changed, deprecated)
 - Social cards (Open Graph / Twitter)
+- Keyboard navigation with shortcut overlay
+- Back-to-top floating button
+- Navigation icons (Lucide icon set)
+- Scale-to-fit for wide HTML output
 
 </td>
 </tr>
@@ -137,6 +144,8 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 
 - Auto-generates `llms.txt` and `llms-full.txt`
 - Agent Skills generation ([agentskills.io](https://agentskills.io/) compliant)
+- Multiple named skills per package
+- Skill install/check/list CLI commands
 - Markdown page generation for LLM consumption
 
 </td>
@@ -149,7 +158,10 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 - Custom favicon and Open Graph images
 - Author metadata with ORCID support
 - Changelog from GitHub Releases
-- Internationalization support
+- Internationalization (20+ languages)
+- Accent color (global or per-mode)
+- Navbar gradient presets or solid colors
+- Content area gradient presets
 
 </td>
 </tr>
@@ -161,9 +173,10 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 - Built-in link checker
 - Documentation linter (docstrings, cross-refs, style)
 - Proofreading (spelling & grammar)
-- SEO auditing
+- SEO auditing (sitemap, robots.txt, canonical URLs, structured data)
 - API diff between versions
-- Tested against 250+ synthetic packages
+- Build timings reporting
+- Tested against ~300 synthetic packages
 - 15,600+ tests
 
 </td>
@@ -174,8 +187,34 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 - One-command GitHub Pages setup
 - GitHub Actions workflow generation
 - Multi-version deployment with version selector
+- Floating version aliases (`/v/latest/`, `/v/stable/`, `/v/dev/`)
 - Custom domain support
 - Static output: host anywhere
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+**Shortcodes & Widgets**
+
+- Color swatches (inline and grid)
+- Collapsible details sections
+- Keyboard keys styling
+- Horizontal rules with accent colors
+- Table previews (Python API for notebooks)
+- Table explorer (interactive data tables)
+
+</td>
+<td width="50%" valign="top">
+
+**Developer Experience**
+
+- `great-docs init` auto-detects package manager (uv, poetry, pip)
+- `great-docs freeze` for caching expensive computations
+- `great-docs timings` for build performance insight
+- Pre-render script hooks
+- Page metadata timestamps (creation/modification dates)
 
 </td>
 </tr>
@@ -190,6 +229,7 @@ All configuration lives in a single `great-docs.yml` file in your project root. 
 navbar_style: sky
 content_style: lilac
 dark_mode_toggle: true
+accent_color: "#3b82f6"
 
 # Branding
 display_name: My Package
@@ -219,6 +259,13 @@ versions:
     label: "2.0 (latest)"
   - tag: v1.5.0
     label: "1.5"
+
+# Freeze cache for expensive computations
+freeze: auto
+
+# Internationalization
+site:
+  language: fr
 
 # Custom sections
 sections:
@@ -266,12 +313,18 @@ Beyond `init`, `build`, and `preview`, Great Docs includes a full suite of quali
 | `great-docs api-snapshot` | Capture a JSON snapshot of your public API |
 | `great-docs versions` | List and validate multi-version configuration |
 | `great-docs changelog` | Generate changelog from GitHub Releases |
+| `great-docs freeze` | Execute specific pages and persist their freeze cache |
+| `great-docs timings` | Show page-level build timings from the last build |
 | `great-docs setup-github-pages` | Create CI workflow for GitHub Pages deployment |
 | `great-docs config` | Generate a fully-documented config template |
+| `great-docs uninstall` | Remove great-docs from your project |
+| `great-docs skill install` | Install AI agent skills for your package |
+| `great-docs skill check` | Check if installed skills are up to date |
+| `great-docs skill list` | List available skills from a package or URL |
 
 ## Recipes
 
-The documentation includes 22 step-by-step recipes:
+The documentation includes 24 step-by-step recipes:
 
 ### Content & API
 
@@ -319,6 +372,7 @@ The documentation includes 22 step-by-step recipes:
 | ------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
 | [Fix Common Build Errors](https://posit-dev.github.io/great-docs/recipes/fix-common-build-errors.html) | Troubleshoot build issues quickly          |
 | [Proofread Documentation](https://posit-dev.github.io/great-docs/recipes/proofread-documentation.html) | Catch spelling and grammar issues          |
+| [Use Freeze Cache](https://posit-dev.github.io/great-docs/recipes/use-freeze-cache.html)               | Cache expensive notebooks across builds    |
 
 ## Documentation
 
@@ -327,17 +381,28 @@ Full documentation is available at **[posit-dev.github.io/great-docs](https://po
 - [Installation](https://posit-dev.github.io/great-docs/user-guide/installation.html): setup and requirements
 - [Quick Start](https://posit-dev.github.io/great-docs/user-guide/quickstart.html): first site in minutes
 - [Configuration](https://posit-dev.github.io/great-docs/user-guide/configuration.html): every option explained
-- [Theming & Appearance](https://posit-dev.github.io/great-docs/user-guide/theming.html): gradients, colors, dark mode
 - [API Documentation](https://posit-dev.github.io/great-docs/user-guide/api-documentation.html): how API references are generated
 - [CLI Documentation](https://posit-dev.github.io/great-docs/user-guide/cli-documentation.html): documenting Click CLIs
+- [User Guides](https://posit-dev.github.io/great-docs/user-guide/user-guides.html): adding prose documentation
+- [Custom Sections](https://posit-dev.github.io/great-docs/user-guide/custom-sections.html): recipes, blog, tutorials
+- [Custom Pages](https://posit-dev.github.io/great-docs/user-guide/custom-pages.html): static HTML pages
+- [Theming & Appearance](https://posit-dev.github.io/great-docs/user-guide/theming.html): gradients, colors, dark mode
+- [Diagrams](https://posit-dev.github.io/great-docs/user-guide/diagrams.html): Mermaid diagram pre-rendering
+- [Videos](https://posit-dev.github.io/great-docs/user-guide/videos.html): embedding YouTube, Vimeo, and local videos
+- [Internationalization](https://posit-dev.github.io/great-docs/user-guide/internationalization.html): 20+ language translations
 - [Deployment](https://posit-dev.github.io/great-docs/user-guide/deployment.html): GitHub Pages and beyond
+- [Multi-Version Docs](https://posit-dev.github.io/great-docs/user-guide/multi-version-docs.html): version selector and versioned builds
+- [API Evolution](https://posit-dev.github.io/great-docs/user-guide/api-evolution.html): tracking API changes across versions
+- [Freeze](https://posit-dev.github.io/great-docs/user-guide/freeze.html): caching expensive computations
+- [Scale to Fit](https://posit-dev.github.io/great-docs/user-guide/scale-to-fit.html): auto-shrink wide output
+- [Page Tags](https://posit-dev.github.io/great-docs/user-guide/page-tags.html): categorize pages with tags
+- [Page Status Badges](https://posit-dev.github.io/great-docs/user-guide/page-status-badges.html): lifecycle indicators
+- [Social Cards](https://posit-dev.github.io/great-docs/user-guide/social-cards.html): Open Graph and Twitter cards
+- [Agent Skills](https://posit-dev.github.io/great-docs/user-guide/agent-skills.html): AI coding agent integration
 - [Link Checker](https://posit-dev.github.io/great-docs/user-guide/link-checker.html): validate all links
 - [Proofreading](https://posit-dev.github.io/great-docs/user-guide/proofreading.html): spelling & grammar checks
 - [Linting](https://posit-dev.github.io/great-docs/user-guide/linting.html): documentation quality checks
 - [SEO](https://posit-dev.github.io/great-docs/user-guide/seo.html): search engine optimization
-- [Multi-Version Docs](https://posit-dev.github.io/great-docs/user-guide/multi-version-docs.html): version selector and versioned builds
-- [API Evolution](https://posit-dev.github.io/great-docs/user-guide/api-evolution.html): tracking API changes across versions
-- [Social Cards](https://posit-dev.github.io/great-docs/user-guide/social-cards.html): Open Graph and Twitter cards
 
 ## Requirements
 
@@ -355,5 +420,5 @@ MIT License. See [LICENSE](LICENSE) for details.
 ---
 
 <p align="center">
-Built by <a href="https://posit.co">Posit</a>
+Built by <a href="https://posit.co">Posit, PBC</a>.
 </p>
