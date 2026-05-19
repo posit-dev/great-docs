@@ -176,7 +176,7 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 - SEO auditing (sitemap, robots.txt, canonical URLs, structured data)
 - API diff between versions
 - Build timings reporting
-- Tested against ~300 synthetic packages
+- Tested against ~300 synthetic packages via the [Great Docs Gauntlet](https://posit-dev.github.io/gdg/)
 - 15,600+ tests
 
 </td>
