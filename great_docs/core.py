@@ -7819,6 +7819,227 @@ class GreatDocs:
 
         return sections if sections else None
 
+    def _categorize_referenced_objects(self, package_name: str, reference_config: list) -> dict:
+        """
+        Lightweight categorization that only inspects objects listed in the reference config.
+
+        Unlike `_categorize_api_objects` which introspects all package exports and deep-enumerates
+        every class's methods (O(exports x methods)), this method only classifies the specific names
+        referenced in great-docs.yml. For a package with 195 exports and 500+ methods, this could
+        avoid ~90% of griffe work.
+
+        Parameters
+        ----------
+        package_name
+            The package name (may contain dashes).
+        reference_config
+            The `reference:` list from great-docs.yml.
+
+        Returns
+        -------
+        dict
+            A categories dict compatible with `_write_object_types_json`.
+        """
+        import griffe
+
+        _patch_griffe()
+
+        normalized_name = package_name.replace("-", "_")
+
+        try:
+            pkg = self._get_griffe_package(normalized_name)
+        except Exception:
+            return self._empty_categories()
+
+        # Collect all names referenced in the config
+        referenced_names: set[str] = set()
+        for section in reference_config:
+            if not isinstance(section, dict):
+                continue
+            for item in section.get("contents", []):
+                if isinstance(item, str):
+                    referenced_names.add(item)
+                elif isinstance(item, dict):
+                    name = item.get("name", "")
+                    if name:
+                        referenced_names.add(name)
+
+        categories = self._empty_categories()
+
+        # Separate into top-level names and qualified names (Class.method)
+        top_level_names: set[str] = set()
+        method_refs: dict[str, list[str]] = {}  # class_name -> [method_name, ...]
+        for name in referenced_names:
+            if "." in name:
+                parts = name.split(".", 1)
+                class_name, method_name = parts[0], parts[1]
+                top_level_names.add(class_name)
+                method_refs.setdefault(class_name, []).append(method_name)
+            else:
+                top_level_names.add(name)
+
+        # Classify each top-level name
+        for name in sorted(top_level_names):
+            if name not in pkg.members:
+                categories["other"].append(name)
+                continue
+
+            try:
+                obj = pkg.members[name]
+                kind = obj.kind.value
+            except (griffe.CyclicAliasError, griffe.AliasResolutionError):
+                categories["other"].append(name)
+                continue
+            except Exception:
+                categories["other"].append(name)
+                continue
+
+            if kind == "class":
+                sub = self._sub_classify_class(obj)
+                _CLASS_SUB_MAP = {
+                    "dataclass": "dataclasses",
+                    "enum": "enums",
+                    "exception": "exceptions",
+                    "namedtuple": "namedtuples",
+                    "typeddict": "typeddicts",
+                    "protocol": "protocols",
+                    "abc": "abstract_classes",
+                    "class": "classes",
+                }
+                cat_key = _CLASS_SUB_MAP.get(sub, "classes")
+                categories[cat_key].append(name)
+
+                # Count public methods for should_split_methods check
+                # (lightweight: just count, don't validate each with get_object)
+                _INIT_DUNDERS = {"__init__", "__new__", "__init_subclass__"}
+                method_count = 0
+                method_names_list: list[str] = []
+                try:
+                    for member_name, member in obj.members.items():
+                        if member_name.startswith("__") and member_name.endswith("__"):
+                            if member_name in _INIT_DUNDERS:
+                                continue
+                        elif member_name.startswith("_"):
+                            continue
+                        try:
+                            if member.kind.value in ("function", "method", "attribute"):
+                                method_count += 1
+                                method_names_list.append(member_name)
+                        except (
+                            griffe.CyclicAliasError,
+                            griffe.AliasResolutionError,
+                        ):
+                            pass
+                        except Exception:
+                            pass
+                except (griffe.CyclicAliasError, griffe.AliasResolutionError):
+                    pass
+
+                categories["class_methods"][name] = method_count
+                if method_names_list:
+                    categories["class_method_names"][name] = method_names_list
+
+            elif kind == "function":
+                sub = self._sub_classify_function(obj)
+                if sub == "async":
+                    categories["async_functions"].append(name)
+                else:
+                    categories["functions"].append(name)
+            elif kind in ("attribute", "type alias"):
+                sub = self._sub_classify_attribute(obj)
+                if sub == "type_alias":
+                    categories["type_aliases"].append(name)
+                elif sub == "typevar":
+                    categories["type_aliases"].append(name)
+                else:
+                    categories["constants"].append(name)
+                    self._extract_constant_metadata(obj, name, categories)
+            elif kind == "module":
+                # Expand module members into qualified names for module_members mapping
+                try:
+                    for member_name, member in obj.members.items():
+                        if member_name.startswith("_"):
+                            continue
+                        try:
+                            member_kind = member.kind.value
+                        except (
+                            griffe.CyclicAliasError,
+                            griffe.AliasResolutionError,
+                        ):
+                            continue
+                        except Exception:
+                            continue
+                        qualified = f"{name}.{member_name}"
+                        if member_kind == "class":
+                            sub = self._sub_classify_class(member)
+                            cat_key_mod = _CLASS_SUB_MAP.get(sub, "classes")
+                            categories[cat_key_mod].append(qualified)
+                        elif member_kind == "function":
+                            categories["functions"].append(qualified)
+                        elif member_kind in ("attribute", "type alias"):
+                            categories["constants"].append(qualified)
+                except (griffe.CyclicAliasError, griffe.AliasResolutionError):
+                    pass
+                except Exception:
+                    pass
+            else:
+                categories["other"].append(name)
+
+        # Classify explicitly-referenced methods (ClassName.method_name)
+        for class_name, methods in method_refs.items():
+            if class_name not in pkg.members:
+                continue
+            try:
+                class_obj = pkg.members[class_name]
+                if class_obj.kind.value != "class":
+                    continue
+            except Exception:
+                continue
+
+            for method_name in methods:
+                key = f"{class_name}.{method_name}"
+                if method_name not in class_obj.members:
+                    categories["class_member_types"][key] = "method"
+                    continue
+                try:
+                    member = class_obj.members[method_name]
+                    if member.kind.value in ("function", "method"):
+                        sub = self._sub_classify_function(member)
+                        if sub in ("classmethod", "staticmethod", "property"):
+                            categories["class_member_types"][key] = sub
+                        else:
+                            categories["class_member_types"][key] = "method"
+                    elif member.kind.value == "attribute":
+                        try:
+                            labels = member.labels
+                        except Exception:
+                            labels = set()
+                        if "property" in labels:
+                            categories["class_member_types"][key] = "property"
+                        else:
+                            categories["class_member_types"][key] = "attribute"
+                    else:
+                        categories["class_member_types"][key] = "method"
+                except (griffe.CyclicAliasError, griffe.AliasResolutionError):
+                    categories["class_member_types"][key] = "method"
+                except Exception:
+                    categories["class_member_types"][key] = "method"
+
+        # Build convenience unions
+        categories["all_classes"] = (
+            categories["classes"]
+            + categories["dataclasses"]
+            + categories["enums"]
+            + categories["exceptions"]
+            + categories["namedtuples"]
+            + categories["typeddicts"]
+            + categories["protocols"]
+            + categories["abstract_classes"]
+        )
+        categories["all_functions"] = categories["functions"] + categories["async_functions"]
+
+        return categories
+
     def _create_api_sections_from_config(self, package_name: str) -> list | None:
         """
         Create API reference sections from the `reference` config in great-docs.yml.
@@ -7843,14 +8064,8 @@ class GreatDocs:
 
         print("Using explicit reference configuration from great-docs.yml")
 
-        # Get all exports to validate references and get method info
-        exports = self._get_package_exports(package_name)
-        if not exports:
-            print("Warning: Could not discover package exports for validation")
-            exports = []
-
-        # Categorize exports to get class method info
-        categories = self._categorize_api_objects(package_name, exports)
+        # Use lightweight targeted categorization instead of full export enumeration
+        categories = self._categorize_referenced_objects(package_name, reference_config)
 
         # Build a mapping of module names → their expanded member names across
         # all categories.  When a user lists a bare module name (e.g. "parser")
