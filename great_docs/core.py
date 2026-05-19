@@ -7911,6 +7911,8 @@ class GreatDocs:
 
                 # Count public methods for should_split_methods check
                 # (lightweight: just count, don't validate each with get_object)
+                # Only count functions/methods and @property attributes and not
+                # plain attributes (e.g., dataclass fields) which aren't methods.
                 _INIT_DUNDERS = {"__init__", "__new__", "__init_subclass__"}
                 method_count = 0
                 method_names_list: list[str] = []
@@ -7922,9 +7924,18 @@ class GreatDocs:
                         elif member_name.startswith("_"):
                             continue
                         try:
-                            if member.kind.value in ("function", "method", "attribute"):
+                            member_kind = member.kind.value
+                            if member_kind in ("function", "method"):
                                 method_count += 1
                                 method_names_list.append(member_name)
+                            elif member_kind == "attribute":
+                                # Only count @property attributes, not plain fields
+                                try:
+                                    if "property" in member.labels:
+                                        method_count += 1
+                                        method_names_list.append(member_name)
+                                except Exception:
+                                    pass
                         except (
                             griffe.CyclicAliasError,
                             griffe.AliasResolutionError,
