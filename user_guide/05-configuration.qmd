@@ -368,6 +368,52 @@ pypi: "https://packages.example.com/simple/my-package"
 When `pypi` is `true` (the default), the link is auto-generated as
 `https://pypi.org/project/{package_name}/`.
 
+## Site URL
+
+Set `site_url` to the canonical URL where your documentation site is (or will be) hosted.
+This value is used in several places:
+
+- **Skills page** install instructions (e.g., `npx skills add <url>`)
+- **`.well-known/` discovery** endpoints for agent skills
+- **Quarto's `website.site-url`** (canonical links, sitemaps)
+- **Subdirectory deployments** where the site lives at a path other than `/`
+  (e.g., `https://internal.example.com/docs/mypackage/`)
+
+Without it, the Skills page renders literal `<site-url>` placeholders instead of working
+install commands, and subdirectory-hosted sites will have broken asset paths.
+
+```{.yaml filename="great-docs.yml"}
+# Site URL: the canonical address of the deployed documentation site.
+# Used for skills page install commands, .well-known/ discovery, and sitemaps.
+site_url: "https://your-org.github.io/your-package/"
+```
+
+Alternatively, you can set a `Documentation` entry in `pyproject.toml`:
+
+```{.toml filename="pyproject.toml"}
+[project.urls]
+Documentation = "https://your-org.github.io/your-package/"
+```
+
+Great Docs checks these sources in order:
+
+1. `site_url` in `great-docs.yml`
+2. `Documentation` URL in `[project.urls]` (pyproject.toml)
+3. `website.site-url` already present in `_quarto.yml`
+
+If none are found, the build emits a warning:
+
+```
+⚠ No site URL found — skills page will show <site-url> placeholders.
+  Set site_url in great-docs.yml or add a Documentation URL to
+  [project.urls] in pyproject.toml.
+```
+
+::: {.callout-tip}
+Set `site_url` even before your site is deployed. Once the site goes live at that address, all
+generated install commands will already be correct.
+:::
+
 ## Sidebar Filter
 
 The API reference sidebar includes a search filter for large APIs. Configure it:
@@ -858,8 +904,9 @@ exclude:
 repo: https://github.com/your-org/your-package  # Override auto-detect
 github_style: widget
 
-# Site URL (for subdirectory deployments)
-# site_url: "https://internal.example.com/docs/mypackage/"
+# Site URL — canonical address of the deployed documentation site.
+# Used for skills page install commands, .well-known/ discovery, and sitemaps.
+# site_url: "https://your-org.github.io/your-package/"
 
 # Source Links
 source:
