@@ -350,6 +350,24 @@ source:
   placement: usage     # Where to place the link: "usage" (default) or "title"
 ```
 
+## PyPI Link
+
+The homepage metadata sidebar includes a "View on PyPI" link, auto-detected from your package name
+in `pyproject.toml`. You can disable it or point it to a custom package index:
+
+```{.yaml filename="great-docs.yml"}
+# Disable the PyPI link entirely
+pypi: false
+```
+
+```{.yaml filename="great-docs.yml"}
+# Use a custom package index URL (e.g., a private registry)
+pypi: "https://packages.example.com/simple/my-package"
+```
+
+When `pypi` is `true` (the default), the link is auto-generated as
+`https://pypi.org/project/{package_name}/`.
+
 ## Sidebar Filter
 
 The API reference sidebar includes a search filter for large APIs. Configure it:
@@ -848,6 +866,9 @@ source:
   enabled: true
   branch: main
   placement: usage
+
+# PyPI Link
+pypi: true  # true (default), false to disable, or a custom URL string
 
 # Sidebar
 sidebar_filter:
