@@ -12826,6 +12826,41 @@ def test_build_metadata_margin_with_package_name():
         assert "#### Links" in result
 
 
+def test_build_metadata_margin_pypi_disabled():
+    """_build_metadata_margin omits PyPI link when pypi: false."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "testpkg"\n', encoding="utf-8")
+        config_file = Path(tmp_dir) / "great-docs.yml"
+        config_file.write_text("pypi: false\n", encoding="utf-8")
+        gd_dir = Path(tmp_dir) / "great-docs"
+        gd_dir.mkdir()
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._build_metadata_margin()
+
+        assert "pypi.org" not in result
+        assert "View on PyPI" not in result
+
+
+def test_build_metadata_margin_pypi_custom_url():
+    """_build_metadata_margin uses custom URL when pypi is a string."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "testpkg"\n', encoding="utf-8")
+        config_file = Path(tmp_dir) / "great-docs.yml"
+        config_file.write_text(
+            'pypi: "https://packages.example.com/simple/testpkg"\n',
+            encoding="utf-8",
+        )
+        gd_dir = Path(tmp_dir) / "great-docs"
+        gd_dir.mkdir()
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._build_metadata_margin()
+
+        assert "packages.example.com/simple/testpkg" in result
+        assert "pypi.org" not in result
+
+
 def test_build_metadata_margin_with_license():
     """_build_metadata_margin omits license when no LICENSE file exists."""
     with tempfile.TemporaryDirectory() as tmp_dir:
