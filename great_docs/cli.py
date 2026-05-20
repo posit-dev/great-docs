@@ -1269,6 +1269,8 @@ def setup_github_pages(
         project_root = Path(project_path) if project_path else Path.cwd()
 
         # Auto-detect Python version if not specified
+        # Great Docs requires Python 3.11+, so we enforce that as the floor
+        min_great_docs_version = (3, 11)
         if python_version is None:
             detected_version = _detect_python_version_from_pyproject(project_root)
             if detected_version:
