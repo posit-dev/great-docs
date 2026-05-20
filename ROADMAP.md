@@ -248,6 +248,21 @@ Tabbed content blocks for alternative instructions.
 - Keyboard accessible
 - Code blocks and prose supported inside tabs
 
+### LLM Chat View
+
+Render multi-turn LLM conversations with role-specific styling for AI workflow documentation.
+
+- Distinct visual treatment per role: user, assistant, system, thinking, tool use, tool result
+- User messages right-aligned with accent background; assistant messages left-aligned with bot icon
+- Assistant thinking blocks collapsed by default with "Show thinking" toggle
+- Tool use/result blocks with tool name badge, status indicator (success/error), and code styling
+- System messages as full-width muted banners
+- Full markdown rendering inside each message (code blocks, lists, links)
+- Optional timestamps, turn numbering, and compact mode
+- Streaming indicator animation for in-progress assistant messages
+- Copy button for the entire conversation as plain text
+- Dark mode aware, responsive, and keyboard accessible
+
 ### Enhanced Search
 
 Improve the built-in search with modern capabilities.
