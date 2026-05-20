@@ -1638,7 +1638,7 @@ def create_default_config() -> str:
         YAML content for a default configuration file.
     """
     return """# Great Docs Configuration
-# See https://posit-dev.github.io/great-docs/user-guide/03-configuration.html
+# See https://posit-dev.github.io/great-docs/user-guide/configuration.html
 
 # Display Name
 # ------------

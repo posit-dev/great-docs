@@ -8668,7 +8668,7 @@ class GreatDocs:
         cli_yaml = self._format_cli_yaml()
 
         return f"""# Great Docs Configuration
-# See https://posit-dev.github.io/great-docs/user-guide/03-configuration.html
+# See https://posit-dev.github.io/great-docs/user-guide/configuration.html
 
 # Module Name (optional)
 # ----------------------
@@ -8778,7 +8778,7 @@ jupyter: python3
 
         lines = [
             "# Great Docs Configuration",
-            "# See https://posit-dev.github.io/great-docs/user-guide/03-configuration.html",
+            "# See https://posit-dev.github.io/great-docs/user-guide/configuration.html",
             "",
             "# Module Name (optional)",
             "# ----------------------",
