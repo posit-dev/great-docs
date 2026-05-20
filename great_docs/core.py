@@ -8707,6 +8707,13 @@ dynamic: {dynamic_str}
 # To show the text title alongside the logo, add: show_title: true
 {authors_section}
 {funding_yaml}
+# Site URL
+# --------
+# Canonical address of the deployed documentation site.
+# Required for subdirectory deployments, skills page install commands,
+# .well-known/ discovery, and sitemaps.
+# site_url: "https://your-org.github.io/your-package/"
+
 {site_yaml}
 # Jupyter Kernel
 # --------------
@@ -8924,9 +8931,16 @@ jupyter: python3
                 lines.append(f"      - {name}")
             has_prev_section = True
 
-        # Add trailing sections for site settings (default templates)
+        # Add trailing sections for site URL and site settings (default templates)
         lines.extend(
             [
+                "",
+                "# Site URL",
+                "# --------",
+                "# Canonical address of the deployed documentation site.",
+                "# Required for subdirectory deployments, skills page install commands,",
+                "# .well-known/ discovery, and sitemaps.",
+                '# site_url: "https://your-org.github.io/your-package/"',
                 "",
             ]
         )

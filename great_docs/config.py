@@ -28,8 +28,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "pypi": True,
     # GitHub integration
     "repo": None,  # GitHub repository URL override (e.g., "https://github.com/owner/repo")
-    # Site URL for subdirectory deployments (sets website.site-url in _quarto.yml)
-    # e.g., "http://myserver:3838/data-team/mypackage/"
+    # Site URL: the canonical address of the deployed documentation site.
+    # Used for skills page install commands, .well-known/ discovery, sitemaps,
+    # and subdirectory deployments. Also sets website.site-url in _quarto.yml.
     "site_url": None,
     "github_style": "widget",  # "widget" (shows stars) or "icon"
     # Source link configuration
