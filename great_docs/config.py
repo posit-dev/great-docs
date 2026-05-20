@@ -21,6 +21,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "exclude": [],
     "auto_include": [],  # Names to force-include even if they match AUTO_EXCLUDE
     "no_auto_exclude": False,  # Bypass the built-in AUTO_EXCLUDE list entirely
+    # PyPI link
+    # True (default): auto-detect package name and link to pypi.org
+    # False: disable the PyPI link entirely
+    # str: custom package index URL (e.g., "https://artifactory.example.com/packages/my-pkg")
+    "pypi": True,
     # GitHub integration
     "repo": None,  # GitHub repository URL override (e.g., "https://github.com/owner/repo")
     # Site URL for subdirectory deployments (sets website.site-url in _quarto.yml)
@@ -501,6 +506,19 @@ class Config:
     def no_auto_exclude(self) -> bool:
         """Check if the built-in AUTO_EXCLUDE list should be bypassed."""
         return self.get("no_auto_exclude", False)
+
+    @property
+    def pypi(self) -> bool | str:
+        """Get the PyPI link configuration.
+
+        Returns
+        -------
+        bool | str
+            - True: auto-detect package name and link to pypi.org (default)
+            - False: disable the PyPI link entirely
+            - str: custom package index URL
+        """
+        return self.get("pypi", True)
 
     @property
     def repo(self) -> str | None:

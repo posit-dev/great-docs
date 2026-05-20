@@ -9452,10 +9452,15 @@ jupyter: python3
         # ── 1. Links ─────────────────────────────────────────────────────
         links_items: list[str] = []
 
-        package_name = self._detect_package_name()
-        if package_name:
-            pypi_url = f"https://pypi.org/project/{package_name}/"
-            links_items.append(f"[{get_translation('view_on_pypi', lang)}]({pypi_url})<br>")
+        pypi_setting = self._config.pypi
+        if pypi_setting is not False:
+            if isinstance(pypi_setting, str):
+                pypi_url = pypi_setting
+            else:
+                package_name = self._detect_package_name()
+                pypi_url = f"https://pypi.org/project/{package_name}/" if package_name else None
+            if pypi_url:
+                links_items.append(f"[{get_translation('view_on_pypi', lang)}]({pypi_url})<br>")
 
         if metadata.get("urls"):
             urls = metadata["urls"]
