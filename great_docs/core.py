@@ -14337,6 +14337,21 @@ body-classes: "gd-homepage"
                 with _quiet_prints():
                     self._generate_skill_md()
                 log.step_done("Created skill.md")
+                # Warn if no site URL is available for the skills page install instructions
+                _meta_urls = self._get_package_metadata().get("urls", {})
+                _has_site_url = bool(self._config.site_url or _meta_urls.get("Documentation", ""))
+                if not _has_site_url:
+                    _qy = self.project_path / "_quarto.yml"
+                    if _qy.exists():
+                        with open(_qy, "r") as _f:
+                            _qc = read_yaml(_f) or {}
+                        _has_site_url = bool(_qc.get("website", {}).get("site-url", ""))
+                if not _has_site_url:
+                    log.warn(
+                        "No site URL found — skills page will show <site-url> placeholders. "
+                        "Set site_url in great-docs.yml or add a Documentation URL to "
+                        "[project.urls] in pyproject.toml."
+                    )
             else:
                 log.step_skip(step, "disabled in config")
 
