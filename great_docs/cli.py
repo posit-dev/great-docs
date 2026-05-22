@@ -3249,6 +3249,28 @@ def termshow():
     pass
 
 
+@click.command("record")
+@click.argument("output", type=click.Path())
+@click.option("--cols", type=int, default=None, help="Terminal width in columns")
+@click.option("--rows", type=int, default=None, help="Terminal height in rows")
+@click.option("--shell", type=str, default=None, help="Shell to spawn (default: $SHELL)")
+@click.option("--capture-input", is_flag=True, help="Also capture keyboard input events")
+def term_record(
+    output: str, cols: int | None, rows: int | None, shell: str | None, capture_input: bool
+) -> None:
+    """Record a terminal session to a .termshow file.
+
+    Spawns an interactive shell and captures all output with timing.
+    Press Ctrl+D or type 'exit' to stop recording.
+    """
+    from ._term_player.recorder import record_session
+
+    if not output.endswith(".termshow"):
+        output += ".termshow"
+
+    record_session(output, shell=shell, cols=cols, rows=rows, capture_input=capture_input)
+
+
 def main() -> None:
     """Main CLI entry point for great-docs."""
     cli()
