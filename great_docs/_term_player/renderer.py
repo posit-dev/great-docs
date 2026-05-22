@@ -264,3 +264,49 @@ def _collect_text_spans(row: list[Cell], theme: Theme) -> list[tuple[int, str, s
     return spans
 
 
+def _resolve_fg(cell: Cell, theme: Theme) -> str:
+    """Resolve the effective foreground color for a cell."""
+    style = cell.style
+
+    if style.inverse:
+        # Inverse swaps fg/bg
+        if style.bg is not None:
+            return _index_to_color(style.bg, theme)
+        return theme.bg
+
+    if style.fg is not None:
+        color = _index_to_color(style.fg, theme)
+        # Bold + standard color → bright variant
+        if style.bold and style.fg.isdigit():
+            idx = int(style.fg)
+            if idx < 8:
+                return _index_to_color(str(idx + 8), theme)
+        return color
+
+    return theme.fg
+
+
+def _resolve_bg(cell: Cell, theme: Theme) -> str | None:
+    """Resolve the effective background color for a cell.
+
+    Returns None if the background is the same as the terminal default.
+    """
+    style = cell.style
+
+    if style.inverse:
+        if style.fg is not None:
+            color = _index_to_color(style.fg, theme)
+            if color != theme.bg:
+                return color
+        elif theme.fg != theme.bg:
+            return theme.fg
+        return None
+
+    if style.bg is not None:
+        color = _index_to_color(style.bg, theme)
+        if color != theme.bg:
+            return color
+
+    return None
+
+
