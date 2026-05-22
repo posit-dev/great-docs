@@ -254,3 +254,18 @@ class TerminalEmulator:
             del self._screen[self._scroll_bottom]
             self._screen.insert(self._scroll_top, self._blank_row())
 
+    def _handle_esc_simple(self, ch: str) -> None:
+        """Handle simple (non-CSI) escape sequences."""
+        if ch == "7":
+            self._saved_cursor = (self._cursor_row, self._cursor_col)
+        elif ch == "8":
+            if self._saved_cursor:
+                self._cursor_row, self._cursor_col = self._saved_cursor
+        elif ch == "M":  # Reverse index
+            if self._cursor_row <= self._scroll_top:
+                self._scroll_down(1)
+            else:
+                self._cursor_row -= 1
+        elif ch == "D":  # Index (linefeed)
+            self._linefeed()
+
