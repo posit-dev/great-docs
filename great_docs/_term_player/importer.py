@@ -31,3 +31,29 @@ def import_asciicast(source: str | Path, output: str | Path) -> Recording:
     return recording
 
 
+def import_tape(source: str | Path, output: str | Path) -> Recording:
+    """Import a VHS .tape file and convert to .termshow.
+
+    Parses the VHS tape DSL and generates synthetic terminal events.
+    This produces a scripted recording rather than a real capture.
+
+    Parameters
+    ----------
+    source
+        Path to .tape file.
+    output
+        Path to write .termshow file.
+
+    Returns
+    -------
+    Recording
+        The generated recording.
+    """
+    path = Path(source)
+    text = path.read_text(encoding="utf-8")
+
+    recording = _parse_tape(text)
+    _write_termshow(recording, output)
+    return recording
+
+
