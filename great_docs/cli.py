@@ -3339,6 +3339,21 @@ def term_import_cast(source: str, output: str) -> None:
     click.echo(f"  Duration: {recording.duration:.1f}s | Events: {len(recording.events)}")
 
 
+@click.command("import-tape")
+@click.argument("source", type=click.Path(exists=True))
+@click.argument("output", type=click.Path())
+def term_import_tape(source: str, output: str) -> None:
+    """Import a VHS .tape file to .termshow format."""
+    from ._term_player.importer import import_tape
+
+    if not output.endswith(".termshow"):
+        output += ".termshow"
+
+    recording = import_tape(source, output)
+    click.echo(f"✓ Imported {source} → {output}")
+    click.echo(f"  Duration: {recording.duration:.1f}s | Events: {len(recording.events)}")
+
+
 def main() -> None:
     """Main CLI entry point for great-docs."""
     cli()
