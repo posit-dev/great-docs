@@ -220,3 +220,47 @@ def _collect_bg_spans(row: list[Cell], theme: Theme) -> list[tuple[int, int, str
     return spans
 
 
+def _collect_text_spans(row: list[Cell], theme: Theme) -> list[tuple[int, str, str, str]]:
+    """Collect contiguous text spans with the same style.
+
+    Returns list of (start_col, text, fg_color, css_classes).
+    Skips trailing spaces for efficiency.
+    """
+    spans: list[tuple[int, str, str, str]] = []
+
+    # Find the last non-space character
+    last_nonspace = -1
+    for i in range(len(row) - 1, -1, -1):
+        if row[i].char != " " or row[i].style.bg is not None:
+            last_nonspace = i
+            break
+
+    if last_nonspace < 0:
+        return spans
+
+    current_fg: str | None = None
+    current_classes = ""
+    start = 0
+    text_parts: list[str] = []
+
+    for col in range(last_nonspace + 1):
+        cell = row[col]
+        fg = _resolve_fg(cell, theme)
+        classes = _style_classes(cell.style)
+
+        if fg == current_fg and classes == current_classes:
+            text_parts.append(cell.char)
+        else:
+            if text_parts:
+                spans.append((start, "".join(text_parts), current_fg or theme.fg, current_classes))
+            current_fg = fg
+            current_classes = classes
+            start = col
+            text_parts = [cell.char]
+
+    if text_parts:
+        spans.append((start, "".join(text_parts), current_fg or theme.fg, current_classes))
+
+    return spans
+
+
