@@ -192,3 +192,31 @@ def _render_chrome(style: str, width: float, theme: Theme) -> str:
     return "\n".join(parts)
 
 
+def _collect_bg_spans(row: list[Cell], theme: Theme) -> list[tuple[int, int, str]]:
+    """Collect contiguous background color spans from a row.
+
+    Returns list of (start_col, length, bg_color).
+    Only returns spans where bg differs from the terminal background.
+    """
+    spans: list[tuple[int, int, str]] = []
+    current_bg: str | None = None
+    start = 0
+    length = 0
+
+    for col, cell in enumerate(row):
+        bg = _resolve_bg(cell, theme)
+        if bg == current_bg:
+            length += 1
+        else:
+            if current_bg is not None:
+                spans.append((start, length, current_bg))
+            current_bg = bg
+            start = col
+            length = 1
+
+    if current_bg is not None:
+        spans.append((start, length, current_bg))
+
+    return spans
+
+
