@@ -3271,6 +3271,59 @@ def term_record(
     record_session(output, shell=shell, cols=cols, rows=rows, capture_input=capture_input)
 
 
+@click.command("render")
+@click.argument("source", type=click.Path(exists=True))
+@click.option(
+    "--output-dir", "-o", type=click.Path(), default=None, help="Output directory for frames"
+)
+@click.option("--interval", type=float, default=2.0, help="Keyframe interval in seconds")
+@click.option(
+    "--script", type=click.Path(exists=True), default=None, help="Path to .termshow.yml script"
+)
+def term_render(source: str, output_dir: str | None, interval: float, script: str | None) -> None:
+    """Render a .termshow recording into SVG frames.
+
+    Processes the recording through the virtual terminal emulator and
+    produces SVG keyframes + a manifest.json for the player.
+    """
+    from ._term_player import apply_script, generate_manifest, parse_asciicast, parse_termshow
+    from ._term_player.script import load_script
+
+    source_path = Path(source)
+
+    # Parse recording
+    if source_path.suffix == ".cast":
+        recording = parse_asciicast(source_path)
+    else:
+        recording = parse_termshow(source_path)
+
+    # Load and apply script
+    script_obj = None
+    if script:
+        script_obj = load_script(script)
+    else:
+        # Auto-detect script file
+        script_path = source_path.with_suffix(".termshow.yml")
+        if script_path.exists():
+            script_obj = load_script(script_path)
+
+    if script_obj:
+        recording = apply_script(recording, script_obj)
+
+    # Determine output directory
+    if output_dir is None:
+        output_dir = str(source_path.parent / "termshow" / source_path.stem)
+
+    # Generate manifest and frames
+    manifest = generate_manifest(
+        recording, script_obj, output_dir=output_dir, keyframe_interval=interval
+    )
+
+    n_frames = len(manifest.keyframes)
+    click.echo(f"✓ Rendered {n_frames} keyframes to {output_dir}/")
+    click.echo(f"  Duration: {manifest.duration:.1f}s | Chapters: {len(manifest.chapters)}")
+
+
 def main() -> None:
     """Main CLI entry point for great-docs."""
     cli()
