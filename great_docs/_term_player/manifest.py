@@ -20,3 +20,15 @@ class KeyframeEntry:
     file: str
 
 
+@dataclass
+class DeltaChange:
+    """A single cell change in a delta frame."""
+
+    row: int
+    col: int
+    char: str
+    fg: str | None = None
+    bg: str | None = None
+    bold: bool = False
+
+
