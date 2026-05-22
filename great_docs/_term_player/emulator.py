@@ -542,3 +542,32 @@ class TerminalEmulator:
             # Erase entire line
             self._screen[row] = self._blank_row()
 
+    def resize(self, cols: int, rows: int) -> None:
+        """Resize the terminal."""
+        old_rows = self.rows
+        old_cols = self.cols
+        self.cols = cols
+        self.rows = rows
+        self._scroll_bottom = rows - 1
+
+        # Extend or trim rows
+        if rows > old_rows:
+            for _ in range(rows - old_rows):
+                self._screen.append(self._blank_row())
+        elif rows < old_rows:
+            self._screen = self._screen[:rows]
+
+        # Extend or trim columns
+        if cols != old_cols:
+            for r in range(len(self._screen)):
+                row = self._screen[r]
+                if cols > old_cols:
+                    row.extend(Cell() for _ in range(cols - old_cols))
+                else:
+                    self._screen[r] = row[:cols]
+
+        # Clamp cursor
+        self._cursor_row = min(self._cursor_row, rows - 1)
+        self._cursor_col = min(self._cursor_col, cols - 1)
+
+
