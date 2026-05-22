@@ -3360,6 +3360,30 @@ termshow.add_command(term_import_cast)
 termshow.add_command(term_import_tape)
 
 
+@click.command("edit")
+@click.argument("source", type=click.Path(exists=True))
+@click.option("--port", type=int, default=8765, help="Local server port")
+@click.option("--no-browser", is_flag=True, help="Don't auto-open browser")
+def term_edit(source: str, port: int, no_browser: bool) -> None:
+    """Open the Termshow Editor for a .termshow recording.
+
+    Launches a browser-based timeline editor for adding chapters,
+    annotations, and cuts. Changes are saved back to the .termshow.yml
+    script file.
+
+    Examples:
+      great-docs termshow edit demos/my-demo.termshow
+      great-docs termshow edit demos/install.termshow --port 9000
+    """
+    from ._term_player.editor import serve_editor
+
+    serve_editor(source, port=port, no_browser=no_browser)
+
+
+termshow.add_command(term_edit)
+cli.add_command(termshow)
+
+
 def main() -> None:
     """Main CLI entry point for great-docs."""
     cli()
