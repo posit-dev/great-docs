@@ -248,3 +248,50 @@ _RECORDER_MSG_PATTERNS = (
 )
 
 
+def _strip_recorder_messages(events: list[str]) -> list[str]:
+    """Remove recorder diagnostic output events and re-adjust intervals.
+
+    Scans through the event list (header + JSON event lines) and removes
+    any output event whose text matches known recorder message patterns.
+    The interval time of removed events is merged into the next event so
+    total timing is preserved.
+    """
+    import re
+
+    _ansi_re = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+    if not events:
+        return events
+
+    result: list[str] = [events[0]]  # Always keep the header
+    carry_interval = 0.0
+
+    for line in events[1:]:
+        try:
+            arr = json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            result.append(line)
+            continue
+
+        if not isinstance(arr, list) or len(arr) < 3:
+            result.append(line)
+            continue
+
+        interval, code, data = arr[0], arr[1], arr[2]
+
+        if code == "o" and _is_recorder_message(data, _ansi_re):
+            # Absorb this event's interval into the next event
+            carry_interval += float(interval)
+            continue
+
+        # Merge any carried time from stripped events
+        if carry_interval > 0:
+            interval = round(float(interval) + carry_interval, 3)
+            carry_interval = 0.0
+            result.append(json.dumps([interval, code, data]))
+        else:
+            result.append(line)
+
+    return result
+
+
