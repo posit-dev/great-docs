@@ -127,3 +127,42 @@ def parse_asciicast(source: str | Path) -> Recording:
     return parse_asciicast_str(text)
 
 
+def parse_asciicast_str(text: str) -> Recording:
+    """Parse asciicast-format text into a Recording."""
+    lines = [
+        line
+        for line in text.strip().splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+
+    if not lines:
+        return Recording()
+
+    header = json.loads(lines[0])
+    version = header.get("version", 2)
+
+    rec = _header_to_recording(header)
+    rec.format = "asciicast"
+
+    # Parse events
+    abs_time = 0.0
+    for line in lines[1:]:
+        arr = json.loads(line)
+        if not isinstance(arr, list) or len(arr) < 3:
+            continue
+
+        if version >= 3:
+            # v3: relative intervals
+            interval = float(arr[0])
+            abs_time += interval
+        else:
+            # v2: absolute timestamps
+            abs_time = float(arr[0])
+
+        code = str(arr[1])
+        data = str(arr[2])
+        rec.events.append(Event(time=abs_time, code=code, data=data))
+
+    return rec
+
+
