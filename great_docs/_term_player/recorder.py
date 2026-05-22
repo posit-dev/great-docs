@@ -295,3 +295,13 @@ def _strip_recorder_messages(events: list[str]) -> list[str]:
     return result
 
 
+def _is_recorder_message(data: str, ansi_re) -> bool:
+    """Check whether an event's data matches a known recorder message."""
+    # Strip ANSI escape codes for matching
+    plain = ansi_re.sub("", data).strip()
+    if not plain:
+        return False
+    for pattern in _RECORDER_MSG_PATTERNS:
+        if pattern in plain:
+            return True
+    return False
