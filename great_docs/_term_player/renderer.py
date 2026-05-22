@@ -330,3 +330,17 @@ def _index_to_color(color_ref: str, theme: Theme) -> str:
     return theme.fg
 
 
+def _style_classes(style) -> str:
+    """Build CSS class string for a cell style."""
+    parts: list[str] = []
+    if style.bold:
+        parts.append("gd-tp-bold")
+    if style.italic:
+        parts.append("gd-tp-italic")
+    if style.underline:
+        parts.append("gd-tp-underline")
+    if style.strikethrough:
+        parts.append("gd-tp-strikethrough")
+    if style.dim:
+        parts.append("gd-tp-dim")
+    return " ".join(parts)
