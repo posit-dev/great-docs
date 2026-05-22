@@ -242,3 +242,15 @@ class TerminalEmulator:
         else:
             self._cursor_row += 1
 
+    def _scroll_up(self, n: int) -> None:
+        """Scroll the scroll region up by n lines."""
+        for _ in range(n):
+            del self._screen[self._scroll_top]
+            self._screen.insert(self._scroll_bottom, self._blank_row())
+
+    def _scroll_down(self, n: int) -> None:
+        """Scroll the scroll region down by n lines."""
+        for _ in range(n):
+            del self._screen[self._scroll_bottom]
+            self._screen.insert(self._scroll_top, self._blank_row())
+
