@@ -290,3 +290,15 @@ def _apply_cuts(events: list[Event], cuts: list[Cut]) -> list[Event]:
     return result
 
 
+def _apply_speed_map(events: list[Event], speed_map: list[SpeedSegment]) -> list[Event]:
+    """Apply segment-specific speed adjustments."""
+    sorted_segs = sorted(speed_map, key=lambda s: s.start)
+
+    result: list[Event] = []
+    for event in events:
+        new_time = _remap_time(event.time, sorted_segs)
+        result.append(Event(time=new_time, code=event.code, data=event.data))
+
+    return result
+
+
