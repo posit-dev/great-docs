@@ -35,3 +35,13 @@ class Theme:
     )
 
 
+@dataclass
+class TermInfo:
+    """Terminal dimensions and type information."""
+
+    cols: int = 80
+    rows: int = 24
+    type: str = "xterm-256color"
+    theme: Theme = field(default_factory=Theme)
+
+
