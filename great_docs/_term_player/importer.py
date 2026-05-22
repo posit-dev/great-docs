@@ -164,3 +164,17 @@ def _parse_tape(text: str) -> Recording:
     return recording
 
 
+def _parse_duration(s: str) -> float:
+    """Parse a VHS duration string (e.g., '500ms', '1s', '2.5')."""
+    s = s.strip()
+    if s.endswith("ms"):
+        return float(s[:-2]) / 1000.0
+    elif s.endswith("s"):
+        return float(s[:-1])
+    else:
+        try:
+            return float(s)
+        except ValueError:
+            return 0.1
+
+
