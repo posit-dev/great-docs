@@ -199,3 +199,16 @@ def _header_to_recording(header: dict) -> Recording:
     return rec
 
 
+def _parse_theme(data: dict) -> Theme:
+    """Parse a theme object from header data."""
+    theme = Theme()
+    theme.fg = data.get("fg", theme.fg)
+    theme.bg = data.get("bg", theme.bg)
+
+    palette_raw = data.get("palette", "")
+    if isinstance(palette_raw, str) and palette_raw:
+        theme.palette = palette_raw.split(":")
+    elif isinstance(palette_raw, list):
+        theme.palette = palette_raw
+
+    return theme
