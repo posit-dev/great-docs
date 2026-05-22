@@ -527,3 +527,18 @@ class TerminalEmulator:
             # Erase all
             self._screen = self._blank_screen()
 
+    def _erase_line(self, mode: int) -> None:
+        """Erase in line."""
+        row = self._cursor_row
+        if mode == 0:
+            # Erase to right
+            for c in range(self._cursor_col, self.cols):
+                self._screen[row][c] = Cell()
+        elif mode == 1:
+            # Erase to left
+            for c in range(self._cursor_col + 1):
+                self._screen[row][c] = Cell()
+        elif mode == 2:
+            # Erase entire line
+            self._screen[row] = self._blank_row()
+
