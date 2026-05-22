@@ -40,3 +40,19 @@ class DeltaEntry:
     changes: list[DeltaChange] = field(default_factory=list)
 
 
+@dataclass
+class Manifest:
+    """The complete manifest describing a rendered termshow recording."""
+
+    version: int = 1
+    title: str = ""
+    duration: float = 0.0
+    cols: int = 80
+    rows: int = 24
+    theme: str = "default"
+    chapters: list[Chapter] = field(default_factory=list)
+    keyframes: list[KeyframeEntry] = field(default_factory=list)
+    deltas: list[DeltaEntry] = field(default_factory=list)
+    annotations: list[Annotation] = field(default_factory=list)
+    highlights: list[Highlight] = field(default_factory=list)
+
