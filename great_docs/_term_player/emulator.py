@@ -509,3 +509,21 @@ class TerminalEmulator:
             v = 8 + (idx - 232) * 10
             return f"#{v:02x}{v:02x}{v:02x}"
 
+    def _erase_display(self, mode: int) -> None:
+        """Erase in display."""
+        if mode == 0:
+            # Erase below (including current position)
+            for c in range(self._cursor_col, self.cols):
+                self._screen[self._cursor_row][c] = Cell()
+            for r in range(self._cursor_row + 1, self.rows):
+                self._screen[r] = self._blank_row()
+        elif mode == 1:
+            # Erase above (including current position)
+            for r in range(self._cursor_row):
+                self._screen[r] = self._blank_row()
+            for c in range(self._cursor_col + 1):
+                self._screen[self._cursor_row][c] = Cell()
+        elif mode == 2 or mode == 3:
+            # Erase all
+            self._screen = self._blank_screen()
+
