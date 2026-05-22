@@ -242,3 +242,23 @@ def apply_script(recording: Recording, script: Script) -> Recording:
     return new_rec
 
 
+def _apply_idle_limit(events: list[Event], limit: float) -> list[Event]:
+    """Compress idle periods longer than limit."""
+    if not events:
+        return events
+
+    result: list[Event] = []
+    prev_time = 0.0
+    time_offset = 0.0  # Accumulated time removed
+
+    for event in events:
+        gap = event.time - prev_time
+        if gap > limit:
+            time_offset += gap - limit
+        new_time = event.time - time_offset
+        result.append(Event(time=new_time, code=event.code, data=event.data))
+        prev_time = event.time
+
+    return result
+
+
