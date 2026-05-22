@@ -382,6 +382,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_mock_code",  # 190
     # 191: Collapsible details shortcode showcase
     "gdtest_details_shortcode",  # 191
+    # 192: Termshow recording/playback showcase
+    "gdtest_termshow",  # 192
 ]
 
 
@@ -2139,6 +2141,14 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "behavior, multiple independent groups), nesting (2–3 levels, mixed "
         "types), rich content (code blocks, lists, tables, blockquotes), and "
         "combinations (typed accordion, icon+type+open, nested accordion)."
+    ),
+    # ── 192: Termshow recording/playback showcase ────────────────────
+    "gdtest_termshow": (
+        "Terminal player showcase demonstrating the termshow shortcode for "
+        "embedding interactive SVG-based terminal recordings in documentation. "
+        "Features CLI command demos (install, init, build), TUI interface "
+        "recordings with box-drawing and ANSI colors, chapter navigation, "
+        "floating annotations, and recording tips user guide."
     ),
 }
 
