@@ -116,3 +116,14 @@ def parse_termshow_str(text: str) -> Recording:
     return rec
 
 
+def parse_asciicast(source: str | Path) -> Recording:
+    """Parse an asciicast v2 or v3 file into a Recording.
+
+    Asciicast v2 uses absolute timestamps; v3 uses relative intervals.
+    Both are newline-delimited JSON with a header on line 1.
+    """
+    path = Path(source)
+    text = path.read_text(encoding="utf-8")
+    return parse_asciicast_str(text)
+
+
