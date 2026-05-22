@@ -14707,6 +14707,9 @@ body-classes: "gd-homepage"
             # Get environment with QUARTO_PYTHON set
             quarto_env = self._get_quarto_env()
 
+            # ── Pre-render termshow recordings ──────────────────────
+            self._prerender_term_player(log)
+
             # ── Step 16: Build site with Quarto ────────────────────────
             step += 1
             log.step_start(step, "Build site with Quarto")
