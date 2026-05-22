@@ -571,3 +571,17 @@ class TerminalEmulator:
         self._cursor_col = min(self._cursor_col, cols - 1)
 
 
+def _parse_params(params_str: str) -> list[int]:
+    """Parse CSI parameter string into list of integers."""
+    # Remove '?' prefix for private sequences
+    cleaned = params_str.lstrip("?")
+    if not cleaned:
+        return []
+    parts = cleaned.split(";")
+    result = []
+    for p in parts:
+        try:
+            result.append(int(p))
+        except ValueError:
+            result.append(0)
+    return result
