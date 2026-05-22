@@ -472,3 +472,22 @@ class TerminalEmulator:
 
             i += 1
 
+    def _parse_extended_color(self, params: list[int]) -> tuple[str | None, int]:
+        """Parse 256-color or truecolor sequences.
+
+        Returns (color_string, number_of_params_consumed).
+        """
+        if not params:
+            return None, 0
+
+        if params[0] == 5 and len(params) >= 2:
+            # 256-color: index
+            idx = params[1]
+            return self._color_256_to_hex(idx), 2
+        elif params[0] == 2 and len(params) >= 4:
+            # Truecolor: r, g, b
+            r, g, b = params[1], params[2], params[3]
+            return f"#{r:02x}{g:02x}{b:02x}", 4
+
+        return None, 0
+
