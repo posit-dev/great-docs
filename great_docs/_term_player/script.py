@@ -48,3 +48,16 @@ class SpeedSegment:
     speed: float = 1.0
 
 
+@dataclass
+class Highlight:
+    """A highlighted region of the terminal."""
+
+    time: float
+    duration: float
+    row: int
+    col: int
+    width: int
+    height: int
+    style: str = "box"  # "box", "underline", "glow"
+
+
