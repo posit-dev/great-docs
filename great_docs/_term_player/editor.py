@@ -231,3 +231,8 @@ def serve_editor(
         server.shutdown()
 
 
+def _get_editor_html() -> str:
+    """Return the full editor HTML page."""
+    return _EDITOR_HTML
+
+
