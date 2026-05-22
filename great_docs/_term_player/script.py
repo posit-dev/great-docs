@@ -262,3 +262,31 @@ def _apply_idle_limit(events: list[Event], limit: float) -> list[Event]:
     return result
 
 
+def _apply_cuts(events: list[Event], cuts: list[Cut]) -> list[Event]:
+    """Remove events within cut ranges and adjust timing."""
+    # Sort cuts by start time
+    sorted_cuts = sorted(cuts, key=lambda c: c.start)
+
+    result: list[Event] = []
+    time_offset = 0.0
+
+    for event in events:
+        in_cut = False
+        for cut in sorted_cuts:
+            if cut.start <= event.time <= cut.end:
+                in_cut = True
+                break
+
+        if not in_cut:
+            # Compute how much time has been cut before this event
+            offset = sum(
+                min(cut.end, event.time) - cut.start
+                for cut in sorted_cuts
+                if cut.start < event.time
+            )
+            new_time = event.time - offset
+            result.append(Event(time=max(0.0, new_time), code=event.code, data=event.data))
+
+    return result
+
+
