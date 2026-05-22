@@ -74,3 +74,17 @@ class Recording:
         return self.events[-1].time
 
 
+def parse_termshow(source: str | Path) -> Recording:
+    """Parse a .termshow file into a Recording.
+
+    The format is newline-delimited JSON:
+    - Line 1: header object
+    - Lines 2+: event arrays [interval, code, data]
+
+    Intervals are relative (seconds since previous event).
+    """
+    path = Path(source)
+    text = path.read_text(encoding="utf-8")
+    return parse_termshow_str(text)
+
+
