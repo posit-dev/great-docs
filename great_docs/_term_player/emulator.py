@@ -106,3 +106,27 @@ _OSC_RE = re.compile(r"\x1b\].*?(?:\x1b\\|\x07)")
 _ESC_SIMPLE_RE = re.compile(r"\x1b[()][0-9A-B]|\x1b[=>DMEH78]")
 
 
+class TerminalEmulator:
+    """A minimal VT100/xterm terminal emulator.
+
+    Processes output bytes and maintains a character grid with styles.
+    Designed for offline rendering of recordings, not interactive use.
+    """
+
+    def __init__(self, cols: int = 80, rows: int = 24) -> None:
+        self.cols = cols
+        self.rows = rows
+        self._cursor_row = 0
+        self._cursor_col = 0
+        self._cursor_visible = True
+        self._style = CellStyle()
+        self._saved_cursor: tuple[int, int] | None = None
+        self._scroll_top = 0
+        self._scroll_bottom = rows - 1
+
+        # Main screen buffer
+        self._screen = self._blank_screen()
+        # Alternate screen buffer (for TUIs)
+        self._alt_screen: list[list[Cell]] | None = None
+        self._using_alt = False
+
