@@ -202,6 +202,7 @@ def serve_editor(
 
     editor_data = _build_editor_data(recording, script)
     editor_data["source_file"] = source_path.name
+    editor_data["source_bytes"] = source_path.stat().st_size
 
     # Create handler class with bound data
     class BoundHandler(EditorHandler):
@@ -1142,6 +1143,62 @@ body {
   font-size: 10px;
   font-family: inherit;
 }
+
+.inspector-panel {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 20;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 11px;
+  min-width: 180px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.inspector-panel.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+}
+
+.inspector-panel .inspector-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.inspector-panel .stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+
+.inspector-panel .stat-label {
+  color: var(--text-dim);
+}
+
+.inspector-panel .stat-value {
+  color: var(--text);
+  font-weight: 500;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+}
+
+.inspector-panel .stat-divider {
+  border-top: 1px solid var(--border);
+  margin: 5px 0;
+}
+
+.btn-inspector-toggle {
+  font-size: 11px;
+  padding: 5px 10px;
+}
 </style>
 </head>
 <body>
@@ -1155,13 +1212,15 @@ body {
     <button class="btn" id="btn-add-chapter" title="Add chapter at playhead (C)">+ Chapter</button>
     <button class="btn" id="btn-add-annotation" title="Add annotation at playhead (A)">+ Annotation</button>
     <button class="btn" id="btn-add-cut" title="Mark cut region (X)">+ Cut</button>
-    <button class="btn" id="btn-view-yaml" title="View YAML (Y)" style="margin-left: 8px;">YAML</button>
+    <button class="btn btn-inspector-toggle" id="btn-inspector" title="Toggle inspector (I)" style="margin-left: 8px;">Info</button>
+    <button class="btn" id="btn-view-yaml" title="View YAML (Y)">YAML</button>
     <button class="btn btn-primary" id="btn-save" title="Save (Cmd+S)">Save</button>
   </div>
 </div>
 
 <div class="editor-main">
   <div class="preview-area">
+    <div class="inspector-panel hidden" id="inspector-panel"></div>
     <div class="preview-wrapper">
       <div id="chapter-title-overlay" class="chapter-title-overlay"></div>
       <div class="preview-viewport">
@@ -1208,6 +1267,7 @@ body {
   <span><kbd>C</kbd> Add chapter</span>
   <span><kbd>A</kbd> Add annotation</span>
   <span><kbd>X</kbd> Mark cut</span>
+  <span><kbd>I</kbd> Inspector</span>
   <span><kbd>&larr;</kbd><kbd>&rarr;</kbd> Seek</span>
   <span><kbd>,</kbd><kbd>.</kbd> Prev/Next chapter</span>
   <span><kbd>&#x2318;S</kbd> Save</span>
@@ -1264,6 +1324,7 @@ body {
   function init() {
     fileName.textContent = data.source_file || data.recording.title || 'Untitled';
     durationDisplay.textContent = formatTimePrecise(data.recording.duration);
+    renderStats();
 
     // Set terminal viewport to captured dimensions
     const viewport = document.querySelector('.preview-viewport pre');
@@ -1283,6 +1344,67 @@ body {
         document.getElementById('main-playhead').style.opacity = '1';
       });
     });
+  }
+
+  // --- Recording Stats ---
+  function renderStats() {
+    const panel = document.getElementById('inspector-panel');
+    const rec = data.recording;
+    const events = rec.events;
+    const outputEvents = events.filter(e => e.code === 'o');
+    const cols = rec.term.cols;
+    const rows = rec.term.rows;
+    const script = data.script;
+
+    // Effective duration accounting for cuts
+    // Jump cuts remove time entirely; ellipsis cuts replace with a brief indicator (~1s)
+    const ELLIPSIS_DUR = 1.0;
+    const cutTime = (script.cuts || []).reduce((s, c) => {
+      const span = c.end - c.start;
+      return s + span - (c.type === 'ellipsis' ? ELLIPSIS_DUR : 0);
+    }, 0);
+    const effectiveDuration = Math.max(0, rec.duration - cutTime);
+
+    // Estimate rendered size: each keyframe SVG is roughly
+    // (cols * rows * 30) bytes for a full-text frame + overhead
+    const avgSvgBytes = (cols * rows * 30) + 800;
+    const estKeyframes = outputEvents.length + Math.ceil(effectiveDuration / 2.0);
+    const estTotalBytes = avgSvgBytes * estKeyframes;
+
+    // Source file size (actual from server, or estimated)
+    const sourceBytes = data.source_bytes ||
+      events.reduce((sum, e) => sum + JSON.stringify(e).length + 1, 0) + 200;
+
+    function fmtSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    const chapters = (script.chapters || []).length;
+    const annotations = (script.annotations || []).length;
+    const cuts = (script.cuts || []).length;
+
+    panel.innerHTML =
+      '<div class="inspector-title">Inspector</div>' +
+      statRow('Terminal', cols + ' \u00d7 ' + rows) +
+      statRow('Duration', rec.duration.toFixed(1) + 's') +
+      (cutTime > 0 ? statRow('Effective', effectiveDuration.toFixed(1) + 's') : '') +
+      statRow('Events', events.length + ' total') +
+      statRow('Output', outputEvents.length + ' events') +
+      '<div class="stat-divider"></div>' +
+      statRow('Chapters', String(chapters)) +
+      statRow('Annotations', String(annotations)) +
+      statRow('Cuts', String(cuts)) +
+      '<div class="stat-divider"></div>' +
+      statRow('Source', fmtSize(sourceBytes)) +
+      statRow('Keyframes', '~' + estKeyframes) +
+      statRow('Rendered (est.)', fmtSize(estTotalBytes));
+  }
+
+  function statRow(label, value) {
+    return '<div class="stat-row"><span class="stat-label">' + label +
+      '</span><span class="stat-value">' + value + '</span></div>';
   }
 
   // --- Ruler ---
@@ -1398,6 +1520,8 @@ body {
 
       trackCuts.appendChild(el);
     });
+
+    renderStats();
   }
 
   // --- Terminal rendering ---
@@ -2523,6 +2647,16 @@ body {
 
   document.getElementById('btn-view-yaml').addEventListener('click', showYamlPreview);
 
+  // --- Inspector toggle ---
+  const inspectorPanel = document.getElementById('inspector-panel');
+  const btnInspector = document.getElementById('btn-inspector');
+  btnInspector.addEventListener('click', toggleInspector);
+
+  function toggleInspector() {
+    inspectorPanel.classList.toggle('hidden');
+    btnInspector.classList.toggle('btn-primary', !inspectorPanel.classList.contains('hidden'));
+  }
+
   // --- Timeline ruler drag-to-scrub ---
   ruler.addEventListener('mousedown', (e) => {
     e.preventDefault();
@@ -2635,6 +2769,7 @@ body {
     }
     else if (e.key === 's' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
     else if (e.key === 'y' || e.key === 'Y') { showYamlPreview(); }
+    else if (e.key === 'i' || e.key === 'I') { toggleInspector(); }
   });
 
   // Close panel on click outside
