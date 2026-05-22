@@ -45,3 +45,12 @@ class TermInfo:
     theme: Theme = field(default_factory=Theme)
 
 
+@dataclass
+class Event:
+    """A single recording event."""
+
+    time: float  # Absolute time in seconds from start
+    code: str  # "o", "i", "m", "r", "a", "x"
+    data: str  # Event-specific payload
+
+
