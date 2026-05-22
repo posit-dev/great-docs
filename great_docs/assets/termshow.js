@@ -141,9 +141,14 @@
     }
 
     if (inlineManifest) {
-      activate(inlineManifest, inlineFrames);
+      // Always try fetching the external manifest first (it reflects the latest
+      // termshow render without requiring an HTML rebuild). Fall back to inline
+      // data if the fetch fails (file:// protocol, offline, etc.).
+      fetchResource(manifestUrl, true)
+        .then(function (manifest) { activate(manifest, null); })
+        .catch(function () { activate(inlineManifest, inlineFrames); });
     } else {
-      // Fallback: fetch manifest (works over HTTP)
+      // No inline data: fetch is the only option
       fetchResource(manifestUrl, true)
         .then(function (manifest) { activate(manifest, null); })
         .catch(function (err) {
