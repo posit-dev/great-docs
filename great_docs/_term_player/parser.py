@@ -54,3 +54,23 @@ class Event:
     data: str  # Event-specific payload
 
 
+@dataclass
+class Recording:
+    """A parsed terminal recording."""
+
+    version: int = 1
+    format: str = "termshow"
+    term: TermInfo = field(default_factory=TermInfo)
+    title: str = ""
+    timestamp: int | None = None
+    idle_time_limit: float | None = None
+    events: list[Event] = field(default_factory=list)
+
+    @property
+    def duration(self) -> float:
+        """Total duration in seconds."""
+        if not self.events:
+            return 0.0
+        return self.events[-1].time
+
+
