@@ -225,3 +225,11 @@ settings:
     )
 
 
+def _set_raw_mode(fd: int) -> None:
+    """Set terminal to raw mode (no echo, no canonical processing)."""
+    import termios
+    import tty
+
+    tty.setraw(fd, termios.TCSADRAIN)
+
+
