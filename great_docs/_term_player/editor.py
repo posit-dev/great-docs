@@ -2224,8 +2224,8 @@ body {
     document.addEventListener('mouseup', onUp);
   }
 
-  // --- Click on chapters track to create ---
-  trackChapters.addEventListener('mousedown', (e) => {
+  // --- Double-click on chapters track to create ---
+  trackChapters.addEventListener('dblclick', (e) => {
     if (e.target !== trackChapters) return;
     e.preventDefault();
     const rect = trackChapters.getBoundingClientRect();
@@ -2284,16 +2284,19 @@ body {
     const startX = e.clientX;
     const startRatio = (startX - rect.left) / rect.width;
     const startTime = roundTime(startRatio * data.recording.duration);
-
-    // Create a temporary cut
-    const tempIdx = data.script.cuts.length;
-    data.script.cuts.push({ start: startTime, end: startTime, type: 'jump' });
-    renderTracks();
-    updatePlayhead();
-
-    cutDragState = { index: tempIdx, startTime: startTime };
+    let dragStarted = false;
 
     function onMove(ev) {
+      if (!dragStarted) {
+        if (Math.abs(ev.clientX - startX) < 4) return;
+        // Threshold exceeded — create the item and start drag
+        dragStarted = true;
+        const tempIdx = data.script.cuts.length;
+        data.script.cuts.push({ start: startTime, end: startTime, type: 'jump' });
+        cutDragState = { index: tempIdx, startTime: startTime };
+        renderTracks();
+        updatePlayhead();
+      }
       const ratio = (ev.clientX - rect.left) / rect.width;
       const t = roundTime(Math.max(0, Math.min(ratio * data.recording.duration, data.recording.duration)));
       const cut = data.script.cuts[cutDragState.index];
@@ -2311,13 +2314,10 @@ body {
     function onUp(ev) {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      if (!dragStarted) return; // No drag — let dblclick handle it
       const cut = data.script.cuts[cutDragState.index];
       if (cut.end - cut.start < 0.15) {
-        // Too small — treat as a click: drop a 1s cut at click position
         data.script.cuts.splice(cutDragState.index, 1);
-        const ratio = (ev.clientX - rect.left) / rect.width;
-        const clickTime = ratio * data.recording.duration;
-        addCutAt(clickTime);
       } else {
         selectCut(cutDragState.index);
         markDirty();
@@ -2330,6 +2330,25 @@ body {
 
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
+  });
+
+  // Double-click on cuts track to create a 2s cut
+  trackCuts.addEventListener('dblclick', (e) => {
+    if (e.target !== trackCuts) return;
+    e.preventDefault();
+    const rect = trackCuts.getBoundingClientRect();
+    const ratio = (e.clientX - rect.left) / rect.width;
+    const clickTime = roundTime(ratio * data.recording.duration);
+    const start = clickTime;
+    const end = roundTime(Math.min(clickTime + 2, data.recording.duration));
+    if (end > start) {
+      data.script.cuts.push({ start: start, end: end, type: 'jump' });
+      renderTracks();
+      updatePlayhead();
+      markDirty();
+      selectCut(data.script.cuts.length - 1);
+      showToast('Cut added (2s) — drag edges to adjust');
+    }
   });
 
   // --- Box drag-to-reposition (annotations and cuts) ---
@@ -2531,16 +2550,19 @@ body {
     const startX = e.clientX;
     const startRatio = (startX - rect.left) / rect.width;
     const startTime = roundTime(startRatio * data.recording.duration);
-
-    // Create a temporary annotation
-    const tempIdx = data.script.annotations.length;
-    data.script.annotations.push({ time: startTime, duration: 0, text: 'Annotation', position: 'top-right', style: 'callout' });
-    renderTracks();
-    updatePlayhead();
-
-    annDragState = { index: tempIdx, startTime: startTime };
+    let dragStarted = false;
 
     function onMove(ev) {
+      if (!dragStarted) {
+        if (Math.abs(ev.clientX - startX) < 4) return;
+        // Threshold exceeded — create the item and start drag
+        dragStarted = true;
+        const tempIdx = data.script.annotations.length;
+        data.script.annotations.push({ time: startTime, duration: 0, text: 'Annotation', position: 'top-right', style: 'callout' });
+        annDragState = { index: tempIdx, startTime: startTime };
+        renderTracks();
+        updatePlayhead();
+      }
       const ratio = (ev.clientX - rect.left) / rect.width;
       const t = roundTime(Math.max(0, Math.min(ratio * data.recording.duration, data.recording.duration)));
       const ann = data.script.annotations[annDragState.index];
@@ -2558,13 +2580,10 @@ body {
     function onUp(ev) {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      if (!dragStarted) return; // No drag — let dblclick handle it
       const ann = data.script.annotations[annDragState.index];
       if (ann.duration < 0.15) {
-        // Too small — treat as a click: drop a 1s annotation at click position
         data.script.annotations.splice(annDragState.index, 1);
-        const ratio = (ev.clientX - rect.left) / rect.width;
-        const clickTime = ratio * data.recording.duration;
-        addAnnotationAt(clickTime);
       } else {
         selectAnnotation(annDragState.index);
         markDirty();
@@ -2577,6 +2596,25 @@ body {
 
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
+  });
+
+  // Double-click on annotations track to create a 2s annotation
+  trackAnnotations.addEventListener('dblclick', (e) => {
+    if (e.target !== trackAnnotations) return;
+    e.preventDefault();
+    const rect = trackAnnotations.getBoundingClientRect();
+    const ratio = (e.clientX - rect.left) / rect.width;
+    const clickTime = roundTime(ratio * data.recording.duration);
+    const start = clickTime;
+    const dur = roundTime(Math.min(2, data.recording.duration - clickTime));
+    if (dur > 0) {
+      data.script.annotations.push({ time: start, duration: dur, text: 'Annotation', position: 'top-right', style: 'callout' });
+      renderTracks();
+      updatePlayhead();
+      markDirty();
+      selectAnnotation(data.script.annotations.length - 1);
+      showToast('Annotation added (2s) — drag edges to adjust');
+    }
   });
 
   function addAnnotationAt(time) {
