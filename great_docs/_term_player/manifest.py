@@ -242,3 +242,27 @@ def generate_manifest(
     return manifest
 
 
+def _compute_keyframe_times(
+    duration: float, interval: float, chapters: list[Chapter]
+) -> list[float]:
+    """Compute the set of times to capture keyframes.
+
+    Includes:
+    - Regular intervals
+    - Chapter boundaries
+    """
+    times: set[float] = set()
+
+    # Regular intervals
+    t = 0.0
+    while t <= duration:
+        times.add(round(t, 3))
+        t += interval
+
+    # Chapter boundaries
+    for ch in chapters:
+        times.add(round(ch.time, 3))
+
+    return sorted(times)
+
+
