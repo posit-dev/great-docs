@@ -142,3 +142,76 @@ class TerminalEmulator:
             cursor_visible=self._cursor_visible,
         )
 
+    def feed(self, data: str) -> None:
+        """Process terminal output data (a string of characters + escape sequences)."""
+        i = 0
+        n = len(data)
+
+        while i < n:
+            ch = data[i]
+
+            # CSI sequence
+            if ch == "\x1b" and i + 1 < n and data[i + 1] == "[":
+                match = _CSI_RE.match(data, i)
+                if match:
+                    self._handle_csi(match.group(1), match.group(3))
+                    i = match.end()
+                    continue
+
+            # OSC sequence (skip)
+            if ch == "\x1b" and i + 1 < n and data[i + 1] == "]":
+                match = _OSC_RE.match(data, i)
+                if match:
+                    i = match.end()
+                    continue
+                # Incomplete OSC, skip to end
+                i = n
+                continue
+
+            # Simple escape sequences
+            if ch == "\x1b":
+                match = _ESC_SIMPLE_RE.match(data, i)
+                if match:
+                    self._handle_esc_simple(data[i + 1] if i + 1 < n else "")
+                    i = match.end()
+                    continue
+                # Unknown escape, skip ESC + next char
+                i += 2
+                continue
+
+            # Control characters
+            if ch == "\r":
+                self._cursor_col = 0
+                i += 1
+                continue
+
+            if ch == "\n":
+                self._linefeed()
+                i += 1
+                continue
+
+            if ch == "\x08":  # Backspace
+                if self._cursor_col > 0:
+                    self._cursor_col -= 1
+                i += 1
+                continue
+
+            if ch == "\t":  # Tab
+                next_tab = ((self._cursor_col // 8) + 1) * 8
+                self._cursor_col = min(next_tab, self.cols - 1)
+                i += 1
+                continue
+
+            if ch == "\x07":  # Bell (ignore)
+                i += 1
+                continue
+
+            # Skip other control chars
+            if ord(ch) < 0x20:
+                i += 1
+                continue
+
+            # Printable character
+            self._put_char(ch)
+            i += 1
+
