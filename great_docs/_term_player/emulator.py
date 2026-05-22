@@ -269,3 +269,116 @@ class TerminalEmulator:
         elif ch == "D":  # Index (linefeed)
             self._linefeed()
 
+    def _handle_csi(self, params_str: str, final: str) -> None:
+        """Handle a CSI (Control Sequence Introducer) sequence."""
+        # Parse parameters
+        params = _parse_params(params_str)
+
+        if final == "m":
+            self._handle_sgr(params)
+        elif final == "H" or final == "f":
+            # CUP: Cursor Position
+            row = max(0, (params[0] if params else 1) - 1)
+            col = max(0, (params[1] if len(params) > 1 else 1) - 1)
+            self._cursor_row = min(row, self.rows - 1)
+            self._cursor_col = min(col, self.cols - 1)
+        elif final == "A":
+            # CUU: Cursor Up
+            n = params[0] if params else 1
+            self._cursor_row = max(0, self._cursor_row - n)
+        elif final == "B":
+            # CUD: Cursor Down
+            n = params[0] if params else 1
+            self._cursor_row = min(self.rows - 1, self._cursor_row + n)
+        elif final == "C":
+            # CUF: Cursor Forward
+            n = params[0] if params else 1
+            self._cursor_col = min(self.cols - 1, self._cursor_col + n)
+        elif final == "D":
+            # CUB: Cursor Back
+            n = params[0] if params else 1
+            self._cursor_col = max(0, self._cursor_col - n)
+        elif final == "G":
+            # CHA: Cursor Horizontal Absolute
+            col = max(0, (params[0] if params else 1) - 1)
+            self._cursor_col = min(col, self.cols - 1)
+        elif final == "d":
+            # VPA: Vertical Position Absolute
+            row = max(0, (params[0] if params else 1) - 1)
+            self._cursor_row = min(row, self.rows - 1)
+        elif final == "J":
+            # ED: Erase in Display
+            mode = params[0] if params else 0
+            self._erase_display(mode)
+        elif final == "K":
+            # EL: Erase in Line
+            mode = params[0] if params else 0
+            self._erase_line(mode)
+        elif final == "L":
+            # IL: Insert Lines
+            n = params[0] if params else 1
+            for _ in range(n):
+                if self._cursor_row <= self._scroll_bottom:
+                    del self._screen[self._scroll_bottom]
+                    self._screen.insert(self._cursor_row, self._blank_row())
+        elif final == "M":
+            # DL: Delete Lines
+            n = params[0] if params else 1
+            for _ in range(n):
+                if self._cursor_row <= self._scroll_bottom:
+                    del self._screen[self._cursor_row]
+                    self._screen.insert(self._scroll_bottom, self._blank_row())
+        elif final == "P":
+            # DCH: Delete Characters
+            n = params[0] if params else 1
+            row = self._screen[self._cursor_row]
+            col = self._cursor_col
+            del row[col : col + n]
+            row.extend(Cell() for _ in range(n))
+            # Trim back to cols
+            self._screen[self._cursor_row] = row[: self.cols]
+        elif final == "@":
+            # ICH: Insert Characters
+            n = params[0] if params else 1
+            row = self._screen[self._cursor_row]
+            col = self._cursor_col
+            for _ in range(n):
+                row.insert(col, Cell())
+            self._screen[self._cursor_row] = row[: self.cols]
+        elif final == "r":
+            # DECSTBM: Set Top and Bottom Margins
+            top = (params[0] if params else 1) - 1
+            bottom = (params[1] if len(params) > 1 else self.rows) - 1
+            self._scroll_top = max(0, top)
+            self._scroll_bottom = min(self.rows - 1, bottom)
+            self._cursor_row = 0
+            self._cursor_col = 0
+        elif final == "S":
+            # SU: Scroll Up
+            n = params[0] if params else 1
+            self._scroll_up(n)
+        elif final == "T":
+            # SD: Scroll Down
+            n = params[0] if params else 1
+            self._scroll_down(n)
+        elif final == "s":
+            # Save cursor position
+            self._saved_cursor = (self._cursor_row, self._cursor_col)
+        elif final == "u":
+            # Restore cursor position
+            if self._saved_cursor:
+                self._cursor_row, self._cursor_col = self._saved_cursor
+        elif final == "h":
+            # Set Mode
+            if "?" in params_str:
+                self._handle_dec_mode(params, set_mode=True)
+        elif final == "l":
+            # Reset Mode
+            if "?" in params_str:
+                self._handle_dec_mode(params, set_mode=False)
+        elif final == "X":
+            # ECH: Erase Characters
+            n = params[0] if params else 1
+            for c in range(self._cursor_col, min(self._cursor_col + n, self.cols)):
+                self._screen[self._cursor_row][c] = Cell()
+
