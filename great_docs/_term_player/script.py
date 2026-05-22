@@ -39,3 +39,12 @@ class Annotation:
     col: int | None = None
 
 
+@dataclass
+class SpeedSegment:
+    """A speed override for a time range."""
+
+    start: float
+    end: float
+    speed: float = 1.0
+
+
