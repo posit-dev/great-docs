@@ -382,3 +382,30 @@ class TerminalEmulator:
             for c in range(self._cursor_col, min(self._cursor_col + n, self.cols)):
                 self._screen[self._cursor_row][c] = Cell()
 
+    def _handle_dec_mode(self, params: list[int], *, set_mode: bool) -> None:
+        """Handle DEC private mode set/reset."""
+        for p in params:
+            if p == 25:
+                # DECTCEM: Cursor visibility
+                self._cursor_visible = set_mode
+            elif p == 1049:
+                # Alt screen buffer
+                if set_mode and not self._using_alt:
+                    self._alt_screen = self._screen
+                    self._screen = self._blank_screen()
+                    self._using_alt = True
+                elif not set_mode and self._using_alt:
+                    self._screen = self._alt_screen or self._blank_screen()
+                    self._alt_screen = None
+                    self._using_alt = False
+            elif p == 47 or p == 1047:
+                # Also alt screen (without save/restore cursor)
+                if set_mode and not self._using_alt:
+                    self._alt_screen = self._screen
+                    self._screen = self._blank_screen()
+                    self._using_alt = True
+                elif not set_mode and self._using_alt:
+                    self._screen = self._alt_screen or self._blank_screen()
+                    self._alt_screen = None
+                    self._using_alt = False
+
