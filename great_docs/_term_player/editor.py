@@ -66,3 +66,49 @@ def _build_editor_data(recording: Recording, script: Script | None) -> dict[str,
     return data
 
 
+def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
+    """Serialize editor script data back to YAML string."""
+    lines = [f"source: {source_path}", ""]
+
+    settings = script_data.get("settings", {})
+    if any(v is not None for v in settings.values()):
+        lines.append("settings:")
+        if settings.get("idle_time_limit") is not None:
+            lines.append(f"  idle_time_limit: {settings['idle_time_limit']}")
+        if settings.get("speed") and settings["speed"] != 1.0:
+            lines.append(f"  speed: {settings['speed']}")
+        if settings.get("window_chrome"):
+            lines.append(f"  window_chrome: {settings['window_chrome']}")
+        lines.append("")
+
+    chapters = script_data.get("chapters", [])
+    if chapters:
+        lines.append("chapters:")
+        for ch in sorted(chapters, key=lambda c: c["time"]):
+            lines.append(f"  - at: {ch['time']}")
+            lines.append(f'    label: "{ch["label"]}"')
+        lines.append("")
+
+    annotations = script_data.get("annotations", [])
+    if annotations:
+        lines.append("annotations:")
+        for ann in sorted(annotations, key=lambda a: a["time"]):
+            lines.append(f"  - at: {ann['time']}")
+            lines.append(f"    duration: {ann['duration']}")
+            lines.append(f'    text: "{ann["text"]}"')
+            lines.append(f"    position: {ann['position']}")
+            lines.append(f"    style: {ann['style']}")
+        lines.append("")
+
+    cuts = script_data.get("cuts", [])
+    if cuts:
+        lines.append("cuts:")
+        for cut in sorted(cuts, key=lambda c: c["start"]):
+            lines.append(f"  - from: {cut['start']}")
+            lines.append(f"    to: {cut['end']}")
+            lines.append(f"    type: {cut['type']}")
+        lines.append("")
+
+    return "\n".join(lines) + "\n"
+
+
