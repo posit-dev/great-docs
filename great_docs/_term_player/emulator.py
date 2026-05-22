@@ -98,3 +98,11 @@ ANSI_COLORS_16 = [
     "#ffffff",
 ]
 
+# Regex for CSI sequences: ESC [ (params) (intermediate) (final)
+_CSI_RE = re.compile(r"\x1b\[([0-9;?]*)([^@-~]?)([A-Za-z@-~])")
+# Regex for OSC sequences: ESC ] ... (ST or BEL)
+_OSC_RE = re.compile(r"\x1b\].*?(?:\x1b\\|\x07)")
+# Regex for simple escape sequences
+_ESC_SIMPLE_RE = re.compile(r"\x1b[()][0-9A-B]|\x1b[=>DMEH78]")
+
+
