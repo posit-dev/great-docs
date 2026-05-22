@@ -3354,6 +3354,12 @@ def term_import_tape(source: str, output: str) -> None:
     click.echo(f"  Duration: {recording.duration:.1f}s | Events: {len(recording.events)}")
 
 
+termshow.add_command(term_record)
+termshow.add_command(term_render)
+termshow.add_command(term_import_cast)
+termshow.add_command(term_import_tape)
+
+
 def main() -> None:
     """Main CLI entry point for great-docs."""
     cli()
