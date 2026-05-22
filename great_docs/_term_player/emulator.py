@@ -491,3 +491,21 @@ class TerminalEmulator:
 
         return None, 0
 
+    def _color_256_to_hex(self, idx: int) -> str:
+        """Convert a 256-color index to a hex color string."""
+        if idx < 16:
+            return ANSI_COLORS_16[idx]
+        elif idx < 232:
+            # 216-color cube: 6x6x6
+            idx -= 16
+            b = (idx % 6) * 51
+            idx //= 6
+            g = (idx % 6) * 51
+            idx //= 6
+            r = idx * 51
+            return f"#{r:02x}{g:02x}{b:02x}"
+        else:
+            # Grayscale ramp: 24 shades
+            v = 8 + (idx - 232) * 10
+            return f"#{v:02x}{v:02x}{v:02x}"
+
