@@ -3234,6 +3234,21 @@ skill.add_command(skill_list)
 cli.add_command(skill)
 
 
+# ---------------------------------------------------------------------------
+# termshow commands
+# ---------------------------------------------------------------------------
+
+
+@click.group()
+def termshow():
+    """Terminal recording and playback for CLI/TUI documentation.
+
+    Record terminal sessions, edit them with YAML scripts, and render
+    them as SVG frame sequences for the termshow player.
+    """
+    pass
+
+
 def main() -> None:
     """Main CLI entry point for great-docs."""
     cli()
