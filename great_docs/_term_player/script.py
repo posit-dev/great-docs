@@ -302,3 +302,34 @@ def _apply_speed_map(events: list[Event], speed_map: list[SpeedSegment]) -> list
     return result
 
 
+def _remap_time(t: float, segments: list[SpeedSegment]) -> float:
+    """Remap a single timestamp through speed segments.
+
+    Time within a speed segment is scaled by 1/speed.
+    Time outside any segment is unchanged.
+    """
+    new_t = 0.0
+    prev = 0.0
+
+    for seg in segments:
+        if t <= seg.start:
+            break
+
+        # Time before this segment (at normal speed)
+        gap_before = min(t, seg.start) - prev
+        new_t += gap_before
+
+        # Time within this segment (scaled)
+        time_in_seg = min(t, seg.end) - seg.start
+        new_t += time_in_seg / seg.speed
+
+        prev = seg.end
+
+    # Time after last segment
+    last_end = segments[-1].end if segments else 0.0
+    if t > last_end:
+        # Add gap from last segment end to prev accumulation point
+        remaining = t - max(prev, last_end)
+        new_t += remaining
+
+    return new_t
