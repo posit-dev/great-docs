@@ -80,3 +80,26 @@ class Script:
     highlights: list[Highlight] = field(default_factory=list)
 
 
+def load_script(path: str | Path) -> Script:
+    """Load a .termshow.yml script file.
+
+    Parameters
+    ----------
+    path
+        Path to the YAML script file.
+
+    Returns
+    -------
+    Script
+        Parsed script object.
+    """
+    import yaml
+
+    p = Path(path)
+    data = yaml.safe_load(p.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        return Script()
+
+    return _parse_script_data(data)
+
+
