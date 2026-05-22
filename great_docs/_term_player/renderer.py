@@ -139,3 +139,26 @@ def render_frame(
     return "\n".join(parts)
 
 
+def render_frames(
+    states: list[tuple[float, ScreenState]],
+    theme: Theme | None = None,
+    **kwargs,
+) -> list[tuple[float, str]]:
+    """Render multiple screen states as SVG frames.
+
+    Parameters
+    ----------
+    states
+        List of (time, screen_state) tuples.
+    theme
+        Color theme.
+    **kwargs
+        Additional arguments passed to render_frame.
+
+    Returns
+    -------
+    list of (time, svg_string) tuples.
+    """
+    return [(time, render_frame(state, theme, **kwargs)) for time, state in states]
+
+
