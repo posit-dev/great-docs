@@ -112,3 +112,63 @@ def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+class EditorHandler(SimpleHTTPRequestHandler):
+    """HTTP handler for the Termshow Editor."""
+
+    editor_data: dict[str, Any]
+    source_path: str
+    script_path: Path
+
+    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+        """Suppress default logging."""
+        pass
+
+    def do_GET(self) -> None:  # noqa: N802
+        if self.path == "/":
+            self._serve_editor_page()
+        elif self.path == "/api/data":
+            self._json_response(self.editor_data)
+        else:
+            self.send_error(404)
+
+    def do_POST(self) -> None:  # noqa: N802
+        if self.path == "/api/save":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            try:
+                script_data = json.loads(body)
+                yaml_str = _serialize_script(script_data, self.source_path)
+                self.script_path.write_text(yaml_str, encoding="utf-8")
+                self._json_response({"ok": True, "path": str(self.script_path)})
+            except Exception as e:
+                self._json_response({"ok": False, "error": str(e)}, status=400)
+        elif self.path == "/api/preview-yaml":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            try:
+                script_data = json.loads(body)
+                yaml_str = _serialize_script(script_data, self.source_path)
+                self._json_response({"yaml": yaml_str})
+            except Exception as e:
+                self._json_response({"error": str(e)}, status=400)
+        else:
+            self.send_error(404)
+
+    def _json_response(self, data: Any, status: int = 200) -> None:
+        body = json.dumps(data).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _serve_editor_page(self) -> None:
+        html = _get_editor_html()
+        body = html.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
