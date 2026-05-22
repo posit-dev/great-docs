@@ -3324,6 +3324,21 @@ def term_render(source: str, output_dir: str | None, interval: float, script: st
     click.echo(f"  Duration: {manifest.duration:.1f}s | Chapters: {len(manifest.chapters)}")
 
 
+@click.command("import-cast")
+@click.argument("source", type=click.Path(exists=True))
+@click.argument("output", type=click.Path())
+def term_import_cast(source: str, output: str) -> None:
+    """Import an asciicast (.cast) file to .termshow format."""
+    from ._term_player.importer import import_asciicast
+
+    if not output.endswith(".termshow"):
+        output += ".termshow"
+
+    recording = import_asciicast(source, output)
+    click.echo(f"✓ Imported {source} → {output}")
+    click.echo(f"  Duration: {recording.duration:.1f}s | Events: {len(recording.events)}")
+
+
 def main() -> None:
     """Main CLI entry point for great-docs."""
     cli()
