@@ -13674,6 +13674,69 @@ body-classes: "gd-homepage"
             "social_cards_twitter_site": self._config.social_cards_twitter_site,
         }
 
+    def _prerender_term_player(self, log) -> None:
+        """Pre-render .termshow recordings into SVG keyframes + manifest.json.
+
+        Discovers all .termshow files in the project root, applies any
+        companion .termshow.yml scripts, and renders SVG frames into
+        great-docs/termshow/<basename>/ so the Quarto shortcode can
+        reference them.
+        """
+
+        # Find all .termshow files in the project root (they live outside
+        # great-docs/ since that directory is ephemeral)
+        termshow_files = []
+        for f in self.project_root.rglob("*.termshow"):
+            rel = f.relative_to(self.project_root)
+            # Skip files inside great-docs/ or _site/
+            if rel.parts[0] in ("great-docs", "_site"):
+                continue
+            termshow_files.append(f)
+        if not termshow_files:
+            return
+
+        try:
+            from great_docs._term_player import (
+                apply_script,
+                generate_manifest,
+                parse_termshow,
+            )
+            from great_docs._term_player.script import load_script
+        except ImportError:
+            return
+
+        rendered_count = 0
+        for ts_file in termshow_files:
+            basename = ts_file.stem
+            # Output into the great-docs project directory (Quarto project)
+            output_dir = self.project_path / "termshow" / basename
+
+            try:
+                recording = parse_termshow(str(ts_file))
+
+                # Apply script if companion .termshow.yml exists
+                script = None
+                script_file = ts_file.with_suffix(".termshow.yml")
+                if script_file.exists():
+                    script = load_script(str(script_file))
+                    recording = apply_script(recording, script)
+
+                generate_manifest(
+                    recording,
+                    script=script,
+                    output_dir=str(output_dir),
+                    keyframe_interval=2.0,
+                )
+                rendered_count += 1
+            except Exception as e:
+                log.warn(f"termshow: failed to render {ts_file.name}: {e}")
+
+        if rendered_count:
+            log.detail(f"Pre-rendered {rendered_count} terminal recording(s)")
+            # Register termshow output as a Quarto resource so it gets
+            # copied to _site/
+            self._add_project_resources(["termshow/**"], [])
+
     def _generate_seo_files(self) -> None:
         """
         Generate all SEO-related files (sitemap.xml, robots.txt).
