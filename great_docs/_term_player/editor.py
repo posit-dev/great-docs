@@ -338,7 +338,9 @@ body {
 
 /* Viewport - terminal preview */
 .preview-area {
-  flex: 0 0 45%;
+  flex: 0 0 auto;
+  height: 45%;
+  min-height: 150px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -347,6 +349,33 @@ body {
   padding: 16px;
   position: relative;
   overflow: hidden;
+}
+
+.resize-handle {
+  flex-shrink: 0;
+  height: 6px;
+  background: var(--surface2);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  cursor: row-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.resize-handle:hover,
+.resize-handle.active {
+  background: var(--border);
+}
+
+.resize-handle::after {
+  content: '';
+  width: 32px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--text-dim);
+  opacity: 0.5;
 }
 
 .preview-viewport {
@@ -1231,6 +1260,8 @@ body {
     </div>
   </div>
 
+  <div class="resize-handle" id="resize-handle"></div>
+
   <div class="transport">
     <span class="transport-spacer"></span>
     <div class="transport-controls">
@@ -1835,7 +1866,7 @@ body {
     const natW = wrapper.offsetWidth;
     const natH = wrapper.offsetHeight;
     if (natW <= 0 || natH <= 0) return;
-    const scale = Math.min(1, availW / natW, availH / natH);
+    const scale = Math.min(availW / natW, availH / natH);
     wrapper.style.setProperty('--viewport-scale', scale.toFixed(4));
   }
 
@@ -2694,6 +2725,47 @@ body {
     inspectorPanel.classList.toggle('hidden');
     btnInspector.classList.toggle('btn-primary', !inspectorPanel.classList.contains('hidden'));
   }
+
+  // --- Resize handle (preview ↔ transport/timeline) ---
+  (function() {
+    const handle = document.getElementById('resize-handle');
+    const previewArea = document.querySelector('.preview-area');
+    const editorMain = document.querySelector('.editor-main');
+    const transport = document.querySelector('.transport');
+    const timelinePanel = document.getElementById('timeline-panel');
+    const MIN_PREVIEW_HEIGHT = 150;
+
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      handle.classList.add('active');
+      const startY = e.clientY;
+      const startHeight = previewArea.offsetHeight;
+
+      function onMove(ev) {
+        const delta = ev.clientY - startY;
+        const mainRect = editorMain.getBoundingClientRect();
+        const transportH = transport.offsetHeight;
+        const handleH = handle.offsetHeight;
+        // Min height for timeline area (ruler + 3 tracks)
+        const minTimelineH = 120;
+        const maxPreviewH = mainRect.height - transportH - handleH - minTimelineH;
+        const newHeight = Math.max(MIN_PREVIEW_HEIGHT, Math.min(startHeight + delta, maxPreviewH));
+        previewArea.style.height = newHeight + 'px';
+        fitViewport();
+      }
+
+      function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        handle.classList.remove('active');
+        // Refresh playhead cache after resize
+        invalidatePlayheadCache();
+      }
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  })();
 
   // --- Timeline ruler drag-to-scrub ---
   ruler.addEventListener('mousedown', (e) => {
