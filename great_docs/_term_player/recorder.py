@@ -233,3 +233,18 @@ def _set_raw_mode(fd: int) -> None:
     tty.setraw(fd, termios.TCSADRAIN)
 
 
+# Patterns that identify recorder diagnostic messages (checked against
+# ANSI-stripped event data). These are useful during the live session but
+# should not appear in the saved recording.
+_RECORDER_MSG_PATTERNS = (
+    "Recording started",
+    "Recording stopped",
+    "Recording saved",
+    "Recording...",
+    "Ctrl+D to stop",
+    "Press Ctrl+D or type",
+    "events captured",
+    "Saved:",
+)
+
+
