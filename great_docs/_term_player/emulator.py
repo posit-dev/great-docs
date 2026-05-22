@@ -130,3 +130,15 @@ class TerminalEmulator:
         self._alt_screen: list[list[Cell]] | None = None
         self._using_alt = False
 
+    @property
+    def screen(self) -> ScreenState:
+        """Current screen state snapshot."""
+        return ScreenState(
+            cols=self.cols,
+            rows=self.rows,
+            cells=[[cell.copy() for cell in row] for row in self._screen],
+            cursor_row=self._cursor_row,
+            cursor_col=self._cursor_col,
+            cursor_visible=self._cursor_visible,
+        )
+
