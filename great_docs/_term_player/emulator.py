@@ -130,6 +130,14 @@ class TerminalEmulator:
         self._alt_screen: list[list[Cell]] | None = None
         self._using_alt = False
 
+    def _blank_screen(self) -> list[list[Cell]]:
+        """Create a blank screen grid."""
+        return [[Cell() for _ in range(self.cols)] for _ in range(self.rows)]
+
+    def _blank_row(self) -> list[Cell]:
+        """Create a blank row."""
+        return [Cell() for _ in range(self.cols)]
+
     @property
     def screen(self) -> ScreenState:
         """Current screen state snapshot."""
