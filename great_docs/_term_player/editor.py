@@ -172,3 +172,62 @@ class EditorHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
 
+def serve_editor(
+    source: str | Path,
+    port: int = 8765,
+    no_browser: bool = False,
+) -> None:
+    """Launch the editor server for a .termshow file.
+
+    Parameters
+    ----------
+    source
+        Path to the .termshow recording file.
+    port
+        Local port to serve on.
+    no_browser
+        If True, don't auto-open the browser.
+    """
+    source_path = Path(source).resolve()
+    if not source_path.exists():
+        raise FileNotFoundError(f"Recording not found: {source_path}")
+
+    recording = parse_termshow(source_path)
+
+    # Auto-detect script
+    script_path = source_path.with_suffix(".termshow.yml")
+    script: Script | None = None
+    if script_path.exists():
+        script = load_script(script_path)
+
+    editor_data = _build_editor_data(recording, script)
+    editor_data["source_file"] = source_path.name
+
+    # Create handler class with bound data
+    class BoundHandler(EditorHandler):
+        pass
+
+    BoundHandler.editor_data = editor_data  # type: ignore[attr-defined]
+    BoundHandler.source_path = str(source_path.relative_to(source_path.parent.parent))  # type: ignore[attr-defined]
+    BoundHandler.script_path = script_path  # type: ignore[attr-defined]
+
+    server = HTTPServer(("127.0.0.1", port), BoundHandler)
+
+    url = f"http://127.0.0.1:{port}"
+    print(f"✦ Termshow Editor serving at {url}")
+    print(f"  Recording: {source_path.name}")
+    print(
+        f"  Script:    {script_path.name} {'(exists)' if script_path.exists() else '(will create)'}"
+    )
+    print("  Press Ctrl+C to stop\n")
+
+    if not no_browser:
+        threading.Timer(0.5, lambda: webbrowser.open(url)).start()
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n✓ Editor stopped.")
+        server.shutdown()
+
+
