@@ -61,3 +61,22 @@ class Highlight:
     style: str = "box"  # "box", "underline", "glow"
 
 
+@dataclass
+class Script:
+    """Parsed .termshow.yml script overlay."""
+
+    source: str = ""
+    idle_time_limit: float | None = None
+    speed: float = 1.0
+    theme_name: str | None = None
+    theme: Theme | None = None
+    font_family: str | None = None
+    show_cursor: bool = True
+    window_chrome: str = "none"
+    chapters: list[Chapter] = field(default_factory=list)
+    cuts: list[Cut] = field(default_factory=list)
+    annotations: list[Annotation] = field(default_factory=list)
+    speed_map: list[SpeedSegment] = field(default_factory=list)
+    highlights: list[Highlight] = field(default_factory=list)
+
+
