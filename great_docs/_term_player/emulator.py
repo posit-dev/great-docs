@@ -45,6 +45,28 @@ class CellStyle:
         )
 
 
+@dataclass
+class ScreenState:
+    """Snapshot of the terminal screen at a point in time."""
+
+    cols: int
+    rows: int
+    cells: list[list[Cell]]  # [row][col]
+    cursor_row: int = 0
+    cursor_col: int = 0
+    cursor_visible: bool = True
+
+    def copy(self) -> ScreenState:
+        return ScreenState(
+            cols=self.cols,
+            rows=self.rows,
+            cells=[[cell.copy() for cell in row] for row in self.cells],
+            cursor_row=self.cursor_row,
+            cursor_col=self.cursor_col,
+            cursor_visible=self.cursor_visible,
+        )
+
+
 # Standard 16 ANSI colors (indices 0-15)
 ANSI_COLORS_16 = [
     "#000000",
