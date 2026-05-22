@@ -223,3 +223,22 @@ class TerminalEmulator:
             self._put_char(ch)
             i += 1
 
+    def _put_char(self, ch: str) -> None:
+        """Place a character at the cursor position and advance."""
+        if self._cursor_col >= self.cols:
+            # Wrap to next line
+            self._cursor_col = 0
+            self._linefeed()
+
+        row = self._cursor_row
+        col = self._cursor_col
+        self._screen[row][col] = Cell(char=ch, style=self._style.copy())
+        self._cursor_col += 1
+
+    def _linefeed(self) -> None:
+        """Move cursor down one line, scrolling if at bottom of scroll region."""
+        if self._cursor_row >= self._scroll_bottom:
+            self._scroll_up(1)
+        else:
+            self._cursor_row += 1
+
