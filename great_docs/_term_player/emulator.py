@@ -45,6 +45,17 @@ class CellStyle:
         )
 
 
+@dataclass(slots=True)
+class Cell:
+    """A single character cell in the terminal grid."""
+
+    char: str = " "
+    style: CellStyle = field(default_factory=CellStyle)
+
+    def copy(self) -> Cell:
+        return Cell(char=self.char, style=self.style.copy())
+
+
 @dataclass
 class ScreenState:
     """Snapshot of the terminal screen at a point in time."""
