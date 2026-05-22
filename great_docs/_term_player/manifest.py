@@ -32,3 +32,11 @@ class DeltaChange:
     bold: bool = False
 
 
+@dataclass
+class DeltaEntry:
+    """A delta frame (incremental changes between keyframes)."""
+
+    time: float
+    changes: list[DeltaChange] = field(default_factory=list)
+
+
