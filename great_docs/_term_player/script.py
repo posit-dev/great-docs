@@ -103,3 +103,85 @@ def load_script(path: str | Path) -> Script:
     return _parse_script_data(data)
 
 
+def _parse_script_data(data: dict[str, Any]) -> Script:
+    """Parse script data from a dictionary."""
+    script = Script()
+
+    script.source = data.get("source", "")
+
+    # Settings
+    settings = data.get("settings", {})
+    if isinstance(settings, dict):
+        script.idle_time_limit = settings.get("idle_time_limit")
+        script.speed = settings.get("speed", 1.0)
+        script.theme_name = settings.get("theme")
+        script.font_family = settings.get("font_family")
+        script.show_cursor = settings.get("show_cursor", True)
+        script.window_chrome = settings.get("window_chrome", "none")
+
+    # Chapters
+    for ch in data.get("chapters", []):
+        if isinstance(ch, dict) and "at" in ch:
+            script.chapters.append(
+                Chapter(
+                    time=float(ch["at"]),
+                    label=ch.get("label", ""),
+                )
+            )
+
+    # Cuts
+    for cut in data.get("cuts", []):
+        if isinstance(cut, dict) and "from" in cut and "to" in cut:
+            script.cuts.append(
+                Cut(
+                    start=float(cut["from"]),
+                    end=float(cut["to"]),
+                    type=cut.get("type", "jump"),
+                )
+            )
+
+    # Annotations
+    for ann in data.get("annotations", []):
+        if isinstance(ann, dict) and "at" in ann:
+            script.annotations.append(
+                Annotation(
+                    time=float(ann["at"]),
+                    duration=float(ann.get("duration", 3.0)),
+                    text=ann.get("text", ""),
+                    position=ann.get("position", "bottom-right"),
+                    style=ann.get("style", "callout"),
+                    row=ann.get("row"),
+                    col=ann.get("col"),
+                )
+            )
+
+    # Speed map
+    for seg in data.get("speed_map", []):
+        if isinstance(seg, dict) and "from" in seg and "to" in seg:
+            script.speed_map.append(
+                SpeedSegment(
+                    start=float(seg["from"]),
+                    end=float(seg["to"]),
+                    speed=float(seg.get("speed", 1.0)),
+                )
+            )
+
+    # Highlights
+    for hl in data.get("highlights", []):
+        if isinstance(hl, dict) and "at" in hl and "region" in hl:
+            region = hl["region"]
+            script.highlights.append(
+                Highlight(
+                    time=float(hl["at"]),
+                    duration=float(hl.get("duration", 2.0)),
+                    row=int(region.get("row", 0)),
+                    col=int(region.get("col", 0)),
+                    width=int(region.get("width", 10)),
+                    height=int(region.get("height", 1)),
+                    style=hl.get("style", "box"),
+                )
+            )
+
+    return script
+
+
