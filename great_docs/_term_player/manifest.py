@@ -99,3 +99,146 @@ class Manifest:
         return json.dumps(data, indent=2)
 
 
+def generate_manifest(
+    recording: Recording,
+    script: Script | None = None,
+    *,
+    output_dir: str | Path | None = None,
+    keyframe_interval: float = 2.0,
+    prefix: str = "frame",
+) -> Manifest:
+    """Generate a manifest and render SVG keyframes from a recording.
+
+    Parameters
+    ----------
+    recording
+        The (optionally script-processed) recording to render.
+    script
+        Optional script for annotations, chapters, and render settings.
+    output_dir
+        Directory to write SVG files to. If None, frames are not written to disk.
+    keyframe_interval
+        Seconds between keyframe snapshots.
+    prefix
+        Filename prefix for frame SVGs.
+
+    Returns
+    -------
+    Manifest
+        The generated manifest with keyframe/delta information.
+    """
+    out_path = Path(output_dir) if output_dir else None
+    if out_path:
+        out_path.mkdir(parents=True, exist_ok=True)
+
+    # Set up emulator
+    emu = TerminalEmulator(cols=recording.term.cols, rows=recording.term.rows)
+
+    # Determine render settings from script
+    theme = recording.term.theme
+    font_family = "JetBrains Mono, Fira Code, SF Mono, Menlo, Consolas, monospace"
+    show_cursor = True
+    window_chrome = "none"
+
+    if script:
+        if script.theme:
+            theme = script.theme
+        if script.font_family:
+            font_family = script.font_family
+        show_cursor = script.show_cursor
+        window_chrome = script.window_chrome
+
+    # Collect chapters
+    chapters: list[Chapter] = []
+    if script and script.chapters:
+        chapters = list(script.chapters)
+    else:
+        # Use markers from recording as chapters
+        for event in recording.events:
+            if event.code == "m":
+                chapters.append(Chapter(time=event.time, label=event.data))
+
+    # Determine keyframe times
+    keyframe_times = _compute_keyframe_times(recording.duration, keyframe_interval, chapters)
+
+    # Add a keyframe at every output event to guarantee full fidelity
+    for event in recording.events:
+        if event.code == "o":
+            keyframe_times.append(round(event.time, 3))
+    keyframe_times = sorted(set(keyframe_times))
+
+    # Process events and capture keyframes + deltas
+    keyframes: list[KeyframeEntry] = []
+    deltas: list[DeltaEntry] = []
+
+    event_idx = 0
+    kf_idx = 0
+    prev_state = None
+
+    # Always capture initial state (time 0)
+    if 0.0 not in keyframe_times:
+        keyframe_times = [0.0] + keyframe_times
+
+    for target_time in sorted(keyframe_times):
+        # Feed events up to this keyframe time
+        while event_idx < len(recording.events):
+            event = recording.events[event_idx]
+            if event.time > target_time:
+                break
+
+            if event.code == "o":
+                emu.feed(event.data)
+            elif event.code == "r":
+                parts = event.data.split("x")
+                if len(parts) == 2:
+                    try:
+                        emu.resize(int(parts[0]), int(parts[1]))
+                    except ValueError:
+                        pass
+
+            event_idx += 1
+
+        # Capture keyframe
+        state = emu.screen
+        frame_num = len(keyframes)
+        filename = f"{prefix}-{frame_num:03d}.svg"
+
+        svg = render_frame(
+            state,
+            theme,
+            font_family=font_family,
+            show_cursor=show_cursor,
+            window_chrome=window_chrome,
+        )
+
+        if out_path:
+            (out_path / filename).write_text(svg, encoding="utf-8")
+
+        keyframes.append(KeyframeEntry(time=target_time, file=filename))
+        prev_state = state
+
+    # Capture deltas between keyframes (character-level changes)
+    # For Phase 1, we use keyframes only; deltas will come in Phase 2
+    # This keeps things simple while still providing smooth chapter-based playback
+
+    # Build manifest
+    manifest = Manifest(
+        version=1,
+        title=recording.title,
+        duration=recording.duration,
+        cols=recording.term.cols,
+        rows=recording.term.rows,
+        theme=script.theme_name if script and script.theme_name else "default",
+        chapters=chapters,
+        keyframes=keyframes,
+        deltas=deltas,
+        annotations=script.annotations if script else [],
+        highlights=script.highlights if script else [],
+    )
+
+    if out_path:
+        (out_path / "manifest.json").write_text(manifest.to_json(), encoding="utf-8")
+
+    return manifest
+
+
