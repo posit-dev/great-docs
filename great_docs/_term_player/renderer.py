@@ -310,3 +310,23 @@ def _resolve_bg(cell: Cell, theme: Theme) -> str | None:
     return None
 
 
+def _index_to_color(color_ref: str, theme: Theme) -> str:
+    """Convert a color reference (index or hex) to a hex color."""
+    # Already a hex color?
+    if color_ref.startswith("#"):
+        return color_ref
+
+    # Numeric index into palette
+    try:
+        idx = int(color_ref)
+    except ValueError:
+        return theme.fg
+
+    if idx < len(theme.palette):
+        return theme.palette[idx]
+    elif idx < 16:
+        return ANSI_COLORS_16[idx]
+
+    return theme.fg
+
+
