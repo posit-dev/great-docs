@@ -162,3 +162,33 @@ def render_frames(
     return [(time, render_frame(state, theme, **kwargs)) for time, state in states]
 
 
+def _chrome_height(style: str) -> float:
+    """Height of window chrome decoration in pixels."""
+    if style == "none":
+        return 0.0
+    return 36.0  # Space for traffic lights / title
+
+
+def _render_chrome(style: str, width: float, theme: Theme) -> str:
+    """Render window chrome decorations."""
+    parts: list[str] = []
+
+    if style == "minimal":
+        # Simple dark bar with three dots
+        parts.append(f'<rect width="{width:.1f}" height="36" fill="{theme.bg}" rx="8" ry="8"/>')
+        parts.append(f'<rect y="28" width="{width:.1f}" height="8" fill="{theme.bg}"/>')
+        # Dots
+        parts.append('<circle cx="24" cy="18" r="5" fill="#585b70"/>')
+        parts.append('<circle cx="44" cy="18" r="5" fill="#585b70"/>')
+        parts.append('<circle cx="64" cy="18" r="5" fill="#585b70"/>')
+    elif style == "colorful":
+        # macOS-style colored traffic lights
+        parts.append(f'<rect width="{width:.1f}" height="36" fill="{theme.bg}" rx="8" ry="8"/>')
+        parts.append(f'<rect y="28" width="{width:.1f}" height="8" fill="{theme.bg}"/>')
+        parts.append('<circle cx="24" cy="18" r="6" fill="#f38ba8"/>')  # Close
+        parts.append('<circle cx="44" cy="18" r="6" fill="#f9e2af"/>')  # Minimize
+        parts.append('<circle cx="64" cy="18" r="6" fill="#a6e3a1"/>')  # Maximize
+
+    return "\n".join(parts)
+
+
