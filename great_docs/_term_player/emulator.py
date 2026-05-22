@@ -409,3 +409,66 @@ class TerminalEmulator:
                     self._alt_screen = None
                     self._using_alt = False
 
+    def _handle_sgr(self, params: list[int]) -> None:
+        """Handle SGR (Select Graphic Rendition) parameters."""
+        if not params:
+            params = [0]
+
+        i = 0
+        while i < len(params):
+            p = params[i]
+
+            if p == 0:
+                self._style = CellStyle()
+            elif p == 1:
+                self._style.bold = True
+            elif p == 2:
+                self._style.dim = True
+            elif p == 3:
+                self._style.italic = True
+            elif p == 4:
+                self._style.underline = True
+            elif p == 7:
+                self._style.inverse = True
+            elif p == 9:
+                self._style.strikethrough = True
+            elif p == 22:
+                self._style.bold = False
+                self._style.dim = False
+            elif p == 23:
+                self._style.italic = False
+            elif p == 24:
+                self._style.underline = False
+            elif p == 27:
+                self._style.inverse = False
+            elif p == 29:
+                self._style.strikethrough = False
+            elif 30 <= p <= 37:
+                self._style.fg = str(p - 30)
+            elif p == 38:
+                # Extended foreground color
+                color, consumed = self._parse_extended_color(params[i + 1 :])
+                if color is not None:
+                    self._style.fg = color
+                i += consumed
+            elif p == 39:
+                self._style.fg = None
+            elif 40 <= p <= 47:
+                self._style.bg = str(p - 40)
+            elif p == 48:
+                # Extended background color
+                color, consumed = self._parse_extended_color(params[i + 1 :])
+                if color is not None:
+                    self._style.bg = color
+                i += consumed
+            elif p == 49:
+                self._style.bg = None
+            elif 90 <= p <= 97:
+                # Bright foreground
+                self._style.fg = str(p - 90 + 8)
+            elif 100 <= p <= 107:
+                # Bright background
+                self._style.bg = str(p - 100 + 8)
+
+            i += 1
+
