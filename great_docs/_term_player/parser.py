@@ -88,3 +88,31 @@ def parse_termshow(source: str | Path) -> Recording:
     return parse_termshow_str(text)
 
 
+def parse_termshow_str(text: str) -> Recording:
+    """Parse termshow-format text into a Recording."""
+    lines = [
+        line
+        for line in text.strip().splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+
+    if not lines:
+        return Recording()
+
+    # Parse header
+    header = json.loads(lines[0])
+    rec = _header_to_recording(header)
+
+    # Parse events (relative intervals → absolute times)
+    abs_time = 0.0
+    for line in lines[1:]:
+        arr = json.loads(line)
+        if not isinstance(arr, list) or len(arr) < 3:
+            continue
+        interval, code, data = arr[0], arr[1], arr[2]
+        abs_time += float(interval)
+        rec.events.append(Event(time=abs_time, code=str(code), data=str(data)))
+
+    return rec
+
+
