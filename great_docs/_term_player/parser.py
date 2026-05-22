@@ -166,3 +166,36 @@ def parse_asciicast_str(text: str) -> Recording:
     return rec
 
 
+def _header_to_recording(header: dict) -> Recording:
+    """Convert a parsed JSON header into a Recording with metadata."""
+    rec = Recording()
+
+    rec.version = header.get("version", 1)
+    rec.format = header.get("format", "termshow")
+    rec.title = header.get("title", "")
+    rec.timestamp = header.get("timestamp")
+    rec.idle_time_limit = header.get("idle_time_limit")
+
+    # Parse terminal info
+    term_data = header.get("term", {})
+    if isinstance(term_data, dict):
+        rec.term.cols = term_data.get("cols", header.get("width", 80))
+        rec.term.rows = term_data.get("rows", header.get("height", 24))
+        rec.term.type = term_data.get("type", "xterm-256color")
+
+        theme_data = term_data.get("theme", {})
+        if isinstance(theme_data, dict):
+            rec.term.theme = _parse_theme(theme_data)
+    else:
+        # Asciicast v2 puts width/height at top level
+        rec.term.cols = header.get("width", 80)
+        rec.term.rows = header.get("height", 24)
+
+    # Asciicast v2 env may contain TERM
+    env = header.get("env", {})
+    if isinstance(env, dict) and "TERM" in env:
+        rec.term.type = env["TERM"]
+
+    return rec
+
+
