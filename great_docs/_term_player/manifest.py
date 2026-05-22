@@ -266,3 +266,13 @@ def _compute_keyframe_times(
     return sorted(times)
 
 
+def _delta_change_to_dict(change: DeltaChange) -> dict:
+    """Convert a DeltaChange to a JSON-serializable dict."""
+    d: dict = {"row": change.row, "col": change.col, "char": change.char}
+    if change.fg:
+        d["fg"] = change.fg
+    if change.bg:
+        d["bg"] = change.bg
+    if change.bold:
+        d["bold"] = True
+    return d
