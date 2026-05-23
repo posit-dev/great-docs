@@ -1,0 +1,24 @@
+source: assets/termshow-demo.termshow
+
+settings:
+  idle_time_limit: 2
+  window_chrome: colorful
+
+chapters:
+  - at: 0
+    label: "Install a Package"
+  - at: 11.67
+    label: "Verify Installation"
+
+annotations:
+  - at: 0.8
+    duration: 6
+    text: "pip install runs in the recorded shell"
+    position: top-right
+    style: callout
+  - at: 12
+    duration: 6
+    text: "Confirm the package installed correctly"
+    position: top-right
+    style: subtle
+
