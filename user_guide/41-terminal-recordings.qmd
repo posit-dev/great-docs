@@ -490,6 +490,8 @@ to change the port or `--no-browser` to suppress the automatic browser launch.
 
 ### Interface Layout
 
+![The Termshow Editor interface with every named component labeled.](../assets/termshow-editor-diagram.png)
+
 The Termshow Editor is divided into these primary areas:
 
 **Header Bar.** The top bar shows the editor title and filename, along with action buttons organized into
