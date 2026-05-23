@@ -297,8 +297,8 @@ Click the player viewport to give it focus, then use:
 | `Space` | Play / Pause (or reset from ended state) |
 | `→` | Seek forward 5 seconds |
 | `←` | Seek backward 5 seconds |
-| `.` | Jump to next chapter |
-| `,` | Jump to previous chapter |
+| `]` | Jump to next chapter |
+| `[` | Jump to previous chapter |
 
 All shortcuts require the player to have focus. Click anywhere on the player viewport first.
 
@@ -549,9 +549,9 @@ preset indicator.
 **Transport Controls.** Below the resize handle, centered transport controls provide:
 
 - **Rewind** (⏮): Jump to the start of the recording
-- **Previous Chapter** (⏴): Jump to the previous chapter marker (shortcut: `,`)
+- **Previous Chapter** (⏴): Jump to the previous chapter marker (shortcut: `[`)
 - **Play/Pause** (▶/⏸): Toggle playback (shortcut: `Space`)
-- **Next Chapter** (⏵): Jump to the next chapter marker (shortcut: `.`)
+- **Next Chapter** (⏵): Jump to the next chapter marker (shortcut: `]`)
 - **Timecode Display**: Shows elapsed time / total duration in `MM:SS.cc` precision. Click the
   current-time value to type an exact position (e.g., `01:23.45`) and press Enter to jump there.
 
@@ -637,7 +637,7 @@ The Termshow Editor supports these keyboard shortcuts for efficient editing:
 | `X` | Add cut at playhead |
 | `I` | Toggle info panel |
 | `←` / `→` | Seek ±1 second (or nudge active edge ±10ms) |
-| `,` / `.` | Jump to previous / next chapter |
+| `[` / `]` | Jump to previous / next chapter |
 | `Y` | View YAML |
 | `Delete` / `Backspace` | Delete selected item |
 | `Escape` | Close properties panel, deselect |
