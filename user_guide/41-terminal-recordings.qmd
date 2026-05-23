@@ -64,6 +64,9 @@ The command creates two files:
 - `assets/install-guide.termshow`: the raw recording
 - `assets/install-guide.termshow.yml`: a script template with commented sections
 
+With the raw recording saved and the script template in place, you're ready to shape the
+presentation.
+
 ### 2. Edit the script file
 
 Open `assets/install-guide.termshow.yml` and uncomment/fill in the sections you need (or use the
@@ -98,6 +101,9 @@ annotations:
 {{< termshow file="assets/install-guide" pause_on_chapters="true" >}}
 ```
 
+That single line is all you need. The shortcode handles discovery, rendering, and embedding
+automatically during the build step.
+
 ### 4. Build
 
 ```bash
@@ -106,6 +112,9 @@ great-docs build
 
 During the build, Great Docs automatically finds all `.termshow` files, renders them into SVG
 keyframes, and embeds the data inline in your HTML pages. No runtime fetches are needed.
+
+That's the entire workflow: record, annotate, embed, and build. The following sections cover each
+piece in detail.
 
 ## The Recording Format
 
@@ -129,6 +138,9 @@ Each event is `[delay_seconds, type, data]`:
 | `"o"` | Output: data written to the terminal |
 | `"i"` | Input: user keystrokes (for display) |
 | `"m"` | Marker: internal sync point for chapters |
+
+You rarely need to edit `.termshow` files by hand. The recorder and importer produce them, and
+the script file controls how they are presented.
 
 ### `.termshow.yml` script files
 
@@ -171,7 +183,13 @@ cuts:
     type: ellipsis
 ```
 
+All fields are optional except `source`. Start with just chapters and add annotations or cuts as
+you refine the presentation.
+
 ## Settings Reference
+
+The `settings` block in your `.termshow.yml` controls how the recording is rendered into SVG
+frames. All settings are optional and have sensible defaults.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -182,13 +200,21 @@ cuts:
 | `line_height` | `1.2` | Line height multiplier |
 | `padding` | `12` | Inner padding of the terminal area (px) |
 
+These settings are applied at render time. Changing them requires re-rendering but not
+re-recording.
+
 ## Shortcode Reference
+
+Embed a Termshow recording in any page with the `termshow` shortcode. At its simplest, you only
+need the `file` path:
 
 ```{shortcodes="false"}
 {{< termshow file="assets/my-demo" >}}
 ```
 
 ### Options
+
+The shortcode accepts the following options to control player behavior:
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -199,6 +225,9 @@ cuts:
 | `pause_on_chapters` | `"false"` | Auto-pause at each chapter boundary |
 | `controls` | `"true"` | Show the control bar |
 | `theme` | `"auto"` | Player theme: `auto`, `dark`, or `light` |
+
+All options are specified as key-value attributes on the shortcode. Unrecognized options are
+silently ignored, so you can safely add new ones as they become available.
 
 ### Examples
 
@@ -220,7 +249,14 @@ Fast autoplay preview:
 {{< termshow file="assets/quick" autoplay="true" speed="1.5" >}}
 ```
 
+Combine options freely. For instance, `autoplay` with `loop` creates a continuously cycling
+demonstration, while `pause_on_chapters` with `speed="1.5"` produces a brisk but controlled
+tutorial.
+
 ## Player Controls
+
+The embedded player provides interactive controls for navigating recordings. Here's what each
+component does:
 
 ### Control Bar
 
@@ -232,6 +268,8 @@ The bottom control bar contains (left to right):
    their hit targets are wider than the visible marks for easy clicking.
 4. **Remaining time**: Counts down to zero during playback.
 5. **Speed**: Cycles through 0.5×, 1×, 1.5×, 2×, 3×.
+
+All controls are keyboard-accessible and respond to the shortcuts listed below.
 
 ### Chapter Bar
 
@@ -247,6 +285,9 @@ A large semi-transparent button appears in the center of the viewport:
   without auto-playing.
 - **During chapter pauses**: Hidden, so the terminal content remains fully visible for reading.
 
+The overlay never obscures content during active playback; it only appears when the player is
+waiting for user input.
+
 ### Keyboard Shortcuts
 
 Click the player viewport to give it focus, then use:
@@ -258,6 +299,8 @@ Click the player viewport to give it focus, then use:
 | `←` | Seek backward 5 seconds |
 | `.` | Jump to next chapter |
 | `,` | Jump to previous chapter |
+
+All shortcuts require the player to have focus. Click anywhere on the player viewport first.
 
 ## Chapters
 
@@ -297,7 +340,12 @@ annotations:
     style: callout
 ```
 
+Annotations are purely presentational: they don't affect timing or terminal output, and you can
+add or remove them at any point without re-recording.
+
 ### Styles
+
+Each annotation has a `style` that controls its visual weight:
 
 | Style | Appearance |
 |-------|------------|
@@ -305,9 +353,17 @@ annotations:
 | `subtle` | Lighter, smaller text: less intrusive |
 | `highlight` | Amber-tinted with warm border: strong emphasis |
 
+Choose the style that matches the annotation's importance. Most recordings need only `callout`
+and `subtle`; reserve `highlight` for critical warnings or pivotal steps.
+
 ### Positions
 
+Annotations can be placed in any corner of the terminal viewport:
+
 `top-left`, `top-right`, `bottom-left`, `bottom-right`
+
+Place annotations where they won't cover the terminal text you're explaining. `top-right` is a
+good default because most CLI output scrolls along the left edge.
 
 **Tips:**
 
@@ -333,6 +389,9 @@ The `type` field controls what viewers see during the cut:
 | `jump` | Seamless jump (no visual indicator) |
 | `ellipsis` | Shows "…" briefly to indicate skipped time |
 
+Cuts are non-destructive: they are stored in the script file, not applied to the raw recording.
+You can always remove or adjust them later.
+
 ## Importing Existing Recordings
 
 Already have terminal recordings from other tools? Import them:
@@ -348,7 +407,12 @@ great-docs termshow import-tape demo.tape assets/my-demo
 The import preserves timing and terminal dimensions. Create a `.termshow.yml` script afterward to
 add chapters and annotations.
 
+Both importers produce the same `.termshow` format, so all editing and rendering features work
+identically regardless of the original source.
+
 ## Rendering & Preview
+
+You can preview and render recordings outside of a full site build using these CLI commands:
 
 ### Preview in terminal
 
@@ -367,7 +431,11 @@ great-docs termshow render assets/my-demo.termshow
 Generates the SVG keyframes and `manifest.json` without a full site build. Useful for inspecting
 the output or debugging chapter timing.
 
+Both commands work with any `.termshow` file that has a companion `.termshow.yml` script.
+
 ## Best Practices
+
+These guidelines help produce recordings that are clear, fast-loading, and pleasant to watch:
 
 - **Keep recordings short**: 15–30 seconds is ideal. Split longer workflows into multiple
   recordings, each embedded with its own shortcode.
@@ -379,6 +447,9 @@ the output or debugging chapter timing.
 - **Test at different speeds**: Make sure annotations are readable at 1.5× and 2×.
 - **Place recordings in `assets/`**: Keep them in a dedicated directory at your project root.
   The build system discovers them automatically.
+
+Following these guidelines ensures your recordings feel polished and load quickly, even on slower
+connections.
 
 ## How It Works
 
@@ -419,75 +490,108 @@ to change the port or `--no-browser` to suppress the automatic browser launch.
 
 ### Interface Layout
 
-The Termshow Editor is divided into four primary areas:
+The Termshow Editor is divided into these primary areas:
 
-#### Header Bar
+**Header Bar.** The top bar shows the editor title and filename, along with action buttons organized into
+thematic groups:
 
-The top bar shows the editor title and filename, along with action buttons:
+**Editing actions** (left):
 
 - **+ Chapter**: Add a chapter marker at the current playhead position (shortcut: `C`)
-- **+ Annotation**: Add a 1-second annotation at the playhead (shortcut: `A`)
+- **+ Annotation**: Add a 2-second annotation at the playhead (shortcut: `A`)
 - **+ Cut**: Mark a cut region at the playhead (shortcut: `X`)
+
+**Layout presets** (center): A segmented button with three view presets that control the
+split between the Preview Area and the Timeline Panel:
+
+- **Preview**: 75/25 split: maximizes the terminal view for inspecting output
+- **Balanced**: 50/50 split: equal space for preview and timeline (default)
+- **Timeline**: 25/75 split: maximizes the timeline for detailed editing
+
+**Document actions** (right):
+
+- **YAML**: View the generated YAML script (shortcut: `Y`)
 - **Save**: Write changes to the `.termshow.yml` file (shortcut: `Cmd+S` / `Ctrl+S`). Pulses
   gold when there are unsaved changes.
 
-#### Preview Area
-
-The center panel shows a live terminal preview. It renders the recording state at the current
+**Preview Area.** The center panel shows a live terminal preview. It renders the recording state at the current
 playhead position, updating in real time as you scrub, drag edges, or play back.
 
 The viewport uses **auto-fit scaling**: the terminal always renders at its native character grid
-(matching the recorded dimensions), then scales down proportionally to fit the available space.
+(matching the recorded dimensions), then scales proportionally to fill the available space.
 This means wide recordings (120 columns) and tall recordings (40+ rows) display without clipping
-or scrollbars. An 80×20 recording shows at or near native size, while larger terminals scale down
-automatically. The scaling recalculates on window resize.
+or scrollbars. When you expand the preview area (via the resize handle or layout presets), the
+terminal scales up to fill it. The scaling recalculates on window resize and during drag.
 
 Above the terminal viewport, a **Chapter Title Bar** displays the currently active chapter name,
 simulating the window chrome appearance of the final player.
 
-#### Transport Controls
+**Info Button**: A small circular *i* button sits in the top-left corner of the Preview Area.
+Clicking it (or pressing `I`) toggles the **Info Panel**, a floating overlay showing recording
+metadata:
 
-Below the preview, centered transport controls provide:
+- terminal dimensions (cols × rows)
+- duration (effective, accounting for cuts; raw duration shown in parentheses when cuts exist)
+- event count (total and output events)
+- chapter, annotation, and cut counts
+- source file size
+- estimated keyframe count and rendered SVG size
+
+The Info Panel updates live as you add or remove items. Click the `×` in its top-right corner
+or press `I` again to dismiss it.
+
+**Resize Handle.** A draggable divider between the Preview Area and the Transport/Timeline section.
+Drag it down to enlarge the terminal preview (the terminal scales up to fill), or drag it up to give
+more space to the timeline tracks. The preview area has a minimum height of 150px, and the timeline
+area is clamped so all three tracks remain visible. Manually dragging clears the active layout
+preset indicator.
+
+**Transport Controls.** Below the resize handle, centered transport controls provide:
 
 - **Rewind** (⏮): Jump to the start of the recording
+- **Previous Chapter** (⏴): Jump to the previous chapter marker (shortcut: `,`)
 - **Play/Pause** (▶/⏸): Toggle playback (shortcut: `Space`)
-- **Previous/Next Chapter** (⏴/⏵): Jump between chapter markers (shortcuts: `,` and `.`)
-- **Timecode Display**: Shows elapsed time / total duration in `MM:SS.cc` precision
+- **Next Chapter** (⏵): Jump to the next chapter marker (shortcut: `.`)
+- **Timecode Display**: Shows elapsed time / total duration in `MM:SS.cc` precision. Click the
+  current-time value to type an exact position (e.g., `01:23.45`) and press Enter to jump there.
 
-#### Timeline Panel
-
-The bottom panel contains three track lanes beneath a **timeline ruler**, the graduated strip
-showing time markings. Click anywhere on the ruler to instantly reposition the playhead; this is
-the safest place to scrub through the recording without accidentally selecting or creating items.
+**Timeline Panel.** The bottom panel contains three track lanes beneath a **Timeline Ruler**, the
+graduated strip showing time markings. Click anywhere on the ruler to reposition the playhead
+instantly, or drag the playhead indicator to scrub through the recording. The ruler is the safest
+place to navigate without accidentally selecting or creating items.
 
 1. **Chapters Track**: Gold vertical markers. Click a marker to select it; drag to reposition.
-   Click empty space to add a new chapter with placeholder text.
+   Double-click empty space to add a new chapter with placeholder text.
 
 2. **Annotations Track**: Green boxes spanning their time duration. The annotation text is shown
-   inside each box (clipped if too long). Boxes have left and right edge handles for resizing.
-   Click empty space to add a 1-second placeholder; drag across the track to create a
-   custom-duration annotation.
+   inside each box (clipped if too long). Click a box to select it; drag to reposition.
+   Boxes have left and right edge handles for resizing. Double-click empty space to add a 2-second
+   placeholder; drag across the track to create a custom-duration annotation.
 
 3. **Cuts Track**: Red (ellipsis) or purple-dashed (seamless) blocks. A centered `⋯` symbol
-   distinguishes ellipsis cuts. Boxes have edge handles. Click empty space to add a 1-second cut;
-   drag across the track to create a custom-length cut.
+   distinguishes ellipsis cuts. Click a box to select it; drag to reposition. Boxes have edge
+   handles. Double-click empty space to add a 2-second cut; drag across the track to create a
+   custom-length cut.
 
-A **playhead** (white vertical line) spans all three tracks and moves with the current time.
+A **Playhead** (white vertical line) spans all three tracks and moves with the current time.
 
-### Inspector Panel
+### Properties Panel
 
-Clicking any item in the timeline opens the **Inspector** on the right side. All fields are
-live; changes apply immediately as you type, with no Apply button. The Inspector shows
+Clicking any item in the timeline opens the **Properties Panel** on the right side. All fields
+are live; changes apply immediately as you type, with no Apply button. The panel shows
 context-specific fields:
 
 - **Chapter**: Time (seconds) and Label
 - **Annotation**: Time, Duration, Text, Position (dropdown), and Style (dropdown)
 - **Cut Region**: From (seconds), To (seconds), and Replace With (None/Ellipsis)
 
-Each inspector includes:
+Each panel includes:
 
-- **Undo**: Reverts the item to its state when the inspector was opened
+- **Undo**: Reverts the item to its state when the panel was opened
 - **Delete**: Removes the item entirely
+
+Changes take effect immediately in the preview, so you can watch the terminal update as you
+adjust values.
 
 ### Edge Editing
 
@@ -506,8 +610,9 @@ Clicking elsewhere or pressing `Escape` deselects and restores normal edge appea
 ### Drag-to-Create
 
 On the Annotations and Cuts tracks, clicking and dragging across empty space creates a new item
-spanning the drag distance. If the drag is too short (under 150ms), it's treated as a click and
-creates a 1-second item at that position instead.
+spanning the drag distance. The drag only initiates after a 4-pixel movement threshold, preventing
+accidental creation from stray clicks. If you want a fixed-size item without dragging,
+double-click instead (creates a 2-second item at that position).
 
 ### Cut Types
 
@@ -515,12 +620,14 @@ The two cut types have distinct visual appearances in the timeline:
 
 | Type | Appearance | Playback Effect |
 |------|-----------|-----------------|
-| **Ellipsis** | Solid red block with `⋯` symbol | Shows a brief centered "⋯" overlay during playback |
 | **Seamless** | Purple dashed block (no symbol) | Silent jump with no visual indicator |
+| **Ellipsis** | Solid red block with `⋯` symbol | Shows a 1 second centered "⋯" overlay during playback |
 
-Switch between types using the "Replace With" dropdown in the inspector.
+Switch between types using the "Replace With" dropdown in the properties panel.
 
 ### Keyboard Shortcuts
+
+The Termshow Editor supports these keyboard shortcuts for efficient editing:
 
 | Key | Action |
 |-----|--------|
@@ -528,16 +635,18 @@ Switch between types using the "Replace With" dropdown in the inspector.
 | `C` | Add chapter at playhead |
 | `A` | Add annotation at playhead |
 | `X` | Add cut at playhead |
+| `I` | Toggle info panel |
 | `←` / `→` | Seek ±1 second (or nudge active edge ±10ms) |
 | `,` / `.` | Jump to previous / next chapter |
+| `Y` | View YAML |
 | `Delete` / `Backspace` | Delete selected item |
-| `Escape` | Close inspector, deselect |
+| `Escape` | Close properties panel, deselect |
 | `Cmd+S` / `Ctrl+S` | Save |
 
 ### Unsaved Changes
 
 Any modification (adding, moving, editing, or deleting items) marks the session as dirty. The
-Save button changes to **"Save *"** with a pulsing gold glow to indicate unsaved changes.
+Save button changes to __Save *__ with a pulsing gold glow to indicate unsaved changes.
 Saving resets the indicator.
 
 ### Recommended Workflow
@@ -547,21 +656,25 @@ Saving resets the indicator.
    - `assets/demo.termshow`: the raw recording (timing + terminal output)
    - `assets/demo.termshow.yml`: the script file (chapters, annotations, cuts, settings)
 
-   Both files are always required. The `term record` command creates both automatically. The
+   Both files are always required. The `termshow record` command creates both automatically. The
    `.yml` file is generated with commented template sections you can uncomment and fill in.
    The `assets/` directory is recommended because it is automatically available to the
    `{{< termshow >}}` shortcode at build time.
 
-2. **Open the Termshow Editor** with `great-docs termshow edit assets/demo.termshow` to visually edit the script.
+2. **Open the Termshow Editor** with `great-docs termshow edit assets/demo.termshow` to visually
+edit the script.
 3. **Play through once** to get familiar with the recording's content and timing. Click the
-   **timeline ruler** (the graduated strip above the tracks) to scrub to any point.
-4. **Add chapters** at logical transitions: click the chapters track or press `C` at each
-   transition point.
-5. **Add annotations** to explain key moments: drag across the annotations track to set the
-   exact duration, then edit the text in the inspector.
-6. **Mark cuts** to remove dead time: drag across the cuts track to select the boring parts.
-   Use "ellipsis" for long skips (so viewers know time was removed) and "seamless" for short
-   gaps (smooth editing).
+**Timeline Ruler** (the graduated strip above the tracks) to scrub to any point.
+4. **Add chapters** at logical transitions: double-click the Chapters Track or press `C` at each
+transition point.
+5. **Add annotations** to explain key moments: drag across the Annotations Track to set the
+exact duration, or double-click for a 2-second default. Edit the text in the Properties Panel.
+6. **Mark cuts** to remove dead time: drag across the Cuts Track to select the boring parts.
+Use "ellipsis" for long skips (so viewers know time was removed) and "seamless" for short
+gaps (smooth editing).
 7. **Fine-tune edges**: click an edge handle, then use arrow keys to nudge it frame-by-frame
-   while watching the terminal preview update.
+while watching the terminal preview update.
 8. **Save** and preview with `great-docs termshow play` or by embedding in a page and building.
+
+The Termshow Editor saves only to the `.termshow.yml` script file. The raw recording is never
+modified, so you can always start fresh by deleting the script and re-editing.
