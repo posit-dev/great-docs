@@ -1194,13 +1194,75 @@ body {
   transform: translateY(-4px);
 }
 
-.inspector-panel .inspector-title {
+.inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.inspector-header .inspector-title {
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-dim);
-  margin-bottom: 8px;
+  margin: 0;
+}
+
+.inspector-close {
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.inspector-close:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.btn-info-circle {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 19;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-dim);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+.btn-info-circle:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.btn-info-circle.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
 }
 
 .inspector-panel .stat-row {
@@ -1224,9 +1286,39 @@ body {
   margin: 5px 0;
 }
 
-.btn-inspector-toggle {
-  font-size: 11px;
+.layout-presets {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-left: 8px;
+}
+
+.layout-presets button {
   padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.layout-presets button:last-child {
+  border-right: none;
+}
+
+.layout-presets button:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.layout-presets button.active {
+  background: var(--accent);
+  color: #000;
+  font-weight: 600;
 }
 </style>
 </head>
@@ -1241,14 +1333,19 @@ body {
     <button class="btn" id="btn-add-chapter" title="Add chapter at playhead (C)">+ Chapter</button>
     <button class="btn" id="btn-add-annotation" title="Add annotation at playhead (A)">+ Annotation</button>
     <button class="btn" id="btn-add-cut" title="Mark cut region (X)">+ Cut</button>
-    <button class="btn btn-inspector-toggle" id="btn-inspector" title="Toggle inspector (I)" style="margin-left: 8px;">Info</button>
-    <button class="btn" id="btn-view-yaml" title="View YAML (Y)">YAML</button>
+    <div class="layout-presets" id="layout-presets" style="margin-left: 8px;">
+      <button data-split="75" title="Maximize preview">Preview</button>
+      <button data-split="50" class="active" title="Equal split">Balanced</button>
+      <button data-split="25" title="Maximize timeline">Timeline</button>
+    </div>
+    <button class="btn" id="btn-view-yaml" title="View YAML (Y)" style="margin-left: 8px;">YAML</button>
     <button class="btn btn-primary" id="btn-save" title="Save (Cmd+S)">Save</button>
   </div>
 </div>
 
 <div class="editor-main">
   <div class="preview-area">
+    <button class="btn-info-circle" id="btn-inspector" title="Toggle info (I)">i</button>
     <div class="inspector-panel hidden" id="inspector-panel"></div>
     <div class="preview-wrapper">
       <div id="chapter-title-overlay" class="chapter-title-overlay"></div>
@@ -1417,7 +1514,7 @@ body {
     const cuts = (script.cuts || []).length;
 
     panel.innerHTML =
-      '<div class="inspector-title">Inspector</div>' +
+      '<div class="inspector-header"><span class="inspector-title">Info</span><button class="inspector-close" id="inspector-close" title="Close">&times;</button></div>' +
       statRow('Terminal', cols + ' \u00d7 ' + rows) +
       statRow('Duration', rec.duration.toFixed(1) + 's') +
       (cutTime > 0 ? statRow('Effective', effectiveDuration.toFixed(1) + 's') : '') +
@@ -2721,9 +2818,29 @@ body {
   const btnInspector = document.getElementById('btn-inspector');
   btnInspector.addEventListener('click', toggleInspector);
 
+  // Delegate close button click (re-rendered each time)
+  inspectorPanel.addEventListener('click', (e) => {
+    if (e.target.closest('.inspector-close')) {
+      hideInspector();
+    }
+  });
+
   function toggleInspector() {
-    inspectorPanel.classList.toggle('hidden');
-    btnInspector.classList.toggle('btn-primary', !inspectorPanel.classList.contains('hidden'));
+    if (inspectorPanel.classList.contains('hidden')) {
+      showInspector();
+    } else {
+      hideInspector();
+    }
+  }
+
+  function showInspector() {
+    inspectorPanel.classList.remove('hidden');
+    btnInspector.classList.add('active');
+  }
+
+  function hideInspector() {
+    inspectorPanel.classList.add('hidden');
+    btnInspector.classList.remove('active');
   }
 
   // --- Resize handle (preview ↔ transport/timeline) ---
@@ -2758,12 +2875,40 @@ body {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
         handle.classList.remove('active');
+        // Clear preset active state since user manually adjusted
+        document.querySelectorAll('#layout-presets button').forEach(b => b.classList.remove('active'));
         // Refresh playhead cache after resize
         invalidatePlayheadCache();
       }
 
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
+    });
+  })();
+
+  // --- Layout presets ---
+  (function() {
+    const presets = document.getElementById('layout-presets');
+    const previewArea = document.querySelector('.preview-area');
+    const editorMain = document.querySelector('.editor-main');
+    const transport = document.querySelector('.transport');
+    const handle = document.getElementById('resize-handle');
+
+    presets.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-split]');
+      if (!btn) return;
+      const split = parseInt(btn.dataset.split, 10);
+      presets.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const mainH = editorMain.clientHeight;
+      const transportH = transport.offsetHeight;
+      const handleH = handle.offsetHeight;
+      const available = mainH - transportH - handleH;
+      const newHeight = Math.round(available * split / 100);
+      previewArea.style.height = newHeight + 'px';
+      fitViewport();
+      invalidatePlayheadCache();
     });
   })();
 
