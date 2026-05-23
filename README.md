@@ -199,6 +199,7 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 **Shortcodes & Widgets**
 
 - Color swatches (inline and grid)
+- Terminal recordings (record, edit, embed)
 - Collapsible details sections
 - Keyboard keys styling
 - Horizontal rules with accent colors
@@ -321,6 +322,12 @@ Beyond `init`, `build`, and `preview`, Great Docs includes a full suite of quali
 | `great-docs skill install` | Install AI agent skills for your package |
 | `great-docs skill check` | Check if installed skills are up to date |
 | `great-docs skill list` | List available skills from a package or URL |
+| `great-docs termshow record` | Record a terminal session as a `.termshow` file |
+| `great-docs termshow edit` | Open the browser-based visual editor for a recording |
+| `great-docs termshow play` | Preview a recording in the terminal |
+| `great-docs termshow render` | Render SVG frames without a full site build |
+| `great-docs termshow import-cast` | Import an asciinema `.cast` file |
+| `great-docs termshow import-tape` | Import a VHS `.tape` file |
 
 ## Recipes
 
@@ -403,6 +410,7 @@ Full documentation is available at **[posit-dev.github.io/great-docs](https://po
 - [Proofreading](https://posit-dev.github.io/great-docs/user-guide/proofreading.html): spelling & grammar checks
 - [Linting](https://posit-dev.github.io/great-docs/user-guide/linting.html): documentation quality checks
 - [SEO](https://posit-dev.github.io/great-docs/user-guide/seo.html): search engine optimization
+- [Terminal Recordings](https://posit-dev.github.io/great-docs/user-guide/terminal-recordings.html): record, edit, and embed terminal sessions
 
 ## Requirements
 
