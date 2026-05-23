@@ -648,8 +648,8 @@ The Termshow Editor supports these keyboard shortcuts for efficient editing:
 ### Unsaved Changes
 
 Any modification (adding, moving, editing, or deleting items) marks the session as dirty. The
-Save button changes to __Save *__ with a pulsing gold glow to indicate unsaved changes.
-Saving resets the indicator.
+Save button changes to Save* with a pulsing gold glow to indicate unsaved changes. Saving resets the
+indicator.
 
 ### Recommended Workflow
 
