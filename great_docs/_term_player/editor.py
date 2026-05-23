@@ -1157,7 +1157,9 @@ body {
 .shortcuts {
   font-size: 11px;
   color: var(--text-dim);
-  padding: 4px 16px;
+  padding-bottom: 1em;
+  padding-top: 0.75em;
+  padding-left: 2em;
   background: var(--surface2);
   border-top: 1px solid var(--border);
   display: flex;
