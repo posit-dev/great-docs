@@ -3017,8 +3017,8 @@ body {
         nudgeAnnotationEdge(selectedItem.index, selectedItem.edge, -0.01);
       } else { seek(currentTime - 1); }
     }
-    else if (e.key === '.') { nextChapter(); }
-    else if (e.key === ',') { prevChapter(); }
+    else if (e.key === ']') { nextChapter(); }
+    else if (e.key === '[') { prevChapter(); }
     else if (e.key === 'Delete' || e.key === 'Backspace') { window.deleteSelected(); }
     else if (e.key === 'Escape') {
       if (yamlBackdrop.classList.contains('visible')) { hideYamlPreview(); }
