@@ -1365,9 +1365,9 @@ body {
     <span class="transport-spacer"></span>
     <div class="transport-controls">
       <button class="transport-btn" id="btn-rewind" title="Rewind to start"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg></button>
-      <button class="transport-btn" id="btn-prev-chapter" title="Previous chapter (,)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="4"/><polygon points="14 20 4 12 14 4"/></svg></button>
+      <button class="transport-btn" id="btn-prev-chapter" title="Previous chapter ([)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="4"/><polygon points="14 20 4 12 14 4"/></svg></button>
       <button class="transport-btn" id="btn-play" title="Play/Pause (Space)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg></button>
-      <button class="transport-btn" id="btn-next-chapter" title="Next chapter (.)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="4" x2="6" y2="20"/><polygon points="10 4 20 12 10 20"/></svg></button>
+      <button class="transport-btn" id="btn-next-chapter" title="Next chapter (])"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="4" x2="6" y2="20"/><polygon points="10 4 20 12 10 20"/></svg></button>
       <span class="transport-time" id="time-display">0:00.00 / 0:00.00</span>
     </div>
     <span class="transport-spacer"></span>
@@ -1397,9 +1397,10 @@ body {
   <span><kbd>C</kbd> Add chapter</span>
   <span><kbd>A</kbd> Add annotation</span>
   <span><kbd>X</kbd> Mark cut</span>
-  <span><kbd>I</kbd> Inspector</span>
   <span><kbd>&larr;</kbd><kbd>&rarr;</kbd> Seek</span>
-  <span><kbd>,</kbd><kbd>.</kbd> Prev/Next chapter</span>
+  <span><kbd>[</kbd><kbd>]</kbd> Prev/Next chapter</span>
+  <span><kbd>I</kbd> Show Info</span>
+  <span><kbd>Y</kbd> View YAML</span>
   <span><kbd>&#x2318;S</kbd> Save</span>
   <span><kbd>Del</kbd> Delete selected</span>
 </div>
