@@ -35,6 +35,7 @@ class Annotation:
     text: str
     position: str = "bottom-right"
     style: str = "callout"
+    width: str = "medium"
     row: int | None = None
     col: int | None = None
 
@@ -150,6 +151,7 @@ def _parse_script_data(data: dict[str, Any]) -> Script:
                     text=ann.get("text", ""),
                     position=ann.get("position", "bottom-right"),
                     style=ann.get("style", "callout"),
+                    width=ann.get("width", "medium"),
                     row=ann.get("row"),
                     col=ann.get("col"),
                 )
