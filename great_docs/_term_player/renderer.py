@@ -53,7 +53,7 @@ def render_frame(
     cell_h = font_size * DEFAULT_LINE_HEIGHT
 
     pad = DEFAULT_PADDING
-    chrome_h = _chrome_height(window_chrome)
+    chrome_h = 0.0  # Chrome is rendered as CSS overlay, not in SVG
 
     content_w = state.cols * cell_w
     content_h = state.rows * cell_h
@@ -90,9 +90,8 @@ def render_frame(
         f'<rect width="{svg_w:.1f}" height="{svg_h:.1f}" fill="{theme.bg}" rx="8" ry="8"/>'
     )
 
-    # Window chrome
-    if window_chrome != "none":
-        parts.append(_render_chrome(window_chrome, svg_w, theme))
+    # Window chrome is now rendered as CSS overlay by the player
+    # (kept as parameter for API compatibility)
 
     # Terminal content group
     content_y = pad + chrome_h

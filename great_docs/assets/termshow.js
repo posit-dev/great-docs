@@ -89,6 +89,10 @@
       try { inlineFrames = JSON.parse(framesEl.textContent); } catch (e) {}
     }
 
+    // Title bar (separate from viewport, above it)
+    const chapterBar = document.createElement('div');
+    chapterBar.className = 'gd-tp-chapter-bar';
+
     // Build player DOM
     const viewport = document.createElement('div');
     viewport.className = 'gd-tp-viewport';
@@ -114,15 +118,11 @@
     centerOverlay.appendChild(centerBtn);
     viewport.appendChild(centerOverlay);
 
-    // Chapter name bar (top of viewport)
-    const chapterBar = document.createElement('div');
-    chapterBar.className = 'gd-tp-chapter-bar';
-    viewport.appendChild(chapterBar);
-
     const controls = buildControls();
 
     // Replace container content with player structure
     container.innerHTML = '';
+    container.appendChild(chapterBar);
     container.appendChild(viewport);
     container.appendChild(controls.root);
 
@@ -132,6 +132,28 @@
       state.frames = frames;
       controls.duration.textContent = formatTime(manifest.duration);
       renderChapterMarkers(controls.timeline, manifest);
+
+      // Add traffic light decorations if window_chrome is set
+      var chrome = manifest.window_chrome || 'none';
+      var hasChapters = manifest.chapters && manifest.chapters.length > 0;
+      if (chrome === 'none' && !hasChapters) {
+        chapterBar.style.display = 'none';
+      } else if (chrome !== 'none') {
+        chapterBar.classList.add('gd-tp-has-chrome');
+        var lights = document.createElement('div');
+        lights.className = 'gd-tp-traffic-lights' + (chrome === 'minimal' ? ' gd-tp-chrome-minimal' : '');
+        lights.innerHTML = '<span class="gd-tp-traffic-dot gd-tp-dot-close"></span>' +
+          '<span class="gd-tp-traffic-dot gd-tp-dot-minimize"></span>' +
+          '<span class="gd-tp-traffic-dot gd-tp-dot-maximize"></span>';
+        chapterBar.appendChild(lights);
+      }
+
+      // Add a span for chapter text (so traffic lights aren't overwritten)
+      var chapterText = document.createElement('span');
+      chapterText.className = 'gd-tp-chapter-text';
+      chapterBar.appendChild(chapterText);
+      state.chapterText = chapterText;
+
       updateChapterBar(chapterBar, manifest, 0);
       // Show initial frame
       showFrame(state, svgContainer, 0);
@@ -395,8 +417,10 @@
   }
 
   function updateChapterBar(chapterBar, manifest, time) {
+    var textEl = chapterBar.querySelector('.gd-tp-chapter-text');
+    if (!textEl) return;
     if (!manifest || !manifest.chapters || manifest.chapters.length === 0) {
-      chapterBar.textContent = '';
+      textEl.textContent = '';
       return;
     }
     // Find the current chapter (last one at or before current time)
@@ -407,7 +431,7 @@
         break;
       }
     }
-    chapterBar.textContent = label;
+    textEl.textContent = label;
   }
 
   function showFrame(state, svgContainer, idx) {
