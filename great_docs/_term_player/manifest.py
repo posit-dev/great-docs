@@ -81,6 +81,7 @@ class Manifest:
                     "text": a.text,
                     "position": a.position,
                     "style": a.style,
+                    "width": a.width,
                 }
                 for a in self.annotations
             ],

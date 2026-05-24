@@ -740,7 +740,10 @@ SPEC = {
             "| `subtle` | Lighter, smaller text — less intrusive |\n"
             "| `highlight` | Amber-tinted with warm border — draws attention |\n"
             "\n"
-            "Positions: `top-left`, `top-right`, `bottom-left`, `bottom-right`.\n"
+            "Positions: `top-left`, `top`, `top-right`, `left`, `right`,\n"
+            "`bottom-left`, `bottom`, `bottom-right`.\n"
+            "\n"
+            "Widths: `small` (25%), `medium` (50%, default), `large` (75%).\n"
             "\n"
             "## Embedding in Pages\n"
             "\n"
@@ -955,6 +958,656 @@ SPEC = {
             "- Works with `file://` protocol (offline docs)\n"
             "- No CORS or fetch issues\n"
             "- SVGs scale perfectly at any zoom level\n"
+        ),
+        # ── Annotation gallery recordings ─────────────────────────────
+        #
+        # A compact base recording used for all annotation position/width
+        # demos. Shows a simple command + output so annotations are visible
+        # against real terminal content.
+        #
+        # --- Position demos ---
+        "demos/ann-pos-top-left.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Position Demo"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "c"]\n'
+            '[0.07, "o", "h"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "\\""]\n'
+            '[0.06, "o", "H"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "l"]\n'
+            '[0.08, "o", "l"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", " "]\n'
+            '[0.06, "o", "f"]\n'
+            '[0.07, "o", "r"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "m"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.07, "o", "G"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.07, "o", "t"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.08, "o", "D"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.07, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.08, "o", "\\""]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.2, "o", "Hello from Great Docs\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/ann-pos-top-left.termshow.yml": (
+            "source: demos/ann-pos-top-left.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "annotations:\n"
+            "  - at: 1.0\n"
+            "    duration: 5.0\n"
+            '    text: "Annotation at top-left"\n'
+            "    position: top-left\n"
+            "    style: callout\n"
+        ),
+        "demos/ann-pos-top.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Position Demo"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "c"]\n'
+            '[0.07, "o", "h"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "\\""]\n'
+            '[0.06, "o", "H"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "l"]\n'
+            '[0.08, "o", "l"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", " "]\n'
+            '[0.06, "o", "f"]\n'
+            '[0.07, "o", "r"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "m"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.07, "o", "G"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.07, "o", "t"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.08, "o", "D"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.07, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.08, "o", "\\""]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.2, "o", "Hello from Great Docs\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/ann-pos-top.termshow.yml": (
+            "source: demos/ann-pos-top.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "annotations:\n"
+            "  - at: 1.0\n"
+            "    duration: 5.0\n"
+            '    text: "Annotation at top"\n'
+            "    position: top\n"
+            "    style: callout\n"
+        ),
+        "demos/ann-pos-top-right.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Position Demo"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "c"]\n'
+            '[0.07, "o", "h"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "\\""]\n'
+            '[0.06, "o", "H"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "l"]\n'
+            '[0.08, "o", "l"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", " "]\n'
+            '[0.06, "o", "f"]\n'
+            '[0.07, "o", "r"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "m"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.07, "o", "G"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.07, "o", "t"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.08, "o", "D"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.07, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.08, "o", "\\""]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.2, "o", "Hello from Great Docs\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/ann-pos-top-right.termshow.yml": (
+            "source: demos/ann-pos-top-right.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "annotations:\n"
+            "  - at: 1.0\n"
+            "    duration: 5.0\n"
+            '    text: "Annotation at top-right"\n'
+            "    position: top-right\n"
+            "    style: callout\n"
+        ),
+        "demos/ann-pos-left.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Position Demo"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "c"]\n'
+            '[0.07, "o", "h"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "\\""]\n'
+            '[0.06, "o", "H"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "l"]\n'
+            '[0.08, "o", "l"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", " "]\n'
+            '[0.06, "o", "f"]\n'
+            '[0.07, "o", "r"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "m"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.07, "o", "G"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.07, "o", "t"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.08, "o", "D"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.07, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.08, "o", "\\""]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.2, "o", "Hello from Great Docs\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/ann-pos-left.termshow.yml": (
+            "source: demos/ann-pos-left.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "annotations:\n"
+            "  - at: 1.0\n"
+            "    duration: 5.0\n"
+            '    text: "Annotation at left"\n'
+            "    position: left\n"
+            "    style: callout\n"
+        ),
+        "demos/ann-pos-right.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Position Demo"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "c"]\n'
+            '[0.07, "o", "h"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "\\""]\n'
+            '[0.06, "o", "H"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "l"]\n'
+            '[0.08, "o", "l"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", " "]\n'
+            '[0.06, "o", "f"]\n'
+            '[0.07, "o", "r"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "m"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.07, "o", "G"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.07, "o", "t"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.08, "o", "D"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.07, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.08, "o", "\\""]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.2, "o", "Hello from Great Docs\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/ann-pos-right.termshow.yml": (
+            "source: demos/ann-pos-right.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "annotations:\n"
+            "  - at: 1.0\n"
+            "    duration: 5.0\n"
+            '    text: "Annotation at right"\n'
+            "    position: right\n"
+            "    style: callout\n"
+        ),
+        "demos/ann-pos-bottom-left.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Position Demo"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "c"]\n'
+            '[0.07, "o", "h"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "\\""]\n'
+            '[0.06, "o", "H"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "l"]\n'
+            '[0.08, "o", "l"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", " "]\n'
+            '[0.06, "o", "f"]\n'
+            '[0.07, "o", "r"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "m"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.07, "o", "G"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.07, "o", "t"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.08, "o", "D"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.07, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.08, "o", "\\""]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.2, "o", "Hello from Great Docs\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/ann-pos-bottom-left.termshow.yml": (
+            "source: demos/ann-pos-bottom-left.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "annotations:\n"
+            "  - at: 1.0\n"
+            "    duration: 5.0\n"
+            '    text: "Annotation at bottom-left"\n'
+            "    position: bottom-left\n"
+            "    style: callout\n"
+        ),
+        "demos/ann-pos-bottom.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Position Demo"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "c"]\n'
+            '[0.07, "o", "h"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "\\""]\n'
+            '[0.06, "o", "H"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "l"]\n'
+            '[0.08, "o", "l"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", " "]\n'
+            '[0.06, "o", "f"]\n'
+            '[0.07, "o", "r"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "m"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.07, "o", "G"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.07, "o", "t"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.08, "o", "D"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.07, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.08, "o", "\\""]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.2, "o", "Hello from Great Docs\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/ann-pos-bottom.termshow.yml": (
+            "source: demos/ann-pos-bottom.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "annotations:\n"
+            "  - at: 1.0\n"
+            "    duration: 5.0\n"
+            '    text: "Annotation at bottom"\n'
+            "    position: bottom\n"
+            "    style: callout\n"
+        ),
+        "demos/ann-pos-bottom-right.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Position Demo"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "c"]\n'
+            '[0.07, "o", "h"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "\\""]\n'
+            '[0.06, "o", "H"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "l"]\n'
+            '[0.08, "o", "l"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", " "]\n'
+            '[0.06, "o", "f"]\n'
+            '[0.07, "o", "r"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "m"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.07, "o", "G"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.07, "o", "t"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.08, "o", "D"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.07, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.08, "o", "\\""]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.2, "o", "Hello from Great Docs\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/ann-pos-bottom-right.termshow.yml": (
+            "source: demos/ann-pos-bottom-right.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "annotations:\n"
+            "  - at: 1.0\n"
+            "    duration: 5.0\n"
+            '    text: "Annotation at bottom-right"\n'
+            "    position: bottom-right\n"
+            "    style: callout\n"
+        ),
+        # --- Width demos (all at top-right) ---
+        "demos/ann-width-small.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Width Demo"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "c"]\n'
+            '[0.07, "o", "h"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "\\""]\n'
+            '[0.06, "o", "H"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "l"]\n'
+            '[0.08, "o", "l"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", " "]\n'
+            '[0.06, "o", "f"]\n'
+            '[0.07, "o", "r"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "m"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.07, "o", "G"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.07, "o", "t"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.08, "o", "D"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.07, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.08, "o", "\\""]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.2, "o", "Hello from Great Docs\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/ann-width-small.termshow.yml": (
+            "source: demos/ann-width-small.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "annotations:\n"
+            "  - at: 1.0\n"
+            "    duration: 5.0\n"
+            '    text: "Small"\n'
+            "    position: top-right\n"
+            "    style: callout\n"
+            "    width: small\n"
+        ),
+        "demos/ann-width-medium.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Width Demo"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "c"]\n'
+            '[0.07, "o", "h"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "\\""]\n'
+            '[0.06, "o", "H"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "l"]\n'
+            '[0.08, "o", "l"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", " "]\n'
+            '[0.06, "o", "f"]\n'
+            '[0.07, "o", "r"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "m"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.07, "o", "G"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.07, "o", "t"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.08, "o", "D"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.07, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.08, "o", "\\""]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.2, "o", "Hello from Great Docs\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/ann-width-medium.termshow.yml": (
+            "source: demos/ann-width-medium.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "annotations:\n"
+            "  - at: 1.0\n"
+            "    duration: 5.0\n"
+            '    text: "Medium width annotation with more text content"\n'
+            "    position: top-right\n"
+            "    style: callout\n"
+            "    width: medium\n"
+        ),
+        "demos/ann-width-large.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Width Demo"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "c"]\n'
+            '[0.07, "o", "h"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "\\""]\n'
+            '[0.06, "o", "H"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "l"]\n'
+            '[0.08, "o", "l"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", " "]\n'
+            '[0.06, "o", "f"]\n'
+            '[0.07, "o", "r"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "m"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.07, "o", "G"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.08, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.07, "o", "t"]\n'
+            '[0.06, "o", " "]\n'
+            '[0.08, "o", "D"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.07, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.08, "o", "\\""]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.2, "o", "Hello from Great Docs\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/ann-width-large.termshow.yml": (
+            "source: demos/ann-width-large.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "annotations:\n"
+            "  - at: 1.0\n"
+            "    duration: 5.0\n"
+            '    text: "Large width annotation that takes up more horizontal space for longer explanations"\n'
+            "    position: top-right\n"
+            "    style: callout\n"
+            "    width: large\n"
+        ),
+        # ── Annotation gallery page ──────────────────────────────────
+        "user_guide/05-annotation-gallery.qmd": (
+            "---\n"
+            "title: Annotation Gallery\n"
+            "---\n"
+            "\n"
+            "## Annotation Positions\n"
+            "\n"
+            "Annotations can be placed at any edge or corner of the terminal\n"
+            "viewport. All examples below use the default `medium` width\n"
+            "and `callout` style.\n"
+            "\n"
+            "### Position: Top-Left\n"
+            "\n"
+            '{{< termshow file="demos/ann-pos-top-left" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Position: Top\n"
+            "\n"
+            '{{< termshow file="demos/ann-pos-top" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Position: Top-Right\n"
+            "\n"
+            '{{< termshow file="demos/ann-pos-top-right" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Position: Left\n"
+            "\n"
+            '{{< termshow file="demos/ann-pos-left" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Position: Right\n"
+            "\n"
+            '{{< termshow file="demos/ann-pos-right" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Position: Bottom-Left\n"
+            "\n"
+            '{{< termshow file="demos/ann-pos-bottom-left" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Position: Bottom\n"
+            "\n"
+            '{{< termshow file="demos/ann-pos-bottom" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Position: Bottom-Right\n"
+            "\n"
+            '{{< termshow file="demos/ann-pos-bottom-right" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "## Annotation Widths\n"
+            "\n"
+            "The `width` field controls how wide an annotation can grow as\n"
+            "a fraction of the player viewport. All examples below use\n"
+            "`top-right` position and `callout` style.\n"
+            "\n"
+            "### Small (25%)\n"
+            "\n"
+            '{{< termshow file="demos/ann-width-small" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Medium (50%) — Default\n"
+            "\n"
+            '{{< termshow file="demos/ann-width-medium" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Large (75%)\n"
+            "\n"
+            '{{< termshow file="demos/ann-width-large" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "## Choosing Settings\n"
+            "\n"
+            "| Goal | Recommended |\n"
+            "|------|-------------|\n"
+            "| Brief label next to code | `position: right`, `width: small` |\n"
+            "| Step explanation avoiding left-aligned output | `position: top-right`, `width: medium` |\n"
+            "| Long description with room to breathe | `position: top`, `width: large` |\n"
+            "| Warning banner across the top | `position: top`, `width: large`, `style: highlight` |\n"
+            "| Subtle aside | `position: bottom-right`, `width: small`, `style: subtle` |\n"
+            "\n"
+            "## YAML Example\n"
+            "\n"
+            "```yaml\n"
+            "annotations:\n"
+            "  - at: 2.0\n"
+            "    duration: 3.0\n"
+            "    text: This step installs all dependencies\n"
+            "    position: top-right\n"
+            "    style: callout\n"
+            "    width: large\n"
+            "```\n"
+            "\n"
+            "Available positions: `top-left`, `top`, `top-right`, `left`, `right`,\n"
+            "`bottom-left`, `bottom`, `bottom-right`.\n"
+            "\n"
+            "Available widths: `small` (25%), `medium` (50%, default), `large` (75%).\n"
         ),
     },
     "config": {
