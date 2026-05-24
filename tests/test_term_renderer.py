@@ -257,14 +257,15 @@ class TestRenderFrame:
     def test_window_chrome_colorful(self):
         state = _simple_screen(10, 3, "X")
         svg = render_frame(state, window_chrome="colorful")
-        assert "circle" in svg
-        assert "#f38ba8" in svg  # Close button color
+
+        # SVG should not contain chrome circles (in the CSS overlay)
+        assert "circle" not in svg
 
     def test_window_chrome_minimal(self):
         state = _simple_screen(10, 3, "X")
         svg = render_frame(state, window_chrome="minimal")
-        assert "circle" in svg
-        assert "#585b70" in svg  # Grey dots
+
+        assert "circle" not in svg
 
     def test_xml_escapes_special_chars(self):
         state = _simple_screen(20, 3, "<script>&alert</script>")

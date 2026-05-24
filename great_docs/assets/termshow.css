@@ -19,6 +19,7 @@
   max-width: 100%;
   margin: 1.5em 0;
   background: var(--gd-tp-bg);
+  container-type: inline-size;
 }
 
 /* Viewport */
@@ -66,10 +67,10 @@
 
 .gd-tp-annotation {
   position: absolute;
-  max-width: 280px;
-  padding: 8px 12px;
+  max-width: 40%;
+  padding: clamp(4px, 1.2cqi, 10px) clamp(6px, 1.8cqi, 14px);
   border-radius: 6px;
-  font-size: 13px;
+  font-size: clamp(10px, 2cqi, 14px);
   line-height: 1.4;
   color: var(--gd-tp-fg);
   transition: opacity 0.3s ease;
@@ -83,7 +84,7 @@
 
 .gd-tp-ann-subtle {
   background: rgba(30, 30, 46, 0.7);
-  font-size: 12px;
+  font-size: clamp(9px, 1.8cqi, 12px);
   backdrop-filter: blur(4px);
 }
 
@@ -96,23 +97,23 @@
 
 /* Annotation positions */
 .gd-tp-ann-top-left {
-  top: 12px;
-  left: 12px;
+  top: clamp(6px, 1.8cqi, 14px);
+  left: clamp(6px, 1.8cqi, 14px);
 }
 
 .gd-tp-ann-top-right {
-  top: 12px;
-  right: 12px;
+  top: clamp(6px, 1.8cqi, 14px);
+  right: clamp(6px, 1.8cqi, 14px);
 }
 
 .gd-tp-ann-bottom-left {
-  bottom: 12px;
-  left: 12px;
+  bottom: clamp(6px, 1.8cqi, 14px);
+  left: clamp(6px, 1.8cqi, 14px);
 }
 
 .gd-tp-ann-bottom-right {
-  bottom: 12px;
-  right: 12px;
+  bottom: clamp(6px, 1.8cqi, 14px);
+  right: clamp(6px, 1.8cqi, 14px);
 }
 
 /* Controls bar */
@@ -284,29 +285,63 @@
   }
 }
 
-/* Chapter name bar */
+/* Title bar */
 .gd-tp-chapter-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  padding: 6px 12px;
+  position: relative;
+  padding: clamp(4px, 1cqi, 8px) clamp(8px, 1.8cqi, 14px);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 14px;
+  font-size: clamp(10px, 2.2cqi, 14px);
   font-weight: 500;
   color: rgba(255, 255, 255, 0.85);
-  background: linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, transparent 100%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-  pointer-events: none;
-  z-index: 4;
-  min-height: 28px;
+  background: var(--gd-tp-bg);
+  border-bottom: 1px solid var(--gd-tp-border);
+  min-height: clamp(22px, 5cqi, 36px);
   text-align: center;
-  opacity: 1;
-  transition: opacity 0.3s;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.gd-tp-chapter-bar:empty {
-  opacity: 0;
+.gd-tp-chapter-bar:empty:not(.gd-tp-has-chrome) {
+  display: none;
+}
+
+.gd-tp-chapter-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Traffic light decorations */
+.gd-tp-traffic-lights {
+  position: absolute;
+  left: clamp(8px, 1.8cqi, 16px);
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: clamp(4px, 0.9cqi, 8px);
+}
+
+.gd-tp-traffic-dot {
+  width: clamp(7px, 1.6cqi, 12px);
+  height: clamp(7px, 1.6cqi, 12px);
+  border-radius: 50%;
+}
+
+.gd-tp-dot-close { background: #f38ba8; }
+.gd-tp-dot-minimize { background: #f9e2af; }
+.gd-tp-dot-maximize { background: #a6e3a1; }
+
+/* Minimal chrome: muted dots */
+.gd-tp-traffic-lights.gd-tp-chrome-minimal .gd-tp-dot-close,
+.gd-tp-traffic-lights.gd-tp-chrome-minimal .gd-tp-dot-minimize,
+.gd-tp-traffic-lights.gd-tp-chrome-minimal .gd-tp-dot-maximize {
+  background: #585b70;
 }
 
 /* Light theme overrides (Quarto body[data-bs-theme="light"]) */

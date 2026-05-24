@@ -253,10 +253,19 @@ class TestGenerateManifest:
         out = tmp_path / "render"
         generate_manifest(rec, script, output_dir=out)
 
-        # First frame SVG should use the script settings
+        # First frame SVG should use the script font settings
         svg = (out / "frame-000.svg").read_text()
+
         assert "Courier" in svg
-        assert "circle" in svg  # colorful chrome has circles
+
+        # Chrome is rendered by the CSS player, not in the SVG
+        assert "circle" not in svg
+
+        # But window_chrome should be in the manifest
+        manifest_text = (out / "manifest.json").read_text()
+        data = json.loads(manifest_text)
+
+        assert data["window_chrome"] == "colorful"
 
     def test_manifest_json_valid(self, tmp_path: Path):
         rec = _minimal_recording(3.0)

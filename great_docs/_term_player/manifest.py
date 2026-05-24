@@ -55,6 +55,7 @@ class Manifest:
     deltas: list[DeltaEntry] = field(default_factory=list)
     annotations: list[Annotation] = field(default_factory=list)
     highlights: list[Highlight] = field(default_factory=list)
+    window_chrome: str = "none"
 
     def to_json(self) -> str:
         """Serialize manifest to JSON string."""
@@ -96,6 +97,8 @@ class Manifest:
                 for h in self.highlights
             ],
         }
+        if self.window_chrome != "none":
+            data["window_chrome"] = self.window_chrome
         return json.dumps(data, indent=2)
 
 
@@ -234,6 +237,7 @@ def generate_manifest(
         deltas=deltas,
         annotations=script.annotations if script else [],
         highlights=script.highlights if script else [],
+        window_chrome=window_chrome,
     )
 
     if out_path:
