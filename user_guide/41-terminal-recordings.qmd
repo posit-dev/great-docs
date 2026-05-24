@@ -702,3 +702,15 @@ while watching the terminal preview update.
 
 The Termshow Editor saves only to the `.termshow.yml` script file. The raw recording is never
 modified, so you can always start fresh by deleting the script and re-editing.
+
+## Next Steps
+
+Terminal recordings bring CLI workflows to life with crisp, interactive playback directly in your
+documentation. Combined with chapters and annotations, they replace static code blocks with
+guided, self-paced walkthroughs that readers can pause and study.
+
+- [Videos](22-videos.qmd): embed video content for non-terminal demos and walkthroughs
+- [CLI Documentation](07-cli-documentation.qmd): auto-generate reference pages for the commands you record
+- [Diagrams](19-diagrams.qmd): complement terminal demos with architecture and flow visualizations
+- [Theming](11-theming.qmd): customize player colors and appearance to match your site
+- [Building](13-building.qmd): how Termshow shortcodes fit into the Quarto build pipeline
