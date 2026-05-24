@@ -49,6 +49,7 @@ def _build_editor_data(recording: Recording, script: Script | None) -> dict[str,
                     "duration": ann.duration,
                     "text": ann.text,
                     "position": ann.position,
+                    "width": ann.width,
                     "style": ann.style,
                 }
                 for ann in (script.annotations if script else [])
@@ -97,6 +98,9 @@ def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
             lines.append(f"    duration: {ann['duration']}")
             lines.append(f'    text: "{ann["text"]}"')
             lines.append(f"    position: {ann['position']}")
+            width = ann.get("width", "medium")
+            if width != "medium":
+                lines.append(f"    width: {width}")
             lines.append(f"    style: {ann['style']}")
         lines.append("")
 
@@ -494,6 +498,13 @@ body {
 .annotation-bubble.pos-top-right { top: 10px; right: 10px; }
 .annotation-bubble.pos-bottom-left { bottom: 10px; left: 10px; }
 .annotation-bubble.pos-bottom-right { bottom: 10px; right: 10px; }
+.annotation-bubble.pos-top { top: 10px; left: 50%; transform: translateX(-50%); }
+.annotation-bubble.pos-bottom { bottom: 10px; left: 50%; transform: translateX(-50%); }
+.annotation-bubble.pos-left { top: 50%; left: 10px; transform: translateY(-50%); }
+.annotation-bubble.pos-right { top: 50%; right: 10px; transform: translateY(-50%); }
+.annotation-bubble.width-small { max-width: 25%; }
+.annotation-bubble.width-medium { max-width: 50%; }
+.annotation-bubble.width-large { max-width: 75%; }
 
 @keyframes ann-fade-in {
   from { opacity: 0; transform: translateY(-4px); }
@@ -1865,7 +1876,8 @@ body {
       const bubble = document.createElement('div');
       bubble.className = 'annotation-bubble'
         + ' style-' + (ann.style || 'callout')
-        + ' pos-' + (ann.position || 'top-right');
+        + ' pos-' + (ann.position || 'top-right')
+        + ' width-' + (ann.width || 'medium');
       bubble.textContent = ann.text;
       overlay.appendChild(bubble);
     }
@@ -2104,6 +2116,7 @@ body {
     const annEls = trackAnnotations.querySelectorAll('.track-item-annotation');
     if (annEls[idx]) annEls[idx].classList.add('selected');
     const ann = data.script.annotations[idx];
+    if (!ann.width) ann.width = 'medium';
     propsPanel.innerHTML = `
       <div class="prop-title">Annotation</div>
       <div class="prop-field">
@@ -2121,10 +2134,22 @@ body {
       <div class="prop-field">
         <div class="prop-label">Position</div>
         <select class="prop-select" id="prop-position">
+          <option value="top" ${ann.position==='top'?'selected':''}>Top</option>
+          <option value="bottom" ${ann.position==='bottom'?'selected':''}>Bottom</option>
+          <option value="left" ${ann.position==='left'?'selected':''}>Left</option>
+          <option value="right" ${ann.position==='right'?'selected':''}>Right</option>
           <option value="top-left" ${ann.position==='top-left'?'selected':''}>Top Left</option>
           <option value="top-right" ${ann.position==='top-right'?'selected':''}>Top Right</option>
           <option value="bottom-left" ${ann.position==='bottom-left'?'selected':''}>Bottom Left</option>
           <option value="bottom-right" ${ann.position==='bottom-right'?'selected':''}>Bottom Right</option>
+        </select>
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Width</div>
+        <select class="prop-select" id="prop-width">
+          <option value="small" ${ann.width==='small'?'selected':''}>Small</option>
+          <option value="medium" ${ann.width==='medium'?'selected':''}>Medium</option>
+          <option value="large" ${ann.width==='large'?'selected':''}>Large</option>
         </select>
       </div>
       <div class="prop-field">
@@ -2253,6 +2278,7 @@ body {
       data.script.annotations[index].duration = parseFloat(document.getElementById('prop-duration').value) || 1;
       data.script.annotations[index].text = document.getElementById('prop-text').value;
       data.script.annotations[index].position = document.getElementById('prop-position').value;
+      data.script.annotations[index].width = document.getElementById('prop-width').value;
       data.script.annotations[index].style = document.getElementById('prop-style').value;
     } else if (type === 'cut') {
       data.script.cuts[index].start = parseFloat(document.getElementById('prop-start').value) || 0;
@@ -2752,7 +2778,7 @@ body {
     const start = roundTime(time);
     const end = roundTime(Math.min(time + 1, data.recording.duration));
     if (end > start) {
-      data.script.annotations.push({ time: start, duration: roundTime(end - start), text: 'Annotation', position: 'top-right', style: 'callout' });
+      data.script.annotations.push({ time: start, duration: roundTime(end - start), text: 'Annotation', position: 'top-right', width: 'medium', style: 'callout' });
       renderTracks();
       updatePlayhead();
       markDirty();
