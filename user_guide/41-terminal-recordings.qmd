@@ -338,6 +338,7 @@ annotations:
     text: This installs all dependencies from requirements.txt
     position: top-right
     style: callout
+    width: medium
 ```
 
 Annotations are purely presentational: they don't affect timing or terminal output, and you can
@@ -358,12 +359,33 @@ and `subtle`; reserve `highlight` for critical warnings or pivotal steps.
 
 ### Positions
 
-Annotations can be placed in any corner of the terminal viewport:
+Annotations can be placed at any edge or corner of the terminal viewport:
 
-`top-left`, `top-right`, `bottom-left`, `bottom-right`
+| Position | Placement |
+|----------|-----------|
+| `top-left` | Top-left corner |
+| `top` | Top center |
+| `top-right` | Top-right corner |
+| `left` | Vertically centered, left edge |
+| `right` | Vertically centered, right edge |
+| `bottom-left` | Bottom-left corner |
+| `bottom` | Bottom center |
+| `bottom-right` | Bottom-right corner (default) |
 
 Place annotations where they won't cover the terminal text you're explaining. `top-right` is a
 good default because most CLI output scrolls along the left edge.
+
+### Width
+
+Control how wide an annotation can grow with the `width` field:
+
+| Width | Max width |
+|-------|-----------|
+| `small` | 25% of the viewport |
+| `medium` | 50% of the viewport (default) |
+| `large` | 75% of the viewport |
+
+Use `small` for brief one-word labels, `large` for longer explanations that need breathing room.
 
 **Tips:**
 
