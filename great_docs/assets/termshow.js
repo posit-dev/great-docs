@@ -96,7 +96,11 @@
     // Build player DOM
     const viewport = document.createElement('div');
     viewport.className = 'gd-tp-viewport';
-    viewport.setAttribute('tabindex', '0');
+    // Defer tabindex until user interaction to prevent Safari from treating
+    // auto-playing players as scroll-restoration targets.
+    if (!options.autoplay) {
+      viewport.setAttribute('tabindex', '0');
+    }
     viewport.setAttribute('role', 'application');
     viewport.setAttribute('aria-label', 'Terminal recording player');
 
@@ -178,8 +182,16 @@
         });
     }
 
+    // Restore tabindex on first user interaction (for keyboard nav)
+    function ensureTabindex() {
+      if (!viewport.hasAttribute('tabindex')) {
+        viewport.setAttribute('tabindex', '0');
+      }
+    }
+
     // Event listeners
     controls.playBtn.addEventListener('click', () => {
+      ensureTabindex();
       if (state.playing) {
         pause(state, controls, container, centerOverlay);
       } else if (state.ended) {
@@ -199,6 +211,7 @@
     });
 
     centerOverlay.addEventListener('click', () => {
+      ensureTabindex();
       if (state.ended) {
         // Return to initial state (don't autoplay)
         state.ended = false;
@@ -438,6 +451,18 @@
     const manifest = state.manifest;
     if (!manifest || idx < 0 || idx >= manifest.keyframes.length) return;
 
+    // Pin height before replacing innerHTML to prevent layout collapse.
+    // All frames in a recording share the same dimensions, so we pin once
+    // and keep it for the lifetime of playback. This prevents Safari's
+    // scroll-preservation heuristic from firing on the last player where
+    // even a sub-frame height flicker affects scrollHeight.
+    if (!svgContainer.style.minHeight) {
+      var pinHeight = svgContainer.offsetHeight;
+      if (pinHeight > 0) {
+        svgContainer.style.minHeight = pinHeight + 'px';
+      }
+    }
+
     // Use inline frames if available (no fetch needed)
     if (state.frames && state.frames[idx]) {
       svgContainer.innerHTML = state.frames[idx];
@@ -452,9 +477,7 @@
       .then((svg) => {
         svgContainer.innerHTML = svg;
       })
-      .catch(() => {
-        // Keep current frame if load fails
-      });
+      .catch(() => {});
   }
 
   function findKeyframeIndex(keyframes, time) {
@@ -470,24 +493,43 @@
   }
 
   function updateAnnotations(layer, annotations, time) {
-    // Clear stale annotations
-    layer.innerHTML = '';
+    if (!annotations || annotations.length === 0) {
+      for (var i = 0; i < layer.children.length; i++) {
+        layer.children[i].style.opacity = '0';
+      }
+      return;
+    }
 
-    if (!annotations || annotations.length === 0) return;
-
-    for (const ann of annotations) {
-      if (time >= ann.time && time <= ann.time + ann.duration) {
-        const el = document.createElement('div');
-        el.className = `gd-tp-annotation gd-tp-ann-${ann.position} gd-tp-ann-${ann.style}`;
-        el.textContent = ann.text;
-
-        // Fade progress (for smooth entry/exit)
-        const elapsed = time - ann.time;
-        const fadeIn = Math.min(1, elapsed / 0.3);
-        const fadeOut = Math.min(1, (ann.duration - elapsed) / 0.3);
-        el.style.opacity = Math.min(fadeIn, fadeOut);
-
+    // Pre-create elements with full styling at init time. Once created, ONLY
+    // opacity is mutated per-frame. This prevents Safari from re-evaluating
+    // position styles (top/bottom/margin-block) during playback, which triggers
+    // its scroll-position recalculation bug.
+    if (!layer._annEls) {
+      layer._annEls = [];
+      for (var j = 0; j < annotations.length; j++) {
+        var ann0 = annotations[j];
+        var el = document.createElement('div');
+        var wCls = ann0.width && ann0.width !== 'medium' ? ' gd-tp-ann-w-' + ann0.width : '';
+        el.className = 'gd-tp-annotation gd-tp-ann-' + ann0.position + ' gd-tp-ann-' + ann0.style + wCls;
+        el.textContent = ann0.text;
+        el.style.opacity = '0';
+        el.setAttribute('aria-hidden', 'true');
         layer.appendChild(el);
+        layer._annEls.push(el);
+      }
+    }
+
+    for (var k = 0; k < annotations.length; k++) {
+      var ann = annotations[k];
+      var node = layer._annEls[k];
+      if (time >= ann.time && time <= ann.time + ann.duration) {
+        // Fade progress (for smooth entry/exit)
+        var elapsed = time - ann.time;
+        var fadeIn = Math.min(1, elapsed / 0.3);
+        var fadeOut = Math.min(1, (ann.duration - elapsed) / 0.3);
+        node.style.opacity = Math.min(fadeIn, fadeOut);
+      } else {
+        if (node.style.opacity !== '0') node.style.opacity = '0';
       }
     }
   }

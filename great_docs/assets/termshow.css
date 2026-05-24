@@ -20,6 +20,12 @@
   margin: 1.5em 0;
   background: var(--gd-tp-bg);
   container-type: inline-size;
+  overflow-anchor: none;
+}
+
+/* Prevent any player internals from being used as scroll anchors */
+.gd-termshow * {
+  overflow-anchor: none;
 }
 
 /* Viewport */
@@ -61,13 +67,11 @@
   inset: 0;
   pointer-events: none;
   padding: 12px;
-  display: flex;
-  flex-direction: column;
+  contain: layout style;
 }
 
 .gd-tp-annotation {
   position: absolute;
-  max-width: 40%;
   padding: clamp(4px, 1.2cqi, 10px) clamp(6px, 1.8cqi, 14px);
   border-radius: 6px;
   font-size: clamp(10px, 2cqi, 14px);
@@ -106,6 +110,14 @@
   right: clamp(6px, 1.8cqi, 14px);
 }
 
+.gd-tp-ann-top {
+  top: clamp(6px, 1.8cqi, 14px);
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: fit-content;
+}
+
 .gd-tp-ann-bottom-left {
   bottom: clamp(6px, 1.8cqi, 14px);
   left: clamp(6px, 1.8cqi, 14px);
@@ -115,6 +127,35 @@
   bottom: clamp(6px, 1.8cqi, 14px);
   right: clamp(6px, 1.8cqi, 14px);
 }
+
+.gd-tp-ann-bottom {
+  bottom: clamp(6px, 1.8cqi, 14px);
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: fit-content;
+}
+
+.gd-tp-ann-left {
+  top: 0;
+  bottom: 0;
+  left: clamp(6px, 1.8cqi, 14px);
+  margin-block: auto;
+  height: fit-content;
+}
+
+.gd-tp-ann-right {
+  top: 0;
+  bottom: 0;
+  right: clamp(6px, 1.8cqi, 14px);
+  margin-block: auto;
+  height: fit-content;
+}
+
+/* Annotation widths */
+.gd-tp-annotation { max-width: 50%; }
+.gd-tp-ann-w-small { max-width: 25%; }
+.gd-tp-ann-w-large { max-width: 75%; }
 
 /* Controls bar */
 .gd-tp-controls {
