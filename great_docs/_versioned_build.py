@@ -1761,7 +1761,7 @@ def run_versioned_build(
             "errors": ["No matching versions to build"],
         }
 
-    build_root = project_root / ".great-docs-build"
+    build_root = project_root / "_great_docs_build"
     if build_root.exists():
         shutil.rmtree(build_root)
     build_root.mkdir(parents=True)

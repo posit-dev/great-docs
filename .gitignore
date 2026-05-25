@@ -146,6 +146,7 @@ __marimo__/
 
 # Great Docs build directory (ephemeral, do not commit)
 great-docs/
+_great_docs_build/
 .great-docs-build/
 .great-docs-cache/
 .great-docs/

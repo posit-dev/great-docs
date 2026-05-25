@@ -3,7 +3,7 @@ from pathlib import Path
 
 # Quarto sets the working directory to the Quarto project directory.
 # In a normal build this is great-docs/ (one level below project root).
-# In a versioned build this is .great-docs-build/<version>/ (two levels below).
+# In a versioned build this is _great_docs_build/<version>/ (two levels below).
 # We find the project root by walking upward until we find great-docs.yml.
 build_dir = Path.cwd()
 
