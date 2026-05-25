@@ -85,6 +85,8 @@ class Script:
     font_family: str | None = None
     show_cursor: bool = True
     window_chrome: str = "none"
+    prompt: str | None = None
+    prompt_pattern: str | None = None
     chapters: list[Chapter] = field(default_factory=list)
     cuts: list[Cut] = field(default_factory=list)
     annotations: list[Annotation] = field(default_factory=list)
@@ -131,6 +133,12 @@ def _parse_script_data(data: dict[str, Any]) -> Script:
         script.font_family = settings.get("font_family")
         script.show_cursor = settings.get("show_cursor", True)
         script.window_chrome = settings.get("window_chrome", "none")
+        if "prompt" in settings:
+            script.prompt = str(settings["prompt"]) if settings["prompt"] is not None else None
+        if "prompt_pattern" in settings:
+            script.prompt_pattern = (
+                str(settings["prompt_pattern"]) if settings["prompt_pattern"] is not None else None
+            )
 
     # Chapters
     for ch in data.get("chapters", []):

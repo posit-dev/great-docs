@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .emulator import TerminalEmulator
+from .emulator import ScreenState, TerminalEmulator
 from .parser import Recording
 from .renderer import render_frame
 from .script import Annotation, Chapter, Highlight, Script, Snippet
@@ -173,6 +174,17 @@ def generate_manifest(
             if event.code == "m":
                 chapters.append(Chapter(time=event.time, label=event.data))
 
+    # Detect prompt prefix for substitution (if prompt setting is configured)
+    prompt_prefix: str | None = None
+    prompt_replacement: str | None = None
+    prompt_pattern: str | None = None
+
+    if script and script.prompt:
+        prompt_replacement = script.prompt
+        prompt_pattern = script.prompt_pattern
+        # Run a pre-pass to detect the prompt from input events
+        prompt_prefix = _detect_prompt_prefix(recording)
+
     # Determine keyframe times
     keyframe_times = _compute_keyframe_times(recording.duration, keyframe_interval, chapters)
 
@@ -215,6 +227,18 @@ def generate_manifest(
 
         # Capture keyframe
         state = emu.screen
+
+        # Apply prompt substitution if configured
+        if prompt_replacement:
+            if prompt_prefix:
+                state = _apply_prompt_substitution(
+                    state, prompt_prefix, prompt_replacement, prompt_pattern
+                )
+            elif prompt_pattern:
+                state = _apply_prompt_pattern_substitution(
+                    state, prompt_pattern, prompt_replacement
+                )
+
         frame_num = len(keyframes)
         filename = f"{prefix}-{frame_num:03d}.svg"
 
@@ -293,3 +317,164 @@ def _delta_change_to_dict(change: DeltaChange) -> dict:
     if change.bold:
         d["bold"] = True
     return d
+
+
+# ---------------------------------------------------------------------------
+# Prompt substitution
+# ---------------------------------------------------------------------------
+
+
+def _detect_prompt_prefix(recording: Recording) -> str | None:
+    """Detect the prompt prefix string by correlating input events with screen state.
+
+    Runs through the recording events with an emulator. At each input ("i") event,
+    captures the text on the cursor row from column 0 up to the cursor position.
+    Returns the most common prompt prefix found, or None if no input events exist.
+    """
+    emu = TerminalEmulator(cols=recording.term.cols, rows=recording.term.rows)
+    prompt_texts: list[str] = []
+
+    for event in recording.events:
+        if event.code == "o":
+            emu.feed(event.data)
+        elif event.code == "r":
+            parts = event.data.split("x")
+            if len(parts) == 2:
+                try:
+                    emu.resize(int(parts[0]), int(parts[1]))
+                except ValueError:
+                    pass
+        elif event.code == "i":
+            screen = emu.screen
+            row = screen.cursor_row
+            col = screen.cursor_col
+            if col > 0:
+                # Extract text on this row up to cursor position
+                text = "".join(screen.cells[row][c].char for c in range(col))
+                prompt_texts.append(text)
+
+    if not prompt_texts:
+        return None
+
+    # Find the most common prompt prefix
+    from collections import Counter
+
+    counts = Counter(prompt_texts)
+    most_common = counts.most_common(1)[0][0]
+    return most_common
+
+
+# Common prompt characters, ordered by specificity
+_PROMPT_CHARS = ("❯", "➜", "→", "▶", "⟩", "λ", "%", "$", ">", "#")
+
+
+def _find_prompt_char_in_prefix(prefix: str) -> tuple[int, str] | None:
+    """Find the last prompt character in a detected prefix string.
+
+    Returns (col_index, char) or None if no known prompt char is found.
+    """
+    # Search backwards for the last known prompt char
+    for i in range(len(prefix) - 1, -1, -1):
+        if prefix[i] in _PROMPT_CHARS:
+            return (i, prefix[i])
+    return None
+
+
+def _apply_prompt_substitution(
+    state: ScreenState,
+    prompt_prefix: str,
+    replacement: str,
+    prompt_pattern: str | None = None,
+) -> ScreenState:
+    """Apply prompt character substitution to a screen state.
+
+    Finds rows that start with the detected prompt prefix and replaces the
+    prompt character with the configured replacement string.
+
+    Parameters
+    ----------
+    state
+        The terminal screen state to modify.
+    prompt_prefix
+        The detected prompt prefix (e.g., "$ " or "user@host:~ $ ").
+    replacement
+        The string to substitute for the prompt character.
+    prompt_pattern
+        Optional regex pattern for fallback prompt detection (used when
+        no input events were available to detect the prefix).
+
+    Returns
+    -------
+    ScreenState
+        A copy of the state with prompt characters substituted.
+    """
+    # Find the prompt character position within the prefix
+    char_info = _find_prompt_char_in_prefix(prompt_prefix)
+    if char_info is None:
+        return state
+
+    prompt_col, original_char = char_info
+
+    # Make a copy so we don't mutate the original
+    new_state = state.copy()
+
+    for row_idx in range(new_state.rows):
+        # Extract the row text up to the prompt prefix length
+        row_text = "".join(
+            new_state.cells[row_idx][c].char for c in range(min(len(prompt_prefix), new_state.cols))
+        )
+
+        # Check if this row starts with the detected prompt prefix
+        if row_text == prompt_prefix:
+            # Substitute the prompt character cell
+            new_state.cells[row_idx][prompt_col].char = replacement
+
+    return new_state
+
+
+def _apply_prompt_pattern_substitution(
+    state: ScreenState,
+    pattern: str,
+    replacement: str,
+) -> ScreenState:
+    """Apply prompt substitution using a regex pattern (fallback mode).
+
+    Used when no input events are available to detect prompts structurally.
+    The pattern should match the prompt portion at the start of a line.
+
+    Parameters
+    ----------
+    state
+        The terminal screen state to modify.
+    pattern
+        Regex pattern that matches the prompt at line start. The last
+        character of the match is replaced.
+    replacement
+        The string to substitute for the prompt character.
+
+    Returns
+    -------
+    ScreenState
+        A copy of the state with prompt characters substituted.
+    """
+    try:
+        regex = re.compile(pattern)
+    except re.error:
+        return state
+
+    new_state = state.copy()
+
+    for row_idx in range(new_state.rows):
+        # Extract full row text
+        row_text = "".join(new_state.cells[row_idx][c].char for c in range(new_state.cols))
+
+        m = regex.match(row_text)
+        if m:
+            # Find the prompt char — last non-space char in the match
+            matched = m.group(0)
+            for i in range(len(matched) - 1, -1, -1):
+                if matched[i].strip():
+                    new_state.cells[row_idx][i].char = replacement
+                    break
+
+    return new_state
