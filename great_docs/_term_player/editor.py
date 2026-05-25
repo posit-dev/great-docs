@@ -62,6 +62,16 @@ def _build_editor_data(recording: Recording, script: Script | None) -> dict[str,
                 }
                 for cut in (script.cuts if script else [])
             ],
+            "snippets": [
+                {
+                    "time": cmd.time,
+                    "duration": cmd.duration,
+                    "text": cmd.text,
+                    "match": cmd.match,
+                    "label": cmd.label,
+                }
+                for cmd in (script.snippets if script else [])
+            ],
         },
     }
     return data
@@ -111,6 +121,23 @@ def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
             lines.append(f"  - from: {cut['start']}")
             lines.append(f"    to: {cut['end']}")
             lines.append(f"    type: {cut['type']}")
+        lines.append("")
+
+    snippets = script_data.get("snippets", [])
+    if snippets:
+        lines.append("snippets:")
+        for cmd in sorted(snippets, key=lambda c: c["time"]):
+            lines.append(f"  - at: {cmd['time']}")
+            lines.append(f"    duration: {cmd['duration']}")
+            text = cmd.get("text", "")
+            match = cmd.get("match", "")
+            if text:
+                lines.append(f'    text: "{text}"')
+            if match:
+                lines.append(f"    match: '{match}'")
+            label = cmd.get("label", "")
+            if label:
+                lines.append(f'    label: "{label}"')
         lines.append("")
 
     return "\n".join(lines) + "\n"
@@ -269,6 +296,7 @@ _EDITOR_HTML = """\
   --chapter: #f9e2af;
   --annotation: #a6e3a1;
   --cut: #f38ba8;
+  --snippet: #89b4fa;
   --playhead: #cba6f7;
   --radius: 6px;
 }
@@ -404,6 +432,7 @@ body {
 }
 
 .preview-wrapper {
+  position: relative;
   display: flex;
   flex-direction: column;
   transform: scale(var(--viewport-scale, 1));
@@ -433,9 +462,42 @@ body {
   padding: 5px 12px;
 }
 
-.chapter-title-overlay.visible + .preview-viewport {
+.chapter-title-overlay.visible + .snippet-preview + .preview-viewport {
   border-top: none;
   border-radius: 0 0 8px 8px;
+}
+
+.snippet-preview {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 10;
+  padding: 4px 10px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.snippet-preview.visible {
+  opacity: 1;
+}
+
+.snippet-preview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--snippet);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--snippet);
+  font-family: inherit;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.snippet-preview-btn svg {
+  opacity: 0.7;
 }
 
 .cut-indicator {
@@ -930,12 +992,102 @@ body {
   cursor: crosshair;
 }
 
+/* Snippet track items */
+.track-item-snippet {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  background: rgba(137, 180, 250, 0.15);
+  border: 1px solid rgba(137, 180, 250, 0.6);
+  border-radius: 3px;
+  cursor: pointer;
+  overflow: visible;
+  min-width: 8px;
+}
+
+.track-item-snippet .cmd-text {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  font-size: 9px;
+  color: var(--snippet);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+}
+
+.track-item-snippet:hover {
+  background: rgba(137, 180, 250, 0.25);
+}
+
+.track-item-snippet.selected {
+  background: rgba(137, 180, 250, 0.35);
+  border-color: var(--snippet);
+  box-shadow: 0 -4px 8px rgba(137, 180, 250, 0.3), 0 4px 8px rgba(137, 180, 250, 0.3);
+}
+
+.track-item-snippet .cmd-handle {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 6px;
+  cursor: ew-resize;
+  z-index: 5;
+}
+
+.track-item-snippet .cmd-handle-left {
+  left: -3px;
+  border-left: 2px solid var(--snippet);
+  border-radius: 2px 0 0 2px;
+}
+
+.track-item-snippet .cmd-handle-right {
+  right: -3px;
+  border-right: 2px solid var(--snippet);
+  border-radius: 0 2px 2px 0;
+}
+
+.track-item-snippet .cmd-handle:hover,
+.track-item-snippet .cmd-handle.active {
+  background: rgba(137, 180, 250, 0.4);
+}
+
+.track-item-snippet .cmd-handle.selected {
+  top: -14px;
+  bottom: -14px;
+  width: 4px;
+  background: none;
+  z-index: 20;
+}
+
+.track-item-snippet .cmd-handle-left.selected {
+  left: -2px;
+  border-left: 3px solid var(--snippet);
+  box-shadow: -2px 0 8px rgba(137, 180, 250, 0.7);
+}
+
+.track-item-snippet .cmd-handle-right.selected {
+  right: -2px;
+  border-right: 3px solid var(--snippet);
+  box-shadow: 2px 0 8px rgba(137, 180, 250, 0.7);
+}
+
+#track-snippets {
+  cursor: crosshair;
+}
+
 /* Playhead — single line spanning ruler + 3 tracks */
 .playhead {
   position: absolute;
   top: 0;
   left: 0;
-  height: 141px; /* ruler 29px + 3 tracks × 36px + 4px overshoot */
+  height: 177px; /* ruler 29px + 4 tracks × 36px + 4px overshoot */
   width: 2px;
   background: var(--playhead);
   z-index: 10;
@@ -1346,6 +1498,7 @@ body {
     <button class="btn" id="btn-add-chapter" title="Add chapter at playhead (C)">+ Chapter</button>
     <button class="btn" id="btn-add-annotation" title="Add annotation at playhead (A)">+ Annotation</button>
     <button class="btn" id="btn-add-cut" title="Mark cut region (X)">+ Cut</button>
+    <button class="btn" id="btn-add-snippet" title="Add snippet at playhead (D)"> + Snippet</button>
     <div class="layout-presets" id="layout-presets" style="margin-left: 8px;">
       <button data-split="75" title="Maximize preview">Preview</button>
       <button data-split="50" class="active" title="Equal split">Balanced</button>
@@ -1362,6 +1515,7 @@ body {
     <div class="inspector-panel hidden" id="inspector-panel"></div>
     <div class="preview-wrapper">
       <div id="chapter-title-overlay" class="chapter-title-overlay"></div>
+      <div id="snippet-preview" class="snippet-preview"></div>
       <div class="preview-viewport">
         <pre id="terminal-output"></pre>
         <div id="annotation-overlay" class="annotation-overlay"></div>
@@ -1400,6 +1554,10 @@ body {
       <div class="track-label" style="color: var(--cut);">Cuts</div>
       <div class="track-content" id="track-cuts"></div>
     </div>
+    <div class="timeline-track">
+      <div class="track-label" style="color: var(--snippet);">Snippets</div>
+      <div class="track-content" id="track-snippets"></div>
+    </div>
   </div>
 </div>
 
@@ -1408,6 +1566,7 @@ body {
   <span><kbd>C</kbd> Add chapter</span>
   <span><kbd>A</kbd> Add annotation</span>
   <span><kbd>X</kbd> Mark cut</span>
+  <span><kbd>D</kbd> Add snippet</span>
   <span><kbd>&larr;</kbd><kbd>&rarr;</kbd> Seek</span>
   <span><kbd>[</kbd><kbd>]</kbd> Prev/Next chapter</span>
   <span><kbd>I</kbd> Show Info</span>
@@ -1452,6 +1611,7 @@ body {
   const trackChapters = document.getElementById('track-chapters');
   const trackAnnotations = document.getElementById('track-annotations');
   const trackCuts = document.getElementById('track-cuts');
+  const trackSnippets = document.getElementById('track-snippets');
   const propsPanel = document.getElementById('properties-panel');
   const toast = document.getElementById('toast');
   const btnPlay = document.getElementById('btn-play');
@@ -1466,6 +1626,8 @@ body {
   function init() {
     fileName.textContent = data.source_file || data.recording.title || 'Untitled';
     durationDisplay.textContent = formatTimePrecise(data.recording.duration);
+    // Ensure snippets array exists
+    if (!data.script.snippets) data.script.snippets = [];
     renderStats();
 
     // Set terminal viewport to captured dimensions
@@ -1526,6 +1688,7 @@ body {
     const chapters = (script.chapters || []).length;
     const annotations = (script.annotations || []).length;
     const cuts = (script.cuts || []).length;
+    const snippets = (script.snippets || []).length;
 
     panel.innerHTML =
       '<div class="inspector-header"><span class="inspector-title">Info</span><button class="inspector-close" id="inspector-close" title="Close">&times;</button></div>' +
@@ -1538,6 +1701,7 @@ body {
       statRow('Chapters', String(chapters)) +
       statRow('Annotations', String(annotations)) +
       statRow('Cuts', String(cuts)) +
+      statRow('Snippets', String(snippets)) +
       '<div class="stat-divider"></div>' +
       statRow('Source', fmtSize(sourceBytes)) +
       statRow('Keyframes', '~' + estKeyframes) +
@@ -1661,6 +1825,39 @@ body {
       el.appendChild(rh);
 
       trackCuts.appendChild(el);
+    });
+
+    // Snippets
+    trackSnippets.innerHTML = '';
+
+    (data.script.snippets || []).forEach((cmd, i) => {
+      const el = document.createElement('div');
+      el.className = 'track-item-snippet';
+      el.style.left = timeToPct(cmd.time);
+      el.style.width = durationToPct(cmd.duration);
+      const textSpan = document.createElement('span');
+      textSpan.className = 'cmd-text';
+      textSpan.textContent = cmd.text;
+      el.appendChild(textSpan);
+      el.addEventListener('mousedown', (e) => {
+        if (e.target.classList.contains('cmd-handle')) return;
+        e.stopPropagation();
+        startBoxDrag('snippet', i, e);
+      });
+
+      // Left handle
+      const lh = document.createElement('div');
+      lh.className = 'cmd-handle cmd-handle-left';
+      lh.addEventListener('mousedown', (e) => { e.stopPropagation(); startSnippetHandleDrag(i, 'start', e); });
+      el.appendChild(lh);
+
+      // Right handle
+      const rh = document.createElement('div');
+      rh.className = 'cmd-handle cmd-handle-right';
+      rh.addEventListener('mousedown', (e) => { e.stopPropagation(); startSnippetHandleDrag(i, 'end', e); });
+      el.appendChild(rh);
+
+      trackSnippets.appendChild(el);
     });
 
     renderStats();
@@ -1839,6 +2036,26 @@ body {
     termOutput.innerHTML = htmlLines.join('\\n');
     renderAnnotations();
     renderChapterTitle();
+    renderSnippetPreview();
+  }
+
+  function renderSnippetPreview() {
+    const el = document.getElementById('snippet-preview');
+    const snips = data.script.snippets || [];
+    // Find first active snippet at current time
+    let active = null;
+    for (const s of snips) {
+      if (currentTime >= s.time && currentTime <= s.time + s.duration) { active = s; break; }
+    }
+    if (active) {
+      const label = active.label || active.text || active.match || 'Copy';
+      el.innerHTML = '<span class="snippet-preview-btn">' +
+        '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
+        '<span>' + escHtml(label) + '</span></span>';
+      el.classList.add('visible');
+    } else {
+      el.classList.remove('visible');
+    }
   }
 
   function renderChapterTitle() {
@@ -2229,6 +2446,43 @@ body {
     attachLiveListeners();
   }
 
+  function selectSnippet(idx) {
+    selectedItem = { type: 'snippet', index: idx };
+    clearAllHighlights();
+    const cmdEls = trackSnippets.querySelectorAll('.track-item-snippet');
+    if (cmdEls[idx]) cmdEls[idx].classList.add('selected');
+    const cmd = (data.script.snippets || [])[idx];
+    propsPanel.innerHTML = `
+      <div class="prop-title">Snippet</div>
+      <div class="prop-field">
+        <div class="prop-label">Time (s)</div>
+        <input class="prop-input" type="number" step="0.01" value="${cmd.time.toFixed(2)}" id="prop-time">
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Duration (s)</div>
+        <input class="prop-input" type="number" step="0.1" value="${cmd.duration.toFixed(2)}" id="prop-duration">
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Text</div>
+        <input class="prop-input" type="text" value="${escAttr(cmd.text)}" id="prop-text" placeholder="Literal text to copy">
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Match (regex)</div>
+        <input class="prop-input" type="text" value="${escAttr(cmd.match || '')}" id="prop-match" placeholder="Regex pattern against terminal buffer">
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Label (optional)</div>
+        <input class="prop-input" type="text" value="${escAttr(cmd.label || '')}" id="prop-label">
+      </div>
+      <div class="prop-actions">
+        <button class="btn" onclick="undoSelected()">Undo</button>
+        <button class="btn" style="color:var(--cut)" onclick="deleteSelected()">Delete</button>
+      </div>
+    `;
+    propsPanel.classList.add('open');
+    attachLiveListeners();
+  }
+
   // --- Live input listeners for inspector ---
   let undoSnapshot = null;
 
@@ -2239,6 +2493,7 @@ body {
       if (type === 'chapter') undoSnapshot = { ...data.script.chapters[index] };
       else if (type === 'annotation') undoSnapshot = { ...data.script.annotations[index] };
       else if (type === 'cut') undoSnapshot = { ...data.script.cuts[index] };
+      else if (type === 'snippet') undoSnapshot = { ...(data.script.snippets || [])[index] };
     }
     propsPanel.querySelectorAll('.prop-input, .prop-select').forEach(el => {
       el.addEventListener('input', liveApply);
@@ -2284,6 +2539,12 @@ body {
       data.script.cuts[index].start = parseFloat(document.getElementById('prop-start').value) || 0;
       data.script.cuts[index].end = parseFloat(document.getElementById('prop-end').value) || 0;
       data.script.cuts[index].type = document.getElementById('prop-type').value;
+    } else if (type === 'snippet') {
+      data.script.snippets[index].time = parseFloat(document.getElementById('prop-time').value) || 0;
+      data.script.snippets[index].duration = parseFloat(document.getElementById('prop-duration').value) || 1;
+      data.script.snippets[index].text = document.getElementById('prop-text').value;
+      data.script.snippets[index].match = document.getElementById('prop-match').value;
+      data.script.snippets[index].label = document.getElementById('prop-label').value;
     }
 
     markDirty();
@@ -2297,12 +2558,14 @@ body {
     if (type === 'chapter') data.script.chapters[index] = { ...undoSnapshot };
     else if (type === 'annotation') data.script.annotations[index] = { ...undoSnapshot };
     else if (type === 'cut') data.script.cuts[index] = { ...undoSnapshot };
+    else if (type === 'snippet') data.script.snippets[index] = { ...undoSnapshot };
     renderTracks();
     updatePlayhead();
     // Re-open panel with restored values
     if (type === 'chapter') selectChapter(index);
     else if (type === 'annotation') selectAnnotation(index);
     else if (type === 'cut') selectCut(index);
+    else if (type === 'snippet') selectSnippet(index);
     showToast('Reverted');
   };
 
@@ -2334,6 +2597,7 @@ body {
     if (type === 'chapter') data.script.chapters.splice(index, 1);
     else if (type === 'annotation') data.script.annotations.splice(index, 1);
     else if (type === 'cut') data.script.cuts.splice(index, 1);
+    else if (type === 'snippet') data.script.snippets.splice(index, 1);
 
     selectedItem = null;
     propsPanel.classList.remove('open');
@@ -2508,11 +2772,186 @@ body {
     }
   });
 
-  // --- Box drag-to-reposition (annotations and cuts) ---
+  // --- Snippet add/drag/double-click ---
+  function addSnippet() {
+    addSnippetAt(currentTime);
+  }
+
+  // Check if a time range overlaps any existing snippet (excluding skipIdx)
+  function snippetOverlapsAny(start, end, skipIdx) {
+    const snips = data.script.snippets || [];
+    for (let i = 0; i < snips.length; i++) {
+      if (i === skipIdx) continue;
+      const s = snips[i];
+      if (start < s.time + s.duration && end > s.time) return true;
+    }
+    return false;
+  }
+
+  function addSnippetAt(time) {
+    if (!data.script.snippets) data.script.snippets = [];
+    const start = roundTime(time);
+    const dur = roundTime(Math.min(5, data.recording.duration - start));
+    if (dur <= 0) return;
+    // Prevent overlapping snippets
+    if (snippetOverlapsAny(start, start + dur, -1)) {
+      showToast('Cannot add snippet — overlaps an existing one');
+      return;
+    }
+    data.script.snippets.push({ time: start, duration: dur, text: '# enter text here', match: '', label: '' });
+    renderTracks();
+    updatePlayhead();
+    markDirty();
+    const idx = data.script.snippets.length - 1;
+    selectSnippet(idx);
+    showToast('Snippet added — edit the text in properties');
+  }
+
+  // Snippet handle drag (resize edges)
+  function startSnippetHandleDrag(cmdIdx, edge, e) {
+    e.preventDefault();
+    const rect = trackSnippets.getBoundingClientRect();
+    const duration = data.recording.duration;
+    selectSnippet(cmdIdx);
+    selectedItem = { type: 'snippet', index: cmdIdx, edge: edge };
+    // Highlight the edge handle
+    const cmdEls = trackSnippets.querySelectorAll('.track-item-snippet');
+    if (cmdEls[cmdIdx]) {
+      const handle = cmdEls[cmdIdx].querySelector('.cmd-handle-' + (edge === 'start' ? 'left' : 'right'));
+      if (handle) handle.classList.add('selected');
+    }
+    // Seek playhead to the edge position
+    const cmd = data.script.snippets[cmdIdx];
+    seek(edge === 'start' ? cmd.time : cmd.time + cmd.duration);
+
+    function onMove(ev) {
+      const ratio = (ev.clientX - rect.left) / rect.width;
+      const t = roundTime(Math.max(0, Math.min(ratio * duration, duration)));
+      const cmd = data.script.snippets[cmdIdx];
+      if (edge === 'start') {
+        const newStart = Math.min(t, cmd.time + cmd.duration - 0.1);
+        const newDur = cmd.duration + (cmd.time - newStart);
+        if (!snippetOverlapsAny(newStart, newStart + newDur, cmdIdx)) {
+          cmd.time = newStart;
+          cmd.duration = newDur;
+        }
+      } else {
+        const newEnd = Math.max(t, cmd.time + 0.1);
+        const newDur = roundTime(newEnd - cmd.time);
+        if (!snippetOverlapsAny(cmd.time, cmd.time + newDur, cmdIdx)) {
+          cmd.duration = newDur;
+        }
+      }
+      renderTracks();
+      updatePlayhead();
+      const cmEls = trackSnippets.querySelectorAll('.track-item-snippet');
+      if (cmEls[cmdIdx]) {
+        cmEls[cmdIdx].classList.add('selected');
+        const h = cmEls[cmdIdx].querySelector('.cmd-handle-' + (edge === 'start' ? 'left' : 'right'));
+        if (h) h.classList.add('selected');
+      }
+      // Update inspector live
+      const timeInput = document.getElementById('prop-time');
+      const durInput = document.getElementById('prop-duration');
+      if (timeInput) timeInput.value = cmd.time.toFixed(2);
+      if (durInput) durInput.value = cmd.duration.toFixed(2);
+    }
+
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      markDirty();
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  // Snippet drag-to-create on track
+  trackSnippets.addEventListener('mousedown', (e) => {
+    if (e.target !== trackSnippets) return;
+    e.preventDefault();
+    if (!data.script.snippets) data.script.snippets = [];
+    const rect = trackSnippets.getBoundingClientRect();
+    const startX = e.clientX;
+    const startRatio = (startX - rect.left) / rect.width;
+    const startTime = roundTime(startRatio * data.recording.duration);
+    let dragStarted = false;
+    let cmdDragIdx = null;
+
+    function onMove(ev) {
+      if (!dragStarted) {
+        if (Math.abs(ev.clientX - startX) < 4) return;
+        dragStarted = true;
+        cmdDragIdx = data.script.snippets.length;
+        data.script.snippets.push({ time: startTime, duration: 0, text: '# enter text here', match: '', label: '' });
+        renderTracks();
+        updatePlayhead();
+      }
+      const ratio = (ev.clientX - rect.left) / rect.width;
+      const t = roundTime(Math.max(0, Math.min(ratio * data.recording.duration, data.recording.duration)));
+      const cmd = data.script.snippets[cmdDragIdx];
+      let newStart, newDur;
+      if (t < startTime) {
+        newStart = t;
+        newDur = roundTime(startTime - t);
+      } else {
+        newStart = startTime;
+        newDur = roundTime(t - startTime);
+      }
+      if (!snippetOverlapsAny(newStart, newStart + newDur, cmdDragIdx)) {
+        cmd.time = newStart;
+        cmd.duration = newDur;
+      }
+      renderTracks();
+      updatePlayhead();
+    }
+
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      if (!dragStarted) return;
+      const cmd = data.script.snippets[cmdDragIdx];
+      if (cmd.duration < 0.15) {
+        data.script.snippets.splice(cmdDragIdx, 1);
+      } else {
+        selectSnippet(cmdDragIdx);
+        markDirty();
+        showToast('Snippet: ' + formatTimePrecise(cmd.time) + ' → ' + formatTimePrecise(cmd.time + cmd.duration));
+      }
+      renderTracks();
+      updatePlayhead();
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  // Double-click on snippets track to create a 5s command
+  trackSnippets.addEventListener('dblclick', (e) => {
+    if (e.target !== trackSnippets) return;
+    e.preventDefault();
+    if (!data.script.snippets) data.script.snippets = [];
+    const rect = trackSnippets.getBoundingClientRect();
+    const ratio = (e.clientX - rect.left) / rect.width;
+    const clickTime = roundTime(ratio * data.recording.duration);
+    const start = clickTime;
+    const dur = roundTime(Math.min(5, data.recording.duration - clickTime));
+    if (dur > 0) {
+      data.script.snippets.push({ time: start, duration: dur, text: '# enter text here', match: '', label: '' });
+      renderTracks();
+      updatePlayhead();
+      markDirty();
+      selectSnippet(data.script.snippets.length - 1);
+      showToast('Snippet added (5s) — drag edges to adjust');
+    }
+  });
+
+  // --- Box drag-to-reposition (annotations, cuts, and snippets) ---
   function startBoxDrag(type, index, e) {
     e.preventDefault();
     const startX = e.clientX;
-    const track = type === 'annotation' ? trackAnnotations : trackCuts;
+    const track = type === 'annotation' ? trackAnnotations : type === 'snippet' ? trackSnippets : trackCuts;
     const rect = track.getBoundingClientRect();
     const duration = data.recording.duration;
     let dragged = false;
@@ -2520,6 +2959,10 @@ body {
     let item, itemStart, itemDuration;
     if (type === 'annotation') {
       item = data.script.annotations[index];
+      itemStart = item.time;
+      itemDuration = item.duration;
+    } else if (type === 'snippet') {
+      item = (data.script.snippets || [])[index];
       itemStart = item.time;
       itemDuration = item.duration;
     } else {
@@ -2536,7 +2979,7 @@ body {
       dragged = true;
       const dt = (dx / rect.width) * duration;
       let newStart = roundTime(Math.max(0, Math.min(origStart + dt, duration - itemDuration)));
-      if (type === 'annotation') {
+      if (type === 'annotation' || type === 'snippet') {
         item.time = newStart;
       } else {
         item.start = newStart;
@@ -2554,6 +2997,7 @@ body {
       }
       // Always select on mouseup (whether drag or click)
       if (type === 'annotation') selectAnnotation(index);
+      else if (type === 'snippet') selectSnippet(index);
       else selectCut(index);
     }
 
@@ -2694,6 +3138,50 @@ body {
     const durInput = document.getElementById('prop-duration');
     if (timeInput) timeInput.value = ann.time.toFixed(2);
     if (durInput) durInput.value = ann.duration.toFixed(2);
+    markDirty();
+  }
+
+  // --- Snippet edge nudge via keyboard ---
+  function highlightSnippet(idx, edge) {
+    trackSnippets.querySelectorAll('.track-item-snippet.selected').forEach(el => el.classList.remove('selected'));
+    trackSnippets.querySelectorAll('.cmd-handle.selected').forEach(el => el.classList.remove('selected'));
+    const cmdEls = trackSnippets.querySelectorAll('.track-item-snippet');
+    if (cmdEls[idx]) {
+      cmdEls[idx].classList.add('selected');
+      if (edge) {
+        const handle = cmdEls[idx].querySelector('.cmd-handle-' + (edge === 'start' ? 'left' : 'right'));
+        if (handle) handle.classList.add('selected');
+      }
+    }
+  }
+
+  function nudgeSnippetEdge(cmdIdx, edge, delta) {
+    const cmd = data.script.snippets[cmdIdx];
+    if (!cmd) return;
+    const end = cmd.time + cmd.duration;
+    if (edge === 'start') {
+      const newStart = roundTime(Math.max(0, Math.min(cmd.time + delta, end - 0.1)));
+      const newDur = roundTime(end - newStart);
+      if (!snippetOverlapsAny(newStart, newStart + newDur, cmdIdx)) {
+        cmd.duration = newDur;
+        cmd.time = newStart;
+      }
+      seek(cmd.time);
+    } else {
+      const newEnd = roundTime(Math.max(cmd.time + 0.1, Math.min(end + delta, data.recording.duration)));
+      const newDur = roundTime(newEnd - cmd.time);
+      if (!snippetOverlapsAny(cmd.time, cmd.time + newDur, cmdIdx)) {
+        cmd.duration = newDur;
+      }
+      seek(cmd.time + cmd.duration);
+    }
+    renderTracks();
+    updatePlayhead();
+    highlightSnippet(cmdIdx, edge);
+    const timeInput = document.getElementById('prop-time');
+    const durInput = document.getElementById('prop-duration');
+    if (timeInput) timeInput.value = cmd.time.toFixed(2);
+    if (durInput) durInput.value = cmd.duration.toFixed(2);
     markDirty();
   }
 
@@ -2980,7 +3468,7 @@ body {
     document.addEventListener('mouseup', onUp);
   });
 
-  [trackChapters, trackAnnotations, trackCuts].forEach(track => {
+  [trackChapters, trackAnnotations, trackCuts, trackSnippets].forEach(track => {
     track.addEventListener('click', (e) => {
       if (e.target === track || e.target.classList.contains('playhead')) {
         const rect = track.getBoundingClientRect();
@@ -3017,6 +3505,7 @@ body {
   document.getElementById('btn-add-chapter').addEventListener('click', addChapter);
   document.getElementById('btn-add-annotation').addEventListener('click', addAnnotation);
   document.getElementById('btn-add-cut').addEventListener('click', addCut);
+  document.getElementById('btn-add-snippet').addEventListener('click', addSnippet);
   document.getElementById('btn-save').addEventListener('click', save);
 
   // Keyboard shortcuts
@@ -3028,12 +3517,15 @@ body {
     else if (e.key === 'c' || e.key === 'C') { addChapter(); }
     else if (e.key === 'a' && !e.metaKey) { addAnnotation(); }
     else if (e.key === 'x' || e.key === 'X') { addCut(); }
+    else if (e.key === 'd' || e.key === 'D') { addSnippet(); }
     else if (e.key === 'ArrowRight') {
       e.preventDefault();
       if (selectedItem && selectedItem.type === 'cut' && selectedItem.edge) {
         nudgeCutEdge(selectedItem.index, selectedItem.edge, 0.01);
       } else if (selectedItem && selectedItem.type === 'annotation' && selectedItem.edge) {
         nudgeAnnotationEdge(selectedItem.index, selectedItem.edge, 0.01);
+      } else if (selectedItem && selectedItem.type === 'snippet' && selectedItem.edge) {
+        nudgeSnippetEdge(selectedItem.index, selectedItem.edge, 0.01);
       } else { seek(currentTime + 1); }
     }
     else if (e.key === 'ArrowLeft') {
@@ -3042,6 +3534,8 @@ body {
         nudgeCutEdge(selectedItem.index, selectedItem.edge, -0.01);
       } else if (selectedItem && selectedItem.type === 'annotation' && selectedItem.edge) {
         nudgeAnnotationEdge(selectedItem.index, selectedItem.edge, -0.01);
+      } else if (selectedItem && selectedItem.type === 'snippet' && selectedItem.edge) {
+        nudgeSnippetEdge(selectedItem.index, selectedItem.edge, -0.01);
       } else { seek(currentTime - 1); }
     }
     else if (e.key === ']') { nextChapter(); }
@@ -3058,7 +3552,7 @@ body {
 
   // Close panel on click outside
   document.addEventListener('click', (e) => {
-    if (!propsPanel.contains(e.target) && !e.target.closest('.track-item-chapter, .track-item-annotation, .track-item-cut')) {
+    if (!propsPanel.contains(e.target) && !e.target.closest('.track-item-chapter, .track-item-annotation, .track-item-cut, .track-item-snippet')) {
       propsPanel.classList.remove('open');
       selectedItem = null;
       clearCutHighlights();
@@ -3071,6 +3565,8 @@ body {
     trackAnnotations.querySelectorAll('.ann-handle.selected').forEach(el => el.classList.remove('selected'));
     trackCuts.querySelectorAll('.track-item-cut.selected').forEach(el => el.classList.remove('selected'));
     trackCuts.querySelectorAll('.cut-handle.selected').forEach(el => el.classList.remove('selected'));
+    trackSnippets.querySelectorAll('.track-item-snippet.selected').forEach(el => el.classList.remove('selected'));
+    trackSnippets.querySelectorAll('.cmd-handle.selected').forEach(el => el.classList.remove('selected'));
   }
 
   function clearCutHighlights() {
