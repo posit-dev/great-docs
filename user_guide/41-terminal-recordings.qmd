@@ -153,9 +153,11 @@ settings:
   idle_time_limit: 2.0        # Cap idle gaps to 2 seconds
   window_chrome: colorful     # Window decoration style
   theme: monokai              # Terminal color scheme
+  font_family: "JetBrains Mono, Fira Code, monospace"
   font_size: 14               # Font size in rendered SVG (px)
   line_height: 1.2            # Line height multiplier
   padding: 12                 # Inner padding (px)
+  prompt: "❯"                 # Replace detected prompts with ❯
 
 chapters:
   - at: 0.0
@@ -196,21 +198,106 @@ frames. All settings are optional and have sensible defaults.
 | `idle_time_limit` | `3.0` | Maximum seconds for any idle gap |
 | `window_chrome` | `colorful` | Window decoration: `colorful`, `plain`, `none` |
 | `theme` | (auto) | Terminal color scheme |
+| `font_family` | (system stack) | Font family for rendered SVG (comma-separated list) |
 | `font_size` | `14` | Font size in rendered SVG (px) |
 | `line_height` | `1.2` | Line height multiplier |
 | `padding` | `12` | Inner padding of the terminal area (px) |
+| `prompt` | (none) | Replacement character for detected prompts |
+| `prompt_pattern` | (none) | Regex pattern for prompt detection fallback |
 
 These settings are applied at render time. Changing them requires re-rendering but not
 re-recording.
 
+## Prompt Substitution
+
+Terminal recordings often contain shell prompts that are visually noisy or environment-specific
+(e.g., `user@host:~/project $`). The **prompt substitution** feature lets you replace the
+prompt character in rendered output with a clean, consistent symbol.
+
+### Configuration
+
+Add `prompt` (and optionally `prompt_pattern`) to your script's `settings` block:
+
+```yaml
+settings:
+  prompt: "❯"
+```
+
+This replaces detected prompt characters with `❯` in all rendered frames. Common replacement
+choices include `$`, `%`, `#`, `>`, `❯`, and `→`.
+
+### How detection works
+
+Prompt substitution uses a three-tier detection strategy, applied in order of precision:
+
+1. **Structural detection** (most precise): If the recording contains input (`"i"`) events,
+   the renderer correlates them with cursor position to identify exactly which rows have
+   prompts and where the prompt character sits. This is fully automatic and requires no
+   additional configuration.
+
+2. **Pattern detection** (explicit): If you provide `prompt_pattern`, the renderer uses it as
+   a regex to match prompt lines. The last character of the match is replaced. Use this when
+   your recording lacks input events or when the structural detection doesn't match your
+   prompt format:
+
+   ```yaml
+   settings:
+     prompt: "$"
+     prompt_pattern: '^\S+@\S+[^$]*\$ '
+   ```
+
+3. **Heuristic detection** (automatic fallback): When neither input events nor a pattern are
+   available, the renderer scans each row for lines that begin with a known prompt character
+   (`$`, `%`, `#`, `>`, `❯`, `→`, etc.) followed by a space. This works well for simple
+   prompt formats.
+
+### Examples
+
+Replace a verbose prompt with a minimal symbol:
+
+```yaml
+settings:
+  prompt: "❯"
+```
+
+Before: `user@dev:~/project$ echo hello`\
+After: `❯ echo hello`
+
+Use a regex for non-standard prompts:
+
+```yaml
+settings:
+  prompt: "$"
+  prompt_pattern: '^\(venv\) .*\$ '
+```
+
+This matches prompts like `(venv) user@host:~$ ` and replaces just the `$` character.
+
+### Tips
+
+Here are some practical guidelines for working with prompt substitution:
+
+- start with just `prompt`: structural and heuristic detection handle most cases automatically
+- add `prompt_pattern` only if the default detection misidentifies prompt lines
+- the substitution affects rendered SVG frames only (the raw recording is never modified)
+- the Termshow Editor shows prompt substitution live in the preview, so you can see the
+  effect immediately as you configure it
+
+In most cases, a single `prompt` line in your settings block is all you need. The detection system
+is designed to do the right thing without manual tuning.
+
 ## Shortcode Reference
 
-Embed a Termshow recording in any page with the `termshow` shortcode. At its simplest, you only
-need the `file` path:
+Embed a Termshow recording in any page with the `termshow` shortcode. At its simplest, you only need
+the `file` path:
 
 ```{shortcodes="false"}
 {{< termshow file="assets/my-demo" >}}
 ```
+
+The shortcode discovers the companion `.termshow.yml` script, renders the recording into SVG frames,
+and embeds everything inline during the build. No additional configuration or runtime fetches are
+required.
 
 ### Options
 
@@ -253,6 +340,9 @@ Combine options freely. For instance, `autoplay` with `loop` creates a continuou
 demonstration, while `pause_on_chapters` with `speed="1.5"` produces a brisk but controlled
 tutorial.
 
+The shortcode is the only integration point between your Quarto pages and the Termshow pipeline.
+Everything else (recording, scripting, rendering) happens automatically during the build.
+
 ## Player Controls
 
 The embedded player provides interactive controls for navigating recordings. Here's what each
@@ -264,8 +354,8 @@ The bottom control bar contains (left to right):
 
 1. **Play / Pause / Replay**: Toggles playback. Shows ↺ at the end of the recording.
 2. **Elapsed time**: Current playback position.
-3. **Timeline**: Click anywhere to seek. Gold chapter markers indicate chapter boundaries;
-   their hit targets are wider than the visible marks for easy clicking.
+3. **Timeline**: Click anywhere to seek. Gold chapter markers indicate chapter boundaries; their hit
+targets are wider than the visible marks for easy clicking.
 4. **Remaining time**: Counts down to zero during playback.
 5. **Speed**: Cycles through 0.5×, 1×, 1.5×, 2×, 3×.
 
@@ -468,7 +558,7 @@ the first one wins and subsequent ones are hidden.
   YAML to avoid backslash escape issues.
 - Use `label` to give context (e.g., "Install", "Build", "Test") so readers know what they're
   copying without reading the full snippet.
-- Snippets work regardless of playback state — readers can copy while paused, playing, or at a
+- Snippets work regardless of playback state: readers can copy while paused, playing, or at a
   chapter stop.
 
 ## Importing Existing Recordings
@@ -608,6 +698,10 @@ scales up to fill it. The scaling recalculates on window resize and during drag.
 Above the terminal viewport, a **Chapter Title Bar** displays the currently active chapter name,
 simulating the window chrome appearance of the final player.
 
+**Settings Button**: A small circular gear (⚙) button sits in the top-left corner of the
+Preview Area, next to the Info Button. Clicking it (or pressing `G`) toggles the **Settings
+Panel** described above.
+
 **Info Button**: A small circular *i* button sits in the top-left corner of the Preview Area.
 Clicking it (or pressing `I`) toggles the **Info Panel**, a floating overlay showing recording
 metadata:
@@ -660,6 +754,28 @@ place to navigate without accidentally selecting or creating items.
    add a 5-second placeholder; drag across the track to create a custom-duration snippet.
 
 A **Playhead** (white vertical line) spans all four tracks and moves with the current time.
+
+### Global Settings Panel
+
+The Termshow Editor includes a **Global Settings** panel for configuring global script settings
+visually. Click the gear icon (⚙) in the top-left corner of the Preview Area or press `G` to toggle
+it.
+
+The Settings panel exposes the following controls:
+
+| Control | Description |
+|---------|-------------|
+| **Default speed** | Playback speed multiplier (dropdown: 0.5×, 1×, 1.5×, 2×, 3×) |
+| **Idle limit** | Maximum idle gap in seconds (number with stepper buttons) |
+| **Chrome** | Window decoration style (dropdown: colorful, simple, none) |
+| **Font family** | Comma-separated font stack for rendered output |
+| **Prompt** | Replacement character for prompt substitution, with preset buttons (`$` `%` `#` `>` `❯` `→`) |
+| **Pattern** | Regex pattern for prompt detection (see [Prompt Substitution]) |
+
+All changes apply immediately to the live preview so you can see the effect of each setting in real
+time. Settings are saved to the `settings` block of the `.termshow.yml` file when you press Save.
+
+Press `Escape` or click outside the panel to dismiss it.
 
 ### Properties Panel
 
@@ -724,12 +840,13 @@ The Termshow Editor supports these keyboard shortcuts for efficient editing:
 | `A` | Add annotation at playhead |
 | `X` | Add cut at playhead |
 | `D` | Add snippet at playhead |
+| `G` | Toggle global settings panel |
 | `I` | Toggle info panel |
 | `←` / `→` | Seek ±1 second (or nudge active edge ±10ms) |
 | `[` / `]` | Jump to previous / next chapter |
 | `Y` | View YAML |
 | `Delete` / `Backspace` | Delete selected item |
-| `Escape` | Close properties panel, deselect |
+| `Escape` | Close settings/properties panel, deselect |
 | `Cmd+S` / `Ctrl+S` | Save |
 
 ### Unsaved Changes
