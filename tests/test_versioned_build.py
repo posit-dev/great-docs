@@ -3439,3 +3439,148 @@ class TestPruneSidebarContentsHrefMissing:
         result = _prune_sidebar_contents(contents, tmp_path)
         assert len(result) == 1
         assert result[0]["href"] == "intro.md"
+
+
+# ---------------------------------------------------------------------------
+# run_versioned_build
+# ---------------------------------------------------------------------------
+
+
+class TestRunVersionedBuildEmptyRender:
+    """Tests for detecting when Quarto exits 0 but produces no HTML."""
+
+    def test_quarto_exit_zero_no_html_reports_error(self, tmp_path: Path):
+        """When Quarto succeeds (exit 0) but creates no HTML, report failure."""
+        from unittest.mock import patch
+
+        source = tmp_path / "source"
+        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nContent"})
+
+        project_root = tmp_path / "project"
+        project_root.mkdir()
+
+        def mock_render_no_output(build_dirs, **kwargs):
+            # Quarto exits 0 but creates NO _site directory (empty render)
+            return [(str(d), 0, "", "", []) for d in build_dirs]
+
+        with patch(
+            "great_docs._versioned_build.render_versions_parallel",
+            side_effect=mock_render_no_output,
+        ):
+            result = run_versioned_build(
+                source_dir=source,
+                project_root=project_root,
+                versions_config=["0.3"],
+            )
+
+        assert result["success"] is False
+        assert result["versions_built"] == []
+        assert len(result["errors"]) >= 1
+        assert "no HTML pages" in result["errors"][0]
+
+    def test_quarto_exit_zero_empty_site_dir_reports_error(self, tmp_path: Path):
+        """When Quarto creates _site but it's empty, report failure."""
+        from unittest.mock import patch
+
+        source = tmp_path / "source"
+        _make_source_tree(source, {"index.qmd": "---\ntitle: Hi\n---\nContent"})
+
+        project_root = tmp_path / "project"
+        project_root.mkdir()
+
+        def mock_render_empty_site(build_dirs, **kwargs):
+            results = []
+            for d in build_dirs:
+                # Create _site but with no HTML files
+                site_dir = d / "_site"
+                site_dir.mkdir(parents=True, exist_ok=True)
+                (site_dir / "sitemap.xml").write_text("<urlset/>")
+                results.append((str(d), 0, "", "", []))
+            return results
+
+        with patch(
+            "great_docs._versioned_build.render_versions_parallel",
+            side_effect=mock_render_empty_site,
+        ):
+            result = run_versioned_build(
+                source_dir=source,
+                project_root=project_root,
+                versions_config=["0.3", "0.2"],
+            )
+
+        assert result["success"] is False
+        assert result["versions_built"] == []
+        assert len(result["errors"]) == 2
+
+        for err in result["errors"]:
+            assert "no HTML pages" in err
+
+    def test_pre_render_check_no_qmd_files(self, tmp_path: Path):
+        """When preprocessing removes all .qmd files, abort before render."""
+        from unittest.mock import patch
+
+        source = tmp_path / "source"
+        source.mkdir(parents=True)
+        # Only _quarto.yml, no .qmd files
+        (source / "_quarto.yml").write_text(
+            "project:\n  type: website\n  output-dir: _site\nwebsite:\n  title: Test\n"
+        )
+
+        project_root = tmp_path / "project"
+        project_root.mkdir()
+
+        render_called = []
+
+        def mock_render(build_dirs, **kwargs):
+            render_called.append(True)
+            return [(str(d), 0, "", "", []) for d in build_dirs]
+
+        with patch(
+            "great_docs._versioned_build.render_versions_parallel",
+            side_effect=mock_render,
+        ):
+            result = run_versioned_build(
+                source_dir=source,
+                project_root=project_root,
+                versions_config=["0.3"],
+            )
+
+        assert result["success"] is False
+        assert "No .qmd files" in result["errors"][0]
+
+        # Render should NOT have been called
+        assert render_called == []
+
+    def test_pre_render_check_missing_quarto_yml(self, tmp_path: Path):
+        """When _quarto.yml is missing from build dir, abort before render."""
+        from unittest.mock import patch
+
+        source = tmp_path / "source"
+        source.mkdir(parents=True)
+        # Create a .qmd file but no _quarto.yml
+        (source / "index.qmd").write_text("---\ntitle: Hi\n---\nContent")
+
+        project_root = tmp_path / "project"
+        project_root.mkdir()
+
+        render_called = []
+
+        def mock_render(build_dirs, **kwargs):
+            render_called.append(True)
+            return [(str(d), 0, "", "", []) for d in build_dirs]
+
+        with patch(
+            "great_docs._versioned_build.render_versions_parallel",
+            side_effect=mock_render,
+        ):
+            result = run_versioned_build(
+                source_dir=source,
+                project_root=project_root,
+                versions_config=["0.3"],
+            )
+
+        assert result["success"] is False
+        assert "_quarto.yml missing" in result["errors"][0]
+
+        # Render should NOT have been called
+        assert render_called == []
