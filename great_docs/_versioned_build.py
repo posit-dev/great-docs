@@ -1769,6 +1769,7 @@ def run_versioned_build(
     # --- Stage 1: Preprocess each version ---
     pages_by_version: dict[str, list[str]] = {}
     build_dirs: list[Path] = []
+    errors: list[str] = []
 
     for entry in targets:
         ver_dir = _version_build_dir(build_root, entry, latest_tag)
@@ -1786,6 +1787,42 @@ def run_versioned_build(
         pages_by_version[entry.tag] = pages
         build_dirs.append(ver_dir)
 
+    # Map build dir to version tag (for pre-render diagnostics)
+    dir_to_tag_pre = {str(_version_build_dir(build_root, e, latest_tag)): e.tag for e in targets}
+
+    # --- Pre-render sanity check ---
+    # Verify each build directory has renderable .qmd files and a valid _quarto.yml.
+    # If not, report an error instead of silently producing an empty site.
+    for ver_dir in build_dirs:
+        qmd_count = sum(
+            1 for _ in ver_dir.rglob("*.qmd") if not str(_.relative_to(ver_dir)).startswith("_")
+        )
+        quarto_yml = ver_dir / "_quarto.yml"
+        if not quarto_yml.exists():
+            tag = dir_to_tag_pre.get(str(ver_dir), str(ver_dir))
+            errors.append(
+                f"Version {tag}: _quarto.yml missing from build directory. "
+                f"This indicates a preprocessing failure."
+            )
+        elif qmd_count == 0:
+            tag = dir_to_tag_pre.get(str(ver_dir), str(ver_dir))
+            errors.append(
+                f"Version {tag}: No .qmd files found in build directory after preprocessing. "
+                f"All pages may have been excluded by version scoping."
+            )
+
+    if errors:
+        # All versions have fatal pre-render issues; abort early.
+        if on_renders_done:
+            on_renders_done()
+        return {
+            "success": False,
+            "versions_built": [],
+            "pages_by_version": pages_by_version,
+            "timings_by_version": {},
+            "errors": errors,
+        }
+
     # --- Stage 2: Parallel renders ---
     render_results = render_versions_parallel(
         build_dirs,
@@ -1794,7 +1831,7 @@ def run_versioned_build(
         progress_callback=progress_callback,
     )
 
-    errors: list[str] = []
+    errors_render: list[str] = []
     versions_built: list[str] = []
     timings_by_version: dict[str, list[dict[str, Any]]] = {}
 
@@ -1804,11 +1841,41 @@ def run_versioned_build(
     for build_dir, returncode, stdout, stderr, page_timings in render_results:
         tag = dir_to_tag.get(build_dir, build_dir)
         if returncode == 0:
-            versions_built.append(tag)
-            if page_timings:
-                timings_by_version[tag] = page_timings
+            # Post-render validation: verify Quarto actually produced HTML pages.
+            # Quarto may exit 0 without rendering anything (e.g. if it cannot find
+            # renderable files or has a configuration issue). Detect this and report
+            # a meaningful error instead of silently producing an empty site.
+            site_dir = Path(build_dir) / "_site"
+            html_files = list(site_dir.rglob("*.html")) if site_dir.exists() else []
+            if not html_files:
+                # Gather diagnostic info
+                qmd_files = list(Path(build_dir).rglob("*.qmd"))
+                diag_parts = [
+                    f"Version {tag}: Quarto exited successfully but produced no HTML pages.",
+                    f"  Build directory: {build_dir}",
+                    f"  .qmd files present: {len(qmd_files)}",
+                ]
+                if stderr.strip():
+                    # Limit stderr to avoid flooding logs
+                    stderr_preview = stderr.strip()[:500]
+                    diag_parts.append(f"  Quarto stderr: {stderr_preview}")
+                else:
+                    diag_parts.append("  Quarto stderr: (empty)")
+                diag_parts.append(
+                    "  This may indicate a Quarto configuration issue, missing dependencies, "
+                    "or an incompatibility with the build environment."
+                )
+                errors_render.append("\n".join(diag_parts))
+            else:
+                versions_built.append(tag)
+                if page_timings:
+                    timings_by_version[tag] = page_timings
         else:
-            errors.append(f"Version {tag}: Quarto render failed (exit {returncode})\n{stderr}")
+            errors_render.append(
+                f"Version {tag}: Quarto render failed (exit {returncode})\n{stderr}"
+            )
+
+    errors.extend(errors_render)
 
     # Notify caller that rendering is complete (e.g. to finish progress bars)
     if on_renders_done:
