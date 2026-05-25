@@ -96,7 +96,7 @@ def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
     if chapters:
         lines.append("chapters:")
         for ch in sorted(chapters, key=lambda c: c["time"]):
-            lines.append(f"  - at: {ch['time']}")
+            lines.append(f"  - at: {round(ch['time'], 2)}")
             lines.append(f'    label: "{ch["label"]}"')
         lines.append("")
 
@@ -104,8 +104,8 @@ def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
     if annotations:
         lines.append("annotations:")
         for ann in sorted(annotations, key=lambda a: a["time"]):
-            lines.append(f"  - at: {ann['time']}")
-            lines.append(f"    duration: {ann['duration']}")
+            lines.append(f"  - at: {round(ann['time'], 2)}")
+            lines.append(f"    duration: {round(ann['duration'], 2)}")
             lines.append(f'    text: "{ann["text"]}"')
             lines.append(f"    position: {ann['position']}")
             width = ann.get("width", "medium")
@@ -118,8 +118,8 @@ def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
     if cuts:
         lines.append("cuts:")
         for cut in sorted(cuts, key=lambda c: c["start"]):
-            lines.append(f"  - from: {cut['start']}")
-            lines.append(f"    to: {cut['end']}")
+            lines.append(f"  - from: {round(cut['start'], 2)}")
+            lines.append(f"    to: {round(cut['end'], 2)}")
             lines.append(f"    type: {cut['type']}")
         lines.append("")
 
@@ -127,8 +127,8 @@ def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
     if snippets:
         lines.append("snippets:")
         for cmd in sorted(snippets, key=lambda c: c["time"]):
-            lines.append(f"  - at: {cmd['time']}")
-            lines.append(f"    duration: {cmd['duration']}")
+            lines.append(f"  - at: {round(cmd['time'], 2)}")
+            lines.append(f"    duration: {round(cmd['duration'], 2)}")
             text = cmd.get("text", "")
             match = cmd.get("match", "")
             if text:
