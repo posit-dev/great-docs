@@ -414,6 +414,63 @@ The `type` field controls what viewers see during the cut:
 Cuts are non-destructive: they are stored in the script file, not applied to the raw recording.
 You can always remove or adjust them later.
 
+## Snippets
+
+Snippets let you add a **copy button** to the player that appears during a time range. When visible,
+readers can click it to copy the associated text to their clipboard: no manual retyping needed.
+
+```yaml
+snippets:
+  - at: 0.5
+    duration: 7.0
+    text: "pip install great-tables"
+    label: Install
+  - at: 8.0
+    duration: 6.0
+    match: '\$ (.+)'
+    label: Verify
+```
+
+You can provide text in two ways:
+
+- **`text`**: a literal string that gets copied verbatim
+- **`match`**: a regex run against the terminal buffer at that moment; copies the first capture
+group (or the full match if no group is defined)
+
+If both are set, `match` takes priority (with `text` as fallback if the regex doesn't match).
+
+### Fields
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `at` | *(required)* | Time in seconds when the button appears |
+| `duration` | `5.0` | How long the button stays visible |
+| `text` | `""` | Literal text copied to the clipboard on click |
+| `match` | `""` | Regex pattern matched against the visible terminal text |
+| `label` | `"Copy"` | Button label shown alongside the copy icon |
+
+At least one of `text` or `match` must be provided.
+
+The button fades in and out smoothly, just like annotations. It appears in the **title bar** at
+the far right of the player. Only one snippet button is visible at a time. If time ranges overlap,
+the first one wins and subsequent ones are hidden.
+
+**Tips:**
+
+- Snippet time ranges **must not overlap**. The Editor enforces this; if you write overlapping
+  ranges manually in YAML, only the first active snippet is shown.
+- Align snippets with chapters: set `at` to the chapter start time and `duration` to the chapter
+  length. This way the copy button is visible for the entire step.
+- Use `text` when you know the exact string (e.g., a `pip install` invocation). Don't include
+  prompts (`$`).
+- Use `match` when the text is dynamic or you want to extract from what's visible. For example,
+  `'\$ (.+)'` matches any shell prompt line and captures just the command. Use single quotes in
+  YAML to avoid backslash escape issues.
+- Use `label` to give context (e.g., "Install", "Build", "Test") so readers know what they're
+  copying without reading the full snippet.
+- Snippets work regardless of playback state — readers can copy while paused, playing, or at a
+  chapter stop.
+
 ## Importing Existing Recordings
 
 Already have terminal recordings from other tools? Import them:
@@ -521,9 +578,10 @@ thematic groups:
 
 **Editing actions** (left):
 
-- **+ Chapter**: Add a chapter marker at the current playhead position (shortcut: `C`)
-- **+ Annotation**: Add a 2-second annotation at the playhead (shortcut: `A`)
-- **+ Cut**: Mark a cut region at the playhead (shortcut: `X`)
+- **+ Chapter**: add a chapter marker at the current playhead position (shortcut: `C`)
+- **+ Annotation**: add a 2-second annotation at the playhead (shortcut: `A`)
+- **+ Cut**: mark a cut region at the playhead (shortcut: `X`)
+- **+ Snippet**: add a snippet at the playhead (shortcut: `D`)
 
 **Layout presets** (center): A segmented button with three view presets that control the
 split between the Preview Area and the Timeline Panel:
@@ -538,14 +596,14 @@ split between the Preview Area and the Timeline Panel:
 - **Save**: Write changes to the `.termshow.yml` file (shortcut: `Cmd+S` / `Ctrl+S`). Pulses
   gold when there are unsaved changes.
 
-**Preview Area.** The center panel shows a live terminal preview. It renders the recording state at the current
-playhead position, updating in real time as you scrub, drag edges, or play back.
+**Preview Area.** The center panel shows a live terminal preview. It renders the recording state at
+the current playhead position, updating in real time as you scrub, drag edges, or play back.
 
 The viewport uses **auto-fit scaling**: the terminal always renders at its native character grid
-(matching the recorded dimensions), then scales proportionally to fill the available space.
-This means wide recordings (120 columns) and tall recordings (40+ rows) display without clipping
-or scrollbars. When you expand the preview area (via the resize handle or layout presets), the
-terminal scales up to fill it. The scaling recalculates on window resize and during drag.
+(matching the recorded dimensions), then scales proportionally to fill the available space. This
+means wide recordings (120 columns) and tall recordings (40+ rows) display without clipping or
+scrollbars. When you expand the preview area (via the resize handle or layout presets), the terminal
+scales up to fill it. The scaling recalculates on window resize and during drag.
 
 Above the terminal viewport, a **Chapter Title Bar** displays the currently active chapter name,
 simulating the window chrome appearance of the final player.
@@ -579,7 +637,7 @@ preset indicator.
 - **Timecode Display**: Shows elapsed time / total duration in `MM:SS.cc` precision. Click the
   current-time value to type an exact position (e.g., `01:23.45`) and press Enter to jump there.
 
-**Timeline Panel.** The bottom panel contains three track lanes beneath a **Timeline Ruler**, the
+**Timeline Panel.** The bottom panel contains four track lanes beneath a **Timeline Ruler**, the
 graduated strip showing time markings. Click anywhere on the ruler to reposition the playhead
 instantly, or drag the playhead indicator to scrub through the recording. The ruler is the safest
 place to navigate without accidentally selecting or creating items.
@@ -597,7 +655,11 @@ place to navigate without accidentally selecting or creating items.
    handles. Double-click empty space to add a 2-second cut; drag across the track to create a
    custom-length cut.
 
-A **Playhead** (white vertical line) spans all three tracks and moves with the current time.
+4. **Snippets Track**: Blue boxes showing the snippet text. Click a box to select it; drag to
+   reposition. Boxes have edge handles for resizing the time range. Double-click empty space to
+   add a 5-second placeholder; drag across the track to create a custom-duration snippet.
+
+A **Playhead** (white vertical line) spans all four tracks and moves with the current time.
 
 ### Properties Panel
 
@@ -608,6 +670,7 @@ context-specific fields:
 - **Chapter**: Time (seconds) and Label
 - **Annotation**: Time, Duration, Text, Position (dropdown), and Style (dropdown)
 - **Cut Region**: From (seconds), To (seconds), and Replace With (None/Ellipsis)
+- **Snippet**: Time, Duration, Text (literal copy), Match (regex pattern), and Label
 
 Each panel includes:
 
@@ -619,24 +682,25 @@ adjust values.
 
 ### Edge Editing
 
-Both annotation boxes and cut regions have draggable edge handles (left and right). When you grab
-an edge:
+Both annotation boxes, cut regions, and snippet boxes have draggable edge handles (left and right).
+When you grab an edge:
 
 1. The **playhead snaps** to that edge's time position, showing the exact terminal frame at the
-   boundary.
+boundary.
 2. The edge displays a **prominent vertical stem** extending beyond the track (green for
-   annotations, red for cuts) with a directional glow so you know which side is active.
+annotations, red for cuts, blue for snippets) with a directional glow so you know which side is
+active.
 3. **Arrow keys** (← →) nudge the active edge by ±10ms for frame-accurate positioning. The
-   playhead tracks the edge so you can see the terminal state update with each nudge.
+playhead tracks the edge so you can see the terminal state update with each nudge.
 
 Clicking elsewhere or pressing `Escape` deselects and restores normal edge appearance.
 
 ### Drag-to-Create
 
-On the Annotations and Cuts tracks, clicking and dragging across empty space creates a new item
-spanning the drag distance. The drag only initiates after a 4-pixel movement threshold, preventing
-accidental creation from stray clicks. If you want a fixed-size item without dragging,
-double-click instead (creates a 2-second item at that position).
+On the Annotations, Cuts, and Snippets tracks, clicking and dragging across empty space creates a
+new item spanning the drag distance. The drag only initiates after a 4-pixel movement threshold,
+preventing accidental creation from stray clicks. If you want a fixed-size item without dragging,
+double-click instead (creates a 2-second item for annotations/cuts, or 5-second for snippets).
 
 ### Cut Types
 
@@ -659,6 +723,7 @@ The Termshow Editor supports these keyboard shortcuts for efficient editing:
 | `C` | Add chapter at playhead |
 | `A` | Add annotation at playhead |
 | `X` | Add cut at playhead |
+| `D` | Add snippet at playhead |
 | `I` | Toggle info panel |
 | `←` / `→` | Seek ±1 second (or nudge active edge ±10ms) |
 | `[` / `]` | Jump to previous / next chapter |

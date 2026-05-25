@@ -199,6 +199,20 @@ SPEC = {
             '    text: "Verbose mode shows each build step"\n'
             "    position: top-right\n"
             "    style: callout\n"
+            "\n"
+            "snippets:\n"
+            "  - at: 0.0\n"
+            "    duration: 4.0\n"
+            '    text: "pip install my-tool"\n'
+            '    label: "Install"\n'
+            "  - at: 4.5\n"
+            "    duration: 5.0\n"
+            '    text: "my-tool init"\n'
+            '    label: "Initialize"\n'
+            "  - at: 10.0\n"
+            "    duration: 4.5\n"
+            '    match: "\\\\$ (.+)"\n'
+            '    label: "Run"\n'
         ),
         # Recording 2: TUI interface demo
         "demos/tui-demo.termshow": (
@@ -469,6 +483,24 @@ SPEC = {
             '    text: "Renders .termshow recordings into SVG keyframes for embedding"\n'
             "    position: top-right\n"
             "    style: highlight\n"
+            "\n"
+            "snippets:\n"
+            "  - at: 0.0\n"
+            "    duration: 3.0\n"
+            '    match: "\\\\$ (.+)"\n'
+            '    label: "Version"\n'
+            "  - at: 3.5\n"
+            "    duration: 5.0\n"
+            '    match: "\\\\$ (.+)"\n'
+            '    label: "Scan"\n'
+            "  - at: 9.0\n"
+            "    duration: 5.0\n"
+            '    match: "\\\\$ (.+)"\n'
+            '    label: "Lint"\n'
+            "  - at: 14.5\n"
+            "    duration: 6.0\n"
+            '    match: "\\\\$ (.+)"\n'
+            '    label: "Render"\n'
         ),
         # ── User guide pages ─────────────────────────────────────────────
         "user_guide/01-quick-start.qmd": (
@@ -716,7 +748,64 @@ SPEC = {
             "  - from: 8.0\n"
             "    to: 11.0\n"
             "    type: ellipsis   # Shows '…' for the cut section\n"
+            "\n"
+            "snippets:\n"
+            "  - at: 0.0\n"
+            "    duration: 5.0\n"
+            "    text: pip install my-package\n"
+            "    label: Install\n"
+            "  - at: 12.0\n"
+            "    duration: 4.0\n"
+            '    match: "\\\\$ (.+)"   # Regex: captures command after $ prompt\n'
+            "    label: Run\n"
             "```\n"
+            "\n"
+            "## Snippets\n"
+            "\n"
+            "Snippets add a **copy button** to the player that appears during a time range.\n"
+            "Readers can click it to copy text to their clipboard without manual retyping.\n"
+            "\n"
+            "### Literal Text\n"
+            "\n"
+            "Use `text` when you know the exact string to copy:\n"
+            "\n"
+            "```yaml\n"
+            "snippets:\n"
+            "  - at: 0.5\n"
+            "    duration: 7.0\n"
+            "    text: pip install my-tool\n"
+            "    label: Install\n"
+            "```\n"
+            "\n"
+            "### Regex Match\n"
+            "\n"
+            "Use `match` to extract text dynamically from the terminal buffer:\n"
+            "\n"
+            "```yaml\n"
+            "snippets:\n"
+            "  - at: 0.5\n"
+            "    duration: 7.0\n"
+            '    match: "\\\\$ (.+)"\n'
+            "    label: Copy Command\n"
+            "```\n"
+            "\n"
+            "The regex runs against the visible terminal text when the reader clicks\n"
+            "the copy button. If it has a capture group, group 1 is copied; otherwise\n"
+            "the full match is used. This is useful when the terminal shows a typed\n"
+            "command and you want to extract it without hardcoding.\n"
+            "\n"
+            "### Snippet Fields\n"
+            "\n"
+            "| Field | Default | Description |\n"
+            "|-------|---------|-------------|\n"
+            "| `at` | *(required)* | Time in seconds when the button appears |\n"
+            "| `duration` | `5.0` | How long the button stays visible |\n"
+            '| `text` | `""` | Literal text copied on click |\n'
+            '| `match` | `""` | Regex matched against visible terminal text |\n'
+            '| `label` | `"Copy"` | Button label shown alongside the copy icon |\n'
+            "\n"
+            "At least one of `text` or `match` must be provided. If both are set,\n"
+            "`match` takes priority (with `text` as fallback).\n"
             "\n"
             "## Settings Reference\n"
             "\n"

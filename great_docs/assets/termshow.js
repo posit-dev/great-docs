@@ -112,6 +112,12 @@
     annotationLayer.className = 'gd-tp-annotations';
     viewport.appendChild(annotationLayer);
 
+    // Copy-snippet buttons (placed in chapter/title bar)
+    const snippetLayer = document.createElement('div');
+    snippetLayer.className = 'gd-tp-snippets';
+    chapterBar.appendChild(snippetLayer);
+    state.snippetLayer = snippetLayer;
+
     // Center overlay (play / replay)
     const centerOverlay = document.createElement('div');
     centerOverlay.className = 'gd-tp-center-overlay';
@@ -140,7 +146,8 @@
       // Add traffic light decorations if window_chrome is set
       var chrome = manifest.window_chrome || 'none';
       var hasChapters = manifest.chapters && manifest.chapters.length > 0;
-      if (chrome === 'none' && !hasChapters) {
+      var hasSnippets = manifest.snippets && manifest.snippets.length > 0;
+      if (chrome === 'none' && !hasChapters && !hasSnippets) {
         chapterBar.style.display = 'none';
       } else if (chrome !== 'none') {
         chapterBar.classList.add('gd-tp-has-chrome');
@@ -427,6 +434,9 @@
 
     // Update annotations
     updateAnnotations(annotationLayer, manifest.annotations, state.currentTime);
+
+    // Update copy-snippet buttons
+    updateSnippets(state.snippetLayer, manifest.snippets, state.currentTime, svgContainer);
   }
 
   function updateChapterBar(chapterBar, manifest, time) {
@@ -532,6 +542,115 @@
         if (node.style.opacity !== '0') node.style.opacity = '0';
       }
     }
+  }
+
+  function updateSnippets(layer, snippets, time, svgContainer) {
+    if (!snippets || snippets.length === 0) {
+      if (layer._cmdEls) {
+        for (var i = 0; i < layer._cmdEls.length; i++) {
+          layer._cmdEls[i].style.display = 'none';
+          layer._cmdEls[i].style.opacity = '0';
+        }
+      }
+      return;
+    }
+
+    // Pre-create snippet copy buttons at init time
+    if (!layer._cmdEls) {
+      layer._cmdEls = [];
+      for (var j = 0; j < snippets.length; j++) {
+        var snip = snippets[j];
+        var el = document.createElement('button');
+        el.className = 'gd-tp-copy-snippet';
+        el.setAttribute('type', 'button');
+        el.setAttribute('aria-label', 'Copy snippet: ' + (snip.text || snip.match));
+        el.dataset.text = snip.text;
+        el.dataset.match = snip.match || '';
+        el.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
+          '<span class="gd-tp-copy-label">' + (snip.label || 'Copy') + '</span>';
+        el.style.display = 'none';
+        el.addEventListener('click', (function(btn, idx) {
+          return function(e) {
+            e.stopPropagation();
+            var copyText = resolveSnippetText(snippets[idx], svgContainer);
+            if (copyText) {
+              navigator.clipboard.writeText(copyText).then(function() {
+                btn.classList.add('gd-tp-copied');
+                setTimeout(function() { btn.classList.remove('gd-tp-copied'); }, 1500);
+              });
+            }
+          };
+        })(el, j));
+        layer.appendChild(el);
+        layer._cmdEls.push(el);
+      }
+    }
+
+    // Show only one snippet at a time (first active wins; overlaps are clipped)
+    var activeIdx = -1;
+    for (var k = 0; k < snippets.length; k++) {
+      var c = snippets[k];
+      if (activeIdx < 0 && time >= c.time && time <= c.time + c.duration) {
+        activeIdx = k;
+        var elapsed = time - c.time;
+        var fadeIn = Math.min(1, elapsed / 0.3);
+        var fadeOut = Math.min(1, (c.duration - elapsed) / 0.3);
+        layer._cmdEls[k].style.display = 'inline-flex';
+        layer._cmdEls[k].style.opacity = Math.min(fadeIn, fadeOut);
+      } else {
+        layer._cmdEls[k].style.display = 'none';
+        layer._cmdEls[k].style.opacity = '0';
+      }
+    }
+  }
+
+  /**
+   * Resolve the text to copy for a snippet.
+   * If `match` is set, extract text from the SVG and run the regex.
+   * If regex has a capture group, use group(1); otherwise use group(0).
+   * Falls back to literal `text` field.
+   */
+  function resolveSnippetText(snip, svgContainer) {
+    if (snip.match) {
+      var buffer = extractSvgText(svgContainer);
+      try {
+        var re = new RegExp(snip.match);
+        var m = re.exec(buffer);
+        if (m) return m[1] !== undefined ? m[1] : m[0];
+      } catch (e) { /* invalid regex — fall through */ }
+    }
+    return snip.text || '';
+  }
+
+  /**
+   * Extract the plain-text content of the current SVG frame.
+   * Groups <text> elements by y-coordinate to reconstruct terminal lines.
+   */
+  function extractSvgText(svgContainer) {
+    var svg = svgContainer.querySelector('svg');
+    if (!svg) return '';
+    var textEls = svg.querySelectorAll('.gd-tp-text');
+    if (!textEls.length) return '';
+    // Group by y-coordinate (row)
+    var rows = {};
+    for (var i = 0; i < textEls.length; i++) {
+      var el = textEls[i];
+      var y = parseFloat(el.getAttribute('y')) || 0;
+      var x = parseFloat(el.getAttribute('x')) || 0;
+      var key = Math.round(y * 10); // quantize y to avoid float drift
+      if (!rows[key]) rows[key] = [];
+      rows[key].push({ x: x, text: el.textContent || '' });
+    }
+    // Sort rows by y, spans within rows by x
+    var keys = Object.keys(rows).map(Number).sort(function(a, b) { return a - b; });
+    var lines = [];
+    for (var k = 0; k < keys.length; k++) {
+      var spans = rows[keys[k]].sort(function(a, b) { return a.x - b.x; });
+      var line = '';
+      for (var s = 0; s < spans.length; s++) line += spans[s].text;
+      lines.push(line);
+    }
+    return lines.join('\n');
   }
 
   // --- Controls UI ---

@@ -50,6 +50,17 @@ class SpeedSegment:
 
 
 @dataclass
+class Snippet:
+    """A copyable text snippet associated with a time range."""
+
+    time: float
+    duration: float
+    text: str = ""
+    match: str = ""
+    label: str = ""
+
+
+@dataclass
 class Highlight:
     """A highlighted region of the terminal."""
 
@@ -79,6 +90,7 @@ class Script:
     annotations: list[Annotation] = field(default_factory=list)
     speed_map: list[SpeedSegment] = field(default_factory=list)
     highlights: list[Highlight] = field(default_factory=list)
+    snippets: list[Snippet] = field(default_factory=list)
 
 
 def load_script(path: str | Path) -> Script:
@@ -181,6 +193,19 @@ def _parse_script_data(data: dict[str, Any]) -> Script:
                     width=int(region.get("width", 10)),
                     height=int(region.get("height", 1)),
                     style=hl.get("style", "box"),
+                )
+            )
+
+    # Snippets (copyable text associated with time ranges)
+    for snip in data.get("snippets", []):
+        if isinstance(snip, dict) and "at" in snip and ("text" in snip or "match" in snip):
+            script.snippets.append(
+                Snippet(
+                    time=float(snip["at"]),
+                    duration=float(snip.get("duration", 5.0)),
+                    text=snip.get("text", ""),
+                    match=snip.get("match", ""),
+                    label=snip.get("label", ""),
                 )
             )
 

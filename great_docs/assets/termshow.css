@@ -398,3 +398,75 @@ body[data-bs-theme="light"] .gd-termshow,
   --gd-tp-ann-bg: rgba(239, 241, 245, 0.92);
   --gd-tp-ann-border: rgba(30, 102, 245, 0.3);
 }
+
+/* Copy-snippet layer */
+.gd-tp-snippets {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  padding-right: clamp(8px, 1.8cqi, 14px);
+  pointer-events: none;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.gd-tp-copy-snippet {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid rgba(137, 180, 250, 0.4);
+  border-radius: 4px;
+  background: rgba(30, 30, 46, 0.7);
+  backdrop-filter: blur(4px);
+  color: var(--gd-tp-fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: clamp(9px, 1.8cqi, 11px);
+  cursor: pointer;
+  transition: opacity 0.3s ease, background 0.15s, border-color 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+
+.gd-tp-copy-snippet:hover {
+  background: rgba(30, 30, 46, 0.95);
+  border-color: var(--gd-tp-accent);
+  transform: scale(1.03);
+}
+
+.gd-tp-copy-snippet:active {
+  transform: scale(0.97);
+}
+
+.gd-tp-copy-snippet.gd-tp-copied {
+  border-color: #a6e3a1;
+  background: rgba(166, 227, 161, 0.15);
+}
+
+.gd-tp-copy-snippet.gd-tp-copied .gd-tp-copy-label::after {
+  content: ' \2713';
+}
+
+.gd-tp-copy-label {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Light theme copy button */
+body[data-bs-theme="light"] .gd-tp-copy-snippet,
+:root:not([data-bs-theme="dark"]) .gd-termshow.gd-tp-light .gd-tp-copy-snippet {
+  background: rgba(239, 241, 245, 0.92);
+  border-color: rgba(30, 102, 245, 0.3);
+  color: var(--gd-tp-fg);
+}
+
+body[data-bs-theme="light"] .gd-tp-copy-snippet:hover,
+:root:not([data-bs-theme="dark"]) .gd-termshow.gd-tp-light .gd-tp-copy-snippet:hover {
+  border-color: var(--gd-tp-accent);
+  background: rgba(239, 241, 245, 0.98);
+}

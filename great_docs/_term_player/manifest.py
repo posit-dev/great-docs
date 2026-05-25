@@ -9,7 +9,7 @@ from pathlib import Path
 from .emulator import TerminalEmulator
 from .parser import Recording
 from .renderer import render_frame
-from .script import Annotation, Chapter, Highlight, Script
+from .script import Annotation, Chapter, Highlight, Script, Snippet
 
 
 @dataclass
@@ -55,6 +55,7 @@ class Manifest:
     deltas: list[DeltaEntry] = field(default_factory=list)
     annotations: list[Annotation] = field(default_factory=list)
     highlights: list[Highlight] = field(default_factory=list)
+    snippets: list[Snippet] = field(default_factory=list)
     window_chrome: str = "none"
 
     def to_json(self) -> str:
@@ -96,6 +97,16 @@ class Manifest:
                     "style": h.style,
                 }
                 for h in self.highlights
+            ],
+            "snippets": [
+                {
+                    "time": round(c.time, 3),
+                    "duration": round(c.duration, 3),
+                    "text": c.text,
+                    "match": c.match,
+                    "label": c.label,
+                }
+                for c in self.snippets
             ],
         }
         if self.window_chrome != "none":
@@ -238,6 +249,7 @@ def generate_manifest(
         deltas=deltas,
         annotations=script.annotations if script else [],
         highlights=script.highlights if script else [],
+        snippets=script.snippets if script else [],
         window_chrome=window_chrome,
     )
 
