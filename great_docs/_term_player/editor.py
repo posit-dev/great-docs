@@ -39,6 +39,9 @@ def _build_editor_data(recording: Recording, script: Script | None) -> dict[str,
                 "idle_time_limit": script.idle_time_limit if script else None,
                 "speed": script.speed if script else 1.0,
                 "window_chrome": script.window_chrome if script else "colorful",
+                "font_family": script.font_family if script else None,
+                "prompt": script.prompt if script else None,
+                "prompt_pattern": script.prompt_pattern if script else None,
             },
             "chapters": [
                 {"time": ch.time, "label": ch.label} for ch in (script.chapters if script else [])
@@ -90,6 +93,12 @@ def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
             lines.append(f"  speed: {settings['speed']}")
         if settings.get("window_chrome"):
             lines.append(f"  window_chrome: {settings['window_chrome']}")
+        if settings.get("font_family"):
+            lines.append(f'  font_family: "{settings["font_family"]}"')
+        if settings.get("prompt"):
+            lines.append(f'  prompt: "{settings["prompt"]}"')
+        if settings.get("prompt_pattern"):
+            lines.append(f"  prompt_pattern: '{settings['prompt_pattern']}'")
         lines.append("")
 
     chapters = script_data.get("chapters", [])
@@ -1359,6 +1368,156 @@ body {
   transform: translateY(-4px);
 }
 
+/* Settings panel (gear icon) */
+.btn-settings-circle {
+  position: absolute;
+  top: 12px;
+  left: 44px;
+  z-index: 19;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-dim);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+.btn-settings-circle:hover {
+  background: var(--border);
+  color: var(--text);
+}
+.btn-settings-circle.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+
+.settings-panel {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 21;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  font-size: 11px;
+  min-width: 250px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  transition: opacity 0.15s, transform 0.15s;
+}
+.settings-panel.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+}
+.settings-panel .settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.settings-panel .settings-title {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text);
+}
+.settings-panel .settings-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 2px;
+}
+.settings-panel .settings-close:hover { color: var(--text); }
+.settings-panel .setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+.settings-panel .setting-label {
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.settings-panel input[type="text"],
+.settings-panel input[type="number"] {
+  width: 100%;
+  padding: 5px 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', Menlo, monospace;
+  outline: none;
+  flex: 1;
+}
+.settings-panel input[type="number"]::-webkit-inner-spin-button,
+.settings-panel input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.settings-panel input[type="number"] {
+  -moz-appearance: textfield;
+  padding-right: 32px;
+}
+.settings-panel .number-wrap {
+  position: relative;
+  flex: 1;
+}
+.settings-panel input:focus { border-color: var(--accent); }
+.settings-panel select {
+  width: 100%;
+  padding: 5px 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+  flex: 1;
+}
+.settings-panel select:focus { border-color: var(--accent); }
+.settings-panel .setting-divider {
+  border-top: 1px solid var(--border);
+  margin: 8px 0;
+}
+.settings-panel .prompt-presets {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  margin-bottom: 10px;
+}
+.settings-panel .prompt-preset {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.settings-panel .prompt-preset:hover {
+  background: var(--border);
+}
+.settings-panel .prompt-preset.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+
 .inspector-header {
   display: flex;
   align-items: center;
@@ -1512,7 +1671,57 @@ body {
 <div class="editor-main">
   <div class="preview-area">
     <button class="btn-info-circle" id="btn-inspector" title="Toggle info (I)">i</button>
+    <button class="btn-settings-circle" id="btn-settings" title="Settings (G)">&#x2699;</button>
     <div class="inspector-panel hidden" id="inspector-panel"></div>
+    <div class="settings-panel hidden" id="settings-panel">
+      <div class="settings-header">
+        <span class="settings-title">Global Settings</span>
+        <button class="settings-close" id="settings-close">&times;</button>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Default speed</span>
+        <select id="setting-speed">
+          <option value="0.5">0.5×</option>
+          <option value="1" selected>1×</option>
+          <option value="1.5">1.5×</option>
+          <option value="2">2×</option>
+          <option value="3">3×</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Idle limit (s)</span>
+        <input type="number" id="setting-idle" min="0" step="0.1" placeholder="none">
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Chrome</span>
+        <select id="setting-chrome">
+          <option value="colorful">colorful</option>
+          <option value="simple">simple</option>
+          <option value="none">none</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Font family</span>
+        <input type="text" id="setting-font-family" placeholder="Font1, Font2, monospace">
+      </div>
+      <div class="setting-divider"></div>
+      <div class="setting-row">
+        <span class="setting-label">Prompt</span>
+        <input type="text" id="setting-prompt" placeholder="e.g. $">
+      </div>
+      <div class="prompt-presets">
+        <button class="prompt-preset" data-prompt="$">$</button>
+        <button class="prompt-preset" data-prompt="%">%</button>
+        <button class="prompt-preset" data-prompt="#">#</button>
+        <button class="prompt-preset" data-prompt="&gt;">&gt;</button>
+        <button class="prompt-preset" data-prompt="&#x276F;">&#x276F;</button>
+        <button class="prompt-preset" data-prompt="&#x2192;">&#x2192;</button>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Pattern</span>
+        <input type="text" id="setting-prompt-pattern" placeholder="regex (optional)">
+      </div>
+    </div>
     <div class="preview-wrapper">
       <div id="chapter-title-overlay" class="chapter-title-overlay"></div>
       <div id="snippet-preview" class="snippet-preview"></div>
@@ -1570,6 +1779,7 @@ body {
   <span><kbd>&larr;</kbd><kbd>&rarr;</kbd> Seek</span>
   <span><kbd>[</kbd><kbd>]</kbd> Prev/Next chapter</span>
   <span><kbd>I</kbd> Show Info</span>
+  <span><kbd>G</kbd> Settings</span>
   <span><kbd>Y</kbd> View YAML</span>
   <span><kbd>&#x2318;S</kbd> Save</span>
   <span><kbd>Del</kbd> Delete selected</span>
@@ -1938,9 +2148,19 @@ body {
       }
     }
 
+    // Track prompt positions via input events
+    const promptRows = new Set(); // rows where prompts were detected
+    let lastOutputRow = -1;
+
     for (const ev of data.recording.events) {
       if (ev.time > currentTime) break;
+      if (ev.code === 'i') {
+        // Input event: current row has a prompt (text before cursor)
+        promptRows.add(curRow);
+        continue;
+      }
       if (ev.code !== 'o') continue;
+      lastOutputRow = curRow;
       const s = ev.data;
       let i = 0;
       while (i < s.length) {
@@ -2000,6 +2220,61 @@ body {
         if (code < 32) { i++; continue; }
         feedChar(c);
         i++;
+      }
+    }
+
+    // --- Prompt substitution ---
+    const promptSetting = data.script.settings.prompt;
+    const promptPattern = data.script.settings.prompt_pattern;
+    if (promptSetting) {
+      const PROMPT_CHARS = ['$', '%', '#', '>', '\u276f', '\u2192', '\u25b6', '\u27e9', '\u03bb'];
+      if (promptRows.size > 0) {
+        // Structural detection: substitute prompt char on identified rows
+        for (const r of promptRows) {
+          if (r >= rows) continue;
+          for (let c2 = 0; c2 < cols; c2++) {
+            const ch = grid[r][c2].char;
+            if (PROMPT_CHARS.includes(ch)) {
+              grid[r][c2] = {...grid[r][c2], char: promptSetting};
+              break;
+            }
+            if (ch !== ' ' && !PROMPT_CHARS.includes(ch)) break;
+          }
+        }
+      } else if (promptPattern) {
+        // Regex fallback for recordings without input events
+        try {
+          const re = new RegExp(promptPattern);
+          for (let r = 0; r < rows; r++) {
+            const rowText = grid[r].map(c2 => c2.char).join('');
+            if (re.test(rowText)) {
+              for (let c2 = 0; c2 < cols; c2++) {
+                const ch = grid[r][c2].char;
+                if (PROMPT_CHARS.includes(ch)) {
+                  grid[r][c2] = {...grid[r][c2], char: promptSetting};
+                  break;
+                }
+                if (ch !== ' ' && !PROMPT_CHARS.includes(ch)) break;
+              }
+            }
+          }
+        } catch(e) { /* invalid regex, skip */ }
+      } else {
+        // Heuristic fallback: scan all rows for a leading prompt char
+        // (used when no input events and no prompt_pattern)
+        for (let r = 0; r < rows; r++) {
+          for (let c2 = 0; c2 < cols; c2++) {
+            const ch = grid[r][c2].char;
+            if (ch === ' ') continue; // skip leading whitespace
+            if (PROMPT_CHARS.includes(ch)) {
+              // Verify it looks like a prompt: char followed by a space
+              if (c2 + 1 < cols && grid[r][c2 + 1].char === ' ') {
+                grid[r][c2] = {...grid[r][c2], char: promptSetting};
+              }
+            }
+            break; // only check the first non-space char per row
+          }
+        }
       }
     }
 
@@ -3360,6 +3635,138 @@ body {
     btnInspector.classList.remove('active');
   }
 
+  // --- Settings panel ---
+  const settingsPanel = document.getElementById('settings-panel');
+  const btnSettings = document.getElementById('btn-settings');
+  const settingSpeed = document.getElementById('setting-speed');
+  const settingIdle = document.getElementById('setting-idle');
+  const settingChrome = document.getElementById('setting-chrome');
+  const settingFontFamily = document.getElementById('setting-font-family');
+  const settingPrompt = document.getElementById('setting-prompt');
+  const settingPromptPattern = document.getElementById('setting-prompt-pattern');
+
+  btnSettings.addEventListener('click', toggleSettings);
+  document.getElementById('settings-close').addEventListener('click', hideSettings);
+
+  // Add custom number spinner buttons to settings number inputs (same as properties panel)
+  settingsPanel.querySelectorAll('input[type="number"]').forEach(input => {
+    const wrap = document.createElement('div');
+    wrap.className = 'number-wrap';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+    const step = parseFloat(input.step) || 1;
+    const btnUp = document.createElement('button');
+    btnUp.type = 'button';
+    btnUp.className = 'num-btn num-btn-up';
+    btnUp.innerHTML = '&#x25B4;';
+    btnUp.addEventListener('click', () => { input.value = (parseFloat(input.value || 0) + step).toFixed(2); input.dispatchEvent(new Event('input')); });
+    const btnDown = document.createElement('button');
+    btnDown.type = 'button';
+    btnDown.className = 'num-btn num-btn-down';
+    btnDown.innerHTML = '&#x25BE;';
+    btnDown.addEventListener('click', () => { input.value = (parseFloat(input.value || 0) - step).toFixed(2); input.dispatchEvent(new Event('input')); });
+    wrap.appendChild(btnUp);
+    wrap.appendChild(btnDown);
+  });
+
+  function toggleSettings() {
+    if (settingsPanel.classList.contains('hidden')) {
+      showSettings();
+    } else {
+      hideSettings();
+    }
+  }
+
+  function showSettings() {
+    // Populate from current data
+    const s = data.script.settings;
+    settingSpeed.value = s.speed != null ? s.speed : 1.0;
+    settingIdle.value = s.idle_time_limit != null ? s.idle_time_limit : '';
+    settingChrome.value = s.window_chrome || 'colorful';
+    settingFontFamily.value = s.font_family || '';
+    settingPrompt.value = s.prompt || '';
+    settingPromptPattern.value = s.prompt_pattern || '';
+    updatePromptPresets();
+    settingsPanel.classList.remove('hidden');
+    btnSettings.classList.add('active');
+    // Hide inspector if open
+    hideInspector();
+  }
+
+  function hideSettings() {
+    settingsPanel.classList.add('hidden');
+    btnSettings.classList.remove('active');
+  }
+
+  function updatePromptPresets() {
+    const current = settingPrompt.value;
+    settingsPanel.querySelectorAll('.prompt-preset').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.prompt === current);
+    });
+  }
+
+  settingSpeed.addEventListener('change', () => {
+    data.script.settings.speed = parseFloat(settingSpeed.value);
+    markDirty();
+    applySettingsPreview();
+  });
+
+  settingIdle.addEventListener('input', () => {
+    const v = parseFloat(settingIdle.value);
+    if (settingIdle.value === '' || settingIdle.value == null) {
+      data.script.settings.idle_time_limit = null;
+    } else if (!isNaN(v) && v >= 0) {
+      data.script.settings.idle_time_limit = v;
+    }
+    markDirty();
+    applySettingsPreview();
+  });
+
+  settingChrome.addEventListener('change', () => {
+    data.script.settings.window_chrome = settingChrome.value;
+    markDirty();
+    applySettingsPreview();
+  });
+
+  settingFontFamily.addEventListener('input', () => {
+    const v = settingFontFamily.value.trim();
+    data.script.settings.font_family = v || null;
+    markDirty();
+    applySettingsPreview();
+  });
+
+  settingPrompt.addEventListener('input', () => {
+    const v = settingPrompt.value.trim();
+    data.script.settings.prompt = v || null;
+    updatePromptPresets();
+    markDirty();
+    applySettingsPreview();
+  });
+
+  settingPromptPattern.addEventListener('input', () => {
+    const v = settingPromptPattern.value.trim();
+    data.script.settings.prompt_pattern = v || null;
+    markDirty();
+    applySettingsPreview();
+  });
+
+  // Prompt preset clicks
+  settingsPanel.addEventListener('click', (e) => {
+    const preset = e.target.closest('.prompt-preset');
+    if (!preset) return;
+    const val = preset.dataset.prompt;
+    settingPrompt.value = val;
+    data.script.settings.prompt = val;
+    updatePromptPresets();
+    markDirty();
+    applySettingsPreview();
+  });
+
+  // Reset playhead and re-render when global settings change
+  function applySettingsPreview() {
+    seek(0);
+  }
+
   // --- Resize handle (preview ↔ transport/timeline) ---
   (function() {
     const handle = document.getElementById('resize-handle');
@@ -3543,11 +3950,13 @@ body {
     else if (e.key === 'Delete' || e.key === 'Backspace') { window.deleteSelected(); }
     else if (e.key === 'Escape') {
       if (yamlBackdrop.classList.contains('visible')) { hideYamlPreview(); }
+      else if (!settingsPanel.classList.contains('hidden')) { hideSettings(); }
       else { propsPanel.classList.remove('open'); selectedItem = null; clearCutHighlights(); }
     }
     else if (e.key === 's' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
     else if (e.key === 'y' || e.key === 'Y') { showYamlPreview(); }
     else if (e.key === 'i' || e.key === 'I') { toggleInspector(); }
+    else if (e.key === 'g' || e.key === 'G') { toggleSettings(); }
   });
 
   // Close panel on click outside

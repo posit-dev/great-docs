@@ -364,3 +364,39 @@ highlights:
 
         script = load_script(f)
         assert isinstance(script, Script)
+
+    def test_load_with_prompt_setting(self, tmp_path: Path):
+        content = """\
+settings:
+  prompt: "❯"
+"""
+        f = tmp_path / "test.yml"
+        f.write_text(content, encoding="utf-8")
+
+        script = load_script(f)
+        assert script.prompt == "❯"
+        assert script.prompt_pattern is None
+
+    def test_load_with_prompt_and_pattern(self, tmp_path: Path):
+        content = """\
+settings:
+  prompt: "→"
+  prompt_pattern: '^\\$ '
+"""
+        f = tmp_path / "test.yml"
+        f.write_text(content, encoding="utf-8")
+
+        script = load_script(f)
+        assert script.prompt == "→"
+        assert script.prompt_pattern == r"^\$ "
+
+    def test_load_prompt_null_stays_none(self, tmp_path: Path):
+        content = """\
+settings:
+  prompt: null
+"""
+        f = tmp_path / "test.yml"
+        f.write_text(content, encoding="utf-8")
+
+        script = load_script(f)
+        assert script.prompt is None

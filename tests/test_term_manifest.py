@@ -12,8 +12,12 @@ from great_docs._term_player.manifest import (
     DeltaEntry,
     KeyframeEntry,
     Manifest,
+    _apply_prompt_pattern_substitution,
+    _apply_prompt_substitution,
     _compute_keyframe_times,
     _delta_change_to_dict,
+    _detect_prompt_prefix,
+    _find_prompt_char_in_prefix,
     generate_manifest,
 )
 from great_docs._term_player.parser import Event, Recording, TermInfo
@@ -277,3 +281,219 @@ class TestGenerateManifest:
         assert data["version"] == 1
         assert "keyframes" in data
         assert "chapters" in data
+
+
+# ---------------------------------------------------------------------------
+# Prompt substitution helpers
+# ---------------------------------------------------------------------------
+
+
+class TestFindPromptCharInPrefix:
+    def test_dollar_sign(self):
+        result = _find_prompt_char_in_prefix("$ ")
+        assert result == (0, "$")
+
+    def test_dollar_with_path(self):
+        result = _find_prompt_char_in_prefix("user@host:~ $ ")
+        assert result == (12, "$")
+
+    def test_chevron(self):
+        result = _find_prompt_char_in_prefix("❯ ")
+        assert result == (0, "❯")
+
+    def test_hash(self):
+        result = _find_prompt_char_in_prefix("root# ")
+        assert result == (4, "#")
+
+    def test_no_prompt_char(self):
+        result = _find_prompt_char_in_prefix("hello ")
+        assert result is None
+
+    def test_percent(self):
+        result = _find_prompt_char_in_prefix("% ")
+        assert result == (0, "%")
+
+
+class TestDetectPromptPrefix:
+    def test_detects_from_input_events(self):
+        # Simulate: prompt appears, then user types
+        events = [
+            Event(time=0.0, code="o", data="$ "),
+            Event(time=0.5, code="i", data="ls"),
+            Event(time=1.0, code="o", data="ls\r\nfile1\r\n"),
+            Event(time=2.0, code="o", data="$ "),
+            Event(time=2.5, code="i", data="pwd"),
+        ]
+        rec = Recording(events=events, term=TermInfo(cols=80, rows=24))
+        prefix = _detect_prompt_prefix(rec)
+        assert prefix == "$ "
+
+    def test_no_input_events(self):
+        events = [
+            Event(time=0.0, code="o", data="$ hello\r\n"),
+        ]
+        rec = Recording(events=events, term=TermInfo(cols=80, rows=24))
+        prefix = _detect_prompt_prefix(rec)
+        assert prefix is None
+
+    def test_custom_prompt(self):
+        events = [
+            Event(time=0.0, code="o", data="❯ "),
+            Event(time=0.5, code="i", data="git status"),
+        ]
+        rec = Recording(events=events, term=TermInfo(cols=80, rows=24))
+        prefix = _detect_prompt_prefix(rec)
+        assert prefix == "❯ "
+
+
+class TestApplyPromptSubstitution:
+    def _make_screen(self, rows_text: list[str], cols: int = 80) -> "ScreenState":
+        """Create a ScreenState from text rows."""
+        from great_docs._term_player.emulator import Cell, CellStyle, ScreenState
+
+        n_rows = len(rows_text)
+        cells = []
+        for text in rows_text:
+            row = []
+            for i in range(cols):
+                ch = text[i] if i < len(text) else " "
+                row.append(Cell(char=ch, style=CellStyle()))
+            cells.append(row)
+        return ScreenState(cols=cols, rows=n_rows, cells=cells)
+
+    def test_substitutes_dollar_prompt(self):
+        state = self._make_screen(["$ hello", "output", "$ "])
+        result = _apply_prompt_substitution(state, "$ ", "❯")
+        # Row 0: "$ " prefix → "$" replaced with "❯"
+        assert result.cells[0][0].char == "❯"
+        # Row 1: "output" doesn't match → untouched
+        assert result.cells[1][0].char == "o"
+        # Row 2: "$ " prefix → substituted
+        assert result.cells[2][0].char == "❯"
+
+    def test_does_not_touch_dollar_in_output(self):
+        state = self._make_screen(["$ echo", "$HOME is set", "$ "])
+        result = _apply_prompt_substitution(state, "$ ", "❯")
+        # Row 0: matches prefix "$ " → substituted
+        assert result.cells[0][0].char == "❯"
+        # Row 1: "$HOME" does NOT start with "$ " (no space after) → untouched
+        assert result.cells[1][0].char == "$"
+        # Row 2: matches
+        assert result.cells[2][0].char == "❯"
+
+    def test_does_not_mutate_original(self):
+        state = self._make_screen(["$ hello"])
+        result = _apply_prompt_substitution(state, "$ ", "→")
+        assert state.cells[0][0].char == "$"
+        assert result.cells[0][0].char == "→"
+
+    def test_no_match_returns_copy(self):
+        state = self._make_screen(["hello", "world"])
+        result = _apply_prompt_substitution(state, "$ ", "❯")
+        assert result.cells[0][0].char == "h"
+        assert result.cells[1][0].char == "w"
+
+    def test_complex_prompt_prefix(self):
+        state = self._make_screen(["user@host:~ $ ls", "output"])
+        result = _apply_prompt_substitution(state, "user@host:~ $ ", "❯")
+        # The $ at col 12 should be replaced
+        assert result.cells[0][12].char == "❯"
+        # The rest is untouched
+        assert result.cells[0][0].char == "u"
+
+
+class TestApplyPromptPatternSubstitution:
+    def _make_screen(self, rows_text: list[str], cols: int = 80) -> "ScreenState":
+        from great_docs._term_player.emulator import Cell, CellStyle, ScreenState
+
+        n_rows = len(rows_text)
+        cells = []
+        for text in rows_text:
+            row = []
+            for i in range(cols):
+                ch = text[i] if i < len(text) else " "
+                row.append(Cell(char=ch, style=CellStyle()))
+            cells.append(row)
+        return ScreenState(cols=cols, rows=n_rows, cells=cells)
+
+    def test_pattern_substitution(self):
+        state = self._make_screen(["$ hello", "output", "$ "])
+        result = _apply_prompt_pattern_substitution(state, r"^\$ ", "❯")
+        assert result.cells[0][0].char == "❯"
+        assert result.cells[1][0].char == "o"
+        assert result.cells[2][0].char == "❯"
+
+    def test_invalid_regex_returns_unchanged(self):
+        state = self._make_screen(["$ hello"])
+        result = _apply_prompt_pattern_substitution(state, "[invalid", "❯")
+        assert result.cells[0][0].char == "$"
+
+    def test_does_not_match_mid_line(self):
+        state = self._make_screen(["echo $HOME", "$ cmd"])
+        result = _apply_prompt_pattern_substitution(state, r"^\$ ", "❯")
+        # "echo $HOME" doesn't match ^
+        assert result.cells[0][5].char == "$"
+        # "$ cmd" matches
+        assert result.cells[1][0].char == "❯"
+
+
+class TestPromptSubstitutionIntegration:
+    def test_generate_manifest_with_prompt(self, tmp_path: Path):
+        """End-to-end test: prompt setting changes rendered SVG content."""
+        events = [
+            Event(time=0.0, code="o", data="$ "),
+            Event(time=0.5, code="i", data="ls"),
+            Event(time=0.6, code="o", data="ls\r\n"),
+            Event(time=1.0, code="o", data="file1.txt\r\n"),
+            Event(time=2.0, code="o", data="$ "),
+            Event(time=2.5, code="i", data="pwd"),
+        ]
+        rec = Recording(events=events, term=TermInfo(cols=40, rows=10), title="Prompt Test")
+        script = Script(prompt="❯")
+
+        out = tmp_path / "prompt_test"
+        manifest = generate_manifest(rec, script, output_dir=out)
+
+        # Read the last frame (should have "$ " → "❯" substituted)
+        last_frame = manifest.keyframes[-1].file
+        svg = (out / last_frame).read_text()
+
+        # The SVG should contain the substituted prompt char
+        assert "❯" in svg
+        # Frame at t=0.0 has only "$ " displayed
+        first_svg = (out / manifest.keyframes[0].file).read_text()
+        assert "❯" in first_svg
+
+    def test_generate_manifest_without_prompt_no_change(self, tmp_path: Path):
+        """Without prompt setting, $ renders as-is."""
+        events = [
+            Event(time=0.0, code="o", data="$ "),
+            Event(time=0.5, code="i", data="ls"),
+        ]
+        rec = Recording(events=events, term=TermInfo(cols=40, rows=10))
+        script = Script()  # No prompt setting
+
+        out = tmp_path / "no_prompt"
+        generate_manifest(rec, script, output_dir=out)
+
+        svg = (out / "frame-000.svg").read_text()
+        # Should still have the original $
+        assert "$" in svg
+
+    def test_prompt_pattern_fallback(self, tmp_path: Path):
+        """When no input events exist, prompt_pattern regex is used."""
+        events = [
+            Event(time=0.0, code="o", data="$ hello\r\n"),
+            Event(time=1.0, code="o", data="output\r\n"),
+            Event(time=2.0, code="o", data="$ "),
+        ]
+        rec = Recording(events=events, term=TermInfo(cols=40, rows=10))
+        script = Script(prompt="→", prompt_pattern=r"^\$ ")
+
+        out = tmp_path / "pattern_test"
+        generate_manifest(rec, script, output_dir=out)
+
+        # The last frame should have → instead of $
+        last_frame_file = sorted(out.glob("frame-*.svg"))[-1]
+        svg = last_frame_file.read_text()
+        assert "→" in svg
