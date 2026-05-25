@@ -22,3 +22,13 @@ annotations:
     position: top-right
     style: subtle
 
+snippets:
+  - at: 0.8
+    duration: 10.91
+    text: "pip install great-tables"
+    label: "Install"
+  - at: 12.9
+    duration: 10.5
+    match: '\$ (.+)'
+    label: "Verify"
+
