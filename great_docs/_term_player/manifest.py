@@ -153,6 +153,7 @@ def generate_manifest(
     # Determine render settings from script
     theme = recording.term.theme
     font_family = "JetBrains Mono, Fira Code, SF Mono, Menlo, Consolas, monospace"
+    line_height: float | None = None
     show_cursor = True
     window_chrome = "none"
 
@@ -161,6 +162,8 @@ def generate_manifest(
             theme = script.theme
         if script.font_family:
             font_family = script.font_family
+        if script.line_height is not None:
+            line_height = script.line_height
         show_cursor = script.show_cursor
         window_chrome = script.window_chrome
 
@@ -248,6 +251,7 @@ def generate_manifest(
             font_family=font_family,
             show_cursor=show_cursor,
             window_chrome=window_chrome,
+            **({"line_height": line_height} if line_height is not None else {}),
         )
 
         if out_path:
