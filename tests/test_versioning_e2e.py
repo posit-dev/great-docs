@@ -185,7 +185,7 @@ def run_mock_versioned_build(
         targets = list(versions)
 
     # --- Stage 1: Preprocess ---
-    build_root = project_root / ".great-docs-build"
+    build_root = project_root / "_great_docs_build"
     build_root.mkdir(parents=True)
 
     pages_by_version: dict[str, list[str]] = {}
@@ -2049,7 +2049,7 @@ class TestCanonicalUrlInjection:
         latest = get_latest_version(versions)
         latest_tag = latest.tag
 
-        build_root = project_root / ".great-docs-build"
+        build_root = project_root / "_great_docs_build"
         build_root.mkdir()
 
         from great_docs._versioned_build import _rewrite_quarto_yml_for_version
@@ -2114,7 +2114,7 @@ class TestCanonicalUrlNone:
         latest = get_latest_version(versions)
         latest_tag = latest.tag
 
-        build_root = project_root / ".great-docs-build"
+        build_root = project_root / "_great_docs_build"
         build_root.mkdir()
 
         from great_docs._versioned_build import _rewrite_quarto_yml_for_version
