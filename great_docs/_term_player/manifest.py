@@ -87,18 +87,7 @@ class Manifest:
                 }
                 for a in self.annotations
             ],
-            "highlights": [
-                {
-                    "time": round(h.time, 3),
-                    "duration": round(h.duration, 3),
-                    "row": h.row,
-                    "col": h.col,
-                    "width": h.width,
-                    "height": h.height,
-                    "style": h.style,
-                }
-                for h in self.highlights
-            ],
+            "highlights": [self._serialize_highlight(h) for h in self.highlights],
             "snippets": [
                 {
                     "time": round(c.time, 3),
@@ -113,6 +102,42 @@ class Manifest:
         if self.window_chrome != "none":
             data["window_chrome"] = self.window_chrome
         return json.dumps(data, indent=2)
+
+    @staticmethod
+    def _serialize_highlight(h: Highlight) -> dict:
+        """Serialize a Highlight to a manifest-compatible dict."""
+        target: dict = {}
+        if h.target.region:
+            target["region"] = h.target.region
+        if h.target.match:
+            target["match"] = h.target.match
+            if h.target.group:
+                target["group"] = h.target.group
+        if h.target.lines:
+            target["lines"] = h.target.lines
+        if h.target.track_scroll:
+            target["track_scroll"] = True
+
+        result: dict = {
+            "time": round(h.time, 3),
+            "duration": round(h.duration, 3),
+            "target": target,
+            "style": h.style,
+            "color": h.color,
+        }
+        # Optional badge fields
+        if h.badge_text:
+            result["badge_text"] = h.badge_text
+        if h.badge_icon:
+            result["badge_icon"] = h.badge_icon
+        # Animation
+        if h.fade_in != 0.3:
+            result["fade_in"] = round(h.fade_in, 3)
+        if h.fade_out != 0.3:
+            result["fade_out"] = round(h.fade_out, 3)
+        if h.pulse:
+            result["pulse"] = True
+        return result
 
 
 def generate_manifest(
