@@ -269,6 +269,15 @@ class GreatDocs:
         if tp_css_src.exists():
             shutil.copy2(tp_css_src, self.project_path / "termshow.css")
 
+        # Copy termshow font subsets (JetBrains Mono for box-drawing fidelity)
+        for font_file in (
+            "JetBrainsMono-Regular.subset.woff2",
+            "JetBrainsMono-Bold.subset.woff2",
+        ):
+            font_src = self.assets_path / font_file
+            if font_src.exists():
+                shutil.copy2(font_src, self.project_path / font_file)
+
         # Copy the evolution demo data file
         demo_json_src = self.assets_path / "api-evolution-demo.json"
         if demo_json_src.exists():
