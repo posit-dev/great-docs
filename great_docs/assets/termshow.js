@@ -108,6 +108,11 @@
     svgContainer.className = 'gd-tp-svg';
     viewport.appendChild(svgContainer);
 
+    const highlightLayer = document.createElement('div');
+    highlightLayer.className = 'gd-tp-highlights';
+    viewport.appendChild(highlightLayer);
+    state.highlightLayer = highlightLayer;
+
     const annotationLayer = document.createElement('div');
     annotationLayer.className = 'gd-tp-annotations';
     viewport.appendChild(annotationLayer);
@@ -435,6 +440,11 @@
     // Update annotations
     updateAnnotations(annotationLayer, manifest.annotations, state.currentTime);
 
+    // Update highlights
+    if (state.highlightLayer) {
+      updateHighlights(state.highlightLayer, manifest.highlights, state.currentTime, svgContainer);
+    }
+
     // Update copy-snippet buttons
     updateSnippets(state.snippetLayer, manifest.snippets, state.currentTime, svgContainer);
   }
@@ -542,6 +552,149 @@
         if (node.style.opacity !== '0') node.style.opacity = '0';
       }
     }
+  }
+
+  function updateHighlights(layer, highlights, time, svgContainer) {
+    if (!highlights || highlights.length === 0) {
+      if (layer._hlEls) {
+        for (var i = 0; i < layer._hlEls.length; i++) {
+          layer._hlEls[i].style.opacity = '0';
+        }
+      }
+      return;
+    }
+
+    // Pre-create highlight elements once
+    if (!layer._hlEls) {
+      layer._hlEls = [];
+      for (var j = 0; j < highlights.length; j++) {
+        var hl = highlights[j];
+        var el = document.createElement('div');
+        el.className = 'gd-tp-highlight gd-tp-hl-' + hl.style;
+        el.style.cssText = 'position:absolute;pointer-events:none;opacity:0;';
+        if (hl.color) {
+          el.style.setProperty('--hl-color', hl.color);
+        }
+        if (hl.pulse) {
+          el.classList.add('gd-tp-hl-pulse');
+        }
+        // Badge content
+        if ((hl.style === 'badge-before' || hl.style === 'badge-after') && (hl.badge_text || hl.badge_icon)) {
+          var badge = document.createElement('span');
+          badge.className = 'gd-tp-hl-badge';
+          badge.textContent = (hl.badge_icon || '') + (hl.badge_text || '');
+          el.appendChild(badge);
+        }
+        el.setAttribute('aria-hidden', 'true');
+        layer.appendChild(el);
+        layer._hlEls.push(el);
+      }
+    }
+
+    // Measure grid in viewBox coordinates (cacheable — never changes with resize)
+    var grid = layer._grid;
+    if (!grid) {
+      grid = measureViewBoxGrid(svgContainer);
+      if (grid) layer._grid = grid;
+    }
+
+    for (var k = 0; k < highlights.length; k++) {
+      var h = highlights[k];
+      var node = layer._hlEls[k];
+      if (time >= h.time && time <= h.time + h.duration) {
+        var elapsed = time - h.time;
+        var fadeInDur = h.fade_in != null ? h.fade_in : 0.3;
+        var fadeOutDur = h.fade_out != null ? h.fade_out : 0.3;
+        var fadeIn = fadeInDur > 0 ? Math.min(1, elapsed / fadeInDur) : 1;
+        var fadeOut = fadeOutDur > 0 ? Math.min(1, (h.duration - elapsed) / fadeOutDur) : 1;
+        node.style.opacity = Math.min(fadeIn, fadeOut);
+
+        // Position using percentage of viewBox (scales with SVG responsively)
+        if (grid && h.target && h.target.region) {
+          var r = h.target.region;
+          var x = grid.translateX + r.col * grid.cellW;
+          var y = grid.translateY + r.row * grid.cellH;
+          var w = r.width * grid.cellW;
+          var hh = r.height * grid.cellH;
+          node.style.left = (x / grid.vbW * 100) + '%';
+          node.style.top = (y / grid.vbH * 100) + '%';
+          node.style.width = (w / grid.vbW * 100) + '%';
+          node.style.height = (hh / grid.vbH * 100) + '%';
+        } else if (grid && h.target && h.target.lines) {
+          var lines = h.target.lines;
+          var minLine = Math.min.apply(null, lines);
+          var maxLine = Math.max.apply(null, lines);
+          var ly = grid.translateY + minLine * grid.cellH;
+          var lh = (maxLine - minLine + 1) * grid.cellH;
+          node.style.left = '0%';
+          node.style.top = (ly / grid.vbH * 100) + '%';
+          node.style.width = '100%';
+          node.style.height = (lh / grid.vbH * 100) + '%';
+        }
+      } else {
+        if (node.style.opacity !== '0') node.style.opacity = '0';
+      }
+    }
+  }
+
+  /**
+   * Measure character grid in viewBox coordinates (SVG units).
+   * Returns {vbW, vbH, cellW, cellH, translateX, translateY} or null.
+   * These values are resolution-independent and never change with browser width.
+   */
+  function measureViewBoxGrid(svgContainer) {
+    var svg = svgContainer.querySelector('svg');
+    if (!svg) return null;
+
+    // Get viewBox dimensions
+    var viewBox = svg.getAttribute('viewBox');
+    if (!viewBox) return null;
+    var parts = viewBox.split(/\s+|,/);
+    var vbW = parseFloat(parts[2]);
+    var vbH = parseFloat(parts[3]);
+    if (!vbW || !vbH) return null;
+
+    // Find the <g transform="translate(...)"> that wraps text content
+    var g = svg.querySelector('g[transform]');
+    var translateX = 0, translateY = 0;
+    if (g) {
+      var m = g.getAttribute('transform').match(/translate\(\s*([\d.]+)\s*[,\s]\s*([\d.]+)\s*\)/);
+      if (m) {
+        translateX = parseFloat(m[1]);
+        translateY = parseFloat(m[2]);
+      }
+    }
+
+    // Determine cell size from cursor rect or text elements (in SVG units)
+    var cursor = svg.querySelector('rect.gd-tp-cursor');
+    var cellW, cellH;
+    if (cursor) {
+      cellW = parseFloat(cursor.getAttribute('width')) || 8.4;
+      cellH = parseFloat(cursor.getAttribute('height')) || 21;
+    } else {
+      var textEls = svg.querySelectorAll('.gd-tp-text');
+      if (textEls.length < 2) return null;
+      var ys = [], xs = [];
+      for (var i = 0; i < Math.min(textEls.length, 50); i++) {
+        var y = parseFloat(textEls[i].getAttribute('y'));
+        var x = parseFloat(textEls[i].getAttribute('x'));
+        if (!isNaN(y) && ys.indexOf(y) < 0) ys.push(y);
+        if (!isNaN(x) && xs.indexOf(x) < 0) xs.push(x);
+      }
+      ys.sort(function(a, b) { return a - b; });
+      xs.sort(function(a, b) { return a - b; });
+      cellH = ys.length >= 2 ? ys[1] - ys[0] : 21;
+      cellW = xs.length >= 2 ? xs[1] - xs[0] : 8.4;
+    }
+
+    return {
+      vbW: vbW,
+      vbH: vbH,
+      cellW: cellW,
+      cellH: cellH,
+      translateX: translateX,
+      translateY: translateY
+    };
   }
 
   function updateSnippets(layer, snippets, time, svgContainer) {
