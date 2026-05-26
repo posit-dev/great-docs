@@ -75,6 +75,27 @@ def _build_editor_data(recording: Recording, script: Script | None) -> dict[str,
                 }
                 for cmd in (script.snippets if script else [])
             ],
+            "highlights": [
+                {
+                    "time": hl.time,
+                    "duration": hl.duration,
+                    "target": {
+                        **({"region": hl.target.region} if hl.target.region else {}),
+                        **({"match": hl.target.match} if hl.target.match else {}),
+                        **({"group": hl.target.group} if hl.target.group else {}),
+                        **({"lines": hl.target.lines} if hl.target.lines else {}),
+                        **({"track_scroll": True} if hl.target.track_scroll else {}),
+                    },
+                    "style": hl.style,
+                    "color": hl.color,
+                    "badge_text": hl.badge_text,
+                    "badge_icon": hl.badge_icon,
+                    "fade_in": hl.fade_in,
+                    "fade_out": hl.fade_out,
+                    "pulse": hl.pulse,
+                }
+                for hl in (script.highlights if script else [])
+            ],
         },
     }
     return data
@@ -147,6 +168,39 @@ def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
             label = cmd.get("label", "")
             if label:
                 lines.append(f'    label: "{label}"')
+        lines.append("")
+
+    highlights = script_data.get("highlights", [])
+    if highlights:
+        lines.append("highlights:")
+        for hl in sorted(highlights, key=lambda h: h["time"]):
+            lines.append(f"  - at: {round(hl['time'], 2)}")
+            lines.append(f"    duration: {round(hl['duration'], 2)}")
+            lines.append(f"    style: {hl.get('style', 'outline')}")
+            color = hl.get("color", "#f1fa8c")
+            if color and color != "#f1fa8c":
+                lines.append(f"    color: '{color}'")
+            target = hl.get("target", {})
+            if target:
+                lines.append("    target:")
+                if target.get("region"):
+                    r = target["region"]
+                    lines.append(
+                        f"      region: {{row: {r.get('row', 0)}, col: {r.get('col', 0)}, width: {r.get('width', 10)}, height: {r.get('height', 1)}}}"
+                    )
+                if target.get("match"):
+                    lines.append(f"      match: '{target['match']}'")
+                    if target.get("group"):
+                        lines.append(f"      group: {target['group']}")
+                if target.get("lines"):
+                    lines.append(f"      lines: {target['lines']}")
+                if target.get("track_scroll"):
+                    lines.append("      track_scroll: true")
+            badge_text = hl.get("badge_text", "")
+            if badge_text:
+                lines.append(f'    badge_text: "{badge_text}"')
+            if hl.get("pulse"):
+                lines.append("    pulse: true")
         lines.append("")
 
     return "\n".join(lines) + "\n"
@@ -306,6 +360,7 @@ _EDITOR_HTML = """\
   --annotation: #a6e3a1;
   --cut: #f38ba8;
   --snippet: #89b4fa;
+  --highlight: #cba6f7;
   --playhead: #cba6f7;
   --radius: 6px;
 }
@@ -1091,12 +1146,101 @@ body {
   cursor: crosshair;
 }
 
-/* Playhead — single line spanning ruler + 3 tracks */
+/* Highlight track items */
+.track-item-highlight {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  background: rgba(203, 166, 247, 0.15);
+  border: 1px solid rgba(203, 166, 247, 0.6);
+  border-radius: 3px;
+  cursor: pointer;
+  overflow: visible;
+  min-width: 8px;
+}
+
+.track-item-highlight .hl-text {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  font-size: 9px;
+  color: var(--highlight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.track-item-highlight:hover {
+  background: rgba(203, 166, 247, 0.25);
+}
+
+.track-item-highlight.selected {
+  background: rgba(203, 166, 247, 0.35);
+  border-color: var(--highlight);
+  box-shadow: 0 -4px 8px rgba(203, 166, 247, 0.3), 0 4px 8px rgba(203, 166, 247, 0.3);
+}
+
+.track-item-highlight .hl-handle {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 6px;
+  cursor: ew-resize;
+  z-index: 5;
+}
+
+.track-item-highlight .hl-handle-left {
+  left: -3px;
+  border-left: 2px solid var(--highlight);
+  border-radius: 2px 0 0 2px;
+}
+
+.track-item-highlight .hl-handle-right {
+  right: -3px;
+  border-right: 2px solid var(--highlight);
+  border-radius: 0 2px 2px 0;
+}
+
+.track-item-highlight .hl-handle:hover,
+.track-item-highlight .hl-handle.active {
+  background: rgba(203, 166, 247, 0.4);
+}
+
+.track-item-highlight .hl-handle.selected {
+  top: -14px;
+  bottom: -14px;
+  width: 4px;
+  background: none;
+  z-index: 20;
+}
+
+.track-item-highlight .hl-handle-left.selected {
+  left: -2px;
+  border-left: 3px solid var(--highlight);
+  box-shadow: -2px 0 8px rgba(203, 166, 247, 0.7);
+}
+
+.track-item-highlight .hl-handle-right.selected {
+  right: -2px;
+  border-right: 3px solid var(--highlight);
+  box-shadow: 2px 0 8px rgba(203, 166, 247, 0.7);
+}
+
+#track-highlights {
+  cursor: crosshair;
+}
+
+/* Playhead — single line spanning ruler + 5 tracks */
 .playhead {
   position: absolute;
   top: 0;
   left: 0;
-  height: 177px; /* ruler 29px + 4 tracks × 36px + 4px overshoot */
+  height: 213px; /* ruler 29px + 5 tracks × 36px + 4px overshoot */
   width: 2px;
   background: var(--playhead);
   z-index: 10;
@@ -1767,6 +1911,10 @@ body {
       <div class="track-label" style="color: var(--snippet);">Snippets</div>
       <div class="track-content" id="track-snippets"></div>
     </div>
+    <div class="timeline-track">
+      <div class="track-label" style="color: var(--highlight);">Highlights</div>
+      <div class="track-content" id="track-highlights"></div>
+    </div>
   </div>
 </div>
 
@@ -1776,6 +1924,7 @@ body {
   <span><kbd>A</kbd> Add annotation</span>
   <span><kbd>X</kbd> Mark cut</span>
   <span><kbd>D</kbd> Add snippet</span>
+  <span><kbd>H</kbd> Add highlight</span>
   <span><kbd>&larr;</kbd><kbd>&rarr;</kbd> Seek</span>
   <span><kbd>[</kbd><kbd>]</kbd> Prev/Next chapter</span>
   <span><kbd>I</kbd> Show Info</span>
@@ -1822,6 +1971,7 @@ body {
   const trackAnnotations = document.getElementById('track-annotations');
   const trackCuts = document.getElementById('track-cuts');
   const trackSnippets = document.getElementById('track-snippets');
+  const trackHighlights = document.getElementById('track-highlights');
   const propsPanel = document.getElementById('properties-panel');
   const toast = document.getElementById('toast');
   const btnPlay = document.getElementById('btn-play');
@@ -1838,6 +1988,8 @@ body {
     durationDisplay.textContent = formatTimePrecise(data.recording.duration);
     // Ensure snippets array exists
     if (!data.script.snippets) data.script.snippets = [];
+    // Ensure highlights array exists
+    if (!data.script.highlights) data.script.highlights = [];
     renderStats();
 
     // Set terminal viewport to captured dimensions
@@ -1899,6 +2051,7 @@ body {
     const annotations = (script.annotations || []).length;
     const cuts = (script.cuts || []).length;
     const snippets = (script.snippets || []).length;
+    const highlights = (script.highlights || []).length;
 
     panel.innerHTML =
       '<div class="inspector-header"><span class="inspector-title">Info</span><button class="inspector-close" id="inspector-close" title="Close">&times;</button></div>' +
@@ -1912,6 +2065,7 @@ body {
       statRow('Annotations', String(annotations)) +
       statRow('Cuts', String(cuts)) +
       statRow('Snippets', String(snippets)) +
+      statRow('Highlights', String(highlights)) +
       '<div class="stat-divider"></div>' +
       statRow('Source', fmtSize(sourceBytes)) +
       statRow('Keyframes', '~' + estKeyframes) +
@@ -2068,6 +2222,39 @@ body {
       el.appendChild(rh);
 
       trackSnippets.appendChild(el);
+    });
+
+    // Highlights
+    trackHighlights.innerHTML = '';
+
+    (data.script.highlights || []).forEach((hl, i) => {
+      const el = document.createElement('div');
+      el.className = 'track-item-highlight';
+      el.style.left = timeToPct(hl.time);
+      el.style.width = durationToPct(hl.duration);
+      const textSpan = document.createElement('span');
+      textSpan.className = 'hl-text';
+      textSpan.textContent = hl.style || 'outline';
+      el.appendChild(textSpan);
+      el.addEventListener('mousedown', (e) => {
+        if (e.target.classList.contains('hl-handle')) return;
+        e.stopPropagation();
+        startBoxDrag('highlight', i, e);
+      });
+
+      // Left handle
+      const lh = document.createElement('div');
+      lh.className = 'hl-handle hl-handle-left';
+      lh.addEventListener('mousedown', (e) => { e.stopPropagation(); startHighlightHandleDrag(i, 'start', e); });
+      el.appendChild(lh);
+
+      // Right handle
+      const rh = document.createElement('div');
+      rh.className = 'hl-handle hl-handle-right';
+      rh.addEventListener('mousedown', (e) => { e.stopPropagation(); startHighlightHandleDrag(i, 'end', e); });
+      el.appendChild(rh);
+
+      trackHighlights.appendChild(el);
     });
 
     renderStats();
@@ -2758,6 +2945,79 @@ body {
     attachLiveListeners();
   }
 
+  function selectHighlight(idx) {
+    selectedItem = { type: 'highlight', index: idx };
+    clearAllHighlights();
+    const hlEls = trackHighlights.querySelectorAll('.track-item-highlight');
+    if (hlEls[idx]) hlEls[idx].classList.add('selected');
+    const hl = (data.script.highlights || [])[idx];
+    const target = hl.target || {};
+    const regionRow = target.region ? (target.region.row || 0) : '';
+    const regionCol = target.region ? (target.region.col || 0) : '';
+    const regionW = target.region ? (target.region.width || 10) : '';
+    const regionH = target.region ? (target.region.height || 1) : '';
+    propsPanel.innerHTML = `
+      <div class="prop-title">Highlight</div>
+      <div class="prop-field">
+        <div class="prop-label">Time (s)</div>
+        <input class="prop-input" type="number" step="0.01" value="${hl.time.toFixed(2)}" id="prop-time">
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Duration (s)</div>
+        <input class="prop-input" type="number" step="0.1" value="${hl.duration.toFixed(2)}" id="prop-duration">
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Style</div>
+        <select class="prop-select" id="prop-hl-style">
+          <option value="outline" ${hl.style==='outline'?'selected':''}>Outline</option>
+          <option value="underline" ${hl.style==='underline'?'selected':''}>Underline</option>
+          <option value="underline-wavy" ${hl.style==='underline-wavy'?'selected':''}>Underline (wavy)</option>
+          <option value="background" ${hl.style==='background'?'selected':''}>Background</option>
+          <option value="spotlight" ${hl.style==='spotlight'?'selected':''}>Spotlight</option>
+          <option value="glow" ${hl.style==='glow'?'selected':''}>Glow</option>
+          <option value="box" ${hl.style==='box'?'selected':''}>Box</option>
+          <option value="badge-before" ${hl.style==='badge-before'?'selected':''}>Badge (before)</option>
+          <option value="badge-after" ${hl.style==='badge-after'?'selected':''}>Badge (after)</option>
+          <option value="bracket" ${hl.style==='bracket'?'selected':''}>Bracket</option>
+        </select>
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Color</div>
+        <input class="prop-input" type="text" value="${escAttr(hl.color || '#f1fa8c')}" id="prop-hl-color" placeholder="#hex">
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Region (row, col, w, h)</div>
+        <div style="display:flex; gap:4px;">
+          <input class="prop-input" type="number" step="1" value="${regionRow}" id="prop-hl-row" style="width:50px" placeholder="row">
+          <input class="prop-input" type="number" step="1" value="${regionCol}" id="prop-hl-col" style="width:50px" placeholder="col">
+          <input class="prop-input" type="number" step="1" value="${regionW}" id="prop-hl-width" style="width:50px" placeholder="w">
+          <input class="prop-input" type="number" step="1" value="${regionH}" id="prop-hl-height" style="width:50px" placeholder="h">
+        </div>
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Match (regex)</div>
+        <input class="prop-input" type="text" value="${escAttr(target.match || '')}" id="prop-hl-match" placeholder="Pattern target">
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Badge text</div>
+        <input class="prop-input" type="text" value="${escAttr(hl.badge_text || '')}" id="prop-hl-badge">
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Pulse</div>
+        <select class="prop-select" id="prop-hl-pulse">
+          <option value="false" ${!hl.pulse?'selected':''}>No</option>
+          <option value="true" ${hl.pulse?'selected':''}>Yes</option>
+        </select>
+      </div>
+      <div class="prop-actions">
+        <button class="btn" onclick="undoSelected()">Undo</button>
+        <button class="btn" style="color:var(--cut)" onclick="deleteSelected()">Delete</button>
+      </div>
+    `;
+    propsPanel.classList.add('open');
+    attachLiveListeners();
+  }
+
   // --- Live input listeners for inspector ---
   let undoSnapshot = null;
 
@@ -2769,6 +3029,7 @@ body {
       else if (type === 'annotation') undoSnapshot = { ...data.script.annotations[index] };
       else if (type === 'cut') undoSnapshot = { ...data.script.cuts[index] };
       else if (type === 'snippet') undoSnapshot = { ...(data.script.snippets || [])[index] };
+      else if (type === 'highlight') undoSnapshot = JSON.parse(JSON.stringify((data.script.highlights || [])[index]));
     }
     propsPanel.querySelectorAll('.prop-input, .prop-select').forEach(el => {
       el.addEventListener('input', liveApply);
@@ -2820,6 +3081,31 @@ body {
       data.script.snippets[index].text = document.getElementById('prop-text').value;
       data.script.snippets[index].match = document.getElementById('prop-match').value;
       data.script.snippets[index].label = document.getElementById('prop-label').value;
+    } else if (type === 'highlight') {
+      const hl = data.script.highlights[index];
+      hl.time = parseFloat(document.getElementById('prop-time').value) || 0;
+      hl.duration = parseFloat(document.getElementById('prop-duration').value) || 1;
+      hl.style = document.getElementById('prop-hl-style').value;
+      hl.color = document.getElementById('prop-hl-color').value || '#f1fa8c';
+      hl.badge_text = document.getElementById('prop-hl-badge').value || '';
+      hl.pulse = document.getElementById('prop-hl-pulse').value === 'true';
+      // Update region from fields
+      const row = parseInt(document.getElementById('prop-hl-row').value);
+      const col = parseInt(document.getElementById('prop-hl-col').value);
+      const w = parseInt(document.getElementById('prop-hl-width').value);
+      const h = parseInt(document.getElementById('prop-hl-height').value);
+      if (!isNaN(row) && !isNaN(col) && !isNaN(w) && !isNaN(h)) {
+        if (!hl.target) hl.target = {};
+        hl.target.region = { row: row, col: col, width: w, height: h };
+      }
+      // Update match target
+      const matchVal = document.getElementById('prop-hl-match').value;
+      if (matchVal) {
+        if (!hl.target) hl.target = {};
+        hl.target.match = matchVal;
+      } else if (hl.target) {
+        delete hl.target.match;
+      }
     }
 
     markDirty();
@@ -2834,6 +3120,7 @@ body {
     else if (type === 'annotation') data.script.annotations[index] = { ...undoSnapshot };
     else if (type === 'cut') data.script.cuts[index] = { ...undoSnapshot };
     else if (type === 'snippet') data.script.snippets[index] = { ...undoSnapshot };
+    else if (type === 'highlight') data.script.highlights[index] = JSON.parse(JSON.stringify(undoSnapshot));
     renderTracks();
     updatePlayhead();
     // Re-open panel with restored values
@@ -2841,6 +3128,7 @@ body {
     else if (type === 'annotation') selectAnnotation(index);
     else if (type === 'cut') selectCut(index);
     else if (type === 'snippet') selectSnippet(index);
+    else if (type === 'highlight') selectHighlight(index);
     showToast('Reverted');
   };
 
@@ -2873,6 +3161,7 @@ body {
     else if (type === 'annotation') data.script.annotations.splice(index, 1);
     else if (type === 'cut') data.script.cuts.splice(index, 1);
     else if (type === 'snippet') data.script.snippets.splice(index, 1);
+    else if (type === 'highlight') data.script.highlights.splice(index, 1);
 
     selectedItem = null;
     propsPanel.classList.remove('open');
@@ -3082,6 +3371,20 @@ body {
     showToast('Snippet added — edit the text in properties');
   }
 
+  function addHighlight() {
+    if (!data.script.highlights) data.script.highlights = [];
+    const start = roundTime(currentTime);
+    const dur = roundTime(Math.min(3, data.recording.duration - start));
+    if (dur <= 0) return;
+    data.script.highlights.push({ time: start, duration: dur, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'outline', color: '#f1fa8c', badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
+    renderTracks();
+    updatePlayhead();
+    markDirty();
+    const idx = data.script.highlights.length - 1;
+    selectHighlight(idx);
+    showToast('Highlight added — configure target and style in properties');
+  }
+
   // Snippet handle drag (resize edges)
   function startSnippetHandleDrag(cmdIdx, edge, e) {
     e.preventDefault();
@@ -3222,11 +3525,136 @@ body {
     }
   });
 
-  // --- Box drag-to-reposition (annotations, cuts, and snippets) ---
+  // --- Highlight handle drag-to-resize ---
+  function startHighlightHandleDrag(hlIdx, edge, e) {
+    e.preventDefault();
+    const rect = trackHighlights.getBoundingClientRect();
+    const duration = data.recording.duration;
+    selectHighlight(hlIdx);
+    selectedItem = { type: 'highlight', index: hlIdx, edge: edge };
+    const hlEls = trackHighlights.querySelectorAll('.track-item-highlight');
+    if (hlEls[hlIdx]) {
+      const handle = hlEls[hlIdx].querySelector('.hl-handle-' + (edge === 'start' ? 'left' : 'right'));
+      if (handle) handle.classList.add('selected');
+    }
+    const hl = data.script.highlights[hlIdx];
+    seek(edge === 'start' ? hl.time : hl.time + hl.duration);
+
+    function onMove(ev) {
+      const ratio = (ev.clientX - rect.left) / rect.width;
+      const t = roundTime(Math.max(0, Math.min(ratio * duration, duration)));
+      const hl = data.script.highlights[hlIdx];
+      if (edge === 'start') {
+        const newStart = Math.min(t, hl.time + hl.duration - 0.1);
+        hl.duration = roundTime(hl.duration + (hl.time - newStart));
+        hl.time = newStart;
+      } else {
+        const newEnd = Math.max(t, hl.time + 0.1);
+        hl.duration = roundTime(newEnd - hl.time);
+      }
+      renderTracks();
+      updatePlayhead();
+      const els = trackHighlights.querySelectorAll('.track-item-highlight');
+      if (els[hlIdx]) {
+        els[hlIdx].classList.add('selected');
+        const h = els[hlIdx].querySelector('.hl-handle-' + (edge === 'start' ? 'left' : 'right'));
+        if (h) h.classList.add('selected');
+      }
+      const timeInput = document.getElementById('prop-time');
+      const durInput = document.getElementById('prop-duration');
+      if (timeInput) timeInput.value = hl.time.toFixed(2);
+      if (durInput) durInput.value = hl.duration.toFixed(2);
+    }
+
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      markDirty();
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  // Highlight drag-to-create on track
+  trackHighlights.addEventListener('mousedown', (e) => {
+    if (e.target !== trackHighlights) return;
+    e.preventDefault();
+    if (!data.script.highlights) data.script.highlights = [];
+    const rect = trackHighlights.getBoundingClientRect();
+    const startX = e.clientX;
+    const startRatio = (startX - rect.left) / rect.width;
+    const startTime = roundTime(startRatio * data.recording.duration);
+    let dragStarted = false;
+    let hlDragIdx = null;
+
+    function onMove(ev) {
+      if (!dragStarted) {
+        if (Math.abs(ev.clientX - startX) < 4) return;
+        dragStarted = true;
+        hlDragIdx = data.script.highlights.length;
+        data.script.highlights.push({ time: startTime, duration: 0, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'outline', color: '#f1fa8c', badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
+        renderTracks();
+        updatePlayhead();
+      }
+      const ratio = (ev.clientX - rect.left) / rect.width;
+      const t = roundTime(Math.max(0, Math.min(ratio * data.recording.duration, data.recording.duration)));
+      const hl = data.script.highlights[hlDragIdx];
+      if (t < startTime) {
+        hl.time = t;
+        hl.duration = roundTime(startTime - t);
+      } else {
+        hl.time = startTime;
+        hl.duration = roundTime(t - startTime);
+      }
+      renderTracks();
+      updatePlayhead();
+    }
+
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      if (!dragStarted) return;
+      const hl = data.script.highlights[hlDragIdx];
+      if (hl.duration < 0.15) {
+        data.script.highlights.splice(hlDragIdx, 1);
+      } else {
+        selectHighlight(hlDragIdx);
+        markDirty();
+        showToast('Highlight: ' + formatTimePrecise(hl.time) + ' → ' + formatTimePrecise(hl.time + hl.duration));
+      }
+      renderTracks();
+      updatePlayhead();
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  // Double-click on highlights track to create a 3s highlight
+  trackHighlights.addEventListener('dblclick', (e) => {
+    if (e.target !== trackHighlights) return;
+    e.preventDefault();
+    if (!data.script.highlights) data.script.highlights = [];
+    const rect = trackHighlights.getBoundingClientRect();
+    const ratio = (e.clientX - rect.left) / rect.width;
+    const clickTime = roundTime(ratio * data.recording.duration);
+    const dur = roundTime(Math.min(3, data.recording.duration - clickTime));
+    if (dur > 0) {
+      data.script.highlights.push({ time: clickTime, duration: dur, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'outline', color: '#f1fa8c', badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
+      renderTracks();
+      updatePlayhead();
+      markDirty();
+      selectHighlight(data.script.highlights.length - 1);
+      showToast('Highlight added (3s) — configure in properties');
+    }
+  });
+
+  // --- Box drag-to-reposition (annotations, cuts, snippets, and highlights) ---
   function startBoxDrag(type, index, e) {
     e.preventDefault();
     const startX = e.clientX;
-    const track = type === 'annotation' ? trackAnnotations : type === 'snippet' ? trackSnippets : trackCuts;
+    const track = type === 'annotation' ? trackAnnotations : type === 'snippet' ? trackSnippets : type === 'highlight' ? trackHighlights : trackCuts;
     const rect = track.getBoundingClientRect();
     const duration = data.recording.duration;
     let dragged = false;
@@ -3238,6 +3666,10 @@ body {
       itemDuration = item.duration;
     } else if (type === 'snippet') {
       item = (data.script.snippets || [])[index];
+      itemStart = item.time;
+      itemDuration = item.duration;
+    } else if (type === 'highlight') {
+      item = (data.script.highlights || [])[index];
       itemStart = item.time;
       itemDuration = item.duration;
     } else {
@@ -3254,7 +3686,7 @@ body {
       dragged = true;
       const dt = (dx / rect.width) * duration;
       let newStart = roundTime(Math.max(0, Math.min(origStart + dt, duration - itemDuration)));
-      if (type === 'annotation' || type === 'snippet') {
+      if (type === 'annotation' || type === 'snippet' || type === 'highlight') {
         item.time = newStart;
       } else {
         item.start = newStart;
@@ -3273,6 +3705,7 @@ body {
       // Always select on mouseup (whether drag or click)
       if (type === 'annotation') selectAnnotation(index);
       else if (type === 'snippet') selectSnippet(index);
+      else if (type === 'highlight') selectHighlight(index);
       else selectCut(index);
     }
 
@@ -3925,6 +4358,7 @@ body {
     else if (e.key === 'a' && !e.metaKey) { addAnnotation(); }
     else if (e.key === 'x' || e.key === 'X') { addCut(); }
     else if (e.key === 'd' || e.key === 'D') { addSnippet(); }
+    else if (e.key === 'h' || e.key === 'H') { addHighlight(); }
     else if (e.key === 'ArrowRight') {
       e.preventDefault();
       if (selectedItem && selectedItem.type === 'cut' && selectedItem.edge) {
