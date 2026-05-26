@@ -1,0 +1,28 @@
+source: assets/landing-demo.termshow
+
+settings:
+  idle_time_limit: 2
+  window_chrome: colorful
+
+chapters:
+  - at: 0
+    label: "Initialize"
+  - at: 11.5
+    label: "Build"
+  - at: 29.23
+    label: "Preview"
+
+snippets:
+  - at: 1.4
+    duration: 9
+    text: "great-docs init"
+    label: "Init"
+  - at: 12.5
+    duration: 15.1
+    text: "great-docs build"
+    label: "Build"
+  - at: 29.59
+    duration: 6.62
+    text: "great-docs preview"
+    label: "Preview"
+
