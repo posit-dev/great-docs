@@ -83,6 +83,7 @@ class Script:
     theme_name: str | None = None
     theme: Theme | None = None
     font_family: str | None = None
+    line_height: float | None = None
     show_cursor: bool = True
     window_chrome: str = "none"
     prompt: str | None = None
@@ -131,6 +132,7 @@ def _parse_script_data(data: dict[str, Any]) -> Script:
         script.speed = settings.get("speed", 1.0)
         script.theme_name = settings.get("theme")
         script.font_family = settings.get("font_family")
+        script.line_height = settings.get("line_height")
         script.show_cursor = settings.get("show_cursor", True)
         script.window_chrome = settings.get("window_chrome", "none")
         if "prompt" in settings:
