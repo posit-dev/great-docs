@@ -4,14 +4,7 @@ Give your Python package the documentation site it deserves. Great Docs turns yo
 
 ## Three Commands. One Beautiful Site.
 
-```bash
-pip install great-docs
-
-cd your-python-package
-great-docs init      # scans your package, writes the config
-great-docs build     # generates everything, renders with Quarto
-great-docs preview   # live preview at localhost:3000
-```
+{{< termshow file="assets/landing-demo" autoplay="true" loop="true" >}}
 
 That's it. Your API reference, CLI docs, and landing page are ready to go. Push to GitHub and you're live.
 
