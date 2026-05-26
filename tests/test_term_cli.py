@@ -45,14 +45,6 @@ def _make_asciicast_file(tmp_path: Path, name: str = "test.cast") -> Path:
     return f
 
 
-def _make_tape_file(tmp_path: Path, name: str = "test.tape") -> Path:
-    """Create a minimal VHS tape file."""
-    content = 'Set Width 80\nSet Height 24\nType "hello"\nEnter\n'
-    f = tmp_path / name
-    f.write_text(content, encoding="utf-8")
-    return f
-
-
 # ---------------------------------------------------------------------------
 # term render
 # ---------------------------------------------------------------------------
@@ -174,44 +166,6 @@ class TestTermImportCast:
 
 
 # ---------------------------------------------------------------------------
-# term import-tape
-# ---------------------------------------------------------------------------
-
-
-class TestTermImportTape:
-    def test_import_tape(self, tmp_path: Path):
-        source = _make_tape_file(tmp_path)
-        output = tmp_path / "imported.termshow"
-
-        runner = CliRunner()
-        result = runner.invoke(cli, ["termshow", "import-tape", str(source), str(output)])
-
-        assert result.exit_code == 0
-        assert "Imported" in result.output
-        assert output.exists()
-
-    def test_import_tape_appends_extension(self, tmp_path: Path):
-        source = _make_tape_file(tmp_path)
-        output = tmp_path / "imported"
-
-        runner = CliRunner()
-        result = runner.invoke(cli, ["termshow", "import-tape", str(source), str(output)])
-
-        assert result.exit_code == 0
-        assert (tmp_path / "imported.termshow").exists()
-
-    def test_import_tape_shows_stats(self, tmp_path: Path):
-        source = _make_tape_file(tmp_path)
-        output = tmp_path / "out.termshow"
-
-        runner = CliRunner()
-        result = runner.invoke(cli, ["termshow", "import-tape", str(source), str(output)])
-
-        assert "Duration:" in result.output
-        assert "Events:" in result.output
-
-
-# ---------------------------------------------------------------------------
 # term (group help)
 # ---------------------------------------------------------------------------
 
@@ -224,7 +178,6 @@ class TestTermGroup:
         assert "record" in result.output
         assert "render" in result.output
         assert "import-cast" in result.output
-        assert "import-tape" in result.output
         assert "edit" in result.output
 
 
