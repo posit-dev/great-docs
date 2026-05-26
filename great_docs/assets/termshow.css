@@ -1,5 +1,28 @@
 /* Great Docs Termshow Player Styles */
 
+/* Embedded JetBrains Mono subset (OFL license) — includes box-drawing chars */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(JetBrainsMono-Regular.subset.woff2) format("woff2");
+  unicode-range: U+0020-007E, U+00A0-00FF, U+2010-2027, U+2190-219F,
+    U+2500-257F, U+2580-259F, U+25A0-25C0, U+2298, U+2605-2606,
+    U+2705, U+2714, U+2716, U+2718, U+26A0;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(JetBrainsMono-Bold.subset.woff2) format("woff2");
+  unicode-range: U+0020-007E, U+00A0-00FF, U+2010-2027, U+2190-219F,
+    U+2500-257F, U+2580-259F, U+25A0-25C0, U+2298, U+2605-2606,
+    U+2705, U+2714, U+2716, U+2718, U+26A0;
+}
+
 .gd-termshow {
   --gd-tp-bg: #1e1e2e;
   --gd-tp-fg: #cdd6f4;
