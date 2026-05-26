@@ -21,7 +21,14 @@ from great_docs._term_player.manifest import (
     generate_manifest,
 )
 from great_docs._term_player.parser import Event, Recording, TermInfo
-from great_docs._term_player.script import Annotation, Chapter, Cut, Highlight, Script
+from great_docs._term_player.script import (
+    Annotation,
+    Chapter,
+    Cut,
+    Highlight,
+    HighlightTarget,
+    Script,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -87,10 +94,16 @@ class TestManifest:
 
     def test_to_json_includes_highlights(self):
         m = Manifest(
-            highlights=[Highlight(time=1.0, duration=1.5, row=5, col=10, width=20, height=1)]
+            highlights=[
+                Highlight(
+                    time=1.0,
+                    duration=1.5,
+                    target=HighlightTarget(region={"row": 5, "col": 10, "width": 20, "height": 1}),
+                )
+            ]
         )
         j = json.loads(m.to_json())
-        assert j["highlights"][0]["row"] == 5
+        assert j["highlights"][0]["target"]["region"]["row"] == 5
 
     def test_to_json_rounds_times(self):
         m = Manifest(duration=5.123456789)
@@ -223,7 +236,13 @@ class TestGenerateManifest:
     def test_highlights_from_script(self):
         rec = _minimal_recording()
         script = Script(
-            highlights=[Highlight(time=1.0, duration=1.0, row=0, col=0, width=5, height=1)]
+            highlights=[
+                Highlight(
+                    time=1.0,
+                    duration=1.0,
+                    target=HighlightTarget(region={"row": 0, "col": 0, "width": 5, "height": 1}),
+                )
+            ]
         )
         manifest = generate_manifest(rec, script)
         assert len(manifest.highlights) == 1
