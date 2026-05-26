@@ -21,6 +21,7 @@ def render_frame(
     *,
     font_family: str = DEFAULT_FONT_FAMILY,
     font_size: int = DEFAULT_FONT_SIZE,
+    line_height: float = DEFAULT_LINE_HEIGHT,
     show_cursor: bool = True,
     window_chrome: str = "none",
 ) -> str:
@@ -36,6 +37,9 @@ def render_frame(
         CSS font-family for terminal text.
     font_size
         Font size in pixels.
+    line_height
+        Line height multiplier. Lower values (e.g. 1.2) make box-drawing
+        characters connect vertically.
     show_cursor
         Whether to render the cursor block.
     window_chrome
@@ -50,7 +54,7 @@ def render_frame(
         theme = Theme()
 
     cell_w = font_size * 0.6  # Monospace character width approximation
-    cell_h = font_size * DEFAULT_LINE_HEIGHT
+    cell_h = font_size * line_height
 
     pad = DEFAULT_PADDING
     chrome_h = 0.0  # Chrome is rendered as CSS overlay, not in SVG
