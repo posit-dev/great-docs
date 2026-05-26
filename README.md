@@ -327,7 +327,6 @@ Beyond `init`, `build`, and `preview`, Great Docs includes a full suite of quali
 | `great-docs termshow play` | Preview a recording in the terminal |
 | `great-docs termshow render` | Render SVG frames without a full site build |
 | `great-docs termshow import-cast` | Import an asciinema `.cast` file |
-| `great-docs termshow import-tape` | Import a VHS `.tape` file |
 
 ## Recipes
 

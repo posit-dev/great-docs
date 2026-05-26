@@ -563,20 +563,17 @@ the first one wins and subsequent ones are hidden.
 
 ## Importing Existing Recordings
 
-Already have terminal recordings from other tools? Import them:
+Already have terminal recordings from asciinema? Import them:
 
 ```bash
 # From asciinema (.cast files)
 great-docs termshow import-cast recording.cast assets/my-demo
-
-# From VHS (.tape files)
-great-docs termshow import-tape demo.tape assets/my-demo
 ```
 
 The import preserves timing and terminal dimensions. Create a `.termshow.yml` script afterward to
 add chapters and annotations.
 
-Both importers produce the same `.termshow` format, so all editing and rendering features work
+The importer produces the same `.termshow` format, so all editing and rendering features work
 identically regardless of the original source.
 
 ## Rendering & Preview
