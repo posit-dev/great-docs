@@ -57,6 +57,7 @@
   width: 100%;
   overflow: hidden;
   outline: none;
+  container-type: inline-size;
 }
 
 .gd-tp-viewport:focus-visible {
@@ -91,6 +92,114 @@
   pointer-events: none;
   padding: 12px;
   contain: layout style;
+}
+
+/* Highlights overlay — top: -2px matches the SVG's margin-top: -2px */
+.gd-tp-highlights {
+  position: absolute;
+  top: -2px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  contain: layout style;
+  z-index: 1;
+}
+
+.gd-tp-highlight {
+  --hl-color: #f1fa8c;
+  transition: opacity 0.15s ease;
+  box-sizing: border-box;
+  border-radius: max(1px, 0.426cqi);
+}
+
+/* Styles */
+.gd-tp-hl-outline {
+  box-shadow: 0 0 0 max(1px, 0.284cqi) var(--hl-color);
+}
+
+.gd-tp-hl-underline {
+  border-bottom: max(1px, 0.284cqi) solid var(--hl-color);
+  border-radius: 0;
+}
+
+.gd-tp-hl-underline-wavy {
+  border-radius: 0;
+}
+.gd-tp-hl-underline-wavy::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: max(2px, 0.568cqi);
+  background-color: var(--hl-color);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='4' viewBox='0 0 8 4'%3E%3Cpath d='M0 2Q2 0 4 2Q6 4 8 2' fill='none' stroke='black' stroke-width='1.5'/%3E%3C/svg%3E");
+  -webkit-mask-repeat: repeat-x;
+  -webkit-mask-size: max(4px, 1.136cqi) max(2px, 0.568cqi);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='4' viewBox='0 0 8 4'%3E%3Cpath d='M0 2Q2 0 4 2Q6 4 8 2' fill='none' stroke='black' stroke-width='1.5'/%3E%3C/svg%3E");
+  mask-repeat: repeat-x;
+  mask-size: max(4px, 1.136cqi) max(2px, 0.568cqi);
+}
+
+.gd-tp-hl-background {
+  background: color-mix(in srgb, var(--hl-color) 20%, transparent);
+}
+
+.gd-tp-hl-spotlight {
+  background: color-mix(in srgb, var(--hl-color) 10%, transparent);
+  box-shadow: 0 0 max(8px, 2.84cqi) color-mix(in srgb, var(--hl-color) 40%, transparent);
+}
+
+.gd-tp-hl-glow {
+  box-shadow: 0 0 max(4px, 1.136cqi) max(1px, 0.284cqi) var(--hl-color), inset 0 0 max(2px, 0.568cqi) max(1px, 0.142cqi) color-mix(in srgb, var(--hl-color) 30%, transparent);
+}
+
+.gd-tp-hl-box {
+  border: max(1px, 0.284cqi) solid var(--hl-color);
+  background: color-mix(in srgb, var(--hl-color) 10%, transparent);
+}
+
+.gd-tp-hl-bracket {
+  border-left: max(2px, 0.426cqi) solid var(--hl-color);
+  border-radius: 0;
+}
+
+.gd-tp-hl-badge-before,
+.gd-tp-hl-badge-after {
+  border: max(1px, 0.213cqi) solid var(--hl-color);
+}
+
+.gd-tp-hl-badge {
+  position: absolute;
+  background: var(--hl-color);
+  color: #1e1e2e;
+  font-size: max(7px, 1.42cqi);
+  font-weight: 600;
+  padding: max(1px, 0.142cqi) max(3px, 0.71cqi);
+  border-radius: max(1px, 0.426cqi);
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.gd-tp-hl-badge-before .gd-tp-hl-badge {
+  top: max(-14px, -1.989cqi);
+  left: 0;
+}
+
+.gd-tp-hl-badge-after .gd-tp-hl-badge {
+  bottom: max(-14px, -1.989cqi);
+  left: 0;
+}
+
+/* Pulse animation */
+@keyframes gd-tp-hl-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.gd-tp-hl-pulse {
+  animation: gd-tp-hl-pulse 1.5s ease-in-out infinite;
 }
 
 .gd-tp-annotation {
