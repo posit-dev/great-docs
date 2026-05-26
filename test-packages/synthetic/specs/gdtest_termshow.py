@@ -1603,6 +1603,570 @@ SPEC = {
             "    style: callout\n"
             "    width: large\n"
         ),
+        # ── Highlight style gallery recordings ────────────────────────
+        #
+        # A compact base recording used for all highlight style demos.
+        # Shows a command with colored output so highlights are clearly
+        # visible against terminal content.
+        #
+        # --- Style: outline ---
+        "demos/hl-style-outline.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Outline"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "g"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.08, "o", "t"]\n'
+            '[0.06, "o", "-"]\n'
+            '[0.07, "o", "d"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "s"]\n'
+            '[0.06, "o", "c"]\n'
+            '[0.07, "o", "a"]\n'
+            '[0.06, "o", "n"]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[36mScanning project...\\u001b[0m\\r\\n"]\n'
+            '[0.4, "o", "\\u001b[32m\\u2713\\u001b[0m Found 4 modules\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[32m\\u2713\\u001b[0m Found 12 functions\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[32m\\u2713\\u001b[0m Found 3 classes\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/hl-style-outline.termshow.yml": (
+            "source: demos/hl-style-outline.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "highlights:\n"
+            "  - at: 1.5\n"
+            "    duration: 5.0\n"
+            "    style: outline\n"
+            "    target:\n"
+            "      region: {row: 2, col: 2, width: 15, height: 1}\n"
+        ),
+        # --- Style: underline ---
+        "demos/hl-style-underline.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Underline"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "g"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.08, "o", "t"]\n'
+            '[0.06, "o", "-"]\n'
+            '[0.07, "o", "d"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "l"]\n'
+            '[0.06, "o", "i"]\n'
+            '[0.07, "o", "n"]\n'
+            '[0.06, "o", "t"]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[36mLinting sources...\\u001b[0m\\r\\n"]\n'
+            '[0.4, "o", "\\u001b[33m\\u26a0\\u001b[0m  src/core.py:42 — unused import\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[33m\\u26a0\\u001b[0m  src/utils.py:8 — line too long\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[32m\\u2713\\u001b[0m 2 warnings, 0 errors\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/hl-style-underline.termshow.yml": (
+            "source: demos/hl-style-underline.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "highlights:\n"
+            "  - at: 1.5\n"
+            "    duration: 5.0\n"
+            "    style: underline\n"
+            "    color: '#f9e2af'\n"
+            "    target:\n"
+            "      region: {row: 2, col: 3, width: 30, height: 1}\n"
+        ),
+        # --- Style: underline-wavy ---
+        "demos/hl-style-underline-wavy.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Underline Wavy"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "p"]\n'
+            '[0.06, "o", "y"]\n'
+            '[0.07, "o", "t"]\n'
+            '[0.06, "o", "h"]\n'
+            '[0.08, "o", "o"]\n'
+            '[0.06, "o", "n"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "a"]\n'
+            '[0.06, "o", "p"]\n'
+            '[0.07, "o", "p"]\n'
+            '[0.06, "o", "."]\n'
+            '[0.08, "o", "p"]\n'
+            '[0.06, "o", "y"]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.3, "o", "Traceback (most recent call last):\\r\\n"]\n'
+            '[0.2, "o", "  File \\"app.py\\", line 7, in <module>\\r\\n"]\n'
+            '[0.2, "o", "    result = compute(data)\\r\\n"]\n'
+            '[0.2, "o", "\\u001b[31mTypeError: unsupported operand type(s)\\u001b[0m\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/hl-style-underline-wavy.termshow.yml": (
+            "source: demos/hl-style-underline-wavy.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "highlights:\n"
+            "  - at: 1.5\n"
+            "    duration: 5.0\n"
+            "    style: underline-wavy\n"
+            "    color: '#f38ba8'\n"
+            "    target:\n"
+            "      region: {row: 4, col: 0, width: 38, height: 1}\n"
+        ),
+        # --- Style: background ---
+        "demos/hl-style-background.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Background"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "c"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.07, "o", "t"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "c"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.07, "o", "n"]\n'
+            '[0.06, "o", "f"]\n'
+            '[0.08, "o", "i"]\n'
+            '[0.06, "o", "g"]\n'
+            '[0.07, "o", "."]\n'
+            '[0.06, "o", "t"]\n'
+            '[0.08, "o", "o"]\n'
+            '[0.06, "o", "m"]\n'
+            '[0.07, "o", "l"]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.2, "o", "\\u001b[36m[project]\\u001b[0m\\r\\n"]\n'
+            '[0.2, "o", "name = \\"my-tool\\"\\r\\n"]\n'
+            '[0.2, "o", "version = \\"2.1.0\\"\\r\\n"]\n'
+            '[0.2, "o", "description = \\"A fast CLI utility\\"\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/hl-style-background.termshow.yml": (
+            "source: demos/hl-style-background.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "highlights:\n"
+            "  - at: 1.5\n"
+            "    duration: 5.0\n"
+            "    style: background\n"
+            "    color: '#89b4fa'\n"
+            "    target:\n"
+            "      region: {row: 3, col: 0, width: 17, height: 1}\n"
+        ),
+        # --- Style: spotlight ---
+        "demos/hl-style-spotlight.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Spotlight"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "g"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.08, "o", "t"]\n'
+            '[0.06, "o", "-"]\n'
+            '[0.07, "o", "d"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "b"]\n'
+            '[0.06, "o", "u"]\n'
+            '[0.07, "o", "i"]\n'
+            '[0.06, "o", "l"]\n'
+            '[0.08, "o", "d"]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[36mBuilding documentation...\\u001b[0m\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u2713\\u001b[0m Rendered 24 pages\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[32m\\u2713\\u001b[0m Generated search index\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[1m\\u001b[32m\\u2728 Build complete!\\u001b[0m Output: _site/\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/hl-style-spotlight.termshow.yml": (
+            "source: demos/hl-style-spotlight.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "highlights:\n"
+            "  - at: 1.5\n"
+            "    duration: 5.0\n"
+            "    style: spotlight\n"
+            "    color: '#a6e3a1'\n"
+            "    target:\n"
+            "      region: {row: 4, col: 0, width: 32, height: 1}\n"
+        ),
+        # --- Style: glow ---
+        "demos/hl-style-glow.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Glow"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "g"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.08, "o", "t"]\n'
+            '[0.06, "o", "-"]\n'
+            '[0.07, "o", "d"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "v"]\n'
+            '[0.06, "o", "e"]\n'
+            '[0.07, "o", "r"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.08, "o", "i"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.07, "o", "n"]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.3, "o", "great-docs \\u001b[1mv0.9.0\\u001b[0m\\r\\n"]\n'
+            '[0.2, "o", "Python 3.12.4\\r\\n"]\n'
+            '[0.2, "o", "Platform: macOS-14.5-arm64\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/hl-style-glow.termshow.yml": (
+            "source: demos/hl-style-glow.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "highlights:\n"
+            "  - at: 1.5\n"
+            "    duration: 5.0\n"
+            "    style: glow\n"
+            "    color: '#cba6f7'\n"
+            "    target:\n"
+            "      region: {row: 1, col: 11, width: 6, height: 1}\n"
+            "    pulse: true\n"
+        ),
+        # --- Style: box ---
+        "demos/hl-style-box.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Box"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "p"]\n'
+            '[0.06, "o", "y"]\n'
+            '[0.07, "o", "t"]\n'
+            '[0.06, "o", "e"]\n'
+            '[0.08, "o", "s"]\n'
+            '[0.06, "o", "t"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "-"]\n'
+            '[0.06, "o", "-"]\n'
+            '[0.07, "o", "c"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "v"]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[36mRunning tests with coverage...\\u001b[0m\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u2713\\u001b[0m 48 passed\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[32m\\u2713\\u001b[0m Coverage: \\u001b[1m94%\\u001b[0m\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[33m\\u26a0\\u001b[0m  Uncovered: utils.py:102-108\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/hl-style-box.termshow.yml": (
+            "source: demos/hl-style-box.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "highlights:\n"
+            "  - at: 1.5\n"
+            "    duration: 5.0\n"
+            "    style: box\n"
+            "    color: '#a6e3a1'\n"
+            "    target:\n"
+            "      region: {row: 2, col: 0, width: 20, height: 2}\n"
+        ),
+        # --- Style: badge-before ---
+        "demos/hl-style-badge-before.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Badge Before"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "g"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.08, "o", "t"]\n'
+            '[0.06, "o", "-"]\n'
+            '[0.07, "o", "d"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "d"]\n'
+            '[0.06, "o", "e"]\n'
+            '[0.07, "o", "p"]\n'
+            '[0.06, "o", "l"]\n'
+            '[0.08, "o", "o"]\n'
+            '[0.06, "o", "y"]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[36mDeploying to production...\\u001b[0m\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u2713\\u001b[0m Uploaded 24 files\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[32m\\u2713\\u001b[0m CDN cache invalidated\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[1m\\u001b[32m\\u2728 Live at https://docs.example.com\\u001b[0m\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/hl-style-badge-before.termshow.yml": (
+            "source: demos/hl-style-badge-before.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "highlights:\n"
+            "  - at: 1.5\n"
+            "    duration: 5.0\n"
+            "    style: badge-before\n"
+            "    color: '#89b4fa'\n"
+            '    badge_text: "NEW"\n'
+            "    target:\n"
+            "      region: {row: 4, col: 0, width: 34, height: 1}\n"
+        ),
+        # --- Style: badge-after ---
+        "demos/hl-style-badge-after.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Badge After"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "g"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.08, "o", "t"]\n'
+            '[0.06, "o", "-"]\n'
+            '[0.07, "o", "d"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "d"]\n'
+            '[0.06, "o", "i"]\n'
+            '[0.07, "o", "f"]\n'
+            '[0.06, "o", "f"]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[36mComparing v0.8 \\u2192 v0.9...\\u001b[0m\\r\\n"]\n'
+            '[0.4, "o", "\\u001b[32m+ greet()\\u001b[0m  — new function\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[33m~ init_project()\\u001b[0m  — signature changed\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[31m- old_helper()\\u001b[0m  — removed\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/hl-style-badge-after.termshow.yml": (
+            "source: demos/hl-style-badge-after.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "highlights:\n"
+            "  - at: 1.5\n"
+            "    duration: 5.0\n"
+            "    style: badge-after\n"
+            "    color: '#f38ba8'\n"
+            '    badge_text: "BREAKING"\n'
+            "    target:\n"
+            "      region: {row: 3, col: 0, width: 37, height: 1}\n"
+        ),
+        # --- Style: bracket ---
+        "demos/hl-style-bracket.termshow": (
+            '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Bracket"}\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[0.08, "o", "g"]\n'
+            '[0.06, "o", "r"]\n'
+            '[0.07, "o", "e"]\n'
+            '[0.06, "o", "a"]\n'
+            '[0.08, "o", "t"]\n'
+            '[0.06, "o", "-"]\n'
+            '[0.07, "o", "d"]\n'
+            '[0.06, "o", "o"]\n'
+            '[0.08, "o", "c"]\n'
+            '[0.06, "o", "s"]\n'
+            '[0.1, "o", " "]\n'
+            '[0.07, "o", "s"]\n'
+            '[0.06, "o", "t"]\n'
+            '[0.07, "o", "a"]\n'
+            '[0.06, "o", "t"]\n'
+            '[0.08, "o", "s"]\n'
+            '[0.5, "o", "\\r\\n"]\n'
+            '[0.3, "o", "\\u001b[36m\\u2500\\u2500 Build Summary \\u2500\\u2500\\u001b[0m\\r\\n"]\n'
+            '[0.3, "o", "  Pages rendered:  24\\r\\n"]\n'
+            '[0.3, "o", "  Assets copied:   18\\r\\n"]\n'
+            '[0.3, "o", "  Total time:      1.3s\\r\\n"]\n'
+            '[0.3, "o", "  Output size:     2.4 MB\\r\\n"]\n'
+            '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
+            '[5.0, "o", ""]\n'
+        ),
+        "demos/hl-style-bracket.termshow.yml": (
+            "source: demos/hl-style-bracket.termshow\n"
+            "\n"
+            "settings:\n"
+            "  idle_time_limit: 2\n"
+            "  window_chrome: colorful\n"
+            "\n"
+            "highlights:\n"
+            "  - at: 1.5\n"
+            "    duration: 5.0\n"
+            "    style: bracket\n"
+            "    color: '#f9e2af'\n"
+            "    target:\n"
+            "      region: {row: 2, col: 0, width: 30, height: 4}\n"
+        ),
+        # ── Highlight gallery page ───────────────────────────────────
+        "user_guide/06-highlight-gallery.qmd": (
+            "---\n"
+            "title: Highlight Gallery\n"
+            "---\n"
+            "\n"
+            "## Highlight Styles\n"
+            "\n"
+            "Highlights draw attention to specific regions of the terminal\n"
+            "during playback. Each style creates a different visual effect.\n"
+            "All examples below target a cell region and auto-play with loop.\n"
+            "\n"
+            "### Style: Outline\n"
+            "\n"
+            "A simple 2px border around the target region.\n"
+            "Highlighted text: `Found 4 modules`\n"
+            "\n"
+            '{{< termshow file="demos/hl-style-outline" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Style: Underline\n"
+            "\n"
+            "A solid line beneath the target — useful for drawing attention\n"
+            "to specific text without obscuring it.\n"
+            "Highlighted text: `src/core.py:42 — unused import`\n"
+            "\n"
+            '{{< termshow file="demos/hl-style-underline" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Style: Underline (Wavy)\n"
+            "\n"
+            "A wavy underline, similar to spell-check or error indicators\n"
+            "in code editors. Great for highlighting errors.\n"
+            "Highlighted text: `TypeError: unsupported operand type(s)`\n"
+            "\n"
+            '{{< termshow file="demos/hl-style-underline-wavy" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Style: Background\n"
+            "\n"
+            "A subtle translucent background fill behind the target region.\n"
+            'Highlighted text: `version = "2.1.0"`\n'
+            "\n"
+            '{{< termshow file="demos/hl-style-background" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Style: Spotlight\n"
+            "\n"
+            "Background fill with an outer glow, making the target\n"
+            '"pop" against the surrounding content.\n'
+            "Highlighted text: `\u2728 Build complete! Output: _site/`\n"
+            "\n"
+            '{{< termshow file="demos/hl-style-spotlight" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Style: Glow\n"
+            "\n"
+            "An animated neon-style glow around the target. This example\n"
+            "also uses `pulse: true` for a breathing effect.\n"
+            "Highlighted text: `v0.9.0`\n"
+            "\n"
+            '{{< termshow file="demos/hl-style-glow" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Style: Box\n"
+            "\n"
+            "Combines a border with a translucent fill — the classic\n"
+            '"selection rectangle" look.\n'
+            "Highlighted text: `✓ 48 passed` and `✓ Coverage: 94%`\n"
+            "\n"
+            '{{< termshow file="demos/hl-style-box" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Style: Badge (Before)\n"
+            "\n"
+            "Border with a labeled badge above the target region.\n"
+            "Use `badge_text` to set the label.\n"
+            "Highlighted text: `\u2728 Live at https://docs.example.com`\n"
+            "\n"
+            '{{< termshow file="demos/hl-style-badge-before" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Style: Badge (After)\n"
+            "\n"
+            "Border with a labeled badge below the target region.\n"
+            "Highlighted text: `~ init_project() \u2014 signature changed`\n"
+            "\n"
+            '{{< termshow file="demos/hl-style-badge-after" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "### Style: Bracket\n"
+            "\n"
+            "A left-edge bracket marking a multi-line block of output.\n"
+            "Great for grouping related lines.\n"
+            "Highlighted text: the four build summary statistics lines\n"
+            "\n"
+            '{{< termshow file="demos/hl-style-bracket" autoplay="true" loop="true" >}}\n'
+            "\n"
+            "## YAML Example\n"
+            "\n"
+            "```yaml\n"
+            "highlights:\n"
+            "  - at: 2.0\n"
+            "    duration: 3.0\n"
+            "    style: glow\n"
+            "    color: '#cba6f7'\n"
+            "    pulse: true\n"
+            "    target:\n"
+            "      region: {row: 1, col: 11, width: 6, height: 1}\n"
+            "```\n"
+            "\n"
+            "## Available Styles\n"
+            "\n"
+            "| Style | Effect |\n"
+            "|-------|--------|\n"
+            "| `outline` | 2px colored border |\n"
+            "| `underline` | Solid line beneath target |\n"
+            "| `underline-wavy` | Wavy line beneath target |\n"
+            "| `background` | Translucent fill |\n"
+            "| `spotlight` | Fill + outer glow |\n"
+            "| `glow` | Neon glow (inner + outer shadow) |\n"
+            "| `box` | Border + translucent fill |\n"
+            "| `badge-before` | Border + label above |\n"
+            "| `badge-after` | Border + label below |\n"
+            "| `bracket` | Left-edge bracket |\n"
+            "\n"
+            "## Targeting Modes\n"
+            "\n"
+            "Highlights support three targeting modes:\n"
+            "\n"
+            "- **Region** — explicit cell coordinates (`row`, `col`, `width`, `height`)\n"
+            "- **Pattern** — regex match against the terminal buffer (`match`, `group`)\n"
+            "- **Lines** — list of line numbers to highlight\n"
+            "\n"
+            "## Animation Options\n"
+            "\n"
+            "| Option | Default | Description |\n"
+            "|--------|---------|-------------|\n"
+            "| `fade_in` | 0.3 | Seconds to fade in |\n"
+            "| `fade_out` | 0.3 | Seconds to fade out |\n"
+            "| `pulse` | false | Breathing animation |\n"
+            "| `color` | `#f1fa8c` | Hex color for the highlight |\n"
+        ),
         # ── Annotation gallery page ──────────────────────────────────
         "user_guide/05-annotation-gallery.qmd": (
             "---\n"
