@@ -2428,6 +2428,7 @@ body {
     <button class="btn" id="btn-add-annotation" title="Add annotation at playhead (A)">+ Annotation</button>
     <button class="btn" id="btn-add-cut" title="Mark cut region (X)">+ Cut</button>
     <button class="btn" id="btn-add-snippet" title="Add snippet at playhead (D)"> + Snippet</button>
+    <button class="btn" id="btn-add-highlight" title="Add highlight at playhead (H)"> + Highlight</button>
     <div class="layout-presets" id="layout-presets" style="margin-left: 8px;">
       <button data-split="75" title="Maximize preview">Preview</button>
       <button data-split="50" class="active" title="Equal split">Balanced</button>
@@ -2559,15 +2560,16 @@ body {
   <span><kbd>Space</kbd> Play/Pause</span>
   <span><kbd>C</kbd> Add chapter</span>
   <span><kbd>A</kbd> Add annotation</span>
-  <span><kbd>X</kbd> Mark cut</span>
+  <span><kbd>X</kbd> Add cut</span>
   <span><kbd>D</kbd> Add snippet</span>
   <span><kbd>H</kbd> Add highlight</span>
   <span><kbd>&larr;</kbd><kbd>&rarr;</kbd> Seek</span>
   <span><kbd>[</kbd><kbd>]</kbd> Prev/Next chapter</span>
   <span><kbd>I</kbd> Show Info</span>
   <span><kbd>G</kbd> Settings</span>
+  <span><kbd>P</kbd> Preview</span>
   <span><kbd>Y</kbd> View YAML</span>
-  <span><kbd>&#x2318;S</kbd> Save</span>
+  <span><kbd>&#x2318;S</kbd> / <kbd>Ctrl+S</kbd> Save</span>
   <span><kbd>Del</kbd> Delete selected</span>
 </div>
 
@@ -5700,6 +5702,7 @@ body {
   document.getElementById('btn-add-annotation').addEventListener('click', addAnnotation);
   document.getElementById('btn-add-cut').addEventListener('click', addCut);
   document.getElementById('btn-add-snippet').addEventListener('click', addSnippet);
+  document.getElementById('btn-add-highlight').addEventListener('click', addHighlight);
   document.getElementById('btn-save').addEventListener('click', save);
 
   // Keyboard shortcuts
