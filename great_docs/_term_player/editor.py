@@ -1986,6 +1986,9 @@ body {
   color: #000;
   border-color: var(--accent);
 }
+#btn-nums-overlay {
+  font-size: 15px;
+}
 
 /* Preview toolbar (left side) */
 .preview-toolbar {
@@ -2498,7 +2501,7 @@ body {
     </div>
     <div class="preview-wrapper">
       <div class="viewport-toolbar" id="viewport-toolbar">
-        <button class="btn-overlay-circle" id="btn-grid-overlay" title="Toggle grid overlay">&#x23F9;</button>
+        <button class="btn-overlay-circle" id="btn-grid-overlay" title="Toggle grid overlay"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="14" rx="1"/><line x1="5.67" y1="1" x2="5.67" y2="15"/><line x1="10.33" y1="1" x2="10.33" y2="15"/><line x1="1" y1="5.67" x2="15" y2="5.67"/><line x1="1" y1="10.33" x2="15" y2="10.33"/></svg></button>
         <button class="btn-overlay-circle" id="btn-nums-overlay" title="Toggle line/column numbers">#</button>
       </div>
       <div id="chapter-title-overlay" class="chapter-title-overlay"></div>
@@ -5417,6 +5420,8 @@ body {
   function showInspector() {
     inspectorPanel.classList.remove('hidden');
     btnInspector.classList.add('active');
+    // Hide settings if open
+    hideSettings();
   }
 
   function hideInspector() {
