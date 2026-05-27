@@ -3714,12 +3714,33 @@ body {
         <div class="prop-label">Matching Regex</div>
         <input class="prop-input" type="text" value="${escAttr(target.match || '')}" id="prop-hl-match" placeholder="Pattern target">
       </div>
-      <div class="prop-field">
-        <div class="prop-label">Pulse</div>
-        <select class="prop-select" id="prop-hl-pulse">
-          <option value="false" ${!hl.pulse?'selected':''}>No</option>
-          <option value="true" ${hl.pulse?'selected':''}>Yes</option>
-        </select>
+      <hr style="border:none; border-top:1px solid var(--border); margin:12px 0;">
+      <div class="prop-field" style="margin-bottom:4px;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--text);">
+          <input type="checkbox" id="prop-hl-anim-on" ${hl.fade_in > 0 || hl.fade_out > 0 || hl.pulse ? 'checked' : ''} style="margin:0;">
+          Animation
+        </label>
+      </div>
+      <div id="prop-hl-anim-fields" style="${hl.fade_in > 0 || hl.fade_out > 0 || hl.pulse ? '' : 'display:none;'}">
+        <div class="prop-field">
+          <div style="display:flex; gap:4px;">
+            <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+              <label style="font-size:9px;color:var(--text-dim);">Fade In (s)</label>
+              <input class="prop-input" type="number" step="0.05" min="0" max="5" value="${hl.fade_in != null ? hl.fade_in : 0.3}" id="prop-hl-fade-in">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+              <label style="font-size:9px;color:var(--text-dim);">Fade Out (s)</label>
+              <input class="prop-input" type="number" step="0.05" min="0" max="5" value="${hl.fade_out != null ? hl.fade_out : 0.3}" id="prop-hl-fade-out">
+            </div>
+          </div>
+        </div>
+        <div class="prop-field">
+          <div class="prop-label">Pulse</div>
+          <select class="prop-select" id="prop-hl-pulse">
+            <option value="false" ${!hl.pulse?'selected':''}>Off</option>
+            <option value="true" ${hl.pulse?'selected':''}>On</option>
+          </select>
+        </div>
       </div>`;
 
     propsPanel.innerHTML = `
@@ -3803,18 +3824,26 @@ body {
       input.parentNode.insertBefore(wrap, input);
       wrap.appendChild(input);
       const step = parseFloat(input.step) || 1;
+      const minVal = input.hasAttribute('min') ? parseFloat(input.min) : -Infinity;
+      const maxVal = input.hasAttribute('max') ? parseFloat(input.max) : Infinity;
       const btnUp = document.createElement('button');
       btnUp.type = 'button';
       btnUp.className = 'num-btn num-btn-up';
       btnUp.innerHTML = '&#x25B4;';
-      btnUp.addEventListener('click', () => { input.value = (parseFloat(input.value) + step).toFixed(2); input.dispatchEvent(new Event('input')); });
+      btnUp.addEventListener('click', () => { input.value = Math.min(maxVal, parseFloat(input.value) + step).toFixed(2); input.dispatchEvent(new Event('input')); });
       const btnDown = document.createElement('button');
       btnDown.type = 'button';
       btnDown.className = 'num-btn num-btn-down';
       btnDown.innerHTML = '&#x25BE;';
-      btnDown.addEventListener('click', () => { input.value = (parseFloat(input.value) - step).toFixed(2); input.dispatchEvent(new Event('input')); });
+      btnDown.addEventListener('click', () => { input.value = Math.max(minVal, parseFloat(input.value) - step).toFixed(2); input.dispatchEvent(new Event('input')); });
       wrap.appendChild(btnUp);
       wrap.appendChild(btnDown);
+      // Clamp negatives: convert to absolute value on blur/change
+      input.addEventListener('change', () => {
+        let v = parseFloat(input.value);
+        if (isNaN(v)) return;
+        if (v < minVal) { input.value = Math.abs(v) <= maxVal ? Math.abs(v).toFixed(2) : minVal.toFixed(2); input.dispatchEvent(new Event('input')); }
+      });
     });
     // Sync color picker <-> hex text field
     const colorPicker = propsPanel.querySelector('#prop-hl-color-picker');
@@ -3867,6 +3896,15 @@ body {
     if (matchInput) {
       matchInput.addEventListener('input', syncRegionDisabled);
       syncRegionDisabled();
+    }
+    // Animation enable/disable toggle
+    const animCheckbox = propsPanel.querySelector('#prop-hl-anim-on');
+    const animFields = propsPanel.querySelector('#prop-hl-anim-fields');
+    if (animCheckbox && animFields) {
+      animCheckbox.addEventListener('change', () => {
+        animFields.style.display = animCheckbox.checked ? '' : 'none';
+        liveApply();
+      });
     }
   }
 
@@ -3922,7 +3960,18 @@ body {
       hl.badge_text = badgeEl ? badgeEl.value : (hl.badge_text || '');
       const glowEl = document.getElementById('prop-hl-glow');
       hl.glow = glowEl ? glowEl.value === 'true' : !!hl.glow;
-      hl.pulse = document.getElementById('prop-hl-pulse').value === 'true';
+      const animOn = document.getElementById('prop-hl-anim-on');
+      if (animOn && animOn.checked) {
+        const fadeInVal = parseFloat(document.getElementById('prop-hl-fade-in').value);
+        hl.fade_in = isNaN(fadeInVal) ? 0.3 : Math.max(0, fadeInVal);
+        const fadeOutVal = parseFloat(document.getElementById('prop-hl-fade-out').value);
+        hl.fade_out = isNaN(fadeOutVal) ? 0.3 : Math.max(0, fadeOutVal);
+        hl.pulse = document.getElementById('prop-hl-pulse').value === 'true';
+      } else {
+        hl.fade_in = 0;
+        hl.fade_out = 0;
+        hl.pulse = false;
+      }
       // Update match target
       const matchVal = document.getElementById('prop-hl-match').value;
       // Update region from fields (sanitize to integers, clamp to terminal bounds)
@@ -4230,7 +4279,7 @@ body {
     const start = roundTime(currentTime);
     const dur = roundTime(Math.min(3, data.recording.duration - start));
     if (dur <= 0) return;
-    data.script.highlights.push({ time: start, duration: dur, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'box', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
+    data.script.highlights.push({ time: start, duration: dur, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'box', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0, fade_out: 0, pulse: false });
     renderTracks();
     updatePlayhead();
     markDirty();
@@ -4477,7 +4526,7 @@ body {
         if (Math.abs(ev.clientX - startX) < 4) return;
         dragStarted = true;
         hlDragIdx = data.script.highlights.length;
-        data.script.highlights.push({ time: startTime, duration: 0, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'box', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
+        data.script.highlights.push({ time: startTime, duration: 0, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'box', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0, fade_out: 0, pulse: false });
         renderTracks();
         updatePlayhead();
       }
@@ -4528,7 +4577,7 @@ body {
     const clickTime = roundTime(ratio * data.recording.duration);
     const dur = roundTime(Math.min(3, data.recording.duration - clickTime));
     if (dur > 0) {
-      data.script.highlights.push({ time: clickTime, duration: dur, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'box', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
+      data.script.highlights.push({ time: clickTime, duration: dur, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'box', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0, fade_out: 0, pulse: false });
       renderTracks();
       updatePlayhead();
       markDirty();
