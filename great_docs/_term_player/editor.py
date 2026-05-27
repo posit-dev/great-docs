@@ -46,7 +46,6 @@ def _build_editor_data(recording: Recording, script: Script | None) -> dict[str,
         },
         "script": {
             "settings": {
-                "idle_time_limit": script.idle_time_limit if script else None,
                 "speed": script.speed if script else 1.0,
                 "window_chrome": script.window_chrome if script else "colorful",
                 "font_family": script.font_family if script else None,
@@ -118,8 +117,6 @@ def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
     settings = script_data.get("settings", {})
     if any(v is not None for v in settings.values()):
         lines.append("settings:")
-        if settings.get("idle_time_limit") is not None:
-            lines.append(f"  idle_time_limit: {settings['idle_time_limit']}")
         if settings.get("speed") and settings["speed"] != 1.0:
             lines.append(f"  speed: {settings['speed']}")
         if settings.get("window_chrome"):
@@ -375,7 +372,6 @@ def _generate_preview_html(editor_data: dict, script_data: dict) -> str:
     # Reconstruct Script from the client's current script state
     settings = script_data.get("settings", {})
     script = Script(
-        idle_time_limit=settings.get("idle_time_limit"),
         speed=settings.get("speed", 1.0),
         window_chrome=settings.get("window_chrome", "none"),
         font_family=settings.get("font_family"),
@@ -2464,10 +2460,6 @@ body {
           <option value="2">2×</option>
           <option value="3">3×</option>
         </select>
-      </div>
-      <div class="setting-row">
-        <span class="setting-label">Idle limit (s)</span>
-        <input type="number" id="setting-idle" min="0" step="0.1" placeholder="none">
       </div>
       <div class="setting-row">
         <span class="setting-label">Chrome</span>
@@ -5433,7 +5425,6 @@ body {
   const settingsPanel = document.getElementById('settings-panel');
   const btnSettings = document.getElementById('btn-settings');
   const settingSpeed = document.getElementById('setting-speed');
-  const settingIdle = document.getElementById('setting-idle');
   const settingChrome = document.getElementById('setting-chrome');
   const settingFontFamily = document.getElementById('setting-font-family');
   const settingPrompt = document.getElementById('setting-prompt');
@@ -5475,7 +5466,6 @@ body {
     // Populate from current data
     const s = data.script.settings;
     settingSpeed.value = s.speed != null ? s.speed : 1.0;
-    settingIdle.value = s.idle_time_limit != null ? s.idle_time_limit : '';
     settingChrome.value = s.window_chrome || 'colorful';
     settingFontFamily.value = s.font_family || '';
     settingPrompt.value = s.prompt || '';
@@ -5501,17 +5491,6 @@ body {
 
   settingSpeed.addEventListener('change', () => {
     data.script.settings.speed = parseFloat(settingSpeed.value);
-    markDirty();
-    applySettingsPreview();
-  });
-
-  settingIdle.addEventListener('input', () => {
-    const v = parseFloat(settingIdle.value);
-    if (settingIdle.value === '' || settingIdle.value == null) {
-      data.script.settings.idle_time_limit = null;
-    } else if (!isNaN(v) && v >= 0) {
-      data.script.settings.idle_time_limit = v;
-    }
     markDirty();
     applySettingsPreview();
   });

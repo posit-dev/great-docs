@@ -58,6 +58,8 @@
   overflow: hidden;
   outline: none;
   container-type: inline-size;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .gd-tp-viewport:focus-visible {
@@ -301,6 +303,7 @@
   font-size: 13px;
   color: var(--gd-tp-fg);
   user-select: none;
+  -webkit-user-select: none;
 }
 
 .gd-tp-play-btn,
@@ -318,8 +321,11 @@
 
 .gd-tp-play-btn {
   width: 32px;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  border: 1px solid var(--gd-tp-progress-bg);
 }
 
 .gd-tp-play-btn:hover,
@@ -361,9 +367,46 @@
 .gd-tp-progress {
   height: 100%;
   background: var(--gd-tp-accent);
-  border-radius: 3px;
+  border-radius: 0 3px 3px 0;
   width: 0%;
   transition: width 0.05s linear;
+  position: relative;
+}
+
+/* Playhead handle */
+.gd-tp-progress::after {
+  content: '';
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #b4d0fc;
+  border: 2px solid #ffffff;
+  transform: translateY(-50%) scale(0);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.4);
+}
+
+.gd-tp-timeline:hover .gd-tp-progress::after,
+.gd-tp-timeline.gd-tp-dragging .gd-tp-progress::after {
+  transform: translateY(-50%) scale(1);
+}
+
+.gd-tp-timeline.gd-tp-dragging .gd-tp-progress::after {
+  width: 14px;
+  height: 14px;
+  right: -7px;
+  box-shadow: 0 0 0 3px rgba(137, 180, 250, 0.5);
+}
+
+.gd-tp-timeline.gd-tp-dragging {
+  height: 8px;
+}
+
+.gd-tp-timeline.gd-tp-dragging .gd-tp-progress {
+  transition: none;
 }
 
 /* Chapter markers */
@@ -476,6 +519,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .gd-tp-chapter-bar:empty:not(.gd-tp-has-chrome) {

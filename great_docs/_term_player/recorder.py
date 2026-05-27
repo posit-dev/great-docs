@@ -192,7 +192,6 @@ def record_session(
 source: {path.name}
 
 settings:
-  idle_time_limit: 2.0
   # window_chrome: colorful
   # theme: monokai
   # font_size: 14

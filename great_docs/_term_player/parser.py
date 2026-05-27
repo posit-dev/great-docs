@@ -63,7 +63,6 @@ class Recording:
     term: TermInfo = field(default_factory=TermInfo)
     title: str = ""
     timestamp: int | None = None
-    idle_time_limit: float | None = None
     events: list[Event] = field(default_factory=list)
 
     @property
@@ -174,7 +173,6 @@ def _header_to_recording(header: dict) -> Recording:
     rec.format = header.get("format", "termshow")
     rec.title = header.get("title", "")
     rec.timestamp = header.get("timestamp")
-    rec.idle_time_limit = header.get("idle_time_limit")
 
     # Parse terminal info
     term_data = header.get("term", {})

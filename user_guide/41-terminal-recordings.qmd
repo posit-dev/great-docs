@@ -76,7 +76,6 @@ Termshow Editor with `great-docs termshow edit assets/install-guide.termshow`):
 source: assets/install-guide.termshow
 
 settings:
-  idle_time_limit: 2.0
   window_chrome: colorful
 
 chapters:
@@ -150,7 +149,6 @@ The companion YAML file adds chapters, annotations, visual settings, and edits:
 source: assets/my-recording.termshow
 
 settings:
-  idle_time_limit: 2.0        # Cap idle gaps to 2 seconds
   window_chrome: colorful     # Window decoration style
   theme: monokai              # Terminal color scheme
   font_family: "JetBrains Mono, Fira Code, monospace"
@@ -204,7 +202,6 @@ frames. All settings are optional and have sensible defaults.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `idle_time_limit` | `3.0` | Maximum seconds for any idle gap |
 | `window_chrome` | `colorful` | Window decoration: `colorful`, `plain`, `none` |
 | `theme` | (auto) | Terminal color scheme |
 | `font_family` | (system stack) | Font family for rendered SVG (comma-separated list) |
@@ -824,8 +821,8 @@ These guidelines help produce recordings that are clear, fast-loading, and pleas
 
 - **Keep recordings short**: 15–30 seconds is ideal. Split longer workflows into multiple
   recordings, each embedded with its own shortcode.
-- **Use `idle_time_limit`**: Caps long pauses so viewers aren't waiting through your thinking
-  time.
+- **Use cuts to trim dead time**: Mark boring pauses (downloads, progress bars) as cuts so
+  viewers skip them entirely.
 - **80 columns, 20 rows** works well for CLI demos. Use 120 columns for wide output like log
   lines or tables. The Termshow Editor auto-scales the preview to fit any terminal size, so
   larger dimensions won't overflow the viewport.
@@ -990,7 +987,6 @@ The Settings panel exposes the following controls:
 | Control | Description |
 |---------|-------------|
 | **Default speed** | Playback speed multiplier (dropdown: 0.5×, 1×, 1.5×, 2×, 3×) |
-| **Idle limit** | Maximum idle gap in seconds (number with stepper buttons) |
 | **Chrome** | Window decoration style (dropdown: colorful, simple, none) |
 | **Font family** | Comma-separated font stack for rendered output |
 | **Prompt** | Replacement character for prompt substitution, with preset buttons (`$` `%` `#` `>` `❯` `→`) |

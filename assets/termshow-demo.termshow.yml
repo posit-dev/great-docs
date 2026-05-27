@@ -1,7 +1,6 @@
 source: assets/termshow-demo.termshow
 
 settings:
-  idle_time_limit: 2
   window_chrome: colorful
 
 chapters:

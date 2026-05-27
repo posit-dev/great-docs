@@ -236,10 +236,6 @@ class TestHeaderToRecording:
         assert rec.term.cols == 132
         assert rec.term.rows == 50
 
-    def test_idle_time_limit(self):
-        rec = _header_to_recording({"idle_time_limit": 2.5})
-        assert rec.idle_time_limit == 2.5
-
     def test_timestamp(self):
         rec = _header_to_recording({"timestamp": 1700000000})
         assert rec.timestamp == 1700000000
