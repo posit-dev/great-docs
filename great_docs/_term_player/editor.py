@@ -13,8 +13,18 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from typing import Any
 
-from .parser import Recording, parse_termshow
-from .script import Script, load_script
+from .manifest import generate_manifest
+from .parser import Event, Recording, TermInfo, parse_termshow
+from .script import (
+    Annotation,
+    Chapter,
+    Cut,
+    Highlight,
+    HighlightTarget,
+    Script,
+    Snippet,
+    load_script,
+)
 
 
 def _build_editor_data(recording: Recording, script: Script | None) -> dict[str, Any]:
@@ -74,6 +84,27 @@ def _build_editor_data(recording: Recording, script: Script | None) -> dict[str,
                     "label": cmd.label,
                 }
                 for cmd in (script.snippets if script else [])
+            ],
+            "highlights": [
+                {
+                    "time": hl.time,
+                    "duration": hl.duration,
+                    "target": {
+                        **({"region": hl.target.region} if hl.target.region else {}),
+                        **({"match": hl.target.match} if hl.target.match else {}),
+                        **({"group": hl.target.group} if hl.target.group else {}),
+                        **({"lines": hl.target.lines} if hl.target.lines else {}),
+                        **({"track_scroll": True} if hl.target.track_scroll else {}),
+                    },
+                    "style": hl.style,
+                    "color": hl.color,
+                    "badge_text": hl.badge_text,
+                    "badge_icon": hl.badge_icon,
+                    "fade_in": hl.fade_in,
+                    "fade_out": hl.fade_out,
+                    "pulse": hl.pulse,
+                }
+                for hl in (script.highlights if script else [])
             ],
         },
     }
@@ -149,6 +180,39 @@ def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
                 lines.append(f'    label: "{label}"')
         lines.append("")
 
+    highlights = script_data.get("highlights", [])
+    if highlights:
+        lines.append("highlights:")
+        for hl in sorted(highlights, key=lambda h: h["time"]):
+            lines.append(f"  - at: {round(hl['time'], 2)}")
+            lines.append(f"    duration: {round(hl['duration'], 2)}")
+            lines.append(f"    style: {hl.get('style', 'outline')}")
+            color = hl.get("color", "#f1fa8c")
+            if color and color != "#f1fa8c":
+                lines.append(f"    color: '{color}'")
+            target = hl.get("target", {})
+            if target:
+                lines.append("    target:")
+                if target.get("region"):
+                    r = target["region"]
+                    lines.append(
+                        f"      region: {{row: {r.get('row', 0)}, col: {r.get('col', 0)}, width: {r.get('width', 10)}, height: {r.get('height', 1)}}}"
+                    )
+                if target.get("match"):
+                    lines.append(f"      match: '{target['match']}'")
+                    if target.get("group"):
+                        lines.append(f"      group: {target['group']}")
+                if target.get("lines"):
+                    lines.append(f"      lines: {target['lines']}")
+                if target.get("track_scroll"):
+                    lines.append("      track_scroll: true")
+            badge_text = hl.get("badge_text", "")
+            if badge_text:
+                lines.append(f'    badge_text: "{badge_text}"')
+            if hl.get("pulse"):
+                lines.append("    pulse: true")
+        lines.append("")
+
     return "\n".join(lines) + "\n"
 
 
@@ -191,6 +255,20 @@ class EditorHandler(SimpleHTTPRequestHandler):
                 self._json_response({"yaml": yaml_str})
             except Exception as e:
                 self._json_response({"error": str(e)}, status=400)
+        elif self.path == "/api/preview":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            try:
+                script_data = json.loads(body)
+                html = _generate_preview_html(self.editor_data, script_data)
+                encoded = html.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(encoded)))
+                self.end_headers()
+                self.wfile.write(encoded)
+            except Exception as e:
+                self._json_response({"error": str(e)}, status=500)
         else:
             self.send_error(404)
 
@@ -272,6 +350,185 @@ def serve_editor(
         server.shutdown()
 
 
+def _generate_preview_html(editor_data: dict, script_data: dict) -> str:
+    """Generate a preview HTML page by rendering through Quarto.
+
+    Reconstructs Recording and Script objects from the editor's live data,
+    renders SVG frames via generate_manifest() into a temp directory, then
+    runs Quarto to produce a production-accurate HTML page.
+    """
+    import shutil
+    import subprocess
+    import tempfile
+
+    # Reconstruct Recording from editor_data
+    rec_data = editor_data["recording"]
+    recording = Recording(
+        title=rec_data.get("title", ""),
+        term=TermInfo(
+            cols=rec_data["term"]["cols"],
+            rows=rec_data["term"]["rows"],
+        ),
+        events=[Event(time=e["time"], code=e["code"], data=e["data"]) for e in rec_data["events"]],
+    )
+
+    # Reconstruct Script from the client's current script state
+    settings = script_data.get("settings", {})
+    script = Script(
+        idle_time_limit=settings.get("idle_time_limit"),
+        speed=settings.get("speed", 1.0),
+        window_chrome=settings.get("window_chrome", "none"),
+        font_family=settings.get("font_family"),
+        prompt=settings.get("prompt"),
+        prompt_pattern=settings.get("prompt_pattern"),
+        chapters=[
+            Chapter(time=ch["time"], label=ch["label"]) for ch in script_data.get("chapters", [])
+        ],
+        cuts=[
+            Cut(start=c["start"], end=c["end"], type=c.get("type", "remove"))
+            for c in script_data.get("cuts", [])
+        ],
+        annotations=[
+            Annotation(
+                time=a["time"],
+                duration=a["duration"],
+                text=a["text"],
+                position=a.get("position", "bottom"),
+                width=a.get("width", "medium"),
+                style=a.get("style", "note"),
+            )
+            for a in script_data.get("annotations", [])
+        ],
+        highlights=[
+            Highlight(
+                time=h["time"],
+                duration=h["duration"],
+                target=HighlightTarget(
+                    region=h.get("target", {}).get("region"),
+                    match=h.get("target", {}).get("match"),
+                    group=h.get("target", {}).get("group", 0),
+                    lines=h.get("target", {}).get("lines"),
+                    track_scroll=h.get("target", {}).get("track_scroll", False),
+                ),
+                style=h.get("style", "box"),
+                color=h.get("color", "#f1fa8c"),
+                badge_text=h.get("badge_text", ""),
+                badge_icon=h.get("badge_icon", ""),
+                fade_in=h.get("fade_in", 0.3),
+                fade_out=h.get("fade_out", 0.3),
+                pulse=h.get("pulse", False),
+            )
+            for h in script_data.get("highlights", [])
+        ],
+        snippets=[
+            Snippet(
+                time=s["time"],
+                duration=s["duration"],
+                text=s.get("text", ""),
+                match=s.get("match", ""),
+                label=s.get("label", ""),
+            )
+            for s in script_data.get("snippets", [])
+        ],
+    )
+
+    # Set up temp directory for Quarto project
+    tmp_dir = Path(tempfile.mkdtemp(prefix="termshow-preview-"))
+    try:
+        # Generate manifest + SVG frames
+        tp_dir = tmp_dir / "termshow" / "preview"
+        tp_dir.mkdir(parents=True)
+        generate_manifest(recording, script, output_dir=str(tp_dir))
+
+        # Copy player assets
+        assets_dir = Path(__file__).parent.parent / "assets"
+        shutil.copy2(assets_dir / "termshow.js", tmp_dir / "termshow.js")
+        shutil.copy2(assets_dir / "termshow.css", tmp_dir / "termshow.css")
+
+        # Copy JetBrains Mono woff2 fonts (referenced by termshow.css)
+        for woff in assets_dir.glob("JetBrainsMono-*.woff2"):
+            shutil.copy2(woff, tmp_dir / woff.name)
+
+        # Copy the Lua extension
+        ext_dir = tmp_dir / "_extensions" / "termshow"
+        ext_dir.mkdir(parents=True)
+        ext_src = assets_dir / "_extensions" / "termshow"
+        for f in ext_src.iterdir():
+            shutil.copy2(f, ext_dir / f.name)
+
+        # Write _quarto.yml
+        quarto_yml = tmp_dir / "_quarto.yml"
+        quarto_yml.write_text(
+            "project:\n"
+            "  type: website\n"
+            "  resources:\n"
+            "    - termshow.js\n"
+            "    - termshow.css\n"
+            "    - '*.woff2'\n"
+            "    - termshow/**\n"
+            "format:\n"
+            "  html:\n"
+            "    theme: darkly\n"
+            "    minimal: true\n"
+            "    embed-resources: true\n"
+            "    toc: false\n"
+            "    include-in-header:\n"
+            '      - text: \'<link rel="stylesheet" href="termshow.css">\'\n'
+            "    include-after-body:\n"
+            "      - text: '<script src=\"termshow.js\"></script>'\n",
+            encoding="utf-8",
+        )
+
+        # Write preview.qmd
+        preview_qmd = tmp_dir / "preview.qmd"
+        preview_qmd.write_text(
+            "---\n"
+            "page-layout: full\n"
+            "title: ' '\n"
+            "css:\n"
+            "  - preview-overrides.css\n"
+            "---\n\n"
+            '{{< termshow file="preview" autoplay="true" >}}\n',
+            encoding="utf-8",
+        )
+
+        # Write CSS overrides to ensure player fills the page width
+        overrides_css = tmp_dir / "preview-overrides.css"
+        overrides_css.write_text(
+            "body { background: #1e1e2e !important; }\n"
+            "#quarto-content { padding: 20px; }\n"
+            ".content { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }\n"
+            "#title-block-header { display: none; }\n"
+            ".gd-termshow { margin: 0; }\n",
+            encoding="utf-8",
+        )
+
+        # Run Quarto render
+        result = subprocess.run(
+            ["quarto", "render", "preview.qmd", "--quiet"],
+            cwd=str(tmp_dir),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"Quarto render failed: {result.stderr}")
+
+        # Read rendered HTML
+        # With embed-resources, the output is self-contained
+        output_html = tmp_dir / "_site" / "preview.html"
+        if not output_html.exists():
+            # Try without _site (non-project render)
+            output_html = tmp_dir / "preview.html"
+        if not output_html.exists():
+            raise RuntimeError("Rendered HTML not found")
+
+        return output_html.read_text(encoding="utf-8")
+
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 def _get_editor_html() -> str:
     """Return the full editor HTML page."""
     return _EDITOR_HTML
@@ -306,6 +563,7 @@ _EDITOR_HTML = """\
   --annotation: #a6e3a1;
   --cut: #f38ba8;
   --snippet: #89b4fa;
+  --highlight: #cba6f7;
   --playhead: #cba6f7;
   --radius: 6px;
 }
@@ -436,6 +694,8 @@ body {
   white-space: pre;
   overflow: hidden;
   color: #cdd6f4;
+  position: relative;
+  z-index: 1;
   width: calc(var(--term-cols) * 1ch + 24px);
   height: calc(var(--term-rows) * 1lh + 24px);
 }
@@ -537,6 +797,116 @@ body {
   inset: 0;
   pointer-events: none;
   overflow: hidden;
+}
+
+/* Highlight overlay in preview */
+.highlight-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+#highlight-underlay { z-index: 0; }
+#highlight-overlay { z-index: 2; }
+
+.highlight-overlay .hl-el {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  border-radius: 3px;
+}
+
+.highlight-overlay .hl-el.hl-outline {
+  box-shadow: 0 0 0 2px var(--hl-color, #f1fa8c);
+}
+
+.highlight-overlay .hl-el.hl-underline {
+  border-bottom: 2px solid var(--hl-color, #f1fa8c);
+  border-radius: 0;
+}
+
+.highlight-overlay .hl-el.hl-underline-wavy {
+  border-radius: 0;
+}
+.highlight-overlay .hl-el.hl-underline-wavy::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background-color: var(--hl-color, #f1fa8c);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='4' viewBox='0 0 8 4'%3E%3Cpath d='M0 2Q2 0 4 2Q6 4 8 2' fill='none' stroke='black' stroke-width='1.5'/%3E%3C/svg%3E");
+  -webkit-mask-repeat: repeat-x;
+  -webkit-mask-size: 6px 3px;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='4' viewBox='0 0 8 4'%3E%3Cpath d='M0 2Q2 0 4 2Q6 4 8 2' fill='none' stroke='black' stroke-width='1.5'/%3E%3C/svg%3E");
+  mask-repeat: repeat-x;
+  mask-size: 6px 3px;
+}
+
+.highlight-overlay .hl-el.hl-background {
+  background: color-mix(in srgb, var(--hl-color, #f1fa8c) 20%, transparent);
+}
+
+.highlight-overlay .hl-el.hl-spotlight {
+  background: color-mix(in srgb, var(--hl-color, #f1fa8c) 10%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--hl-color, #f1fa8c) 40%, transparent);
+}
+
+.highlight-overlay .hl-el.hl-box {
+  border: 2px solid var(--hl-color, #f1fa8c);
+  background: var(--hl-fill, transparent);
+}
+.highlight-overlay .hl-el.hl-box.hl-glow {
+  box-shadow: 0 0 4px 1px var(--hl-color, #f1fa8c), inset 0 0 2px 1px color-mix(in srgb, var(--hl-color, #f1fa8c) 30%, transparent);
+}
+
+.highlight-overlay .hl-el.hl-bracket {
+  border-left: 3px solid var(--hl-color, #f1fa8c);
+  border-radius: 0;
+}
+
+.highlight-overlay .hl-el.hl-badge-before,
+.highlight-overlay .hl-el.hl-badge-after {
+  border: 1px solid var(--hl-color, #f1fa8c);
+}
+
+.highlight-overlay .hl-badge-label {
+  position: absolute;
+  background: var(--hl-color, #f1fa8c);
+  color: #1e1e2e;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+  line-height: 1.3;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+.highlight-overlay .hl-el.hl-badge-before .hl-badge-label {
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 2px;
+}
+
+.highlight-overlay .hl-el.hl-badge-after .hl-badge-label {
+  top: 100%;
+  left: 0;
+  margin-top: 2px;
+}
+
+@keyframes hl-pulse-editor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.highlight-overlay .hl-el.hl-pulse {
+  animation: hl-pulse-editor 1.5s ease-in-out infinite;
 }
 
 .annotation-bubble {
@@ -820,6 +1190,9 @@ body {
 #track-chapters {
   cursor: crosshair;
 }
+#track-annotations {
+  cursor: crosshair;
+}
 
 .track-item-annotation {
   position: absolute;
@@ -1091,12 +1464,174 @@ body {
   cursor: crosshair;
 }
 
-/* Playhead — single line spanning ruler + 3 tracks */
+/* Highlight track items */
+.track-item-highlight {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  background: rgba(203, 166, 247, 0.15);
+  border: 1px solid rgba(203, 166, 247, 0.6);
+  border-radius: 3px;
+  cursor: pointer;
+  overflow: visible;
+  min-width: 8px;
+}
+
+.track-item-highlight .hl-text {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  font-size: 9px;
+  color: var(--highlight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.track-item-highlight:hover {
+  background: rgba(203, 166, 247, 0.25);
+}
+
+.track-item-highlight.selected {
+  background: rgba(203, 166, 247, 0.35);
+  border-color: var(--highlight);
+  box-shadow: 0 -4px 8px rgba(203, 166, 247, 0.3), 0 4px 8px rgba(203, 166, 247, 0.3);
+}
+
+.track-item-highlight .hl-handle {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 6px;
+  cursor: ew-resize;
+  z-index: 5;
+}
+
+.track-item-highlight .hl-handle-left {
+  left: -3px;
+  border-left: 2px solid var(--highlight);
+  border-radius: 2px 0 0 2px;
+}
+
+.track-item-highlight .hl-handle-right {
+  right: -3px;
+  border-right: 2px solid var(--highlight);
+  border-radius: 0 2px 2px 0;
+}
+
+.track-item-highlight .hl-handle:hover,
+.track-item-highlight .hl-handle.active {
+  background: rgba(203, 166, 247, 0.4);
+}
+
+.track-item-highlight .hl-handle.selected {
+  top: -14px;
+  bottom: -14px;
+  width: 4px;
+  background: none;
+  z-index: 20;
+}
+
+.track-item-highlight .hl-handle-left.selected {
+  left: -2px;
+  border-left: 3px solid var(--highlight);
+  box-shadow: -2px 0 8px rgba(203, 166, 247, 0.7);
+}
+
+.track-item-highlight .hl-handle-right.selected {
+  right: -2px;
+  border-right: 3px solid var(--highlight);
+  box-shadow: 2px 0 8px rgba(203, 166, 247, 0.7);
+}
+
+#track-highlights {
+  cursor: crosshair;
+}
+
+/* Per-style highlight colors in timeline */
+.track-item-highlight.hl-style-box {
+  background: rgba(139, 233, 253, 0.15);
+  border-color: rgba(139, 233, 253, 0.6);
+}
+.track-item-highlight.hl-style-box:hover { background: rgba(139, 233, 253, 0.25); }
+.track-item-highlight.hl-style-box.selected {
+  background: rgba(139, 233, 253, 0.35);
+  border-color: #8be9fd;
+  box-shadow: 0 -4px 8px rgba(139, 233, 253, 0.3), 0 4px 8px rgba(139, 233, 253, 0.3);
+}
+.track-item-highlight.hl-style-box .hl-text { color: #8be9fd; }
+
+.track-item-highlight.hl-style-underline {
+  background: rgba(80, 250, 123, 0.15);
+  border-color: rgba(80, 250, 123, 0.6);
+}
+.track-item-highlight.hl-style-underline:hover { background: rgba(80, 250, 123, 0.25); }
+.track-item-highlight.hl-style-underline.selected {
+  background: rgba(80, 250, 123, 0.35);
+  border-color: #50fa7b;
+  box-shadow: 0 -4px 8px rgba(80, 250, 123, 0.3), 0 4px 8px rgba(80, 250, 123, 0.3);
+}
+.track-item-highlight.hl-style-underline .hl-text { color: #50fa7b; }
+
+.track-item-highlight.hl-style-background {
+  background: rgba(241, 250, 140, 0.15);
+  border-color: rgba(241, 250, 140, 0.6);
+}
+.track-item-highlight.hl-style-background:hover { background: rgba(241, 250, 140, 0.25); }
+.track-item-highlight.hl-style-background.selected {
+  background: rgba(241, 250, 140, 0.35);
+  border-color: #f1fa8c;
+  box-shadow: 0 -4px 8px rgba(241, 250, 140, 0.3), 0 4px 8px rgba(241, 250, 140, 0.3);
+}
+.track-item-highlight.hl-style-background .hl-text { color: #f1fa8c; }
+
+.track-item-highlight.hl-style-spotlight {
+  background: rgba(255, 184, 108, 0.15);
+  border-color: rgba(255, 184, 108, 0.6);
+}
+.track-item-highlight.hl-style-spotlight:hover { background: rgba(255, 184, 108, 0.25); }
+.track-item-highlight.hl-style-spotlight.selected {
+  background: rgba(255, 184, 108, 0.35);
+  border-color: #ffb86c;
+  box-shadow: 0 -4px 8px rgba(255, 184, 108, 0.3), 0 4px 8px rgba(255, 184, 108, 0.3);
+}
+.track-item-highlight.hl-style-spotlight .hl-text { color: #ffb86c; }
+
+.track-item-highlight.hl-style-badge {
+  background: rgba(255, 121, 198, 0.15);
+  border-color: rgba(255, 121, 198, 0.6);
+}
+.track-item-highlight.hl-style-badge:hover { background: rgba(255, 121, 198, 0.25); }
+.track-item-highlight.hl-style-badge.selected {
+  background: rgba(255, 121, 198, 0.35);
+  border-color: #ff79c6;
+  box-shadow: 0 -4px 8px rgba(255, 121, 198, 0.3), 0 4px 8px rgba(255, 121, 198, 0.3);
+}
+.track-item-highlight.hl-style-badge .hl-text { color: #ff79c6; }
+
+.track-item-highlight.hl-style-bracket {
+  background: rgba(189, 147, 249, 0.15);
+  border-color: rgba(189, 147, 249, 0.6);
+}
+.track-item-highlight.hl-style-bracket:hover { background: rgba(189, 147, 249, 0.25); }
+.track-item-highlight.hl-style-bracket.selected {
+  background: rgba(189, 147, 249, 0.35);
+  border-color: #bd93f9;
+  box-shadow: 0 -4px 8px rgba(189, 147, 249, 0.3), 0 4px 8px rgba(189, 147, 249, 0.3);
+}
+.track-item-highlight.hl-style-bracket .hl-text { color: #bd93f9; }
+
+/* Playhead — single line spanning ruler + 5 tracks */
 .playhead {
   position: absolute;
   top: 0;
   left: 0;
-  height: 177px; /* ruler 29px + 4 tracks × 36px + 4px overshoot */
+  height: 213px; /* ruler 29px + 5 tracks × 36px + 4px overshoot */
   width: 2px;
   background: var(--playhead);
   z-index: 10;
@@ -1184,6 +1719,34 @@ body {
 }
 
 .prop-input:focus { border-color: var(--accent); }
+
+/* No-color indicator for fill picker */
+.fill-picker-wrap {
+  position: relative;
+  width: 26px; height: 26px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.fill-picker-wrap input[type="color"] {
+  width: 100%; height: 100%;
+  padding: 0; border: none;
+  cursor: pointer; background: none;
+}
+.fill-picker-wrap.no-color {
+  background: #000;
+}
+.fill-picker-wrap.no-color input[type="color"] {
+  opacity: 0;
+}
+.fill-picker-wrap.no-color::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top right, transparent calc(50% - 1px), #e55 calc(50% - 1px), #e55 calc(50% + 1px), transparent calc(50% + 1px));
+  pointer-events: none;
+}
 
 /* Custom number spinner buttons */
 .number-wrap {
@@ -1350,7 +1913,7 @@ body {
 .inspector-panel {
   position: absolute;
   top: 12px;
-  left: 12px;
+  left: 48px;
   z-index: 20;
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -1370,10 +1933,6 @@ body {
 
 /* Settings panel (gear icon) */
 .btn-settings-circle {
-  position: absolute;
-  top: 12px;
-  left: 44px;
-  z-index: 19;
   width: 26px;
   height: 26px;
   border-radius: 50%;
@@ -1387,6 +1946,7 @@ body {
   justify-content: center;
   transition: all 0.15s;
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  flex-shrink: 0;
 }
 .btn-settings-circle:hover {
   background: var(--border);
@@ -1398,10 +1958,115 @@ body {
   border-color: var(--accent);
 }
 
-.settings-panel {
+/* Preview overlay toggle buttons */
+.btn-overlay-circle {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  flex-shrink: 0;
+}
+.btn-overlay-circle:hover {
+  background: var(--border);
+  color: var(--text);
+}
+.btn-overlay-circle.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+#btn-nums-overlay {
+  font-size: 15px;
+}
+
+/* Preview toolbar (left side) */
+.preview-toolbar {
   position: absolute;
   top: 12px;
   left: 12px;
+  z-index: 19;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Viewport toolbar (hugs preview window, outside left edge) */
+.viewport-toolbar {
+  position: absolute;
+  top: 6px;
+  right: calc(100% + 6px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transform: scale(var(--btn-counter-scale, 1));
+  transform-origin: top right;
+}
+
+/* Grid overlay */
+.grid-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 2;
+  overflow: hidden;
+}
+.grid-overlay-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Line/column numbers overlay */
+.nums-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 3;
+  overflow: hidden;
+}
+.nums-overlay .row-num {
+  position: absolute;
+  left: 2px;
+  font-size: 8px;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  color: rgba(137, 180, 250, 0.7);
+  line-height: 1;
+  pointer-events: none;
+}
+.nums-overlay .col-num {
+  position: absolute;
+  top: 2px;
+  font-size: 8px;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  color: rgba(137, 180, 250, 0.7);
+  line-height: 1;
+  pointer-events: none;
+}
+
+.settings-panel {
+  position: absolute;
+  top: 12px;
+  left: 48px;
   z-index: 21;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1556,10 +2221,6 @@ body {
 }
 
 .btn-info-circle {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 19;
   width: 26px;
   height: 26px;
   border-radius: 50%;
@@ -1576,6 +2237,7 @@ body {
   justify-content: center;
   transition: all 0.15s;
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  flex-shrink: 0;
 }
 
 .btn-info-circle:hover {
@@ -1644,6 +2306,117 @@ body {
   color: #000;
   font-weight: 600;
 }
+
+/* Preview Modal */
+.preview-modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-modal-backdrop.open {
+  display: flex;
+}
+
+.preview-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  width: 90vw;
+  height: calc(100vh - 10px);
+  max-width: 1200px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+}
+
+.preview-modal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.preview-modal-toolbar .size-presets {
+  display: flex;
+  gap: 4px;
+}
+
+.preview-modal-toolbar .size-presets button {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preview-modal-toolbar .size-presets button:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.preview-modal-toolbar .size-presets button.active {
+  background: var(--accent);
+  color: #000;
+  font-weight: 600;
+}
+
+.preview-modal-toolbar .preview-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.preview-modal-toolbar .preview-close:hover {
+  background: var(--cut);
+  color: #fff;
+}
+
+.preview-modal-body {
+  flex: 1;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  background: #1e1e2e;
+}
+
+.preview-tab-panel {
+  display: none;
+}
+
+.preview-tab-panel.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-tab-panel iframe {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #1e1e2e;
+}
 </style>
 </head>
 <body>
@@ -1658,20 +2431,24 @@ body {
     <button class="btn" id="btn-add-annotation" title="Add annotation at playhead (A)">+ Annotation</button>
     <button class="btn" id="btn-add-cut" title="Mark cut region (X)">+ Cut</button>
     <button class="btn" id="btn-add-snippet" title="Add snippet at playhead (D)"> + Snippet</button>
+    <button class="btn" id="btn-add-highlight" title="Add highlight at playhead (H)"> + Highlight</button>
     <div class="layout-presets" id="layout-presets" style="margin-left: 8px;">
       <button data-split="75" title="Maximize preview">Preview</button>
       <button data-split="50" class="active" title="Equal split">Balanced</button>
       <button data-split="25" title="Maximize timeline">Timeline</button>
     </div>
     <button class="btn" id="btn-view-yaml" title="View YAML (Y)" style="margin-left: 8px;">YAML</button>
+    <button class="btn" id="btn-preview-player" title="Preview player (P)" style="margin-left: 4px;">&#9654; Preview</button>
     <button class="btn btn-primary" id="btn-save" title="Save (Cmd+S)">Save</button>
   </div>
 </div>
 
 <div class="editor-main">
   <div class="preview-area">
-    <button class="btn-info-circle" id="btn-inspector" title="Toggle info (I)">i</button>
-    <button class="btn-settings-circle" id="btn-settings" title="Settings (G)">&#x2699;</button>
+    <div class="preview-toolbar">
+      <button class="btn-info-circle" id="btn-inspector" title="Toggle info (I)">i</button>
+      <button class="btn-settings-circle" id="btn-settings" title="Settings (G)">&#x2699;</button>
+    </div>
     <div class="inspector-panel hidden" id="inspector-panel"></div>
     <div class="settings-panel hidden" id="settings-panel">
       <div class="settings-header">
@@ -1723,10 +2500,18 @@ body {
       </div>
     </div>
     <div class="preview-wrapper">
+      <div class="viewport-toolbar" id="viewport-toolbar">
+        <button class="btn-overlay-circle" id="btn-grid-overlay" title="Toggle grid overlay"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="14" rx="1"/><line x1="5.67" y1="1" x2="5.67" y2="15"/><line x1="10.33" y1="1" x2="10.33" y2="15"/><line x1="1" y1="5.67" x2="15" y2="5.67"/><line x1="1" y1="10.33" x2="15" y2="10.33"/></svg></button>
+        <button class="btn-overlay-circle" id="btn-nums-overlay" title="Toggle line/column numbers">#</button>
+      </div>
       <div id="chapter-title-overlay" class="chapter-title-overlay"></div>
       <div id="snippet-preview" class="snippet-preview"></div>
       <div class="preview-viewport">
+        <div id="highlight-underlay" class="highlight-overlay"></div>
         <pre id="terminal-output"></pre>
+        <div id="grid-overlay" class="grid-overlay" style="display:none;"><canvas class="grid-overlay-canvas"></canvas></div>
+        <div id="nums-overlay" class="nums-overlay" style="display:none;"></div>
+        <div id="highlight-overlay" class="highlight-overlay"></div>
         <div id="annotation-overlay" class="annotation-overlay"></div>
         <div id="cut-indicator" class="cut-indicator">&#x22ef;</div>
       </div>
@@ -1767,6 +2552,10 @@ body {
       <div class="track-label" style="color: var(--snippet);">Snippets</div>
       <div class="track-content" id="track-snippets"></div>
     </div>
+    <div class="timeline-track">
+      <div class="track-label" style="color: var(--highlight);">HLGTS.</div>
+      <div class="track-content" id="track-highlights"></div>
+    </div>
   </div>
 </div>
 
@@ -1774,14 +2563,16 @@ body {
   <span><kbd>Space</kbd> Play/Pause</span>
   <span><kbd>C</kbd> Add chapter</span>
   <span><kbd>A</kbd> Add annotation</span>
-  <span><kbd>X</kbd> Mark cut</span>
+  <span><kbd>X</kbd> Add cut</span>
   <span><kbd>D</kbd> Add snippet</span>
+  <span><kbd>H</kbd> Add highlight</span>
   <span><kbd>&larr;</kbd><kbd>&rarr;</kbd> Seek</span>
   <span><kbd>[</kbd><kbd>]</kbd> Prev/Next chapter</span>
   <span><kbd>I</kbd> Show Info</span>
   <span><kbd>G</kbd> Settings</span>
+  <span><kbd>P</kbd> Preview</span>
   <span><kbd>Y</kbd> View YAML</span>
-  <span><kbd>&#x2318;S</kbd> Save</span>
+  <span><kbd>&#x2318;S</kbd> / <kbd>Ctrl+S</kbd> Save</span>
   <span><kbd>Del</kbd> Delete selected</span>
 </div>
 
@@ -1797,6 +2588,31 @@ body {
     </div>
     <div class="yaml-modal-body">
       <pre id="yaml-modal-content"></pre>
+    </div>
+  </div>
+</div>
+
+<!-- Preview Player Modal -->
+<div class="preview-modal-backdrop" id="preview-modal-backdrop">
+  <div class="preview-modal" id="preview-modal">
+    <div class="preview-modal-toolbar">
+      <div class="size-presets" id="preview-size-presets">
+        <button data-tab="desktop" class="active">Desktop</button>
+        <button data-tab="tablet">Tablet</button>
+        <button data-tab="mobile">Mobile</button>
+      </div>
+      <button class="preview-close" id="preview-modal-close" title="Close (Escape)">&times;</button>
+    </div>
+    <div class="preview-modal-body">
+      <div class="preview-tab-panel active" id="preview-tab-desktop">
+        <iframe id="preview-iframe-desktop"></iframe>
+      </div>
+      <div class="preview-tab-panel" id="preview-tab-tablet">
+        <iframe id="preview-iframe-tablet"></iframe>
+      </div>
+      <div class="preview-tab-panel" id="preview-tab-mobile">
+        <iframe id="preview-iframe-mobile"></iframe>
+      </div>
     </div>
   </div>
 </div>
@@ -1822,10 +2638,14 @@ body {
   const trackAnnotations = document.getElementById('track-annotations');
   const trackCuts = document.getElementById('track-cuts');
   const trackSnippets = document.getElementById('track-snippets');
+  const trackHighlights = document.getElementById('track-highlights');
+  const highlightOverlay = document.getElementById('highlight-overlay');
+  const highlightUnderlay = document.getElementById('highlight-underlay');
   const propsPanel = document.getElementById('properties-panel');
   const toast = document.getElementById('toast');
   const btnPlay = document.getElementById('btn-play');
   const fileName = document.getElementById('file-name');
+  let _hlEls = null;
 
   // --- Load data ---
   fetch('/api/data')
@@ -1838,6 +2658,8 @@ body {
     durationDisplay.textContent = formatTimePrecise(data.recording.duration);
     // Ensure snippets array exists
     if (!data.script.snippets) data.script.snippets = [];
+    // Ensure highlights array exists
+    if (!data.script.highlights) data.script.highlights = [];
     renderStats();
 
     // Set terminal viewport to captured dimensions
@@ -1899,6 +2721,7 @@ body {
     const annotations = (script.annotations || []).length;
     const cuts = (script.cuts || []).length;
     const snippets = (script.snippets || []).length;
+    const highlights = (script.highlights || []).length;
 
     panel.innerHTML =
       '<div class="inspector-header"><span class="inspector-title">Info</span><button class="inspector-close" id="inspector-close" title="Close">&times;</button></div>' +
@@ -1912,6 +2735,7 @@ body {
       statRow('Annotations', String(annotations)) +
       statRow('Cuts', String(cuts)) +
       statRow('Snippets', String(snippets)) +
+      statRow('Highlights', String(highlights)) +
       '<div class="stat-divider"></div>' +
       statRow('Source', fmtSize(sourceBytes)) +
       statRow('Keyframes', '~' + estKeyframes) +
@@ -2070,7 +2894,44 @@ body {
       trackSnippets.appendChild(el);
     });
 
+    // Highlights
+    trackHighlights.innerHTML = '';
+
+    (data.script.highlights || []).forEach((hl, i) => {
+      const el = document.createElement('div');
+      const baseStyle = (hl.style || 'box').replace(/-.*/, '');
+      el.className = 'track-item-highlight hl-style-' + baseStyle;
+      el.style.left = timeToPct(hl.time);
+      el.style.width = durationToPct(hl.duration);
+      const textSpan = document.createElement('span');
+      textSpan.className = 'hl-text';
+      textSpan.textContent = hl.style || 'outline';
+      el.appendChild(textSpan);
+      el.addEventListener('mousedown', (e) => {
+        if (e.target.classList.contains('hl-handle')) return;
+        e.stopPropagation();
+        startBoxDrag('highlight', i, e);
+      });
+
+      // Left handle
+      const lh = document.createElement('div');
+      lh.className = 'hl-handle hl-handle-left';
+      lh.addEventListener('mousedown', (e) => { e.stopPropagation(); startHighlightHandleDrag(i, 'start', e); });
+      el.appendChild(lh);
+
+      // Right handle
+      const rh = document.createElement('div');
+      rh.className = 'hl-handle hl-handle-right';
+      rh.addEventListener('mousedown', (e) => { e.stopPropagation(); startHighlightHandleDrag(i, 'end', e); });
+      el.appendChild(rh);
+
+      trackHighlights.appendChild(el);
+    });
+
     renderStats();
+    // Invalidate highlight overlay so elements are recreated for new data
+    _hlEls = null;
+    renderPreviewHighlights();
   }
 
   // --- Terminal rendering ---
@@ -2104,6 +2965,23 @@ body {
       return 'rgb(' + toVal(rv) + ',' + toVal(gv) + ',' + toVal(bv) + ')';
     }
 
+    function charWidth(cp) {
+      if (cp <= 0x7E) return 1;
+      if ((cp >= 0x0300 && cp <= 0x036F) || (cp >= 0x1AB0 && cp <= 0x1AFF) ||
+          (cp >= 0x1DC0 && cp <= 0x1DFF) || (cp >= 0x20D0 && cp <= 0x20FF) ||
+          (cp >= 0xFE00 && cp <= 0xFE0F) || (cp >= 0xE0100 && cp <= 0xE01EF) ||
+          cp === 0x200B || cp === 0x200C || cp === 0x200D || cp === 0xFEFF) return 0;
+      if ((cp >= 0x1100 && cp <= 0x115F) || cp === 0x2329 || cp === 0x232A ||
+          (cp >= 0x2E80 && cp <= 0x303E) || (cp >= 0x3040 && cp <= 0x33FF) ||
+          (cp >= 0x3400 && cp <= 0x4DBF) || (cp >= 0x4E00 && cp <= 0xA4CF) ||
+          (cp >= 0xA960 && cp <= 0xA97F) || (cp >= 0xAC00 && cp <= 0xD7FF) ||
+          (cp >= 0xF900 && cp <= 0xFAFF) || (cp >= 0xFE10 && cp <= 0xFE19) ||
+          (cp >= 0xFE30 && cp <= 0xFE6F) || (cp >= 0xFF01 && cp <= 0xFF60) ||
+          (cp >= 0xFFE0 && cp <= 0xFFE6) || (cp >= 0x20000 && cp <= 0x3FFFF) ||
+          (cp >= 0x1F000 && cp <= 0x1FAFF)) return 2;
+      return 1;
+    }
+
     function scrollUp() {
       grid.shift();
       const row = [];
@@ -2113,11 +2991,22 @@ body {
 
     function clearCell(r, c2) { grid[r][c2] = {...EMPTY}; }
 
-    function feedChar(ch) {
+    function feedChar(ch, w) {
       if (curRow >= rows) { curRow = rows - 1; scrollUp(); }
+      if (w === 0) {
+        if (curCol > 0) grid[curRow][curCol - 1].char += ch;
+        return;
+      }
       if (curCol >= cols) return;
-      grid[curRow][curCol] = {char: ch, fg: curFg, bg: curBg, bold: curBold};
-      curCol++;
+      if (w === 2) {
+        if (curCol + 1 >= cols) return;
+        grid[curRow][curCol] = {char: ch, fg: curFg, bg: curBg, bold: curBold, wide: true};
+        grid[curRow][curCol + 1] = {...EMPTY, cont: true};
+        curCol += 2;
+      } else {
+        grid[curRow][curCol] = {char: ch, fg: curFg, bg: curBg, bold: curBold};
+        curCol++;
+      }
     }
 
     function applySGR(nums) {
@@ -2218,7 +3107,14 @@ body {
         if (c === '\\x07') { i++; continue; }
         const code = c.charCodeAt(0);
         if (code < 32) { i++; continue; }
-        feedChar(c);
+        let ch = c, cp = code;
+        if (cp >= 0xD800 && cp <= 0xDBFF && i + 1 < s.length) {
+          const lo = s[i + 1].charCodeAt(0);
+          if (lo >= 0xDC00 && lo <= 0xDFFF) {
+            ch = c + s[i + 1]; cp = ((cp - 0xD800) << 10) + (lo - 0xDC00) + 0x10000; i++;
+          }
+        }
+        feedChar(ch, charWidth(cp));
         i++;
       }
     }
@@ -2286,23 +3182,37 @@ body {
       let prevFg = null, prevBg = null, prevBold = false;
       for (let c2 = 0; c2 < cols; c2++) {
         const cell = grid[r][c2];
-        if (cell.fg !== prevFg || cell.bg !== prevBg || cell.bold !== prevBold) {
-          if (spanOpen) { line += '</span>'; spanOpen = false; }
-          if (cell.fg || cell.bg || cell.bold) {
-            let st = '';
-            if (cell.fg) st += 'color:' + cell.fg + ';';
-            if (cell.bg) st += 'background:' + cell.bg + ';';
-            if (cell.bold) st += 'font-weight:bold;';
-            line += '<span style="' + st + '">';
-            spanOpen = true;
-          }
-          prevFg = cell.fg; prevBg = cell.bg; prevBold = cell.bold;
-        }
+        if (cell.cont) continue;
         const ch = cell.char;
-        if (ch === '<') line += '&lt;';
-        else if (ch === '>') line += '&gt;';
-        else if (ch === '&') line += '&amp;';
-        else line += ch;
+        const cp = ch.codePointAt(0) || 0;
+        if (cp > 0x7E && !cell.wide) {
+          // Narrow non-ASCII: force exact 1ch to prevent glyph overflow
+          if (spanOpen) { line += '</span>'; spanOpen = false; }
+          let st = 'display:inline-block;width:1ch;';
+          if (cell.fg) st += 'color:' + cell.fg + ';';
+          if (cell.bg) st += 'background:' + cell.bg + ';';
+          if (cell.bold) st += 'font-weight:bold;';
+          line += '<span style="' + st + '">' + ch + '</span>';
+          prevFg = null; prevBg = null; prevBold = false;
+        } else {
+          // ASCII or wide chars: render naturally (wide chars already ~2ch in browser)
+          if (cell.fg !== prevFg || cell.bg !== prevBg || cell.bold !== prevBold) {
+            if (spanOpen) { line += '</span>'; spanOpen = false; }
+            if (cell.fg || cell.bg || cell.bold) {
+              let st = '';
+              if (cell.fg) st += 'color:' + cell.fg + ';';
+              if (cell.bg) st += 'background:' + cell.bg + ';';
+              if (cell.bold) st += 'font-weight:bold;';
+              line += '<span style="' + st + '">';
+              spanOpen = true;
+            }
+            prevFg = cell.fg; prevBg = cell.bg; prevBold = cell.bold;
+          }
+          if (ch === '<') line += '&lt;';
+          else if (ch === '>') line += '&gt;';
+          else if (ch === '&') line += '&amp;';
+          else line += ch;
+        }
       }
       if (spanOpen) line += '</span>';
       htmlLines.push(line.trimEnd());
@@ -2312,6 +3222,7 @@ body {
     renderAnnotations();
     renderChapterTitle();
     renderSnippetPreview();
+    renderPreviewHighlights();
   }
 
   function renderSnippetPreview() {
@@ -2332,6 +3243,269 @@ body {
       el.classList.remove('visible');
     }
   }
+
+  // --- Highlight preview overlay ---
+
+  function measureCellSize() {
+    if (highlightOverlay._measure) return;
+    const pre = document.getElementById('terminal-output');
+    const preStyle = getComputedStyle(pre);
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;top:0;left:0;visibility:hidden;font:inherit;white-space:pre;';
+    // Use multiple lines to get accurate line height
+    probe.textContent = '0\\n0\\n0\\n0\\n0\\n0\\n0\\n0\\n0\\n0';
+    pre.appendChild(probe);
+    const rect = probe.getBoundingClientRect();
+    highlightOverlay._cellW = rect.width; // width of single '0' char
+    highlightOverlay._cellH = rect.height / 10; // average height per line over 10 lines
+    pre.removeChild(probe);
+    highlightOverlay._measure = true;
+    // Redraw grid/nums overlays if visible
+    if (_gridVisible && !_gridDrawn) drawGrid();
+    if (_numsVisible && !_numsDrawn) drawNums();
+  }
+
+  function renderPreviewHighlights() {
+    const highlights = data.script.highlights || [];
+    measureCellSize();
+    if (highlights.length === 0) {
+      if (_hlEls) _hlEls.forEach(el => el.style.opacity = '0');
+      return;
+    }
+
+    // Pre-create elements once (recreate if count changed)
+    if (!_hlEls || _hlEls.length !== highlights.length) {
+      highlightOverlay.innerHTML = '';
+      highlightUnderlay.innerHTML = '';
+      _hlEls = [];
+      for (const hl of highlights) {
+        const el = document.createElement('div');
+        el.className = 'hl-el hl-' + hl.style;
+        el.style.opacity = '0';
+        if (hl.glow) el.classList.add('hl-glow');
+        if (hl.color) el.style.setProperty('--hl-color', hl.color);
+        if (hl.fill_color) {
+          const fo = hl.fill_opacity != null ? hl.fill_opacity : 0.3;
+          el.style.setProperty('--hl-fill', hl.fill_color + Math.round(fo * 255).toString(16).padStart(2, '0'));
+        }
+        if (hl.pulse) el.classList.add('hl-pulse');
+        if ((hl.style === 'badge-before' || hl.style === 'badge-after') && (hl.badge_text || hl.badge_icon)) {
+          const badge = document.createElement('span');
+          badge.className = 'hl-badge-label';
+          badge.textContent = (hl.badge_icon || '') + (hl.badge_text || '');
+          el.appendChild(badge);
+        }
+        // Background style goes in underlay (behind text), others in overlay
+        if (hl.style === 'background') {
+          highlightUnderlay.appendChild(el);
+        } else {
+          highlightOverlay.appendChild(el);
+        }
+        _hlEls.push(el);
+      }
+    }
+
+    const pre = document.getElementById('terminal-output');
+    const preStyle = getComputedStyle(pre);
+    const paddingLeft = parseFloat(preStyle.paddingLeft) || 12;
+    const paddingTop = parseFloat(preStyle.paddingTop) || 12;
+    const cellW = highlightOverlay._cellW;
+    const cellH = highlightOverlay._cellH;
+
+    for (let k = 0; k < highlights.length; k++) {
+      const hl = highlights[k];
+      const node = _hlEls[k];
+
+      // Update color in case it was edited
+      if (hl.color) node.style.setProperty('--hl-color', hl.color);
+      node.classList.toggle('hl-glow', !!hl.glow);
+      if (hl.fill_color) {
+        const fo = hl.fill_opacity != null ? hl.fill_opacity : 0.3;
+        const alphaHex = Math.round(fo * 255).toString(16).padStart(2, '0');
+        node.style.setProperty('--hl-fill', hl.fill_color + alphaHex);
+      } else {
+        node.style.setProperty('--hl-fill', 'transparent');
+      }
+
+      if (currentTime >= hl.time && currentTime <= hl.time + hl.duration) {
+        // Compute fade
+        const elapsed = currentTime - hl.time;
+        const fadeInDur = hl.fade_in != null ? hl.fade_in : 0.3;
+        const fadeOutDur = hl.fade_out != null ? hl.fade_out : 0.3;
+        const fadeIn = fadeInDur > 0 ? Math.min(1, elapsed / fadeInDur) : 1;
+        const fadeOut = fadeOutDur > 0 ? Math.min(1, (hl.duration - elapsed) / fadeOutDur) : 1;
+        const baseOpacity = hl.opacity != null ? hl.opacity : 1;
+        node.style.opacity = String(Math.min(fadeIn, fadeOut) * baseOpacity);
+
+        // Position based on target (match takes priority over region)
+        const target = hl.target || {};
+        if (target.match) {
+          // Match-based: search terminal buffer for pattern
+          const matchPos = findMatchInTerminal(target.match);
+          if (matchPos) {
+            node.style.left = (paddingLeft + matchPos.col * cellW) + 'px';
+            node.style.top = (paddingTop + matchPos.row * cellH) + 'px';
+            node.style.width = (matchPos.length * cellW) + 'px';
+            node.style.height = cellH + 'px';
+          } else {
+            node.style.opacity = '0';
+          }
+        } else if (target.region) {
+          const r = target.region;
+          node.style.left = (paddingLeft + (r.col || 0) * cellW) + 'px';
+          node.style.top = (paddingTop + (r.row || 0) * cellH) + 'px';
+          node.style.width = ((r.width || 10) * cellW) + 'px';
+          node.style.height = ((r.height || 1) * cellH) + 'px';
+        } else if (target.lines) {
+          const lines = target.lines;
+          const minLine = Math.min(...lines);
+          const maxLine = Math.max(...lines);
+          node.style.left = paddingLeft + 'px';
+          node.style.top = (paddingTop + minLine * cellH) + 'px';
+          node.style.width = 'calc(100% - ' + (paddingLeft * 2) + 'px)';
+          node.style.height = ((maxLine - minLine + 1) * cellH) + 'px';
+        } else {
+          // No target — hide
+          node.style.opacity = '0';
+        }
+      } else {
+        if (node.style.opacity !== '0') node.style.opacity = '0';
+      }
+    }
+  }
+
+  // Search the current terminal text buffer for a regex match
+  function findMatchInTerminal(pattern) {
+    try {
+      const pre = document.getElementById('terminal-output');
+      // Get plain text lines from the rendered terminal
+      const text = pre.textContent || '';
+      const lines = text.split('\\n');
+      const re = new RegExp(pattern);
+      for (let row = 0; row < lines.length; row++) {
+        const m = re.exec(lines[row]);
+        if (m) {
+          return { row: row, col: m.index, length: m[0].length };
+        }
+      }
+    } catch (e) {
+      // Invalid regex — ignore
+    }
+    return null;
+  }
+
+  // Invalidate measure cache on resize
+  function invalidateHighlightMeasure() {
+    if (highlightOverlay) highlightOverlay._measure = false;
+    _gridDrawn = false;
+    _numsDrawn = false;
+  }
+
+  // --- Grid overlay ---
+  let _gridVisible = false;
+  let _gridDrawn = false;
+
+  function toggleGridOverlay() {
+    _gridVisible = !_gridVisible;
+    const btn = document.getElementById('btn-grid-overlay');
+    const el = document.getElementById('grid-overlay');
+    btn.classList.toggle('active', _gridVisible);
+    el.style.display = _gridVisible ? '' : 'none';
+    if (_gridVisible && !_gridDrawn) drawGrid();
+  }
+
+  function drawGrid() {
+    if (!highlightOverlay._measure) return;
+    const cellW = highlightOverlay._cellW;
+    const cellH = highlightOverlay._cellH;
+    const pre = document.getElementById('terminal-output');
+    const preStyle = getComputedStyle(pre);
+    const padL = parseFloat(preStyle.paddingLeft) || 12;
+    const padT = parseFloat(preStyle.paddingTop) || 12;
+    const cols = data.recording.term.cols;
+    const rows = data.recording.term.rows;
+
+    const canvas = document.querySelector('#grid-overlay .grid-overlay-canvas');
+    const w = pre.offsetWidth;
+    const h = pre.offsetHeight;
+    canvas.width = w * 2;
+    canvas.height = h * 2;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(2, 2);
+    ctx.strokeStyle = 'rgba(137, 180, 250, 0.15)';
+    ctx.lineWidth = 0.5;
+
+    // Vertical lines (columns)
+    for (let c = 0; c <= cols; c++) {
+      const x = padL + c * cellW;
+      ctx.beginPath();
+      ctx.moveTo(x, padT);
+      ctx.lineTo(x, padT + rows * cellH);
+      ctx.stroke();
+    }
+    // Horizontal lines (rows)
+    for (let r = 0; r <= rows; r++) {
+      const y = padT + r * cellH;
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(padL + cols * cellW, y);
+      ctx.stroke();
+    }
+    _gridDrawn = true;
+  }
+
+  // --- Line/column numbers overlay ---
+  let _numsVisible = false;
+  let _numsDrawn = false;
+
+  function toggleNumsOverlay() {
+    _numsVisible = !_numsVisible;
+    const btn = document.getElementById('btn-nums-overlay');
+    const el = document.getElementById('nums-overlay');
+    btn.classList.toggle('active', _numsVisible);
+    el.style.display = _numsVisible ? '' : 'none';
+    if (_numsVisible && !_numsDrawn) drawNums();
+  }
+
+  function drawNums() {
+    if (!highlightOverlay._measure) return;
+    const cellW = highlightOverlay._cellW;
+    const cellH = highlightOverlay._cellH;
+    const pre = document.getElementById('terminal-output');
+    const preStyle = getComputedStyle(pre);
+    const padL = parseFloat(preStyle.paddingLeft) || 12;
+    const padT = parseFloat(preStyle.paddingTop) || 12;
+    const cols = data.recording.term.cols;
+    const rows = data.recording.term.rows;
+
+    const container = document.getElementById('nums-overlay');
+    container.innerHTML = '';
+
+    // Row numbers (1-based, shown at start of each row)
+    for (let r = 0; r < rows; r++) {
+      const el = document.createElement('span');
+      el.className = 'row-num';
+      el.style.top = (padT + r * cellH + cellH * 0.3) + 'px';
+      el.style.left = '2px';
+      el.textContent = String(r + 1);
+      container.appendChild(el);
+    }
+    // Column numbers (1-based, shown every 5 cols at top)
+    for (let c = 0; c < cols; c += 5) {
+      const el = document.createElement('span');
+      el.className = 'col-num';
+      el.style.left = (padL + c * cellW) + 'px';
+      el.style.top = '2px';
+      el.textContent = String(c + 1);
+      container.appendChild(el);
+    }
+    _numsDrawn = true;
+  }
+
+  document.getElementById('btn-grid-overlay').addEventListener('click', toggleGridOverlay);
+  document.getElementById('btn-nums-overlay').addEventListener('click', toggleNumsOverlay);
 
   function renderChapterTitle() {
     const overlay = document.getElementById('chapter-title-overlay');
@@ -2465,17 +3639,21 @@ body {
     if (!area || !wrapper) return;
     // Reset scale to 1 to measure natural size
     wrapper.style.setProperty('--viewport-scale', '1');
-    const availW = area.clientWidth - 32;  // 16px padding each side
+    const availW = area.clientWidth - 32 - 36;  // padding + toolbar overflow
     const availH = area.clientHeight - 32;
     const natW = wrapper.offsetWidth;
     const natH = wrapper.offsetHeight;
     if (natW <= 0 || natH <= 0) return;
     const scale = Math.min(availW / natW, availH / natH);
     wrapper.style.setProperty('--viewport-scale', scale.toFixed(4));
+    // Counter-scale viewport toolbar buttons so they stay fixed size
+    const vt = document.getElementById('viewport-toolbar');
+    if (vt) vt.style.setProperty('--btn-counter-scale', (1 / scale).toFixed(4));
   }
 
   window.addEventListener('resize', () => {
     invalidatePlayheadCache();
+    invalidateHighlightMeasure();
     fitViewport();
   });
 
@@ -2758,6 +3936,218 @@ body {
     attachLiveListeners();
   }
 
+  function selectHighlight(idx) {
+    selectedItem = { type: 'highlight', index: idx };
+    clearAllHighlights();
+    const hlEls = trackHighlights.querySelectorAll('.track-item-highlight');
+    if (hlEls[idx]) hlEls[idx].classList.add('selected');
+    const hl = (data.script.highlights || [])[idx];
+    const target = hl.target || {};
+    const regionRow = target.region ? (target.region.row || 0) + 1 : '';
+    const regionCol = target.region ? (target.region.col || 0) + 1 : '';
+    const regionW = target.region ? (target.region.width || 10) : '';
+    const regionH = target.region ? (target.region.height || 1) : '';
+
+    // Normalize merged styles for UI
+    const isUnderline = hl.style === 'underline' || hl.style === 'underline-wavy';
+    const isBadge = hl.style === 'badge-before' || hl.style === 'badge-after';
+    const isBox = hl.style === 'box' || hl.style === 'outline';
+    const uiStyle = isUnderline ? 'underline' : isBadge ? 'badge' : isBox ? 'box' : hl.style;
+    const hasGlow = !!hl.glow;
+    const underlineType = hl.style === 'underline-wavy' ? 'wavy' : 'solid';
+    const badgePosition = hl.style === 'badge-after' ? 'after' : 'before';
+
+    // Build style-specific options
+    let styleOptions = '';
+
+    if (isUnderline) {
+      styleOptions += `
+      <div class="prop-field">
+        <div class="prop-label">Type</div>
+        <select class="prop-select" id="prop-hl-subtype">
+          <option value="solid" ${underlineType==='solid'?'selected':''}>Solid</option>
+          <option value="wavy" ${underlineType==='wavy'?'selected':''}>Wavy</option>
+        </select>
+      </div>`;
+    }
+
+    if (isBadge) {
+      styleOptions += `
+      <div class="prop-field">
+        <div class="prop-label">Position</div>
+        <select class="prop-select" id="prop-hl-badge-pos">
+          <option value="before" ${badgePosition==='before'?'selected':''}>Before (above)</option>
+          <option value="after" ${badgePosition==='after'?'selected':''}>After (below)</option>
+        </select>
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Badge text</div>
+        <input class="prop-input" type="text" value="${escAttr(hl.badge_text || '')}" id="prop-hl-badge">
+      </div>`;
+    }
+
+    const termCols = data.recording.term.cols;
+    const termRows = data.recording.term.rows;
+
+    styleOptions += `
+      <div class="prop-field">
+        <div style="display:flex; gap:4px; align-items:flex-end;">
+          <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+            <label style="font-size:9px;color:var(--text-dim);">${isBox ? 'Border Color' : 'Color'}</label>
+            <div style="display:flex; gap:4px; align-items:center;">
+              <input type="color" value="${escAttr(hl.color || '#f1fa8c')}" id="prop-hl-color-picker" style="width:26px;height:26px;padding:0;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:none;flex-shrink:0;">
+              <input class="prop-input" type="text" value="${escAttr((hl.color || '#f1fa8c').toUpperCase())}" id="prop-hl-color" placeholder="#hex" style="flex:1;font-family:'SF Mono',Menlo,Consolas,monospace;text-transform:uppercase;">
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;">
+            <label style="font-size:9px;color:var(--text-dim);">Opacity</label>
+            <input class="prop-input" type="number" step="0.05" min="0" max="1" value="${hl.opacity != null ? hl.opacity : 1}" id="prop-hl-opacity" style="width:76px;">
+          </div>
+        </div>
+      </div>`;
+
+    if (isBox) {
+      styleOptions += `
+      <div class="prop-field">
+        <div style="display:flex; gap:4px; align-items:flex-end;">
+          <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+            <label style="font-size:9px;color:var(--text-dim);">Fill Color</label>
+            <div style="display:flex; gap:4px; align-items:center;">
+              <div class="fill-picker-wrap${hl.fill_color ? '' : ' no-color'}">
+                <input type="color" value="${escAttr(hl.fill_color || '#000000')}" id="prop-hl-fill-picker">
+              </div>
+              <input class="prop-input" type="text" value="${escAttr((hl.fill_color || '').toUpperCase())}" id="prop-hl-fill" placeholder="none" style="flex:1;font-family:'SF Mono',Menlo,Consolas,monospace;text-transform:uppercase;">
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;">
+            <label style="font-size:9px;color:var(--text-dim);">Fill Opacity</label>
+            <input class="prop-input" type="number" step="0.05" min="0" max="1" value="${hl.fill_opacity != null ? hl.fill_opacity : 0.3}" id="prop-hl-fill-opacity" style="width:76px;">
+          </div>
+        </div>
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Glow</div>
+        <select class="prop-select" id="prop-hl-glow">
+          <option value="false" ${!hasGlow?'selected':''}>Off</option>
+          <option value="true" ${hasGlow?'selected':''}>On</option>
+        </select>
+      </div>`;
+    }
+    styleOptions += `
+      <div class="prop-field">
+        <div style="display:flex; gap:4px;">
+          <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+            <label style="font-size:9px;color:var(--text-dim);">Row</label>
+            <input class="prop-input" type="number" step="1" min="1" max="${termRows}" value="${regionRow}" id="prop-hl-row" placeholder="row">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+            <label style="font-size:9px;color:var(--text-dim);">Column</label>
+            <input class="prop-input" type="number" step="1" min="1" max="${termCols}" value="${regionCol}" id="prop-hl-col" placeholder="col">
+          </div>
+        </div>
+      </div>
+      <div class="prop-field">
+        <div style="display:flex; gap:4px;">
+          <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+            <label style="font-size:9px;color:var(--text-dim);">Width</label>
+            <input class="prop-input" type="number" step="1" min="1" max="${termCols}" value="${regionW}" id="prop-hl-width" placeholder="w">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+            <label style="font-size:9px;color:var(--text-dim);">Height</label>
+            <input class="prop-input" type="number" step="1" min="1" max="${termRows}" value="${regionH}" id="prop-hl-height" placeholder="h">
+          </div>
+        </div>
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Matching Regex</div>
+        <input class="prop-input" type="text" value="${escAttr(target.match || '')}" id="prop-hl-match" placeholder="Pattern target">
+      </div>
+      <hr style="border:none; border-top:1px solid var(--border); margin:12px 0;">
+      <div class="prop-field" style="margin-bottom:4px;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--text);">
+          <input type="checkbox" id="prop-hl-anim-on" ${hl.fade_in > 0 || hl.fade_out > 0 || hl.pulse ? 'checked' : ''} style="margin:0;">
+          Animation
+        </label>
+      </div>
+      <div id="prop-hl-anim-fields" style="${hl.fade_in > 0 || hl.fade_out > 0 || hl.pulse ? '' : 'display:none;'}">
+        <div class="prop-field">
+          <div style="display:flex; gap:4px;">
+            <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+              <label style="font-size:9px;color:var(--text-dim);">Fade In (s)</label>
+              <input class="prop-input" type="number" step="0.05" min="0" max="5" value="${hl.fade_in != null ? hl.fade_in : 0.3}" id="prop-hl-fade-in">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+              <label style="font-size:9px;color:var(--text-dim);">Fade Out (s)</label>
+              <input class="prop-input" type="number" step="0.05" min="0" max="5" value="${hl.fade_out != null ? hl.fade_out : 0.3}" id="prop-hl-fade-out">
+            </div>
+          </div>
+        </div>
+        <div class="prop-field">
+          <div class="prop-label">Pulse</div>
+          <select class="prop-select" id="prop-hl-pulse">
+            <option value="false" ${!hl.pulse?'selected':''}>Off</option>
+            <option value="true" ${hl.pulse?'selected':''}>On</option>
+          </select>
+        </div>
+      </div>`;
+
+    propsPanel.innerHTML = `
+      <div class="prop-title">Highlight</div>
+      <div class="prop-field">
+        <div class="prop-label">Time (s)</div>
+        <input class="prop-input" type="number" step="0.01" value="${hl.time.toFixed(2)}" id="prop-time">
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Duration (s)</div>
+        <input class="prop-input" type="number" step="0.1" value="${hl.duration.toFixed(2)}" id="prop-duration">
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Style</div>
+        <select class="prop-select" id="prop-hl-style">
+          <option value="box" ${uiStyle==='box'?'selected':''}>Box</option>
+          <option value="underline" ${uiStyle==='underline'?'selected':''}>Underline</option>
+          <option value="background" ${uiStyle==='background'?'selected':''}>Background</option>
+          <option value="spotlight" ${uiStyle==='spotlight'?'selected':''}>Spotlight</option>
+          <option value="badge" ${uiStyle==='badge'?'selected':''}>Badge</option>
+          <option value="bracket" ${uiStyle==='bracket'?'selected':''}>Bracket</option>
+        </select>
+      </div>
+      <hr style="border:none; border-top:1px solid var(--border); margin:12px 0;">
+      ${styleOptions}
+      <div class="prop-actions">
+        <button class="btn" onclick="undoSelected()">Undo</button>
+        <button class="btn" style="color:var(--cut)" onclick="deleteSelected()">Delete</button>
+      </div>
+    `;
+    propsPanel.classList.add('open');
+    attachLiveListeners();
+
+    // Re-draw inspector when style changes
+    document.getElementById('prop-hl-style').addEventListener('change', () => {
+      liveApplyHighlightStyle(idx);
+      selectHighlight(idx);
+    });
+  }
+
+  // Apply just the style change before re-rendering inspector
+  function liveApplyHighlightStyle(idx) {
+    const hl = data.script.highlights[idx];
+    const uiVal = document.getElementById('prop-hl-style').value;
+    // Map merged UI values back to internal style
+    if (uiVal === 'underline') {
+      hl.style = 'underline';
+    } else if (uiVal === 'badge') {
+      hl.style = 'badge-before';
+    } else {
+      hl.style = uiVal;
+    }
+    // Also persist time/duration from current inputs
+    hl.time = parseFloat(document.getElementById('prop-time').value) || 0;
+    hl.duration = parseFloat(document.getElementById('prop-duration').value) || 1;
+    markDirty();
+    renderTracks();
+  }
+
   // --- Live input listeners for inspector ---
   let undoSnapshot = null;
 
@@ -2769,6 +4159,7 @@ body {
       else if (type === 'annotation') undoSnapshot = { ...data.script.annotations[index] };
       else if (type === 'cut') undoSnapshot = { ...data.script.cuts[index] };
       else if (type === 'snippet') undoSnapshot = { ...(data.script.snippets || [])[index] };
+      else if (type === 'highlight') undoSnapshot = JSON.parse(JSON.stringify((data.script.highlights || [])[index]));
     }
     propsPanel.querySelectorAll('.prop-input, .prop-select').forEach(el => {
       el.addEventListener('input', liveApply);
@@ -2781,19 +4172,88 @@ body {
       input.parentNode.insertBefore(wrap, input);
       wrap.appendChild(input);
       const step = parseFloat(input.step) || 1;
+      const minVal = input.hasAttribute('min') ? parseFloat(input.min) : -Infinity;
+      const maxVal = input.hasAttribute('max') ? parseFloat(input.max) : Infinity;
       const btnUp = document.createElement('button');
       btnUp.type = 'button';
       btnUp.className = 'num-btn num-btn-up';
       btnUp.innerHTML = '&#x25B4;';
-      btnUp.addEventListener('click', () => { input.value = (parseFloat(input.value) + step).toFixed(2); input.dispatchEvent(new Event('input')); });
+      btnUp.addEventListener('click', () => { input.value = Math.min(maxVal, parseFloat(input.value) + step).toFixed(2); input.dispatchEvent(new Event('input')); });
       const btnDown = document.createElement('button');
       btnDown.type = 'button';
       btnDown.className = 'num-btn num-btn-down';
       btnDown.innerHTML = '&#x25BE;';
-      btnDown.addEventListener('click', () => { input.value = (parseFloat(input.value) - step).toFixed(2); input.dispatchEvent(new Event('input')); });
+      btnDown.addEventListener('click', () => { input.value = Math.max(minVal, parseFloat(input.value) - step).toFixed(2); input.dispatchEvent(new Event('input')); });
       wrap.appendChild(btnUp);
       wrap.appendChild(btnDown);
+      // Clamp negatives: convert to absolute value on blur/change
+      input.addEventListener('change', () => {
+        let v = parseFloat(input.value);
+        if (isNaN(v)) return;
+        if (v < minVal) { input.value = Math.abs(v) <= maxVal ? Math.abs(v).toFixed(2) : minVal.toFixed(2); input.dispatchEvent(new Event('input')); }
+      });
     });
+    // Sync color picker <-> hex text field
+    const colorPicker = propsPanel.querySelector('#prop-hl-color-picker');
+    const colorHex = propsPanel.querySelector('#prop-hl-color');
+    if (colorPicker && colorHex) {
+      colorPicker.addEventListener('input', () => {
+        colorHex.value = colorPicker.value.toUpperCase();
+        liveApply();
+      });
+      colorHex.addEventListener('input', () => {
+        colorHex.value = colorHex.value.toUpperCase();
+        if (/^#[0-9A-F]{6}$/.test(colorHex.value)) {
+          colorPicker.value = colorHex.value;
+        }
+      });
+    }
+    // Sync fill color picker <-> hex field
+    const fillPicker = propsPanel.querySelector('#prop-hl-fill-picker');
+    const fillHex = propsPanel.querySelector('#prop-hl-fill');
+    const fillWrap = propsPanel.querySelector('.fill-picker-wrap');
+    if (fillPicker && fillHex) {
+      fillPicker.addEventListener('input', () => {
+        fillHex.value = fillPicker.value.toUpperCase();
+        if (fillWrap) fillWrap.classList.remove('no-color');
+        liveApply();
+      });
+      fillHex.addEventListener('input', () => {
+        fillHex.value = fillHex.value.toUpperCase();
+        if (/^#[0-9A-F]{6}$/.test(fillHex.value)) {
+          fillPicker.value = fillHex.value;
+          if (fillWrap) fillWrap.classList.remove('no-color');
+        } else if (fillHex.value.trim() === '') {
+          if (fillWrap) fillWrap.classList.add('no-color');
+        }
+      });
+    }
+    // Disable region fields when match regex has a value
+    const matchInput = propsPanel.querySelector('#prop-hl-match');
+    const regionFields = ['#prop-hl-row', '#prop-hl-col', '#prop-hl-width', '#prop-hl-height'];
+    function syncRegionDisabled() {
+      const hasMatch = matchInput && matchInput.value.trim() !== '';
+      regionFields.forEach(sel => {
+        const el = propsPanel.querySelector(sel);
+        if (el) {
+          el.disabled = hasMatch;
+          el.style.opacity = hasMatch ? '0.4' : '1';
+        }
+      });
+    }
+    if (matchInput) {
+      matchInput.addEventListener('input', syncRegionDisabled);
+      syncRegionDisabled();
+    }
+    // Animation enable/disable toggle
+    const animCheckbox = propsPanel.querySelector('#prop-hl-anim-on');
+    const animFields = propsPanel.querySelector('#prop-hl-anim-fields');
+    if (animCheckbox && animFields) {
+      animCheckbox.addEventListener('change', () => {
+        animFields.style.display = animCheckbox.checked ? '' : 'none';
+        liveApply();
+      });
+    }
   }
 
   function liveApply() {
@@ -2820,6 +4280,83 @@ body {
       data.script.snippets[index].text = document.getElementById('prop-text').value;
       data.script.snippets[index].match = document.getElementById('prop-match').value;
       data.script.snippets[index].label = document.getElementById('prop-label').value;
+    } else if (type === 'highlight') {
+      const hl = data.script.highlights[index];
+      hl.time = parseFloat(document.getElementById('prop-time').value) || 0;
+      hl.duration = parseFloat(document.getElementById('prop-duration').value) || 1;
+      // Resolve merged style values
+      const uiStyle = document.getElementById('prop-hl-style').value;
+      if (uiStyle === 'underline') {
+        const subEl = document.getElementById('prop-hl-subtype');
+        hl.style = subEl && subEl.value === 'wavy' ? 'underline-wavy' : 'underline';
+      } else if (uiStyle === 'badge') {
+        const posEl = document.getElementById('prop-hl-badge-pos');
+        hl.style = posEl && posEl.value === 'after' ? 'badge-after' : 'badge-before';
+      } else {
+        hl.style = uiStyle;
+      }
+      hl.color = document.getElementById('prop-hl-color').value || '#f1fa8c';
+      const opVal = parseFloat(document.getElementById('prop-hl-opacity').value);
+      hl.opacity = isNaN(opVal) ? 1 : Math.max(0, Math.min(1, opVal));
+      const fillEl = document.getElementById('prop-hl-fill');
+      if (fillEl) {
+        hl.fill_color = fillEl.value || '';
+        const fillOpVal = parseFloat(document.getElementById('prop-hl-fill-opacity').value);
+        hl.fill_opacity = isNaN(fillOpVal) ? 0.3 : Math.max(0, Math.min(1, fillOpVal));
+      }
+      const badgeEl = document.getElementById('prop-hl-badge');
+      hl.badge_text = badgeEl ? badgeEl.value : (hl.badge_text || '');
+      const glowEl = document.getElementById('prop-hl-glow');
+      hl.glow = glowEl ? glowEl.value === 'true' : !!hl.glow;
+      const animOn = document.getElementById('prop-hl-anim-on');
+      if (animOn && animOn.checked) {
+        const fadeInVal = parseFloat(document.getElementById('prop-hl-fade-in').value);
+        hl.fade_in = isNaN(fadeInVal) ? 0.3 : Math.max(0, fadeInVal);
+        const fadeOutVal = parseFloat(document.getElementById('prop-hl-fade-out').value);
+        hl.fade_out = isNaN(fadeOutVal) ? 0.3 : Math.max(0, fadeOutVal);
+        hl.pulse = document.getElementById('prop-hl-pulse').value === 'true';
+      } else {
+        hl.fade_in = 0;
+        hl.fade_out = 0;
+        hl.pulse = false;
+      }
+      // Update match target
+      const matchVal = document.getElementById('prop-hl-match').value;
+      // Update region from fields (sanitize to integers, clamp to terminal bounds)
+      const maxCols = data.recording.term.cols;
+      const maxRows = data.recording.term.rows;
+      const rowEl = document.getElementById('prop-hl-row');
+      const colEl = document.getElementById('prop-hl-col');
+      const wEl = document.getElementById('prop-hl-width');
+      const hEl = document.getElementById('prop-hl-height');
+      const rowStr = rowEl.value;
+      const colStr = colEl.value;
+      const wStr = wEl.value;
+      const hStr = hEl.value;
+      let row = Math.round(parseFloat(rowStr));
+      let col = Math.round(parseFloat(colStr));
+      let w = Math.round(parseFloat(wStr));
+      let h = Math.round(parseFloat(hStr));
+      const hasRegion = rowStr !== '' || colStr !== '' || wStr !== '' || hStr !== '';
+
+      // Clamp values (1-based UI)
+      if (!isNaN(row)) { row = Math.max(1, Math.min(row, maxRows)); rowEl.value = row; }
+      if (!isNaN(col)) { col = Math.max(1, Math.min(col, maxCols)); colEl.value = col; }
+      if (!isNaN(w)) { w = Math.max(1, Math.min(w, maxCols)); wEl.value = w; }
+      if (!isNaN(h)) { h = Math.max(1, Math.min(h, maxRows)); hEl.value = h; }
+
+      if (!hl.target) hl.target = {};
+      // Match takes priority — if set, remove region so it doesn't override
+      if (matchVal) {
+        hl.target.match = matchVal;
+        delete hl.target.region;
+      } else {
+        delete hl.target.match;
+        // Only set region if user provided values (convert 1-based UI to 0-based internal)
+        if (hasRegion && !isNaN(row) && !isNaN(col) && !isNaN(w) && !isNaN(h)) {
+          hl.target.region = { row: row - 1, col: col - 1, width: w, height: h };
+        }
+      }
     }
 
     markDirty();
@@ -2834,6 +4371,7 @@ body {
     else if (type === 'annotation') data.script.annotations[index] = { ...undoSnapshot };
     else if (type === 'cut') data.script.cuts[index] = { ...undoSnapshot };
     else if (type === 'snippet') data.script.snippets[index] = { ...undoSnapshot };
+    else if (type === 'highlight') data.script.highlights[index] = JSON.parse(JSON.stringify(undoSnapshot));
     renderTracks();
     updatePlayhead();
     // Re-open panel with restored values
@@ -2841,6 +4379,7 @@ body {
     else if (type === 'annotation') selectAnnotation(index);
     else if (type === 'cut') selectCut(index);
     else if (type === 'snippet') selectSnippet(index);
+    else if (type === 'highlight') selectHighlight(index);
     showToast('Reverted');
   };
 
@@ -2873,6 +4412,7 @@ body {
     else if (type === 'annotation') data.script.annotations.splice(index, 1);
     else if (type === 'cut') data.script.cuts.splice(index, 1);
     else if (type === 'snippet') data.script.snippets.splice(index, 1);
+    else if (type === 'highlight') data.script.highlights.splice(index, 1);
 
     selectedItem = null;
     propsPanel.classList.remove('open');
@@ -2957,7 +4497,7 @@ body {
 
   function addCutAt(time) {
     const start = roundTime(time);
-    const end = roundTime(Math.min(time + 1, data.recording.duration));
+    const end = roundTime(Math.min(time + 2, data.recording.duration));
     if (end > start) {
       data.script.cuts.push({ start: start, end: end, type: 'jump' });
       renderTracks();
@@ -2965,7 +4505,7 @@ body {
       markDirty();
       const idx = data.script.cuts.length - 1;
       selectCut(idx);
-      showToast('Cut added — drag edges to adjust');
+      showToast('Cut added (2s) — drag edges to adjust');
     }
   }
 
@@ -3080,6 +4620,20 @@ body {
     const idx = data.script.snippets.length - 1;
     selectSnippet(idx);
     showToast('Snippet added — edit the text in properties');
+  }
+
+  function addHighlight() {
+    if (!data.script.highlights) data.script.highlights = [];
+    const start = roundTime(currentTime);
+    const dur = roundTime(Math.min(3, data.recording.duration - start));
+    if (dur <= 0) return;
+    data.script.highlights.push({ time: start, duration: dur, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'box', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0, fade_out: 0, pulse: false });
+    renderTracks();
+    updatePlayhead();
+    markDirty();
+    const idx = data.script.highlights.length - 1;
+    selectHighlight(idx);
+    showToast('Highlight added — configure target and style in properties');
   }
 
   // Snippet handle drag (resize edges)
@@ -3222,11 +4776,169 @@ body {
     }
   });
 
-  // --- Box drag-to-reposition (annotations, cuts, and snippets) ---
+  // --- Highlight handle drag-to-resize ---
+  function startHighlightHandleDrag(hlIdx, edge, e) {
+    e.preventDefault();
+    const rect = trackHighlights.getBoundingClientRect();
+    const duration = data.recording.duration;
+    selectHighlight(hlIdx);
+    selectedItem = { type: 'highlight', index: hlIdx, edge: edge };
+    const hlEls = trackHighlights.querySelectorAll('.track-item-highlight');
+    if (hlEls[hlIdx]) {
+      const handle = hlEls[hlIdx].querySelector('.hl-handle-' + (edge === 'start' ? 'left' : 'right'));
+      if (handle) handle.classList.add('selected');
+    }
+    const hl = data.script.highlights[hlIdx];
+    seek(edge === 'start' ? hl.time : hl.time + hl.duration);
+
+    function onMove(ev) {
+      const ratio = (ev.clientX - rect.left) / rect.width;
+      const t = roundTime(Math.max(0, Math.min(ratio * duration, duration)));
+      const hl = data.script.highlights[hlIdx];
+      if (edge === 'start') {
+        const newStart = Math.min(t, hl.time + hl.duration - 0.1);
+        hl.duration = roundTime(hl.duration + (hl.time - newStart));
+        hl.time = newStart;
+      } else {
+        const newEnd = Math.max(t, hl.time + 0.1);
+        hl.duration = roundTime(newEnd - hl.time);
+      }
+      renderTracks();
+      updatePlayhead();
+      const els = trackHighlights.querySelectorAll('.track-item-highlight');
+      if (els[hlIdx]) {
+        els[hlIdx].classList.add('selected');
+        const h = els[hlIdx].querySelector('.hl-handle-' + (edge === 'start' ? 'left' : 'right'));
+        if (h) h.classList.add('selected');
+      }
+      const timeInput = document.getElementById('prop-time');
+      const durInput = document.getElementById('prop-duration');
+      if (timeInput) timeInput.value = hl.time.toFixed(2);
+      if (durInput) durInput.value = hl.duration.toFixed(2);
+    }
+
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      markDirty();
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  function nudgeHighlightEdge(hlIdx, edge, delta) {
+    const hl = data.script.highlights[hlIdx];
+    if (!hl) return;
+    const end = hl.time + hl.duration;
+    if (edge === 'start') {
+      const newStart = roundTime(Math.max(0, Math.min(hl.time + delta, end - 0.1)));
+      hl.duration = roundTime(end - newStart);
+      hl.time = newStart;
+      seek(hl.time);
+    } else {
+      const newEnd = roundTime(Math.max(hl.time + 0.1, Math.min(end + delta, data.recording.duration)));
+      hl.duration = roundTime(newEnd - hl.time);
+      seek(hl.time + hl.duration);
+    }
+    renderTracks();
+    updatePlayhead();
+    // Re-highlight the handle
+    const hlEls = trackHighlights.querySelectorAll('.track-item-highlight');
+    if (hlEls[hlIdx]) {
+      hlEls[hlIdx].classList.add('selected');
+      const handle = hlEls[hlIdx].querySelector('.hl-handle-' + (edge === 'start' ? 'left' : 'right'));
+      if (handle) handle.classList.add('selected');
+    }
+    const timeInput = document.getElementById('prop-time');
+    const durInput = document.getElementById('prop-duration');
+    if (timeInput) timeInput.value = hl.time.toFixed(2);
+    if (durInput) durInput.value = hl.duration.toFixed(2);
+    markDirty();
+  }
+
+  // Highlight drag-to-create on track
+  trackHighlights.addEventListener('mousedown', (e) => {
+    if (e.target !== trackHighlights) return;
+    e.preventDefault();
+    if (!data.script.highlights) data.script.highlights = [];
+    const rect = trackHighlights.getBoundingClientRect();
+    const startX = e.clientX;
+    const startRatio = (startX - rect.left) / rect.width;
+    const startTime = roundTime(startRatio * data.recording.duration);
+    let dragStarted = false;
+    let hlDragIdx = null;
+
+    function onMove(ev) {
+      if (!dragStarted) {
+        if (Math.abs(ev.clientX - startX) < 4) return;
+        dragStarted = true;
+        hlDragIdx = data.script.highlights.length;
+        data.script.highlights.push({ time: startTime, duration: 0, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'box', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0, fade_out: 0, pulse: false });
+        renderTracks();
+        updatePlayhead();
+      }
+      const ratio = (ev.clientX - rect.left) / rect.width;
+      const t = roundTime(Math.max(0, Math.min(ratio * data.recording.duration, data.recording.duration)));
+      const hl = data.script.highlights[hlDragIdx];
+      if (t < startTime) {
+        hl.time = t;
+        hl.duration = roundTime(startTime - t);
+      } else {
+        hl.time = startTime;
+        hl.duration = roundTime(t - startTime);
+      }
+      renderTracks();
+      updatePlayhead();
+    }
+
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      if (!dragStarted) {
+        seek(startTime);
+        return;
+      }
+      const hl = data.script.highlights[hlDragIdx];
+      if (hl.duration < 0.15) {
+        data.script.highlights.splice(hlDragIdx, 1);
+      } else {
+        selectHighlight(hlDragIdx);
+        markDirty();
+        showToast('Highlight: ' + formatTimePrecise(hl.time) + ' → ' + formatTimePrecise(hl.time + hl.duration));
+      }
+      renderTracks();
+      updatePlayhead();
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  // Double-click on highlights track to create a 3s highlight
+  trackHighlights.addEventListener('dblclick', (e) => {
+    if (e.target !== trackHighlights) return;
+    e.preventDefault();
+    if (!data.script.highlights) data.script.highlights = [];
+    const rect = trackHighlights.getBoundingClientRect();
+    const ratio = (e.clientX - rect.left) / rect.width;
+    const clickTime = roundTime(ratio * data.recording.duration);
+    const dur = roundTime(Math.min(3, data.recording.duration - clickTime));
+    if (dur > 0) {
+      data.script.highlights.push({ time: clickTime, duration: dur, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'box', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0, fade_out: 0, pulse: false });
+      renderTracks();
+      updatePlayhead();
+      markDirty();
+      selectHighlight(data.script.highlights.length - 1);
+      showToast('Highlight added (3s) — configure in properties');
+    }
+  });
+
+  // --- Box drag-to-reposition (annotations, cuts, snippets, and highlights) ---
   function startBoxDrag(type, index, e) {
     e.preventDefault();
     const startX = e.clientX;
-    const track = type === 'annotation' ? trackAnnotations : type === 'snippet' ? trackSnippets : trackCuts;
+    const track = type === 'annotation' ? trackAnnotations : type === 'snippet' ? trackSnippets : type === 'highlight' ? trackHighlights : trackCuts;
     const rect = track.getBoundingClientRect();
     const duration = data.recording.duration;
     let dragged = false;
@@ -3238,6 +4950,10 @@ body {
       itemDuration = item.duration;
     } else if (type === 'snippet') {
       item = (data.script.snippets || [])[index];
+      itemStart = item.time;
+      itemDuration = item.duration;
+    } else if (type === 'highlight') {
+      item = (data.script.highlights || [])[index];
       itemStart = item.time;
       itemDuration = item.duration;
     } else {
@@ -3254,7 +4970,7 @@ body {
       dragged = true;
       const dt = (dx / rect.width) * duration;
       let newStart = roundTime(Math.max(0, Math.min(origStart + dt, duration - itemDuration)));
-      if (type === 'annotation' || type === 'snippet') {
+      if (type === 'annotation' || type === 'snippet' || type === 'highlight') {
         item.time = newStart;
       } else {
         item.start = newStart;
@@ -3273,6 +4989,7 @@ body {
       // Always select on mouseup (whether drag or click)
       if (type === 'annotation') selectAnnotation(index);
       else if (type === 'snippet') selectSnippet(index);
+      else if (type === 'highlight') selectHighlight(index);
       else selectCut(index);
     }
 
@@ -3539,7 +5256,7 @@ body {
 
   function addAnnotationAt(time) {
     const start = roundTime(time);
-    const end = roundTime(Math.min(time + 1, data.recording.duration));
+    const end = roundTime(Math.min(time + 2, data.recording.duration));
     if (end > start) {
       data.script.annotations.push({ time: start, duration: roundTime(end - start), text: 'Annotation', position: 'top-right', width: 'medium', style: 'callout' });
       renderTracks();
@@ -3547,7 +5264,7 @@ body {
       markDirty();
       const idx = data.script.annotations.length - 1;
       selectAnnotation(idx);
-      showToast('Annotation added — drag edges to adjust');
+      showToast('Annotation added (2s) — drag edges to adjust');
     }
   }
 
@@ -3605,6 +5322,81 @@ body {
 
   document.getElementById('btn-view-yaml').addEventListener('click', showYamlPreview);
 
+  // --- Preview Player Modal ---
+  const previewBackdrop = document.getElementById('preview-modal-backdrop');
+  const previewCloseBtn = document.getElementById('preview-modal-close');
+  const previewSizePresets = document.getElementById('preview-size-presets');
+  const previewIframes = {
+    desktop: document.getElementById('preview-iframe-desktop'),
+    tablet: document.getElementById('preview-iframe-tablet'),
+    mobile: document.getElementById('preview-iframe-mobile'),
+  };
+  const previewTabs = {
+    desktop: document.getElementById('preview-tab-desktop'),
+    tablet: document.getElementById('preview-tab-tablet'),
+    mobile: document.getElementById('preview-tab-mobile'),
+  };
+  // Fixed sizes: width, height (height accommodates player at that width)
+  const previewSizes = {
+    desktop: { w: 900, h: 780 },
+    tablet: { w: 600, h: 560 },
+    mobile: { w: 375, h: 420 },
+  };
+
+  // Apply fixed dimensions to each iframe
+  Object.entries(previewSizes).forEach(([key, size]) => {
+    previewIframes[key].style.width = size.w + 'px';
+    previewIframes[key].style.height = size.h + 'px';
+  });
+
+  function openPreviewPlayer() {
+    previewBackdrop.classList.add('open');
+    const loading = '<html><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100%;background:#1e1e2e;color:#888;font-family:system-ui"><p>Rendering preview\u2026</p></body></html>';
+    Object.values(previewIframes).forEach(f => { f.srcdoc = loading; });
+
+    fetch('/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data.script),
+    })
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    })
+    .then(html => {
+      Object.values(previewIframes).forEach(f => { f.srcdoc = html; });
+    })
+    .catch(e => {
+      const errHtml = '<html><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100%;background:#1e1e2e;color:#f38ba8;font-family:system-ui"><p>Preview failed: ' + e.message + '</p></body></html>';
+      Object.values(previewIframes).forEach(f => { f.srcdoc = errHtml; });
+      showToast('Preview failed: ' + e.message);
+    });
+  }
+
+  function closePreviewPlayer() {
+    previewBackdrop.classList.remove('open');
+    Object.values(previewIframes).forEach(f => { f.srcdoc = ''; });
+  }
+
+  previewCloseBtn.addEventListener('click', closePreviewPlayer);
+  previewBackdrop.addEventListener('click', (e) => {
+    if (e.target === previewBackdrop) closePreviewPlayer();
+  });
+
+  // Tab switching
+  previewSizePresets.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-tab]');
+    if (!btn) return;
+    const tab = btn.dataset.tab;
+    previewSizePresets.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    Object.entries(previewTabs).forEach(([key, panel]) => {
+      panel.classList.toggle('active', key === tab);
+    });
+  });
+
+  document.getElementById('btn-preview-player').addEventListener('click', openPreviewPlayer);
+
   // --- Inspector toggle ---
   const inspectorPanel = document.getElementById('inspector-panel');
   const btnInspector = document.getElementById('btn-inspector');
@@ -3628,6 +5420,8 @@ body {
   function showInspector() {
     inspectorPanel.classList.remove('hidden');
     btnInspector.classList.add('active');
+    // Hide settings if open
+    hideSettings();
   }
 
   function hideInspector() {
@@ -3913,6 +5707,7 @@ body {
   document.getElementById('btn-add-annotation').addEventListener('click', addAnnotation);
   document.getElementById('btn-add-cut').addEventListener('click', addCut);
   document.getElementById('btn-add-snippet').addEventListener('click', addSnippet);
+  document.getElementById('btn-add-highlight').addEventListener('click', addHighlight);
   document.getElementById('btn-save').addEventListener('click', save);
 
   // Keyboard shortcuts
@@ -3925,6 +5720,7 @@ body {
     else if (e.key === 'a' && !e.metaKey) { addAnnotation(); }
     else if (e.key === 'x' || e.key === 'X') { addCut(); }
     else if (e.key === 'd' || e.key === 'D') { addSnippet(); }
+    else if (e.key === 'h' || e.key === 'H') { addHighlight(); }
     else if (e.key === 'ArrowRight') {
       e.preventDefault();
       if (selectedItem && selectedItem.type === 'cut' && selectedItem.edge) {
@@ -3933,6 +5729,8 @@ body {
         nudgeAnnotationEdge(selectedItem.index, selectedItem.edge, 0.01);
       } else if (selectedItem && selectedItem.type === 'snippet' && selectedItem.edge) {
         nudgeSnippetEdge(selectedItem.index, selectedItem.edge, 0.01);
+      } else if (selectedItem && selectedItem.type === 'highlight' && selectedItem.edge) {
+        nudgeHighlightEdge(selectedItem.index, selectedItem.edge, 0.01);
       } else { seek(currentTime + 1); }
     }
     else if (e.key === 'ArrowLeft') {
@@ -3943,25 +5741,29 @@ body {
         nudgeAnnotationEdge(selectedItem.index, selectedItem.edge, -0.01);
       } else if (selectedItem && selectedItem.type === 'snippet' && selectedItem.edge) {
         nudgeSnippetEdge(selectedItem.index, selectedItem.edge, -0.01);
+      } else if (selectedItem && selectedItem.type === 'highlight' && selectedItem.edge) {
+        nudgeHighlightEdge(selectedItem.index, selectedItem.edge, -0.01);
       } else { seek(currentTime - 1); }
     }
     else if (e.key === ']') { nextChapter(); }
     else if (e.key === '[') { prevChapter(); }
     else if (e.key === 'Delete' || e.key === 'Backspace') { window.deleteSelected(); }
     else if (e.key === 'Escape') {
-      if (yamlBackdrop.classList.contains('visible')) { hideYamlPreview(); }
+      if (previewBackdrop.classList.contains('open')) { closePreviewPlayer(); }
+      else if (yamlBackdrop.classList.contains('visible')) { hideYamlPreview(); }
       else if (!settingsPanel.classList.contains('hidden')) { hideSettings(); }
       else { propsPanel.classList.remove('open'); selectedItem = null; clearCutHighlights(); }
     }
     else if (e.key === 's' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
     else if (e.key === 'y' || e.key === 'Y') { showYamlPreview(); }
+    else if (e.key === 'p' || e.key === 'P') { openPreviewPlayer(); }
     else if (e.key === 'i' || e.key === 'I') { toggleInspector(); }
     else if (e.key === 'g' || e.key === 'G') { toggleSettings(); }
   });
 
   // Close panel on click outside
   document.addEventListener('click', (e) => {
-    if (!propsPanel.contains(e.target) && !e.target.closest('.track-item-chapter, .track-item-annotation, .track-item-cut, .track-item-snippet')) {
+    if (!propsPanel.contains(e.target) && !e.target.closest('.track-item-chapter, .track-item-annotation, .track-item-cut, .track-item-snippet, .track-item-highlight') && !e.target.closest('#btn-add-chapter, #btn-add-annotation, #btn-add-cut, #btn-add-snippet, #btn-add-highlight')) {
       propsPanel.classList.remove('open');
       selectedItem = null;
       clearCutHighlights();
@@ -3976,6 +5778,8 @@ body {
     trackCuts.querySelectorAll('.cut-handle.selected').forEach(el => el.classList.remove('selected'));
     trackSnippets.querySelectorAll('.track-item-snippet.selected').forEach(el => el.classList.remove('selected'));
     trackSnippets.querySelectorAll('.cmd-handle.selected').forEach(el => el.classList.remove('selected'));
+    trackHighlights.querySelectorAll('.track-item-highlight.selected').forEach(el => el.classList.remove('selected'));
+    trackHighlights.querySelectorAll('.hl-handle.selected').forEach(el => el.classList.remove('selected'));
   }
 
   function clearCutHighlights() {

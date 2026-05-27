@@ -61,16 +61,65 @@ class Snippet:
 
 
 @dataclass
+class HighlightTarget:
+    """Targeting information for a highlight."""
+
+    # Region-based targeting
+    region: dict[str, int] | None = None  # {row, col, width, height}
+    # Pattern-based targeting
+    match: str | None = None
+    group: int = 0
+    # Line-based targeting
+    lines: list[int] | None = None
+    # Scroll tracking
+    track_scroll: bool = False
+
+
+@dataclass
 class Highlight:
-    """A highlighted region of the terminal."""
+    """A highlighted region of the terminal with rich adornment styles.
+
+    Styles: outline, underline, underline-wavy, background, spotlight,
+    glow, box, badge-before, badge-after, bracket
+    """
 
     time: float
     duration: float
-    row: int
-    col: int
-    width: int
-    height: int
-    style: str = "box"  # "box", "underline", "glow"
+    target: HighlightTarget
+    style: str = "outline"
+    color: str = "#f1fa8c"
+    # Badge options (only for badge-before / badge-after)
+    badge_text: str = ""
+    badge_icon: str = ""
+    # Animation
+    fade_in: float = 0.3
+    fade_out: float = 0.3
+    pulse: bool = False
+
+    # Legacy compatibility properties for region-based access
+    @property
+    def row(self) -> int:
+        if self.target.region:
+            return self.target.region.get("row", 0)
+        return 0
+
+    @property
+    def col(self) -> int:
+        if self.target.region:
+            return self.target.region.get("col", 0)
+        return 0
+
+    @property
+    def width(self) -> int:
+        if self.target.region:
+            return self.target.region.get("width", 10)
+        return 0
+
+    @property
+    def height(self) -> int:
+        if self.target.region:
+            return self.target.region.get("height", 1)
+        return 1
 
 
 @dataclass
@@ -192,17 +241,35 @@ def _parse_script_data(data: dict[str, Any]) -> Script:
 
     # Highlights
     for hl in data.get("highlights", []):
-        if isinstance(hl, dict) and "at" in hl and "region" in hl:
-            region = hl["region"]
+        if isinstance(hl, dict) and "at" in hl:
+            target_data = hl.get("target", {})
+            if not isinstance(target_data, dict):
+                target_data = {}
+
+            # Legacy format: region at top level
+            if "region" in hl and "target" not in hl:
+                target_data = {"region": hl["region"]}
+
+            target = HighlightTarget(
+                region=target_data.get("region"),
+                match=target_data.get("match"),
+                group=int(target_data.get("group", 0)),
+                lines=target_data.get("lines"),
+                track_scroll=bool(target_data.get("track_scroll", False)),
+            )
+
             script.highlights.append(
                 Highlight(
                     time=float(hl["at"]),
                     duration=float(hl.get("duration", 2.0)),
-                    row=int(region.get("row", 0)),
-                    col=int(region.get("col", 0)),
-                    width=int(region.get("width", 10)),
-                    height=int(region.get("height", 1)),
-                    style=hl.get("style", "box"),
+                    target=target,
+                    style=hl.get("style", "outline"),
+                    color=hl.get("color", "#f1fa8c"),
+                    badge_text=hl.get("badge_text", ""),
+                    badge_icon=hl.get("badge_icon", ""),
+                    fade_in=float(hl.get("fade_in", 0.3)),
+                    fade_out=float(hl.get("fade_out", 0.3)),
+                    pulse=bool(hl.get("pulse", False)),
                 )
             )
 
