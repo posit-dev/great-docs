@@ -656,7 +656,7 @@ body {
 
 .highlight-overlay .hl-el.hl-box {
   border: 2px solid var(--hl-color, #f1fa8c);
-  background: color-mix(in srgb, var(--hl-color, #f1fa8c) 10%, transparent);
+  background: var(--hl-fill, transparent);
 }
 
 .highlight-overlay .hl-el.hl-bracket {
@@ -1438,6 +1438,34 @@ body {
 
 .prop-input:focus { border-color: var(--accent); }
 
+/* No-color indicator for fill picker */
+.fill-picker-wrap {
+  position: relative;
+  width: 26px; height: 26px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.fill-picker-wrap input[type="color"] {
+  width: 100%; height: 100%;
+  padding: 0; border: none;
+  cursor: pointer; background: none;
+}
+.fill-picker-wrap.no-color {
+  background: #000;
+}
+.fill-picker-wrap.no-color input[type="color"] {
+  opacity: 0;
+}
+.fill-picker-wrap.no-color::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top right, transparent calc(50% - 1px), #e55 calc(50% - 1px), #e55 calc(50% + 1px), transparent calc(50% + 1px));
+  pointer-events: none;
+}
+
 /* Custom number spinner buttons */
 .number-wrap {
   position: relative;
@@ -2126,7 +2154,7 @@ body {
       <div class="track-content" id="track-snippets"></div>
     </div>
     <div class="timeline-track">
-      <div class="track-label" style="color: var(--highlight);">Highlights</div>
+      <div class="track-label" style="color: var(--highlight);">HLGTS.</div>
       <div class="track-content" id="track-highlights"></div>
     </div>
   </div>
@@ -2827,6 +2855,10 @@ body {
         el.className = 'hl-el hl-' + hl.style;
         el.style.opacity = '0';
         if (hl.color) el.style.setProperty('--hl-color', hl.color);
+        if (hl.fill_color) {
+          const fo = hl.fill_opacity != null ? hl.fill_opacity : 0.3;
+          el.style.setProperty('--hl-fill', hl.fill_color + Math.round(fo * 255).toString(16).padStart(2, '0'));
+        }
         if (hl.pulse) el.classList.add('hl-pulse');
         if ((hl.style === 'badge-before' || hl.style === 'badge-after') && (hl.badge_text || hl.badge_icon)) {
           const badge = document.createElement('span');
@@ -2852,6 +2884,13 @@ body {
 
       // Update color in case it was edited
       if (hl.color) node.style.setProperty('--hl-color', hl.color);
+      if (hl.fill_color) {
+        const fo = hl.fill_opacity != null ? hl.fill_opacity : 0.3;
+        const alphaHex = Math.round(fo * 255).toString(16).padStart(2, '0');
+        node.style.setProperty('--hl-fill', hl.fill_color + alphaHex);
+      } else {
+        node.style.setProperty('--hl-fill', 'transparent');
+      }
 
       if (currentTime >= hl.time && currentTime <= hl.time + hl.duration) {
         // Compute fade
@@ -3477,7 +3516,8 @@ body {
     // Normalize merged styles for UI
     const isUnderline = hl.style === 'underline' || hl.style === 'underline-wavy';
     const isBadge = hl.style === 'badge-before' || hl.style === 'badge-after';
-    const uiStyle = isUnderline ? 'underline' : isBadge ? 'badge' : hl.style;
+    const isBox = hl.style === 'box' || hl.style === 'outline';
+    const uiStyle = isUnderline ? 'underline' : isBadge ? 'badge' : isBox ? 'box' : hl.style;
     const underlineType = hl.style === 'underline-wavy' ? 'wavy' : 'solid';
     const badgePosition = hl.style === 'badge-after' ? 'after' : 'before';
 
@@ -3517,7 +3557,7 @@ body {
       <div class="prop-field">
         <div style="display:flex; gap:4px; align-items:flex-end;">
           <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
-            <label style="font-size:9px;color:var(--text-dim);">Color</label>
+            <label style="font-size:9px;color:var(--text-dim);">${isBox ? 'Border Color' : 'Color'}</label>
             <div style="display:flex; gap:4px; align-items:center;">
               <input type="color" value="${escAttr(hl.color || '#f1fa8c')}" id="prop-hl-color-picker" style="width:26px;height:26px;padding:0;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:none;flex-shrink:0;">
               <input class="prop-input" type="text" value="${escAttr((hl.color || '#f1fa8c').toUpperCase())}" id="prop-hl-color" placeholder="#hex" style="flex:1;font-family:'SF Mono',Menlo,Consolas,monospace;text-transform:uppercase;">
@@ -3528,7 +3568,29 @@ body {
             <input class="prop-input" type="number" step="0.05" min="0" max="1" value="${hl.opacity != null ? hl.opacity : 1}" id="prop-hl-opacity" style="width:76px;">
           </div>
         </div>
-      </div>
+      </div>`;
+
+    if (isBox) {
+      styleOptions += `
+      <div class="prop-field">
+        <div style="display:flex; gap:4px; align-items:flex-end;">
+          <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+            <label style="font-size:9px;color:var(--text-dim);">Fill Color</label>
+            <div style="display:flex; gap:4px; align-items:center;">
+              <div class="fill-picker-wrap${hl.fill_color ? '' : ' no-color'}">
+                <input type="color" value="${escAttr(hl.fill_color || '#000000')}" id="prop-hl-fill-picker">
+              </div>
+              <input class="prop-input" type="text" value="${escAttr((hl.fill_color || '').toUpperCase())}" id="prop-hl-fill" placeholder="none" style="flex:1;font-family:'SF Mono',Menlo,Consolas,monospace;text-transform:uppercase;">
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;">
+            <label style="font-size:9px;color:var(--text-dim);">Fill Opacity</label>
+            <input class="prop-input" type="number" step="0.05" min="0" max="1" value="${hl.fill_opacity != null ? hl.fill_opacity : 0.3}" id="prop-hl-fill-opacity" style="width:76px;">
+          </div>
+        </div>
+      </div>`;
+    }
+    styleOptions += `
       <div class="prop-field">
         <div style="display:flex; gap:4px;">
           <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
@@ -3578,12 +3640,11 @@ body {
       <div class="prop-field">
         <div class="prop-label">Style</div>
         <select class="prop-select" id="prop-hl-style">
-          <option value="outline" ${uiStyle==='outline'?'selected':''}>Outline</option>
+          <option value="box" ${uiStyle==='box'?'selected':''}>Box</option>
           <option value="underline" ${uiStyle==='underline'?'selected':''}>Underline</option>
           <option value="background" ${uiStyle==='background'?'selected':''}>Background</option>
           <option value="spotlight" ${uiStyle==='spotlight'?'selected':''}>Spotlight</option>
           <option value="glow" ${uiStyle==='glow'?'selected':''}>Glow</option>
-          <option value="box" ${uiStyle==='box'?'selected':''}>Box</option>
           <option value="badge" ${uiStyle==='badge'?'selected':''}>Badge</option>
           <option value="bracket" ${uiStyle==='bracket'?'selected':''}>Bracket</option>
         </select>
@@ -3676,6 +3737,26 @@ body {
         }
       });
     }
+    // Sync fill color picker <-> hex field
+    const fillPicker = propsPanel.querySelector('#prop-hl-fill-picker');
+    const fillHex = propsPanel.querySelector('#prop-hl-fill');
+    const fillWrap = propsPanel.querySelector('.fill-picker-wrap');
+    if (fillPicker && fillHex) {
+      fillPicker.addEventListener('input', () => {
+        fillHex.value = fillPicker.value.toUpperCase();
+        if (fillWrap) fillWrap.classList.remove('no-color');
+        liveApply();
+      });
+      fillHex.addEventListener('input', () => {
+        fillHex.value = fillHex.value.toUpperCase();
+        if (/^#[0-9A-F]{6}$/.test(fillHex.value)) {
+          fillPicker.value = fillHex.value;
+          if (fillWrap) fillWrap.classList.remove('no-color');
+        } else if (fillHex.value.trim() === '') {
+          if (fillWrap) fillWrap.classList.add('no-color');
+        }
+      });
+    }
     // Disable region fields when match regex has a value
     const matchInput = propsPanel.querySelector('#prop-hl-match');
     const regionFields = ['#prop-hl-row', '#prop-hl-col', '#prop-hl-width', '#prop-hl-height'];
@@ -3737,6 +3818,12 @@ body {
       hl.color = document.getElementById('prop-hl-color').value || '#f1fa8c';
       const opVal = parseFloat(document.getElementById('prop-hl-opacity').value);
       hl.opacity = isNaN(opVal) ? 1 : Math.max(0, Math.min(1, opVal));
+      const fillEl = document.getElementById('prop-hl-fill');
+      if (fillEl) {
+        hl.fill_color = fillEl.value || '';
+        const fillOpVal = parseFloat(document.getElementById('prop-hl-fill-opacity').value);
+        hl.fill_opacity = isNaN(fillOpVal) ? 0.3 : Math.max(0, Math.min(1, fillOpVal));
+      }
       const badgeEl = document.getElementById('prop-hl-badge');
       hl.badge_text = badgeEl ? badgeEl.value : (hl.badge_text || '');
       hl.pulse = document.getElementById('prop-hl-pulse').value === 'true';
@@ -4047,7 +4134,7 @@ body {
     const start = roundTime(currentTime);
     const dur = roundTime(Math.min(3, data.recording.duration - start));
     if (dur <= 0) return;
-    data.script.highlights.push({ time: start, duration: dur, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'outline', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
+    data.script.highlights.push({ time: start, duration: dur, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'box', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
     renderTracks();
     updatePlayhead();
     markDirty();
@@ -4264,7 +4351,7 @@ body {
         if (Math.abs(ev.clientX - startX) < 4) return;
         dragStarted = true;
         hlDragIdx = data.script.highlights.length;
-        data.script.highlights.push({ time: startTime, duration: 0, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'outline', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
+        data.script.highlights.push({ time: startTime, duration: 0, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'box', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
         renderTracks();
         updatePlayhead();
       }
@@ -4315,7 +4402,7 @@ body {
     const clickTime = roundTime(ratio * data.recording.duration);
     const dur = roundTime(Math.min(3, data.recording.duration - clickTime));
     if (dur > 0) {
-      data.script.highlights.push({ time: clickTime, duration: dur, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'outline', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
+      data.script.highlights.push({ time: clickTime, duration: dur, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'box', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
       renderTracks();
       updatePlayhead();
       markDirty();
