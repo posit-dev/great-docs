@@ -240,6 +240,50 @@
       play(state, svgContainer, annotationLayer, controls, options, container, centerOverlay, chapterBar);
     });
 
+    // Double-click/tap on viewport: left 30% rewinds 5s, right 30% fast-forwards 5s
+    // Uses pointerdown for immediate, reliable detection unaffected by overlay state
+    var vpTapTime = 0;
+    var vpTapX = 0;
+
+    function handleViewportSeek(clientX) {
+      if (!state.manifest) return;
+      var rect = viewport.getBoundingClientRect();
+      var x = clientX - rect.left;
+      var w = rect.width;
+      var newTime;
+      if (x < w * 0.3) {
+        newTime = Math.max(0, state.currentTime - 5);
+      } else if (x > w * 0.7) {
+        newTime = Math.min(state.manifest.duration, state.currentTime + 5);
+      } else {
+        return; // Middle 40% — no action
+      }
+      if (state.ended) {
+        state.ended = false;
+        controls.playBtn.textContent = '\u25b6';
+        controls.playBtn.setAttribute('aria-label', 'Play');
+        centerBtn.innerHTML = '<span class="gd-tp-icon-play">\u25b6</span>';
+        container.classList.remove('gd-tp-ended');
+      }
+      seek(state, newTime, svgContainer, annotationLayer, controls);
+      updateChapterBar(chapterBar, state.manifest, state.currentTime);
+    }
+
+    viewport.addEventListener('pointerdown', (e) => {
+      if (!state.manifest) return;
+      if (e.target.closest('.gd-tp-controls')) return;
+      if (!state.playing && !state.ended) return; // Let center overlay handle paused state
+      var now = Date.now();
+      var dx = Math.abs(e.clientX - vpTapX);
+      if (now - vpTapTime < 400 && dx < 50) {
+        vpTapTime = 0;
+        handleViewportSeek(e.clientX);
+      } else {
+        vpTapTime = now;
+        vpTapX = e.clientX;
+      }
+    });
+
     controls.timeline.addEventListener('mousedown', (e) => {
       if (!state.manifest) return;
       // If the click landed on a chapter marker, snap to it instead of starting drag
