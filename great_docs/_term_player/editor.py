@@ -987,6 +987,9 @@ body {
 #track-chapters {
   cursor: crosshair;
 }
+#track-annotations {
+  cursor: crosshair;
+}
 
 .track-item-annotation {
   position: absolute;
