@@ -58,6 +58,8 @@
   overflow: hidden;
   outline: none;
   container-type: inline-size;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .gd-tp-viewport:focus-visible {
@@ -301,6 +303,7 @@
   font-size: 13px;
   color: var(--gd-tp-fg);
   user-select: none;
+  -webkit-user-select: none;
 }
 
 .gd-tp-play-btn,
@@ -516,6 +519,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .gd-tp-chapter-bar:empty:not(.gd-tp-has-chrome) {
