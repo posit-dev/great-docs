@@ -491,6 +491,8 @@ body {
   white-space: pre;
   overflow: hidden;
   color: #cdd6f4;
+  position: relative;
+  z-index: 1;
   width: calc(var(--term-cols) * 1ch + 24px);
   height: calc(var(--term-rows) * 1lh + 24px);
 }
@@ -604,6 +606,8 @@ body {
   pointer-events: none;
   overflow: hidden;
 }
+#highlight-underlay { z-index: 0; }
+#highlight-overlay { z-index: 2; }
 
 .highlight-overlay .hl-el {
   position: absolute;
@@ -650,13 +654,12 @@ body {
   box-shadow: 0 0 8px color-mix(in srgb, var(--hl-color, #f1fa8c) 40%, transparent);
 }
 
-.highlight-overlay .hl-el.hl-glow {
-  box-shadow: 0 0 4px 1px var(--hl-color, #f1fa8c), inset 0 0 2px 1px color-mix(in srgb, var(--hl-color, #f1fa8c) 30%, transparent);
-}
-
 .highlight-overlay .hl-el.hl-box {
   border: 2px solid var(--hl-color, #f1fa8c);
   background: var(--hl-fill, transparent);
+}
+.highlight-overlay .hl-el.hl-box.hl-glow {
+  box-shadow: 0 0 4px 1px var(--hl-color, #f1fa8c), inset 0 0 2px 1px color-mix(in srgb, var(--hl-color, #f1fa8c) 30%, transparent);
 }
 
 .highlight-overlay .hl-el.hl-bracket {
@@ -1343,6 +1346,79 @@ body {
 #track-highlights {
   cursor: crosshair;
 }
+
+/* Per-style highlight colors in timeline */
+.track-item-highlight.hl-style-box {
+  background: rgba(139, 233, 253, 0.15);
+  border-color: rgba(139, 233, 253, 0.6);
+}
+.track-item-highlight.hl-style-box:hover { background: rgba(139, 233, 253, 0.25); }
+.track-item-highlight.hl-style-box.selected {
+  background: rgba(139, 233, 253, 0.35);
+  border-color: #8be9fd;
+  box-shadow: 0 -4px 8px rgba(139, 233, 253, 0.3), 0 4px 8px rgba(139, 233, 253, 0.3);
+}
+.track-item-highlight.hl-style-box .hl-text { color: #8be9fd; }
+
+.track-item-highlight.hl-style-underline {
+  background: rgba(80, 250, 123, 0.15);
+  border-color: rgba(80, 250, 123, 0.6);
+}
+.track-item-highlight.hl-style-underline:hover { background: rgba(80, 250, 123, 0.25); }
+.track-item-highlight.hl-style-underline.selected {
+  background: rgba(80, 250, 123, 0.35);
+  border-color: #50fa7b;
+  box-shadow: 0 -4px 8px rgba(80, 250, 123, 0.3), 0 4px 8px rgba(80, 250, 123, 0.3);
+}
+.track-item-highlight.hl-style-underline .hl-text { color: #50fa7b; }
+
+.track-item-highlight.hl-style-background {
+  background: rgba(241, 250, 140, 0.15);
+  border-color: rgba(241, 250, 140, 0.6);
+}
+.track-item-highlight.hl-style-background:hover { background: rgba(241, 250, 140, 0.25); }
+.track-item-highlight.hl-style-background.selected {
+  background: rgba(241, 250, 140, 0.35);
+  border-color: #f1fa8c;
+  box-shadow: 0 -4px 8px rgba(241, 250, 140, 0.3), 0 4px 8px rgba(241, 250, 140, 0.3);
+}
+.track-item-highlight.hl-style-background .hl-text { color: #f1fa8c; }
+
+.track-item-highlight.hl-style-spotlight {
+  background: rgba(255, 184, 108, 0.15);
+  border-color: rgba(255, 184, 108, 0.6);
+}
+.track-item-highlight.hl-style-spotlight:hover { background: rgba(255, 184, 108, 0.25); }
+.track-item-highlight.hl-style-spotlight.selected {
+  background: rgba(255, 184, 108, 0.35);
+  border-color: #ffb86c;
+  box-shadow: 0 -4px 8px rgba(255, 184, 108, 0.3), 0 4px 8px rgba(255, 184, 108, 0.3);
+}
+.track-item-highlight.hl-style-spotlight .hl-text { color: #ffb86c; }
+
+.track-item-highlight.hl-style-badge {
+  background: rgba(255, 121, 198, 0.15);
+  border-color: rgba(255, 121, 198, 0.6);
+}
+.track-item-highlight.hl-style-badge:hover { background: rgba(255, 121, 198, 0.25); }
+.track-item-highlight.hl-style-badge.selected {
+  background: rgba(255, 121, 198, 0.35);
+  border-color: #ff79c6;
+  box-shadow: 0 -4px 8px rgba(255, 121, 198, 0.3), 0 4px 8px rgba(255, 121, 198, 0.3);
+}
+.track-item-highlight.hl-style-badge .hl-text { color: #ff79c6; }
+
+.track-item-highlight.hl-style-bracket {
+  background: rgba(189, 147, 249, 0.15);
+  border-color: rgba(189, 147, 249, 0.6);
+}
+.track-item-highlight.hl-style-bracket:hover { background: rgba(189, 147, 249, 0.25); }
+.track-item-highlight.hl-style-bracket.selected {
+  background: rgba(189, 147, 249, 0.35);
+  border-color: #bd93f9;
+  box-shadow: 0 -4px 8px rgba(189, 147, 249, 0.3), 0 4px 8px rgba(189, 147, 249, 0.3);
+}
+.track-item-highlight.hl-style-bracket .hl-text { color: #bd93f9; }
 
 /* Playhead — single line spanning ruler + 5 tracks */
 .playhead {
@@ -2109,6 +2185,7 @@ body {
       <div id="chapter-title-overlay" class="chapter-title-overlay"></div>
       <div id="snippet-preview" class="snippet-preview"></div>
       <div class="preview-viewport">
+        <div id="highlight-underlay" class="highlight-overlay"></div>
         <pre id="terminal-output"></pre>
         <div id="grid-overlay" class="grid-overlay" style="display:none;"><canvas class="grid-overlay-canvas"></canvas></div>
         <div id="nums-overlay" class="nums-overlay" style="display:none;"></div>
@@ -2215,6 +2292,7 @@ body {
   const trackSnippets = document.getElementById('track-snippets');
   const trackHighlights = document.getElementById('track-highlights');
   const highlightOverlay = document.getElementById('highlight-overlay');
+  const highlightUnderlay = document.getElementById('highlight-underlay');
   const propsPanel = document.getElementById('properties-panel');
   const toast = document.getElementById('toast');
   const btnPlay = document.getElementById('btn-play');
@@ -2473,7 +2551,8 @@ body {
 
     (data.script.highlights || []).forEach((hl, i) => {
       const el = document.createElement('div');
-      el.className = 'track-item-highlight';
+      const baseStyle = (hl.style || 'box').replace(/-.*/, '');
+      el.className = 'track-item-highlight hl-style-' + baseStyle;
       el.style.left = timeToPct(hl.time);
       el.style.width = durationToPct(hl.duration);
       const textSpan = document.createElement('span');
@@ -2849,11 +2928,13 @@ body {
     // Pre-create elements once (recreate if count changed)
     if (!_hlEls || _hlEls.length !== highlights.length) {
       highlightOverlay.innerHTML = '';
+      highlightUnderlay.innerHTML = '';
       _hlEls = [];
       for (const hl of highlights) {
         const el = document.createElement('div');
         el.className = 'hl-el hl-' + hl.style;
         el.style.opacity = '0';
+        if (hl.glow) el.classList.add('hl-glow');
         if (hl.color) el.style.setProperty('--hl-color', hl.color);
         if (hl.fill_color) {
           const fo = hl.fill_opacity != null ? hl.fill_opacity : 0.3;
@@ -2866,7 +2947,12 @@ body {
           badge.textContent = (hl.badge_icon || '') + (hl.badge_text || '');
           el.appendChild(badge);
         }
-        highlightOverlay.appendChild(el);
+        // Background style goes in underlay (behind text), others in overlay
+        if (hl.style === 'background') {
+          highlightUnderlay.appendChild(el);
+        } else {
+          highlightOverlay.appendChild(el);
+        }
         _hlEls.push(el);
       }
     }
@@ -2884,6 +2970,7 @@ body {
 
       // Update color in case it was edited
       if (hl.color) node.style.setProperty('--hl-color', hl.color);
+      node.classList.toggle('hl-glow', !!hl.glow);
       if (hl.fill_color) {
         const fo = hl.fill_opacity != null ? hl.fill_opacity : 0.3;
         const alphaHex = Math.round(fo * 255).toString(16).padStart(2, '0');
@@ -3518,6 +3605,7 @@ body {
     const isBadge = hl.style === 'badge-before' || hl.style === 'badge-after';
     const isBox = hl.style === 'box' || hl.style === 'outline';
     const uiStyle = isUnderline ? 'underline' : isBadge ? 'badge' : isBox ? 'box' : hl.style;
+    const hasGlow = !!hl.glow;
     const underlineType = hl.style === 'underline-wavy' ? 'wavy' : 'solid';
     const badgePosition = hl.style === 'badge-after' ? 'after' : 'before';
 
@@ -3588,6 +3676,13 @@ body {
             <input class="prop-input" type="number" step="0.05" min="0" max="1" value="${hl.fill_opacity != null ? hl.fill_opacity : 0.3}" id="prop-hl-fill-opacity" style="width:76px;">
           </div>
         </div>
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Glow</div>
+        <select class="prop-select" id="prop-hl-glow">
+          <option value="false" ${!hasGlow?'selected':''}>Off</option>
+          <option value="true" ${hasGlow?'selected':''}>On</option>
+        </select>
       </div>`;
     }
     styleOptions += `
@@ -3644,7 +3739,6 @@ body {
           <option value="underline" ${uiStyle==='underline'?'selected':''}>Underline</option>
           <option value="background" ${uiStyle==='background'?'selected':''}>Background</option>
           <option value="spotlight" ${uiStyle==='spotlight'?'selected':''}>Spotlight</option>
-          <option value="glow" ${uiStyle==='glow'?'selected':''}>Glow</option>
           <option value="badge" ${uiStyle==='badge'?'selected':''}>Badge</option>
           <option value="bracket" ${uiStyle==='bracket'?'selected':''}>Bracket</option>
         </select>
@@ -3826,6 +3920,8 @@ body {
       }
       const badgeEl = document.getElementById('prop-hl-badge');
       hl.badge_text = badgeEl ? badgeEl.value : (hl.badge_text || '');
+      const glowEl = document.getElementById('prop-hl-glow');
+      hl.glow = glowEl ? glowEl.value === 'true' : !!hl.glow;
       hl.pulse = document.getElementById('prop-hl-pulse').value === 'true';
       // Update match target
       const matchVal = document.getElementById('prop-hl-match').value;
