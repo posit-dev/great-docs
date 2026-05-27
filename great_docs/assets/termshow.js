@@ -240,11 +240,34 @@
       play(state, svgContainer, annotationLayer, controls, options, container, centerOverlay, chapterBar);
     });
 
-    controls.timeline.addEventListener('click', (e) => {
+    controls.timeline.addEventListener('mousedown', (e) => {
       if (!state.manifest) return;
-      const rect = controls.timeline.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      // Reset ended/chapter-paused state if seeking
+      // If the click landed on a chapter marker, snap to it instead of starting drag
+      var markerEl = e.target.closest('.gd-tp-chapter-marker');
+      if (markerEl) {
+        var chapterTime = parseFloat(markerEl.dataset.time);
+        if (!isNaN(chapterTime)) {
+          if (state.ended) {
+            state.ended = false;
+            controls.playBtn.textContent = '\u25b6';
+            controls.playBtn.setAttribute('aria-label', 'Play');
+            centerBtn.innerHTML = '<span class="gd-tp-icon-play">\u25b6</span>';
+            container.classList.remove('gd-tp-ended');
+          }
+          state.chapterPaused = false;
+          container.classList.remove('gd-tp-chapter-paused');
+          seek(state, chapterTime, svgContainer, annotationLayer, controls);
+          updateChapterBar(chapterBar, state.manifest, state.currentTime);
+        }
+        return;
+      }
+      e.preventDefault();
+      var wasPlaying = state.playing;
+      if (state.playing) {
+        pause(state, controls, container, centerOverlay);
+      }
+      controls.timeline.classList.add('gd-tp-dragging');
+      // Reset ended/chapter-paused state
       if (state.ended) {
         state.ended = false;
         controls.playBtn.textContent = '\u25b6';
@@ -254,9 +277,80 @@
       }
       state.chapterPaused = false;
       container.classList.remove('gd-tp-chapter-paused');
-      seek(state, ratio * state.manifest.duration, svgContainer, annotationLayer, controls);
-      updateChapterBar(chapterBar, state.manifest, state.currentTime);
+
+      function seekFromEvent(ev) {
+        var rect = controls.timeline.getBoundingClientRect();
+        var ratio = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+        seek(state, ratio * state.manifest.duration, svgContainer, annotationLayer, controls);
+        updateChapterBar(chapterBar, state.manifest, state.currentTime);
+      }
+
+      seekFromEvent(e);
+
+      function onMove(ev) {
+        ev.preventDefault();
+        seekFromEvent(ev);
+      }
+
+      function onUp() {
+        controls.timeline.classList.remove('gd-tp-dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (wasPlaying) {
+          play(state, svgContainer, annotationLayer, controls, options, container, centerOverlay, chapterBar);
+        }
+      }
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
     });
+
+    // Touch support for timeline drag
+    controls.timeline.addEventListener('touchstart', (e) => {
+      if (!state.manifest) return;
+      e.preventDefault();
+      var wasPlaying = state.playing;
+      if (state.playing) {
+        pause(state, controls, container, centerOverlay);
+      }
+      controls.timeline.classList.add('gd-tp-dragging');
+      if (state.ended) {
+        state.ended = false;
+        controls.playBtn.textContent = '\u25b6';
+        controls.playBtn.setAttribute('aria-label', 'Play');
+        centerBtn.innerHTML = '<span class="gd-tp-icon-play">\u25b6</span>';
+        container.classList.remove('gd-tp-ended');
+      }
+      state.chapterPaused = false;
+      container.classList.remove('gd-tp-chapter-paused');
+
+      function seekFromTouch(ev) {
+        var touch = ev.touches[0] || ev.changedTouches[0];
+        var rect = controls.timeline.getBoundingClientRect();
+        var ratio = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+        seek(state, ratio * state.manifest.duration, svgContainer, annotationLayer, controls);
+        updateChapterBar(chapterBar, state.manifest, state.currentTime);
+      }
+
+      seekFromTouch(e);
+
+      function onTouchMove(ev) {
+        ev.preventDefault();
+        seekFromTouch(ev);
+      }
+
+      function onTouchEnd() {
+        controls.timeline.classList.remove('gd-tp-dragging');
+        document.removeEventListener('touchmove', onTouchMove);
+        document.removeEventListener('touchend', onTouchEnd);
+        if (wasPlaying) {
+          play(state, svgContainer, annotationLayer, controls, options, container, centerOverlay, chapterBar);
+        }
+      }
+
+      document.addEventListener('touchmove', onTouchMove, { passive: false });
+      document.addEventListener('touchend', onTouchEnd);
+    }, { passive: false });
 
     // Speed control
     controls.speedBtn.addEventListener('click', () => {
@@ -315,7 +409,7 @@
     state.ended = false;
     state.chapterPaused = false;
     state.lastTick = performance.now();
-    controls.playBtn.textContent = '\u275a\u275a'; // ❚❚
+    controls.playBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
     controls.playBtn.setAttribute('aria-label', 'Pause');
     container.classList.add('gd-tp-playing');
     container.classList.remove('gd-tp-ended');
@@ -858,6 +952,7 @@
       marker.className = 'gd-tp-chapter-marker';
       marker.style.left = pct + '%';
       marker.setAttribute('title', ch.label || 'Chapter');
+      marker.dataset.time = ch.time;
       timeline.appendChild(marker);
     }
   }
