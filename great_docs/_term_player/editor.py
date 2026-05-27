@@ -13,8 +13,18 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from typing import Any
 
-from .parser import Recording, parse_termshow
-from .script import Script, load_script
+from .manifest import generate_manifest
+from .parser import Event, Recording, TermInfo, parse_termshow
+from .script import (
+    Annotation,
+    Chapter,
+    Cut,
+    Highlight,
+    HighlightTarget,
+    Script,
+    Snippet,
+    load_script,
+)
 
 
 def _build_editor_data(recording: Recording, script: Script | None) -> dict[str, Any]:
@@ -245,6 +255,20 @@ class EditorHandler(SimpleHTTPRequestHandler):
                 self._json_response({"yaml": yaml_str})
             except Exception as e:
                 self._json_response({"error": str(e)}, status=400)
+        elif self.path == "/api/preview":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            try:
+                script_data = json.loads(body)
+                html = _generate_preview_html(self.editor_data, script_data)
+                encoded = html.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(encoded)))
+                self.end_headers()
+                self.wfile.write(encoded)
+            except Exception as e:
+                self._json_response({"error": str(e)}, status=500)
         else:
             self.send_error(404)
 
@@ -324,6 +348,168 @@ def serve_editor(
     except KeyboardInterrupt:
         print("\n✓ Editor stopped.")
         server.shutdown()
+
+
+def _generate_preview_html(editor_data: dict, script_data: dict) -> str:
+    """Generate a preview HTML page by rendering through Quarto.
+
+    Reconstructs Recording and Script objects from the editor's live data,
+    renders SVG frames via generate_manifest() into a temp directory, then
+    runs Quarto to produce a production-accurate HTML page.
+    """
+    import shutil
+    import subprocess
+    import tempfile
+
+    # Reconstruct Recording from editor_data
+    rec_data = editor_data["recording"]
+    recording = Recording(
+        title=rec_data.get("title", ""),
+        term=TermInfo(
+            cols=rec_data["term"]["cols"],
+            rows=rec_data["term"]["rows"],
+        ),
+        events=[Event(time=e["time"], code=e["code"], data=e["data"]) for e in rec_data["events"]],
+    )
+
+    # Reconstruct Script from the client's current script state
+    settings = script_data.get("settings", {})
+    script = Script(
+        idle_time_limit=settings.get("idle_time_limit"),
+        speed=settings.get("speed", 1.0),
+        window_chrome=settings.get("window_chrome", "none"),
+        font_family=settings.get("font_family"),
+        prompt=settings.get("prompt"),
+        prompt_pattern=settings.get("prompt_pattern"),
+        chapters=[
+            Chapter(time=ch["time"], label=ch["label"]) for ch in script_data.get("chapters", [])
+        ],
+        cuts=[
+            Cut(start=c["start"], end=c["end"], type=c.get("type", "remove"))
+            for c in script_data.get("cuts", [])
+        ],
+        annotations=[
+            Annotation(
+                time=a["time"],
+                duration=a["duration"],
+                text=a["text"],
+                position=a.get("position", "bottom"),
+                width=a.get("width", "medium"),
+                style=a.get("style", "note"),
+            )
+            for a in script_data.get("annotations", [])
+        ],
+        highlights=[
+            Highlight(
+                time=h["time"],
+                duration=h["duration"],
+                target=HighlightTarget(
+                    region=h.get("target", {}).get("region"),
+                    match=h.get("target", {}).get("match"),
+                    group=h.get("target", {}).get("group", 0),
+                    lines=h.get("target", {}).get("lines"),
+                    track_scroll=h.get("target", {}).get("track_scroll", False),
+                ),
+                style=h.get("style", "box"),
+                color=h.get("color", "#f1fa8c"),
+                badge_text=h.get("badge_text", ""),
+                badge_icon=h.get("badge_icon", ""),
+                fade_in=h.get("fade_in", 0.3),
+                fade_out=h.get("fade_out", 0.3),
+                pulse=h.get("pulse", False),
+            )
+            for h in script_data.get("highlights", [])
+        ],
+        snippets=[
+            Snippet(
+                time=s["time"],
+                duration=s["duration"],
+                text=s.get("text", ""),
+                match=s.get("match", ""),
+                label=s.get("label", ""),
+            )
+            for s in script_data.get("snippets", [])
+        ],
+    )
+
+    # Set up temp directory for Quarto project
+    tmp_dir = Path(tempfile.mkdtemp(prefix="termshow-preview-"))
+    try:
+        # Generate manifest + SVG frames
+        tp_dir = tmp_dir / "termshow" / "preview"
+        tp_dir.mkdir(parents=True)
+        generate_manifest(recording, script, output_dir=str(tp_dir))
+
+        # Copy player assets
+        assets_dir = Path(__file__).parent.parent / "assets"
+        shutil.copy2(assets_dir / "termshow.js", tmp_dir / "termshow.js")
+        shutil.copy2(assets_dir / "termshow.css", tmp_dir / "termshow.css")
+
+        # Copy JetBrains Mono woff2 fonts (referenced by termshow.css)
+        for woff in assets_dir.glob("JetBrainsMono-*.woff2"):
+            shutil.copy2(woff, tmp_dir / woff.name)
+
+        # Copy the Lua extension
+        ext_dir = tmp_dir / "_extensions" / "termshow"
+        ext_dir.mkdir(parents=True)
+        ext_src = assets_dir / "_extensions" / "termshow"
+        for f in ext_src.iterdir():
+            shutil.copy2(f, ext_dir / f.name)
+
+        # Write _quarto.yml
+        quarto_yml = tmp_dir / "_quarto.yml"
+        quarto_yml.write_text(
+            "project:\n"
+            "  type: website\n"
+            "  resources:\n"
+            "    - termshow.js\n"
+            "    - termshow.css\n"
+            "    - '*.woff2'\n"
+            "    - termshow/**\n"
+            "format:\n"
+            "  html:\n"
+            "    theme: darkly\n"
+            "    minimal: true\n"
+            "    embed-resources: true\n"
+            "    toc: false\n"
+            "    include-in-header:\n"
+            '      - text: \'<link rel="stylesheet" href="termshow.css">\'\n'
+            "    include-after-body:\n"
+            "      - text: '<script src=\"termshow.js\"></script>'\n",
+            encoding="utf-8",
+        )
+
+        # Write preview.qmd
+        preview_qmd = tmp_dir / "preview.qmd"
+        preview_qmd.write_text(
+            '---\ntitle: Preview\n---\n\n{{< termshow file="preview" autoplay="true" >}}\n',
+            encoding="utf-8",
+        )
+
+        # Run Quarto render
+        result = subprocess.run(
+            ["quarto", "render", "preview.qmd", "--quiet"],
+            cwd=str(tmp_dir),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"Quarto render failed: {result.stderr}")
+
+        # Read rendered HTML
+        # With embed-resources, the output is self-contained
+        output_html = tmp_dir / "_site" / "preview.html"
+        if not output_html.exists():
+            # Try without _site (non-project render)
+            output_html = tmp_dir / "preview.html"
+        if not output_html.exists():
+            raise RuntimeError("Rendered HTML not found")
+
+        return output_html.read_text(encoding="utf-8")
+
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def _get_editor_html() -> str:
@@ -2100,6 +2286,109 @@ body {
   color: #000;
   font-weight: 600;
 }
+
+/* Preview Modal */
+.preview-modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-modal-backdrop.open {
+  display: flex;
+}
+
+.preview-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  width: 90vw;
+  height: calc(100vh - 10px);
+  max-width: 1200px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+}
+
+.preview-modal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.preview-modal-toolbar .size-presets {
+  display: flex;
+  gap: 4px;
+}
+
+.preview-modal-toolbar .size-presets button {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preview-modal-toolbar .size-presets button:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.preview-modal-toolbar .size-presets button.active {
+  background: var(--accent);
+  color: #000;
+  font-weight: 600;
+}
+
+.preview-modal-toolbar .preview-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.preview-modal-toolbar .preview-close:hover {
+  background: var(--cut);
+  color: #fff;
+}
+
+.preview-modal-body {
+  flex: 1;
+  padding: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  overflow: hidden;
+  background: #1e1e2e;
+}
+
+.preview-modal-body iframe {
+  border: none;
+  background: #1e1e2e;
+  height: 100%;
+  width: 100%;
+  transition: width 0.3s ease;
+}
 </style>
 </head>
 <body>
@@ -2120,6 +2409,7 @@ body {
       <button data-split="25" title="Maximize timeline">Timeline</button>
     </div>
     <button class="btn" id="btn-view-yaml" title="View YAML (Y)" style="margin-left: 8px;">YAML</button>
+    <button class="btn" id="btn-preview-player" title="Preview player (P)" style="margin-left: 4px;">&#9654; Preview</button>
     <button class="btn btn-primary" id="btn-save" title="Save (Cmd+S)">Save</button>
   </div>
 </div>
@@ -2268,6 +2558,25 @@ body {
     </div>
     <div class="yaml-modal-body">
       <pre id="yaml-modal-content"></pre>
+    </div>
+  </div>
+</div>
+
+<!-- Preview Player Modal -->
+<div class="preview-modal-backdrop" id="preview-modal-backdrop">
+  <div class="preview-modal" id="preview-modal">
+    <div class="preview-modal-toolbar">
+      <div class="size-presets" id="preview-size-presets">
+        <button data-width="full" class="active">Full</button>
+        <button data-width="900">900px</button>
+        <button data-width="700">700px</button>
+        <button data-width="480">480px</button>
+        <button data-width="375">375px</button>
+      </div>
+      <button class="preview-close" id="preview-modal-close" title="Close (Escape)">&times;</button>
+    </div>
+    <div class="preview-modal-body">
+      <iframe id="preview-iframe"></iframe>
     </div>
   </div>
 </div>
@@ -4977,6 +5286,57 @@ body {
 
   document.getElementById('btn-view-yaml').addEventListener('click', showYamlPreview);
 
+  // --- Preview Player Modal ---
+  const previewBackdrop = document.getElementById('preview-modal-backdrop');
+  const previewIframe = document.getElementById('preview-iframe');
+  const previewCloseBtn = document.getElementById('preview-modal-close');
+  const previewSizePresets = document.getElementById('preview-size-presets');
+
+  function openPreviewPlayer() {
+    // Show modal immediately with loading state
+    previewBackdrop.classList.add('open');
+    previewIframe.srcdoc = '<html><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#1e1e2e;color:#888;font-family:system-ui"><p>Rendering preview\u2026</p></body></html>';
+
+    fetch('/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data.script),
+    })
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    })
+    .then(html => {
+      previewIframe.srcdoc = html;
+    })
+    .catch(e => {
+      previewIframe.srcdoc = '<html><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#1e1e2e;color:#f38ba8;font-family:system-ui"><p>Preview failed: ' + e.message + '</p></body></html>';
+      showToast('Preview failed: ' + e.message);
+    });
+  }
+
+  function closePreviewPlayer() {
+    previewBackdrop.classList.remove('open');
+    previewIframe.srcdoc = '';
+  }
+
+  previewCloseBtn.addEventListener('click', closePreviewPlayer);
+  previewBackdrop.addEventListener('click', (e) => {
+    if (e.target === previewBackdrop) closePreviewPlayer();
+  });
+
+  // Size preset buttons — change iframe width, page responds naturally
+  previewSizePresets.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-width]');
+    if (!btn) return;
+    const w = btn.dataset.width;
+    previewIframe.style.width = w === 'full' ? '100%' : w + 'px';
+    previewSizePresets.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+
+  document.getElementById('btn-preview-player').addEventListener('click', openPreviewPlayer);
+
   // --- Inspector toggle ---
   const inspectorPanel = document.getElementById('inspector-panel');
   const btnInspector = document.getElementById('btn-inspector');
@@ -5326,12 +5686,14 @@ body {
     else if (e.key === '[') { prevChapter(); }
     else if (e.key === 'Delete' || e.key === 'Backspace') { window.deleteSelected(); }
     else if (e.key === 'Escape') {
-      if (yamlBackdrop.classList.contains('visible')) { hideYamlPreview(); }
+      if (previewBackdrop.classList.contains('open')) { closePreviewPlayer(); }
+      else if (yamlBackdrop.classList.contains('visible')) { hideYamlPreview(); }
       else if (!settingsPanel.classList.contains('hidden')) { hideSettings(); }
       else { propsPanel.classList.remove('open'); selectedItem = null; clearCutHighlights(); }
     }
     else if (e.key === 's' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
     else if (e.key === 'y' || e.key === 'Y') { showYamlPreview(); }
+    else if (e.key === 'p' || e.key === 'P') { openPreviewPlayer(); }
     else if (e.key === 'i' || e.key === 'I') { toggleInspector(); }
     else if (e.key === 'g' || e.key === 'G') { toggleSettings(); }
   });
