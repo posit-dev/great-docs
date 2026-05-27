@@ -183,10 +183,19 @@ cuts:
   - from: 8.0
     to: 11.0
     type: ellipsis
+
+highlights:
+  - at: 12.5
+    duration: 3.0
+    target:
+      match: 'All \\d+ tests passed'
+    style: spotlight
+    color: "#50fa7b"
+    fade_in: 0.3
 ```
 
-All fields are optional except `source`. Start with just chapters and add annotations or cuts as
-you refine the presentation.
+All fields are optional except `source`. Start with just chapters and add annotations, cuts, or
+highlights as you refine the presentation.
 
 ## Settings Reference
 
@@ -410,11 +419,16 @@ chapters:
 The `at` field is the timestamp in seconds. The `label` is shown in the chapter bar and as a
 tooltip on the timeline marker.
 
-**Tips:**
+### Tips
+
+Here are some guidelines for effective chapter placement:
 
 - Place chapters at logical transitions. Each should represent one distinct step.
 - The first chapter at `0.0` names what's on screen before the viewer presses play.
 - Use `pause_on_chapters="true"` for tutorials where readers need time to absorb each step.
+
+Well-placed chapters transform a continuous recording into a structured, navigable lesson that
+readers can work through at their own pace.
 
 ## Annotations
 
@@ -477,15 +491,23 @@ Control how wide an annotation can grow with the `width` field:
 
 Use `small` for brief one-word labels, `large` for longer explanations that need breathing room.
 
-**Tips:**
+### Tips
+
+Keep these principles in mind when adding annotations:
 
 - Keep text to one sentence. Annotations complement the terminal output, not replace it.
 - Use `callout` for important explanations, `subtle` for minor context.
 - Ensure `duration` is long enough to read at 1.5× speed.
 
+Good annotations enhance comprehension without competing with the terminal content for the
+viewer's attention. When in doubt, shorter and fewer is better.
+
 ## Cuts
 
-Remove dead time or irrelevant segments from a recording:
+Terminal recordings often contain dead time: waiting for a package to download, watching a
+progress bar crawl, or pausing to think about the next command. Cuts let you remove these
+segments from the viewer's experience without re-recording. The raw file stays intact; cuts
+are purely a playback instruction that tells the player to skip a time range.
 
 ```yaml
 cuts:
@@ -494,12 +516,17 @@ cuts:
     type: ellipsis
 ```
 
-The `type` field controls what viewers see during the cut:
+The `from` and `to` fields define the time range to skip (in seconds). The `type` field
+controls what viewers see during the cut:
 
 | Value | Effect |
 |-------|--------|
 | `jump` | Seamless jump (no visual indicator) |
 | `ellipsis` | Shows "…" briefly to indicate skipped time |
+
+Use `jump` for short gaps where continuity isn't important (e.g., trimming a 2-second pause
+between commands). Use `ellipsis` for longer skips where viewers should know time was removed
+(e.g., a 30-second download reduced to a single "…" flash).
 
 Cuts are non-destructive: they are stored in the script file, not applied to the raw recording.
 You can always remove or adjust them later.
@@ -531,6 +558,8 @@ If both are set, `match` takes priority (with `text` as fallback if the regex do
 
 ### Fields
 
+Each snippet entry in the YAML accepts the following fields:
+
 | Field | Default | Description |
 |-------|---------|-------------|
 | `at` | *(required)* | Time in seconds when the button appears |
@@ -545,7 +574,9 @@ The button fades in and out smoothly, just like annotations. It appears in the *
 the far right of the player. Only one snippet button is visible at a time. If time ranges overlap,
 the first one wins and subsequent ones are hidden.
 
-**Tips:**
+### Tips
+
+Practical guidance for working with snippets:
 
 - Snippet time ranges **must not overlap**. The Editor enforces this; if you write overlapping
   ranges manually in YAML, only the first active snippet is shown.
@@ -560,6 +591,194 @@ the first one wins and subsequent ones are hidden.
   copying without reading the full snippet.
 - Snippets work regardless of playback state: readers can copy while paused, playing, or at a
   chapter stop.
+
+Snippets bridge the gap between watching and doing. By giving readers one-click access to the
+exact commands shown in the recording, you eliminate transcription errors and reduce friction.
+
+## Highlights
+
+Highlights draw attention to specific terminal text during playback. Unlike annotations (which float
+in corners), highlights are **attached to the terminal text itself**: they decorate characters
+in-place, can follow scrolling, and support rich adornment styles.
+
+Multiple highlights can be active simultaneously, and overlapping highlights stack naturally
+(later ones render on top).
+
+```yaml
+highlights:
+  - at: 8.0
+    duration: 2.0
+    target:
+      region: { row: 5, col: 0, width: 40, height: 1 }
+    style: box
+    color: "#f1fa8c"
+  - at: 10.0
+    duration: 4.0
+    target:
+      match: 'Successfully installed (.+)'
+      group: 1
+    style: spotlight
+    color: "#50fA7B"
+```
+
+### Targeting
+
+A highlight must identify *which text* to decorate. Three targeting modes are available:
+
+| Mode | YAML Key | Description |
+|------|----------|-------------|
+| **Region** | `target.region` | Fixed rectangle: `{ row, col, width, height }` (0-indexed) |
+| **Pattern** | `target.match` | Regex matched against the visible terminal text each frame |
+| **Lines** | `target.lines` | List of 0-indexed row numbers to highlight entirely |
+
+For pattern matches, an optional `target.group` (default `0`) selects which capture group to
+highlight. This lets you match context (e.g., a full line) while only decorating the interesting
+part (e.g., a flag name).
+
+**Scroll tracking.** Terminal output scrolls. A region-based highlight is positional: row 5
+stays at row 5 even after scrolling pushes new content into that row. Set `target.track_scroll:
+true` to have the highlight follow the matched text as it moves. Scroll tracking only works
+with `target.match` (the renderer re-runs the regex each frame to locate the text's new position):
+
+```yaml
+highlights:
+  - at: 20.0
+    duration: 8.0
+    target:
+      match: 'error:'
+      track_scroll: true
+    style: underline-wavy
+    color: "#ff5555"
+```
+
+### Styles
+
+Each highlight has a `style` that controls its visual adornment:
+
+| Style | Visual | Notes |
+|-------|--------|-------|
+| `box` | Bordered rectangle around text | Default style; technical look |
+| `underline` | Underline beneath text | Solid or wavy (set via subtype) |
+| `background` | Semi-transparent background fill | Good for multi-line selections |
+| `spotlight` | Dims everything *except* the target | Viewport-wide dimming with cutout |
+| `badge` | Small label pill adjacent to text | Position: before or after |
+| `bracket` | Curly brace spanning lines | For grouping multiple rows |
+
+### Badge Details
+
+Badge style attaches a small inline pill adjacent to the highlighted text:
+
+```yaml
+highlights:
+  - at: 18.0
+    duration: 5.0
+    target:
+      match: '--verbose'
+    style: badge
+    badge_text: "recommended"
+    color: "#8be9fd"
+```
+
+The `badge_text` field sets the label inside the badge. Use the badge position control in the
+Properties Panel to place it before or after the matched text. Badges will wrap to the opposite
+side if they would overflow the viewport.
+
+### Animation & Transitions
+
+Highlights support animated entry and exit:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `fade_in` | `0` | Duration of the appear transition (seconds) |
+| `fade_out` | `0` | Duration of the disappear transition (seconds) |
+| `pulse` | `false` | Gentle pulsing animation that loops continuously |
+
+When `pulse` is enabled, the highlight's opacity oscillates between 100% and 50% on a 1.5-second
+cycle with an ease-in-out curve. The animation runs for the entire duration of the highlight. This
+works well for drawing attention to transient output or short-lived highlights where you want
+sustained visual emphasis.
+
+### Fields Reference
+
+The complete set of fields available for each highlight entry:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `at` | *(required)* | Time in seconds when the highlight appears |
+| `duration` | *(required)* | How long the highlight remains visible |
+| `target` | *(required)* | Targeting object (see above) |
+| `style` | `"box"` | Adornment style (see table above) |
+| `color` | `"#f1fa8c"` | Adornment color (hex or rgba) |
+| `opacity` | `1` | Overall opacity of the highlight (0–1) |
+| `badge_text` | `""` | Label text for badge styles |
+| `pulse` | `false` | Enable pulsing animation |
+| `fade_in` | `0` | Appear transition duration (seconds) |
+| `fade_out` | `0` | Disappear transition duration (seconds) |
+
+Only `at`, `duration`, and `target` are required. All other fields have sensible defaults and
+can be omitted for simple highlights.
+
+### Examples
+
+The following examples illustrate common highlight patterns, from simple region markers to animated
+spotlights.
+
+Highlight a fixed region of the terminal:
+
+```yaml
+highlights:
+  - at: 3.0
+    duration: 4.0
+    target:
+      region: { row: 2, col: 0, width: 80, height: 3 }
+    style: background
+    color: "rgba(255, 184, 108, 0.15)"
+```
+
+Call out a specific flag using regex with a badge:
+
+```yaml
+highlights:
+  - at: 12.0
+    duration: 5.0
+    target:
+      match: '--output'
+    style: badge
+    badge_text: "new in v2"
+    color: "#bd93f9"
+```
+
+Spotlight an important result (dims the rest of the viewport):
+
+```yaml
+highlights:
+  - at: 10.0
+    duration: 3.0
+    target:
+      match: 'All tests passed'
+    style: spotlight
+    color: "#50fa7b"
+    fade_in: 0.3
+    fade_out: 0.3
+```
+
+These patterns combine freely. A single recording might use `background` for broad context, `badge`
+to label a new flag, and `spotlight` for the final result (layering visual cues without competing
+for attention).
+
+### Tips
+
+Guidelines for effective use of highlights:
+
+- Highlights are purely visual: they don't affect timing or terminal output.
+- Multiple highlights can overlap in time. Unlike snippets, there is no exclusivity rule.
+- Use `spotlight` sparingly: it dims the entire viewport and works best for one focal point.
+- Combine `pulse: true` with short highlights to draw the eye to transient output.
+- Use `track_scroll: true` when highlighting text that may scroll off-screen during the
+  highlight's duration.
+
+Highlights are your most expressive tool for directing the viewer's eye. Used judiciously, they
+turn a passive recording into an active guided tour of the terminal output.
 
 ## Importing Existing Recordings
 
@@ -669,6 +888,7 @@ thematic groups:
 - **+ Annotation**: add a 2-second annotation at the playhead (shortcut: `A`)
 - **+ Cut**: mark a cut region at the playhead (shortcut: `X`)
 - **+ Snippet**: add a snippet at the playhead (shortcut: `D`)
+- **+ Highlight**: add a highlight at the playhead (shortcut: `H`)
 
 **Layout presets** (center): A segmented button with three view presets that control the
 split between the Preview Area and the Timeline Panel:
@@ -680,6 +900,7 @@ split between the Preview Area and the Timeline Panel:
 **Document actions** (right):
 
 - **YAML**: View the generated YAML script (shortcut: `Y`)
+- **▶ Preview**: Open the production preview modal (shortcut: `P`)
 - **Save**: Write changes to the `.termshow.yml` file (shortcut: `Cmd+S` / `Ctrl+S`). Pulses
   gold when there are unsaved changes.
 
@@ -728,7 +949,7 @@ preset indicator.
 - **Timecode Display**: Shows elapsed time / total duration in `MM:SS.cc` precision. Click the
   current-time value to type an exact position (e.g., `01:23.45`) and press Enter to jump there.
 
-**Timeline Panel.** The bottom panel contains four track lanes beneath a **Timeline Ruler**, the
+**Timeline Panel.** The bottom panel contains five track lanes beneath a **Timeline Ruler**, the
 graduated strip showing time markings. Click anywhere on the ruler to reposition the playhead
 instantly, or drag the playhead indicator to scrub through the recording. The ruler is the safest
 place to navigate without accidentally selecting or creating items.
@@ -750,7 +971,13 @@ place to navigate without accidentally selecting or creating items.
    reposition. Boxes have edge handles for resizing the time range. Double-click empty space to
    add a 5-second placeholder; drag across the track to create a custom-duration snippet.
 
-A **Playhead** (white vertical line) spans all four tracks and moves with the current time.
+5. **Highlights Track**: Color-coded boxes styled per highlight type (cyan for box, green for
+   underline, yellow for background, orange for spotlight, pink for badge). Click a box to select
+   it; drag to reposition. Boxes have edge handles for resizing. Double-click empty space to add
+   a 3-second highlight; drag across the track to create a custom-duration highlight. Unlike
+   snippets, **highlights may overlap in time** (multiple highlights can be active simultaneously).
+
+A **Playhead** (white vertical line) spans all five tracks and moves with the current time.
 
 ### Global Settings Panel
 
@@ -781,9 +1008,13 @@ are live; changes apply immediately as you type, with no Apply button. The panel
 context-specific fields:
 
 - **Chapter**: Time (seconds) and Label
-- **Annotation**: Time, Duration, Text, Position (dropdown), and Style (dropdown)
-- **Cut Region**: From (seconds), To (seconds), and Replace With (None/Ellipsis)
+- **Annotation**: Time, Duration, Text, Position (dropdown), Width (dropdown), and Style (dropdown)
+- **Cut Region**: From (seconds), To (seconds), and Cut type (Jump/Ellipsis)
 - **Snippet**: Time, Duration, Text (literal copy), Match (regex pattern), and Label
+- **Highlight**: Time, Duration, Style (box/underline/background/spotlight/badge/bracket),
+  underline subtype (solid/wavy), badge position and text, Color (picker + hex), Opacity,
+  Fill color and opacity, Glow toggle, Target (region row/col/width/height or match regex),
+  Fade in/out, Pulse, and Animation toggle
 
 Each panel includes:
 
@@ -795,14 +1026,14 @@ adjust values.
 
 ### Edge Editing
 
-Both annotation boxes, cut regions, and snippet boxes have draggable edge handles (left and right).
-When you grab an edge:
+Annotation boxes, cut regions, snippet boxes, and highlight boxes all have draggable edge handles
+(left and right). When you grab an edge:
 
 1. The **playhead snaps** to that edge's time position, showing the exact terminal frame at the
 boundary.
 2. The edge displays a **prominent vertical stem** extending beyond the track (green for
-annotations, red for cuts, blue for snippets) with a directional glow so you know which side is
-active.
+annotations, red for cuts, blue for snippets, style-colored for highlights) with a directional
+glow so you know which side is active.
 3. **Arrow keys** (← →) nudge the active edge by ±10ms for frame-accurate positioning. The
 playhead tracks the edge so you can see the terminal state update with each nudge.
 
@@ -810,10 +1041,11 @@ Clicking elsewhere or pressing `Escape` deselects and restores normal edge appea
 
 ### Drag-to-Create
 
-On the Annotations, Cuts, and Snippets tracks, clicking and dragging across empty space creates a
-new item spanning the drag distance. The drag only initiates after a 4-pixel movement threshold,
-preventing accidental creation from stray clicks. If you want a fixed-size item without dragging,
-double-click instead (creates a 2-second item for annotations/cuts, or 5-second for snippets).
+On the Annotations, Cuts, Snippets, and Highlights tracks, clicking and dragging across empty
+space creates a new item spanning the drag distance. The drag only initiates after a 4-pixel
+movement threshold, preventing accidental creation from stray clicks. If you want a fixed-size
+item without dragging, double-click instead (creates a 2-second item for annotations/cuts,
+5-second for snippets, or 3-second for highlights).
 
 ### Cut Types
 
@@ -837,11 +1069,13 @@ The Termshow Editor supports these keyboard shortcuts for efficient editing:
 | `A` | Add annotation at playhead |
 | `X` | Add cut at playhead |
 | `D` | Add snippet at playhead |
+| `H` | Add highlight at playhead |
 | `G` | Toggle global settings panel |
 | `I` | Toggle info panel |
 | `←` / `→` | Seek ±1 second (or nudge active edge ±10ms) |
 | `[` / `]` | Jump to previous / next chapter |
 | `Y` | View YAML |
+| `P` | Preview |
 | `Delete` / `Backspace` | Delete selected item |
 | `Escape` | Close settings/properties panel, deselect |
 | `Cmd+S` / `Ctrl+S` | Save |
@@ -851,6 +1085,33 @@ The Termshow Editor supports these keyboard shortcuts for efficient editing:
 Any modification (adding, moving, editing, or deleting items) marks the session as dirty. The
 Save button changes to Save* with a pulsing gold glow to indicate unsaved changes. Saving resets the
 indicator.
+
+### Preview
+
+The **Preview** button (shortcut: `P`) opens a full-screen modal showing your recording exactly as
+it will appear on a built site. Unlike the in-editor live preview (which shows the raw SVG frame at
+the current playhead), the Preview modal renders the complete player using Quarto with the
+production `termshow` shortcode, embedded fonts, dark theme, and autoplay enabled.
+
+This lets you verify the final presentation (including the control bar, chapter markers, speed
+controls, and annotations) without running a full site build.
+
+The modal provides three tabbed viewports at fixed widths:
+
+| Tab | Viewport Width | Use Case |
+|-----|---------------|----------|
+| **Desktop** | 900px | Standard laptop/desktop browser |
+| **Tablet** | 600px | Tablet or narrow browser window |
+| **Mobile** | 375px | Phone-sized viewport |
+
+Switch between tabs to verify that the player renders well at each breakpoint. The player is fully
+interactive within each viewport: you can play, pause, seek, and test chapter navigation.
+
+The preview is generated on-demand by rendering a temporary Quarto page with
+`embed-resources: true`, so the result is fully self-contained with no external dependencies.
+Generation takes a few seconds and a loading indicator is shown while the render completes.
+
+Press `Escape` or click outside the modal to close it.
 
 ### Recommended Workflow
 
@@ -877,7 +1138,9 @@ Use "ellipsis" for long skips (so viewers know time was removed) and "seamless" 
 gaps (smooth editing).
 7. **Fine-tune edges**: click an edge handle, then use arrow keys to nudge it frame-by-frame
 while watching the terminal preview update.
-8. **Save** and preview with `great-docs termshow play` or by embedding in a page and building.
+8. **Preview**: press `P` to open the production preview and verify the final player at desktop,
+tablet, and mobile widths.
+9. **Save** and embed in a page with the `{{< termshow >}}` shortcode.
 
 The Termshow Editor saves only to the `.termshow.yml` script file. The raw recording is never
 modified, so you can always start fresh by deleting the script and re-editing.
