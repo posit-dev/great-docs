@@ -4430,6 +4430,36 @@ body {
     document.addEventListener('mouseup', onUp);
   }
 
+  function nudgeHighlightEdge(hlIdx, edge, delta) {
+    const hl = data.script.highlights[hlIdx];
+    if (!hl) return;
+    const end = hl.time + hl.duration;
+    if (edge === 'start') {
+      const newStart = roundTime(Math.max(0, Math.min(hl.time + delta, end - 0.1)));
+      hl.duration = roundTime(end - newStart);
+      hl.time = newStart;
+      seek(hl.time);
+    } else {
+      const newEnd = roundTime(Math.max(hl.time + 0.1, Math.min(end + delta, data.recording.duration)));
+      hl.duration = roundTime(newEnd - hl.time);
+      seek(hl.time + hl.duration);
+    }
+    renderTracks();
+    updatePlayhead();
+    // Re-highlight the handle
+    const hlEls = trackHighlights.querySelectorAll('.track-item-highlight');
+    if (hlEls[hlIdx]) {
+      hlEls[hlIdx].classList.add('selected');
+      const handle = hlEls[hlIdx].querySelector('.hl-handle-' + (edge === 'start' ? 'left' : 'right'));
+      if (handle) handle.classList.add('selected');
+    }
+    const timeInput = document.getElementById('prop-time');
+    const durInput = document.getElementById('prop-duration');
+    if (timeInput) timeInput.value = hl.time.toFixed(2);
+    if (durInput) durInput.value = hl.duration.toFixed(2);
+    markDirty();
+  }
+
   // Highlight drag-to-create on track
   trackHighlights.addEventListener('mousedown', (e) => {
     if (e.target !== trackHighlights) return;
@@ -5224,6 +5254,8 @@ body {
         nudgeAnnotationEdge(selectedItem.index, selectedItem.edge, 0.01);
       } else if (selectedItem && selectedItem.type === 'snippet' && selectedItem.edge) {
         nudgeSnippetEdge(selectedItem.index, selectedItem.edge, 0.01);
+      } else if (selectedItem && selectedItem.type === 'highlight' && selectedItem.edge) {
+        nudgeHighlightEdge(selectedItem.index, selectedItem.edge, 0.01);
       } else { seek(currentTime + 1); }
     }
     else if (e.key === 'ArrowLeft') {
@@ -5234,6 +5266,8 @@ body {
         nudgeAnnotationEdge(selectedItem.index, selectedItem.edge, -0.01);
       } else if (selectedItem && selectedItem.type === 'snippet' && selectedItem.edge) {
         nudgeSnippetEdge(selectedItem.index, selectedItem.edge, -0.01);
+      } else if (selectedItem && selectedItem.type === 'highlight' && selectedItem.edge) {
+        nudgeHighlightEdge(selectedItem.index, selectedItem.edge, -0.01);
       } else { seek(currentTime - 1); }
     }
     else if (e.key === ']') { nextChapter(); }
