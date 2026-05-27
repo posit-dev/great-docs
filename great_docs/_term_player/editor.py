@@ -594,6 +594,115 @@ body {
   overflow: hidden;
 }
 
+/* Highlight overlay in preview */
+.highlight-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.highlight-overlay .hl-el {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  border-radius: 3px;
+}
+
+.highlight-overlay .hl-el.hl-outline {
+  box-shadow: 0 0 0 2px var(--hl-color, #f1fa8c);
+}
+
+.highlight-overlay .hl-el.hl-underline {
+  border-bottom: 2px solid var(--hl-color, #f1fa8c);
+  border-radius: 0;
+}
+
+.highlight-overlay .hl-el.hl-underline-wavy {
+  border-radius: 0;
+}
+.highlight-overlay .hl-el.hl-underline-wavy::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background-color: var(--hl-color, #f1fa8c);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='4' viewBox='0 0 8 4'%3E%3Cpath d='M0 2Q2 0 4 2Q6 4 8 2' fill='none' stroke='black' stroke-width='1.5'/%3E%3C/svg%3E");
+  -webkit-mask-repeat: repeat-x;
+  -webkit-mask-size: 6px 3px;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='4' viewBox='0 0 8 4'%3E%3Cpath d='M0 2Q2 0 4 2Q6 4 8 2' fill='none' stroke='black' stroke-width='1.5'/%3E%3C/svg%3E");
+  mask-repeat: repeat-x;
+  mask-size: 6px 3px;
+}
+
+.highlight-overlay .hl-el.hl-background {
+  background: color-mix(in srgb, var(--hl-color, #f1fa8c) 20%, transparent);
+}
+
+.highlight-overlay .hl-el.hl-spotlight {
+  background: color-mix(in srgb, var(--hl-color, #f1fa8c) 10%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--hl-color, #f1fa8c) 40%, transparent);
+}
+
+.highlight-overlay .hl-el.hl-glow {
+  box-shadow: 0 0 4px 1px var(--hl-color, #f1fa8c), inset 0 0 2px 1px color-mix(in srgb, var(--hl-color, #f1fa8c) 30%, transparent);
+}
+
+.highlight-overlay .hl-el.hl-box {
+  border: 2px solid var(--hl-color, #f1fa8c);
+  background: color-mix(in srgb, var(--hl-color, #f1fa8c) 10%, transparent);
+}
+
+.highlight-overlay .hl-el.hl-bracket {
+  border-left: 3px solid var(--hl-color, #f1fa8c);
+  border-radius: 0;
+}
+
+.highlight-overlay .hl-el.hl-badge-before,
+.highlight-overlay .hl-el.hl-badge-after {
+  border: 1px solid var(--hl-color, #f1fa8c);
+}
+
+.highlight-overlay .hl-badge-label {
+  position: absolute;
+  background: var(--hl-color, #f1fa8c);
+  color: #1e1e2e;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+  line-height: 1.3;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+.highlight-overlay .hl-el.hl-badge-before .hl-badge-label {
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 2px;
+}
+
+.highlight-overlay .hl-el.hl-badge-after .hl-badge-label {
+  top: 100%;
+  left: 0;
+  margin-top: 2px;
+}
+
+@keyframes hl-pulse-editor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.highlight-overlay .hl-el.hl-pulse {
+  animation: hl-pulse-editor 1.5s ease-in-out infinite;
+}
+
 .annotation-bubble {
   position: absolute;
   padding: 6px 12px;
@@ -1494,7 +1603,7 @@ body {
 .inspector-panel {
   position: absolute;
   top: 12px;
-  left: 12px;
+  left: 48px;
   z-index: 20;
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -1514,10 +1623,6 @@ body {
 
 /* Settings panel (gear icon) */
 .btn-settings-circle {
-  position: absolute;
-  top: 12px;
-  left: 44px;
-  z-index: 19;
   width: 26px;
   height: 26px;
   border-radius: 50%;
@@ -1531,6 +1636,7 @@ body {
   justify-content: center;
   transition: all 0.15s;
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  flex-shrink: 0;
 }
 .btn-settings-circle:hover {
   background: var(--border);
@@ -1542,10 +1648,112 @@ body {
   border-color: var(--accent);
 }
 
-.settings-panel {
+/* Preview overlay toggle buttons */
+.btn-overlay-circle {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  flex-shrink: 0;
+}
+.btn-overlay-circle:hover {
+  background: var(--border);
+  color: var(--text);
+}
+.btn-overlay-circle.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+
+/* Preview toolbar (left side) */
+.preview-toolbar {
   position: absolute;
   top: 12px;
   left: 12px;
+  z-index: 19;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Viewport toolbar (hugs preview window, outside left edge) */
+.viewport-toolbar {
+  position: absolute;
+  top: 6px;
+  right: calc(100% + 6px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transform: scale(var(--btn-counter-scale, 1));
+  transform-origin: top right;
+}
+
+/* Grid overlay */
+.grid-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 2;
+  overflow: hidden;
+}
+.grid-overlay-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Line/column numbers overlay */
+.nums-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 3;
+  overflow: hidden;
+}
+.nums-overlay .row-num {
+  position: absolute;
+  left: 2px;
+  font-size: 8px;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  color: rgba(137, 180, 250, 0.7);
+  line-height: 1;
+  pointer-events: none;
+}
+.nums-overlay .col-num {
+  position: absolute;
+  top: 2px;
+  font-size: 8px;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  color: rgba(137, 180, 250, 0.7);
+  line-height: 1;
+  pointer-events: none;
+}
+
+.settings-panel {
+  position: absolute;
+  top: 12px;
+  left: 48px;
   z-index: 21;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1700,10 +1908,6 @@ body {
 }
 
 .btn-info-circle {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 19;
   width: 26px;
   height: 26px;
   border-radius: 50%;
@@ -1720,6 +1924,7 @@ body {
   justify-content: center;
   transition: all 0.15s;
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  flex-shrink: 0;
 }
 
 .btn-info-circle:hover {
@@ -1814,8 +2019,10 @@ body {
 
 <div class="editor-main">
   <div class="preview-area">
-    <button class="btn-info-circle" id="btn-inspector" title="Toggle info (I)">i</button>
-    <button class="btn-settings-circle" id="btn-settings" title="Settings (G)">&#x2699;</button>
+    <div class="preview-toolbar">
+      <button class="btn-info-circle" id="btn-inspector" title="Toggle info (I)">i</button>
+      <button class="btn-settings-circle" id="btn-settings" title="Settings (G)">&#x2699;</button>
+    </div>
     <div class="inspector-panel hidden" id="inspector-panel"></div>
     <div class="settings-panel hidden" id="settings-panel">
       <div class="settings-header">
@@ -1867,10 +2074,17 @@ body {
       </div>
     </div>
     <div class="preview-wrapper">
+      <div class="viewport-toolbar" id="viewport-toolbar">
+        <button class="btn-overlay-circle" id="btn-grid-overlay" title="Toggle grid overlay">&#x23F9;</button>
+        <button class="btn-overlay-circle" id="btn-nums-overlay" title="Toggle line/column numbers">#</button>
+      </div>
       <div id="chapter-title-overlay" class="chapter-title-overlay"></div>
       <div id="snippet-preview" class="snippet-preview"></div>
       <div class="preview-viewport">
         <pre id="terminal-output"></pre>
+        <div id="grid-overlay" class="grid-overlay" style="display:none;"><canvas class="grid-overlay-canvas"></canvas></div>
+        <div id="nums-overlay" class="nums-overlay" style="display:none;"></div>
+        <div id="highlight-overlay" class="highlight-overlay"></div>
         <div id="annotation-overlay" class="annotation-overlay"></div>
         <div id="cut-indicator" class="cut-indicator">&#x22ef;</div>
       </div>
@@ -1972,10 +2186,12 @@ body {
   const trackCuts = document.getElementById('track-cuts');
   const trackSnippets = document.getElementById('track-snippets');
   const trackHighlights = document.getElementById('track-highlights');
+  const highlightOverlay = document.getElementById('highlight-overlay');
   const propsPanel = document.getElementById('properties-panel');
   const toast = document.getElementById('toast');
   const btnPlay = document.getElementById('btn-play');
   const fileName = document.getElementById('file-name');
+  let _hlEls = null;
 
   // --- Load data ---
   fetch('/api/data')
@@ -2258,6 +2474,9 @@ body {
     });
 
     renderStats();
+    // Invalidate highlight overlay so elements are recreated for new data
+    _hlEls = null;
+    renderPreviewHighlights();
   }
 
   // --- Terminal rendering ---
@@ -2291,6 +2510,23 @@ body {
       return 'rgb(' + toVal(rv) + ',' + toVal(gv) + ',' + toVal(bv) + ')';
     }
 
+    function charWidth(cp) {
+      if (cp <= 0x7E) return 1;
+      if ((cp >= 0x0300 && cp <= 0x036F) || (cp >= 0x1AB0 && cp <= 0x1AFF) ||
+          (cp >= 0x1DC0 && cp <= 0x1DFF) || (cp >= 0x20D0 && cp <= 0x20FF) ||
+          (cp >= 0xFE00 && cp <= 0xFE0F) || (cp >= 0xE0100 && cp <= 0xE01EF) ||
+          cp === 0x200B || cp === 0x200C || cp === 0x200D || cp === 0xFEFF) return 0;
+      if ((cp >= 0x1100 && cp <= 0x115F) || cp === 0x2329 || cp === 0x232A ||
+          (cp >= 0x2E80 && cp <= 0x303E) || (cp >= 0x3040 && cp <= 0x33FF) ||
+          (cp >= 0x3400 && cp <= 0x4DBF) || (cp >= 0x4E00 && cp <= 0xA4CF) ||
+          (cp >= 0xA960 && cp <= 0xA97F) || (cp >= 0xAC00 && cp <= 0xD7FF) ||
+          (cp >= 0xF900 && cp <= 0xFAFF) || (cp >= 0xFE10 && cp <= 0xFE19) ||
+          (cp >= 0xFE30 && cp <= 0xFE6F) || (cp >= 0xFF01 && cp <= 0xFF60) ||
+          (cp >= 0xFFE0 && cp <= 0xFFE6) || (cp >= 0x20000 && cp <= 0x3FFFF) ||
+          (cp >= 0x1F000 && cp <= 0x1FAFF)) return 2;
+      return 1;
+    }
+
     function scrollUp() {
       grid.shift();
       const row = [];
@@ -2300,11 +2536,22 @@ body {
 
     function clearCell(r, c2) { grid[r][c2] = {...EMPTY}; }
 
-    function feedChar(ch) {
+    function feedChar(ch, w) {
       if (curRow >= rows) { curRow = rows - 1; scrollUp(); }
+      if (w === 0) {
+        if (curCol > 0) grid[curRow][curCol - 1].char += ch;
+        return;
+      }
       if (curCol >= cols) return;
-      grid[curRow][curCol] = {char: ch, fg: curFg, bg: curBg, bold: curBold};
-      curCol++;
+      if (w === 2) {
+        if (curCol + 1 >= cols) return;
+        grid[curRow][curCol] = {char: ch, fg: curFg, bg: curBg, bold: curBold, wide: true};
+        grid[curRow][curCol + 1] = {...EMPTY, cont: true};
+        curCol += 2;
+      } else {
+        grid[curRow][curCol] = {char: ch, fg: curFg, bg: curBg, bold: curBold};
+        curCol++;
+      }
     }
 
     function applySGR(nums) {
@@ -2405,7 +2652,14 @@ body {
         if (c === '\\x07') { i++; continue; }
         const code = c.charCodeAt(0);
         if (code < 32) { i++; continue; }
-        feedChar(c);
+        let ch = c, cp = code;
+        if (cp >= 0xD800 && cp <= 0xDBFF && i + 1 < s.length) {
+          const lo = s[i + 1].charCodeAt(0);
+          if (lo >= 0xDC00 && lo <= 0xDFFF) {
+            ch = c + s[i + 1]; cp = ((cp - 0xD800) << 10) + (lo - 0xDC00) + 0x10000; i++;
+          }
+        }
+        feedChar(ch, charWidth(cp));
         i++;
       }
     }
@@ -2473,23 +2727,37 @@ body {
       let prevFg = null, prevBg = null, prevBold = false;
       for (let c2 = 0; c2 < cols; c2++) {
         const cell = grid[r][c2];
-        if (cell.fg !== prevFg || cell.bg !== prevBg || cell.bold !== prevBold) {
-          if (spanOpen) { line += '</span>'; spanOpen = false; }
-          if (cell.fg || cell.bg || cell.bold) {
-            let st = '';
-            if (cell.fg) st += 'color:' + cell.fg + ';';
-            if (cell.bg) st += 'background:' + cell.bg + ';';
-            if (cell.bold) st += 'font-weight:bold;';
-            line += '<span style="' + st + '">';
-            spanOpen = true;
-          }
-          prevFg = cell.fg; prevBg = cell.bg; prevBold = cell.bold;
-        }
+        if (cell.cont) continue;
         const ch = cell.char;
-        if (ch === '<') line += '&lt;';
-        else if (ch === '>') line += '&gt;';
-        else if (ch === '&') line += '&amp;';
-        else line += ch;
+        const cp = ch.codePointAt(0) || 0;
+        if (cp > 0x7E && !cell.wide) {
+          // Narrow non-ASCII: force exact 1ch to prevent glyph overflow
+          if (spanOpen) { line += '</span>'; spanOpen = false; }
+          let st = 'display:inline-block;width:1ch;';
+          if (cell.fg) st += 'color:' + cell.fg + ';';
+          if (cell.bg) st += 'background:' + cell.bg + ';';
+          if (cell.bold) st += 'font-weight:bold;';
+          line += '<span style="' + st + '">' + ch + '</span>';
+          prevFg = null; prevBg = null; prevBold = false;
+        } else {
+          // ASCII or wide chars: render naturally (wide chars already ~2ch in browser)
+          if (cell.fg !== prevFg || cell.bg !== prevBg || cell.bold !== prevBold) {
+            if (spanOpen) { line += '</span>'; spanOpen = false; }
+            if (cell.fg || cell.bg || cell.bold) {
+              let st = '';
+              if (cell.fg) st += 'color:' + cell.fg + ';';
+              if (cell.bg) st += 'background:' + cell.bg + ';';
+              if (cell.bold) st += 'font-weight:bold;';
+              line += '<span style="' + st + '">';
+              spanOpen = true;
+            }
+            prevFg = cell.fg; prevBg = cell.bg; prevBold = cell.bold;
+          }
+          if (ch === '<') line += '&lt;';
+          else if (ch === '>') line += '&gt;';
+          else if (ch === '&') line += '&amp;';
+          else line += ch;
+        }
       }
       if (spanOpen) line += '</span>';
       htmlLines.push(line.trimEnd());
@@ -2499,6 +2767,7 @@ body {
     renderAnnotations();
     renderChapterTitle();
     renderSnippetPreview();
+    renderPreviewHighlights();
   }
 
   function renderSnippetPreview() {
@@ -2519,6 +2788,250 @@ body {
       el.classList.remove('visible');
     }
   }
+
+  // --- Highlight preview overlay ---
+
+  function measureCellSize() {
+    if (highlightOverlay._measure) return;
+    const pre = document.getElementById('terminal-output');
+    const preStyle = getComputedStyle(pre);
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;top:0;left:0;visibility:hidden;font:inherit;white-space:pre;';
+    // Use multiple lines to get accurate line height
+    probe.textContent = '0\\n0\\n0\\n0\\n0\\n0\\n0\\n0\\n0\\n0';
+    pre.appendChild(probe);
+    const rect = probe.getBoundingClientRect();
+    highlightOverlay._cellW = rect.width; // width of single '0' char
+    highlightOverlay._cellH = rect.height / 10; // average height per line over 10 lines
+    pre.removeChild(probe);
+    highlightOverlay._measure = true;
+    // Redraw grid/nums overlays if visible
+    if (_gridVisible && !_gridDrawn) drawGrid();
+    if (_numsVisible && !_numsDrawn) drawNums();
+  }
+
+  function renderPreviewHighlights() {
+    const highlights = data.script.highlights || [];
+    measureCellSize();
+    if (highlights.length === 0) {
+      if (_hlEls) _hlEls.forEach(el => el.style.opacity = '0');
+      return;
+    }
+
+    // Pre-create elements once (recreate if count changed)
+    if (!_hlEls || _hlEls.length !== highlights.length) {
+      highlightOverlay.innerHTML = '';
+      _hlEls = [];
+      for (const hl of highlights) {
+        const el = document.createElement('div');
+        el.className = 'hl-el hl-' + hl.style;
+        el.style.opacity = '0';
+        if (hl.color) el.style.setProperty('--hl-color', hl.color);
+        if (hl.pulse) el.classList.add('hl-pulse');
+        if ((hl.style === 'badge-before' || hl.style === 'badge-after') && (hl.badge_text || hl.badge_icon)) {
+          const badge = document.createElement('span');
+          badge.className = 'hl-badge-label';
+          badge.textContent = (hl.badge_icon || '') + (hl.badge_text || '');
+          el.appendChild(badge);
+        }
+        highlightOverlay.appendChild(el);
+        _hlEls.push(el);
+      }
+    }
+
+    const pre = document.getElementById('terminal-output');
+    const preStyle = getComputedStyle(pre);
+    const paddingLeft = parseFloat(preStyle.paddingLeft) || 12;
+    const paddingTop = parseFloat(preStyle.paddingTop) || 12;
+    const cellW = highlightOverlay._cellW;
+    const cellH = highlightOverlay._cellH;
+
+    for (let k = 0; k < highlights.length; k++) {
+      const hl = highlights[k];
+      const node = _hlEls[k];
+
+      // Update color in case it was edited
+      if (hl.color) node.style.setProperty('--hl-color', hl.color);
+
+      if (currentTime >= hl.time && currentTime <= hl.time + hl.duration) {
+        // Compute fade
+        const elapsed = currentTime - hl.time;
+        const fadeInDur = hl.fade_in != null ? hl.fade_in : 0.3;
+        const fadeOutDur = hl.fade_out != null ? hl.fade_out : 0.3;
+        const fadeIn = fadeInDur > 0 ? Math.min(1, elapsed / fadeInDur) : 1;
+        const fadeOut = fadeOutDur > 0 ? Math.min(1, (hl.duration - elapsed) / fadeOutDur) : 1;
+        const baseOpacity = hl.opacity != null ? hl.opacity : 1;
+        node.style.opacity = String(Math.min(fadeIn, fadeOut) * baseOpacity);
+
+        // Position based on target (match takes priority over region)
+        const target = hl.target || {};
+        if (target.match) {
+          // Match-based: search terminal buffer for pattern
+          const matchPos = findMatchInTerminal(target.match);
+          if (matchPos) {
+            node.style.left = (paddingLeft + matchPos.col * cellW) + 'px';
+            node.style.top = (paddingTop + matchPos.row * cellH) + 'px';
+            node.style.width = (matchPos.length * cellW) + 'px';
+            node.style.height = cellH + 'px';
+          } else {
+            node.style.opacity = '0';
+          }
+        } else if (target.region) {
+          const r = target.region;
+          node.style.left = (paddingLeft + (r.col || 0) * cellW) + 'px';
+          node.style.top = (paddingTop + (r.row || 0) * cellH) + 'px';
+          node.style.width = ((r.width || 10) * cellW) + 'px';
+          node.style.height = ((r.height || 1) * cellH) + 'px';
+        } else if (target.lines) {
+          const lines = target.lines;
+          const minLine = Math.min(...lines);
+          const maxLine = Math.max(...lines);
+          node.style.left = paddingLeft + 'px';
+          node.style.top = (paddingTop + minLine * cellH) + 'px';
+          node.style.width = 'calc(100% - ' + (paddingLeft * 2) + 'px)';
+          node.style.height = ((maxLine - minLine + 1) * cellH) + 'px';
+        } else {
+          // No target — hide
+          node.style.opacity = '0';
+        }
+      } else {
+        if (node.style.opacity !== '0') node.style.opacity = '0';
+      }
+    }
+  }
+
+  // Search the current terminal text buffer for a regex match
+  function findMatchInTerminal(pattern) {
+    try {
+      const pre = document.getElementById('terminal-output');
+      // Get plain text lines from the rendered terminal
+      const text = pre.textContent || '';
+      const lines = text.split('\\n');
+      const re = new RegExp(pattern);
+      for (let row = 0; row < lines.length; row++) {
+        const m = re.exec(lines[row]);
+        if (m) {
+          return { row: row, col: m.index, length: m[0].length };
+        }
+      }
+    } catch (e) {
+      // Invalid regex — ignore
+    }
+    return null;
+  }
+
+  // Invalidate measure cache on resize
+  function invalidateHighlightMeasure() {
+    if (highlightOverlay) highlightOverlay._measure = false;
+    _gridDrawn = false;
+    _numsDrawn = false;
+  }
+
+  // --- Grid overlay ---
+  let _gridVisible = false;
+  let _gridDrawn = false;
+
+  function toggleGridOverlay() {
+    _gridVisible = !_gridVisible;
+    const btn = document.getElementById('btn-grid-overlay');
+    const el = document.getElementById('grid-overlay');
+    btn.classList.toggle('active', _gridVisible);
+    el.style.display = _gridVisible ? '' : 'none';
+    if (_gridVisible && !_gridDrawn) drawGrid();
+  }
+
+  function drawGrid() {
+    if (!highlightOverlay._measure) return;
+    const cellW = highlightOverlay._cellW;
+    const cellH = highlightOverlay._cellH;
+    const pre = document.getElementById('terminal-output');
+    const preStyle = getComputedStyle(pre);
+    const padL = parseFloat(preStyle.paddingLeft) || 12;
+    const padT = parseFloat(preStyle.paddingTop) || 12;
+    const cols = data.recording.term.cols;
+    const rows = data.recording.term.rows;
+
+    const canvas = document.querySelector('#grid-overlay .grid-overlay-canvas');
+    const w = pre.offsetWidth;
+    const h = pre.offsetHeight;
+    canvas.width = w * 2;
+    canvas.height = h * 2;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(2, 2);
+    ctx.strokeStyle = 'rgba(137, 180, 250, 0.15)';
+    ctx.lineWidth = 0.5;
+
+    // Vertical lines (columns)
+    for (let c = 0; c <= cols; c++) {
+      const x = padL + c * cellW;
+      ctx.beginPath();
+      ctx.moveTo(x, padT);
+      ctx.lineTo(x, padT + rows * cellH);
+      ctx.stroke();
+    }
+    // Horizontal lines (rows)
+    for (let r = 0; r <= rows; r++) {
+      const y = padT + r * cellH;
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(padL + cols * cellW, y);
+      ctx.stroke();
+    }
+    _gridDrawn = true;
+  }
+
+  // --- Line/column numbers overlay ---
+  let _numsVisible = false;
+  let _numsDrawn = false;
+
+  function toggleNumsOverlay() {
+    _numsVisible = !_numsVisible;
+    const btn = document.getElementById('btn-nums-overlay');
+    const el = document.getElementById('nums-overlay');
+    btn.classList.toggle('active', _numsVisible);
+    el.style.display = _numsVisible ? '' : 'none';
+    if (_numsVisible && !_numsDrawn) drawNums();
+  }
+
+  function drawNums() {
+    if (!highlightOverlay._measure) return;
+    const cellW = highlightOverlay._cellW;
+    const cellH = highlightOverlay._cellH;
+    const pre = document.getElementById('terminal-output');
+    const preStyle = getComputedStyle(pre);
+    const padL = parseFloat(preStyle.paddingLeft) || 12;
+    const padT = parseFloat(preStyle.paddingTop) || 12;
+    const cols = data.recording.term.cols;
+    const rows = data.recording.term.rows;
+
+    const container = document.getElementById('nums-overlay');
+    container.innerHTML = '';
+
+    // Row numbers (1-based, shown at start of each row)
+    for (let r = 0; r < rows; r++) {
+      const el = document.createElement('span');
+      el.className = 'row-num';
+      el.style.top = (padT + r * cellH + cellH * 0.3) + 'px';
+      el.style.left = '2px';
+      el.textContent = String(r + 1);
+      container.appendChild(el);
+    }
+    // Column numbers (1-based, shown every 5 cols at top)
+    for (let c = 0; c < cols; c += 5) {
+      const el = document.createElement('span');
+      el.className = 'col-num';
+      el.style.left = (padL + c * cellW) + 'px';
+      el.style.top = '2px';
+      el.textContent = String(c + 1);
+      container.appendChild(el);
+    }
+    _numsDrawn = true;
+  }
+
+  document.getElementById('btn-grid-overlay').addEventListener('click', toggleGridOverlay);
+  document.getElementById('btn-nums-overlay').addEventListener('click', toggleNumsOverlay);
 
   function renderChapterTitle() {
     const overlay = document.getElementById('chapter-title-overlay');
@@ -2652,17 +3165,21 @@ body {
     if (!area || !wrapper) return;
     // Reset scale to 1 to measure natural size
     wrapper.style.setProperty('--viewport-scale', '1');
-    const availW = area.clientWidth - 32;  // 16px padding each side
+    const availW = area.clientWidth - 32 - 36;  // padding + toolbar overflow
     const availH = area.clientHeight - 32;
     const natW = wrapper.offsetWidth;
     const natH = wrapper.offsetHeight;
     if (natW <= 0 || natH <= 0) return;
     const scale = Math.min(availW / natW, availH / natH);
     wrapper.style.setProperty('--viewport-scale', scale.toFixed(4));
+    // Counter-scale viewport toolbar buttons so they stay fixed size
+    const vt = document.getElementById('viewport-toolbar');
+    if (vt) vt.style.setProperty('--btn-counter-scale', (1 / scale).toFixed(4));
   }
 
   window.addEventListener('resize', () => {
     invalidatePlayheadCache();
+    invalidateHighlightMeasure();
     fitViewport();
   });
 
@@ -2952,10 +3469,102 @@ body {
     if (hlEls[idx]) hlEls[idx].classList.add('selected');
     const hl = (data.script.highlights || [])[idx];
     const target = hl.target || {};
-    const regionRow = target.region ? (target.region.row || 0) : '';
-    const regionCol = target.region ? (target.region.col || 0) : '';
+    const regionRow = target.region ? (target.region.row || 0) + 1 : '';
+    const regionCol = target.region ? (target.region.col || 0) + 1 : '';
     const regionW = target.region ? (target.region.width || 10) : '';
     const regionH = target.region ? (target.region.height || 1) : '';
+
+    // Normalize merged styles for UI
+    const isUnderline = hl.style === 'underline' || hl.style === 'underline-wavy';
+    const isBadge = hl.style === 'badge-before' || hl.style === 'badge-after';
+    const uiStyle = isUnderline ? 'underline' : isBadge ? 'badge' : hl.style;
+    const underlineType = hl.style === 'underline-wavy' ? 'wavy' : 'solid';
+    const badgePosition = hl.style === 'badge-after' ? 'after' : 'before';
+
+    // Build style-specific options
+    let styleOptions = '';
+
+    if (isUnderline) {
+      styleOptions += `
+      <div class="prop-field">
+        <div class="prop-label">Type</div>
+        <select class="prop-select" id="prop-hl-subtype">
+          <option value="solid" ${underlineType==='solid'?'selected':''}>Solid</option>
+          <option value="wavy" ${underlineType==='wavy'?'selected':''}>Wavy</option>
+        </select>
+      </div>`;
+    }
+
+    if (isBadge) {
+      styleOptions += `
+      <div class="prop-field">
+        <div class="prop-label">Position</div>
+        <select class="prop-select" id="prop-hl-badge-pos">
+          <option value="before" ${badgePosition==='before'?'selected':''}>Before (above)</option>
+          <option value="after" ${badgePosition==='after'?'selected':''}>After (below)</option>
+        </select>
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Badge text</div>
+        <input class="prop-input" type="text" value="${escAttr(hl.badge_text || '')}" id="prop-hl-badge">
+      </div>`;
+    }
+
+    const termCols = data.recording.term.cols;
+    const termRows = data.recording.term.rows;
+
+    styleOptions += `
+      <div class="prop-field">
+        <div style="display:flex; gap:4px; align-items:flex-end;">
+          <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+            <label style="font-size:9px;color:var(--text-dim);">Color</label>
+            <div style="display:flex; gap:4px; align-items:center;">
+              <input type="color" value="${escAttr(hl.color || '#f1fa8c')}" id="prop-hl-color-picker" style="width:26px;height:26px;padding:0;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:none;flex-shrink:0;">
+              <input class="prop-input" type="text" value="${escAttr((hl.color || '#f1fa8c').toUpperCase())}" id="prop-hl-color" placeholder="#hex" style="flex:1;font-family:'SF Mono',Menlo,Consolas,monospace;text-transform:uppercase;">
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;">
+            <label style="font-size:9px;color:var(--text-dim);">Opacity</label>
+            <input class="prop-input" type="number" step="0.05" min="0" max="1" value="${hl.opacity != null ? hl.opacity : 1}" id="prop-hl-opacity" style="width:76px;">
+          </div>
+        </div>
+      </div>
+      <div class="prop-field">
+        <div style="display:flex; gap:4px;">
+          <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+            <label style="font-size:9px;color:var(--text-dim);">Row</label>
+            <input class="prop-input" type="number" step="1" min="1" max="${termRows}" value="${regionRow}" id="prop-hl-row" placeholder="row">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+            <label style="font-size:9px;color:var(--text-dim);">Column</label>
+            <input class="prop-input" type="number" step="1" min="1" max="${termCols}" value="${regionCol}" id="prop-hl-col" placeholder="col">
+          </div>
+        </div>
+      </div>
+      <div class="prop-field">
+        <div style="display:flex; gap:4px;">
+          <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+            <label style="font-size:9px;color:var(--text-dim);">Width</label>
+            <input class="prop-input" type="number" step="1" min="1" max="${termCols}" value="${regionW}" id="prop-hl-width" placeholder="w">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+            <label style="font-size:9px;color:var(--text-dim);">Height</label>
+            <input class="prop-input" type="number" step="1" min="1" max="${termRows}" value="${regionH}" id="prop-hl-height" placeholder="h">
+          </div>
+        </div>
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Matching Regex</div>
+        <input class="prop-input" type="text" value="${escAttr(target.match || '')}" id="prop-hl-match" placeholder="Pattern target">
+      </div>
+      <div class="prop-field">
+        <div class="prop-label">Pulse</div>
+        <select class="prop-select" id="prop-hl-pulse">
+          <option value="false" ${!hl.pulse?'selected':''}>No</option>
+          <option value="true" ${hl.pulse?'selected':''}>Yes</option>
+        </select>
+      </div>`;
+
     propsPanel.innerHTML = `
       <div class="prop-title">Highlight</div>
       <div class="prop-field">
@@ -2969,46 +3578,18 @@ body {
       <div class="prop-field">
         <div class="prop-label">Style</div>
         <select class="prop-select" id="prop-hl-style">
-          <option value="outline" ${hl.style==='outline'?'selected':''}>Outline</option>
-          <option value="underline" ${hl.style==='underline'?'selected':''}>Underline</option>
-          <option value="underline-wavy" ${hl.style==='underline-wavy'?'selected':''}>Underline (wavy)</option>
-          <option value="background" ${hl.style==='background'?'selected':''}>Background</option>
-          <option value="spotlight" ${hl.style==='spotlight'?'selected':''}>Spotlight</option>
-          <option value="glow" ${hl.style==='glow'?'selected':''}>Glow</option>
-          <option value="box" ${hl.style==='box'?'selected':''}>Box</option>
-          <option value="badge-before" ${hl.style==='badge-before'?'selected':''}>Badge (before)</option>
-          <option value="badge-after" ${hl.style==='badge-after'?'selected':''}>Badge (after)</option>
-          <option value="bracket" ${hl.style==='bracket'?'selected':''}>Bracket</option>
+          <option value="outline" ${uiStyle==='outline'?'selected':''}>Outline</option>
+          <option value="underline" ${uiStyle==='underline'?'selected':''}>Underline</option>
+          <option value="background" ${uiStyle==='background'?'selected':''}>Background</option>
+          <option value="spotlight" ${uiStyle==='spotlight'?'selected':''}>Spotlight</option>
+          <option value="glow" ${uiStyle==='glow'?'selected':''}>Glow</option>
+          <option value="box" ${uiStyle==='box'?'selected':''}>Box</option>
+          <option value="badge" ${uiStyle==='badge'?'selected':''}>Badge</option>
+          <option value="bracket" ${uiStyle==='bracket'?'selected':''}>Bracket</option>
         </select>
       </div>
-      <div class="prop-field">
-        <div class="prop-label">Color</div>
-        <input class="prop-input" type="text" value="${escAttr(hl.color || '#f1fa8c')}" id="prop-hl-color" placeholder="#hex">
-      </div>
-      <div class="prop-field">
-        <div class="prop-label">Region (row, col, w, h)</div>
-        <div style="display:flex; gap:4px;">
-          <input class="prop-input" type="number" step="1" value="${regionRow}" id="prop-hl-row" style="width:50px" placeholder="row">
-          <input class="prop-input" type="number" step="1" value="${regionCol}" id="prop-hl-col" style="width:50px" placeholder="col">
-          <input class="prop-input" type="number" step="1" value="${regionW}" id="prop-hl-width" style="width:50px" placeholder="w">
-          <input class="prop-input" type="number" step="1" value="${regionH}" id="prop-hl-height" style="width:50px" placeholder="h">
-        </div>
-      </div>
-      <div class="prop-field">
-        <div class="prop-label">Match (regex)</div>
-        <input class="prop-input" type="text" value="${escAttr(target.match || '')}" id="prop-hl-match" placeholder="Pattern target">
-      </div>
-      <div class="prop-field">
-        <div class="prop-label">Badge text</div>
-        <input class="prop-input" type="text" value="${escAttr(hl.badge_text || '')}" id="prop-hl-badge">
-      </div>
-      <div class="prop-field">
-        <div class="prop-label">Pulse</div>
-        <select class="prop-select" id="prop-hl-pulse">
-          <option value="false" ${!hl.pulse?'selected':''}>No</option>
-          <option value="true" ${hl.pulse?'selected':''}>Yes</option>
-        </select>
-      </div>
+      <hr style="border:none; border-top:1px solid var(--border); margin:12px 0;">
+      ${styleOptions}
       <div class="prop-actions">
         <button class="btn" onclick="undoSelected()">Undo</button>
         <button class="btn" style="color:var(--cut)" onclick="deleteSelected()">Delete</button>
@@ -3016,6 +3597,31 @@ body {
     `;
     propsPanel.classList.add('open');
     attachLiveListeners();
+
+    // Re-draw inspector when style changes
+    document.getElementById('prop-hl-style').addEventListener('change', () => {
+      liveApplyHighlightStyle(idx);
+      selectHighlight(idx);
+    });
+  }
+
+  // Apply just the style change before re-rendering inspector
+  function liveApplyHighlightStyle(idx) {
+    const hl = data.script.highlights[idx];
+    const uiVal = document.getElementById('prop-hl-style').value;
+    // Map merged UI values back to internal style
+    if (uiVal === 'underline') {
+      hl.style = 'underline';
+    } else if (uiVal === 'badge') {
+      hl.style = 'badge-before';
+    } else {
+      hl.style = uiVal;
+    }
+    // Also persist time/duration from current inputs
+    hl.time = parseFloat(document.getElementById('prop-time').value) || 0;
+    hl.duration = parseFloat(document.getElementById('prop-duration').value) || 1;
+    markDirty();
+    renderTracks();
   }
 
   // --- Live input listeners for inspector ---
@@ -3055,6 +3661,38 @@ body {
       wrap.appendChild(btnUp);
       wrap.appendChild(btnDown);
     });
+    // Sync color picker <-> hex text field
+    const colorPicker = propsPanel.querySelector('#prop-hl-color-picker');
+    const colorHex = propsPanel.querySelector('#prop-hl-color');
+    if (colorPicker && colorHex) {
+      colorPicker.addEventListener('input', () => {
+        colorHex.value = colorPicker.value.toUpperCase();
+        liveApply();
+      });
+      colorHex.addEventListener('input', () => {
+        colorHex.value = colorHex.value.toUpperCase();
+        if (/^#[0-9A-F]{6}$/.test(colorHex.value)) {
+          colorPicker.value = colorHex.value;
+        }
+      });
+    }
+    // Disable region fields when match regex has a value
+    const matchInput = propsPanel.querySelector('#prop-hl-match');
+    const regionFields = ['#prop-hl-row', '#prop-hl-col', '#prop-hl-width', '#prop-hl-height'];
+    function syncRegionDisabled() {
+      const hasMatch = matchInput && matchInput.value.trim() !== '';
+      regionFields.forEach(sel => {
+        const el = propsPanel.querySelector(sel);
+        if (el) {
+          el.disabled = hasMatch;
+          el.style.opacity = hasMatch ? '0.4' : '1';
+        }
+      });
+    }
+    if (matchInput) {
+      matchInput.addEventListener('input', syncRegionDisabled);
+      syncRegionDisabled();
+    }
   }
 
   function liveApply() {
@@ -3085,26 +3723,59 @@ body {
       const hl = data.script.highlights[index];
       hl.time = parseFloat(document.getElementById('prop-time').value) || 0;
       hl.duration = parseFloat(document.getElementById('prop-duration').value) || 1;
-      hl.style = document.getElementById('prop-hl-style').value;
-      hl.color = document.getElementById('prop-hl-color').value || '#f1fa8c';
-      hl.badge_text = document.getElementById('prop-hl-badge').value || '';
-      hl.pulse = document.getElementById('prop-hl-pulse').value === 'true';
-      // Update region from fields
-      const row = parseInt(document.getElementById('prop-hl-row').value);
-      const col = parseInt(document.getElementById('prop-hl-col').value);
-      const w = parseInt(document.getElementById('prop-hl-width').value);
-      const h = parseInt(document.getElementById('prop-hl-height').value);
-      if (!isNaN(row) && !isNaN(col) && !isNaN(w) && !isNaN(h)) {
-        if (!hl.target) hl.target = {};
-        hl.target.region = { row: row, col: col, width: w, height: h };
+      // Resolve merged style values
+      const uiStyle = document.getElementById('prop-hl-style').value;
+      if (uiStyle === 'underline') {
+        const subEl = document.getElementById('prop-hl-subtype');
+        hl.style = subEl && subEl.value === 'wavy' ? 'underline-wavy' : 'underline';
+      } else if (uiStyle === 'badge') {
+        const posEl = document.getElementById('prop-hl-badge-pos');
+        hl.style = posEl && posEl.value === 'after' ? 'badge-after' : 'badge-before';
+      } else {
+        hl.style = uiStyle;
       }
+      hl.color = document.getElementById('prop-hl-color').value || '#f1fa8c';
+      const opVal = parseFloat(document.getElementById('prop-hl-opacity').value);
+      hl.opacity = isNaN(opVal) ? 1 : Math.max(0, Math.min(1, opVal));
+      const badgeEl = document.getElementById('prop-hl-badge');
+      hl.badge_text = badgeEl ? badgeEl.value : (hl.badge_text || '');
+      hl.pulse = document.getElementById('prop-hl-pulse').value === 'true';
       // Update match target
       const matchVal = document.getElementById('prop-hl-match').value;
+      // Update region from fields (sanitize to integers, clamp to terminal bounds)
+      const maxCols = data.recording.term.cols;
+      const maxRows = data.recording.term.rows;
+      const rowEl = document.getElementById('prop-hl-row');
+      const colEl = document.getElementById('prop-hl-col');
+      const wEl = document.getElementById('prop-hl-width');
+      const hEl = document.getElementById('prop-hl-height');
+      const rowStr = rowEl.value;
+      const colStr = colEl.value;
+      const wStr = wEl.value;
+      const hStr = hEl.value;
+      let row = Math.round(parseFloat(rowStr));
+      let col = Math.round(parseFloat(colStr));
+      let w = Math.round(parseFloat(wStr));
+      let h = Math.round(parseFloat(hStr));
+      const hasRegion = rowStr !== '' || colStr !== '' || wStr !== '' || hStr !== '';
+
+      // Clamp values (1-based UI)
+      if (!isNaN(row)) { row = Math.max(1, Math.min(row, maxRows)); rowEl.value = row; }
+      if (!isNaN(col)) { col = Math.max(1, Math.min(col, maxCols)); colEl.value = col; }
+      if (!isNaN(w)) { w = Math.max(1, Math.min(w, maxCols)); wEl.value = w; }
+      if (!isNaN(h)) { h = Math.max(1, Math.min(h, maxRows)); hEl.value = h; }
+
+      if (!hl.target) hl.target = {};
+      // Match takes priority — if set, remove region so it doesn't override
       if (matchVal) {
-        if (!hl.target) hl.target = {};
         hl.target.match = matchVal;
-      } else if (hl.target) {
+        delete hl.target.region;
+      } else {
         delete hl.target.match;
+        // Only set region if user provided values (convert 1-based UI to 0-based internal)
+        if (hasRegion && !isNaN(row) && !isNaN(col) && !isNaN(w) && !isNaN(h)) {
+          hl.target.region = { row: row - 1, col: col - 1, width: w, height: h };
+        }
       }
     }
 
@@ -3376,7 +4047,7 @@ body {
     const start = roundTime(currentTime);
     const dur = roundTime(Math.min(3, data.recording.duration - start));
     if (dur <= 0) return;
-    data.script.highlights.push({ time: start, duration: dur, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'outline', color: '#f1fa8c', badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
+    data.script.highlights.push({ time: start, duration: dur, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'outline', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
     renderTracks();
     updatePlayhead();
     markDirty();
@@ -3593,7 +4264,7 @@ body {
         if (Math.abs(ev.clientX - startX) < 4) return;
         dragStarted = true;
         hlDragIdx = data.script.highlights.length;
-        data.script.highlights.push({ time: startTime, duration: 0, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'outline', color: '#f1fa8c', badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
+        data.script.highlights.push({ time: startTime, duration: 0, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'outline', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
         renderTracks();
         updatePlayhead();
       }
@@ -3614,7 +4285,10 @@ body {
     function onUp() {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
-      if (!dragStarted) return;
+      if (!dragStarted) {
+        seek(startTime);
+        return;
+      }
       const hl = data.script.highlights[hlDragIdx];
       if (hl.duration < 0.15) {
         data.script.highlights.splice(hlDragIdx, 1);
@@ -3641,7 +4315,7 @@ body {
     const clickTime = roundTime(ratio * data.recording.duration);
     const dur = roundTime(Math.min(3, data.recording.duration - clickTime));
     if (dur > 0) {
-      data.script.highlights.push({ time: clickTime, duration: dur, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'outline', color: '#f1fa8c', badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
+      data.script.highlights.push({ time: clickTime, duration: dur, target: { region: { row: 0, col: 0, width: 10, height: 1 } }, style: 'outline', color: '#f1fa8c', opacity: 1, badge_text: '', badge_icon: '', fade_in: 0.3, fade_out: 0.3, pulse: false });
       renderTracks();
       updatePlayhead();
       markDirty();
@@ -4395,7 +5069,7 @@ body {
 
   // Close panel on click outside
   document.addEventListener('click', (e) => {
-    if (!propsPanel.contains(e.target) && !e.target.closest('.track-item-chapter, .track-item-annotation, .track-item-cut, .track-item-snippet')) {
+    if (!propsPanel.contains(e.target) && !e.target.closest('.track-item-chapter, .track-item-annotation, .track-item-cut, .track-item-snippet, .track-item-highlight')) {
       propsPanel.classList.remove('open');
       selectedItem = null;
       clearCutHighlights();
@@ -4410,6 +5084,8 @@ body {
     trackCuts.querySelectorAll('.cut-handle.selected').forEach(el => el.classList.remove('selected'));
     trackSnippets.querySelectorAll('.track-item-snippet.selected').forEach(el => el.classList.remove('selected'));
     trackSnippets.querySelectorAll('.cmd-handle.selected').forEach(el => el.classList.remove('selected'));
+    trackHighlights.querySelectorAll('.track-item-highlight.selected').forEach(el => el.classList.remove('selected'));
+    trackHighlights.querySelectorAll('.hl-handle.selected').forEach(el => el.classList.remove('selected'));
   }
 
   function clearCutHighlights() {
