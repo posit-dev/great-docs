@@ -4494,7 +4494,7 @@ body {
 
   function addCutAt(time) {
     const start = roundTime(time);
-    const end = roundTime(Math.min(time + 1, data.recording.duration));
+    const end = roundTime(Math.min(time + 2, data.recording.duration));
     if (end > start) {
       data.script.cuts.push({ start: start, end: end, type: 'jump' });
       renderTracks();
@@ -4502,7 +4502,7 @@ body {
       markDirty();
       const idx = data.script.cuts.length - 1;
       selectCut(idx);
-      showToast('Cut added — drag edges to adjust');
+      showToast('Cut added (2s) — drag edges to adjust');
     }
   }
 
@@ -5253,7 +5253,7 @@ body {
 
   function addAnnotationAt(time) {
     const start = roundTime(time);
-    const end = roundTime(Math.min(time + 1, data.recording.duration));
+    const end = roundTime(Math.min(time + 2, data.recording.duration));
     if (end > start) {
       data.script.annotations.push({ time: start, duration: roundTime(end - start), text: 'Annotation', position: 'top-right', width: 'medium', style: 'callout' });
       renderTracks();
@@ -5261,7 +5261,7 @@ body {
       markDirty();
       const idx = data.script.annotations.length - 1;
       selectAnnotation(idx);
-      showToast('Annotation added — drag edges to adjust');
+      showToast('Annotation added (2s) — drag edges to adjust');
     }
   }
 
@@ -5758,7 +5758,7 @@ body {
 
   // Close panel on click outside
   document.addEventListener('click', (e) => {
-    if (!propsPanel.contains(e.target) && !e.target.closest('.track-item-chapter, .track-item-annotation, .track-item-cut, .track-item-snippet, .track-item-highlight')) {
+    if (!propsPanel.contains(e.target) && !e.target.closest('.track-item-chapter, .track-item-annotation, .track-item-cut, .track-item-snippet, .track-item-highlight') && !e.target.closest('#btn-add-chapter, #btn-add-annotation, #btn-add-cut, #btn-add-snippet, #btn-add-highlight')) {
       propsPanel.classList.remove('open');
       selectedItem = null;
       clearCutHighlights();
