@@ -127,7 +127,6 @@ class Script:
     """Parsed .termshow.yml script overlay."""
 
     source: str = ""
-    idle_time_limit: float | None = None
     speed: float = 1.0
     theme_name: str | None = None
     theme: Theme | None = None
@@ -177,7 +176,6 @@ def _parse_script_data(data: dict[str, Any]) -> Script:
     # Settings
     settings = data.get("settings", {})
     if isinstance(settings, dict):
-        script.idle_time_limit = settings.get("idle_time_limit")
         script.speed = settings.get("speed", 1.0)
         script.theme_name = settings.get("theme")
         script.font_family = settings.get("font_family")
@@ -293,7 +291,6 @@ def apply_script(recording: Recording, script: Script) -> Recording:
     """Apply a script overlay to a recording, producing a modified recording.
 
     This applies:
-    - Idle time limiting
     - Cuts (segment removal)
     - Speed map adjustments
     - Global speed multiplier
@@ -315,20 +312,15 @@ def apply_script(recording: Recording, script: Script) -> Recording:
     """
     events = list(recording.events)
 
-    # 1. Apply idle time limit
-    idle_limit = script.idle_time_limit or recording.idle_time_limit
-    if idle_limit is not None:
-        events = _apply_idle_limit(events, idle_limit)
-
-    # 2. Apply cuts
+    # 1. Apply cuts
     if script.cuts:
         events = _apply_cuts(events, script.cuts)
 
-    # 3. Apply speed map
+    # 2. Apply speed map
     if script.speed_map:
         events = _apply_speed_map(events, script.speed_map)
 
-    # 4. Apply global speed
+    # 3. Apply global speed
     if script.speed != 1.0:
         events = [Event(time=e.time / script.speed, code=e.code, data=e.data) for e in events]
 
@@ -339,31 +331,10 @@ def apply_script(recording: Recording, script: Script) -> Recording:
         term=recording.term,
         title=recording.title,
         timestamp=recording.timestamp,
-        idle_time_limit=idle_limit,
         events=events,
     )
 
     return new_rec
-
-
-def _apply_idle_limit(events: list[Event], limit: float) -> list[Event]:
-    """Compress idle periods longer than limit."""
-    if not events:
-        return events
-
-    result: list[Event] = []
-    prev_time = 0.0
-    time_offset = 0.0  # Accumulated time removed
-
-    for event in events:
-        gap = event.time - prev_time
-        if gap > limit:
-            time_offset += gap - limit
-        new_time = event.time - time_offset
-        result.append(Event(time=new_time, code=event.code, data=event.data))
-        prev_time = event.time
-
-    return result
 
 
 def _apply_cuts(events: list[Event], cuts: list[Cut]) -> list[Event]:
