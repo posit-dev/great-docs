@@ -482,7 +482,24 @@ def _generate_preview_html(editor_data: dict, script_data: dict) -> str:
         # Write preview.qmd
         preview_qmd = tmp_dir / "preview.qmd"
         preview_qmd.write_text(
-            '---\ntitle: Preview\n---\n\n{{< termshow file="preview" autoplay="true" >}}\n',
+            "---\n"
+            "page-layout: full\n"
+            "title: ' '\n"
+            "css:\n"
+            "  - preview-overrides.css\n"
+            "---\n\n"
+            '{{< termshow file="preview" autoplay="true" >}}\n',
+            encoding="utf-8",
+        )
+
+        # Write CSS overrides to ensure player fills the page width
+        overrides_css = tmp_dir / "preview-overrides.css"
+        overrides_css.write_text(
+            "body { background: #1e1e2e !important; }\n"
+            "#quarto-content { padding: 20px; }\n"
+            ".content { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }\n"
+            "#title-block-header { display: none; }\n"
+            ".gd-termshow { margin: 0; }\n",
             encoding="utf-8",
         )
 
@@ -2374,20 +2391,28 @@ body {
 
 .preview-modal-body {
   flex: 1;
-  padding: 0;
+  padding: 24px;
   display: flex;
-  align-items: stretch;
+  align-items: center;
   justify-content: center;
-  overflow: hidden;
+  overflow: auto;
   background: #1e1e2e;
 }
 
-.preview-modal-body iframe {
-  border: none;
+.preview-tab-panel {
+  display: none;
+}
+
+.preview-tab-panel.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-tab-panel iframe {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   background: #1e1e2e;
-  height: 100%;
-  width: 100%;
-  transition: width 0.3s ease;
 }
 </style>
 </head>
@@ -2567,16 +2592,22 @@ body {
   <div class="preview-modal" id="preview-modal">
     <div class="preview-modal-toolbar">
       <div class="size-presets" id="preview-size-presets">
-        <button data-width="full" class="active">Full</button>
-        <button data-width="900">900px</button>
-        <button data-width="700">700px</button>
-        <button data-width="480">480px</button>
-        <button data-width="375">375px</button>
+        <button data-tab="desktop" class="active">Desktop</button>
+        <button data-tab="tablet">Tablet</button>
+        <button data-tab="mobile">Mobile</button>
       </div>
       <button class="preview-close" id="preview-modal-close" title="Close (Escape)">&times;</button>
     </div>
     <div class="preview-modal-body">
-      <iframe id="preview-iframe"></iframe>
+      <div class="preview-tab-panel active" id="preview-tab-desktop">
+        <iframe id="preview-iframe-desktop"></iframe>
+      </div>
+      <div class="preview-tab-panel" id="preview-tab-tablet">
+        <iframe id="preview-iframe-tablet"></iframe>
+      </div>
+      <div class="preview-tab-panel" id="preview-tab-mobile">
+        <iframe id="preview-iframe-mobile"></iframe>
+      </div>
     </div>
   </div>
 </div>
@@ -5288,14 +5319,35 @@ body {
 
   // --- Preview Player Modal ---
   const previewBackdrop = document.getElementById('preview-modal-backdrop');
-  const previewIframe = document.getElementById('preview-iframe');
   const previewCloseBtn = document.getElementById('preview-modal-close');
   const previewSizePresets = document.getElementById('preview-size-presets');
+  const previewIframes = {
+    desktop: document.getElementById('preview-iframe-desktop'),
+    tablet: document.getElementById('preview-iframe-tablet'),
+    mobile: document.getElementById('preview-iframe-mobile'),
+  };
+  const previewTabs = {
+    desktop: document.getElementById('preview-tab-desktop'),
+    tablet: document.getElementById('preview-tab-tablet'),
+    mobile: document.getElementById('preview-tab-mobile'),
+  };
+  // Fixed sizes: width, height (height accommodates player at that width)
+  const previewSizes = {
+    desktop: { w: 900, h: 780 },
+    tablet: { w: 600, h: 560 },
+    mobile: { w: 375, h: 420 },
+  };
+
+  // Apply fixed dimensions to each iframe
+  Object.entries(previewSizes).forEach(([key, size]) => {
+    previewIframes[key].style.width = size.w + 'px';
+    previewIframes[key].style.height = size.h + 'px';
+  });
 
   function openPreviewPlayer() {
-    // Show modal immediately with loading state
     previewBackdrop.classList.add('open');
-    previewIframe.srcdoc = '<html><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#1e1e2e;color:#888;font-family:system-ui"><p>Rendering preview\u2026</p></body></html>';
+    const loading = '<html><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100%;background:#1e1e2e;color:#888;font-family:system-ui"><p>Rendering preview\u2026</p></body></html>';
+    Object.values(previewIframes).forEach(f => { f.srcdoc = loading; });
 
     fetch('/api/preview', {
       method: 'POST',
@@ -5307,17 +5359,18 @@ body {
       return r.text();
     })
     .then(html => {
-      previewIframe.srcdoc = html;
+      Object.values(previewIframes).forEach(f => { f.srcdoc = html; });
     })
     .catch(e => {
-      previewIframe.srcdoc = '<html><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#1e1e2e;color:#f38ba8;font-family:system-ui"><p>Preview failed: ' + e.message + '</p></body></html>';
+      const errHtml = '<html><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100%;background:#1e1e2e;color:#f38ba8;font-family:system-ui"><p>Preview failed: ' + e.message + '</p></body></html>';
+      Object.values(previewIframes).forEach(f => { f.srcdoc = errHtml; });
       showToast('Preview failed: ' + e.message);
     });
   }
 
   function closePreviewPlayer() {
     previewBackdrop.classList.remove('open');
-    previewIframe.srcdoc = '';
+    Object.values(previewIframes).forEach(f => { f.srcdoc = ''; });
   }
 
   previewCloseBtn.addEventListener('click', closePreviewPlayer);
@@ -5325,14 +5378,16 @@ body {
     if (e.target === previewBackdrop) closePreviewPlayer();
   });
 
-  // Size preset buttons — change iframe width, page responds naturally
+  // Tab switching
   previewSizePresets.addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-width]');
+    const btn = e.target.closest('button[data-tab]');
     if (!btn) return;
-    const w = btn.dataset.width;
-    previewIframe.style.width = w === 'full' ? '100%' : w + 'px';
+    const tab = btn.dataset.tab;
     previewSizePresets.querySelectorAll('button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+    Object.entries(previewTabs).forEach(([key, panel]) => {
+      panel.classList.toggle('active', key === tab);
+    });
   });
 
   document.getElementById('btn-preview-player').addEventListener('click', openPreviewPlayer);
