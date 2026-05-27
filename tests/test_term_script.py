@@ -15,7 +15,6 @@ from great_docs._term_player.script import (
     Script,
     SpeedSegment,
     _apply_cuts,
-    _apply_idle_limit,
     _apply_speed_map,
     _remap_time,
     apply_script,
@@ -33,52 +32,9 @@ def _events(*times: float) -> list[Event]:
     return [Event(time=t, code="o", data=f"data_{i}") for i, t in enumerate(times)]
 
 
-def _recording(events: list[Event], idle_time_limit: float | None = None) -> Recording:
+def _recording(events: list[Event]) -> Recording:
     """Create a minimal Recording wrapping some events."""
-    return Recording(events=events, idle_time_limit=idle_time_limit)
-
-
-# ---------------------------------------------------------------------------
-# _apply_idle_limit
-# ---------------------------------------------------------------------------
-
-
-class TestApplyIdleLimit:
-    def test_no_events(self):
-        result = _apply_idle_limit([], 2.0)
-        assert result == []
-
-    def test_no_compression_needed(self):
-        events = _events(0.0, 0.5, 1.0, 1.5)
-        result = _apply_idle_limit(events, 2.0)
-        assert [e.time for e in result] == pytest.approx([0.0, 0.5, 1.0, 1.5])
-
-    def test_single_gap_compressed(self):
-        # Gap from 1.0 to 6.0 = 5s, limit = 2s → remove 3s
-        events = _events(0.0, 1.0, 6.0, 7.0)
-        result = _apply_idle_limit(events, 2.0)
-        assert result[0].time == pytest.approx(0.0)
-        assert result[1].time == pytest.approx(1.0)
-        assert result[2].time == pytest.approx(3.0)  # 6.0 - 3.0
-        assert result[3].time == pytest.approx(4.0)  # 7.0 - 3.0
-
-    def test_multiple_gaps_compressed(self):
-        # Two gaps: 1→5 (4s gap, remove 2s) and 6→12 (6s gap, remove 4s)
-        events = _events(0.0, 1.0, 5.0, 6.0, 12.0)
-        result = _apply_idle_limit(events, 2.0)
-        assert result[0].time == pytest.approx(0.0)
-        assert result[1].time == pytest.approx(1.0)
-        assert result[2].time == pytest.approx(3.0)  # 5 - 2
-        assert result[3].time == pytest.approx(4.0)  # 6 - 2
-        assert result[4].time == pytest.approx(6.0)  # 12 - 2 - 4
-
-    def test_preserves_event_data(self):
-        events = [Event(time=0.0, code="o", data="hello"), Event(time=10.0, code="i", data="world")]
-        result = _apply_idle_limit(events, 1.0)
-        assert result[0].data == "hello"
-        assert result[0].code == "o"
-        assert result[1].data == "world"
-        assert result[1].code == "i"
+    return Recording(events=events)
 
 
 # ---------------------------------------------------------------------------
@@ -191,21 +147,6 @@ class TestApplySpeedMap:
 
 
 class TestApplyScript:
-    def test_idle_limit_from_script(self):
-        rec = _recording(_events(0.0, 1.0, 11.0, 12.0))
-        script = Script(idle_time_limit=2.0)
-        result = apply_script(rec, script)
-        # Gap 1→11 = 10s, compressed to 2s → offset = 8
-        assert result.events[2].time == pytest.approx(3.0)
-        assert result.events[3].time == pytest.approx(4.0)
-
-    def test_idle_limit_from_recording(self):
-        rec = _recording(_events(0.0, 1.0, 11.0), idle_time_limit=3.0)
-        script = Script()  # No idle limit in script
-        result = apply_script(rec, script)
-        # Uses recording's idle_time_limit=3.0: gap 10s → 3s, offset=7
-        assert result.events[2].time == pytest.approx(4.0)
-
     def test_global_speed(self):
         rec = _recording(_events(0.0, 2.0, 4.0))
         script = Script(speed=2.0)
@@ -252,7 +193,6 @@ class TestLoadScript:
     def test_load_basic_script(self, tmp_path: Path):
         content = """\
 settings:
-  idle_time_limit: 2.0
   speed: 1.5
   window_chrome: colorful
   font_family: "JetBrains Mono"
@@ -273,7 +213,6 @@ cuts:
         f.write_text(content, encoding="utf-8")
 
         script = load_script(f)
-        assert script.idle_time_limit == 2.0
         assert script.speed == 1.5
         assert script.window_chrome == "colorful"
         assert script.font_family == "JetBrains Mono"

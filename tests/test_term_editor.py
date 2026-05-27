@@ -37,7 +37,6 @@ def _make_script(**kwargs) -> Script:
     """Create a Script with sensible defaults, overridable via kwargs."""
     defaults = {
         "source": "demo.termshow",
-        "idle_time_limit": None,
         "speed": 1.0,
         "window_chrome": "colorful",
         "font_family": None,
@@ -64,7 +63,6 @@ class TestBuildEditorData:
         rec = _make_recording()
         data = _build_editor_data(rec, None)
         s = data["script"]["settings"]
-        assert s["idle_time_limit"] is None
         assert s["speed"] == 1.0
         assert s["window_chrome"] == "colorful"
         assert s["font_family"] is None
@@ -73,7 +71,6 @@ class TestBuildEditorData:
 
     def test_settings_with_all_fields(self):
         script = _make_script(
-            idle_time_limit=2.0,
             speed=1.5,
             window_chrome="simple",
             font_family="JetBrains Mono, monospace",
@@ -82,7 +79,6 @@ class TestBuildEditorData:
         )
         data = _build_editor_data(_make_recording(), script)
         s = data["script"]["settings"]
-        assert s["idle_time_limit"] == 2.0
         assert s["speed"] == 1.5
         assert s["window_chrome"] == "simple"
         assert s["font_family"] == "JetBrains Mono, monospace"
@@ -172,7 +168,6 @@ class TestSerializeScript:
         """Only window_chrome set (speed=1.0 is default, so omitted)."""
         script_data = {
             "settings": {
-                "idle_time_limit": None,
                 "speed": 1.0,
                 "window_chrome": "colorful",
                 "font_family": None,
@@ -195,7 +190,6 @@ class TestSerializeScript:
     def test_prompt_serialized(self):
         script_data = {
             "settings": {
-                "idle_time_limit": None,
                 "speed": 1.0,
                 "window_chrome": "colorful",
                 "font_family": None,
@@ -215,7 +209,6 @@ class TestSerializeScript:
     def test_prompt_and_pattern_serialized(self):
         script_data = {
             "settings": {
-                "idle_time_limit": None,
                 "speed": 1.0,
                 "window_chrome": "colorful",
                 "font_family": None,
@@ -235,7 +228,6 @@ class TestSerializeScript:
     def test_font_family_single(self):
         script_data = {
             "settings": {
-                "idle_time_limit": None,
                 "speed": 1.0,
                 "window_chrome": "colorful",
                 "font_family": "JetBrains Mono",
@@ -254,7 +246,6 @@ class TestSerializeScript:
     def test_font_family_comma_list(self):
         script_data = {
             "settings": {
-                "idle_time_limit": None,
                 "speed": 1.0,
                 "window_chrome": "colorful",
                 "font_family": "JetBrains Mono, Fira Code, monospace",
@@ -273,7 +264,6 @@ class TestSerializeScript:
     def test_speed_non_default_serialized(self):
         script_data = {
             "settings": {
-                "idle_time_limit": None,
                 "speed": 2.0,
                 "window_chrome": "colorful",
                 "font_family": None,
@@ -292,7 +282,6 @@ class TestSerializeScript:
     def test_speed_default_omitted(self):
         script_data = {
             "settings": {
-                "idle_time_limit": None,
                 "speed": 1.0,
                 "window_chrome": "colorful",
                 "font_family": None,
@@ -308,29 +297,9 @@ class TestSerializeScript:
         parsed = yaml.safe_load(yaml_str)
         assert "speed" not in parsed["settings"]
 
-    def test_idle_time_limit_serialized(self):
-        script_data = {
-            "settings": {
-                "idle_time_limit": 2.5,
-                "speed": 1.0,
-                "window_chrome": "colorful",
-                "font_family": None,
-                "prompt": None,
-                "prompt_pattern": None,
-            },
-            "chapters": [],
-            "annotations": [],
-            "cuts": [],
-            "snippets": [],
-        }
-        yaml_str = _serialize_script(script_data, "demo.termshow")
-        parsed = yaml.safe_load(yaml_str)
-        assert parsed["settings"]["idle_time_limit"] == 2.5
-
     def test_chapters_serialized_sorted(self):
         script_data = {
             "settings": {
-                "idle_time_limit": None,
                 "speed": 1.0,
                 "window_chrome": "colorful",
                 "font_family": None,
@@ -353,7 +322,6 @@ class TestSerializeScript:
     def test_snippets_with_match(self):
         script_data = {
             "settings": {
-                "idle_time_limit": None,
                 "speed": 1.0,
                 "window_chrome": "colorful",
                 "font_family": None,
@@ -376,7 +344,6 @@ class TestSerializeScript:
         """Full settings with every field populated."""
         script_data = {
             "settings": {
-                "idle_time_limit": 1.5,
                 "speed": 3.0,
                 "window_chrome": "simple",
                 "font_family": "Fira Code, monospace",
@@ -402,7 +369,6 @@ class TestSerializeScript:
         yaml_str = _serialize_script(script_data, "rec.termshow")
         parsed = yaml.safe_load(yaml_str)
         s = parsed["settings"]
-        assert s["idle_time_limit"] == 1.5
         assert s["speed"] == 3.0
         assert s["window_chrome"] == "simple"
         assert s["font_family"] == "Fira Code, monospace"
@@ -417,7 +383,6 @@ class TestSerializeScript:
         """All None/empty produces minimal YAML."""
         script_data = {
             "settings": {
-                "idle_time_limit": None,
                 "speed": 1.0,
                 "window_chrome": None,
                 "font_family": None,
@@ -449,7 +414,6 @@ class TestEditorRoundTrip:
 
     def test_settings_round_trip(self):
         script = _make_script(
-            idle_time_limit=2.0,
             speed=1.5,
             window_chrome="simple",
             font_family="Cascadia Code",
@@ -460,7 +424,6 @@ class TestEditorRoundTrip:
         yaml_str = _serialize_script(data["script"], "demo.termshow")
         parsed = yaml.safe_load(yaml_str)
         s = parsed["settings"]
-        assert s["idle_time_limit"] == 2.0
         assert s["speed"] == 1.5
         assert s["window_chrome"] == "simple"
         assert s["font_family"] == "Cascadia Code"
@@ -484,7 +447,6 @@ class TestEditorRoundTrip:
 
     def test_full_round_trip(self):
         script = _make_script(
-            idle_time_limit=1.0,
             speed=2.0,
             window_chrome="colorful",
             font_family="Menlo",
