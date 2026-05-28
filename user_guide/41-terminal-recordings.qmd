@@ -429,8 +429,8 @@ activate it, then use the following keys:
 | {{< keys "Space" >}} | Play / Pause (or reset from ended state) |
 | {{< keys "→" >}} | Seek forward 5 seconds |
 | {{< keys "←" >}} | Seek backward 5 seconds |
-| {{< keys "]" >}} | Jump to next chapter |
-| {{< keys "[" >}} | Jump to previous chapter |
+| `]` | Jump to next chapter |
+| `[` | Jump to previous chapter |
 
 All shortcuts require the player to have focus. Click anywhere on the player viewport first.
 
@@ -976,9 +976,9 @@ preset indicator.
 **Transport Controls.** Below the resize handle, centered transport controls provide:
 
 - **Rewind** (⏮): Jump to the start of the recording
-- **Previous Chapter** (⏴): Jump to the previous chapter marker (shortcut: {{< keys "[" >}})
+- **Previous Chapter** (⏴): Jump to the previous chapter marker (shortcut: `[`)
 - **Play/Pause** (▶/⏸): Toggle playback (shortcut: {{< keys "Space" >}})
-- **Next Chapter** (⏵): Jump to the next chapter marker (shortcut: {{< keys "]" >}})
+- **Next Chapter** (⏵): Jump to the next chapter marker (shortcut: `]`)
 - **Timecode Display**: Shows elapsed time / total duration in `MM:SS.cc` precision. Click the
   current-time value to type an exact position (e.g., `01:23.45`) and press {{< keys "Enter" >}} to jump there.
 
@@ -1101,7 +1101,7 @@ The Termshow Editor supports these keyboard shortcuts for efficient editing:
 | {{< keys "G" >}} | Toggle global settings panel |
 | {{< keys "I" >}} | Toggle info panel |
 | {{< keys "←" >}} / {{< keys "→" >}} | Seek ±1 second (or nudge active edge ±10ms) |
-| {{< keys "[" >}} / {{< keys "]" >}} | Jump to previous / next chapter |
+| `[` / `]` | Jump to previous / next chapter |
 | {{< keys "Y" >}} | View YAML |
 | {{< keys "P" >}} | Preview |
 | {{< keys "Delete" >}} / {{< keys "Backspace" >}} | Delete selected item |
