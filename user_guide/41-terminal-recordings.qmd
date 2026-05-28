@@ -4,8 +4,7 @@ guide-section: "Site Content"
 bread-crumbs: false
 tags: [Content, CLI, Terminal, Multimedia]
 status: experimental
-upcoming: "0.12.0"
-versions: ">=0.11"
+versions: ">=0.12"
 ---
 
 # Terminal Recordings
