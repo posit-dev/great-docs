@@ -34243,6 +34243,116 @@ def test_render_api_page_with_summary_details():
     assert "Do something" in str(summary[0][1])
 
 
+def _make_function_page(name="my_func"):
+    """Build a single-function Page for RenderAPIPage duplication tests."""
+    obj = gf.Function(name=name, lineno=1)
+    obj.endlineno = 10
+    doc = layout.DocFunction(name=name, obj=obj, anchor=name)
+    return layout.Page(path=f"reference/{name}", contents=[doc])
+
+
+def _make_class_page_with_members(name="MyClass"):
+    """Build a Page containing a class with an attribute and a method.
+
+    Mirrors the original failure case (``config.BakeryConfig``), which
+    rendered Attributes and Methods sections in addition to the
+    duplicated class header.
+    """
+    cls_obj = dc.Class(name=name, lineno=1)
+    attr_obj = dc.Attribute(name="my_attr", lineno=2)
+    func_obj = dc.Function(name="method", lineno=3)
+    cls_obj.set_member("my_attr", attr_obj)
+    cls_obj.set_member("method", func_obj)
+    doc_attr = layout.DocAttribute(name="my_attr", obj=attr_obj)
+    doc_func = layout.DocFunction(name="method", obj=func_obj)
+    doc_cls = layout.DocClass(name=name, obj=cls_obj, members=[doc_attr, doc_func])
+    return layout.Page(path=f"reference/{name}", contents=[doc_cls])
+
+
+def test_render_api_page_suppresses_inner_title_at_level_1():
+    """At level=1, RenderAPIPage flips the inner object's show_title off."""
+    page = _make_function_page()
+
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        ap = RenderAPIPage(layout_obj=page, level=1)
+        inner = ap.render_objs[0]
+
+    assert inner.show_title is False
+    assert ap.show_title is True
+
+
+def test_render_api_page_single_object_renders_title_once():
+    """Single-object pages emit exactly one heading for the object.
+
+    The front-matter title is preserved as ``title:`` in the YAML block.
+    The body retains the signature and other content, but does not add
+    a header that duplicates the front-matter title.
+    """
+    page = _make_function_page()
+
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        rendered = str(RenderAPIPage(layout_obj=page, level=1))
+
+    assert 'title: "[my_func()]' in rendered
+    assert "\n# [my_func()]" not in rendered
+    # Body content survives despite the suppressed inner title.
+    assert "```python\nmy_func()" in rendered
+
+
+def test_render_api_page_class_with_members_renders_title_once():
+    """Class pages avoid the duplicate heading and keep member sections."""
+    page = _make_class_page_with_members()
+
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        rendered = str(RenderAPIPage(layout_obj=page, level=1))
+
+    assert 'title: "[MyClass]' in rendered
+    assert "\n# [MyClass]" not in rendered
+    assert "## Attributes" in rendered
+    assert "## Methods" in rendered
+
+
+def test_render_api_page_renders_body_header_at_level_2():
+    """At level=2, the body header is H2 and coexists with the H1 title."""
+    page = _make_function_page()
+
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        rendered = str(RenderAPIPage(layout_obj=page, level=2))
+
+    assert 'title: "[my_func()]' in rendered
+    assert "\n## [my_func()]" in rendered
+
+
+def test_render_api_page_multi_object_renders_all_inner_headers():
+    """Multi-object pages keep every inner header.
+
+    The front-matter title comes from the first object only. Body
+    headers render at level+1 for every object on the page.
+    """
+    f1 = gf.Function(name="func1", lineno=1)
+    f1.endlineno = 5
+    f2 = gf.Function(name="func2", lineno=10)
+    f2.endlineno = 15
+    doc_f1 = layout.DocFunction(name="func1", obj=f1, anchor="func1")
+    doc_f2 = layout.DocFunction(name="func2", obj=f2, anchor="func2")
+    page = layout.Page(
+        path="reference/funcs",
+        contents=[doc_f1, doc_f2],
+        flatten=True,
+    )
+
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GITHUB_REPO_URL", None)
+        rendered = str(RenderAPIPage(layout_obj=page, level=1))
+
+    assert "\n## [func1()]" in rendered
+    assert "\n## [func2()]" in rendered
+
+
 def test_renderdoc_display_name_relative_level_gt1():
     """RenderDoc.display_name uses 'name' format when level > 1."""
 
