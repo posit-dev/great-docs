@@ -28,8 +28,8 @@ installing a package and verifying it:
 
 The player above is paused at each chapter boundary, waiting for you to press play. This is the
 recommended presentation mode for tutorials: each chapter represents one logical step, giving
-readers time to absorb what happened before moving on. Click the play button (or press Space) to
-advance through each chapter at your own pace.
+readers time to absorb what happened before moving on. Click the play button (or press
+{{< keys "Space" >}}) to advance through each chapter at your own pace.
 
 The two chapters in this demo correspond to the two stages of the workflow: installing the
 package and verifying the result. You define chapters in a companion YAML file, and the player
@@ -47,7 +47,7 @@ great-docs termshow record assets/install-guide.termshow
 ```
 
 This launches a recording session in your terminal. Everything you type and see is captured with
-precise timing. Press `Ctrl+D` or type `exit` to end.
+precise timing. Press {{< keys shortcut="Ctrl+D" >}} or type `exit` to end.
 
 During the session, you will see status messages confirming the recording is active:
 
@@ -117,6 +117,12 @@ piece in detail.
 
 ## The Recording Format
 
+A Termshow recording consists of two files that work together: a raw capture file (`.termshow`)
+and an optional script file (`.termshow.yml`). The capture file stores exactly what happened in
+the terminal with precise timing. The script file layers presentation choices on top: where to
+place chapters, what annotations to show, which segments to cut. This separation means you never
+need to re-record just to change how something is presented.
+
 ### `.termshow` files
 
 The raw recording is stored as NDJSON (newline-delimited JSON). The first line is a header with
@@ -125,12 +131,18 @@ terminal metadata; subsequent lines are events:
 ```json
 {"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20}, "title": "My Demo"}
 [0.5, "o", "$ "]
+[0.0, "i", "echo hello"]
 [0.1, "o", "echo hello"]
 [0.6, "o", "\r\nhello\r\n"]
 [1.0, "m", "Step complete"]
+[0.3, "o", "$ "]
+[0.0, "i", "date"]
+[0.1, "o", "date"]
+[0.4, "o", "\r\nWed May 28 09:15:03 UTC 2026\r\n"]
 ```
 
-Each event is `[delay_seconds, type, data]`:
+Each event is `[delay_seconds, type, data]`. The delay is relative to the previous event (not
+absolute), and the type code identifies what kind of data the event carries:
 
 | Type | Meaning |
 |------|---------|
@@ -143,7 +155,8 @@ the script file controls how they are presented.
 
 ### `.termshow.yml` script files
 
-The companion YAML file adds chapters, annotations, visual settings, and edits:
+The companion YAML file controls how the recording is presented. It adds chapters, annotations,
+cuts, highlights, and visual settings:
 
 ```yaml
 source: assets/my-recording.termshow
@@ -202,14 +215,19 @@ frames. All settings are optional and have sensible defaults.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `window_chrome` | `colorful` | Window decoration: `colorful`, `plain`, `none` |
+| `window_chrome` | `colorful` | Window decoration style |
 | `theme` | (auto) | Terminal color scheme |
-| `font_family` | (system stack) | Font family for rendered SVG (comma-separated list) |
-| `font_size` | `14` | Font size in rendered SVG (px) |
+| `font_family` | (system stack) | Font family for rendered SVG |
+| `font_size` | `14` | Font size in px |
 | `line_height` | `1.2` | Line height multiplier |
-| `padding` | `12` | Inner padding of the terminal area (px) |
-| `prompt` | (none) | Replacement character for detected prompts |
-| `prompt_pattern` | (none) | Regex pattern for prompt detection fallback |
+| `padding` | `12` | Inner padding in px |
+| `prompt` | (none) | Prompt replacement character |
+| `prompt_pattern` | (none) | Prompt detection regex |
+
+The `window_chrome` setting accepts `colorful` (traffic-light buttons), `plain` (grey dots), or
+`none` (no title bar). The `font_family` value is a comma-separated list passed directly to the
+SVG `font-family` attribute. The `prompt` and `prompt_pattern` settings work together for prompt
+substitution, described in the next section.
 
 These settings are applied at render time. Changing them requires re-rendering but not
 re-recording.
@@ -256,6 +274,10 @@ Prompt substitution uses a three-tier detection strategy, applied in order of pr
    available, the renderer scans each row for lines that begin with a known prompt character
    (`$`, `%`, `#`, `>`, `❯`, `→`, etc.) followed by a space. This works well for simple
    prompt formats.
+
+The tiers are tried in order: structural first, then pattern, then heuristic. Once a tier matches a
+given row, the lower tiers are skipped for that row. In practice, most recordings have input events
+and structural detection handles everything automatically.
 
 ### Examples
 
@@ -324,19 +346,22 @@ silently ignored, so you can safely add new ones as they become available.
 
 ### Examples
 
-Basic embed:
+The following examples show common shortcode patterns, from a minimal embed to more tailored
+presentations.
+
+A basic embed with default settings (manual play, 1× speed, controls visible):
 
 ```{shortcodes="false"}
 {{< termshow file="assets/getting-started" >}}
 ```
 
-Chapter-pausing tutorial:
+A chapter-pausing tutorial that stops at each chapter boundary so readers can follow along:
 
 ```{shortcodes="false"}
 {{< termshow file="assets/workflow" pause_on_chapters="true" >}}
 ```
 
-Fast autoplay preview:
+A fast autoplay preview for hero sections or landing pages:
 
 ```{shortcodes="false"}
 {{< termshow file="assets/quick" autoplay="true" speed="1.5" >}}
@@ -351,12 +376,13 @@ Everything else (recording, scripting, rendering) happens automatically during t
 
 ## Player Controls
 
-The embedded player provides interactive controls for navigating recordings. Here's what each
-component does:
+The embedded player provides interactive controls for navigating recordings. The following sections
+describe what each component does.
 
 ### Control Bar
 
-The bottom control bar contains (left to right):
+The control bar sits along the bottom edge of the player and provides everything you need to
+navigate a recording. Its elements are arranged left to right:
 
 1. **Play / Pause / Replay**: Toggles playback. Shows ↺ at the end of the recording.
 2. **Elapsed time**: Current playback position.
@@ -374,7 +400,9 @@ as playback progresses and when pausing at chapter boundaries.
 
 ### Center Overlay
 
-A large semi-transparent button appears in the center of the viewport:
+The center overlay provides a large, easy-to-hit target for the most common playback actions. It
+appears as a semi-transparent button in the middle of the viewport and adapts to the current player
+state:
 
 - **Before playback**: Shows ▶ as a play call-to-action.
 - **After playback ends**: Shows ↺. Clicking it returns the player to its initial state (frame 0)
@@ -384,17 +412,25 @@ A large semi-transparent button appears in the center of the viewport:
 The overlay never obscures content during active playback; it only appears when the player is
 waiting for user input.
 
+### Double-Tap to Seek
+
+During playback (or when the recording has ended), double-tapping or double-clicking the left or
+right third of the viewport seeks backward or forward by 5 seconds. This mirrors the seek gesture
+familiar from video players: tap the left edge to rewind, or the right edge to skip ahead. Taps in
+the middle 40% of the viewport are ignored to avoid conflicts with the center overlay.
+
 ### Keyboard Shortcuts
 
-Click the player viewport to give it focus, then use:
+The player supports keyboard navigation once it has focus. Click anywhere on the viewport to
+activate it, then use the following keys:
 
 | Key | Action |
 |-----|--------|
-| `Space` | Play / Pause (or reset from ended state) |
-| `→` | Seek forward 5 seconds |
-| `←` | Seek backward 5 seconds |
-| `]` | Jump to next chapter |
-| `[` | Jump to previous chapter |
+| {{< keys "Space" >}} | Play / Pause (or reset from ended state) |
+| {{< keys "→" >}} | Seek forward 5 seconds |
+| {{< keys "←" >}} | Seek backward 5 seconds |
+| {{< keys "]" >}} | Jump to next chapter |
+| {{< keys "[" >}} | Jump to previous chapter |
 
 All shortcuts require the player to have focus. Click anywhere on the player viewport first.
 
@@ -876,16 +912,16 @@ to change the port or `--no-browser` to suppress the automatic browser launch.
 
 The Termshow Editor is divided into these primary areas:
 
-**Header Bar.** The top bar shows the editor title and filename, along with action buttons organized into
-thematic groups:
+**Header Bar.** The top bar shows the editor title and filename, along with action buttons organized
+into thematic groups:
 
 **Editing actions** (left):
 
-- **+ Chapter**: add a chapter marker at the current playhead position (shortcut: `C`)
-- **+ Annotation**: add a 2-second annotation at the playhead (shortcut: `A`)
-- **+ Cut**: mark a cut region at the playhead (shortcut: `X`)
-- **+ Snippet**: add a snippet at the playhead (shortcut: `D`)
-- **+ Highlight**: add a highlight at the playhead (shortcut: `H`)
+- **+ Chapter**: add a chapter marker at the current playhead position (shortcut: {{< keys "C" >}})
+- **+ Annotation**: add a 2-second annotation at the playhead (shortcut: {{< keys "A" >}})
+- **+ Cut**: mark a cut region at the playhead (shortcut: {{< keys "X" >}})
+- **+ Snippet**: add a snippet at the playhead (shortcut: {{< keys "D" >}})
+- **+ Highlight**: add a highlight at the playhead (shortcut: {{< keys "H" >}})
 
 **Layout presets** (center): A segmented button with three view presets that control the
 split between the Preview Area and the Timeline Panel:
@@ -896,10 +932,10 @@ split between the Preview Area and the Timeline Panel:
 
 **Document actions** (right):
 
-- **YAML**: View the generated YAML script (shortcut: `Y`)
-- **▶ Preview**: Open the production preview modal (shortcut: `P`)
-- **Save**: Write changes to the `.termshow.yml` file (shortcut: `Cmd+S` / `Ctrl+S`). Pulses
-  gold when there are unsaved changes.
+- **YAML**: View the generated YAML script (shortcut: {{< keys "Y" >}})
+- **▶ Preview**: Open the production preview modal (shortcut: {{< keys "P" >}})
+- **Save**: Write changes to the `.termshow.yml` file (shortcut: {{< keys shortcut="Cmd+S" >}} /
+  {{< keys shortcut="Ctrl+S" >}}). Pulses gold when there are unsaved changes.
 
 **Preview Area.** The center panel shows a live terminal preview. It renders the recording state at
 the current playhead position, updating in real time as you scrub, drag edges, or play back.
@@ -914,12 +950,12 @@ Above the terminal viewport, a **Chapter Title Bar** displays the currently acti
 simulating the window chrome appearance of the final player.
 
 **Settings Button**: A small circular gear (⚙) button sits in the top-left corner of the
-Preview Area, next to the Info Button. Clicking it (or pressing `G`) toggles the **Settings
-Panel** described above.
+Preview Area, next to the Info Button. Clicking it (or pressing {{< keys "G" >}}) toggles the
+**Settings Panel** described above.
 
 **Info Button**: A small circular *i* button sits in the top-left corner of the Preview Area.
-Clicking it (or pressing `I`) toggles the **Info Panel**, a floating overlay showing recording
-metadata:
+Clicking it (or pressing {{< keys "I" >}}) toggles the **Info Panel**, a floating overlay showing
+recording metadata:
 
 - terminal dimensions (cols × rows)
 - duration (effective, accounting for cuts; raw duration shown in parentheses when cuts exist)
@@ -929,7 +965,7 @@ metadata:
 - estimated keyframe count and rendered SVG size
 
 The Info Panel updates live as you add or remove items. Click the `×` in its top-right corner
-or press `I` again to dismiss it.
+or press {{< keys "I" >}} again to dismiss it.
 
 **Resize Handle.** A draggable divider between the Preview Area and the Transport/Timeline section.
 Drag it down to enlarge the terminal preview (the terminal scales up to fill), or drag it up to give
@@ -940,11 +976,11 @@ preset indicator.
 **Transport Controls.** Below the resize handle, centered transport controls provide:
 
 - **Rewind** (⏮): Jump to the start of the recording
-- **Previous Chapter** (⏴): Jump to the previous chapter marker (shortcut: `[`)
-- **Play/Pause** (▶/⏸): Toggle playback (shortcut: `Space`)
-- **Next Chapter** (⏵): Jump to the next chapter marker (shortcut: `]`)
+- **Previous Chapter** (⏴): Jump to the previous chapter marker (shortcut: {{< keys "[" >}})
+- **Play/Pause** (▶/⏸): Toggle playback (shortcut: {{< keys "Space" >}})
+- **Next Chapter** (⏵): Jump to the next chapter marker (shortcut: {{< keys "]" >}})
 - **Timecode Display**: Shows elapsed time / total duration in `MM:SS.cc` precision. Click the
-  current-time value to type an exact position (e.g., `01:23.45`) and press Enter to jump there.
+  current-time value to type an exact position (e.g., `01:23.45`) and press {{< keys "Enter" >}} to jump there.
 
 **Timeline Panel.** The bottom panel contains five track lanes beneath a **Timeline Ruler**, the
 graduated strip showing time markings. Click anywhere on the ruler to reposition the playhead
@@ -979,8 +1015,8 @@ A **Playhead** (white vertical line) spans all five tracks and moves with the cu
 ### Global Settings Panel
 
 The Termshow Editor includes a **Global Settings** panel for configuring global script settings
-visually. Click the gear icon (⚙) in the top-left corner of the Preview Area or press `G` to toggle
-it.
+visually. Click the gear icon (⚙) in the top-left corner of the Preview Area or press
+{{< keys "G" >}} to toggle it.
 
 The Settings panel exposes the following controls:
 
@@ -989,36 +1025,32 @@ The Settings panel exposes the following controls:
 | **Default speed** | Playback speed multiplier (dropdown: 0.5×, 1×, 1.5×, 2×, 3×) |
 | **Chrome** | Window decoration style (dropdown: colorful, simple, none) |
 | **Font family** | Comma-separated font stack for rendered output |
-| **Prompt** | Replacement character for prompt substitution, with preset buttons (`$` `%` `#` `>` `❯` `→`) |
+| **Prompt** | Replacement character for prompt substitution, with preset buttons |
 | **Pattern** | Regex pattern for prompt detection (see [Prompt Substitution]) |
 
 All changes apply immediately to the live preview so you can see the effect of each setting in real
 time. Settings are saved to the `settings` block of the `.termshow.yml` file when you press Save.
 
-Press `Escape` or click outside the panel to dismiss it.
+Press {{< keys "Escape" >}} or click outside the panel to dismiss it.
 
 ### Properties Panel
 
-Clicking any item in the timeline opens the **Properties Panel** on the right side. All fields
-are live; changes apply immediately as you type, with no Apply button. The panel shows
-context-specific fields:
+Clicking any item in the timeline opens the **Properties Panel** on the right side. The panel adapts
+to show fields relevant to the selected item type, and all edits are live: changes apply immediately
+as you type, with no Apply button needed.
 
-- **Chapter**: Time (seconds) and Label
-- **Annotation**: Time, Duration, Text, Position (dropdown), Width (dropdown), and Style (dropdown)
-- **Cut Region**: From (seconds), To (seconds), and Cut type (Jump/Ellipsis)
-- **Snippet**: Time, Duration, Text (literal copy), Match (regex pattern), and Label
-- **Highlight**: Time, Duration, Style (box/underline/background/spotlight/badge/bracket),
-  underline subtype (solid/wavy), badge position and text, Color (picker + hex), Opacity,
-  Fill color and opacity, Glow toggle, Target (region row/col/width/height or match regex),
-  Fade in/out, Pulse, and Animation toggle
+For **chapters**, the panel shows the timestamp and label text. **Annotations** add duration, the
+annotation body, and dropdowns for position, width, and style. **Cut regions** expose the start and
+end times along with the cut type (jump or ellipsis). **Snippets** include the time range, literal
+copy text or regex match pattern, and a label for the button.
 
-Each panel includes:
+**Highlights** have the richest panel: in addition to timing and style, you can configure the target
+(a fixed region, regex pattern, or line list), color and opacity, fade transitions, pulse animation,
+and badge-specific options like label text and placement.
 
-- **Undo**: Reverts the item to its state when the panel was opened
-- **Delete**: Removes the item entirely
-
-Changes take effect immediately in the preview, so you can watch the terminal update as you
-adjust values.
+Every panel also includes an **Undo** button (which reverts the item to its state when the panel
+opened) and a **Delete** button to remove the item entirely. Because changes are live, you can watch
+the terminal preview update as you adjust values.
 
 ### Edge Editing
 
@@ -1033,7 +1065,7 @@ glow so you know which side is active.
 3. **Arrow keys** (← →) nudge the active edge by ±10ms for frame-accurate positioning. The
 playhead tracks the edge so you can see the terminal state update with each nudge.
 
-Clicking elsewhere or pressing `Escape` deselects and restores normal edge appearance.
+Clicking elsewhere or pressing {{< keys "Escape" >}} deselects and restores normal edge appearance.
 
 ### Drag-to-Create
 
@@ -1050,7 +1082,7 @@ The two cut types have distinct visual appearances in the timeline:
 | Type | Appearance | Playback Effect |
 |------|-----------|-----------------|
 | **Seamless** | Purple dashed block (no symbol) | Silent jump with no visual indicator |
-| **Ellipsis** | Solid red block with `⋯` symbol | Shows a 1 second centered "⋯" overlay during playback |
+| **Ellipsis** | Solid red block with `⋯` symbol | Shows a 1 second "⋯" overlay during playback |
 
 Switch between types using the "Replace With" dropdown in the properties panel.
 
@@ -1060,21 +1092,21 @@ The Termshow Editor supports these keyboard shortcuts for efficient editing:
 
 | Key | Action |
 |-----|--------|
-| `Space` | Play / Pause |
-| `C` | Add chapter at playhead |
-| `A` | Add annotation at playhead |
-| `X` | Add cut at playhead |
-| `D` | Add snippet at playhead |
-| `H` | Add highlight at playhead |
-| `G` | Toggle global settings panel |
-| `I` | Toggle info panel |
-| `←` / `→` | Seek ±1 second (or nudge active edge ±10ms) |
-| `[` / `]` | Jump to previous / next chapter |
-| `Y` | View YAML |
-| `P` | Preview |
-| `Delete` / `Backspace` | Delete selected item |
-| `Escape` | Close settings/properties panel, deselect |
-| `Cmd+S` / `Ctrl+S` | Save |
+| {{< keys "Space" >}} | Play / Pause |
+| {{< keys "C" >}} | Add chapter at playhead |
+| {{< keys "A" >}} | Add annotation at playhead |
+| {{< keys "X" >}} | Add cut at playhead |
+| {{< keys "D" >}} | Add snippet at playhead |
+| {{< keys "H" >}} | Add highlight at playhead |
+| {{< keys "G" >}} | Toggle global settings panel |
+| {{< keys "I" >}} | Toggle info panel |
+| {{< keys "←" >}} / {{< keys "→" >}} | Seek ±1 second (or nudge active edge ±10ms) |
+| {{< keys "[" >}} / {{< keys "]" >}} | Jump to previous / next chapter |
+| {{< keys "Y" >}} | View YAML |
+| {{< keys "P" >}} | Preview |
+| {{< keys "Delete" >}} / {{< keys "Backspace" >}} | Delete selected item |
+| {{< keys "Escape" >}} | Close settings/properties panel, deselect |
+| {{< keys shortcut="Cmd+S" >}} / {{< keys shortcut="Ctrl+S" >}} | Save |
 
 ### Unsaved Changes
 
@@ -1084,10 +1116,10 @@ indicator.
 
 ### Preview
 
-The **Preview** button (shortcut: `P`) opens a full-screen modal showing your recording exactly as
-it will appear on a built site. Unlike the in-editor live preview (which shows the raw SVG frame at
-the current playhead), the Preview modal renders the complete player using Quarto with the
-production `termshow` shortcode, embedded fonts, dark theme, and autoplay enabled.
+The **Preview** button (shortcut: {{< keys "P" >}}) opens a full-screen modal showing your recording
+exactly as it will appear on a built site. Unlike the in-editor live preview (which shows the raw
+SVG frame at the current playhead), the Preview modal renders the complete player using Quarto with
+the production `termshow` shortcode, embedded fonts, dark theme, and autoplay enabled.
 
 This lets you verify the final presentation (including the control bar, chapter markers, speed
 controls, and annotations) without running a full site build.
@@ -1107,7 +1139,7 @@ The preview is generated on-demand by rendering a temporary Quarto page with
 `embed-resources: true`, so the result is fully self-contained with no external dependencies.
 Generation takes a few seconds and a loading indicator is shown while the render completes.
 
-Press `Escape` or click outside the modal to close it.
+Press {{< keys "Escape" >}} or click outside the modal to close it.
 
 ### Recommended Workflow
 
@@ -1125,8 +1157,8 @@ Press `Escape` or click outside the modal to close it.
 edit the script.
 3. **Play through once** to get familiar with the recording's content and timing. Click the
 **Timeline Ruler** (the graduated strip above the tracks) to scrub to any point.
-4. **Add chapters** at logical transitions: double-click the Chapters Track or press `C` at each
-transition point.
+4. **Add chapters** at logical transitions: double-click the Chapters Track or press
+{{< keys "C" >}} at each transition point.
 5. **Add annotations** to explain key moments: drag across the Annotations Track to set the
 exact duration, or double-click for a 2-second default. Edit the text in the Properties Panel.
 6. **Mark cuts** to remove dead time: drag across the Cuts Track to select the boring parts.
@@ -1134,8 +1166,8 @@ Use "ellipsis" for long skips (so viewers know time was removed) and "seamless" 
 gaps (smooth editing).
 7. **Fine-tune edges**: click an edge handle, then use arrow keys to nudge it frame-by-frame
 while watching the terminal preview update.
-8. **Preview**: press `P` to open the production preview and verify the final player at desktop,
-tablet, and mobile widths.
+8. **Preview**: press {{< keys "P" >}} to open the production preview and verify the final player at
+desktop, tablet, and mobile widths.
 9. **Save** and embed in a page with the `{{< termshow >}}` shortcode.
 
 The Termshow Editor saves only to the `.termshow.yml` script file. The raw recording is never
