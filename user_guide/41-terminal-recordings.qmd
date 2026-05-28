@@ -1135,9 +1135,9 @@ The modal provides three tabbed viewports at fixed widths:
 Switch between tabs to verify that the player renders well at each breakpoint. The player is fully
 interactive within each viewport: you can play, pause, seek, and test chapter navigation.
 
-The preview is generated on-demand by rendering a temporary Quarto page with
-`embed-resources: true`, so the result is fully self-contained with no external dependencies.
-Generation takes a few seconds and a loading indicator is shown while the render completes.
+The preview is generated on-demand by rendering a temporary page that is fully self-contained with
+no external dependencies. Generation takes a few seconds and a loading indicator is shown while the
+render completes.
 
 Press {{< keys "Escape" >}} or click outside the modal to close it.
 
