@@ -68,6 +68,15 @@ Audit which public symbols have complete documentation.
 - Integrates with `great-docs lint` for unified quality checking
 - JSON/Markdown output for CI artifact publishing
 
+### Pytest Coverage Report
+
+Run pytest during build and render a per-file coverage table in the documentation site.
+
+- `great-docs coverage-report` CLI command runs `pytest --cov` and captures results
+- Generates a styled HTML table showing coverage percentage, missed lines, and branch hits per file
+- Configurable via `great-docs.yml` (`coverage_report:` section): source dirs, threshold colors, exclusion patterns
+- Supports `--cov-branch` for branch-level reporting
+
 ### Migration Guide Generation
 
 Auto-generate version migration guides from API diffs.
