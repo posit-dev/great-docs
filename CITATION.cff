@@ -3,7 +3,7 @@ message: 'If you wish to cite the "Great Docs" package use:'
 type: software
 license: MIT
 title: "Great Docs: A comprehensive documentation site generator for Python packages."
-version: "0.11.0"
+version: "0.12.0"
 abstract:
   Great Docs helps you create beautiful, professional Python documentation sites with API
   references, smart navigation, and modern styling. Features one-command setup, intelligent
