@@ -12,6 +12,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from ._translations import get_translation
+
 
 def discover_mcp_server(
     module_path: str,
@@ -427,6 +429,7 @@ def generate_mcp_reference_pages(
     output_dir: Path,
     categories: dict[str, list[str]] | None = None,
     display_name: str | None = None,
+    language: str = "en",
 ) -> list[str | dict]:
     """
     Generate Quarto .qmd pages for an MCP server's tools.
@@ -460,14 +463,14 @@ def generate_mcp_reference_pages(
     sidebar_items: list[str | dict] = []
 
     # Generate index page
-    index_content = _generate_mcp_index_page(server_name, server_info, sections)
+    index_content = _generate_mcp_index_page(server_name, server_info, sections, language)
     index_path = output_dir / "index.qmd"
     index_path.write_text(index_content, encoding="utf-8")
     generated_paths.append("reference/mcp/index.qmd")
 
     # Generate individual tool pages
     for tool in tools:
-        page_content = _generate_tool_page(tool, server_name)
+        page_content = _generate_tool_page(tool, server_name, language)
         safe_name = tool["name"].replace("-", "_")
         page_path = output_dir / f"{safe_name}.qmd"
         page_path.write_text(page_content, encoding="utf-8")
@@ -475,7 +478,7 @@ def generate_mcp_reference_pages(
 
     # Generate resource pages (if any)
     for resource in resources:
-        page_content = _generate_resource_page(resource, server_name)
+        page_content = _generate_resource_page(resource, server_name, language)
         safe_name = re.sub(r"[^a-zA-Z0-9_]", "_", resource["name"])
         page_path = output_dir / f"resource_{safe_name}.qmd"
         page_path.write_text(page_content, encoding="utf-8")
@@ -483,7 +486,7 @@ def generate_mcp_reference_pages(
 
     # Generate resource template pages (if any)
     for template in resource_templates:
-        page_content = _generate_resource_template_page(template, server_name)
+        page_content = _generate_resource_template_page(template, server_name, language)
         safe_name = re.sub(r"[^a-zA-Z0-9_]", "_", template["name"])
         page_path = output_dir / f"template_{safe_name}.qmd"
         page_path.write_text(page_content, encoding="utf-8")
@@ -491,7 +494,7 @@ def generate_mcp_reference_pages(
 
     # Generate prompt pages (if any)
     for prompt in prompts:
-        page_content = _generate_prompt_page(prompt, server_name)
+        page_content = _generate_prompt_page(prompt, server_name, language)
         safe_name = prompt["name"].replace("-", "_")
         page_path = output_dir / f"prompt_{safe_name}.qmd"
         page_path.write_text(page_content, encoding="utf-8")
@@ -538,13 +541,14 @@ def _generate_mcp_index_page(
     server_name: str,
     server_info: dict[str, Any],
     sections: list[dict[str, Any]],
+    language: str = "en",
 ) -> str:
     """Generate the MCP reference index page."""
     lines: list[str] = []
 
     # Front matter
     lines.append("---")
-    lines.append('title: "MCP Reference"')
+    lines.append(f'title: "{get_translation("mcp_reference", language)}"')
     lines.append("body-classes: doc-api-page")
     lines.append("sidebar: mcp-reference")
     lines.append("page-navigation: false")
@@ -559,29 +563,40 @@ def _generate_mcp_index_page(
     has_completions = server_info.get("completions_enabled", False)
     has_instructions = bool(server_info.get("instructions"))
 
+    completions_mark = "✓" if has_completions else "✗"
+    instructions_mark = "✓" if has_instructions else "✗"
+
     lines.append('<div class="mcp-capability-tiles">')
-    if n_tools:
-        lines.append(
-            f'<span class="mcp-tile mcp-tile-tools">Tools <strong>{n_tools}</strong></span>'
-        )
-    if n_resources:
-        lines.append(
-            f'<span class="mcp-tile mcp-tile-resources">Resources'
-            f" <strong>{n_resources}</strong></span>"
-        )
-    if n_templates:
-        lines.append(
-            f'<span class="mcp-tile mcp-tile-templates">Resource Templates'
-            f" <strong>{n_templates}</strong></span>"
-        )
-    if n_prompts:
-        lines.append(
-            f'<span class="mcp-tile mcp-tile-prompts">Prompts <strong>{n_prompts}</strong></span>'
-        )
-    if has_completions:
-        lines.append('<span class="mcp-tile mcp-tile-completions">Completions</span>')
-    if has_instructions:
-        lines.append('<span class="mcp-tile mcp-tile-instructions">Instructions</span>')
+    lines.append(
+        f'<span class="mcp-tile mcp-tile-tools">'
+        f'<span class="mcp-tile-label">{get_translation("mcp_tools", language)}</span>'
+        f'<span class="mcp-tile-count">{n_tools}</span></span>'
+    )
+    lines.append(
+        f'<span class="mcp-tile mcp-tile-resources">'
+        f'<span class="mcp-tile-label">{get_translation("mcp_resources", language)}</span>'
+        f'<span class="mcp-tile-count">{n_resources}</span></span>'
+    )
+    lines.append(
+        f'<span class="mcp-tile mcp-tile-templates">'
+        f'<span class="mcp-tile-label">{get_translation("mcp_resource_templates", language)}</span>'
+        f'<span class="mcp-tile-count">{n_templates}</span></span>'
+    )
+    lines.append(
+        f'<span class="mcp-tile mcp-tile-prompts">'
+        f'<span class="mcp-tile-label">{get_translation("mcp_prompts", language)}</span>'
+        f'<span class="mcp-tile-count">{n_prompts}</span></span>'
+    )
+    lines.append(
+        f'<span class="mcp-tile mcp-tile-completions">'
+        f'<span class="mcp-tile-label">{get_translation("mcp_completions", language)}</span>'
+        f'<span class="mcp-tile-count">{completions_mark}</span></span>'
+    )
+    lines.append(
+        f'<span class="mcp-tile mcp-tile-instructions">'
+        f'<span class="mcp-tile-label">{get_translation("mcp_instructions", language)}</span>'
+        f'<span class="mcp-tile-count">{instructions_mark}</span></span>'
+    )
     lines.append("</div>")
     lines.append("")
 
@@ -589,11 +604,21 @@ def _generate_mcp_index_page(
     instructions = server_info.get("instructions")
     if instructions:
         lines.append("::: {.callout-note collapse='true'}")
-        lines.append("## Server Instructions")
+        lines.append(f"## {get_translation('mcp_server_instructions', language)}")
         lines.append("")
         lines.append("```text")
         lines.append(instructions)
         lines.append("```")
+        lines.append("")
+        lines.append(":::")
+        lines.append("")
+
+    # Completions note (if enabled)
+    if has_completions:
+        lines.append("::: {.callout-tip collapse='true'}")
+        lines.append(f"## {get_translation('mcp_completions', language)}")
+        lines.append("")
+        lines.append(get_translation("mcp_completions_desc", language))
         lines.append("")
         lines.append(":::")
         lines.append("")
@@ -615,7 +640,7 @@ def _generate_mcp_index_page(
 
     # Resources section
     if server_info["resources"]:
-        lines.append("## Resources")
+        lines.append(f"## {get_translation('mcp_resources', language)}")
         lines.append("")
         lines.append("| Resource | URI | Description |")
         lines.append("|----------|-----|-------------|")
@@ -634,7 +659,7 @@ def _generate_mcp_index_page(
     # Resource templates section
     resource_templates = server_info.get("resource_templates", [])
     if resource_templates:
-        lines.append("## Resource Templates")
+        lines.append(f"## {get_translation('mcp_resource_templates', language)}")
         lines.append("")
         lines.append("| Template | URI Pattern | Description |")
         lines.append("|----------|-------------|-------------|")
@@ -651,7 +676,7 @@ def _generate_mcp_index_page(
 
     # Prompts section
     if server_info["prompts"]:
-        lines.append("## Prompts")
+        lines.append(f"## {get_translation('mcp_prompts', language)}")
         lines.append("")
         lines.append("| Prompt | Description |")
         lines.append("|--------|-------------|")
@@ -668,7 +693,7 @@ def _generate_mcp_index_page(
     return "\n".join(lines) + "\n"
 
 
-def _generate_tool_page(tool: dict[str, Any], server_name: str) -> str:
+def _generate_tool_page(tool: dict[str, Any], server_name: str, language: str = "en") -> str:
     """Generate a reference page for a single MCP tool."""
     lines: list[str] = []
     name = tool["name"]
@@ -738,7 +763,7 @@ def _generate_tool_page(tool: dict[str, Any], server_name: str) -> str:
 
     # Parameters section — uses definition list format matching Python API style
     if properties:
-        lines.append("## Parameters {.doc-parameters}")
+        lines.append(f"## {get_translation('mcp_parameters', language)} {{.doc-parameters}}")
         lines.append("")
         lines.append("::: {.doc-definition-items}")
         for param_name, param_info in properties.items():
@@ -781,7 +806,9 @@ def _generate_tool_page(tool: dict[str, Any], server_name: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _generate_resource_page(resource: dict[str, Any], server_name: str) -> str:
+def _generate_resource_page(
+    resource: dict[str, Any], server_name: str, language: str = "en"
+) -> str:
     """Generate a reference page for an MCP resource."""
     lines: list[str] = []
     name = resource["name"]
@@ -807,7 +834,7 @@ def _generate_resource_page(resource: dict[str, Any], server_name: str) -> str:
         lines.append(":::")
         lines.append("")
 
-    lines.append("## Details {.doc-parameters}")
+    lines.append(f"## {get_translation('mcp_details', language)} {{.doc-parameters}}")
     lines.append("")
     lines.append(f"**URI:** `{uri}`")
     lines.append("")
@@ -818,7 +845,9 @@ def _generate_resource_page(resource: dict[str, Any], server_name: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _generate_resource_template_page(template: dict[str, Any], server_name: str) -> str:
+def _generate_resource_template_page(
+    template: dict[str, Any], server_name: str, language: str = "en"
+) -> str:
     """Generate a reference page for an MCP resource template."""
     lines: list[str] = []
     name = template["name"]
@@ -846,7 +875,7 @@ def _generate_resource_template_page(template: dict[str, Any], server_name: str)
         lines.append(":::")
         lines.append("")
 
-    lines.append("## Details {.doc-parameters}")
+    lines.append(f"## {get_translation('mcp_details', language)} {{.doc-parameters}}")
     lines.append("")
     lines.append(f"**URI Template:** `{uri_template}`")
     lines.append("")
@@ -859,7 +888,9 @@ def _generate_resource_template_page(template: dict[str, Any], server_name: str)
 
     variables = _re.findall(r"\{(\w+)\}", uri_template)
     if variables:
-        lines.append("## Template Variables {.doc-parameters}")
+        lines.append(
+            f"## {get_translation('mcp_template_variables', language)} {{.doc-parameters}}"
+        )
         lines.append("")
         lines.append("::: {.doc-definition-items}")
         for var in variables:
@@ -878,7 +909,7 @@ def _generate_resource_template_page(template: dict[str, Any], server_name: str)
     return "\n".join(lines) + "\n"
 
 
-def _generate_prompt_page(prompt: dict[str, Any], server_name: str) -> str:
+def _generate_prompt_page(prompt: dict[str, Any], server_name: str, language: str = "en") -> str:
     """Generate a reference page for an MCP prompt."""
     lines: list[str] = []
     name = prompt["name"]
@@ -905,7 +936,7 @@ def _generate_prompt_page(prompt: dict[str, Any], server_name: str) -> str:
         lines.append("")
 
     if arguments:
-        lines.append("## Arguments {.doc-parameters}")
+        lines.append(f"## {get_translation('mcp_arguments', language)} {{.doc-parameters}}")
         lines.append("")
         lines.append("::: {.doc-definition-items}")
         for arg in arguments:
@@ -936,13 +967,15 @@ def _generate_prompt_page(prompt: dict[str, Any], server_name: str) -> str:
 
     # Prompt message content
     if messages:
-        lines.append("## Prompt Text")
+        lines.append(f"## {get_translation('mcp_prompt_text', language)}")
         lines.append("")
         for msg in messages:
             role = msg.get("role", "user")
             text = msg.get("text", "")
             if text:
-                lines.append(f'::: {{.callout-note title="{role.capitalize()} message"}}')
+                lines.append(
+                    f'::: {{.callout-note title="{get_translation("mcp_user_message", language) if role == "user" else role.capitalize()}"}}'
+                )
                 lines.append("")
                 lines.append("```text")
                 lines.append(text)
