@@ -588,18 +588,12 @@ def _generate_mcp_index_page(
     # Server instructions (if present)
     instructions = server_info.get("instructions")
     if instructions:
-        # Ensure blank line before any markdown list in the instructions text
-        # so Quarto renders it as a proper list
-        fixed_instructions = instructions.replace("\n-", "\n\n-").replace("\n- ", "\n\n- ")
-        # Collapse any triple+ newlines back to double
-        import re as _re
-
-        fixed_instructions = _re.sub(r"\n{3,}", "\n\n", fixed_instructions)
-
         lines.append("::: {.callout-note collapse='true'}")
         lines.append("## Server Instructions")
         lines.append("")
-        lines.append(fixed_instructions)
+        lines.append("```text")
+        lines.append(instructions)
+        lines.append("```")
         lines.append("")
         lines.append(":::")
         lines.append("")
