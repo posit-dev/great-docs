@@ -544,10 +544,7 @@ def _generate_mcp_index_page(
 
     # Front matter
     lines.append("---")
-    lines.append(
-        f'title: "[{server_name} MCP Server]'
-        '{.doc-object-name .doc-module .doc-label .doc-label-mcp}"'
-    )
+    lines.append('title: "MCP Reference"')
     lines.append("body-classes: doc-api-page")
     lines.append("sidebar: mcp-reference")
     lines.append("page-navigation: false")
@@ -684,15 +681,17 @@ def _generate_tool_page(tool: dict[str, Any], server_name: str) -> str:
     description = tool["description"]
     schema = tool.get("input_schema", {})
 
-    # Front matter — title used by sidebar for link text
+    # Front matter — plain title for sidebar label; heading rendered below
     lines.append("---")
-    lines.append(
-        f'title: "[{name}]{{.doc-object-name .doc-label .doc-label-mcp-tool}}"'
-    )
+    lines.append(f'title: "{name}"')
+    lines.append("title-block-style: none")
+    lines.append("bread-crumbs: false")
     lines.append("body-classes: doc-api-page")
     lines.append("sidebar: mcp-reference")
     lines.append("page-navigation: false")
     lines.append("---")
+    lines.append("")
+    lines.append(f"# [{name}]{{.doc-object-name .doc-label .doc-label-mcp-tool}} {{.title}}")
     lines.append("")
 
     # Description
@@ -797,13 +796,15 @@ def _generate_resource_page(resource: dict[str, Any], server_name: str) -> str:
     mime_type = resource.get("mime_type")
 
     lines.append("---")
-    lines.append(
-        f'title: "[{name}]{{.doc-object-name .doc-label .doc-label-mcp-resource}}"'
-    )
+    lines.append(f'title: "{name}"')
+    lines.append("title-block-style: none")
+    lines.append("bread-crumbs: false")
     lines.append("body-classes: doc-api-page")
     lines.append("sidebar: mcp-reference")
     lines.append("page-navigation: false")
     lines.append("---")
+    lines.append("")
+    lines.append(f"# [{name}]{{.doc-object-name .doc-label .doc-label-mcp-resource}} {{.title}}")
     lines.append("")
 
     if description:
@@ -832,13 +833,17 @@ def _generate_resource_template_page(template: dict[str, Any], server_name: str)
     mime_type = template.get("mime_type")
 
     lines.append("---")
-    lines.append(
-        f'title: "[{name}]{{.doc-object-name .doc-label .doc-label-mcp-resource-template}}"'
-    )
+    lines.append(f'title: "{name}"')
+    lines.append("title-block-style: none")
+    lines.append("bread-crumbs: false")
     lines.append("body-classes: doc-api-page")
     lines.append("sidebar: mcp-reference")
     lines.append("page-navigation: false")
     lines.append("---")
+    lines.append("")
+    lines.append(
+        f"# [{name}]{{.doc-object-name .doc-label .doc-label-mcp-resource-template}} {{.title}}"
+    )
     lines.append("")
 
     if description:
@@ -888,13 +893,15 @@ def _generate_prompt_page(prompt: dict[str, Any], server_name: str) -> str:
     messages = prompt.get("messages", [])
 
     lines.append("---")
-    lines.append(
-        f'title: "[{name}]{{.doc-object-name .doc-label .doc-label-mcp-prompt}}"'
-    )
+    lines.append(f'title: "{name}"')
+    lines.append("title-block-style: none")
+    lines.append("bread-crumbs: false")
     lines.append("body-classes: doc-api-page")
     lines.append("sidebar: mcp-reference")
     lines.append("page-navigation: false")
     lines.append("---")
+    lines.append("")
+    lines.append(f"# [{name}]{{.doc-object-name .doc-label .doc-label-mcp-prompt}} {{.title}}")
     lines.append("")
 
     if description:
