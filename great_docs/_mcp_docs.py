@@ -537,6 +537,16 @@ def generate_mcp_reference_pages(
     return sidebar_items
 
 
+def _first_sentence(text: str) -> str:
+    """Extract the first sentence, handling periods in filenames/identifiers."""
+    # Split on ". " (period + space) which indicates a real sentence boundary
+    parts = re.split(r"\.\s", text, maxsplit=1)
+    result = parts[0].strip()
+    # Remove trailing period if present (from end-of-string sentences)
+    result = result.rstrip(".")
+    return result + "." if result else ""
+
+
 def _generate_mcp_index_page(
     server_name: str,
     server_info: dict[str, Any],
@@ -549,7 +559,7 @@ def _generate_mcp_index_page(
     # Front matter
     lines.append("---")
     lines.append(f'title: "{get_translation("mcp_reference", language)}"')
-    lines.append("body-classes: doc-api-page")
+    lines.append("body-classes: doc-api-page doc-reference")
     lines.append("sidebar: mcp-reference")
     lines.append("page-navigation: false")
     lines.append("---")
@@ -603,8 +613,8 @@ def _generate_mcp_index_page(
     # Server instructions (if present)
     instructions = server_info.get("instructions")
     if instructions:
-        lines.append("::: {.callout-note collapse='true'}")
-        lines.append(f"## {get_translation('mcp_server_instructions', language)}")
+        instr_title = get_translation("mcp_server_instructions", language)
+        lines.append(f"::: {{.callout-note collapse='true' title='{instr_title}'}}")
         lines.append("")
         lines.append("```text")
         lines.append(instructions)
@@ -615,8 +625,8 @@ def _generate_mcp_index_page(
 
     # Completions note (if enabled)
     if has_completions:
-        lines.append("::: {.callout-tip collapse='true'}")
-        lines.append(f"## {get_translation('mcp_completions', language)}")
+        comp_title = get_translation("mcp_completions", language)
+        lines.append(f"::: {{.callout-tip collapse='true' title='{comp_title}'}}")
         lines.append("")
         lines.append(get_translation("mcp_completions_desc", language))
         lines.append("")
@@ -625,70 +635,65 @@ def _generate_mcp_index_page(
 
     # Tool listing by section
     for section in sections:
-        lines.append(f"## {section['title']}")
+        lines.append(f"### {section['title']} {{.doc-group}}")
         lines.append("")
-        lines.append("| Tool | Description |")
-        lines.append("|------|-------------|")
         for tool in section["tools"]:
             name = tool["name"]
-            desc = tool["description"].split(".")[0].strip()
-            if desc and not desc.endswith("."):
-                desc += "."
-            link = f"[`{name}`]({name.replace('-', '_')}.qmd)"
-            lines.append(f"| {link} | {desc} |")
-        lines.append("")
+            desc = _first_sentence(tool["description"])
+            safe_name = name.replace("-", "_")
+            lines.append(
+                f"[{name}]({safe_name}.qmd){{.doc-function .doc-label .doc-label-mcp-tool}}"
+            )
+            lines.append("")
+            lines.append(f":   {desc}")
+            lines.append("")
 
     # Resources section
     if server_info["resources"]:
-        lines.append(f"## {get_translation('mcp_resources', language)}")
+        lines.append(f"### {get_translation('mcp_resources', language)} {{.doc-group}}")
         lines.append("")
-        lines.append("| Resource | URI | Description |")
-        lines.append("|----------|-----|-------------|")
         for r in server_info["resources"]:
             name = r["name"]
-            uri = r.get("uri", "")
-            desc = r.get("description", "") or ""
-            # Truncate long descriptions for the table
-            if len(desc) > 80:
-                desc = desc[:77] + "..."
+            desc_line = _first_sentence(r.get("description", "") or "")
             safe = re.sub(r"[^a-zA-Z0-9_]", "_", name)
-            link = f"[`{name}`](resource_{safe}.qmd)"
-            lines.append(f"| {link} | `{uri}` | {desc} |")
-        lines.append("")
+            lines.append(
+                f"[{name}](resource_{safe}.qmd){{.doc-function .doc-label .doc-label-mcp-resource}}"
+            )
+            lines.append("")
+            lines.append(f":   {desc_line}")
+            lines.append("")
 
     # Resource templates section
     resource_templates = server_info.get("resource_templates", [])
     if resource_templates:
-        lines.append(f"## {get_translation('mcp_resource_templates', language)}")
+        lines.append(f"### {get_translation('mcp_resource_templates', language)} {{.doc-group}}")
         lines.append("")
-        lines.append("| Template | URI Pattern | Description |")
-        lines.append("|----------|-------------|-------------|")
         for t in resource_templates:
             name = t["name"]
-            uri_tmpl = t.get("uri_template", "")
-            desc = t.get("description", "") or ""
-            if len(desc) > 80:
-                desc = desc[:77] + "..."
+            desc_line = _first_sentence(t.get("description", "") or "")
             safe = re.sub(r"[^a-zA-Z0-9_]", "_", name)
-            link = f"[`{name}`](template_{safe}.qmd)"
-            lines.append(f"| {link} | `{uri_tmpl}` | {desc} |")
-        lines.append("")
+            lines.append(
+                f"[{name}](template_{safe}.qmd)"
+                f"{{.doc-function .doc-label .doc-label-mcp-resource-template}}"
+            )
+            lines.append("")
+            lines.append(f":   {desc_line}")
+            lines.append("")
 
     # Prompts section
     if server_info["prompts"]:
-        lines.append(f"## {get_translation('mcp_prompts', language)}")
+        lines.append(f"### {get_translation('mcp_prompts', language)} {{.doc-group}}")
         lines.append("")
-        lines.append("| Prompt | Description |")
-        lines.append("|--------|-------------|")
         for p in server_info["prompts"]:
             name = p["name"]
-            desc = p.get("description", "") or ""
-            if len(desc) > 80:
-                desc = desc[:77] + "..."
+            desc_line = _first_sentence(p.get("description", "") or "")
             safe = name.replace("-", "_")
-            link = f"[`{name}`](prompt_{safe}.qmd)"
-            lines.append(f"| {link} | {desc} |")
-        lines.append("")
+            lines.append(
+                f"[{name}](prompt_{safe}.qmd){{.doc-function .doc-label .doc-label-mcp-prompt}}"
+            )
+            lines.append("")
+            lines.append(f":   {desc_line}")
+            lines.append("")
 
     return "\n".join(lines) + "\n"
 
