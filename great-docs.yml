@@ -193,6 +193,27 @@ cli:
   module: great_docs.cli
   name: cli
 
+# MCP Server Documentation
+# ------------------------
+# Auto-generate reference pages from the MCP server's tool definitions.
+mcp:
+  enabled: true
+  module: great_docs.mcp
+  name: Great Docs
+  categories:
+    "Build & Deploy":
+      - gd_build
+      - gd_preview
+    "Discovery & Analysis":
+      - gd_scan
+      - gd_lint
+      - gd_api_diff
+    "Configuration":
+      - gd_config
+      - gd_status
+    "Content":
+      - gd_add_page
+
 # Page Tags
 # ---------
 # Enable page tags for content discoverability
