@@ -365,11 +365,20 @@ class GreatDocs:
             js_files.append("skill-switcher.js")
         # termshow player is always available (lightweight, only activates if shortcode used)
         js_files.append("termshow.js")
+        # marimo islands (only when enabled)
+        if self._config.marimo_enabled:
+            js_files.append("marimo-islands.js")
         for js_file in js_files:
             js_src = self.assets_path / js_file
             if js_src.exists():
                 js_dst = self.project_path / js_file
                 shutil.copy2(js_src, js_dst)
+
+        # Copy marimo CSS when enabled
+        if self._config.marimo_enabled:
+            marimo_css_src = self.assets_path / "marimo-islands.css"
+            if marimo_css_src.exists():
+                shutil.copy2(marimo_css_src, self.project_path / "marimo-islands.css")
 
         # Create .gitignore for the great-docs directory
         gitignore_content = """# Great Docs build directory
@@ -10909,6 +10918,20 @@ body-classes: "gd-homepage"
                 config["project"]["resources"].append(js_file)
         if "termshow.css" not in config["project"]["resources"]:
             config["project"]["resources"].append("termshow.css")
+
+        # Add marimo islands resources when enabled
+        if self._config.marimo_enabled:
+            for marimo_res in ("marimo-islands.js", "marimo-islands.css"):
+                if marimo_res not in config["project"]["resources"]:
+                    config["project"]["resources"].append(marimo_res)
+            # Include notebooks directory so .py files are available to the shortcode
+            notebooks_dir = self.project_path / "notebooks"
+            if notebooks_dir.exists() and notebooks_dir.is_dir():
+                if "notebooks/**" not in config["project"]["resources"]:
+                    config["project"]["resources"].append("notebooks/**")
+            # Include pre-generated island HTML fragments
+            if "_marimo_islands/**" not in config["project"]["resources"]:
+                config["project"]["resources"].append("_marimo_islands/**")
 
         # Add assets directory to resources if it exists
         assets_dir = self.project_path / "assets"
