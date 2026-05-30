@@ -11032,6 +11032,55 @@ body-classes: "gd-homepage"
         ):
             config["format"]["html"]["include-in-header"].append(tp_css_entry)
 
+        # Add marimo islands runtime (CDN JS/CSS) when enabled
+        if self._config.marimo_enabled:
+            marimo_version = self._config.marimo_version
+            marimo_entry = {
+                "text": (
+                    f'<script type="module" src="https://cdn.jsdelivr.net/npm/'
+                    f'@marimo-team/islands@{marimo_version}/dist/main.js"></script>\n'
+                    f'<link href="https://cdn.jsdelivr.net/npm/'
+                    f'@marimo-team/islands@{marimo_version}/dist/style.css" '
+                    f'rel="stylesheet" crossorigin="anonymous"/>\n'
+                    '<link rel="preconnect" href="https://cdn.jsdelivr.net"/>'
+                )
+            }
+            if not any(
+                "marimo-team/islands" in str(item)
+                for item in config["format"]["html"]["include-in-header"]
+            ):
+                config["format"]["html"]["include-in-header"].append(marimo_entry)
+
+            # Add marimo-islands.js (lazy-load + copy handler)
+            marimo_js_entry = {
+                "text": (
+                    "<script>document.head.appendChild(Object.assign("
+                    "document.createElement('script'),{src:(document.querySelector("
+                    "'meta[name=\"quarto:offset\"]')||{content:''}).content+"
+                    "'marimo-islands.js'}));</script>"
+                )
+            }
+            if not any(
+                "marimo-islands.js" in str(item)
+                for item in config["format"]["html"]["include-in-header"]
+            ):
+                config["format"]["html"]["include-in-header"].append(marimo_js_entry)
+
+            # Add marimo-islands.css
+            marimo_css_entry = {
+                "text": (
+                    "<script>document.head.appendChild(Object.assign("
+                    "document.createElement('link'),{rel:'stylesheet',"
+                    "href:(document.querySelector('meta[name=\"quarto:offset\"]')"
+                    "||{content:''}).content+'marimo-islands.css'}));</script>"
+                )
+            }
+            if not any(
+                "marimo-islands.css" in str(item)
+                for item in config["format"]["html"]["include-in-header"]
+            ):
+                config["format"]["html"]["include-in-header"].append(marimo_css_entry)
+
         # Add website navigation if not present
         if "website" not in config:
             config["website"] = {}
