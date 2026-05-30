@@ -215,6 +215,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # True (default): show back-to-top button on all pages
     # False: disable back-to-top button
     "back_to_top": True,
+    # Marimo notebook islands (interactive WASM notebooks embedded in pages)
+    # None/False: disabled (no marimo islands runtime loaded)
+    # True: enabled with default version
+    # dict: {"enabled": True, "version": "0.23.7", "lazy_load": True}
+    "marimo": None,
     # Attribution text in the footer ("Site created with Great Docs")
     # True (default): show attribution
     # False: hide attribution
@@ -738,6 +743,22 @@ class Config:
     def back_to_top(self) -> bool:
         """Check if back-to-top button is enabled."""
         return self.get("back_to_top", True)
+
+    @property
+    def marimo_enabled(self) -> bool:
+        """Check if marimo islands integration is enabled."""
+        val = self.get("marimo")
+        if val is None or val is False:
+            return False
+        return True
+
+    @property
+    def marimo_version(self) -> str:
+        """Get the @marimo-team/islands CDN version."""
+        val = self.get("marimo")
+        if isinstance(val, dict):
+            return val.get("version", "0.23.8")
+        return "0.23.8"
 
     @property
     def markdown_pages(self) -> bool:
