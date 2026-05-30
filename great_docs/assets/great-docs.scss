@@ -2651,7 +2651,11 @@ html.quarto-dark .gd-badge-deprecated,
    ============================================ */
 
 .reference-switcher-container {
-    padding: 0.5rem 0.65rem;
+    margin-left: 0;
+    margin-right: 0.6rem;
+    margin-bottom: 0.2rem;
+    padding-top: 1.25rem;
+    padding-bottom: 0.6rem;
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     background: transparent;
 }
