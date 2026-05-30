@@ -1,0 +1,157 @@
+/* marimo-islands.css — Styling for embedded Marimo island notebooks. */
+
+/* Island group container */
+.gd-marimo-island-group {
+  margin: 1.5rem 0;
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: var(--bs-body-bg, #fff);
+}
+
+/* Individual island cells */
+.gd-marimo-island-group marimo-island {
+  display: block;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+}
+
+.gd-marimo-island-group marimo-island:last-of-type {
+  border-bottom: none;
+}
+
+/* Cell code styling (our visible code block) */
+.gd-marimo-code {
+  display: block;
+  font-family: var(--bs-font-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  padding: 0.75rem 1rem;
+  margin: 0;
+  background: var(--bs-tertiary-bg, #f8f9fa);
+  border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.gd-marimo-code code {
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  padding: 0;
+}
+
+/* Hide the raw marimo-cell-code (runtime uses it internally) */
+marimo-cell-code {
+  display: none;
+}
+
+/* Cell output area */
+marimo-cell-output {
+  display: block;
+  min-height: 1.5rem;
+}
+
+/* Loading placeholder */
+.gd-marimo-loading {
+  color: var(--bs-secondary-color, #6c757d);
+  font-size: 0.85rem;
+  font-style: italic;
+  padding: 0.25rem 0;
+}
+
+/* Active state (after Pyodide boots) */
+.gd-marimo-island-group.gd-marimo-active .gd-marimo-loading {
+  display: none;
+}
+
+/* Copy notebook button area */
+.gd-marimo-copy {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: var(--bs-tertiary-bg, #f8f9fa);
+  border-top: 1px solid var(--bs-border-color, #dee2e6);
+}
+
+.gd-marimo-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--bs-body-color, #212529);
+  background: var(--bs-body-bg, #fff);
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.gd-marimo-copy-btn:hover {
+  background: var(--bs-secondary-bg, #e9ecef);
+  border-color: var(--bs-secondary, #6c757d);
+}
+
+.gd-marimo-copy-btn.gd-marimo-copied {
+  color: var(--bs-success, #198754);
+  border-color: var(--bs-success, #198754);
+}
+
+.gd-marimo-copy-hint {
+  font-size: 0.75rem;
+  color: var(--bs-secondary-color, #6c757d);
+}
+
+.gd-marimo-copy-hint code {
+  font-size: 0.75rem;
+  padding: 0.1rem 0.3rem;
+  background: var(--bs-body-bg, #fff);
+  border-radius: 0.2rem;
+}
+
+/* Error state */
+.gd-marimo-error {
+  padding: 1rem;
+  color: var(--bs-danger, #dc3545);
+  font-style: italic;
+  border: 1px dashed var(--bs-danger, #dc3545);
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+}
+
+/* Iframe mode */
+.gd-marimo-iframe-wrap {
+  margin: 1.5rem 0;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid var(--bs-border-color, #dee2e6);
+}
+
+.gd-marimo-iframe {
+  display: block;
+  border: none;
+  width: 100%;
+}
+
+/* Dark mode adjustments */
+[data-bs-theme="dark"] .gd-marimo-island-group {
+  border-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] marimo-cell-code {
+  background: var(--bs-tertiary-bg);
+}
+
+[data-bs-theme="dark"] .gd-marimo-copy {
+  background: var(--bs-tertiary-bg);
+}
+
+[data-bs-theme="dark"] .gd-marimo-copy-btn {
+  background: var(--bs-body-bg);
+  border-color: var(--bs-border-color);
+  color: var(--bs-body-color);
+}
