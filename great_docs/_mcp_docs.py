@@ -791,16 +791,13 @@ def _generate_tool_page(tool: dict[str, Any], server_name: str, language: str = 
 
             # Description as definition-list body
             desc_parts = []
-            if is_required:
-                desc_parts.append("[required]{.badge .bg-primary}")
             if param_desc:
-                if desc_parts:
-                    desc_parts.append("— " + param_desc)
-                else:
-                    desc_parts.append(param_desc)
+                desc_parts.append(param_desc)
             if "enum" in param_info:
                 values = ", ".join(f"`{v}`" for v in param_info["enum"])
                 desc_parts.append(f"Allowed values: {values}")
+            if is_required:
+                desc_parts.append("[required]{.badge .bg-primary}")
 
             desc_text = " ".join(desc_parts) if desc_parts else "No description."
             lines.append(f":   {desc_text}")
@@ -957,13 +954,10 @@ def _generate_prompt_page(prompt: dict[str, Any], server_name: str, language: st
             lines.append("")
 
             desc_parts = []
+            if arg_desc:
+                desc_parts.append(arg_desc)
             if is_required:
                 desc_parts.append("[required]{.badge .bg-primary}")
-            if arg_desc:
-                if desc_parts:
-                    desc_parts.append("— " + arg_desc)
-                else:
-                    desc_parts.append(arg_desc)
             desc_text = " ".join(desc_parts) if desc_parts else "No description."
             lines.append(f":   {desc_text}")
             lines.append("")
