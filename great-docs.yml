@@ -276,12 +276,14 @@ nav_icons:
     Publishing: upload
     Agent Skills: brain-circuit
     "llms.txt": file-text
+    MCP Documentation: plug
     Build & Quality: circle-check
     Cross-Referencing: link
     Internationalization: globe
     Scale-to-Fit: scaling
     API Documentation: file-code
     CLI Documentation: terminal
+    MCP Server: cpu
     User Guides: book-text
     Custom Sections: layout-list
     Blog: pen-line
