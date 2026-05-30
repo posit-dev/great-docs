@@ -289,6 +289,37 @@ class GreatDocs:
             extensions_dst = self.project_path / "_extensions"
             shutil.copytree(extensions_src, extensions_dst, dirs_exist_ok=True)
 
+        # Copy notebooks directory and pre-generate marimo island HTML
+        if self._config.marimo_enabled:
+            notebooks_src = self.project_root / "notebooks"
+            if notebooks_src.exists() and notebooks_src.is_dir():
+                notebooks_dst = self.project_path / "notebooks"
+                shutil.copytree(notebooks_src, notebooks_dst, dirs_exist_ok=True)
+
+                # Pre-generate island HTML for each .py notebook
+                # Marimo's import accesses sys.stdout.encoding at class-def time,
+                # so ensure the stream has that attribute before importing.
+                import io as _io
+                import sys as _sys
+
+                _orig_stdout = _sys.stdout
+                _orig_stderr = _sys.stderr
+                if not hasattr(_sys.stdout, "encoding"):
+                    _sys.stdout = _io.TextIOWrapper(_io.BytesIO(), encoding="utf-8")
+                if not hasattr(_sys.stderr, "encoding"):
+                    _sys.stderr = _io.TextIOWrapper(_io.BytesIO(), encoding="utf-8")
+                try:
+                    from great_docs._marimo import generate_islands_for_build
+
+                    islands_dir = self.project_path / "_marimo_islands"
+                    islands_dir.mkdir(exist_ok=True)
+                    for nb_file in notebooks_src.glob("*.py"):
+                        out_file = islands_dir / f"{nb_file.stem}.html"
+                        generate_islands_for_build(nb_file, out_file, reactive=True)
+                finally:
+                    _sys.stdout = _orig_stdout
+                    _sys.stderr = _orig_stderr
+
         # Copy JavaScript files
         js_files = [
             "github-widget.js",
