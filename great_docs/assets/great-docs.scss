@@ -208,6 +208,11 @@ body.quarto-dark table.gd-summary-table td:last-child {
   word-break: initial;
 }
 
+.doc-api-page .badge {
+  position: relative;
+  top: -3px;
+}
+
 /*------------------------------------- API Page --------------------------------------*/
 
 // Remove h2 underlines on API reference pages (Quarto/Bootstrap adds border-bottom
