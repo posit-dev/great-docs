@@ -180,6 +180,11 @@ sidebar_filter:
   enabled: true
   min_items: 1 # Set low for testing (default: 20)
 
+# Marimo Notebooks
+# ----------------
+# Enable interactive WASM notebooks via marimo islands
+marimo: true
+
 # Site Settings
 # -------------
 # Configure page metadata timestamps and other site-wide options
