@@ -1,0 +1,453 @@
+---
+title: "MCP Documentation"
+guide-section: "AI & Agents"
+tags: [AI, Agents, MCP, API]
+---
+
+# MCP Documentation
+
+If your Python package includes an [MCP](https://modelcontextprotocol.io/) (Model Context Protocol)
+server, Great Docs can generate a complete reference section for it automatically. Every tool,
+resource, resource template, and prompt your server exposes gets its own structured page showing its
+description, parameters (with types and required/optional markers), and return information. The pages
+use the same layout as API and CLI reference pages and stay perfectly in sync with your code because
+everything is extracted directly from your server definition at build time.
+
+This page covers how to enable MCP documentation, what gets documented, how to organize tools into
+categories, and how to write server definitions that produce clear, useful reference pages.
+
+## Enabling MCP Server Documentation
+
+MCP documentation is enabled by default. If your package has a module at a standard location
+(`my_package.mcp`, `my_package.mcp_server`, or `my_package.server`), Great Docs will discover it
+automatically and generate reference pages without any configuration. For most projects with an MCP
+server, this means documentation appears on your next build with zero setup.
+
+To point Great Docs at a non-standard module location, add:
+
+```{.yaml filename="great-docs.yml"}
+mcp:
+  module: my_package.my_custom_mcp_module
+```
+
+To explicitly disable MCP documentation:
+
+```{.yaml filename="great-docs.yml"}
+mcp:
+  enabled: false
+```
+
+If your module is importable and contains a valid `mcp.server.Server` instance, you're all set.
+Great Docs handles discovery, introspection, page generation, and sidebar integration from there.
+
+## How It Works
+
+Understanding the discovery pipeline helps you troubleshoot when pages don't appear as expected and
+gives you confidence that the output matches your code. When MCP documentation is enabled, Great
+Docs runs the following steps during `great-docs build`:
+
+1. **Imports your module**: loads the module at the path you specified (or auto-detected)
+2. **Finds the Server instance**: auto-detects the first `mcp.server.Server` object in the module
+3. **Extracts capabilities**: introspects registered tools, resources, resource templates, and
+   prompts by calling the server's internal handlers
+4. **Generates structured pages**: creates `.qmd` files in `reference/mcp/` with parameter tables,
+   type annotations, and descriptions
+5. **Builds an index page**: creates an overview with capability tiles and categorized tool listings
+6. **Updates navigation**: adds an MCP Reference section to the sidebar
+
+Because the pipeline uses the MCP server's own registration metadata, the documentation always
+reflects the current state of your code. You never need to maintain a separate manifest of your
+server's capabilities, just add a tool in Python and it appears in the reference on the next build.
+
+## What Gets Documented
+
+Great Docs documents every capability your MCP server exposes. Each capability type produces a
+different style of reference page, tailored to the kind of information agents and developers need
+when working with your server.
+
+### Tools
+
+Tools are the primary interface and they are the functions that AI agents can call. Each tool page
+shows:
+
+- The tool's description (from its docstring or registration)
+- Every input parameter with its name, type, default value, and whether it's required
+- Return value description (if provided)
+
+This mirrors the structure of Python API reference pages, so users familiar with the function
+documentation will feel at home browsing MCP tools.
+
+### Resources
+
+Static resources that agents can read (e.g., configuration files, build logs). Each resource page
+shows:
+
+- The resource URI
+- Description text
+- MIME type (if specified)
+
+Resources give agents read access to project data without requiring a tool call, making them ideal
+for context that agents need frequently.
+
+### Resource Templates
+
+URI-templated resources with variable segments (e.g., `docs://project/{path}`). Each template page
+shows:
+
+- The URI template pattern
+- Template variables with types and descriptions
+- Description text
+
+Templates are especially useful for exposing file-based content where the path is parameterized,
+like individual documentation pages or configuration sections.
+
+### Prompts
+
+Pre-built prompt templates for common workflows. Each prompt page shows:
+
+- The prompt's purpose
+- Arguments (named inputs the agent fills in)
+- The message template text
+
+Well-designed prompts encode your best practices into reusable templates, so agents can follow
+established patterns without the user spelling out every step.
+
+### Server-Level Information
+
+The index page also surfaces:
+
+- **Server instructions**: the instruction text displayed to agents at connection time
+- **Completions**: whether the server provides argument auto-completion
+
+Together, these capability types give both human developers and AI agents a comprehensive view of
+what your server offers. The generated pages serve as a contract: anyone connecting to your server
+can see exactly what tools are available, what inputs they expect, and what resources they can read.
+
+## Configuration Options
+
+While MCP documentation works out of the box for standard project layouts, several options let you
+customize discovery, display names, and tool organization. The full set of MCP configuration
+options in `great-docs.yml`:
+
+```{.yaml filename="great-docs.yml"}
+mcp:
+  enabled: true                # Default: true (set false to disable)
+  module: my_package.mcp       # Optional: auto-detected from common locations
+  server_var: server           # Optional: variable name (auto-detected if omitted)
+  name: My Package             # Optional: display name override
+  categories:                  # Optional: organize tools into named groups
+    "Build & Deploy":
+      - build_docs
+      - deploy_site
+    "Analysis":
+      - scan_project
+      - lint_docs
+```
+
+### `module` (optional)
+
+The dotted import path to the Python module containing your `mcp.server.Server` instance. If
+omitted, Great Docs auto-detects by checking `<package>.mcp`, `<package>.mcp_server`, and
+`<package>.server` in order.
+
+### `server_var` (optional)
+
+The variable name of the `Server` instance in your module. If omitted, Great Docs auto-detects the
+first `mcp.server.Server` object it finds. Only needed if your module defines multiple server
+instances.
+
+### `name` (optional)
+
+A display name for the server shown in page titles and the sidebar. Defaults to the server's
+registered name.
+
+### `categories` (optional)
+
+A mapping of category names to lists of tool names. When provided, the index page groups tools
+under these headings instead of listing them in a flat sequence. Tools not assigned to any category
+appear in an "Other" group.
+
+All options except `module` have sensible defaults. In practice, most projects only need to specify
+`categories` once the server grows beyond a handful of tools.
+
+## Organizing Tools with Categories
+
+As your server grows, a flat list of tools becomes hard to scan. Categories let you group related
+tools under meaningful headings, making it easier for both developers and agents to find what they
+need. Define them by grouping tool function names under descriptive labels:
+
+```{.yaml filename="great-docs.yml"}
+mcp:
+  enabled: true
+  module: my_package.mcp
+  categories:
+    "Build & Deploy":
+      - build
+      - preview
+      - deploy
+    "Discovery & Analysis":
+      - scan
+      - lint
+      - diff
+    "Configuration":
+      - config
+      - status
+    "Content":
+      - add_page
+      - add_section
+```
+
+Each category becomes a section on the index page with its own heading. Within each section, tools
+are listed as a definition list linking to their individual reference pages.
+
+Choose category names that reflect how users think about your server's capabilities (by workflow or
+domain) rather than how the code is organized internally. A good set of categories helps both new
+users browsing the reference and experienced users looking for a specific tool.
+
+## Writing Good MCP Definitions
+
+The quality of your generated documentation depends entirely on how you define your tools and
+prompts in code. Great Docs extracts descriptions, parameter names, types, and default values
+directly from your MCP registration. So investing a few extra minutes in clear definitions pays
+off immediately in the reference output. The following patterns produce the best results.
+
+### Tool Descriptions
+
+The first sentence of a tool's description becomes the summary shown on the index page. Write it
+as a concise action statement:
+
+```python
+@server.call_tool()
+async def build(arguments: dict) -> list[TextContent]:
+    """Build the documentation site.
+
+    Runs a full documentation build, generating API reference pages,
+    user guide content, and all configured extensions.
+    """
+    ...
+```
+
+Keep the first sentence short and specific. Avoid generic phrasing like "This tool does something".
+Instead, lead with the action: "Build the documentation site", "Scan the package for public
+symbols", or "Compare API surfaces between versions".
+
+### Typed Parameters with Descriptions
+
+Define tool input schemas with descriptions on each property. Great Docs extracts these into
+the parameter table:
+
+```python
+@server.list_tools()
+async def list_tools() -> list[Tool]:
+    return [
+        Tool(
+            name="build",
+            description="Build the documentation site.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project_path": {
+                        "type": "string",
+                        "description": "Path to the project root directory.",
+                    },
+                    "clean": {
+                        "type": "boolean",
+                        "description": "Remove previous build artifacts first.",
+                        "default": False,
+                    },
+                },
+                "required": ["project_path"],
+            },
+        ),
+    ]
+```
+
+This produces a parameter section with `project_path` marked as required and `clean` shown with its
+default value.
+
+### Prompt Arguments
+
+For prompts, define arguments with clear descriptions:
+
+```python
+@server.list_prompts()
+async def list_prompts() -> list[Prompt]:
+    return [
+        Prompt(
+            name="setup_project",
+            description="Guide through initial project setup.",
+            arguments=[
+                PromptArgument(
+                    name="package_name",
+                    description="Name of the Python package to document.",
+                    required=True,
+                ),
+                PromptArgument(
+                    name="framework",
+                    description="Web framework used (if any).",
+                    required=False,
+                ),
+            ],
+        ),
+    ]
+```
+
+Marking arguments as `required=True` or `required=False` controls whether Great Docs displays a
+"required" badge next to the argument on the generated page.
+
+### Server Instructions
+
+Set `server.instructions` to provide context that agents see when they first connect. Great Docs
+surfaces this on the index page in a callout block, giving visitors an immediate sense of what the
+server does and how to get started:
+
+```python
+server = Server("my-package")
+server.instructions = (
+    "You are connected to the My Package MCP server. "
+    "Use `status` to check the current project state before "
+    "making changes."
+)
+```
+
+Good instructions orient the agent (and the human reading the docs) quickly. A sentence or two
+covering the server's purpose and a suggested starting point is usually sufficient.
+
+## Generated Output
+
+Once your server is discovered and your build completes, Great Docs produces a set of pages that
+integrate seamlessly with the rest of your documentation site. This section describes what to
+expect.
+
+### Index Page
+
+The index page provides an overview of the server's capabilities with:
+
+- **Capability tiles**: visual indicators showing how many tools, resources, templates, and prompts
+  are available
+- **Callout blocks**: server instructions and completions status
+- **Categorized tool listings**: each category as a section with tools shown as definition-list
+  entries linking to their individual pages
+
+The index page serves as the landing point for anyone exploring your server's capabilities, whether
+they arrived from the sidebar or a search result.
+
+### Individual Pages
+
+Each tool, resource, template, or prompt page includes:
+
+- A title with the item name
+- Full description text
+- Parameters or arguments table (with types, defaults, and required markers)
+- Cross-references back to the server and related items
+
+The generated pages use the same styling, navigation, and dark-mode support as the Python API
+reference, giving your documentation site a consistent look regardless of whether someone is
+browsing functions, CLI commands, or MCP tools.
+
+## Internationalization
+
+MCP reference pages support the same internationalization system as the rest of the site. If your
+documentation targets a non-English audience, or if you ship a multilingual site, MCP pages
+participate automatically. When you set a language in `great-docs.yml`:
+
+```{.yaml filename="great-docs.yml"}
+site:
+  language: ja
+```
+
+All UI labels on MCP pages (section headings like "Parameters", "Arguments", badges like
+"required") are translated into the configured language. Currently 25 languages are supported,
+including right-to-left scripts like Arabic and Hebrew. See
+[Internationalization](internationalization.qmd) for the full list.
+
+Your tool descriptions and parameter help text remain in whatever language you write them in. Only
+the structural UI chrome is translated.
+
+## Example
+
+To tie everything together, here's a complete minimal MCP server that produces a well-documented
+reference section. This example includes a tool with typed parameters, a static resource, and
+server instructions (the three most common capability types).
+
+```{.python filename="my_package/mcp.py"}
+from mcp.server import Server
+from mcp.types import Resource, TextContent, Tool
+
+server = Server("my-package")
+server.instructions = "Use status to check project state before making changes."
+
+
+@server.list_tools()
+async def list_tools() -> list[Tool]:
+    return [
+        Tool(
+            name="status",
+            description="Show current project status and configuration.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project_path": {
+                        "type": "string",
+                        "description": "Path to the project root.",
+                    }
+                },
+                "required": ["project_path"],
+            },
+        ),
+    ]
+
+
+@server.call_tool()
+async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    if name == "status":
+        return [TextContent(type="text", text="Project is configured.")]
+    raise ValueError(f"Unknown tool: {name}")
+
+
+@server.list_resources()
+async def list_resources() -> list[Resource]:
+    return [
+        Resource(
+            uri="docs://config",
+            name="Configuration",
+            description="Current great-docs.yml configuration.",
+            mimeType="application/json",
+        ),
+    ]
+```
+
+With this module at `my_package/mcp.py` and the configuration:
+
+```{.yaml filename="great-docs.yml"}
+mcp:
+  enabled: true
+  module: my_package.mcp
+  name: My Package
+```
+
+Running `great-docs build` produces a reference section with an index page, a `status` tool page,
+and a `Configuration` resource page, all fully integrated into the site navigation.
+
+From here you can add more tools, define prompts for common workflows, and organize everything
+with categories as your server grows. The documentation will keep pace with your code automatically.
+
+## Next Steps
+
+Now that your MCP server has a generated reference section, here are some ways to build on it:
+
+- **[Agent Skills](agent-skills.qmd)**: Ship a `SKILL.md` alongside your MCP server so agents have
+  both the structured reference and a concise cheat sheet for common usage patterns.
+- **[llms.txt](llms-txt.qmd)**: MCP tools are automatically included in the generated `llms.txt`
+  and `llms-full.txt` files, giving LLM-based tools another way to discover your server's
+  capabilities.
+- **[Internationalization](internationalization.qmd)**: Translate the UI labels on your MCP
+  reference pages into any of the 25 supported languages.
+- **[Linting](linting.qmd)**: Run `great-docs lint` to catch missing descriptions, undocumented
+  parameters, and other issues in your MCP definitions before they reach the published site.
+- **[API Documentation](api-documentation.qmd)**: If your package also exposes a Python API, both
+  reference sections share the same styling and navigation, giving users a unified experience.
+
+With MCP documentation, Agent Skills, and `llms.txt` all working together, your package provides
+agents with every level of context they need (from a quick skill summary to full tool-by-tool
+reference pages).

@@ -51,6 +51,17 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "module": None,
         "name": None,
     },
+    # MCP server documentation configuration
+    # Auto-generates reference pages from MCP server tool/resource/prompt definitions.
+    # None/False: disabled (default)
+    # dict: {"enabled": True, "module": "package.mcp", ...}
+    "mcp": {
+        "enabled": True,
+        "module": None,  # Importable module path containing the MCP server (e.g., "sweet.mcp")
+        "server_var": None,  # Variable name of the Server instance (auto-detected if None)
+        "name": None,  # Display name override (defaults to server name)
+        "categories": {},  # Manual tool categories: {"Category Name": ["tool_a", "tool_b"]}
+    },
     # Dark mode toggle
     "dark_mode_toggle": True,
     # Authors (rich author metadata)
@@ -580,6 +591,31 @@ class Config:
     def cli_name(self) -> str | None:
         """Get the CLI command name."""
         return self.get("cli.name")
+
+    @property
+    def mcp_enabled(self) -> bool:
+        """Check if MCP server documentation is enabled."""
+        return self.get("mcp.enabled", False)
+
+    @property
+    def mcp_module(self) -> str | None:
+        """Get the MCP server module path."""
+        return self.get("mcp.module")
+
+    @property
+    def mcp_server_var(self) -> str | None:
+        """Get the MCP server variable name."""
+        return self.get("mcp.server_var")
+
+    @property
+    def mcp_name(self) -> str | None:
+        """Get the MCP server display name override."""
+        return self.get("mcp.name")
+
+    @property
+    def mcp_categories(self) -> dict:
+        """Get manual MCP tool categories."""
+        return self.get("mcp.categories", {})
 
     @property
     def skill_enabled(self) -> bool:

@@ -1472,6 +1472,9 @@ class GreatDocs:
         metadata["cli_module"] = self._config.cli_module
         metadata["cli_name"] = self._config.cli_name
 
+        # MCP documentation configuration
+        metadata["mcp_enabled"] = self._config.mcp_enabled
+
         # Dark mode toggle
         metadata["dark_mode_toggle_enabled"] = self._config.dark_mode_toggle
 
@@ -4449,6 +4452,152 @@ class GreatDocs:
 
         print(
             f"Updated sidebar with {self._count_cli_sidebar_items(cli_files)} CLI reference page(s)"
+        )
+
+    # =========================================================================
+    # MCP Server Documentation Methods
+    # =========================================================================
+
+    def _discover_mcp_server(self) -> dict | None:
+        """
+        Discover and introspect the configured MCP server module.
+
+        Returns
+        -------
+        dict | None
+            Server metadata with tools/resources/prompts, or None if not found.
+        """
+        module_path = self._config.mcp_module
+        if not module_path:
+            # Try common MCP module locations based on the documented package
+            package_name = self._normalize_package_name(
+                self._config.get("module") or self.project_path.name
+            )
+            common_mcp_modules = [
+                f"{package_name}.mcp",
+                f"{package_name}.mcp_server",
+                f"{package_name}.server",
+            ]
+            for candidate in common_mcp_modules:
+                try:
+                    import importlib
+
+                    importlib.import_module(candidate)
+                    module_path = candidate
+                    break
+                except ImportError:
+                    continue
+
+        if not module_path:
+            print("No MCP module configured or found")
+            return None
+
+        from ._mcp_docs import discover_mcp_server
+
+        return discover_mcp_server(
+            module_path=module_path,
+            server_var=self._config.mcp_server_var,
+        )
+
+    def _generate_mcp_reference_pages(self, mcp_info: dict) -> list[str | dict]:
+        """
+        Generate Quarto reference pages for MCP server tools/resources/prompts.
+
+        Parameters
+        ----------
+        mcp_info
+            Server metadata from _discover_mcp_server().
+
+        Returns
+        -------
+        list[str | dict]
+            Sidebar items for the generated pages.
+        """
+        from ._mcp_docs import generate_mcp_reference_pages
+
+        mcp_ref_dir = self.project_path / "reference" / "mcp"
+        return generate_mcp_reference_pages(
+            server_info=mcp_info,
+            output_dir=mcp_ref_dir,
+            categories=self._config.mcp_categories or None,
+            display_name=self._config.mcp_name,
+        )
+
+    def _update_sidebar_with_mcp(self, mcp_files: list[str | dict]) -> None:
+        """
+        Update the sidebar configuration to include MCP reference.
+
+        Parameters
+        ----------
+        mcp_files
+            Sidebar items for MCP reference pages.
+        """
+        if not mcp_files:
+            return
+
+        quarto_yml = self.project_path / "_quarto.yml"
+        if not quarto_yml.exists():
+            return
+
+        with open(quarto_yml, "r") as f:
+            config = read_yaml(f) or {}
+
+        if "website" not in config:
+            config["website"] = {}
+
+        # Ensure sidebar exists
+        if "sidebar" not in config["website"]:
+            config["website"]["sidebar"] = []
+
+        sidebar = config["website"]["sidebar"]
+        mcp_section_exists = False
+
+        for section in sidebar:
+            if isinstance(section, dict) and section.get("id") == "mcp-reference":
+                mcp_section_exists = True
+                section["contents"] = mcp_files
+                break
+
+        if not mcp_section_exists:
+            mcp_section = {
+                "id": "mcp-reference",
+                "title": "MCP Reference",
+                "contents": [{"text": "MCP Index", "href": "reference/mcp/index.qmd"}] + mcp_files,
+            }
+            sidebar.append(mcp_section)
+
+        self._write_quarto_yml(quarto_yml, config)
+
+        # Count total tool pages
+        n_pages = self._count_cli_sidebar_items(mcp_files)
+        print(f"Updated sidebar with {n_pages} MCP reference page(s)")
+
+    def _generate_mcp_manifest(self, mcp_info: dict) -> None:
+        """
+        Generate a .well-known/mcp.json discovery manifest.
+
+        Enables clients and registries to auto-discover the MCP server
+        and its capabilities from the documentation site URL.
+
+        Parameters
+        ----------
+        mcp_info
+            Server metadata from _discover_mcp_server().
+        """
+        from ._mcp_docs import generate_mcp_manifest
+
+        # Gather project metadata
+        package_name = self._detect_package_name()
+        owner, repo, _ = self._get_github_repo_info()
+        repo_url = f"https://github.com/{owner}/{repo}" if owner and repo else None
+        site_url = self._config.get("site_url")
+
+        generate_mcp_manifest(
+            server_info=mcp_info,
+            output_dir=self.project_path,
+            package_name=package_name,
+            repo_url=repo_url,
+            site_url=site_url,
         )
 
     # =========================================================================
@@ -11362,15 +11511,45 @@ body-classes: "gd-homepage"
                     page_status_entry
                 )  # pragma: no cover
 
-        # Add reference switcher script (if CLI is enabled)
+        # Add reference switcher script (if CLI or MCP is enabled)
         cli_enabled = metadata.get("cli_enabled", False)
-        if cli_enabled:
+        mcp_enabled = metadata.get("mcp_enabled", False)
+        if cli_enabled or mcp_enabled:
             if "include-after-body" not in config["format"]["html"]:
                 config["format"]["html"]["include-after-body"] = []  # pragma: no cover
             elif isinstance(config["format"]["html"]["include-after-body"], str):
                 config["format"]["html"]["include-after-body"] = [  # pragma: no cover
                     config["format"]["html"]["include-after-body"]
                 ]
+
+            # Build the sections list for the data attribute
+            ref_sections = ["api"]
+            if cli_enabled:
+                ref_sections.append("cli")
+            if mcp_enabled:
+                ref_sections.append("mcp")
+            sections_attr = ",".join(ref_sections)
+
+            # Inject data-gd-ref-sections on <body> via include-in-header script
+            if "include-in-header" not in config["format"]["html"]:
+                config["format"]["html"]["include-in-header"] = []
+            elif isinstance(config["format"]["html"]["include-in-header"], str):
+                config["format"]["html"]["include-in-header"] = [
+                    config["format"]["html"]["include-in-header"]
+                ]
+            ref_sections_script = {
+                "text": (
+                    "<script>"
+                    f"document.addEventListener('DOMContentLoaded',function(){{document.body.setAttribute('data-gd-ref-sections','{sections_attr}');}});"
+                    "</script>"
+                )
+            }
+            has_ref_sections = any(
+                "data-gd-ref-sections" in str(item)
+                for item in config["format"]["html"]["include-in-header"]
+            )
+            if not has_ref_sections:
+                config["format"]["html"]["include-in-header"].append(ref_sections_script)
 
             ref_switcher_script_entry = {"text": '<script src="reference-switcher.js"></script>'}
             has_ref_switcher = any(
@@ -14544,6 +14723,34 @@ body-classes: "gd-homepage"
                     log.step_done("CLI generation had issues")
             else:
                 log.step_skip(step, "CLI not enabled")
+
+            # ── Step 7b: Generate MCP server reference ─────────────────
+            step += 1
+            log.step_start(step, "Generate MCP server reference")
+            if self._config.mcp_enabled:
+                try:
+                    with _quiet_prints():
+                        mcp_info = self._discover_mcp_server()
+                    if mcp_info:
+                        with _quiet_prints():
+                            mcp_files = self._generate_mcp_reference_pages(mcp_info)
+                        if mcp_files:
+                            with _quiet_prints():
+                                self._update_sidebar_with_mcp(mcp_files)
+                            # Generate .well-known/mcp.json discovery manifest
+                            with _quiet_prints():
+                                self._generate_mcp_manifest(mcp_info)
+                            n_tools = len(mcp_info.get("tools", []))
+                            log.step_done(f"{n_tools} MCP tool page(s) + manifest")
+                        else:
+                            log.step_done("No MCP pages generated")
+                    else:
+                        log.step_skip(step, "no MCP server found")
+                except Exception as e:
+                    log.warn(f"Error generating MCP docs: {e}")
+                    log.step_done("MCP generation had issues")
+            else:
+                log.step_skip(step, "MCP not enabled")
 
             # ── Step 8: Process User Guide ─────────────────────────────
             step += 1

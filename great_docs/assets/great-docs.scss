@@ -21,6 +21,11 @@ $label-constant-color: mix($primary, $orange-500, 20%);
 $label-typealias-color: mix($primary, $yellow-500, 20%);
 $label-cli-color: mix($primary, $green-600, 20%);
 $label-cli-group-color: mix($primary, $green-600, 20%);
+$label-mcp-tool-color: mix($primary, $purple-600, 20%);
+$label-mcp-resource-color: mix($primary, $teal-500, 20%);
+$label-mcp-resource-template-color: mix($primary, $teal-500, 20%);
+$label-mcp-prompt-color: mix($primary, $orange-400, 20%);
+$label-mcp-color: mix($primary, $purple-600, 20%);
 
 $signature-background-color: shade-color(tint-color($primary, 96%), 2%);
 
@@ -201,6 +206,11 @@ body.quarto-dark table.gd-summary-table td:last-child {
   text-underline-offset: 0.25em;
   text-decoration-thickness: 0.125em;
   word-break: initial;
+}
+
+.doc-api-page .badge {
+  position: relative;
+  top: -3px;
 }
 
 /*------------------------------------- API Page --------------------------------------*/
@@ -467,7 +477,12 @@ $all_labels: (
   constant,
   typealias,
   cli,
-  cli-group
+  cli-group,
+  mcp-tool,
+  mcp-resource,
+  mcp-resource-template,
+  mcp-prompt,
+  mcp
 );
 $class-like-labels: (class, dataclass, namedtuple, typeddict, protocol, abc, enum);
 $method-like-labels: (method, classmethod, staticmethod);
@@ -547,6 +562,115 @@ $method-like-labels: (method, classmethod, staticmethod);
   color: $label-cli-group-color;
   border-color: $label-cli-group-color;
   background-color: tint-color($label-cli-group-color, 95%);
+}
+
+// MCP label styles
+.content span.doc-label-mcp-tool::after {
+  content: "tool";
+  color: $label-mcp-tool-color;
+  border-color: $label-mcp-tool-color;
+  background-color: tint-color($label-mcp-tool-color, 95%);
+}
+
+.content span.doc-label-mcp-resource::after {
+  content: "resource";
+  color: $label-mcp-resource-color;
+  border-color: $label-mcp-resource-color;
+  background-color: tint-color($label-mcp-resource-color, 95%);
+}
+
+.content span.doc-label-mcp-resource-template::after {
+  content: "resource template";
+  color: $label-mcp-resource-template-color;
+  border-color: $label-mcp-resource-template-color;
+  background-color: tint-color($label-mcp-resource-template-color, 95%);
+}
+
+.content span.doc-label-mcp-prompt::after {
+  content: "prompt";
+  color: $label-mcp-prompt-color;
+  border-color: $label-mcp-prompt-color;
+  background-color: tint-color($label-mcp-prompt-color, 95%);
+}
+
+.content span.doc-label-mcp::after {
+  content: "mcp";
+  color: $label-mcp-color;
+  border-color: $label-mcp-color;
+  background-color: tint-color($label-mcp-color, 95%);
+}
+
+// MCP capability tiles
+$label-mcp-completions-color: mix($primary, $indigo-400, 20%);
+$label-mcp-instructions-color: mix($primary, $pink-500, 20%);
+
+.mcp-capability-tiles {
+  max-width: 28rem;
+  margin-bottom: 1.5rem;
+
+  > p {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin: 0;
+  }
+}
+
+.mcp-tile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.85rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid;
+}
+
+.mcp-tile-label {
+  flex: 1;
+}
+
+.mcp-tile-count {
+  font-weight: 700;
+  font-size: 1rem;
+  margin-left: 0.5rem;
+}
+
+.mcp-tile-tools {
+  color: $label-mcp-tool-color;
+  border-color: $label-mcp-tool-color;
+  background-color: tint-color($label-mcp-tool-color, 92%);
+}
+
+.mcp-tile-resources {
+  color: $label-mcp-resource-color;
+  border-color: $label-mcp-resource-color;
+  background-color: tint-color($label-mcp-resource-color, 92%);
+}
+
+.mcp-tile-templates {
+  color: $label-mcp-resource-template-color;
+  border-color: $label-mcp-resource-template-color;
+  background-color: tint-color($label-mcp-resource-template-color, 92%);
+}
+
+.mcp-tile-prompts {
+  color: $label-mcp-prompt-color;
+  border-color: $label-mcp-prompt-color;
+  background-color: tint-color($label-mcp-prompt-color, 92%);
+}
+
+.mcp-tile-completions {
+  color: $label-mcp-completions-color;
+  border-color: $label-mcp-completions-color;
+  background-color: tint-color($label-mcp-completions-color, 92%);
+}
+
+.mcp-tile-instructions {
+  color: $label-mcp-instructions-color;
+  border-color: $label-mcp-instructions-color;
+  background-color: tint-color($label-mcp-instructions-color, 92%);
 }
 
 // Adorn callables with ()
@@ -2527,7 +2651,11 @@ html.quarto-dark .gd-badge-deprecated,
    ============================================ */
 
 .reference-switcher-container {
-    padding: 0.5rem 0.65rem;
+    margin-left: 0;
+    margin-right: 0.6rem;
+    margin-bottom: 0.2rem;
+    padding-top: 1.25rem;
+    padding-bottom: 0.6rem;
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     background: transparent;
 }
@@ -2590,6 +2718,134 @@ body.quarto-dark .reference-switcher-btn.active {
     background: #3a3a3a;
     color: #fff;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================
+   Reference Switcher Dropdown (3+ sections)
+   ============================================ */
+
+.reference-switcher-dropdown {
+    position: relative;
+}
+
+.reference-switcher-dropdown-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 6px;
+    background: #f8f8f8;
+    color: #333;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.reference-switcher-dropdown-toggle:hover {
+    border-color: rgba(0, 0, 0, 0.2);
+    background: #f0f0f0;
+}
+
+.reference-switcher-dropdown-toggle i {
+    font-size: 0.9rem;
+    opacity: 0.7;
+}
+
+.reference-switcher-dropdown-label {
+    flex: 1;
+    text-align: left;
+}
+
+.reference-switcher-chevron {
+    opacity: 0.5;
+    transition: transform 0.15s ease;
+}
+
+.reference-switcher-dropdown-toggle[aria-expanded="true"] .reference-switcher-chevron {
+    transform: rotate(180deg);
+}
+
+.reference-switcher-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 100;
+    margin: 0;
+    padding: 0.25rem;
+    list-style: none;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.reference-switcher-dropdown-menu.show {
+    display: block;
+}
+
+.reference-switcher-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #555;
+    cursor: pointer;
+    transition: background 0.1s ease, color 0.1s ease;
+}
+
+.reference-switcher-dropdown-item:hover {
+    background: #f0f0f0;
+    color: #333;
+}
+
+.reference-switcher-dropdown-item.active {
+    background: #e8f0fe;
+    color: #1a73e8;
+}
+
+.reference-switcher-dropdown-item i {
+    font-size: 0.9rem;
+    opacity: 0.7;
+}
+
+/* Dark mode dropdown */
+body.quarto-dark .reference-switcher-dropdown-toggle {
+    background: #2a2a2a;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #e0e0e0;
+}
+
+body.quarto-dark .reference-switcher-dropdown-toggle:hover {
+    background: #333;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+body.quarto-dark .reference-switcher-dropdown-menu {
+    background: #2a2a2a;
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+body.quarto-dark .reference-switcher-dropdown-item {
+    color: #999;
+}
+
+body.quarto-dark .reference-switcher-dropdown-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #e0e0e0;
+}
+
+body.quarto-dark .reference-switcher-dropdown-item.active {
+    background: rgba(138, 180, 248, 0.15);
+    color: #8ab4f8;
 }
 
 /* ============================================
