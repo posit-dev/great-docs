@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .
+          python -m pip install -e ".[mcp]"
           python -m pip install jupyter polars pandas pyarrow plotnine
 
       - name: Set up Quarto
