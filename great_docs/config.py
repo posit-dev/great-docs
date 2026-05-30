@@ -56,7 +56,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # None/False: disabled (default)
     # dict: {"enabled": True, "module": "package.mcp", ...}
     "mcp": {
-        "enabled": False,
+        "enabled": True,
         "module": None,  # Importable module path containing the MCP server (e.g., "sweet.mcp")
         "server_var": None,  # Variable name of the Server instance (auto-detected if None)
         "name": None,  # Display name override (defaults to server name)
