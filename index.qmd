@@ -14,6 +14,8 @@ Every class, function, method, and attribute in your public API gets its own str
 
 If your package has a Click CLI, that's documented as well (complete with terminal-style help output and subcommand trees).
 
+Want to *show* your CLI in action? Termshow lets you record terminal sessions, edit them visually in a browser-based editor, and embed the results as animated SVG players directly in your documentation. No screen recordings, no GIFs, no JavaScript... just lightweight, theme-aware terminal playback that lives alongside your reference pages.
+
 ## Looks Good Without Trying
 
 Dark mode with a persistent toggle. Responsive on every screen. Sidebar search for large APIs. GitHub star counts in the corner.
