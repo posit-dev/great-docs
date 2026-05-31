@@ -26,6 +26,8 @@ Your package gets a site that matches the quality of the code behind it.
 
 Great Docs generates `llms.txt` and `llms-full.txt` so AI coding agents can understand your library without scraping HTML. It also produces Agent Skills files: structured metadata that tells tools like Copilot, Cursor, and Claude Code *how* to use your package (not just what it exports).
 
+If your package ships an MCP server, Great Docs auto-generates reference pages for every tool, resource, and prompt it exposes, giving agents structured documentation they can discover through the [Model Context Protocol](https://modelcontextprotocol.io/).
+
 You can also write your own custom skills and publish them with your site. Your users install them with a single command.
 
 ## Deploy in One Step
