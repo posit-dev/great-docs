@@ -87,6 +87,10 @@ Click-based CLIs are documented automatically with `--help` output rendered in t
 <img src="https://posit-dev.github.io/great-docs/assets/cli-page.png" alt="CLI reference page with terminal-style help output" width="720">
 </p>
 
+### MCP Server Reference
+
+If your package ships an [MCP](https://modelcontextprotocol.io/) server, Great Docs generates structured reference pages for every tool, resource, and prompt it exposes. Parameters, types, required/optional markers, and descriptions are extracted automatically from your server definitions.
+
 ### Dark Mode
 
 A persistent dark mode toggle with flash-free loading. Your users' preference is remembered across visits.
@@ -147,6 +151,7 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 - Multiple named skills per package
 - Skill install/check/list CLI commands
 - Markdown page generation for LLM consumption
+- MCP server reference pages (tools, resources, prompts)
 
 </td>
 <td width="50%" valign="top">
