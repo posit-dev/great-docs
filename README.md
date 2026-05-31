@@ -91,6 +91,10 @@ Click-based CLIs are documented automatically with `--help` output rendered in t
 
 If your package ships an [MCP](https://modelcontextprotocol.io/) server, Great Docs generates structured reference pages for every tool, resource, and prompt it exposes. Parameters, types, required/optional markers, and descriptions are extracted automatically from your server definitions.
 
+### Terminal Recordings
+
+Teach your CLI visually with Termshow: record terminal sessions, edit them in a browser-based visual editor, and embed the results as animated SVG players in your documentation. Recordings are lightweight, theme-aware, and play inline without JavaScript dependencies. It so incredibly useful in onboarding guides, tutorials, and landing pages.
+
 ### Dark Mode
 
 A persistent dark mode toggle with flash-free loading. Your users' preference is remembered across visits.
