@@ -27,7 +27,9 @@ async def __():
         import micropip
 
         await micropip.install(["great-tables", "polars"])
-    return
+
+    _packages_ready = True
+    return (_packages_ready,)
 
 
 @app.cell
@@ -44,7 +46,7 @@ def __(mo):
 
 
 @app.cell
-def __():
+def __(_packages_ready):
     import great_tables as gt
     import polars as pl
 
