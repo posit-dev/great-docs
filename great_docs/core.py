@@ -316,6 +316,35 @@ class GreatDocs:
                     for nb_file in notebooks_src.glob("*.py"):
                         out_file = islands_dir / f"{nb_file.stem}.html"
                         generate_islands_for_build(nb_file, out_file, reactive=True)
+                        # Also generate nocode variant for show-code="false"
+                        nocode_file = islands_dir / f"{nb_file.stem}-nocode.html"
+                        generate_islands_for_build(
+                            nb_file, nocode_file, display_code=False, reactive=True
+                        )
+
+                    # Generate WASM exports for iframe mode
+                    import subprocess
+
+                    for nb_file in notebooks_src.glob("*.py"):
+                        wasm_dir = self.project_path / "notebooks" / nb_file.stem
+                        wasm_dir.mkdir(parents=True, exist_ok=True)
+                        subprocess.run(
+                            [
+                                _sys.executable,
+                                "-m",
+                                "marimo",
+                                "export",
+                                "html-wasm",
+                                str(nb_file),
+                                "-o",
+                                str(wasm_dir) + "/",
+                                "--mode",
+                                "run",
+                            ],
+                            input="n\n",
+                            capture_output=True,
+                            text=True,
+                        )
                 finally:
                     _sys.stdout = _orig_stdout
                     _sys.stderr = _orig_stderr
