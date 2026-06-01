@@ -84,6 +84,8 @@ return {
         end
 
         -- ISLAND MODE --------------------------------------------------------
+        local show_code = kwarg(kwargs, "show-code", "true")
+
         -- Read pre-generated island HTML from _marimo_islands/<stem>.html
         local stem = file:match("([^/]+)%.py$")
         if not stem then
@@ -93,7 +95,12 @@ return {
                 .. escape_html(file) .. '</div>')
         end
 
-        local island_html = read_project_file("_marimo_islands/" .. stem .. ".html")
+        -- Use -nocode variant when show-code is false
+        local island_file = "_marimo_islands/" .. stem .. ".html"
+        if show_code == "false" then
+            island_file = "_marimo_islands/" .. stem .. "-nocode.html"
+        end
+        local island_html = read_project_file(island_file)
         if not island_html then
             quarto.log.warning("[marimo] Pre-generated island HTML not found for: " .. stem)
             return pandoc.RawInline("html",
@@ -102,7 +109,11 @@ return {
         end
 
         local parts = {}
-        table.insert(parts, '<div class="gd-marimo-island-group" data-theme="' .. escape_html(theme) .. '">')
+        local wrapper_classes = "gd-marimo-island-group"
+        if show_code == "false" then
+            wrapper_classes = wrapper_classes .. " gd-marimo-nocode"
+        end
+        table.insert(parts, '<div class="' .. wrapper_classes .. '" data-theme="' .. escape_html(theme) .. '">')
         table.insert(parts, island_html)
 
         -- Copy notebook button
