@@ -115,14 +115,18 @@ into view) to avoid impacting initial page load.
 Embeds the full Marimo notebook UI in a sandboxed iframe. Use this for complex notebooks
 that benefit from the complete editor interface.
 
+{{< marimo file="notebooks/gt-basics.py" mode="iframe" height="700px" >}}
+
 ### Hide code
 
 ```markdown
-{{{{< marimo file="notebooks/gt-basics.py" show-code="false" >}}}}
+{{{{< marimo file="notebooks/gt-output-demo.py" show-code="false" >}}}}
 ```
 
 Shows only outputs, which is useful for dashboards or app-style presentations where the code is
 secondary.
+
+{{< marimo file="notebooks/gt-output-demo.py" show-code="false" >}}
 
 These options can be combined freely. For instance, you might use `show-code="false"` with
 `theme="dark"` for a polished demo, or `mode="iframe"` with a custom `height` for a full-featured
