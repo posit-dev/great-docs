@@ -113,6 +113,15 @@ marimo-cell-output {
   border-radius: 0.2rem;
 }
 
+/* No-code mode: hide source, show outputs only */
+.gd-marimo-nocode .gd-marimo-code {
+  display: none;
+}
+
+.gd-marimo-nocode marimo-cell-code {
+  display: none;
+}
+
 /* Error state */
 .gd-marimo-error {
   padding: 1rem;
