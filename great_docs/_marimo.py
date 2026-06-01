@@ -33,6 +33,7 @@ def generate_islands_html(
     *,
     display_code: bool = True,
     reactive: bool = True,
+    app_id: str | None = None,
 ) -> str:
     """Generate marimo island HTML from a notebook file.
 
@@ -47,6 +48,9 @@ def generate_islands_html(
         Whether to show cell source code.
     reactive
         Whether cells should be reactive (run with Pyodide in browser).
+    app_id
+        Unique app identifier for namespacing islands on the same page.
+        Defaults to the notebook stem name.
 
     Returns
     -------
@@ -85,6 +89,22 @@ def generate_islands_html(
     if not reactive:
         body_html = body_html.replace('data-reactive="true"', 'data-reactive="false"')
 
+    # When hiding code, strip islands whose output is empty (utility cells)
+    if not display_code:
+        body_html = re.sub(
+            r"<marimo-island[^>]*>\s*<marimo-cell-output>\s*<span></span>\s*"
+            r"</marimo-cell-output>\s*(?:<marimo-cell-code[^>]*>.*?</marimo-cell-code>\s*)?"
+            r"</marimo-island>\s*",
+            "",
+            body_html,
+            flags=re.DOTALL,
+        )
+
+    # Namespace islands with a unique app_id (defaults to notebook stem)
+    resolved_app_id = app_id or notebook_path.stem
+    if resolved_app_id != "main":
+        body_html = body_html.replace('data-app-id="main"', f'data-app-id="{resolved_app_id}"')
+
     return body_html
 
 
@@ -94,6 +114,7 @@ def generate_islands_for_build(
     *,
     display_code: bool = True,
     reactive: bool = True,
+    app_id: str | None = None,
 ) -> None:
     """Pre-generate island HTML and save to a file for the Lua shortcode to read.
 
@@ -107,11 +128,15 @@ def generate_islands_for_build(
         Whether to show cell source code.
     reactive
         Whether cells should be reactive.
+    app_id
+        Unique app identifier for namespacing islands on the same page.
+        Defaults to the notebook stem name.
     """
     html = generate_islands_html(
         notebook_path,
         display_code=display_code,
         reactive=reactive,
+        app_id=app_id,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html, encoding="utf-8")
