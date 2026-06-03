@@ -469,10 +469,11 @@
             var item = items[i];
             if (item.section && item.section !== currentSection) {
                 currentSection = item.section;
+                // Section text comes from innerHTML (already HTML-safe), so
+                // insert directly without escaping to avoid double-encoding
+                // entities like &amp; → &amp;amp;
                 html += '<li class="gd-menu-section" aria-hidden="true">' +
-                        (typeof currentSection === 'string' && currentSection.indexOf('<') !== -1
-                            ? currentSection
-                            : escapeHtml(currentSection)) + '</li>';
+                        currentSection + '</li>';
             }
             var activeClass = item.active ? ' gd-menu-item-active' : '';
             var label = item.html || escapeHtml(item.text);
