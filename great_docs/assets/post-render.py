@@ -2958,9 +2958,14 @@ if os.path.exists(index_file):
     # Translate renderer-rendered headings, TOC, and sidebar on the index page
     content = translate_renderer_headings(content)
 
-    # Replace breadcrumb with a "Reference" title bar label
-    _reference_label = _t("reference", "Reference")
-    _ref_idx_title = f'<h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title">{html.escape(_reference_label)}</h1>'
+    # Replace breadcrumb with an "API / Index" title bar label
+    _ref_idx_title = (
+        '<h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title">'
+        '<span class="gd-ref-title-prefix">API</span>'
+        '<span class="gd-ref-title-sep">/</span>'
+        '<span class="gd-ref-title-name">Index</span>'
+        "</h1>"
+    )
     _bc_pat = r'<nav class="quarto-page-breadcrumbs[^"]*"[^>]*>.*?</nav>'
     content = re.sub(_bc_pat, _ref_idx_title, content, flags=re.DOTALL)
 
@@ -2970,6 +2975,71 @@ if os.path.exists(index_file):
     print("Index file processing complete")
 else:
     print(f"Index file not found: {index_file}")
+
+
+# Modify the MCP index page to replace breadcrumbs with a styled title
+mcp_index_file = "_site/reference/mcp/index.html"
+if os.path.exists(mcp_index_file):
+    print(f"Processing MCP index file: {mcp_index_file}")
+    with open(mcp_index_file, "r", encoding="utf-8") as file:
+        content = file.read()
+
+    _mcp_idx_title = (
+        '<h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title">'
+        '<span class="gd-ref-title-prefix">MCP</span>'
+        '<span class="gd-ref-title-sep">/</span>'
+        '<span class="gd-ref-title-name">Index</span>'
+        "</h1>"
+    )
+    _bc_pat = r'<nav class="quarto-page-breadcrumbs[^"]*"[^>]*>.*?</nav>'
+    content = re.sub(_bc_pat, _mcp_idx_title, content, flags=re.DOTALL)
+
+    with open(mcp_index_file, "w", encoding="utf-8") as file:
+        file.write(content)
+
+    print("MCP index file processing complete")
+else:
+    print(f"MCP index file not found: {mcp_index_file}")
+
+
+# Process individual MCP reference pages (tools, resources, prompts) to add
+# "MCP / object_name" title bar in the secondary nav
+mcp_html_files = [
+    f for f in glob.glob("_site/reference/mcp/*.html") if os.path.basename(f) != "index.html"
+]
+
+if mcp_html_files:
+    print(f"Processing {len(mcp_html_files)} MCP reference pages...")
+
+    for html_file in mcp_html_files:
+        with open(html_file, "r", encoding="utf-8") as file:
+            content = file.read()
+
+        # Extract the display name from the doc-object-name span
+        _obj_name_match = re.search(r'<span class="doc-object-name[^"]*">([^<]+)</span>', content)
+        _mcp_name = (
+            _obj_name_match.group(1)
+            if _obj_name_match
+            else os.path.basename(html_file).replace(".html", "")
+        )
+
+        _mcp_title_html = (
+            f'<h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title">'
+            f'<span class="gd-ref-title-prefix">MCP</span>'
+            f'<span class="gd-ref-title-sep">/</span>'
+            f'<span class="gd-ref-title-name">{html.escape(_mcp_name)}</span>'
+            f"</h1>"
+        )
+
+        # MCP pages use bread-crumbs: false, so Quarto renders the title inside
+        # an h1.quarto-secondary-nav-title.no-breadcrumbs element
+        _h1_pat = r'<h1 class="quarto-secondary-nav-title no-breadcrumbs[^"]*">.*?</h1>'
+        content = re.sub(_h1_pat, _mcp_title_html, content, count=1, flags=re.DOTALL)
+
+        with open(html_file, "w", encoding="utf-8") as file:
+            file.write(content)
+
+    print(f"Styled {len(mcp_html_files)} MCP reference page titles")
 
 
 # Update quarto-secondary-nav-title to display "User Guide" text

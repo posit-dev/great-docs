@@ -21,10 +21,10 @@ $label-constant-color: mix($primary, $orange-500, 20%);
 $label-typealias-color: mix($primary, $yellow-500, 20%);
 $label-cli-color: mix($primary, $green-600, 20%);
 $label-cli-group-color: mix($primary, $green-600, 20%);
-$label-mcp-tool-color: mix($primary, $purple-600, 20%);
-$label-mcp-resource-color: mix($primary, $teal-500, 20%);
-$label-mcp-resource-template-color: mix($primary, $teal-500, 20%);
-$label-mcp-prompt-color: mix($primary, $orange-400, 20%);
+$label-mcp-tool-color: #e6194B;
+$label-mcp-resource-color: #3cb44b;
+$label-mcp-resource-template-color: #f032e6;
+$label-mcp-prompt-color: #4363d8;
 $label-mcp-color: mix($primary, $purple-600, 20%);
 
 $signature-background-color: shade-color(tint-color($primary, 96%), 2%);
@@ -601,8 +601,8 @@ $method-like-labels: (method, classmethod, staticmethod);
 }
 
 // MCP capability tiles
-$label-mcp-completions-color: mix($primary, $indigo-400, 20%);
-$label-mcp-instructions-color: mix($primary, $pink-500, 20%);
+$label-mcp-completions-color: #911eb4;
+$label-mcp-instructions-color: #f58231;
 
 .mcp-capability-tiles {
   max-width: 28rem;
@@ -613,6 +613,7 @@ $label-mcp-instructions-color: mix($primary, $pink-500, 20%);
     grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
     margin: 0;
+    padding-top: 10px;
   }
 }
 
@@ -638,39 +639,39 @@ $label-mcp-instructions-color: mix($primary, $pink-500, 20%);
 }
 
 .mcp-tile-tools {
-  color: $label-mcp-tool-color;
-  border-color: $label-mcp-tool-color;
-  background-color: tint-color($label-mcp-tool-color, 92%);
+  color: #e6194B;
+  border-color: #e6194B;
+  background-color: tint-color(#e6194B, 92%);
 }
 
 .mcp-tile-resources {
-  color: $label-mcp-resource-color;
-  border-color: $label-mcp-resource-color;
-  background-color: tint-color($label-mcp-resource-color, 92%);
+  color: #3cb44b;
+  border-color: #3cb44b;
+  background-color: tint-color(#3cb44b, 92%);
 }
 
 .mcp-tile-templates {
-  color: $label-mcp-resource-template-color;
-  border-color: $label-mcp-resource-template-color;
-  background-color: tint-color($label-mcp-resource-template-color, 92%);
+  color: #f032e6;
+  border-color: #f032e6;
+  background-color: tint-color(#f032e6, 92%);
 }
 
 .mcp-tile-prompts {
-  color: $label-mcp-prompt-color;
-  border-color: $label-mcp-prompt-color;
-  background-color: tint-color($label-mcp-prompt-color, 92%);
-}
-
-.mcp-tile-completions {
-  color: $label-mcp-completions-color;
-  border-color: $label-mcp-completions-color;
-  background-color: tint-color($label-mcp-completions-color, 92%);
+  color: #4363d8;
+  border-color: #4363d8;
+  background-color: tint-color(#4363d8, 92%);
 }
 
 .mcp-tile-instructions {
-  color: $label-mcp-instructions-color;
-  border-color: $label-mcp-instructions-color;
-  background-color: tint-color($label-mcp-instructions-color, 92%);
+  color: #f58231;
+  border-color: #f58231;
+  background-color: tint-color(#f58231, 92%);
+}
+
+.mcp-tile-completions {
+  color: #911eb4;
+  border-color: #911eb4;
+  background-color: tint-color(#911eb4, 92%);
 }
 
 // Adorn callables with ()
@@ -1947,7 +1948,7 @@ div.sourceCode:hover > .gd-code-nav .gd-code-copy,
         gap: 0;
         padding-top: 0;
         padding-left: 0.5rem;
-        color: #6c757d;
+        color: #212529;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;

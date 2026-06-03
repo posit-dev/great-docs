@@ -598,14 +598,14 @@ def _generate_mcp_index_page(
         f'<span class="mcp-tile-count">{n_prompts}</span></span>'
     )
     lines.append(
-        f'<span class="mcp-tile mcp-tile-completions">'
-        f'<span class="mcp-tile-label">{get_translation("mcp_completions", language)}</span>'
-        f'<span class="mcp-tile-count">{completions_mark}</span></span>'
-    )
-    lines.append(
         f'<span class="mcp-tile mcp-tile-instructions">'
         f'<span class="mcp-tile-label">{get_translation("mcp_instructions", language)}</span>'
         f'<span class="mcp-tile-count">{instructions_mark}</span></span>'
+    )
+    lines.append(
+        f'<span class="mcp-tile mcp-tile-completions">'
+        f'<span class="mcp-tile-label">{get_translation("mcp_completions", language)}</span>'
+        f'<span class="mcp-tile-count">{completions_mark}</span></span>'
     )
     lines.append("</div>")
     lines.append("")
