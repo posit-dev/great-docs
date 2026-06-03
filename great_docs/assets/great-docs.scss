@@ -21,10 +21,10 @@ $label-constant-color: mix($primary, $orange-500, 20%);
 $label-typealias-color: mix($primary, $yellow-500, 20%);
 $label-cli-color: mix($primary, $green-600, 20%);
 $label-cli-group-color: mix($primary, $green-600, 20%);
-$label-mcp-tool-color: mix($primary, $purple-600, 20%);
-$label-mcp-resource-color: mix($primary, $teal-500, 20%);
-$label-mcp-resource-template-color: mix($primary, $teal-500, 20%);
-$label-mcp-prompt-color: mix($primary, $orange-400, 20%);
+$label-mcp-tool-color: #e6194B;
+$label-mcp-resource-color: #3cb44b;
+$label-mcp-resource-template-color: #f032e6;
+$label-mcp-prompt-color: #4363d8;
 $label-mcp-color: mix($primary, $purple-600, 20%);
 
 $signature-background-color: shade-color(tint-color($primary, 96%), 2%);
