@@ -601,8 +601,8 @@ $method-like-labels: (method, classmethod, staticmethod);
 }
 
 // MCP capability tiles
-$label-mcp-completions-color: mix($primary, $indigo-400, 20%);
-$label-mcp-instructions-color: mix($primary, $pink-500, 20%);
+$label-mcp-completions-color: #911eb4;
+$label-mcp-instructions-color: #f58231;
 
 .mcp-capability-tiles {
   max-width: 28rem;
