@@ -81,10 +81,10 @@ Classes, functions, methods, and attributes are automatically organized into cat
 
 ### CLI Reference
 
-Click-based CLIs are documented automatically with `--help` output rendered in terminal style, organized by command group.
+Click-based CLIs get rich, sectioned reference pages with usage signatures, typed options, and descriptions extracted directly from code. Each command page includes structured documentation alongside a collapsible `--help` output view.
 
 <p align="center">
-<img src="https://posit-dev.github.io/great-docs/assets/cli-page.png" alt="CLI reference page with terminal-style help output" width="720">
+<img src="https://posit-dev.github.io/great-docs/assets/cli-page.png" alt="CLI reference page with structured documentation and collapsible help output" width="720">
 </p>
 
 ### MCP Server Reference
