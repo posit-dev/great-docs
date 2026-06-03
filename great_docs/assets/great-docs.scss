@@ -638,9 +638,9 @@ $label-mcp-instructions-color: #f58231;
 }
 
 .mcp-tile-tools {
-  color: $label-mcp-tool-color;
-  border-color: $label-mcp-tool-color;
-  background-color: tint-color($label-mcp-tool-color, 92%);
+  color: #e6194B;
+  border-color: #e6194B;
+  background-color: tint-color(#e6194B, 92%);
 }
 
 .mcp-tile-resources {
