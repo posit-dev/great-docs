@@ -644,33 +644,33 @@ $label-mcp-instructions-color: #f58231;
 }
 
 .mcp-tile-resources {
-  color: $label-mcp-resource-color;
-  border-color: $label-mcp-resource-color;
-  background-color: tint-color($label-mcp-resource-color, 92%);
+  color: #3cb44b;
+  border-color: #3cb44b;
+  background-color: tint-color(#3cb44b, 92%);
 }
 
 .mcp-tile-templates {
-  color: $label-mcp-resource-template-color;
-  border-color: $label-mcp-resource-template-color;
-  background-color: tint-color($label-mcp-resource-template-color, 92%);
+  color: #f032e6;
+  border-color: #f032e6;
+  background-color: tint-color(#f032e6, 92%);
 }
 
 .mcp-tile-prompts {
-  color: $label-mcp-prompt-color;
-  border-color: $label-mcp-prompt-color;
-  background-color: tint-color($label-mcp-prompt-color, 92%);
-}
-
-.mcp-tile-completions {
-  color: $label-mcp-completions-color;
-  border-color: $label-mcp-completions-color;
-  background-color: tint-color($label-mcp-completions-color, 92%);
+  color: #4363d8;
+  border-color: #4363d8;
+  background-color: tint-color(#4363d8, 92%);
 }
 
 .mcp-tile-instructions {
-  color: $label-mcp-instructions-color;
-  border-color: $label-mcp-instructions-color;
-  background-color: tint-color($label-mcp-instructions-color, 92%);
+  color: #f58231;
+  border-color: #f58231;
+  background-color: tint-color(#f58231, 92%);
+}
+
+.mcp-tile-completions {
+  color: #911eb4;
+  border-color: #911eb4;
+  background-color: tint-color(#911eb4, 92%);
 }
 
 // Adorn callables with ()
