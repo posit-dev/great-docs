@@ -3171,7 +3171,9 @@ def inject_github_widget():
 
     widget_escaped_pattern = re.compile(
         r'<span class="menu-text">&lt;div id="github-widget" '
-        r'data-owner="([^"]*)" data-repo="([^"]*)"&gt;&lt;/div&gt;</span>'
+        r'data-owner="([^"]*)" data-repo="([^"]*)"'
+        r'((?:\s+data-[a-z]+=(?:"[^"]*"|&quot;[^&]*&quot;))*)'
+        r"&gt;&lt;/div&gt;</span>"
     )
 
     widget_count = 0
@@ -3185,9 +3187,13 @@ def inject_github_widget():
         if match:
             owner = match.group(1)
             repo = match.group(2)
+            extra_attrs_raw = match.group(3)
+
+            # Unescape any &quot; in extra attributes
+            extra_attrs = extra_attrs_raw.replace("&quot;", '"') if extra_attrs_raw else ""
 
             # Replace with actual widget HTML
-            replacement = f'<div id="github-widget" data-owner="{owner}" data-repo="{repo}"></div>'
+            replacement = f'<div id="github-widget" data-owner="{owner}" data-repo="{repo}"{extra_attrs}></div>'
             content = widget_escaped_pattern.sub(replacement, content)
 
             with open(html_file, "w", encoding="utf-8") as file:
