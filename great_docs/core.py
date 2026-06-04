@@ -1533,8 +1533,12 @@ class GreatDocs:
 
         # Build the new GitHub entry based on style
         if github_style == "widget" and owner and repo:
+            stats = self._fetch_github_repo_stats(owner, repo)
+            stats_attrs = ""
+            if stats:
+                stats_attrs = f' data-stars="{stats["stars"]}" data-forks="{stats["forks"]}"'
             new_gh_entry = {
-                "text": f'<div id="github-widget" data-owner="{owner}" data-repo="{repo}"></div>'
+                "text": f'<div id="github-widget" data-owner="{owner}" data-repo="{repo}"{stats_attrs}></div>'
             }
         else:
             new_gh_entry = {"icon": "github", "href": repo_url}
@@ -1619,6 +1623,43 @@ class GreatDocs:
             return owner, repo, base_url
 
         return None, None, None  # pragma: no cover
+
+    def _fetch_github_repo_stats(self, owner: str, repo: str) -> dict[str, int]:
+        """
+        Fetch repository star and fork counts from the GitHub API at build time.
+
+        Uses GITHUB_TOKEN / GH_TOKEN if available for higher rate limits.
+
+        Returns
+        -------
+        dict[str, int]
+            A dict with 'stars' and 'forks' keys, or empty dict on failure.
+        """
+        import requests
+
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+
+        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        url = f"https://api.github.com/repos/{owner}/{repo}"
+
+        try:
+            resp = requests.get(url, headers=headers, timeout=15)
+            if resp.status_code == 200:
+                data = resp.json()
+                return {
+                    "stars": data.get("stargazers_count", 0),
+                    "forks": data.get("forks_count", 0),
+                }
+        except requests.RequestException:
+            pass
+
+        return {}
 
     # =========================================================================
     # Changelog (GitHub Releases) Methods
@@ -11014,9 +11055,11 @@ body-classes: "gd-homepage"
 
             # Add GitHub link on the right if repository URL is available
             if owner and repo and repo_url and github_style == "widget":
-                gh_widget_html = (
-                    f'<div id="github-widget" data-owner="{owner}" data-repo="{repo}"></div>'
-                )
+                stats = self._fetch_github_repo_stats(owner, repo)
+                stats_attrs = ""
+                if stats:
+                    stats_attrs = f' data-stars="{stats["stars"]}" data-forks="{stats["forks"]}"'
+                gh_widget_html = f'<div id="github-widget" data-owner="{owner}" data-repo="{repo}"{stats_attrs}></div>'
                 navbar_config["right"] = [{"text": gh_widget_html}]
             elif repo_url:
                 navbar_config["right"] = [{"icon": "github", "href": repo_url}]
