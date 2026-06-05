@@ -134,6 +134,9 @@ class GreatDocs:
         # Whether API reference was successfully configured (set during build)
         self._has_api_reference = True
 
+        # Whether MCP pages were actually generated (None = not yet determined)
+        self._mcp_pages_generated: bool | None = None
+
         # Per-build caches (reset on each build, shared across steps)
         self._griffe_pkg_cache: dict | None = None  # {normalized_name: griffe Package}
         self._cached_exports: list | None = None
@@ -4612,6 +4615,60 @@ class GreatDocs:
         # Count total tool pages
         n_pages = self._count_cli_sidebar_items(mcp_files)
         print(f"Updated sidebar with {n_pages} MCP reference page(s)")
+
+    def _remove_mcp_from_ref_sections(self) -> None:
+        """
+        Remove 'mcp' from the reference switcher data attribute in _quarto.yml.
+
+        Called when MCP is enabled in config but no MCP server is discovered
+        or no MCP pages are generated. This prevents a dangling MCP navigation
+        item that would lead to a 404 page.
+        """
+        quarto_yml = self.project_path / "_quarto.yml"
+        if not quarto_yml.exists():
+            return
+
+        with open(quarto_yml, "r") as f:
+            config = read_yaml(f) or {}
+
+        html_config = config.get("format", {}).get("html", {})
+        include_in_header = html_config.get("include-in-header", [])
+        include_after_body = html_config.get("include-after-body", [])
+
+        # Find and update the data-gd-ref-sections script
+        updated = False
+        for i, item in enumerate(include_in_header):
+            if isinstance(item, dict) and "data-gd-ref-sections" in item.get("text", ""):
+                # Extract current sections and remove 'mcp'
+                text = item["text"]
+                # The format is: ...setAttribute('data-gd-ref-sections','api,cli,mcp')...
+                match = re.search(r"'data-gd-ref-sections','([^']*)'", text)
+                if match:
+                    sections = [s for s in match.group(1).split(",") if s != "mcp"]
+                    if len(sections) <= 1:
+                        # Only 'api' remains — remove the ref-sections script entirely
+                        include_in_header.pop(i)
+                        # Also remove the reference-switcher.js script
+                        config["format"]["html"]["include-after-body"] = [
+                            entry
+                            for entry in include_after_body
+                            if not (
+                                isinstance(entry, dict)
+                                and "reference-switcher" in entry.get("text", "")
+                            )
+                        ]
+                    else:
+                        new_sections = ",".join(sections)
+                        item["text"] = re.sub(
+                            r"'data-gd-ref-sections','[^']*'",
+                            f"'data-gd-ref-sections','{new_sections}'",
+                            text,
+                        )
+                    updated = True
+                break
+
+        if updated:
+            self._write_quarto_yml(quarto_yml, config)
 
     def _generate_mcp_manifest(self, mcp_info: dict) -> None:
         """
@@ -11556,7 +11613,13 @@ body-classes: "gd-homepage"
 
         # Add reference switcher script (if CLI or MCP is enabled)
         cli_enabled = metadata.get("cli_enabled", False)
-        mcp_enabled = metadata.get("mcp_enabled", False)
+        # Use the runtime flag if MCP discovery has already run; otherwise fall
+        # back to the config value (optimistic, will be patched later if needed)
+        mcp_enabled = (
+            self._mcp_pages_generated
+            if self._mcp_pages_generated is not None
+            else metadata.get("mcp_enabled", False)
+        )
         if cli_enabled or mcp_enabled:
             if "include-after-body" not in config["format"]["html"]:
                 config["format"]["html"]["include-after-body"] = []  # pragma: no cover
@@ -14778,6 +14841,7 @@ body-classes: "gd-homepage"
                         with _quiet_prints():
                             mcp_files = self._generate_mcp_reference_pages(mcp_info)
                         if mcp_files:
+                            self._mcp_pages_generated = True
                             with _quiet_prints():
                                 self._update_sidebar_with_mcp(mcp_files)
                             # Generate .well-known/mcp.json discovery manifest
@@ -14786,11 +14850,17 @@ body-classes: "gd-homepage"
                             n_tools = len(mcp_info.get("tools", []))
                             log.step_done(f"{n_tools} MCP tool page(s) + manifest")
                         else:
+                            self._mcp_pages_generated = False
+                            self._remove_mcp_from_ref_sections()
                             log.step_done("No MCP pages generated")
                     else:
+                        self._mcp_pages_generated = False
+                        self._remove_mcp_from_ref_sections()
                         log.step_skip(step, "no MCP server found")
                 except Exception as e:
+                    self._mcp_pages_generated = False
                     log.warn(f"Error generating MCP docs: {e}")
+                    self._remove_mcp_from_ref_sections()
                     log.step_done("MCP generation had issues")
             else:
                 log.step_skip(step, "MCP not enabled")
