@@ -68,7 +68,8 @@ def create_inventory(
         Inventory dictionary with project, version, count, and items.
     """
     if uri is None:
-        uri = lambda s: f"{s.canonical_path}.html"
+        def uri(s):
+            return f"{s.canonical_path}.html"
     if dispname is None:
         dispname = "-"
 
