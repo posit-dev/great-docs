@@ -47,18 +47,22 @@ def discover_mcp_server(
     if server_var:
         server = getattr(module, server_var, None)
     else:
-        # Auto-detect: look for mcp.server.Server instances
+        # Auto-detect: look for mcp.server.Server or FastMCP instances
         for attr_name in dir(module):
             obj = getattr(module, attr_name)
             type_name = type(obj).__name__
             module_name = type(obj).__module__ or ""
-            if type_name == "Server" and "mcp" in module_name:
+            if "mcp" in module_name and type_name in ("Server", "FastMCP"):
                 server = obj
                 break
 
     if server is None:
         print(f"No MCP Server instance found in {module_path}")
         return None
+
+    # Unwrap FastMCP to get the underlying low-level server with request_handlers
+    if hasattr(server, "_mcp_server"):
+        server = server._mcp_server
 
     # Extract server name
     server_name = getattr(server, "name", None) or module_path.split(".")[-1]
