@@ -125,6 +125,26 @@ def _should_use_color() -> bool:
         return False
 
 
+def _safe_stream_write(stream, text: str, *, flush: bool = True) -> None:
+    """Write *text* to *stream*, falling back to UTF-8 bytes on encode errors."""
+    try:
+        stream.write(text)
+        if flush:
+            stream.flush()
+    except UnicodeEncodeError:
+        buffer = getattr(stream, "buffer", None)
+        if buffer is None:
+            return
+        try:
+            buffer.write(text.encode("utf-8", errors="replace"))
+            if flush:
+                buffer.flush()
+        except (BrokenPipeError, OSError):
+            pass
+    except (BrokenPipeError, OSError):
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Time formatting
 # ---------------------------------------------------------------------------
@@ -282,15 +302,13 @@ class ProgressBar:
                     return  # throttle to 1 Hz
                 self._last_draw_time = now
                 line = self._render_bar(current)
-                self.stream.write(f"\r{line}")
-                self.stream.flush()
+                _safe_stream_write(self.stream, f"\r{line}")
             else:
                 # CI mode: emit at every 10 % boundary
                 bucket = min(current * 100 // self.total, 100) // 10
                 if bucket > self._last_pct_bucket:
                     self._last_pct_bucket = bucket
-                    self.stream.write(self._render_bar_plain(current) + "\n")
-                    self.stream.flush()
+                    _safe_stream_write(self.stream, self._render_bar_plain(current) + "\n")
         except (BrokenPipeError, OSError):
             pass
 
@@ -307,8 +325,7 @@ class ProgressBar:
             # Clear the in-place line
             try:
                 width = shutil.get_terminal_size((80, 24)).columns
-                self.stream.write("\r" + " " * width + "\r")
-                self.stream.flush()
+                _safe_stream_write(self.stream, "\r" + " " * width + "\r")
             except (BrokenPipeError, OSError):
                 pass
 
@@ -391,8 +408,7 @@ class MultiProgressBar:
             if bucket > self._ci_buckets[idx]:
                 self._ci_buckets[idx] = bucket
                 pct = bucket * 10
-                self.stream.write(f"   [..] {self._labels[idx]}  {pct:>3d}%\n")
-                self.stream.flush()
+                _safe_stream_write(self.stream, f"   [..] {self._labels[idx]}  {pct:>3d}%\n")
 
     def finish(self) -> None:
         """Clear all progress lines. Safe to call more than once."""
@@ -403,12 +419,11 @@ class MultiProgressBar:
             try:
                 width = shutil.get_terminal_size((80, 24)).columns
                 # Move up N lines and clear each
-                self.stream.write(f"\033[{self._n}A")
+                _safe_stream_write(self.stream, f"\033[{self._n}A", flush=False)
                 for _ in range(self._n):
-                    self.stream.write(" " * width + "\n")
+                    _safe_stream_write(self.stream, " " * width + "\n", flush=False)
                 # Move back up to start
-                self.stream.write(f"\033[{self._n}A\r")
-                self.stream.flush()
+                _safe_stream_write(self.stream, f"\033[{self._n}A\r")
             except (BrokenPipeError, OSError):
                 pass
 
@@ -417,7 +432,7 @@ class MultiProgressBar:
         try:
             if self._drawn:
                 # Move cursor up to first slot line
-                self.stream.write(f"\033[{self._n}A")
+                _safe_stream_write(self.stream, f"\033[{self._n}A", flush=False)
 
             lines = []
             width = shutil.get_terminal_size((80, 24)).columns
@@ -427,8 +442,7 @@ class MultiProgressBar:
                 padding = max(0, width - _display_width(line))
                 lines.append(line + " " * padding)
 
-            self.stream.write("\n".join(lines) + "\n")
-            self.stream.flush()
+            _safe_stream_write(self.stream, "\n".join(lines) + "\n")
             self._drawn = True
         except (BrokenPipeError, OSError):
             pass
@@ -505,11 +519,7 @@ class BuildLog:
     # -- internal helpers ---------------------------------------------------
 
     def _write(self, text: str) -> None:
-        try:
-            self.stream.write(text + "\n")
-            self.stream.flush()
-        except (BrokenPipeError, OSError):
-            pass  # never crash the build for a logging failure
+        _safe_stream_write(self.stream, text + "\n")
 
     def _pad_rail(self, inner: str, inner_plain_len: int) -> str:
         """Pad a step header *inner* string with ``━`` to fill the width."""
