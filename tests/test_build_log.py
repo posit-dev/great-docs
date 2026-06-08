@@ -1712,6 +1712,35 @@ class TestDefensiveWrite:
         log = BuildLog(stream=ErrorStream(), force_color=False, width=80)
         log._write("test")  # should not raise
 
+    def test_substep_survives_cp1252_stdout(self):
+        """Issue #200: box-drawing substeps must not crash on cp1252 stdout."""
+        buffer = io.BytesIO()
+        stream = io.TextIOWrapper(buffer, encoding="cp1252", errors="strict")
+        log = BuildLog(stream=stream, force_color=False, width=80)
+        log.substep("SEO enhancements applied")
+        output = buffer.getvalue().decode("utf-8", errors="replace")
+        assert "SEO enhancements applied" in output
+
+    def test_footer_survives_cp1252_stdout(self):
+        """Issue #200: celebration emoji in footer must not crash on cp1252 stdout."""
+        buffer = io.BytesIO()
+        stream = io.TextIOWrapper(buffer, encoding="cp1252", errors="strict")
+        log = BuildLog(stream=stream, force_color=False, width=80)
+        log.footer(site_path="out/index.html")
+        output = buffer.getvalue().decode("utf-8", errors="replace")
+        assert "Site ready" in output
+        assert "Build complete" in output
+
+    def test_post_render_stdio_reconfigure_allows_emoji(self):
+        """Issue #200: post-render status prints must survive cp1252 stdout."""
+        buffer = io.BytesIO()
+        wrapper = io.TextIOWrapper(buffer, encoding="cp1252", errors="strict")
+        wrapper.reconfigure(encoding="utf-8", errors="replace")
+        print("\n🔍 Applying SEO enhancements to HTML files...", file=wrapper)
+        wrapper.flush()
+        output = buffer.getvalue().decode("utf-8", errors="replace")
+        assert "SEO enhancements" in output
+
     def test_progress_bar_survives_broken_pipe(self):
         class BrokenStream:
             def write(self, _s):

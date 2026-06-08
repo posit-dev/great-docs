@@ -2213,6 +2213,23 @@ def test_get_quarto_env_preserves_existing_env():
         assert env["PATH"] == os.environ.get("PATH")
 
 
+def test_get_quarto_env_sets_pythonutf8():
+    """Issue #200: Quarto subprocess env enables UTF-8 mode on Windows."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        env = docs._get_quarto_env()
+        assert env.get("PYTHONUTF8") == "1"
+
+
+def test_get_quarto_env_preserves_existing_pythonutf8(monkeypatch):
+    """Issue #200: do not override an explicit PYTHONUTF8 value."""
+    monkeypatch.setenv("PYTHONUTF8", "0")
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        env = docs._get_quarto_env()
+        assert env["PYTHONUTF8"] == "0"
+
+
 def test_detect_dynamic_mode_returns_true_for_simple_package():
     """Test that _detect_dynamic_mode returns True for packages without cyclic aliases."""
 

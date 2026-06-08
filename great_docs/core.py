@@ -1309,6 +1309,9 @@ class GreatDocs:
         else:
             env["PYTHONPATH"] = new_pythonpath
 
+        # Ensure Python subprocesses (e.g. post-render.py via Quarto) use UTF-8 on Windows.
+        env.setdefault("PYTHONUTF8", "1")
+
         return env
 
     def _get_package_metadata(self) -> dict:
