@@ -15079,7 +15079,7 @@ def test_update_reference_index_frontmatter_no_frontmatter():
 
 
 def test_update_reference_index_frontmatter_already_has_page_nav():
-    """Test _update_reference_index_frontmatter skips when page-navigation already present."""
+    """Test _update_reference_index_frontmatter skips page-navigation when already present."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
@@ -15087,7 +15087,7 @@ def test_update_reference_index_frontmatter_already_has_page_nav():
         ref_dir.mkdir(parents=True, exist_ok=True)
 
         index_qmd = ref_dir / "index.qmd"
-        original = "---\ntitle: API Reference\npage-navigation: false\n---\n\n# API\n"
+        original = "---\ntitle: API Reference\npage-navigation: false\nhtml-table-processing: none\n---\n\n# API\n"
         index_qmd.write_text(original, encoding="utf-8")
 
         docs._update_reference_index_frontmatter()
@@ -36910,10 +36910,12 @@ class TestUpdateReferenceIndexFrontmatter:
             finally:
                 os.chdir(old_cwd)
             content = index_path.read_text()
-            assert content.startswith("---\npage-navigation: false\n---\n")
+            assert content.startswith(
+                "---\npage-navigation: false\nhtml-table-processing: none\n---\n"
+            )
 
     def test_skips_if_already_has_page_navigation(self):
-        """Doesn't modify file if page-navigation already set."""
+        """Doesn't modify file if page-navigation and html-table-processing already set."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp = Path(tmp_dir)
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
@@ -36922,7 +36924,7 @@ class TestUpdateReferenceIndexFrontmatter:
             ref_dir = docs.project_path / "reference"
             ref_dir.mkdir()
             index_path = ref_dir / "index.qmd"
-            original = "---\ntitle: API\npage-navigation: false\n---\nContent.\n"
+            original = "---\ntitle: API\npage-navigation: false\nhtml-table-processing: none\n---\nContent.\n"
             index_path.write_text(original)
             docs._update_reference_index_frontmatter()
             assert index_path.read_text() == original
@@ -37587,7 +37589,9 @@ class TestUpdateReferenceIndexFrontmatterBatch9:
             finally:
                 docs.docs_dir = original_docs_dir
             content = index_qmd.read_text()
-            assert content.startswith("---\npage-navigation: false\n---\n")
+            assert content.startswith(
+                "---\npage-navigation: false\nhtml-table-processing: none\n---\n"
+            )
 
     def test_skips_when_already_has_page_navigation(self):
         """Does not duplicate page-navigation if already present."""
