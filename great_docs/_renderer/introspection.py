@@ -571,8 +571,10 @@ class Builder:
             _log.info(f"Rendering {page.path}")
             rendered = str(RenderAPIPage(page, self.header_level))
 
-            # Merge page-navigation into existing frontmatter
-            rendered = _merge_frontmatter(rendered, {"page-navigation": False})
+            # Merge page-navigation and disable Quarto table processing
+            rendered = _merge_frontmatter(
+                rendered, {"page-navigation": False, "html-table-processing": "none"}
+            )
 
             html_path = Path(self.dir) / (page.path + self.out_page_suffix)
             html_path.parent.mkdir(exist_ok=True, parents=True)
