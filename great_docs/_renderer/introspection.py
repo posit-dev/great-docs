@@ -175,6 +175,55 @@ def replace_docstring(obj: dc.Object | dc.Alias, f: object = None) -> None:
     if f.__doc__ is None:
         return
 
+    # Reclassify callable attributes as functions.
+    # When a class uses `method = some_function` pattern, griffe sees it as
+    # Kind.ATTRIBUTE. If the runtime value is actually a function, promote it
+    # to a Function object so it gets proper function-style rendering.
+    if (
+        isinstance(obj, dc.Attribute)
+        and callable(f)
+        and hasattr(f, "__code__")
+        and obj.parent is not None
+    ):
+        func_obj = dc.Function(
+            name=obj.name,
+            lineno=obj.lineno,
+            endlineno=obj.endlineno,
+            parent=obj.parent,
+        )
+        # Extract parameters from runtime signature
+        try:
+            sig = inspect.signature(f)
+            params = []
+            _kind_map = {
+                inspect.Parameter.POSITIONAL_ONLY: dc.ParameterKind.positional_only,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD: dc.ParameterKind.positional_or_keyword,
+                inspect.Parameter.VAR_POSITIONAL: dc.ParameterKind.var_positional,
+                inspect.Parameter.KEYWORD_ONLY: dc.ParameterKind.keyword_only,
+                inspect.Parameter.VAR_KEYWORD: dc.ParameterKind.var_keyword,
+            }
+            for pname, param in sig.parameters.items():
+                kind = _kind_map.get(param.kind, dc.ParameterKind.positional_or_keyword)
+                default = (
+                    str(param.default) if param.default is not inspect.Parameter.empty else None
+                )
+                params.append(dc.Parameter(name=pname, kind=kind, default=default))
+            func_obj.parameters = dc.Parameters(*params)
+        except (ValueError, TypeError):
+            pass
+
+        old = obj.docstring
+        func_obj.docstring = dc.Docstring(
+            value=f.__doc__,
+            lineno=getattr(old, "lineno", None),
+            endlineno=getattr(old, "endlineno", None),
+            parent=func_obj,
+            parser=getattr(old, "parser", None),
+            parser_options=getattr(old, "parser_options", None),
+        )
+        obj.parent.set_member(obj.name, func_obj)
+        return
+
     old = obj.docstring
     new = dc.Docstring(
         value=f.__doc__,
