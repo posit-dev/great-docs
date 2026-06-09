@@ -409,8 +409,11 @@ class __RenderDoc(RenderBase):
             parts = raw_title.split("`")
             title = "`".join(part if idx % 2 else part.title() for idx, part in enumerate(parts))
 
-            if section_kind == "text":
-                assert i == 0, f"unexpected text section {section_kind}"
+            if section_kind == "text" and i > 0:
+                # Some docstrings (e.g., numpy-style with Examples) produce
+                # trailing text sections. Treat them as additional description
+                # content rather than crashing.
+                title = "Text"
 
             items.append((title, section))
 
