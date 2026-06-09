@@ -50,6 +50,7 @@ class __RenderReferencePage(RenderPageMixin, RenderBase):
                 "title": self.layout.title,
                 "body-classes": "doc-reference",
                 "page-navigation": False,
+                "html-table-processing": "none",
             }
         )
 

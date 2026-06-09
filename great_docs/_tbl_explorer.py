@@ -1046,8 +1046,7 @@ def tbl_explorer(
 
     See Also
     --------
-    tbl_preview: A simpler table preview widget for quick looks at datasets without interactive
-    controls or pagination.
+    tbl_preview: A simpler table preview widget for quick looks at datasets without interactive controls or pagination.
     """
     import warnings
 

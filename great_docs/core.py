@@ -4205,6 +4205,7 @@ class GreatDocs:
         lines.append("body-classes: doc-api-page")
         lines.append("sidebar: cli-reference")
         lines.append("page-navigation: false")
+        lines.append("html-table-processing: none")
         lines.append("---")
         lines.append("")
 
@@ -11028,6 +11029,10 @@ body-classes: "gd-homepage"
         if self._config.language and self._config.language != "en":
             config["lang"] = self._config.language  # pragma: no cover
 
+        # Disable Quarto's HTML table processing so that GT tables (and other
+        # pre-styled HTML tables) are not affected by Bootstrap striping/styles
+        config["format"]["html"]["html-table-processing"] = "none"
+
         # Configure Mermaid diagrams - use 'default' (light) theme always
         # We provide a light background container in dark mode via CSS
         config["format"]["html"]["mermaid"] = {"theme": "default"}
@@ -12486,14 +12491,17 @@ body-classes: "gd-homepage"
 
         # Check if frontmatter already exists; if so, inject page-navigation
         if content.startswith("---"):
-            if "page-navigation:" not in content.split("---", 2)[1]:
+            fm_section = content.split("---", 2)[1]
+            if "page-navigation:" not in fm_section:
                 content = content.replace("---\n", "---\npage-navigation: false\n", 1)
-                with open(index_path, "w") as f:
-                    f.write(content)
+            if "html-table-processing:" not in fm_section:
+                content = content.replace("---\n", "---\nhtml-table-processing: none\n", 1)
+            with open(index_path, "w") as f:
+                f.write(content)
             return
 
         # Add minimal frontmatter if none exists
-        content = f"---\npage-navigation: false\n---\n\n{content}"
+        content = f"---\npage-navigation: false\nhtml-table-processing: none\n---\n\n{content}"
 
         # Write updated content
         with open(index_path, "w") as f:

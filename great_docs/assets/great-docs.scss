@@ -1712,6 +1712,14 @@ body.quarto-light .navbar .gd-navbar-icon:hover {
     zoom: 60%;
 }
 
+// Prevent Quarto/Bootstrap from striping computational output tables
+// (Pandas DataFrames, etc.). Quarto injects .table-striped on cell outputs
+// but GT tables already opt out via data-quarto-bootstrap="false".
+.cell-output table.table-striped > tbody > tr:nth-of-type(odd) > * {
+    --bs-table-striped-bg: transparent;
+}
+
+
 // Scale-to-fit: shrinks wide content (tables, GT output) to fill the
 // container width.  Apply in .qmd via  :::{.scale-to-fit} ... :::
 .scale-to-fit {
