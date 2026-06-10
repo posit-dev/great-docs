@@ -851,7 +851,7 @@ def build_license_features_html(
 
     if info.conditions:
         parts.append('<div class="license-feature-group">')
-        parts.append(f"<h4>{conditions_label}</h4>")
+        parts.append(f'<h4 id="conditions" style="margin-top: 1rem;">{conditions_label}</h4>')
         parts.append('<div class="license-badges">')
         for c in info.conditions:
             parts.append(f'<span class="license-badge license-badge-condition">{c}</span>')
@@ -859,7 +859,7 @@ def build_license_features_html(
 
     if info.limitations:
         parts.append('<div class="license-feature-group">')
-        parts.append(f"<h4>{limitations_label}</h4>")
+        parts.append(f'<h4 id="limitations" style="margin-top: 1rem;">{limitations_label}</h4>')
         parts.append('<div class="license-badges">')
         for lim in info.limitations:
             parts.append(f'<span class="license-badge license-badge-limitation">{lim}</span>')
