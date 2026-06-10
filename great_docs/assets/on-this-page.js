@@ -108,7 +108,8 @@
                 li.className = 'gd-otp-nested';
             }
             var a = document.createElement('a');
-            a.href = entry.href;
+            a.setAttribute('href', entry.href);
+            a.setAttribute('data-scroll-target', entry.href);
             a.textContent = entry.text;
             a.className = 'gd-otp-panel-link';
             li.appendChild(a);
@@ -220,11 +221,12 @@
         for (var i = 0; i < links.length; i++) {
             links[i].addEventListener('click', function (e) {
                 e.preventDefault();
-                var targetId = this.getAttribute('href');
+                var targetId = this.getAttribute('data-scroll-target');
                 close();
 
                 // Navigate to the section
-                var target = document.querySelector(targetId);
+                var id = targetId.charAt(0) === '#' ? targetId.substring(1) : targetId;
+                var target = document.getElementById(id);
                 if (target) {
                     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
                         target.scrollIntoView();
@@ -232,7 +234,7 @@
                         target.scrollIntoView({ behavior: 'smooth' });
                     }
                     // Update URL hash without triggering scroll
-                    history.pushState(null, '', targetId);
+                    history.pushState(null, '', '#' + id);
                 }
             });
         }
