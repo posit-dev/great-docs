@@ -670,6 +670,24 @@ class TestBuildLogHeader:
         border_line = lines[0]
         assert len(border_line) <= _BOX_MAX_WIDTH
 
+    def test_header_shows_package_location(self):
+        log, stream = _make_log(package_location="/path/to/site-packages/testpkg")
+        log.header()
+        output = stream.getvalue()
+        assert "from /path/to/site-packages/testpkg" in output
+
+    def test_header_no_location_when_empty(self):
+        log, stream = _make_log(package_location="")
+        log.header()
+        output = stream.getvalue()
+        assert "from " not in output
+
+    def test_header_location_with_remote_url(self):
+        log, stream = _make_log(package_location="https://github.com/posit-dev/great-tables.git")
+        log.header()
+        output = stream.getvalue()
+        assert "from https://github.com/posit-dev/great-tables.git" in output
+
 
 # =========================================================================
 # BuildLog — step_start
