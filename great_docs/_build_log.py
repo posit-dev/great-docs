@@ -491,6 +491,7 @@ class BuildLog:
         *,
         package_name: str = "",
         package_version: str = "",
+        package_location: str = "",
         total_steps: int = 17,
         estimated_seconds: float = 0,
         stream=None,
@@ -499,6 +500,7 @@ class BuildLog:
     ) -> None:
         self.package_name = package_name
         self.package_version = package_version
+        self.package_location = package_location
         self.total_steps = total_steps
         self.estimated_seconds = estimated_seconds
         self.stream = stream or sys.stdout
@@ -606,6 +608,8 @@ class BuildLog:
 
         self._write(self._box_top())
         self._write(self._box_line(title))
+        if self.package_location:
+            self._write(self._box_line(f"from {self.package_location}"))
         self._write(self._box_line(info))
         self._write(self._box_bottom())
 
