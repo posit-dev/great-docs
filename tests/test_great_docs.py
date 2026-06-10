@@ -17410,8 +17410,10 @@ def test_categorize_referenced_objects_missing_item_raises():
                 }
             ]
 
-            with pytest.raises(SystemExit) as exc_info:
-                docs._categorize_referenced_objects("mypkg", reference_config)
+            # Mock importlib.metadata.version to simulate an installed package
+            with patch("importlib.metadata.version", return_value="1.0.0"):
+                with pytest.raises(SystemExit) as exc_info:
+                    docs._categorize_referenced_objects("mypkg", reference_config)
 
             error_msg = str(exc_info.value)
             assert "nonexistent_item" in error_msg
