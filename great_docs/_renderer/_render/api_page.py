@@ -57,9 +57,11 @@ class __RenderAPIPage(RenderPageMixin, RenderBase):
 
         # For a top level object, the title will be created by
         # this api-page as front-matter, rather than a regular header.
+        # Suppress the inner object's title to avoid a duplicate heading
+        # alongside the Quarto-rendered front-matter title.
         for obj in render_objs:
             if obj.level == 1:
-                self.show_title = False
+                obj.show_title = False
 
         return render_objs
 
