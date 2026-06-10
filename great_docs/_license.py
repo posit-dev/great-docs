@@ -47,6 +47,30 @@ LIM_WARRANTY = "Warranty"
 LIM_TRADEMARK = "Trademark use"
 LIM_PATENT = "Patent use"
 
+# ── Badge tooltip descriptions ─────────────────────────────────────────
+# Maps each badge label to a translation key used for its tooltip.
+# The actual tooltip text lives in _translations.py under these keys.
+
+BADGE_TOOLTIP_KEYS: dict[str, str] = {
+    PERM_COMMERCIAL: "license_tip_commercial_use",
+    PERM_DISTRIBUTION: "license_tip_distribution",
+    PERM_MODIFICATION: "license_tip_modification",
+    PERM_PATENT: "license_tip_patent_use",
+    PERM_PRIVATE: "license_tip_private_use",
+    COND_DISCLOSE_SOURCE: "license_tip_disclose_source",
+    COND_LICENSE_NOTICE: "license_tip_license_notice",
+    COND_LICENSE_NOTICE_SOURCE: "license_tip_license_notice_source",
+    COND_NETWORK_USE: "license_tip_network_use",
+    COND_SAME_LICENSE: "license_tip_same_license",
+    COND_SAME_LICENSE_FILE: "license_tip_same_license_file",
+    COND_SAME_LICENSE_LIBRARY: "license_tip_same_license_library",
+    COND_STATE_CHANGES: "license_tip_state_changes",
+    LIM_LIABILITY: "license_tip_liability",
+    LIM_PATENT: "license_tip_no_patent",
+    LIM_TRADEMARK: "license_tip_trademark",
+    LIM_WARRANTY: "license_tip_warranty",
+}
+
 # ── License database ───────────────────────────────────────────────────
 
 LICENSES: dict[str, LicenseInfo] = {}
@@ -796,6 +820,7 @@ def build_license_features_html(
     permissions_label: str = "Permissions",
     conditions_label: str = "Conditions",
     limitations_label: str = "Limitations",
+    tooltips: dict[str, str] | None = None,
 ) -> str:
     """
     Generate the HTML for a collapsible license-features section.
@@ -816,12 +841,25 @@ def build_license_features_html(
         Translated heading for the conditions section.
     limitations_label
         Translated heading for the limitations section.
+    tooltips
+        Optional mapping of badge label to tooltip description text.
+        When provided, each badge ``<span>`` gets a ``title`` attribute.
 
     Returns
     -------
     str
         An HTML fragment ready for inclusion inside a ``.license-container``.
     """
+    import html as _html
+
+    _tips = tooltips or {}
+
+    def _badge(css_class: str, label: str) -> str:
+        tip = _tips.get(label, "")
+        if tip:
+            return f'<span class="license-badge {css_class}" title="{_html.escape(tip, quote=True)}">{label}</span>'
+        return f'<span class="license-badge {css_class}">{label}</span>'
+
     parts: list[str] = []
 
     # Outer wrapper
@@ -846,23 +884,23 @@ def build_license_features_html(
         parts.append(f"<h4>{permissions_label}</h4>")
         parts.append('<div class="license-badges">')
         for p in info.permissions:
-            parts.append(f'<span class="license-badge license-badge-permission">{p}</span>')
+            parts.append(_badge("license-badge-permission", p))
         parts.append("</div></div>")
 
     if info.conditions:
         parts.append('<div class="license-feature-group">')
-        parts.append(f"<h4>{conditions_label}</h4>")
+        parts.append(f'<h4 id="conditions" style="margin-top: 1rem;">{conditions_label}</h4>')
         parts.append('<div class="license-badges">')
         for c in info.conditions:
-            parts.append(f'<span class="license-badge license-badge-condition">{c}</span>')
+            parts.append(_badge("license-badge-condition", c))
         parts.append("</div></div>")
 
     if info.limitations:
         parts.append('<div class="license-feature-group">')
-        parts.append(f"<h4>{limitations_label}</h4>")
+        parts.append(f'<h4 id="limitations" style="margin-top: 1rem;">{limitations_label}</h4>')
         parts.append('<div class="license-badges">')
         for lim in info.limitations:
-            parts.append(f'<span class="license-badge license-badge-limitation">{lim}</span>')
+            parts.append(_badge("license-badge-limitation", lim))
         parts.append("</div></div>")
 
     parts.append("</div></div></div>")  # pad, inner, body

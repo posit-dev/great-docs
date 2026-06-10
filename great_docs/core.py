@@ -10134,7 +10134,11 @@ title: "Security Policy"
                 license_content = f.read()
 
             # Build optional license-features section from SPDX data
-            from ._license import build_license_features_html, get_license_info
+            from ._license import (
+                BADGE_TOOLTIP_KEYS,
+                build_license_features_html,
+                get_license_info,
+            )
             from ._translations import get_translation
 
             metadata_for_license = self._get_package_metadata()
@@ -10145,12 +10149,18 @@ title: "Security Policy"
                 if license_info is not None:  # pragma: no cover
                     _lang = self._config.language  # pragma: no cover
                     features_label = get_translation("license_features", _lang)  # pragma: no cover
+                    # Build translated tooltips for each badge
+                    _tooltips = {  # pragma: no cover
+                        label: get_translation(key, _lang)
+                        for label, key in BADGE_TOOLTIP_KEYS.items()
+                    }
                     license_features_html = build_license_features_html(  # pragma: no cover
                         license_info,
                         features_label=features_label,
                         permissions_label=get_translation("license_permissions", _lang),
                         conditions_label=get_translation("license_conditions", _lang),
                         limitations_label=get_translation("license_limitations", _lang),
+                        tooltips=_tooltips,
                     )
 
             # Wrap all HTML in raw blocks so Quarto passes them through verbatim
@@ -10166,6 +10176,7 @@ toc: false
 sidebar: false
 page-layout: full
 body-classes: "gd-license-page"
+anchor-sections: false
 ---
 
 {features_block}```{{=html}}
