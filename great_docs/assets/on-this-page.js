@@ -183,6 +183,7 @@
             backdrop.classList.add('gd-otp-backdrop-visible');
             btn.classList.add('gd-otp-btn-active');
             btn.setAttribute('aria-expanded', 'true');
+            document.body.style.overflow = 'hidden';
 
             // Position the panel above the button
             var btnRect = btn.getBoundingClientRect();
@@ -199,6 +200,7 @@
             backdrop.classList.remove('gd-otp-backdrop-visible');
             btn.classList.remove('gd-otp-btn-active');
             btn.setAttribute('aria-expanded', 'false');
+            document.body.style.overflow = '';
         }
 
         // Toggle on button tap
@@ -216,26 +218,51 @@
             close();
         });
 
+        // Prevent touch scroll from propagating to the page body
+        panel.addEventListener('touchmove', function (e) {
+            e.stopPropagation();
+        }, { passive: true });
+
         // Handle link taps: navigate + dismiss
         var links = panel.querySelectorAll('.gd-otp-panel-link');
         for (var i = 0; i < links.length; i++) {
             links[i].addEventListener('click', function (e) {
                 e.preventDefault();
                 var targetId = this.getAttribute('data-scroll-target');
-                close();
-
-                // Navigate to the section
                 var id = targetId.charAt(0) === '#' ? targetId.substring(1) : targetId;
                 var target = document.getElementById(id);
-                if (target) {
-                    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-                        target.scrollIntoView();
-                    } else {
-                        target.scrollIntoView({ behavior: 'smooth' });
-                    }
-                    // Update URL hash without triggering scroll
-                    history.pushState(null, '', '#' + id);
+                if (!target) { close(); return; }
+
+                // In Quarto the id is on the <section>, not the <h2>/<h3>.
+                // The section can be very tall, so find the actual heading
+                // to use as the scroll anchor.
+                var scrollAnchor = target;
+                if (target.tagName === 'SECTION' || target.tagName === 'DIV') {
+                    var heading = target.querySelector('h1, h2, h3, h4, h5, h6');
+                    if (heading) scrollAnchor = heading;
                 }
+
+                // Compute absolute position using offsetTop walk
+                var absTop = 0;
+                var el = scrollAnchor;
+                while (el) {
+                    absTop += el.offsetTop;
+                    el = el.offsetParent;
+                }
+                var anchorHeight = scrollAnchor.offsetHeight;
+
+                close();
+
+                // Scroll to center the heading vertically after layout settles
+                requestAnimationFrame(function () {
+                    var centerY = absTop - (window.innerHeight / 2) + (anchorHeight / 2);
+                    var opts = { top: Math.max(0, centerY), left: 0 };
+                    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                        opts.behavior = 'smooth';
+                    }
+                    window.scrollTo(opts);
+                    history.pushState(null, '', '#' + id);
+                });
             });
         }
 
