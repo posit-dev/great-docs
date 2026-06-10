@@ -7409,7 +7409,8 @@ body.gd-menu-open {
     z-index: 1042;
     width: min(280px, calc(100vw - 2.5rem));
     max-height: min(360px, 60vh);
-    overflow-y: auto;
+    overflow-y: scroll;
+    overscroll-behavior: contain;
     background: #fff;
     border: 1px solid rgba(0, 0, 0, 0.1);
     border-radius: 12px;
