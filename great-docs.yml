@@ -12,6 +12,38 @@ announcement:
   style: mint
   dismissable: true
 
+# Author Information
+# ------------------
+# Rich author metadata for display in the landing page sidebar
+authors:
+  - name: Rich Iannone
+    role: Maintainer
+    affiliation: Posit, PBC
+    email: riannone@me.com
+    github: rich-iannone
+    orcid: 0000-0003-3925-190X
+  - name: Hassan Kibirige
+    role: Author
+    affiliation: Posit, PBC
+    email: hassan.kibirige@posit.co
+    github: has2k1
+  - name: Tomasz Kalinowski
+    role: Contributor
+    affiliation: Posit, PBC
+    email: tomasz@posit.co
+    github: t-kalinowski
+
+# Funding / Copyright Holder
+# --------------------------
+# Credit the organization that funds or holds copyright for this package.
+funding:
+  name: Posit Software, PBC
+  roles:
+    - Copyright holder
+    - funder
+  homepage: https://posit.co
+  ror: https://ror.org/03wc8by49
+
 # Navbar Style
 # ------------
 # Animated gradient preset for the top navigation bar.
@@ -292,33 +324,6 @@ nav_icons:
     Keyboard Keys: keyboard
     Collapsible Details: panel-top-close
     Terminal Recordings: clapperboard
-
-# Author Information
-# ------------------
-# Rich author metadata for display in the landing page sidebar
-authors:
-  - name: Rich Iannone
-    role: Maintainer
-    affiliation: Posit, PBC
-    email: riannone@me.com
-    github: rich-iannone
-    orcid: 0000-0003-3925-190X
-  - name: Tomasz Kalinowski
-    role: Contributor
-    affiliation: Posit, PBC
-    email: tomasz@posit.co
-    github: t-kalinowski
-
-# Funding / Copyright Holder
-# --------------------------
-# Credit the organization that funds or holds copyright for this package.
-funding:
-  name: Posit Software, PBC
-  roles:
-    - Copyright holder
-    - funder
-  homepage: https://posit.co
-  ror: https://ror.org/03wc8by49
 
 # API Reference Structure
 # -----------------------
