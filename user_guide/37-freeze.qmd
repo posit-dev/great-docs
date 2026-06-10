@@ -1,7 +1,7 @@
 ---
 title: "Freeze & Caching"
 guide-section: "Build & Deploy"
-tags: [Build, Deployment, CI/CD]
+tags: [Build, Deployment, CI\/CD]
 status: experimental
 versions: ">=0.11"
 ---

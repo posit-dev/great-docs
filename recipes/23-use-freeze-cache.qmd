@@ -1,7 +1,7 @@
 ---
 title: "Use Freeze to Cache Expensive Notebooks"
 description: "Avoid re-executing costly computations (MCMC, deep learning, simulations) on every docs build using Quarto's freeze feature."
-tags: [Build, Deployment, CI/CD]
+tags: [Build, Deployment, CI\/CD]
 ---
 
 # Use Freeze to Cache Expensive Notebooks
