@@ -8147,9 +8147,10 @@ class GreatDocs:
                 top_level_names.add(name)
 
         # Classify each top-level name
+        missing_names: list[str] = []
         for name in sorted(top_level_names):
             if name not in pkg.members:
-                categories["other"].append(name)
+                missing_names.append(name)
                 continue
 
             try:
@@ -8263,6 +8264,30 @@ class GreatDocs:
                     pass
             else:
                 categories["other"].append(name)
+
+        # Fail loudly if configured items cannot be found in the package,
+        # but only when the package is genuinely installed (has a resolvable version).
+        # If the package isn't installed (version unknown), this is likely a
+        # bootstrap/development scenario — fall back gracefully.
+        if missing_names:
+            try:
+                from importlib.metadata import version as _mv
+
+                pkg_ver = _mv(package_name)
+            except Exception:
+                pkg_ver = None
+
+            if pkg_ver is not None:
+                items_str = ", ".join(f"`{n}`" for n in missing_names)
+                raise SystemExit(
+                    f"ERROR: Configured reference item(s) not found in "
+                    f"`{package_name}` v{pkg_ver}: {items_str}\n"
+                    f"Check that the correct version of `{package_name}` is installed "
+                    f"and that these names exist in the package's public API."
+                )
+            else:
+                # Package not installed — treat missing items as "other" (old behavior)
+                categories["other"].extend(missing_names)
 
         # Classify explicitly-referenced methods (ClassName.method_name)
         for class_name, methods in method_refs.items():
@@ -14521,6 +14546,7 @@ body-classes: "gd-homepage"
         # --- Gather metadata for the build header -------------------------
         package_name = self._detect_package_name() or ""
         package_version = ""
+        package_location = ""
         if package_name:
             try:
                 from importlib.metadata import version as _pkg_version
@@ -14528,6 +14554,44 @@ body-classes: "gd-homepage"
                 package_version = _pkg_version(package_name)
             except Exception:
                 pass
+            # Show the location Griffe will actually use for introspection
+            # (prioritizes project root / src layout over sys.path)
+            _normalized_pkg = package_name.replace("-", "_")
+            for _sp in self._griffe_search_paths():
+                _candidate = Path(_sp) / _normalized_pkg
+                if _candidate.is_dir() and (_candidate / "__init__.py").exists():
+                    package_location = str(_candidate)
+                    break
+            if not package_location:
+                try:
+                    import importlib.util
+
+                    _spec = importlib.util.find_spec(_normalized_pkg)
+                    if _spec and _spec.origin:
+                        package_location = str(Path(_spec.origin).parent)
+                except Exception:
+                    pass
+            # For --from-repo builds (temp clone dirs), show the git remote URL
+            # instead of the opaque temp path
+            if package_location:
+                try:
+                    import subprocess as _sp_sub
+                    import tempfile
+
+                    _git_remote = _sp_sub.run(
+                        ["git", "config", "--get", "remote.origin.url"],
+                        cwd=str(self.project_root),
+                        capture_output=True,
+                        text=True,
+                    )
+                    if _git_remote.returncode == 0 and _git_remote.stdout.strip():
+                        _remote_url = _git_remote.stdout.strip()
+                        # Check if the package lives inside a temp clone directory
+                        _tmp_prefixes = ("/tmp/", "/var/folders/", tempfile.gettempdir())
+                        if any(package_location.startswith(p) for p in _tmp_prefixes):
+                            package_location = _remote_url
+                except Exception:
+                    pass
 
         # Count total pages for time estimate (API items from config)
         n_api_items = 0
@@ -14581,7 +14645,7 @@ body-classes: "gd-homepage"
         except Exception:
             pass  # never let estimation crash the build
 
-        total_steps = 18
+        total_steps = 19
         est_seconds = estimate_build_time(
             n_api_items=n_api_items,
             n_total_pages=n_total_pages,
@@ -14591,6 +14655,7 @@ body-classes: "gd-homepage"
         log = BuildLog(
             package_name=package_name,
             package_version=package_version,
+            package_location=package_location,
             total_steps=total_steps,
             estimated_seconds=est_seconds,
         )
@@ -14989,10 +15054,16 @@ body-classes: "gd-homepage"
                         builder = Builder.from_quarto_config(str(quarto_yml))
                         builder.build()
                     log.step_done("API reference generated")
+                except SystemExit:
+                    # Missing config items or other fatal errors — don't mask them
+                    raise
                 except Exception as e:
                     dynamic = self._config.dynamic
                     if dynamic:
-                        log.warn("Dynamic introspection failed, retrying static...")
+                        log.warn(
+                            "Dynamic introspection failed for a resolved item, "
+                            "retrying with static analysis..."
+                        )
                         log.detail(str(e))
                         with open(quarto_yml, "r") as f:
                             qconfig = read_yaml(f) or {}

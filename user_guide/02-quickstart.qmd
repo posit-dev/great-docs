@@ -89,26 +89,26 @@ processes your user guide and custom pages, generates API reference pages, and r
 the final HTML site. The output shows each step with its status and timing:
 
 ```{.default filename="Build output (abbreviated)"}
-━━ Step  1/18 ─ Prepare build directory ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━ Step  1/19 ─ Prepare build directory ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    [OK] great-docs/ ready                                                <0.1s
 
-━━ Step  2/18 ─ Configure API reference ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━ Step  2/19 ─ Configure API reference ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    [OK] 2 section(s), 15 item(s)                                           1.2s
    ...
 
-━━ Step 16/18 ─ Build site with Quarto ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━ Step 17/19 ─ Build site with Quarto ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    [OK] quarto render                                                     28.4s
 
-━━ Step 17/18 ─ Post-render processing ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━ Step 18/19 ─ Post-render processing ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    [OK] Version assembly complete                                        <0.1s
 
-━━ Step 18/18 ─ Generate SEO files ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━ Step 19/19 ─ Generate SEO files ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       Generated sitemap.xml with 120 URLs
       Generated robots.txt
    [OK] sitemap.xml + robots.txt                                          <0.1s
 
 ==============================================================================
-|  [OK] Build complete — 18/18 steps                                         |
+|  [OK] Build complete — 19/19 steps                                         |
 |  Total time: 35.6s                                                         |
 |                                                                            |
 |  🎉 Site ready →                                                           |
@@ -195,7 +195,7 @@ discovered in your package. It shows every public class, function, constant, and
 whether each item appears in your `great-docs.yml` reference config:
 
 ```{.bash filename="Terminal"}
-great-docs scan           # Show discovered exports
+great-docs scan            # Show discovered exports
 great-docs scan --verbose  # Include method names for each class
 ```
 
