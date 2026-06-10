@@ -10166,6 +10166,7 @@ toc: false
 sidebar: false
 page-layout: full
 body-classes: "gd-license-page"
+anchor-sections: false
 ---
 
 {features_block}```{{=html}}
