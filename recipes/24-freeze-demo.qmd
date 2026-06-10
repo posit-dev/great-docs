@@ -1,7 +1,7 @@
 ---
 title: "Freeze a Page to Cache Outputs"
 description: "A live demonstration of page-level freeze. The code cells below were executed once and cached — subsequent builds reuse the output without re-running."
-tags: [Build, CI/CD]
+tags: [Build, CI\/CD]
 freeze: auto
 ---
 

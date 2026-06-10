@@ -39654,7 +39654,7 @@ def test_homepage_sidebar_skills_link_position():
         margin = docs._build_metadata_margin()
 
         # Skills link should appear before llms.txt
-        skills_pos = margin.find("[Skills](skills.html)")
+        skills_pos = margin.find('href="skills.html"')
         llms_pos = margin.find("[llms.txt](llms.txt)")
 
         assert skills_pos != -1, "Skills link not found in sidebar"
