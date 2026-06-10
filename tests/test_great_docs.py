@@ -17385,6 +17385,80 @@ def test_categorize_api_objects_fallback_import_failure():
         assert "Widget" in result["other"]
 
 
+def test_categorize_referenced_objects_missing_item_raises():
+    """Test that _categorize_referenced_objects raises SystemExit for missing config items."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Create a minimal package with one export
+        pkg_dir = Path(tmp_dir) / "mypkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '"""Test package."""\ndef real_func():\n    """A real function."""\n    pass\n'
+        )
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+
+            # Reference config that includes a name that doesn't exist
+            reference_config = [
+                {
+                    "title": "Functions",
+                    "contents": ["real_func", "nonexistent_item"],
+                }
+            ]
+
+            with pytest.raises(SystemExit) as exc_info:
+                docs._categorize_referenced_objects("mypkg", reference_config)
+
+            error_msg = str(exc_info.value)
+            assert "nonexistent_item" in error_msg
+            assert "mypkg" in error_msg
+            assert "not found" in error_msg
+        finally:
+            sys.path.remove(tmp_dir)
+
+
+def test_categorize_referenced_objects_all_found_no_error():
+    """Test that _categorize_referenced_objects succeeds when all items exist."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg_dir = Path(tmp_dir) / "mypkg2"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            '"""Test package."""\n'
+            "def greet():\n"
+            '    """Say hello."""\n'
+            "    pass\n"
+            "\n"
+            "class Widget:\n"
+            '    """A widget."""\n'
+            "    pass\n"
+        )
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg2"\n', encoding="utf-8")
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+
+            reference_config = [
+                {
+                    "title": "API",
+                    "contents": ["greet", "Widget"],
+                }
+            ]
+
+            # Should not raise
+            categories = docs._categorize_referenced_objects("mypkg2", reference_config)
+            assert "greet" in categories["functions"]
+            assert "Widget" in categories["classes"]
+        finally:
+            sys.path.remove(tmp_dir)
+
+
 def test_create_api_sections_basic():
     """Test _create_api_sections with mocked exports and categories."""
 
