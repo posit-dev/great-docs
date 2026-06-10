@@ -311,7 +311,7 @@ class TestGenerateTagsIndexPage:
         content = index_path.read_text(encoding="utf-8")
         assert "Python" in content
         assert "Intro" in content
-        assert 'title: "Tags"' in content
+        assert 'title: "Site Tags"' in content
 
     def test_hierarchical_headings(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
