@@ -14637,7 +14637,7 @@ body-classes: "gd-homepage"
         except Exception:
             pass  # never let estimation crash the build
 
-        total_steps = 18
+        total_steps = 19
         est_seconds = estimate_build_time(
             n_api_items=n_api_items,
             n_total_pages=n_total_pages,
