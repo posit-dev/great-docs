@@ -2050,11 +2050,13 @@ class GreatDocs:
         from ._translations import get_translation
 
         lang = self._config.language
-        tags_title = get_translation("tags_title", lang)
+        tags_title = get_translation("site_tags", lang)
         tag_icons = self._config.tags_icons
 
         tags_dir = self.project_path / "tags"
         tags_dir.mkdir(parents=True, exist_ok=True)
+
+        tags_intro = get_translation("tags_intro", lang)
 
         lines: list[str] = [
             "---",
@@ -2063,6 +2065,8 @@ class GreatDocs:
             "toc: false",
             "body-classes: gd-tags-index",
             "---",
+            "",
+            tags_intro,
             "",
         ]
 
@@ -2275,7 +2279,7 @@ class GreatDocs:
         from ._translations import get_translation
 
         lang = self._config.language
-        tags_label = get_translation("tags_nav", lang)
+        tags_label = get_translation("site_tags", lang)
 
         quarto_yml = self.project_path / "_quarto.yml"
         if not quarto_yml.exists():
@@ -9759,6 +9763,16 @@ jupyter: python3
         # ── 1. Links ─────────────────────────────────────────────────────
         links_items: list[str] = []
 
+        # Lucide arrow-up-right icon (indicates external link)
+        _ext_arrow = (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" '
+            'fill="none" stroke="currentColor" stroke-width="2" '
+            'stroke-linecap="round" stroke-linejoin="round" '
+            'style="vertical-align: -0.05em; margin-left: 0em; margin-top: 0.1em;" '
+            'viewBox="0 0 24 24">'
+            '<path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>'
+        )
+
         pypi_setting = self._config.pypi
         if pypi_setting is not False:
             if isinstance(pypi_setting, str):
@@ -9767,7 +9781,9 @@ jupyter: python3
                 package_name = self._detect_package_name()
                 pypi_url = f"https://pypi.org/project/{package_name}/" if package_name else None
             if pypi_url:
-                links_items.append(f"[{get_translation('view_on_pypi', lang)}]({pypi_url})<br>")
+                links_items.append(
+                    f'<a href="{pypi_url}">{get_translation("view_on_pypi", lang)}{_ext_arrow}</a><br>'
+                )
 
         if metadata.get("urls"):
             urls = metadata["urls"]
@@ -9781,7 +9797,7 @@ jupyter: python3
                 name_lower = name.lower().replace(" ", "_")
                 display_name = url_map.get(name_lower, name.replace("_", " ").title())
                 if display_name:
-                    links_items.append(f"[{display_name}]({url})<br>")
+                    links_items.append(f'<a href="{url}">{display_name}{_ext_arrow}</a><br>')
 
         if links_items:
             margin_sections.append(f"#### {get_translation('links', lang)}\n")
@@ -9790,7 +9806,25 @@ jupyter: python3
         # ── 2. AI / Agents ───────────────────────────────────────────────
         ai_items: list[str] = []
         if self._config.skill_enabled:
-            ai_items.append("[Skills](skills.html)<br>")
+            # Determine if skills are hand-written/curated (intensify effect)
+            _curated_skill = bool(self._config.skill_file or self._config.skill_skills)
+            if not _curated_skill:
+                pkg_name = self._detect_package_name() or ""
+                for cand in [pkg_name.replace("_", "-"), pkg_name]:
+                    if cand and (package_root / "skills" / cand / "SKILL.md").exists():
+                        _curated_skill = True
+                        break
+
+            _sparkle_class = "gd-sparkle-curated" if _curated_skill else "gd-sparkle"
+            _sparkle_svg = (
+                '<svg class="' + _sparkle_class + '" xmlns="http://www.w3.org/2000/svg" '
+                'width="0.85em" height="0.85em" viewBox="0 0 24 24" fill="none" '
+                'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+                'stroke-linejoin="round" style="vertical-align: -0.1em; margin-left: 0.25em;">'
+                '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.582a.5.5 0 0 1 0 .963L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>'
+                '<path d="M20 3v4"/><path d="M22 5h-4"/></svg>'
+            )
+            ai_items.append(f'<a href="skills.html">Skills{_sparkle_svg}</a><br>')
         ai_items.append("[llms.txt](llms.txt)<br>")
         ai_items.append("[llms-full.txt](llms-full.txt)<br>")
 
@@ -10094,7 +10128,7 @@ title: "Security Policy"
                 meta_items.append(f"**{_provides}:** {extras_formatted}")
 
         if self._config.tags_enabled and self._config.tags_index_page:
-            tags_label = get_translation("tags_nav", lang)
+            tags_label = get_translation("site_tags", lang)
             meta_items.append(f"[{tags_label}](tags/index.html)")
 
         if meta_items:
