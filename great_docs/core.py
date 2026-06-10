@@ -8265,21 +8265,29 @@ class GreatDocs:
             else:
                 categories["other"].append(name)
 
-        # Fail loudly if configured items cannot be found in the package
+        # Fail loudly if configured items cannot be found in the package,
+        # but only when the package is genuinely installed (has a resolvable version).
+        # If the package isn't installed (version unknown), this is likely a
+        # bootstrap/development scenario — fall back gracefully.
         if missing_names:
             try:
                 from importlib.metadata import version as _mv
 
                 pkg_ver = _mv(package_name)
             except Exception:
-                pkg_ver = "unknown"
-            items_str = ", ".join(f"`{n}`" for n in missing_names)
-            raise SystemExit(
-                f"ERROR: Configured reference item(s) not found in "
-                f"`{package_name}` v{pkg_ver}: {items_str}\n"
-                f"Check that the correct version of `{package_name}` is installed "
-                f"and that these names exist in the package's public API."
-            )
+                pkg_ver = None
+
+            if pkg_ver is not None:
+                items_str = ", ".join(f"`{n}`" for n in missing_names)
+                raise SystemExit(
+                    f"ERROR: Configured reference item(s) not found in "
+                    f"`{package_name}` v{pkg_ver}: {items_str}\n"
+                    f"Check that the correct version of `{package_name}` is installed "
+                    f"and that these names exist in the package's public API."
+                )
+            else:
+                # Package not installed — treat missing items as "other" (old behavior)
+                categories["other"].extend(missing_names)
 
         # Classify explicitly-referenced methods (ClassName.method_name)
         for class_name, methods in method_refs.items():
