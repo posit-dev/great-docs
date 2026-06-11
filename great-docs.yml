@@ -55,14 +55,6 @@ navbar_style: sky
 # Use a string for all pages, or dict with pages: "homepage" to limit scope.
 content_style: lilac
 
-# Exclusions
-# ----------
-# Items to exclude from auto-documentation (affects 'init' and 'scan')
-exclude:
-  - Config
-  - create_default_config
-  - load_config
-
 # Logo & Favicon
 # ---------------
 logo:
@@ -70,6 +62,23 @@ logo:
   dark: assets/logo-dark.svg
 
 favicon: assets/favicon.svg
+
+# Sidebar Filter
+# --------------
+sidebar_filter:
+  enabled: true
+  min_items: 1 # default: 20
+
+# Site Settings
+# -------------
+# Configure page metadata timestamps and other site-wide options
+site:
+  show_dates: true # Display creation/modification dates on pages
+
+# Dark Mode Toggle
+# ----------------
+# Enable/disable the dark mode toggle in navbar (default: true)
+dark_mode_toggle: true
 
 # Hero Section
 # ------------
@@ -114,21 +123,8 @@ versions:
     git_ref: v0.7
     eol: true
 
-# GitHub Integration
-# ------------------
-# Repository URL override (auto-detected from pyproject.toml [project.urls] by default)
-# repo: https://github.com/your-org/your-package
-
 # GitHub link style: "widget" (shows stars count) or "icon" (simple icon)
 github_style: widget
-
-# Source Link Configuration
-# -------------------------
-# source:
-#   enabled: true              # Enable/disable source links (default: true)
-#   branch: main               # Git branch/tag to link to (default: auto-detect)
-#   path: src/package          # Custom source path for monorepos (default: auto-detect)
-#   placement: usage           # Where to place the link: "usage" (default) or "title"
 
 # Analytics
 # ---------
@@ -144,88 +140,6 @@ include_in_header:
 # If not provided, uses the actual package name (e.g., 'my_package' or 'my-package').
 # Use this to provide a marketing/presentation name (e.g., 'My Package').
 display_name: Great Docs
-
-# Custom Sections
-# ---------------
-sections:
-  - title: Recipes
-    dir: recipes
-    navbar_after: User Guide
-    sidebar_groups:
-      - section: Content & API
-        contents:
-          - hide-internal-symbols.qmd
-          - customize-api-organization.qmd
-          - document-a-cli.qmd
-          - cross-reference-items.qmd
-          - write-effective-docstrings.qmd
-          - add-images-diagrams.qmd
-          - embed-videos.qmd
-      - section: Theming & Appearance
-        contents:
-          - add-custom-css.qmd
-          - choose-gradient-theme.qmd
-          - add-logo-favicon.qmd
-          - customize-announcement-banner.qmd
-      - section: Publishing
-        contents:
-          - create-changelog.qmd
-          - github-pages-ci.qmd
-          - add-custom-domain.qmd
-          - enable-multi-version-docs.qmd
-          - use-version-fences-and-badges.qmd
-          - use-freeze-cache.qmd
-      - section: AI & LLMs
-        contents:
-          - install-great-docs-skill.qmd
-          - build-site-with-llm.qmd
-          - customize-site-with-llm.qmd
-          - understand-llms-txt.qmd
-      - section: Build & Quality
-        contents:
-          - fix-common-build-errors.qmd
-          - proofread-documentation.qmd
-          - freeze-demo.qmd
-
-# Sidebar Filter
-# --------------
-sidebar_filter:
-  enabled: true
-  min_items: 1 # Set low for testing (default: 20)
-
-# Site Settings
-# -------------
-# Configure page metadata timestamps and other site-wide options
-site:
-  show_dates: true # Display creation/modification dates on pages
-
-# CLI Documentation
-# -----------------
-cli:
-  enabled: true
-  module: great_docs.cli
-  name: cli
-
-# MCP Server Documentation
-# ------------------------
-# Auto-generate reference pages from the MCP server's tool definitions.
-mcp:
-  enabled: true
-  module: great_docs.mcp
-  name: Great Docs
-  categories:
-    "Build & Deploy":
-      - gd_build
-      - gd_preview
-    "Discovery & Analysis":
-      - gd_scan
-      - gd_lint
-      - gd_api_diff
-    "Configuration":
-      - gd_config
-      - gd_status
-    "Content":
-      - gd_add_page
 
 # Page Tags
 # ---------
@@ -256,11 +170,6 @@ tags:
     Extensions: puzzle
     Data: database
     Versioning: git-compare
-
-# Dark Mode Toggle
-# ----------------
-# Enable/disable the dark mode toggle in navbar (default: true)
-dark_mode_toggle: true
 
 # Page Status Badges
 # ------------------
@@ -325,6 +234,75 @@ nav_icons:
     Collapsible Details: panel-top-close
     Terminal Recordings: clapperboard
 
+# Agent Skills
+# ------------
+# Multiple named skills for the documentation site. Each entry maps
+# a human-readable name to a SKILL.md file path. All skills appear
+# on the Skills page with a switcher bar and are placed in
+# .well-known/agent-skills/ for auto-discovery.
+skill:
+  skills:
+    - name: great-docs
+      file: skills/great-docs/SKILL.md
+    - name: write-user-guide
+      file: skills/write-user-guide/SKILL.md
+    - name: revise-docstrings
+      file: skills/revise-docstrings/SKILL.md
+    - name: configure-site
+      file: skills/configure-site/SKILL.md
+    - name: author-skills
+      file: skills/author-skills/SKILL.md
+
+# Custom Sections
+# ---------------
+sections:
+  - title: Recipes
+    dir: recipes
+    navbar_after: User Guide
+    sidebar_groups:
+      - section: Content & API
+        contents:
+          - hide-internal-symbols.qmd
+          - customize-api-organization.qmd
+          - document-a-cli.qmd
+          - cross-reference-items.qmd
+          - write-effective-docstrings.qmd
+          - add-images-diagrams.qmd
+          - embed-videos.qmd
+      - section: Theming & Appearance
+        contents:
+          - add-custom-css.qmd
+          - choose-gradient-theme.qmd
+          - add-logo-favicon.qmd
+          - customize-announcement-banner.qmd
+      - section: Publishing
+        contents:
+          - create-changelog.qmd
+          - github-pages-ci.qmd
+          - add-custom-domain.qmd
+          - enable-multi-version-docs.qmd
+          - use-version-fences-and-badges.qmd
+          - use-freeze-cache.qmd
+      - section: AI & LLMs
+        contents:
+          - install-great-docs-skill.qmd
+          - build-site-with-llm.qmd
+          - customize-site-with-llm.qmd
+          - understand-llms-txt.qmd
+      - section: Build & Quality
+        contents:
+          - fix-common-build-errors.qmd
+          - proofread-documentation.qmd
+          - freeze-demo.qmd
+
+# Exclusions
+# ----------
+# Items to exclude from auto-documentation (affects 'great-docs scan')
+exclude:
+  - Config
+  - create_default_config
+  - load_config
+
 # API Reference Structure
 # -----------------------
 # Explicit control over API reference organization
@@ -370,21 +348,30 @@ reference:
         - check_skill
         - list_skills
 
-# Agent Skills
-# ------------
-# Multiple named skills for the documentation site. Each entry maps
-# a human-readable name to a SKILL.md file path. All skills appear
-# on the Skills page with a switcher bar and are placed in
-# .well-known/agent-skills/ for auto-discovery.
-skill:
-  skills:
-    - name: great-docs
-      file: skills/great-docs/SKILL.md
-    - name: write-user-guide
-      file: skills/write-user-guide/SKILL.md
-    - name: revise-docstrings
-      file: skills/revise-docstrings/SKILL.md
-    - name: configure-site
-      file: skills/configure-site/SKILL.md
-    - name: author-skills
-      file: skills/author-skills/SKILL.md
+# CLI Documentation
+# -----------------
+cli:
+  enabled: true
+  module: great_docs.cli
+  name: cli
+
+# MCP Server Documentation
+# ------------------------
+# Auto-generate reference pages from the MCP server's tool definitions.
+mcp:
+  enabled: true
+  module: great_docs.mcp
+  name: Great Docs
+  categories:
+    "Build & Deploy":
+      - gd_build
+      - gd_preview
+    "Discovery & Analysis":
+      - gd_scan
+      - gd_lint
+      - gd_api_diff
+    "Configuration":
+      - gd_config
+      - gd_status
+    "Content":
+      - gd_add_page
