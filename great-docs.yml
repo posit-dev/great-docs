@@ -330,18 +330,21 @@ nav_icons:
 # Explicit control over API reference organization
 reference:
   desc: >-
-    The API reference for Great Docs is organized around the `GreatDocs` class,
-    which provides all of the methods needed to initialize, build, and deploy
-    documentation sites.
+    The API reference for Great Docs is organized around the `GreatDocs` class, which provides all
+    of the methods needed to initialize, build, and deploy documentation sites.
   sections:
-    - title: Classes
-      desc: Core classes and types.
+    - title: The GreatDocs Class
+      desc: >-
+        The central class that orchestrates site initialization, building, and deployment for your
+        Python package documentation.
       contents:
         - name: GreatDocs
           members: false
 
     - title: GreatDocs Methods
-      desc: Methods for the GreatDocs class.
+      desc: >-
+        Methods for installing dependencies, building the documentation site, launching a live
+        preview, and validating links across all pages.
       contents:
         - GreatDocs.install
         - GreatDocs.uninstall
@@ -351,15 +354,15 @@ reference:
 
     - title: Table Preview/Explorer
       desc: >-
-        Generate styled HTML table previews from any tabular data source with
-        `tbl_preview()`, and explore tables interactively with `tbl_explorer()`.
+        Generate styled HTML table previews from any tabular data source with `tbl_preview()`, and
+        explore tables interactively with `tbl_explorer()`.
       contents:
         - tbl_preview
         - enable_tbl_preview
         - disable_tbl_preview
         - tbl_explorer
 
-    - title: Agent Skills
+    - title: Skills
       desc: >-
         Install, check, and list Agent Skills from the Python API.
       contents:
