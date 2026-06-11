@@ -96,6 +96,10 @@ versions:
     tag: dev
     version: "0.14.0"
     prerelease: true
+  - label: "0.13.1"
+    tag: "0.13.1"
+    version: "0.13.1"
+    latest: true
   - label: "0.13.0"
     tag: "0.13.0"
     version: "0.13.0"
@@ -117,10 +121,6 @@ versions:
   - label: "0.8"
     tag: "0.8"
     git_ref: v0.8
-    eol: true
-  - label: "0.7"
-    tag: "0.7"
-    git_ref: v0.7
     eol: true
 
 # GitHub link style: "widget" (shows stars count) or "icon" (simple icon)
