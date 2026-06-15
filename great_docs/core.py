@@ -11059,6 +11059,18 @@ body-classes: "gd-homepage"
         if "termshow.css" not in config["project"]["resources"]:
             config["project"]["resources"].append("termshow.css")
 
+        # Add gd-lightbox assets as resources
+        for lb_res in ("gd-lightbox.js", "gd-lightbox.css"):
+            if lb_res not in config["project"]["resources"]:
+                config["project"]["resources"].append(lb_res)
+
+        # Add user-guide/images/** to resources so that images referenced only
+        # via data attributes (e.g., dark-mode variants) get copied to _site
+        ug_images_dir = self.project_path / "user-guide" / "images"
+        if ug_images_dir.exists() and ug_images_dir.is_dir():
+            if "user-guide/images/**" not in config["project"]["resources"]:
+                config["project"]["resources"].append("user-guide/images/**")
+
         # Add assets directory to resources if it exists
         assets_dir = self.project_path / "assets"
         if assets_dir.exists() and assets_dir.is_dir():
