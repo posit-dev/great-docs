@@ -51,6 +51,12 @@
   let autoplayInterval = 0; // Autoplay interval in ms (0 = disabled)
   let autoplayTimer = null; // Active autoplay timer
 
+  // Zoom state (toolbar-button controlled; zooms about the image center)
+  let zoomScale = 1;
+  const ZOOM_MIN = 1;
+  const ZOOM_MAX = 4;
+  const ZOOM_STEP = 0.5;
+
   // Touch/gesture state
   let touchStartX = 0;
   let touchStartY = 0;
@@ -265,6 +271,52 @@
     // Spacer
     toolbar.appendChild(el("span", { className: PREFIX + "-toolbar-spacer" }));
 
+    // Zoom controls: out / level / in / reset
+    var zoomOutBtn = el(
+      "button",
+      {
+        className: PREFIX + "-btn " + PREFIX + "-btn-zoom-out",
+        "aria-label": "Zoom out",
+        "data-tippy-content": "Zoom out",
+        "data-tippy-trigger": "mouseenter",
+        onClick: zoomOut,
+      },
+      [createZoomOutIcon()]
+    );
+    toolbar.appendChild(zoomOutBtn);
+
+    var zoomLevel = el("span", {
+      className: PREFIX + "-zoom-level",
+      "aria-live": "polite",
+    });
+    toolbar.appendChild(zoomLevel);
+
+    var zoomInBtn = el(
+      "button",
+      {
+        className: PREFIX + "-btn " + PREFIX + "-btn-zoom-in",
+        "aria-label": "Zoom in",
+        "data-tippy-content": "Zoom in",
+        "data-tippy-trigger": "mouseenter",
+        onClick: zoomIn,
+      },
+      [createZoomInIcon()]
+    );
+    toolbar.appendChild(zoomInBtn);
+
+    var zoomResetBtn = el(
+      "button",
+      {
+        className: PREFIX + "-btn " + PREFIX + "-btn-zoom-reset",
+        "aria-label": "Reset zoom",
+        "data-tippy-content": "Reset zoom",
+        "data-tippy-trigger": "mouseenter",
+        onClick: zoomReset,
+      },
+      [createZoomResetIcon()]
+    );
+    toolbar.appendChild(zoomResetBtn);
+
     // Copy button
     var copyBtn = el(
       "button",
@@ -397,6 +449,32 @@
 
   function createChevronRight() {
     return svgEl(["M9 18l6-6-6-6"], 24);
+  }
+
+  function createZoomInIcon() {
+    return svgEl([
+      "M11 4a7 7 0 100 14 7 7 0 000-14z",
+      "M21 21l-4.35-4.35",
+      "M11 8v6",
+      "M8 11h6",
+    ]);
+  }
+
+  function createZoomOutIcon() {
+    return svgEl([
+      "M11 4a7 7 0 100 14 7 7 0 000-14z",
+      "M21 21l-4.35-4.35",
+      "M8 11h6",
+    ]);
+  }
+
+  function createZoomResetIcon() {
+    // Concentric "fit" target
+    return svgEl([
+      "M11 4a7 7 0 100 14 7 7 0 000-14z",
+      "M21 21l-4.35-4.35",
+      "M11 9.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z",
+    ]);
   }
 
   function createCopyIcon() {
@@ -565,9 +643,72 @@
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Zoom (toolbar-button controlled; zooms about the image center)
+  // ---------------------------------------------------------------------------
+
+  function zoomIn() { setZoom(zoomScale + ZOOM_STEP); }
+  function zoomOut() { setZoom(zoomScale - ZOOM_STEP); }
+  function zoomReset() { setZoom(1); }
+
+  function setZoom(scale) {
+    scale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(scale * 100) / 100));
+    if (scale === zoomScale) {
+      updateZoomUI();
+      return;
+    }
+    zoomScale = scale;
+    applyZoom(false);
+    announce("Zoom " + Math.round(zoomScale * 100) + " percent");
+  }
+
+  /** Reset to fit (100%). `immediate` skips the transition (slide changes). */
+  function resetZoom(immediate) {
+    zoomScale = 1;
+    applyZoom(immediate);
+  }
+
+  function applyZoom(immediate) {
+    if (!overlay) return;
+    var mainImg = qs("." + PREFIX + "-main-img", overlay);
+    var transform = zoomScale > 1 ? "scale(" + zoomScale + ")" : "";
+    if (mainImg) {
+      if (immediate) {
+        var prev = mainImg.style.transition;
+        mainImg.style.transition = "none";
+        mainImg.style.transform = transform;
+        mainImg.offsetHeight; // force reflow so future changes animate
+        mainImg.style.transition = prev;
+      } else {
+        mainImg.style.transform = transform;
+      }
+    }
+    // Annotations are hidden while zoomed (shown again at fit level).
+    var layer = qs("." + PREFIX + "-annotations", overlay);
+    if (layer) {
+      layer.style.display = zoomScale > 1 ? "none" : "";
+    }
+    updateZoomUI();
+  }
+
+  function updateZoomUI() {
+    if (!overlay) return;
+    var level = qs("." + PREFIX + "-zoom-level", overlay);
+    if (level) level.textContent = Math.round(zoomScale * 100) + "%";
+    var outBtn = qs("." + PREFIX + "-btn-zoom-out", overlay);
+    var inBtn = qs("." + PREFIX + "-btn-zoom-in", overlay);
+    var resetBtn = qs("." + PREFIX + "-btn-zoom-reset", overlay);
+    if (outBtn) outBtn.disabled = zoomScale <= ZOOM_MIN;
+    if (inBtn) inBtn.disabled = zoomScale >= ZOOM_MAX;
+    if (resetBtn) resetBtn.disabled = zoomScale === 1;
+  }
+
   function showSlide(index, originItem) {
     var item = currentGroup[index];
     if (!item) return;
+
+    // Each slide starts at fit (100%); clear any zoom from the previous image.
+    resetZoom(true);
 
     var mainImg = qs("." + PREFIX + "-main-img", overlay);
     var captionText = qs("." + PREFIX + "-caption-text", overlay);
@@ -768,10 +909,11 @@
     mainImg.style.transform = "translate(0, 0) scale(1)";
     mainImg.style.opacity = "1";
 
-    // Clean up after animation
+    // Clean up after animation. Don't clobber an active zoom if the user
+    // zoomed during the open transition — only clear the open transform.
     setTimeout(function () {
       mainImg.style.transition = "";
-      mainImg.style.transform = "";
+      mainImg.style.transform = zoomScale > 1 ? "scale(" + zoomScale + ")" : "";
     }, TRANSITION_MS + 50);
   }
 
@@ -954,6 +1096,20 @@
         break;
       case "Tab":
         trapFocus(e);
+        break;
+      case "+":
+      case "=": // unshifted "+" key
+        zoomIn();
+        e.preventDefault();
+        break;
+      case "-":
+      case "_":
+        zoomOut();
+        e.preventDefault();
+        break;
+      case "0":
+        zoomReset();
+        e.preventDefault();
         break;
     }
   }

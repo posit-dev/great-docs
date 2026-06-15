@@ -196,6 +196,9 @@ body.gd-lightbox-open {
   box-shadow: var(--gd-lightbox-shadow);
   user-select: none;
   -webkit-user-drag: none;
+  /* Smooth zoom from the toolbar buttons. The open animation overrides this
+     with its own inline transition, so it isn't affected. */
+  transition: transform 200ms ease;
 }
 
 /* ---------------------------------------------------------------------------
@@ -263,6 +266,24 @@ body.gd-lightbox-open {
   padding: 4px 10px;
   background: var(--gd-lightbox-btn-hover);
   border-radius: 20px;
+}
+
+/* Zoom level readout (e.g. "150%") */
+.gd-lightbox-zoom-level {
+  min-width: 3.5em;
+  text-align: center;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: var(--gd-lightbox-toolbar-color);
+  user-select: none;
+}
+
+/* Disabled toolbar buttons (e.g. zoom at min/max) */
+.gd-lightbox-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
 }
 
 /* Toolbar buttons */
