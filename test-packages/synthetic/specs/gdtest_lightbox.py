@@ -4,8 +4,8 @@ gdtest_lightbox — Showcase the gd-lightbox extension.
 Dimensions: A1, B1, C1, D1, E6, F1, G1, H7
 Focus: Demonstrate lightbox with multiple modes: explicit class, auto mode,
        dark-mode variants, galleries, captions, credits, grouped images,
-       and the .nolightbox opt-out. Includes a user guide page exercising
-       every combination.
+       comparison slider, annotations, toolbar actions, deep-linking,
+       responsive srcset, and the .nolightbox opt-out.
 """
 
 # ── Helper: generate placeholder SVG images ──────────────────────────────────
@@ -18,6 +18,37 @@ def _svg(width, height, bg, label, text_color="white"):
         f'<rect width="{width}" height="{height}" fill="{bg}" rx="8"/>'
         f'<text x="{width // 2}" y="{height // 2 + 6}" text-anchor="middle" '
         f'fill="{text_color}" font-size="16" font-family="sans-serif">{label}</text>'
+        f"</svg>\n"
+    )
+
+
+def _svg_gradient(width, height, color1, color2, label, text_color="white"):
+    """Generate an SVG with a linear gradient background."""
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}">'
+        f'<defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">'
+        f'<stop offset="0%" stop-color="{color1}"/>'
+        f'<stop offset="100%" stop-color="{color2}"/>'
+        f"</linearGradient></defs>"
+        f'<rect width="{width}" height="{height}" fill="url(#g)" rx="8"/>'
+        f'<text x="{width // 2}" y="{height // 2 + 6}" text-anchor="middle" '
+        f'fill="{text_color}" font-size="16" font-family="sans-serif">{label}</text>'
+        f"</svg>\n"
+    )
+
+
+def _svg_panels(width, height, panels, label):
+    """Generate an SVG with multiple colored panels (simulates a complex UI)."""
+    panel_w = width // len(panels)
+    rects = "".join(
+        f'<rect x="{i * panel_w}" width="{panel_w}" height="{height}" fill="{c}"/>'
+        for i, c in enumerate(panels)
+    )
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}">'
+        f"{rects}"
+        f'<text x="{width // 2}" y="{height // 2 + 6}" text-anchor="middle" '
+        f'fill="white" font-size="16" font-family="sans-serif">{label}</text>'
         f"</svg>\n"
     )
 
@@ -57,6 +88,39 @@ _UG_IMAGES = {
     "user_guide/images/full-page.svg": _svg(1200, 800, "#2c3e50", "Full Page Screenshot"),
     # Small inline image (should NOT get lightbox in auto mode)
     "user_guide/images/icon-small.svg": _svg(24, 24, "#666", "•"),
+    # Responsive srcset variants (simulate different resolutions)
+    "user_guide/images/chart-400.svg": _svg(400, 280, "#8e44ad", "Chart 400w"),
+    "user_guide/images/chart-800.svg": _svg(800, 560, "#8e44ad", "Chart 800w"),
+    "user_guide/images/chart-1600.svg": _svg(1600, 1120, "#8e44ad", "Chart 1600w (Full)"),
+    "user_guide/images/diagram-2400.svg": _svg(2400, 1500, "#2c3e50", "Diagram 2400w (Full Res)"),
+    # Multi-panel UI screenshots (for annotation demos)
+    "user_guide/images/app-layout.svg": _svg_panels(
+        900, 500, ["#2c3e50", "#34495e", "#3d566e", "#ecf0f1"], "App Layout"
+    ),
+    "user_guide/images/app-layout.dark.svg": _svg_panels(
+        900, 500, ["#1a1a2e", "#16213e", "#0f3460", "#1a1a2e"], "App Layout (Dark)"
+    ),
+    # Gradient images for visual variety
+    "user_guide/images/hero-gradient.svg": _svg_gradient(
+        800, 400, "#667eea", "#764ba2", "Hero Section"
+    ),
+    "user_guide/images/hero-gradient.dark.svg": _svg_gradient(
+        800, 400, "#2d1b69", "#1a0533", "Hero Section (Dark)"
+    ),
+    # Version comparison images (more realistic before/after)
+    "user_guide/images/v1-table.svg": _svg(600, 350, "#95a5a6", "Table v1 — Plain", "#fff"),
+    "user_guide/images/v2-table.svg": _svg_gradient(
+        600, 350, "#3498db", "#2980b9", "Table v2 — Styled"
+    ),
+    "user_guide/images/v1-sidebar.svg": _svg(300, 500, "#bdc3c7", "Sidebar v1", "#333"),
+    "user_guide/images/v2-sidebar.svg": _svg_gradient(300, 500, "#2ecc71", "#27ae60", "Sidebar v2"),
+    # Pipeline/flow diagram for multi-annotation demo
+    "user_guide/images/pipeline.svg": _svg(
+        1000, 300, "#2c3e50", "Data Pipeline: Ingest → Process → Store → Serve"
+    ),
+    # Toolbar demo images (named clearly for the toolbar page)
+    "user_guide/images/api-reference.svg": _svg(700, 450, "#1e3a5f", "API Reference Page"),
+    "user_guide/images/config-panel.svg": _svg(600, 400, "#4a1e5f", "Configuration Panel"),
 }
 
 
@@ -233,43 +297,311 @@ SPEC = {
 
             ![Gallery D](images/mosaic-d.svg){.lightbox group="mosaic"}
 
+            ## Gallery with Loop Disabled
+
+            This gallery stops at the first and last image (no wrap-around):
+
+            ![Step 1](images/step1.svg){.lightbox group="no-loop" loop="false"}
+
+            ![Step 2](images/step2.svg){.lightbox group="no-loop" loop="false"}
+
+            ![Step 3](images/step3.svg){.lightbox group="no-loop" loop="false"}
+
+            ## Auto-Advancing Gallery
+
+            This gallery auto-advances every 3 seconds (with loop):
+
+            ![Step 1](images/step1.svg){.lightbox group="autoplay" autoplay="3s"}
+
+            ![Step 2](images/step2.svg){.lightbox group="autoplay" autoplay="3s"}
+
+            ![Step 3](images/step3.svg){.lightbox group="autoplay" autoplay="3s"}
+
+            ![Step 4](images/step4.svg){.lightbox group="autoplay" autoplay="3s"}
+
+            ## Auto-Advancing Without Loop
+
+            Auto-advances every 2 seconds and stops at the last image:
+
+            ![Gallery A](images/mosaic-a.svg){.lightbox group="autoplay-nol" autoplay="2s" loop="false"}
+
+            ![Gallery B](images/mosaic-b.svg){.lightbox group="autoplay-nol" autoplay="2s" loop="false"}
+
+            ![Gallery C](images/mosaic-c.svg){.lightbox group="autoplay-nol" autoplay="2s" loop="false"}
+
             ## Single Image (No Gallery)
 
             A standalone lightbox image without a group:
 
             ![Full Page](images/full-page.svg){.lightbox}
         """,
-        "user_guide/05-all-features.qmd": """\
+        "user_guide/05-responsive-srcset.qmd": """\
             ---
-            title: "All Features Combined"
+            title: "Responsive Images"
+            ---
+
+            ## Responsive srcset
+
+            The thumbnail uses a responsive `srcset` so the browser picks the best
+            size for the viewport. When clicked, the lightbox loads the highest-
+            resolution source automatically.
+
+            ![Revenue Chart](images/chart-400.svg){.lightbox srcset="images/chart-400.svg 400w, images/chart-800.svg 800w, images/chart-1600.svg 1600w" sizes="(max-width: 600px) 400px, 800px"}
+
+            ## Explicit full-src Override
+
+            Use `full-src` to point the lightbox at a specific high-res file
+            regardless of what `srcset` contains:
+
+            ![Architecture Diagram](images/diagram.svg){.lightbox full-src="images/diagram-2400.svg"}
+
+            ## Srcset with Dark Mode
+
+            Responsive images can also combine with dark-mode variants. The lightbox
+            will prefer the dark variant when in dark mode:
+
+            ![Dashboard](images/dashboard.light.svg){.lightbox srcset="images/dashboard.light.svg 700w" dark="images/dashboard.dark.svg"}
+        """,
+        "user_guide/06-comparison.qmd": """\
+            ---
+            title: "Image Comparison"
+            ---
+
+            ## Shortcode Syntax
+
+            Use the `{{< compare >}}` shortcode for a quick before/after slider:
+
+            {{< compare before="images/before.svg" after="images/after.svg" >}}
+
+            ## Custom Labels
+
+            {{< compare before="images/before.svg" after="images/after.svg" label-before="v0.8" label-after="v0.9" >}}
+
+            ## Custom Start Position
+
+            Start the divider at 30% (showing mostly the "after" image):
+
+            {{< compare before="images/before.svg" after="images/after.svg" start="30" >}}
+
+            ## Vertical Split
+
+            {{< compare before="images/before.svg" after="images/after.svg" direction="vertical" >}}
+
+            ## Fenced Div Syntax
+
+            The fenced div syntax offers more control:
+
+            ::: {.lightbox-compare}
+            ![Before](images/before.svg)
+            ![After](images/after.svg)
+            :::
+
+            ## Fenced Div with Options
+
+            ::: {.lightbox-compare direction="vertical" start="70"}
+            ![Old Design](images/mosaic-a.svg)
+            ![New Design](images/mosaic-c.svg)
+            :::
+        """,
+        "user_guide/07-annotations.qmd": """\
+            ---
+            title: "Image Annotations"
+            ---
+
+            ## Basic Annotations
+
+            Numbered markers are positioned over the image using percentage
+            coordinates. Hover or click a marker to see its description:
+
+            ![Architecture Diagram](images/full-page.svg){.lightbox annotations='[{"x": 15, "y": 20, "label": "1", "text": "Navigation sidebar with collapsible sections"}, {"x": 50, "y": 35, "label": "2", "text": "Main content area with rendered documentation"}, {"x": 85, "y": 50, "label": "3", "text": "Table of contents for the current page"}]'}
+
+            ## Custom Labels
+
+            Annotations can use any short label text (letters, symbols):
+
+            ![Dashboard](images/dashboard.light.svg){.lightbox annotations='[{"x": 25, "y": 30, "label": "A", "text": "Revenue metrics widget"}, {"x": 75, "y": 30, "label": "B", "text": "User growth chart"}, {"x": 50, "y": 70, "label": "C", "text": "Recent activity feed"}]'}
+
+            ## Custom Marker Colors
+
+            Individual markers can have custom colors for categorization:
+
+            ![Step Diagram](images/diagram.svg){.lightbox annotations='[{"x": 20, "y": 50, "label": "1", "text": "Input stage", "color": "#e74c3c"}, {"x": 50, "y": 50, "label": "2", "text": "Processing stage", "color": "#f39c12"}, {"x": 80, "y": 50, "label": "3", "text": "Output stage", "color": "#27ae60"}]'}
+
+            ## Multi-Panel Layout Annotations
+
+            A complex UI with annotations pointing to specific panels:
+
+            ![App Layout](images/app-layout.svg){.lightbox dark="images/app-layout.dark.svg" annotations='[{"x": 12, "y": 50, "label": "1", "text": "Sidebar navigation — collapsible tree of pages", "color": "#3498db"}, {"x": 38, "y": 30, "label": "2", "text": "Document body — rendered Markdown content", "color": "#2ecc71"}, {"x": 62, "y": 50, "label": "3", "text": "Code panel — interactive examples", "color": "#e67e22"}, {"x": 88, "y": 30, "label": "4", "text": "On This Page — auto-generated TOC", "color": "#9b59b6"}]'}
+
+            ## Pipeline Diagram
+
+            Annotations along a horizontal data flow:
+
+            ![Data Pipeline](images/pipeline.svg){.lightbox annotations='[{"x": 12, "y": 50, "label": "①", "text": "Ingest: raw data arrives via API or file upload"}, {"x": 37, "y": 50, "label": "②", "text": "Process: validation, transformation, enrichment"}, {"x": 62, "y": 50, "label": "③", "text": "Store: write to database and search index"}, {"x": 87, "y": 50, "label": "④", "text": "Serve: API and documentation site consume data"}]'}
+
+            ## Annotations with Dark Mode
+
+            Annotations work with dark-mode variant images. The markers adjust
+            their appearance automatically:
+
+            ![UI Preview](images/ui-preview.svg){.lightbox dark="images/ui-preview-night.svg" annotations='[{"x": 50, "y": 25, "label": "H", "text": "Header with navigation"}, {"x": 50, "y": 75, "label": "F", "text": "Footer with links"}]'}
+        """,
+        "user_guide/08-toolbar-links.qmd": """\
+            ---
+            title: "Toolbar & Deep Links"
+            ---
+
+            ## Toolbar Actions
+
+            When the lightbox is open, a toolbar provides quick actions. Hover over
+            the lightbox image to reveal it (auto-hides after 3 seconds).
+
+            ### Copy to Clipboard
+
+            Click the **copy** button (clipboard icon) to copy the full-resolution
+            image directly to your clipboard — paste it into Slack, a bug report,
+            or a presentation:
+
+            ![API Reference Page](images/api-reference.svg){.lightbox caption="Copy this image to share the API reference layout"}
+
+            ### Download
+
+            Click the **download** button (arrow icon) to save the full-resolution
+            image with a meaningful filename derived from the alt text:
+
+            ![Configuration Panel](images/config-panel.svg){.lightbox caption="Download this image for your slide deck"}
+
+            ### Copy Link
+
+            Click the **link** button (chain icon) to copy a URL that opens this
+            page with the lightbox already open at this exact image:
+
+            ![Full Application](images/full-page.svg){.lightbox caption="Share this deep link with your team"}
+
+            ## Deep Linking
+
+            ### How It Works
+
+            Each lightbox image gets a unique ID (e.g., `gd-lb-1`). The URL
+            fragment `#lightbox=gd-lb-N` opens the lightbox at that image on
+            page load.
+
+            Try these links (they point to images on this page):
+
+            - [Open the API Reference image](#lightbox=gd-lb-1)
+            - [Open the Configuration Panel](#lightbox=gd-lb-2)
+            - [Open the Full Application image](#lightbox=gd-lb-3)
+
+            ### Gallery Deep Links
+
+            Deep links also work within galleries. Click the link below to open
+            the gallery at a specific image:
+
+            ![Step 1](images/step1.svg){.lightbox group="deep-demo"}
+
+            ![Step 2](images/step2.svg){.lightbox group="deep-demo"}
+
+            ![Step 3](images/step3.svg){.lightbox group="deep-demo"}
+
+            ![Step 4](images/step4.svg){.lightbox group="deep-demo"}
+
+            - [Open gallery at Step 3](#lightbox=gd-lb-7)
+        """,
+        "user_guide/09-showcase.qmd": """\
+            ---
+            title: "Full Showcase"
             lightbox: true
             ---
 
-            ## Combined Demo
+            ## Complete Feature Showcase
 
-            This page uses `lightbox: true` (auto mode) and shows multiple features
-            working together.
+            This page demonstrates all gd-lightbox capabilities working together.
+            `lightbox: true` is set in the page YAML so all block images are
+            automatically enhanced.
 
-            ### Auto lightbox with caption
+            ---
 
-            ![Dashboard overview with all metrics visible](images/dashboard.light.svg)
+            ### Auto Mode + Captions
 
-            ### Gallery with dark variants
+            All block-level images get lightbox treatment automatically. Captions
+            and credits appear in the lightbox overlay:
 
-            These images form a gallery AND have dark-mode variants:
+            ![Hero section with gradient background](images/hero-gradient.svg){caption="The hero section uses a vibrant gradient that adapts to dark mode" credit="Design Team"}
 
-            ![Dashboard](images/dashboard.light.svg){group="dark-gallery" dark="images/dashboard.dark.svg"}
+            ---
 
-            ![UI Preview](images/ui-preview.svg){group="dark-gallery" dark="images/ui-preview-night.svg"}
+            ### Dark-Mode Variants in Auto Mode
 
-            ### Deep-link test
+            These images swap automatically when the user toggles the theme:
+
+            ![App Layout](images/app-layout.svg){dark="images/app-layout.dark.svg" caption="Multi-panel application interface"}
+
+            ![Hero Gradient](images/hero-gradient.svg){dark="images/hero-gradient.dark.svg"}
+
+            ---
+
+            ### Gallery + Dark Variants + Autoplay
+
+            A gallery where each image has a dark variant, auto-advancing every
+            4 seconds:
+
+            ![Dashboard](images/dashboard.light.svg){group="showcase-gallery" dark="images/dashboard.dark.svg" autoplay="4s" caption="Dashboard metrics"}
+
+            ![App Layout](images/app-layout.svg){group="showcase-gallery" dark="images/app-layout.dark.svg" autoplay="4s" caption="Application layout"}
+
+            ![Hero Section](images/hero-gradient.svg){group="showcase-gallery" dark="images/hero-gradient.dark.svg" autoplay="4s" caption="Landing page hero"}
+
+            ---
+
+            ### Annotated Gallery
+
+            A gallery where each image also has annotations. Click any image,
+            then explore the markers:
+
+            ![App Layout](images/app-layout.svg){group="annotated" annotations='[{"x": 12, "y": 50, "label": "1", "text": "Sidebar"}, {"x": 50, "y": 50, "label": "2", "text": "Content"}, {"x": 88, "y": 50, "label": "3", "text": "TOC"}]'}
+
+            ![Pipeline](images/pipeline.svg){group="annotated" annotations='[{"x": 25, "y": 50, "label": "A", "text": "Input"}, {"x": 75, "y": 50, "label": "B", "text": "Output"}]'}
+
+            ---
+
+            ### Before/After Comparisons
+
+            #### Table Redesign
+
+            {{< compare before="images/v1-table.svg" after="images/v2-table.svg" label-before="v1 Plain" label-after="v2 Styled" >}}
+
+            #### Sidebar Update
+
+            {{< compare before="images/v1-sidebar.svg" after="images/v2-sidebar.svg" label-before="Old" label-after="New" direction="vertical" >}}
+
+            ---
+
+            ### Responsive Image + Annotations
+
+            High-res source loaded in the lightbox, with annotations visible
+            on the thumbnail:
+
+            ![Revenue Chart](images/chart-400.svg){srcset="images/chart-400.svg 400w, images/chart-800.svg 800w, images/chart-1600.svg 1600w" sizes="(max-width: 600px) 400px, 800px" annotations='[{"x": 30, "y": 50, "label": "Q3", "text": "Revenue dipped in Q3 due to seasonal factors", "color": "#e74c3c"}, {"x": 70, "y": 30, "label": "Q4", "text": "Strong recovery in Q4 with 42% growth", "color": "#27ae60"}]'}
+
+            ---
+
+            ### Multiple Comparison Styles
+
+            ::: {.lightbox-compare start="25"}
+            ![Light App](images/app-layout.svg)
+            ![Dark App](images/app-layout.dark.svg)
+            :::
+
+            ---
+
+            ### Deep Link Test
 
             Navigate to this page with `#lightbox=gd-lb-1` appended to the URL
-            to auto-open the first image's lightbox.
+            to auto-open the hero section image.
 
-            ### Large image (tests scroll/zoom)
+            ### Large Image with Annotations + Caption
 
-            ![Full application screenshot showing all panels](images/full-page.svg){caption="The full application with sidebar, main content, and inspector panel"}
+            ![Full application screenshot](images/full-page.svg){caption="Complete application with all panels visible — use the annotation markers to explore each section" credit="Engineering Team" annotations='[{"x": 20, "y": 25, "label": "①", "text": "File tree and navigation", "color": "#3498db"}, {"x": 50, "y": 50, "label": "②", "text": "Main editing area", "color": "#e74c3c"}, {"x": 80, "y": 75, "label": "③", "text": "Terminal and output panel", "color": "#f39c12"}]'}
         """,
         # ── Images ────────────────────────────────────────────────────
         **_IMAGES,
