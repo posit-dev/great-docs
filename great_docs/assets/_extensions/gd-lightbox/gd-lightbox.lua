@@ -68,9 +68,15 @@ local function should_lightbox(img)
     return false
 end
 
---- Detect dark-mode variant by naming convention.
---- Given "diagram.png", checks if "diagram.dark.png" exists as a sibling.
---- Also handles explicit dark="..." attribute.
+--- Resolve a dark-mode variant only when the author has opted in.
+--- Opt-in happens via an explicit dark="..." attribute, or by naming the
+--- source with a ".light" segment (e.g. "diagram.light.svg"), in which case
+--- the dark sibling is "diagram.dark.svg".
+---
+--- We deliberately do NOT guess a ".dark" sibling for arbitrary sources:
+--- the Lua filter cannot verify the file exists at render time, so a blind
+--- guess produces a broken image (404) in the lightbox whenever no dark
+--- variant was ever provided.
 --- @param src string
 --- @param attrs table
 --- @return string|nil  dark variant path, or nil
@@ -79,18 +85,18 @@ local function get_dark_variant(src, attrs)
     if attrs["dark"] then
         return attrs["dark"]
     end
-    -- Naming convention: file.ext → file.dark.ext
-    -- Also: file.light.ext → file.dark.ext
+    -- Naming convention opt-in: file.light.ext → file.dark.ext
     local stem, ext = src:match("^(.+)%.([^%.]+)$")
     if not stem then return nil end
 
-    -- If file is already named .light.ext, the dark variant is .dark.ext
     local base = stem:match("^(.+)%.light$")
     if base then
         return base .. ".dark." .. ext
     end
-    -- Otherwise try stem.dark.ext
-    return stem .. ".dark." .. ext
+
+    -- No explicit dark variant and no ".light" opt-in: leave it unset so the
+    -- lightbox keeps using the (working) light source in dark mode.
+    return nil
 end
 
 --- Build the HTML wrapper for a lightbox-enabled image.

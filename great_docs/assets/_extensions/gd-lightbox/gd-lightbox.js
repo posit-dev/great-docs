@@ -254,7 +254,11 @@
       {
         className: PREFIX + "-btn " + PREFIX + "-btn-copy",
         "aria-label": "Copy image to clipboard",
-        title: "Copy image",
+        // Tooltip via Great Docs' tooltips.js (tippy). Hover-only trigger so it
+        // never fires on the auto-focus/focus-trap that would otherwise strand
+        // the tooltip when the toolbar auto-hides. No native `title` is used.
+        "data-tippy-content": "Copy image",
+        "data-tippy-trigger": "mouseenter",
         onClick: handleCopy,
       },
       [createCopyIcon()]
@@ -267,7 +271,8 @@
       {
         className: PREFIX + "-btn " + PREFIX + "-btn-download",
         "aria-label": "Download image",
-        title: "Download image",
+        "data-tippy-content": "Download image",
+        "data-tippy-trigger": "mouseenter",
         onClick: handleDownload,
       },
       [createDownloadIcon()]
@@ -280,7 +285,8 @@
       {
         className: PREFIX + "-btn " + PREFIX + "-btn-link",
         "aria-label": "Copy link to this image",
-        title: "Copy link",
+        "data-tippy-content": "Copy link",
+        "data-tippy-trigger": "mouseenter",
         onClick: handleCopyLink,
       },
       [createLinkIcon()]
@@ -293,7 +299,8 @@
       {
         className: PREFIX + "-btn " + PREFIX + "-btn-close",
         "aria-label": "Close lightbox",
-        title: "Close (Esc)",
+        "data-tippy-content": "Close (Esc)",
+        "data-tippy-trigger": "mouseenter",
         onClick: close,
       },
       [createCloseIcon()]
@@ -454,6 +461,7 @@
     if (!isOpen) return;
     isOpen = false;
     stopAutoplay();
+    hideToolbarTooltips();
 
     overlay.classList.remove(PREFIX + "-visible");
     overlay.classList.add(PREFIX + "-closing");
@@ -790,6 +798,17 @@
   function hideToolbar() {
     var tb = qs("." + PREFIX + "-toolbar", overlay);
     if (tb) tb.classList.add("hidden");
+    // The toolbar hides via opacity (it stays in the DOM), so a tippy tooltip
+    // attached to a button could linger visibly. Dismiss any active ones.
+    hideToolbarTooltips();
+  }
+
+  /** Hide any tippy tooltips currently attached to toolbar buttons. */
+  function hideToolbarTooltips() {
+    if (!overlay) return;
+    qsa("." + PREFIX + "-btn", overlay).forEach(function (btn) {
+      if (btn._tippy) btn._tippy.hide();
+    });
   }
 
   // ---------------------------------------------------------------------------
