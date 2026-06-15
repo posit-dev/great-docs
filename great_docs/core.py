@@ -12417,6 +12417,8 @@ body-classes: "gd-homepage"
             config["filters"].append("output-title")
         if "details" not in config["filters"]:
             config["filters"].append("details")
+        if "gd-lightbox" not in config["filters"]:
+            config["filters"].append("gd-lightbox")
 
         # Write back to file
         self._write_quarto_yml(quarto_yml, config)
