@@ -57,6 +57,15 @@
   const ZOOM_MAX = 4;
   const ZOOM_STEP = 0.5;
 
+  // Pan state (drag the zoomed image around)
+  let panX = 0;
+  let panY = 0;
+  let isPanning = false;
+  let panPointerStartX = 0;
+  let panPointerStartY = 0;
+  let panOriginX = 0;
+  let panOriginY = 0;
+
   // Touch/gesture state
   let touchStartX = 0;
   let touchStartY = 0;
@@ -248,6 +257,11 @@
       className: PREFIX + "-main-img",
       alt: "",
     });
+    // Drag-to-pan when zoomed (pointer events cover mouse + touch)
+    mainImg.addEventListener("pointerdown", onPanStart);
+    mainImg.addEventListener("pointermove", onPanMove);
+    mainImg.addEventListener("pointerup", onPanEnd);
+    mainImg.addEventListener("pointercancel", onPanEnd);
     imageWrap.appendChild(mainImg);
     content.appendChild(imageWrap);
 
@@ -469,11 +483,13 @@
   }
 
   function createZoomResetIcon() {
-    // Concentric "fit" target
+    // "Fit to view" — inward-pointing corner arrows (feather minimize-2),
+    // visually distinct from the +/- magnifiers.
     return svgEl([
-      "M11 4a7 7 0 100 14 7 7 0 000-14z",
-      "M21 21l-4.35-4.35",
-      "M11 9.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z",
+      "M4 14h6v6",
+      "M20 10h-6V4",
+      "M14 10l7-7",
+      "M3 21l7-7",
     ]);
   }
 
@@ -658,6 +674,7 @@
       return;
     }
     zoomScale = scale;
+    clampPan(); // pull pan back into bounds when zooming out
     applyZoom(false);
     announce("Zoom " + Math.round(zoomScale * 100) + " percent");
   }
@@ -665,30 +682,95 @@
   /** Reset to fit (100%). `immediate` skips the transition (slide changes). */
   function resetZoom(immediate) {
     zoomScale = 1;
+    panX = 0;
+    panY = 0;
     applyZoom(immediate);
+  }
+
+  /** Build the transform for the current zoom + pan (empty string at fit). */
+  function zoomTransform() {
+    if (zoomScale <= 1) return "";
+    return "translate(" + panX + "px, " + panY + "px) scale(" + zoomScale + ")";
+  }
+
+  /** Apply just the transform (used during drag-pan; no transition juggling). */
+  function applyTransform() {
+    var mainImg = qs("." + PREFIX + "-main-img", overlay);
+    if (mainImg) mainImg.style.transform = zoomTransform();
   }
 
   function applyZoom(immediate) {
     if (!overlay) return;
+    if (zoomScale <= 1) {
+      panX = 0;
+      panY = 0;
+    }
     var mainImg = qs("." + PREFIX + "-main-img", overlay);
-    var transform = zoomScale > 1 ? "scale(" + zoomScale + ")" : "";
     if (mainImg) {
       if (immediate) {
         var prev = mainImg.style.transition;
         mainImg.style.transition = "none";
-        mainImg.style.transform = transform;
+        mainImg.style.transform = zoomTransform();
         mainImg.offsetHeight; // force reflow so future changes animate
         mainImg.style.transition = prev;
       } else {
-        mainImg.style.transform = transform;
+        mainImg.style.transform = zoomTransform();
       }
     }
+    // Cursor affordance: grab when zoomed (grabbing handled while dragging).
+    overlay.classList.toggle(PREFIX + "-zoomed", zoomScale > 1);
     // Annotations are hidden while zoomed (shown again at fit level).
     var layer = qs("." + PREFIX + "-annotations", overlay);
     if (layer) {
       layer.style.display = zoomScale > 1 ? "none" : "";
     }
     updateZoomUI();
+  }
+
+  /** Clamp pan so the image always covers its fit box (no gaps inside it). */
+  function clampPan() {
+    var mainImg = qs("." + PREFIX + "-main-img", overlay);
+    if (!mainImg || zoomScale <= 1) {
+      panX = 0;
+      panY = 0;
+      return;
+    }
+    var maxX = (mainImg.offsetWidth * (zoomScale - 1)) / 2;
+    var maxY = (mainImg.offsetHeight * (zoomScale - 1)) / 2;
+    panX = Math.max(-maxX, Math.min(maxX, panX));
+    panY = Math.max(-maxY, Math.min(maxY, panY));
+  }
+
+  // ── Drag-to-pan (pointer events: mouse + touch) ───────────────────────────
+
+  function onPanStart(e) {
+    if (zoomScale <= 1) return;
+    isPanning = true;
+    panPointerStartX = e.clientX;
+    panPointerStartY = e.clientY;
+    panOriginX = panX;
+    panOriginY = panY;
+    overlay.classList.add(PREFIX + "-panning");
+    var mainImg = qs("." + PREFIX + "-main-img", overlay);
+    if (mainImg && mainImg.setPointerCapture) {
+      try { mainImg.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+    e.preventDefault();
+  }
+
+  function onPanMove(e) {
+    if (!isPanning) return;
+    panX = panOriginX + (e.clientX - panPointerStartX);
+    panY = panOriginY + (e.clientY - panPointerStartY);
+    clampPan();
+    applyTransform();
+    e.preventDefault();
+  }
+
+  function onPanEnd() {
+    if (!isPanning) return;
+    isPanning = false;
+    overlay.classList.remove(PREFIX + "-panning");
   }
 
   function updateZoomUI() {
@@ -1143,6 +1225,8 @@
 
   function handleTouchStart(e) {
     if (!isOpen) return;
+    // When zoomed, touch drives pan (pointer events), not swipe-nav/close.
+    if (zoomScale > 1) return;
     var touch = e.touches[0];
     touchStartX = touch.clientX;
     touchStartY = touch.clientY;
@@ -1153,6 +1237,7 @@
 
   function handleTouchMove(e) {
     if (!isOpen) return;
+    if (zoomScale > 1) return;
     var touch = e.touches[0];
     touchDeltaX = touch.clientX - touchStartX;
     touchDeltaY = touch.clientY - touchStartY;
@@ -1309,7 +1394,12 @@
 
     // Keep annotation markers aligned to the image when the viewport resizes
     window.addEventListener("resize", function () {
-      if (isOpen) positionAnnotations(false);
+      if (!isOpen) return;
+      positionAnnotations(false);
+      if (zoomScale > 1) {
+        clampPan();
+        applyTransform();
+      }
     });
 
     // Deep link check

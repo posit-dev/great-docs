@@ -201,6 +201,18 @@ body.gd-lightbox-open {
   transition: transform 200ms ease;
 }
 
+/* Zoomed: image is draggable to pan. */
+.gd-lightbox-overlay.gd-lightbox-zoomed .gd-lightbox-main-img {
+  cursor: grab;
+  touch-action: none; /* let pointer-pan own the gesture on touch devices */
+}
+
+/* Actively dragging: grabbing cursor, and no transition so pan tracks 1:1. */
+.gd-lightbox-overlay.gd-lightbox-panning .gd-lightbox-main-img {
+  cursor: grabbing;
+  transition: none;
+}
+
 /* ---------------------------------------------------------------------------
    Caption
    --------------------------------------------------------------------------- */
