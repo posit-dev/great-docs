@@ -153,6 +153,20 @@
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
 
+  /** Parse a lightbox annotations attribute into an array, or null. */
+  function parseAnnotations(raw) {
+    if (window.GDAnnotate && window.GDAnnotate.parse) {
+      return window.GDAnnotate.parse(raw);
+    }
+    if (!raw) return null;
+    try {
+      var a = JSON.parse(raw);
+      return Array.isArray(a) && a.length ? a : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Collect Items
   // ---------------------------------------------------------------------------
@@ -181,6 +195,9 @@
         loop: wrapper.getAttribute(ATTR_LOOP),
         autoplay: wrapper.getAttribute(ATTR_AUTOPLAY),
         alt: img.getAttribute("alt") || "",
+        annotations: parseAnnotations(
+          wrapper.getAttribute("data-gd-lightbox-annotations")
+        ),
       };
 
       allItems.push(item);
@@ -611,6 +628,62 @@
 
     // Update filmstrip
     updateFilmstrip();
+
+    // Render any annotations over the enlarged image
+    renderAnnotations(item);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Annotations (over the enlarged image)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Render annotation markers for the current slide using the shared
+   * GDAnnotate API, so they match the in-page annotations exactly. The markers
+   * live in a layer that is sized to the displayed image by positionAnnotations.
+   */
+  function renderAnnotations(item) {
+    var imageWrap = qs("." + PREFIX + "-image-wrap", overlay);
+    if (!imageWrap) return;
+
+    // Clear any layer from the previous slide
+    var existing = qs("." + PREFIX + "-annotations", imageWrap);
+    if (existing) existing.remove();
+
+    if (!item.annotations || !window.GDAnnotate || !window.GDAnnotate.buildOverlay) {
+      return;
+    }
+
+    var layer = el("div", { className: PREFIX + "-annotations" });
+    layer.appendChild(window.GDAnnotate.buildOverlay(item.annotations));
+    imageWrap.appendChild(layer);
+
+    // The image src was just (re)set, so its layout box may not be final yet.
+    // Position immediately (no reveal), then reveal once it has loaded and as a
+    // fallback after the open animation (covers cached images).
+    var mainImg = qs("." + PREFIX + "-main-img", overlay);
+    positionAnnotations(false);
+    if (mainImg) {
+      mainImg.addEventListener("load", function () {
+        positionAnnotations(true);
+      }, { once: true });
+    }
+    setTimeout(function () { positionAnnotations(true); }, TRANSITION_MS + 60);
+  }
+
+  /** Size/position the annotation layer to exactly cover the displayed image. */
+  function positionAnnotations(reveal) {
+    if (!overlay) return;
+    var imageWrap = qs("." + PREFIX + "-image-wrap", overlay);
+    var mainImg = imageWrap && qs("." + PREFIX + "-main-img", overlay);
+    var layer = imageWrap && qs("." + PREFIX + "-annotations", imageWrap);
+    if (!layer || !mainImg) return;
+
+    layer.style.left = mainImg.offsetLeft + "px";
+    layer.style.top = mainImg.offsetTop + "px";
+    layer.style.width = mainImg.offsetWidth + "px";
+    layer.style.height = mainImg.offsetHeight + "px";
+    if (reveal) layer.classList.add("visible");
   }
 
   // ---------------------------------------------------------------------------
@@ -1076,6 +1149,11 @@
     // Mouse movement re-shows toolbar
     document.addEventListener("mousemove", function () {
       if (isOpen) startToolbarTimer();
+    });
+
+    // Keep annotation markers aligned to the image when the viewport resizes
+    window.addEventListener("resize", function () {
+      if (isOpen) positionAnnotations(false);
     });
 
     // Deep link check

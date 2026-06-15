@@ -26,32 +26,54 @@
     }
   }
 
+  /**
+   * Parse a raw annotations attribute value into an array, or null if it is
+   * absent / invalid / empty.
+   */
+  function parse(raw) {
+    if (!raw) return null;
+    try {
+      var annotations = JSON.parse(raw);
+      return Array.isArray(annotations) && annotations.length ? annotations : null;
+    } catch (e) {
+      // Not valid JSON — could be a file path (future: fetch)
+      return null;
+    }
+  }
+
   function initWrapper(wrapper) {
     if (wrapper.dataset.gdAnnotateInit) return;
     wrapper.dataset.gdAnnotateInit = "true";
 
-    var raw = wrapper.getAttribute(ATTR);
-    if (!raw) return;
+    var annotations = parse(wrapper.getAttribute(ATTR));
+    if (!annotations) return;
 
-    // Parse annotations JSON
-    var annotations;
-    try {
-      annotations = JSON.parse(raw);
-    } catch (e) {
-      // Not valid JSON — could be a file path (future: fetch)
-      return;
-    }
-
-    if (!Array.isArray(annotations) || annotations.length === 0) return;
-
-    // Create annotation overlay container
-    var overlay = document.createElement("div");
-    overlay.className = PREFIX + "-overlay";
     wrapper.style.position = "relative";
+    var overlay = buildOverlay(annotations);
     wrapper.appendChild(overlay);
 
-    // Track currently active tooltip
-    var activeMarker = null;
+    // Close tooltips when clicking outside the wrapper
+    document.addEventListener("click", function (e) {
+      if (!wrapper.contains(e.target)) {
+        closeAll(overlay);
+      }
+    });
+  }
+
+  /**
+   * Build a `.gd-annotate-overlay` element populated with markers and tooltips
+   * for the given annotations array, with all interactions wired up. The
+   * overlay is `position:absolute; inset:0`, so the caller is responsible for
+   * sizing/positioning its container to match the target image. Edge-aware
+   * tooltip placement uses the overlay's own bounds.
+   *
+   * Reused by both the in-page annotator and the lightbox view.
+   * @param {Array} annotations
+   * @returns {HTMLElement} the overlay element
+   */
+  function buildOverlay(annotations) {
+    var overlay = document.createElement("div");
+    overlay.className = PREFIX + "-overlay";
 
     annotations.forEach(function (ann, idx) {
       var x = parseFloat(ann.x) || 0;
@@ -112,8 +134,7 @@
           marker.classList.add(PREFIX + "-active");
           marker.setAttribute("aria-expanded", "true");
           marker.classList.remove(PREFIX + "-pulse");
-          activeMarker = marker;
-          positionTooltip(marker, tooltip, wrapper);
+          positionTooltip(marker, tooltip, overlay);
         }
       });
 
@@ -122,7 +143,7 @@
         marker.classList.remove(PREFIX + "-pulse");
         if (!marker.classList.contains(PREFIX + "-active")) {
           tooltip.classList.add(PREFIX + "-tooltip--hover");
-          positionTooltip(marker, tooltip, wrapper);
+          positionTooltip(marker, tooltip, overlay);
         }
       });
 
@@ -139,12 +160,7 @@
       });
     });
 
-    // Close tooltips when clicking outside
-    document.addEventListener("click", function (e) {
-      if (!wrapper.contains(e.target)) {
-        closeAll(overlay);
-      }
-    });
+    return overlay;
   }
 
   function closeAll(overlay) {
@@ -156,10 +172,10 @@
   }
 
   /**
-   * Position tooltip so it doesn't overflow the wrapper bounds.
+   * Position tooltip so it doesn't overflow the bounds element.
    * Prefers showing above the marker; falls back to below.
    */
-  function positionTooltip(marker, tooltip, wrapper) {
+  function positionTooltip(marker, tooltip, bounds) {
     // Reset positioning classes
     tooltip.classList.remove(
       PREFIX + "-tooltip--above",
@@ -168,10 +184,10 @@
       PREFIX + "-tooltip--right"
     );
 
-    var wrapperRect = wrapper.getBoundingClientRect();
+    var boundsRect = bounds.getBoundingClientRect();
     var markerRect = marker.getBoundingClientRect();
-    var markerCenterX = markerRect.left + markerRect.width / 2 - wrapperRect.left;
-    var markerTop = markerRect.top - wrapperRect.top;
+    var markerCenterX = markerRect.left + markerRect.width / 2 - boundsRect.left;
+    var markerTop = markerRect.top - boundsRect.top;
 
     // Default: above
     if (markerTop > 80) {
@@ -181,10 +197,10 @@
     }
 
     // Horizontal: center, but shift if near edges
-    var wrapperWidth = wrapperRect.width;
-    if (markerCenterX < wrapperWidth * 0.25) {
+    var boundsWidth = boundsRect.width;
+    if (markerCenterX < boundsWidth * 0.25) {
       tooltip.classList.add(PREFIX + "-tooltip--right");
-    } else if (markerCenterX > wrapperWidth * 0.75) {
+    } else if (markerCenterX > boundsWidth * 0.75) {
       tooltip.classList.add(PREFIX + "-tooltip--left");
     }
   }
@@ -198,4 +214,12 @@
 
   // Re-init after Quarto navigation (for SPA-like navigation)
   document.addEventListener("quarto-nav", initAll);
+
+  // Public API — consumed by the lightbox to render the same annotation
+  // markers/tooltips over the enlarged image.
+  window.GDAnnotate = {
+    parse: parse,
+    buildOverlay: buildOverlay,
+    closeAll: closeAll,
+  };
 })();

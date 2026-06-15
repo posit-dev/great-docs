@@ -160,11 +160,32 @@ body.gd-lightbox-open {
 }
 
 .gd-lightbox-image-wrap {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   max-width: 90vw;
   max-height: calc(100vh - 200px);
+}
+
+/* Annotation layer — sized/positioned by JS to cover the displayed image.
+   Holds a .gd-annotate-overlay (inset:0), so markers position by % of this
+   box. Fades in once positioned to avoid a flash at the wrong location. */
+.gd-lightbox-annotations {
+  position: absolute;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.gd-lightbox-annotations.visible {
+  opacity: 1;
+}
+
+/* The markers themselves re-enable pointer events (see annotate CSS). */
+.gd-lightbox-annotations .gd-annotate-marker {
+  pointer-events: auto;
 }
 
 .gd-lightbox-main-img {
