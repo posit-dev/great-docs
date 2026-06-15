@@ -27,6 +27,9 @@
   const ATTR_CREDIT = "data-gd-lightbox-credit";
   const ATTR_DESC_POS = "data-gd-lightbox-desc-position";
   const ATTR_ZOOM_TARGET = "data-gd-lightbox-zoom-target";
+  const ATTR_LOOP = "data-gd-lightbox-loop";
+  const ATTR_AUTOPLAY = "data-gd-lightbox-autoplay";
+  const ATTR_FULL_SRC = "data-gd-lightbox-full-src";
 
   const TRANSITION_MS = 300;
   const TOOLBAR_HIDE_MS = 3000;
@@ -44,6 +47,9 @@
   let toolbarTimer = null;
   let previousFocus = null; // Element that had focus before lightbox opened
   let isDarkMode = false;
+  let loopEnabled = true; // Whether gallery wraps around at ends
+  let autoplayInterval = 0; // Autoplay interval in ms (0 = disabled)
+  let autoplayTimer = null; // Active autoplay timer
 
   // Touch/gesture state
   let touchStartX = 0;
@@ -104,6 +110,45 @@
     return item.src;
   }
 
+  /**
+   * Get the highest-resolution source for lightbox display.
+   * Prefers: explicit full-src > largest srcset entry > base src.
+   */
+  function getFullResSrc(item) {
+    if (isDarkMode && item.darkSrc) {
+      return item.darkSrc;
+    }
+    if (item.fullSrc) {
+      return item.fullSrc;
+    }
+    if (item.srcsetMax) {
+      return item.srcsetMax;
+    }
+    return item.src;
+  }
+
+  /**
+   * Parse a srcset string and return the URL of the widest/highest-res source.
+   * Handles both width descriptors (800w) and pixel density (2x).
+   */
+  function parseSrcsetMax(srcset) {
+    if (!srcset) return null;
+    var best = null;
+    var bestVal = 0;
+    srcset.split(",").forEach(function (entry) {
+      var parts = entry.trim().split(/\s+/);
+      if (parts.length < 2) return;
+      var url = parts[0];
+      var descriptor = parts[1];
+      var val = parseFloat(descriptor) || 0;
+      if (val > bestVal) {
+        bestVal = val;
+        best = url;
+      }
+    });
+    return best;
+  }
+
   function prefersReducedMotion() {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
@@ -126,11 +171,15 @@
         id: wrapper.getAttribute(ATTR_ID),
         src: img.getAttribute("src"),
         darkSrc: wrapper.getAttribute(ATTR_DARK) || null,
+        fullSrc: wrapper.getAttribute(ATTR_FULL_SRC) || null,
+        srcsetMax: parseSrcsetMax(img.getAttribute("srcset")),
         group: wrapper.getAttribute(ATTR_GROUP) || null,
         caption: wrapper.getAttribute(ATTR_CAPTION) || "",
         credit: wrapper.getAttribute(ATTR_CREDIT) || "",
         descPosition: wrapper.getAttribute(ATTR_DESC_POS) || "bottom",
         zoomTarget: wrapper.getAttribute(ATTR_ZOOM_TARGET) || null,
+        loop: wrapper.getAttribute(ATTR_LOOP),
+        autoplay: wrapper.getAttribute(ATTR_AUTOPLAY),
         alt: img.getAttribute("alt") || "",
       };
 
@@ -157,6 +206,7 @@
       role: "dialog",
       "aria-modal": "true",
       "aria-label": "Image lightbox",
+      "aria-hidden": "true",
     });
 
     // Backdrop
@@ -223,6 +273,19 @@
       [createDownloadIcon()]
     );
     toolbar.appendChild(downloadBtn);
+
+    // Copy link button
+    var linkBtn = el(
+      "button",
+      {
+        className: PREFIX + "-btn " + PREFIX + "-btn-link",
+        "aria-label": "Copy link to this image",
+        title: "Copy link",
+        onClick: handleCopyLink,
+      },
+      [createLinkIcon()]
+    );
+    toolbar.appendChild(linkBtn);
 
     // Close button
     var closeBtn = el(
@@ -323,6 +386,13 @@
     return svgEl(["M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4", "M7 10l5 5 5-5", "M12 15V3"]);
   }
 
+  function createLinkIcon() {
+    return svgEl([
+      "M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71",
+      "M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71",
+    ]);
+  }
+
   // ---------------------------------------------------------------------------
   // Open / Close / Navigate
   // ---------------------------------------------------------------------------
@@ -345,10 +415,19 @@
     currentIndex = currentGroup.indexOf(item);
     if (currentIndex < 0) currentIndex = 0;
 
+    // Read loop setting from the opening item (group-level attribute)
+    // Default: true (wraps around). Set data-gd-lightbox-loop="false" to disable.
+    var loopAttr = item.loop;
+    loopEnabled = loopAttr !== "false";
+
+    // Read autoplay interval (e.g., "3s", "2000ms", or "3000")
+    autoplayInterval = parseInterval(item.autoplay);
+
     showSlide(currentIndex, item);
 
     // Show overlay with animation
     overlay.classList.add(PREFIX + "-visible");
+    overlay.setAttribute("aria-hidden", "false");
     document.body.classList.add(PREFIX + "-open");
 
     // Origin animation: get thumbnail rect and animate from there
@@ -368,14 +447,17 @@
     }, TRANSITION_MS);
 
     startToolbarTimer();
+    startAutoplay();
   }
 
   function close() {
     if (!isOpen) return;
     isOpen = false;
+    stopAutoplay();
 
     overlay.classList.remove(PREFIX + "-visible");
     overlay.classList.add(PREFIX + "-closing");
+    overlay.setAttribute("aria-hidden", "true");
     document.body.classList.remove(PREFIX + "-open");
 
     // Remove hash
@@ -394,16 +476,68 @@
 
   function next() {
     if (!currentGroup || currentGroup.length <= 1) return;
+    if (!loopEnabled && currentIndex >= currentGroup.length - 1) return;
     currentIndex = (currentIndex + 1) % currentGroup.length;
     showSlide(currentIndex);
     announce("Image " + (currentIndex + 1) + " of " + currentGroup.length);
+    resetAutoplay();
   }
 
   function prev() {
     if (!currentGroup || currentGroup.length <= 1) return;
+    if (!loopEnabled && currentIndex <= 0) return;
     currentIndex = (currentIndex - 1 + currentGroup.length) % currentGroup.length;
     showSlide(currentIndex);
     announce("Image " + (currentIndex + 1) + " of " + currentGroup.length);
+    resetAutoplay();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Autoplay
+  // ---------------------------------------------------------------------------
+
+  /** Parse an interval string like "3s", "2000ms", or "3000" → milliseconds. */
+  function parseInterval(val) {
+    if (!val) return 0;
+    val = val.trim().toLowerCase();
+    if (val.endsWith("ms")) {
+      return parseInt(val, 10) || 0;
+    }
+    if (val.endsWith("s")) {
+      return (parseFloat(val) || 0) * 1000;
+    }
+    // Bare number: treat as ms if >=100, otherwise as seconds
+    var n = parseFloat(val);
+    if (!n || n <= 0) return 0;
+    return n >= 100 ? n : n * 1000;
+  }
+
+  function startAutoplay() {
+    stopAutoplay();
+    if (autoplayInterval <= 0 || !currentGroup || currentGroup.length <= 1) return;
+    autoplayTimer = setInterval(function () {
+      if (!loopEnabled && currentIndex >= currentGroup.length - 1) {
+        stopAutoplay();
+        return;
+      }
+      currentIndex = (currentIndex + 1) % currentGroup.length;
+      showSlide(currentIndex);
+      announce("Image " + (currentIndex + 1) + " of " + currentGroup.length);
+    }, autoplayInterval);
+  }
+
+  function stopAutoplay() {
+    if (autoplayTimer) {
+      clearInterval(autoplayTimer);
+      autoplayTimer = null;
+    }
+  }
+
+  /** Reset autoplay timer (called on manual navigation to restart the interval). */
+  function resetAutoplay() {
+    if (autoplayInterval > 0) {
+      startAutoplay();
+    }
   }
 
   function showSlide(index, originItem) {
@@ -415,10 +549,15 @@
     var creditText = qs("." + PREFIX + "-credit-text", overlay);
     var counter = qs("." + PREFIX + "-counter", overlay);
 
-    // Update image source (with dark mode awareness)
-    var src = getImageSrc(item);
+    // Update image source — use highest-resolution source for lightbox display
+    var src = getFullResSrc(item);
     mainImg.setAttribute("src", src);
+    mainImg.removeAttribute("srcset");
+    mainImg.removeAttribute("sizes");
     mainImg.setAttribute("alt", item.alt);
+
+    // Update dialog label for screen readers
+    overlay.setAttribute("aria-label", item.alt || item.caption || "Image lightbox");
 
     // Update caption
     if (item.caption) {
@@ -452,6 +591,14 @@
     } else {
       prevBtn.style.display = "";
       nextBtn.style.display = "";
+      // Disable buttons at boundaries when loop is off
+      if (!loopEnabled) {
+        prevBtn.disabled = index <= 0;
+        nextBtn.disabled = index >= currentGroup.length - 1;
+      } else {
+        prevBtn.disabled = false;
+        nextBtn.disabled = false;
+      }
     }
 
     // Update filmstrip
@@ -591,6 +738,20 @@
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  }
+
+  function handleCopyLink() {
+    var item = currentGroup[currentIndex];
+    if (!item || !item.id) {
+      showToast("No link available");
+      return;
+    }
+    var url = window.location.origin + window.location.pathname + "#lightbox=" + item.id;
+    navigator.clipboard.writeText(url).then(function () {
+      showToast("Link copied");
+    }).catch(function () {
+      showToast("Could not copy link");
+    });
   }
 
   function showToast(msg) {
