@@ -295,7 +295,14 @@ class GreatDocs:
         # Copy lightbox assets (JS + CSS live with the extension but also need
         # to be available as top-level resources for the Lua filter's injection)
         lb_ext = self.assets_path / "_extensions" / "gd-lightbox"
-        for lb_file in ("gd-lightbox.js", "gd-lightbox.css"):
+        for lb_file in (
+            "gd-lightbox.js",
+            "gd-lightbox.css",
+            "gd-lightbox-compare.js",
+            "gd-lightbox-compare.css",
+            "gd-lightbox-annotate.js",
+            "gd-lightbox-annotate.css",
+        ):
             lb_src = lb_ext / lb_file
             if lb_src.exists():
                 shutil.copy2(lb_src, self.project_path / lb_file)
@@ -11060,7 +11067,14 @@ body-classes: "gd-homepage"
             config["project"]["resources"].append("termshow.css")
 
         # Add gd-lightbox assets as resources
-        for lb_res in ("gd-lightbox.js", "gd-lightbox.css"):
+        for lb_res in (
+            "gd-lightbox.js",
+            "gd-lightbox.css",
+            "gd-lightbox-compare.js",
+            "gd-lightbox-compare.css",
+            "gd-lightbox-annotate.js",
+            "gd-lightbox-annotate.css",
+        ):
             if lb_res not in config["project"]["resources"]:
                 config["project"]["resources"].append(lb_res)
 
@@ -11204,6 +11218,66 @@ body-classes: "gd-homepage"
             "gd-lightbox.js" in str(item) for item in config["format"]["html"]["include-in-header"]
         ):
             config["format"]["html"]["include-in-header"].append(lb_js_entry)
+
+        # Add gd-lightbox-compare CSS (uses quarto:offset)
+        lb_compare_css_entry = {
+            "text": (
+                "<script>document.head.appendChild(Object.assign("
+                "document.createElement('link'),{rel:'stylesheet',"
+                "href:(document.querySelector('meta[name=\"quarto:offset\"]')"
+                "||{content:''}).content+'gd-lightbox-compare.css'}));</script>"
+            )
+        }
+        if not any(
+            "gd-lightbox-compare.css" in str(item)
+            for item in config["format"]["html"]["include-in-header"]
+        ):
+            config["format"]["html"]["include-in-header"].append(lb_compare_css_entry)
+
+        # Add gd-lightbox-compare JS (deferred, uses quarto:offset)
+        lb_compare_js_entry = {
+            "text": (
+                "<script>(function(){var s=document.createElement('script');"
+                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
+                "s.src=(m?m.content:'')+'gd-lightbox-compare.js';s.defer=true;"
+                "document.head.appendChild(s);})();</script>"
+            )
+        }
+        if not any(
+            "gd-lightbox-compare.js" in str(item)
+            for item in config["format"]["html"]["include-in-header"]
+        ):
+            config["format"]["html"]["include-in-header"].append(lb_compare_js_entry)
+
+        # Add gd-lightbox-annotate CSS (uses quarto:offset)
+        lb_annotate_css_entry = {
+            "text": (
+                "<script>document.head.appendChild(Object.assign("
+                "document.createElement('link'),{rel:'stylesheet',"
+                "href:(document.querySelector('meta[name=\"quarto:offset\"]')"
+                "||{content:''}).content+'gd-lightbox-annotate.css'}));</script>"
+            )
+        }
+        if not any(
+            "gd-lightbox-annotate.css" in str(item)
+            for item in config["format"]["html"]["include-in-header"]
+        ):
+            config["format"]["html"]["include-in-header"].append(lb_annotate_css_entry)
+
+        # Add gd-lightbox-annotate JS (deferred, uses quarto:offset)
+        lb_annotate_js_entry = {
+            "text": (
+                "<script>(function(){var s=document.createElement('script');"
+                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
+                "s.src=(m?m.content:'')+'gd-lightbox-annotate.js';s.defer=true;"
+                "document.head.appendChild(s);})();</script>"
+            )
+        }
+        if not any(
+            "gd-lightbox-annotate.js" in str(item)
+            for item in config["format"]["html"]["include-in-header"]
+        ):
+            config["format"]["html"]["include-in-header"].append(lb_annotate_js_entry)
 
         # Add website navigation if not present
         if "website" not in config:
