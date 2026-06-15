@@ -292,6 +292,14 @@ class GreatDocs:
             extensions_dst = self.project_path / "_extensions"
             shutil.copytree(extensions_src, extensions_dst, dirs_exist_ok=True)
 
+        # Copy lightbox assets (JS + CSS live with the extension but also need
+        # to be available as top-level resources for the Lua filter's injection)
+        lb_ext = self.assets_path / "_extensions" / "gd-lightbox"
+        for lb_file in ("gd-lightbox.js", "gd-lightbox.css"):
+            lb_src = lb_ext / lb_file
+            if lb_src.exists():
+                shutil.copy2(lb_src, self.project_path / lb_file)
+
         # Copy JavaScript files
         js_files = [
             "github-widget.js",
