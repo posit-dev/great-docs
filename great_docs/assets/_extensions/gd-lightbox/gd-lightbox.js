@@ -709,23 +709,71 @@
   function handleCopy() {
     var mainImg = qs("." + PREFIX + "-main-img", overlay);
     if (!mainImg || !mainImg.src) return;
+    var src = mainImg.src;
 
-    // Fetch image as blob and copy to clipboard
-    fetch(mainImg.src)
-      .then(function (r) { return r.blob(); })
-      .then(function (blob) {
-        var item = new ClipboardItem({ [blob.type]: blob });
-        return navigator.clipboard.write([item]);
-      })
-      .then(function () {
-        showToast("Copied to clipboard");
-      })
-      .catch(function () {
-        // Fallback: copy the URL
-        navigator.clipboard.writeText(mainImg.src).then(function () {
-          showToast("Image URL copied");
-        });
-      });
+    // The async Clipboard API only reliably accepts image/png (SVG and other
+    // types are rejected), so we rasterize whatever is displayed — including
+    // SVG — to a PNG before copying. We hand a Promise to ClipboardItem so the
+    // async rasterization happens inside the user-activation window, which
+    // Safari requires; doing the work first and writing afterwards loses the
+    // gesture and the write (and any fallback) silently fails.
+    var canWriteImage =
+      window.ClipboardItem && navigator.clipboard && navigator.clipboard.write;
+
+    if (canWriteImage) {
+      var item = new ClipboardItem({ "image/png": toPngBlob(src) });
+      navigator.clipboard
+        .write([item])
+        .then(function () { showToast("Image copied"); })
+        .catch(function () { fallbackCopyUrl(src); });
+    } else {
+      fallbackCopyUrl(src);
+    }
+  }
+
+  /**
+   * Rasterize an image URL (raster or SVG) to a PNG Blob via canvas.
+   * Returns a Promise<Blob>; rejects if the image can't be loaded or the
+   * canvas is tainted (e.g. a cross-origin source without CORS headers).
+   */
+  function toPngBlob(src) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = function () {
+        var w = img.naturalWidth || img.width;
+        var h = img.naturalHeight || img.height;
+        if (!w || !h) {
+          reject(new Error("Image has no intrinsic size"));
+          return;
+        }
+        var canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        try {
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          canvas.toBlob(function (blob) {
+            blob ? resolve(blob) : reject(new Error("toBlob returned null"));
+          }, "image/png");
+        } catch (e) {
+          reject(e);
+        }
+      };
+      img.onerror = function () { reject(new Error("Image load failed")); };
+      img.src = src;
+    });
+  }
+
+  /** Fallback when image copy isn't possible: copy the image URL as text. */
+  function fallbackCopyUrl(src) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard
+        .writeText(src)
+        .then(function () { showToast("Image URL copied"); })
+        .catch(function () { showToast("Copy not supported"); });
+    } else {
+      showToast("Copy not supported");
+    }
   }
 
   function handleDownload() {
