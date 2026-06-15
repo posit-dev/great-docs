@@ -146,6 +146,21 @@ local function render_lightbox_image(img)
         data_attrs["data-gd-lightbox-annotations"] = attrs["annotations"]
     end
 
+    -- Gallery loop control (default: true; set loop="false" to stop at ends)
+    if attrs["loop"] then
+        data_attrs["data-gd-lightbox-loop"] = attrs["loop"]
+    end
+
+    -- Gallery autoplay interval (e.g., "3s", "2000ms")
+    if attrs["autoplay"] then
+        data_attrs["data-gd-lightbox-autoplay"] = attrs["autoplay"]
+    end
+
+    -- Explicit full-resolution source for lightbox view
+    if attrs["full-src"] then
+        data_attrs["data-gd-lightbox-full-src"] = attrs["full-src"]
+    end
+
     -- Build HTML attributes string
     local attr_parts = {}
     for k, v in pairs(data_attrs) do
@@ -204,6 +219,47 @@ local function render_lightbox_image(img)
     return pandoc.RawBlock("html", html)
 end
 
+--- Render a .lightbox-compare fenced div as a comparison slider.
+--- Expected: two images inside the div.
+--- @param div pandoc.Div
+--- @return pandoc.RawBlock|nil
+local function render_compare_div(div)
+    local images = {}
+    div:walk({
+        Image = function(img)
+            table.insert(images, img)
+        end
+    })
+    if #images < 2 then return nil end
+
+    local before_img = images[1]
+    local after_img = images[2]
+
+    -- Read optional attributes from the div
+    local attrs = div.attributes or {}
+    local direction = attrs["direction"] or "horizontal"
+    local start_pos = attrs["start"] or "50"
+
+    -- Determine labels from image class (.before/.after) caption, or defaults
+    local label_before = before_img.attributes["caption"] or "Before"
+    local label_after = after_img.attributes["caption"] or "After"
+
+    local data_attrs = ' data-direction="' .. direction .. '"'
+        .. ' data-start-position="' .. start_pos .. '"'
+        .. ' data-label-before="' .. label_before:gsub('"', '&quot;') .. '"'
+        .. ' data-label-after="' .. label_after:gsub('"', '&quot;') .. '"'
+
+    local before_alt = pandoc.utils.stringify(before_img.caption) or label_before
+    local after_alt = pandoc.utils.stringify(after_img.caption) or label_after
+
+    local html = '<div class="gd-compare"' .. data_attrs .. '>'
+        .. '<img src="' .. before_img.src .. '" alt="' .. before_alt:gsub('"', '&quot;') .. '">'
+        .. '<img src="' .. after_img.src .. '" alt="' .. after_alt:gsub('"', '&quot;') .. '">'
+        .. '</div>'
+
+    return pandoc.RawBlock("html", html)
+end
+
 --- Main filter: process images in the document.
 --- Note: gd-lightbox.js and gd-lightbox.css are injected globally via core.py
 --- using the quarto:offset pattern (handles subdirectory pages correctly).
@@ -216,6 +272,40 @@ return {
         end
     },
     {
+        -- Process .lightbox-compare fenced divs and code output cells
+        Div = function(div)
+            if has_class(div, "lightbox-compare") then
+                return render_compare_div(div)
+            end
+
+            -- Auto-enhance computational cell outputs (fig-* outputs)
+            -- In auto mode, images inside .cell-output-display get lightbox
+            if lightbox_mode == "auto" and has_class(div, "cell-output-display") then
+                local blocks = {}
+                local changed = false
+                for _, block in ipairs(div.content) do
+                    if block.t == "Para" and #block.content == 1
+                        and block.content[1].t == "Image" then
+                        local img = block.content[1]
+                        if not has_class(img, "nolightbox") then
+                            -- Auto-add lightbox to cell output images
+                            table.insert(blocks, render_lightbox_image(img))
+                            changed = true
+                        else
+                            table.insert(blocks, block)
+                        end
+                    else
+                        table.insert(blocks, block)
+                    end
+                end
+                if changed then
+                    return pandoc.Div(blocks, div.attr)
+                end
+            end
+
+            return nil
+        end,
+
         -- Process images that appear as standalone paragraphs (block-level)
         Para = function(para)
             -- A paragraph with a single image is a "figure" in Pandoc
