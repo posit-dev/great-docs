@@ -11177,6 +11177,34 @@ body-classes: "gd-homepage"
         ):
             config["format"]["html"]["include-in-header"].append(tp_css_entry)
 
+        # Add gd-lightbox CSS (uses quarto:offset for subdirectory-safe paths)
+        lb_css_entry = {
+            "text": (
+                "<script>document.head.appendChild(Object.assign("
+                "document.createElement('link'),{rel:'stylesheet',"
+                "href:(document.querySelector('meta[name=\"quarto:offset\"]')"
+                "||{content:''}).content+'gd-lightbox.css'}));</script>"
+            )
+        }
+        if not any(
+            "gd-lightbox.css" in str(item) for item in config["format"]["html"]["include-in-header"]
+        ):
+            config["format"]["html"]["include-in-header"].append(lb_css_entry)
+
+        # Add gd-lightbox JS (deferred, uses quarto:offset)
+        lb_js_entry = {
+            "text": (
+                "<script>(function(){var s=document.createElement('script');"
+                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
+                "s.src=(m?m.content:'')+'gd-lightbox.js';s.defer=true;"
+                "document.head.appendChild(s);})();</script>"
+            )
+        }
+        if not any(
+            "gd-lightbox.js" in str(item) for item in config["format"]["html"]["include-in-header"]
+        ):
+            config["format"]["html"]["include-in-header"].append(lb_js_entry)
+
         # Add website navigation if not present
         if "website" not in config:
             config["website"] = {}
