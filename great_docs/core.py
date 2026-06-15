@@ -11115,6 +11115,9 @@ body-classes: "gd-homepage"
         # Disable Quarto's native code-copy — we supply our own via copy-code.js
         config["format"]["html"]["code-copy"] = False
 
+        # Disable Quarto's built-in GLightbox — we supply gd-lightbox instead
+        config["lightbox"] = False
+
         # Set document language for Quarto built-in i18n (search widget, etc.)
         if self._config.language and self._config.language != "en":
             config["lang"] = self._config.language  # pragma: no cover
