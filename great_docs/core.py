@@ -15124,8 +15124,9 @@ body-classes: "gd-homepage"
             try:
                 with _quiet_prints():
                     assets_copied = self._copy_assets()
-                    if assets_copied:
-                        self._update_quarto_config()
+                    # Always update quarto config after user guide + assets steps
+                    # (registers user-guide/images/** and other dynamic resources)
+                    self._update_quarto_config()
                 if assets_copied:
                     log.step_done("Assets copied")
                 else:
