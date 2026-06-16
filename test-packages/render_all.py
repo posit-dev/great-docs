@@ -909,6 +909,10 @@ def _build_nav_html(
     }}
     body {{ margin-top: 40px !important; }}
     #quarto-header {{ top: 40px !important; }}
+    /* When a gd-lightbox is open it sets body.gd-lightbox-open. The hub nav is
+       fixed at z-index 99999 and would otherwise cover the lightbox's top
+       toolbar (copy/download/link/close), so hide it while the lightbox is up. */
+    body.gd-lightbox-open .gd-topnav {{ display: none; }}
     </style>
 
     <div class="gd-topnav" id="gd-topnav">

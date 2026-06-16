@@ -384,6 +384,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_details_shortcode",  # 191
     # 192: Termshow recording/playback showcase
     "gdtest_termshow",  # 192
+    # 193: Lightbox extension showcase
+    "gdtest_lightbox",  # 193
 ]
 
 
@@ -2149,6 +2151,14 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "Features CLI command demos (install, init, build), TUI interface "
         "recordings with box-drawing and ANSI colors, chapter navigation, "
         "floating annotations, and recording tips user guide."
+    ),
+    # ── 193: Lightbox extension showcase ─────────────────────────────
+    "gdtest_lightbox": (
+        "Lightbox extension showcase demonstrating the gd-lightbox image viewer "
+        "with all feature combinations: explicit .lightbox class, auto mode "
+        "(lightbox: true), dark-mode image variants (naming convention and "
+        "explicit dark= attribute), gallery grouping with filmstrip navigation, "
+        "captions and credits, .nolightbox opt-out, and deep-linking."
     ),
 }
 

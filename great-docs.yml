@@ -111,16 +111,10 @@ versions:
   - label: "0.11.0"
     tag: "0.11.0"
     git_ref: v0.11.0
+    eol: true
   - label: "0.10.0"
     tag: "0.10.0"
     git_ref: v0.10.0
-  - label: "0.9"
-    tag: "0.9"
-    git_ref: v0.9
-    eol: true
-  - label: "0.8"
-    tag: "0.8"
-    git_ref: v0.8
     eol: true
 
 # GitHub link style: "widget" (shows stars count) or "icon" (simple icon)
@@ -233,6 +227,7 @@ nav_icons:
     Keyboard Keys: keyboard
     Collapsible Details: panel-top-close
     Terminal Recordings: clapperboard
+    Lightbox: images
 
 # Agent Skills
 # ------------

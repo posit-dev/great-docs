@@ -292,6 +292,21 @@ class GreatDocs:
             extensions_dst = self.project_path / "_extensions"
             shutil.copytree(extensions_src, extensions_dst, dirs_exist_ok=True)
 
+        # Copy lightbox assets (JS + CSS live with the extension but also need
+        # to be available as top-level resources for the Lua filter's injection)
+        lb_ext = self.assets_path / "_extensions" / "gd-lightbox"
+        for lb_file in (
+            "gd-lightbox.js",
+            "gd-lightbox.css",
+            "gd-lightbox-compare.js",
+            "gd-lightbox-compare.css",
+            "gd-lightbox-annotate.js",
+            "gd-lightbox-annotate.css",
+        ):
+            lb_src = lb_ext / lb_file
+            if lb_src.exists():
+                shutil.copy2(lb_src, self.project_path / lb_file)
+
         # Copy JavaScript files
         js_files = [
             "github-widget.js",
@@ -11051,6 +11066,25 @@ body-classes: "gd-homepage"
         if "termshow.css" not in config["project"]["resources"]:
             config["project"]["resources"].append("termshow.css")
 
+        # Add gd-lightbox assets as resources
+        for lb_res in (
+            "gd-lightbox.js",
+            "gd-lightbox.css",
+            "gd-lightbox-compare.js",
+            "gd-lightbox-compare.css",
+            "gd-lightbox-annotate.js",
+            "gd-lightbox-annotate.css",
+        ):
+            if lb_res not in config["project"]["resources"]:
+                config["project"]["resources"].append(lb_res)
+
+        # Add user-guide/images/** to resources so that images referenced only
+        # via data attributes (e.g., dark-mode variants) get copied to _site
+        ug_images_dir = self.project_path / "user-guide" / "images"
+        if ug_images_dir.exists() and ug_images_dir.is_dir():
+            if "user-guide/images/**" not in config["project"]["resources"]:
+                config["project"]["resources"].append("user-guide/images/**")
+
         # Add assets directory to resources if it exists
         assets_dir = self.project_path / "assets"
         if assets_dir.exists() and assets_dir.is_dir():
@@ -11094,6 +11128,9 @@ body-classes: "gd-homepage"
 
         # Disable Quarto's native code-copy — we supply our own via copy-code.js
         config["format"]["html"]["code-copy"] = False
+
+        # Disable Quarto's built-in GLightbox — we supply gd-lightbox instead
+        config["lightbox"] = False
 
         # Set document language for Quarto built-in i18n (search widget, etc.)
         if self._config.language and self._config.language != "en":
@@ -11153,6 +11190,94 @@ body-classes: "gd-homepage"
             "termshow.css" in str(item) for item in config["format"]["html"]["include-in-header"]
         ):
             config["format"]["html"]["include-in-header"].append(tp_css_entry)
+
+        # Add gd-lightbox CSS (uses quarto:offset for subdirectory-safe paths)
+        lb_css_entry = {
+            "text": (
+                "<script>document.head.appendChild(Object.assign("
+                "document.createElement('link'),{rel:'stylesheet',"
+                "href:(document.querySelector('meta[name=\"quarto:offset\"]')"
+                "||{content:''}).content+'gd-lightbox.css'}));</script>"
+            )
+        }
+        if not any(
+            "gd-lightbox.css" in str(item) for item in config["format"]["html"]["include-in-header"]
+        ):
+            config["format"]["html"]["include-in-header"].append(lb_css_entry)
+
+        # Add gd-lightbox JS (deferred, uses quarto:offset)
+        lb_js_entry = {
+            "text": (
+                "<script>(function(){var s=document.createElement('script');"
+                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
+                "s.src=(m?m.content:'')+'gd-lightbox.js';s.defer=true;"
+                "document.head.appendChild(s);})();</script>"
+            )
+        }
+        if not any(
+            "gd-lightbox.js" in str(item) for item in config["format"]["html"]["include-in-header"]
+        ):
+            config["format"]["html"]["include-in-header"].append(lb_js_entry)
+
+        # Add gd-lightbox-compare CSS (uses quarto:offset)
+        lb_compare_css_entry = {
+            "text": (
+                "<script>document.head.appendChild(Object.assign("
+                "document.createElement('link'),{rel:'stylesheet',"
+                "href:(document.querySelector('meta[name=\"quarto:offset\"]')"
+                "||{content:''}).content+'gd-lightbox-compare.css'}));</script>"
+            )
+        }
+        if not any(
+            "gd-lightbox-compare.css" in str(item)
+            for item in config["format"]["html"]["include-in-header"]
+        ):
+            config["format"]["html"]["include-in-header"].append(lb_compare_css_entry)
+
+        # Add gd-lightbox-compare JS (deferred, uses quarto:offset)
+        lb_compare_js_entry = {
+            "text": (
+                "<script>(function(){var s=document.createElement('script');"
+                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
+                "s.src=(m?m.content:'')+'gd-lightbox-compare.js';s.defer=true;"
+                "document.head.appendChild(s);})();</script>"
+            )
+        }
+        if not any(
+            "gd-lightbox-compare.js" in str(item)
+            for item in config["format"]["html"]["include-in-header"]
+        ):
+            config["format"]["html"]["include-in-header"].append(lb_compare_js_entry)
+
+        # Add gd-lightbox-annotate CSS (uses quarto:offset)
+        lb_annotate_css_entry = {
+            "text": (
+                "<script>document.head.appendChild(Object.assign("
+                "document.createElement('link'),{rel:'stylesheet',"
+                "href:(document.querySelector('meta[name=\"quarto:offset\"]')"
+                "||{content:''}).content+'gd-lightbox-annotate.css'}));</script>"
+            )
+        }
+        if not any(
+            "gd-lightbox-annotate.css" in str(item)
+            for item in config["format"]["html"]["include-in-header"]
+        ):
+            config["format"]["html"]["include-in-header"].append(lb_annotate_css_entry)
+
+        # Add gd-lightbox-annotate JS (deferred, uses quarto:offset)
+        lb_annotate_js_entry = {
+            "text": (
+                "<script>(function(){var s=document.createElement('script');"
+                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
+                "s.src=(m?m.content:'')+'gd-lightbox-annotate.js';s.defer=true;"
+                "document.head.appendChild(s);})();</script>"
+            )
+        }
+        if not any(
+            "gd-lightbox-annotate.js" in str(item)
+            for item in config["format"]["html"]["include-in-header"]
+        ):
+            config["format"]["html"]["include-in-header"].append(lb_annotate_js_entry)
 
         # Add website navigation if not present
         if "website" not in config:
@@ -12366,6 +12491,8 @@ body-classes: "gd-homepage"
             config["filters"].append("output-title")
         if "details" not in config["filters"]:
             config["filters"].append("details")
+        if "gd-lightbox" not in config["filters"]:
+            config["filters"].append("gd-lightbox")
 
         # Write back to file
         self._write_quarto_yml(quarto_yml, config)
@@ -15071,8 +15198,9 @@ body-classes: "gd-homepage"
             try:
                 with _quiet_prints():
                     assets_copied = self._copy_assets()
-                    if assets_copied:
-                        self._update_quarto_config()
+                    # Always update quarto config after user guide + assets steps
+                    # (registers user-guide/images/** and other dynamic resources)
+                    self._update_quarto_config()
                 if assets_copied:
                     log.step_done("Assets copied")
                 else:
