@@ -82,9 +82,11 @@ body.gd-lightbox-open {
 
 .gd-gallery {
   position: relative;
-  display: inline-block;
-  margin: 1.5rem 0;
+  /* Block sized to its content so margin auto can center it in the body. */
+  display: block;
+  width: fit-content;
   max-width: 480px;
+  margin: 1.5rem auto;
 }
 
 /* The cover is a normal lightbox wrapper; drop its standalone margin. */
