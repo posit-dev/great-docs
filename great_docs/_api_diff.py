@@ -7,6 +7,7 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from great_docs._subprocess import TEXT_MODE_KWARGS
 from great_docs._translations import get_translation
 
 # ---------------------------------------------------------------------------
@@ -622,7 +623,7 @@ def list_version_tags(project_root: Path) -> list[str]:
             ["git", "tag", "--sort=creatordate"],
             cwd=project_root,
             capture_output=True,
-            text=True,
+            **TEXT_MODE_KWARGS,
             timeout=10,
         )
         if result.returncode != 0:
@@ -647,7 +648,7 @@ def _get_tag_date(project_root: Path, tag: str) -> str | None:
             ["git", "log", "-1", "--format=%ai", tag],
             cwd=project_root,
             capture_output=True,
-            text=True,
+            **TEXT_MODE_KWARGS,
             timeout=10,
         )
         if result.returncode == 0 and result.stdout.strip():
@@ -682,7 +683,7 @@ def _extract_package_at_tag(
                 ["git", "ls-tree", "--name-only", tag, candidate + "/"],
                 cwd=project_root,
                 capture_output=True,
-                text=True,
+                **TEXT_MODE_KWARGS,
                 timeout=10,
             )
             if check.returncode != 0 or not check.stdout.strip():
@@ -743,7 +744,7 @@ def _read_cli_module_at_tag(
                 ["git", "show", f"{tag}:{cfg_file}"],
                 cwd=project_root,
                 capture_output=True,
-                text=True,
+                **TEXT_MODE_KWARGS,
                 timeout=10,
             )
             if result.returncode != 0:
@@ -782,7 +783,7 @@ def _read_cli_module_at_tag(
                 ["git", "cat-file", "-t", f"{tag}:{mod_path}"],
                 cwd=project_root,
                 capture_output=True,
-                text=True,
+                **TEXT_MODE_KWARGS,
                 timeout=5,
             )
             if check.returncode == 0:

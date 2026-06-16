@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from great_docs._subprocess import TEXT_MODE_KWARGS
+
 if TYPE_CHECKING:
     pass
 
@@ -551,7 +553,7 @@ def get_harper_version(harper_path: str | None = None) -> str | None:
         result = subprocess.run(
             [harper_path, "--version"],
             capture_output=True,
-            text=True,
+            **TEXT_MODE_KWARGS,
             timeout=5,
         )
         if result.returncode == 0:
@@ -649,7 +651,7 @@ def run_harper(
         result = subprocess.run(
             cmd,
             capture_output=True,
-            text=True,
+            **TEXT_MODE_KWARGS,
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as e:
@@ -794,7 +796,7 @@ def run_harper_on_text(
             cmd,
             input=text,
             capture_output=True,
-            text=True,
+            **TEXT_MODE_KWARGS,
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as e:

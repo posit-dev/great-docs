@@ -8,6 +8,7 @@ from pathlib import Path
 import click
 
 from . import __version__
+from ._subprocess import TEXT_MODE_KWARGS
 from .core import GreatDocs
 
 
@@ -947,7 +948,7 @@ def freeze(
             ["quarto", "render", str(rel_target)],
             cwd=build_dir,
             capture_output=True,
-            text=True,
+            **TEXT_MODE_KWARGS,
             env=freeze_env,
         )
 

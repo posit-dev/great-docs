@@ -9,6 +9,7 @@ from pathlib import Path
 from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
 
 from .config import Config
+from ._subprocess import TEXT_MODE_KWARGS
 
 
 def _patch_griffe():
@@ -5880,7 +5881,7 @@ class GreatDocs:
                 ["git", "describe", "--tags", "--exact-match"],
                 cwd=package_root,
                 capture_output=True,
-                text=True,
+                **TEXT_MODE_KWARGS,
             )
             if result.returncode == 0:
                 return result.stdout.strip()
@@ -5890,7 +5891,7 @@ class GreatDocs:
                 ["git", "rev-parse", "--abbrev-ref", "HEAD"],
                 cwd=package_root,
                 capture_output=True,
-                text=True,
+                **TEXT_MODE_KWARGS,
             )
             if result.returncode == 0:
                 branch = result.stdout.strip()
@@ -9356,7 +9357,7 @@ jupyter: python3
             result = subprocess.run(
                 [*pandoc_cmd, str(rst_path), "-f", "rst", "-t", "markdown", "--wrap=none"],
                 capture_output=True,
-                text=True,
+                **TEXT_MODE_KWARGS,
                 timeout=30,
             )
             if result.returncode == 0:
@@ -12085,7 +12086,7 @@ body-classes: "gd-homepage"
                     ["git", "config", "--get", "remote.origin.url"],
                     cwd=gd_source_dir,
                     capture_output=True,
-                    text=True,
+                    **TEXT_MODE_KWARGS,
                     timeout=5,
                 )
                 remote_url = remote_result.stdout.strip() if remote_result.returncode == 0 else ""
@@ -12094,7 +12095,7 @@ body-classes: "gd-homepage"
                         ["git", "rev-parse", "--short", "HEAD"],
                         cwd=gd_source_dir,
                         capture_output=True,
-                        text=True,
+                        **TEXT_MODE_KWARGS,
                         timeout=5,
                     )
                     if result.returncode == 0:
@@ -12587,7 +12588,7 @@ body-classes: "gd-homepage"
                 ["git", "describe", "--tags", "--exact-match", "HEAD"],
                 cwd=self.project_root,
                 capture_output=True,
-                text=True,
+                **TEXT_MODE_KWARGS,
                 timeout=5,
             )
             if result.returncode == 0 and result.stdout.strip():
@@ -14754,7 +14755,7 @@ body-classes: "gd-homepage"
                         ["git", "config", "--get", "remote.origin.url"],
                         cwd=str(self.project_root),
                         capture_output=True,
-                        text=True,
+                        **TEXT_MODE_KWARGS,
                     )
                     if _git_remote.returncode == 0 and _git_remote.stdout.strip():
                         _remote_url = _git_remote.stdout.strip()
@@ -14858,7 +14859,7 @@ body-classes: "gd-homepage"
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
+                **TEXT_MODE_KWARGS,
                 env=env,
                 bufsize=1,
             )
@@ -15618,7 +15619,7 @@ body-classes: "gd-homepage"
             if branch:
                 clone_cmd += ["--branch", branch]
             clone_cmd += [repo_url, str(clone_dir)]
-            result = subprocess.run(clone_cmd, capture_output=True, text=True)
+            result = subprocess.run(clone_cmd, capture_output=True, **TEXT_MODE_KWARGS)
             if result.returncode != 0:
                 raise RuntimeError(
                     f"git clone failed (exit {result.returncode}):\n{result.stderr.strip()}"
@@ -15633,13 +15634,13 @@ body-classes: "gd-homepage"
                         ["git", "fetch", "--unshallow"],
                         cwd=str(clone_dir),
                         capture_output=True,
-                        text=True,
+                        **TEXT_MODE_KWARGS,
                     )
                     subprocess.run(
                         ["git", "fetch", "--tags"],
                         cwd=str(clone_dir),
                         capture_output=True,
-                        text=True,
+                        **TEXT_MODE_KWARGS,
                     )
                 elif needs == "tags":
                     print("   Fetching tags for source link detection...")
@@ -15647,7 +15648,7 @@ body-classes: "gd-homepage"
                         ["git", "fetch", "--tags"],
                         cwd=str(clone_dir),
                         capture_output=True,
-                        text=True,
+                        **TEXT_MODE_KWARGS,
                     )
             print("   Cloned to temporary directory")
 
@@ -15667,7 +15668,7 @@ body-classes: "gd-homepage"
             result = subprocess.run(
                 [str(venv_pip), "install", "great-docs"],
                 capture_output=True,
-                text=True,
+                **TEXT_MODE_KWARGS,
             )
             if result.returncode != 0:
                 # Fall back to installing from the current source tree if
@@ -15676,7 +15677,7 @@ body-classes: "gd-homepage"
                 result = subprocess.run(
                     [str(venv_pip), "install", str(src_root)],
                     capture_output=True,
-                    text=True,
+                    **TEXT_MODE_KWARGS,
                 )
                 if result.returncode != 0:
                     raise RuntimeError(f"Failed to install great-docs:\n{result.stderr.strip()}")
@@ -15690,13 +15691,13 @@ body-classes: "gd-homepage"
                 install_cmd.append(f"{clone_dir}[{extras}]")
             else:
                 install_cmd.append(str(clone_dir))
-            result = subprocess.run(install_cmd, capture_output=True, text=True)
+            result = subprocess.run(install_cmd, capture_output=True, **TEXT_MODE_KWARGS)
             if result.returncode != 0:
                 # Retry without extras
                 result = subprocess.run(
                     [str(venv_pip), "install", "-e", str(clone_dir)],
                     capture_output=True,
-                    text=True,
+                    **TEXT_MODE_KWARGS,
                 )
                 if result.returncode != 0:
                     raise RuntimeError(

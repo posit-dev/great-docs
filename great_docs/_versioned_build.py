@@ -11,6 +11,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 from pathlib import Path
 from typing import Any, Callable
 
+from great_docs._subprocess import TEXT_MODE_KWARGS
 from great_docs._versioning import (
     VersionEntry,
     build_version_map,
@@ -974,7 +975,7 @@ def _validate_git_ref_is_tag(project_root: Path, git_ref: str) -> bool:
             ["git", "tag", "--list", git_ref],
             cwd=project_root,
             capture_output=True,
-            text=True,
+            **TEXT_MODE_KWARGS,
             timeout=10,
         )
         return result.returncode == 0 and git_ref in result.stdout.strip().split("\n")
@@ -1339,7 +1340,7 @@ def _render_single_version(
                 ["quarto", "render"],
                 cwd=build_dir,
                 capture_output=True,
-                text=True,
+                **TEXT_MODE_KWARGS,
                 env=env,
                 timeout=600,
             )
@@ -1383,7 +1384,7 @@ def _render_single_version_streaming(
             cwd=build_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
+            **TEXT_MODE_KWARGS,
             env=env,
             bufsize=1,
         )
@@ -1439,7 +1440,7 @@ def _render_single_version_streaming(
                 cwd=build_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
+                **TEXT_MODE_KWARGS,
                 env=env,
                 bufsize=1,
             )

@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING, cast
 
 import griffe as gf
 
+from great_docs._subprocess import TEXT_MODE_KWARGS
+
 from .pandoc.components import Attr
 from .pandoc.inlines import InterLink, Span
 
@@ -311,7 +313,7 @@ def format_str(source: str) -> str:
             "-",
         ],
         input=source,
-        text=True,
+        **TEXT_MODE_KWARGS,
         capture_output=True,
     )
 

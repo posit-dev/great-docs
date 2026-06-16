@@ -25,6 +25,11 @@ def _configure_stdio_for_unicode() -> None:
 
 _configure_stdio_for_unicode()
 
+try:
+    from great_docs._subprocess import TEXT_MODE_KWARGS as _SUBPROCESS_TEXT_KWARGS
+except ImportError:
+    _SUBPROCESS_TEXT_KWARGS = {"text": True, "encoding": "utf-8", "errors": "replace"}
+
 # Skip post-render processing during freeze-only renders
 if os.environ.get("GD_FREEZE_ONLY"):
     print("Skipping post-render (freeze-only mode)")
@@ -4035,7 +4040,7 @@ def inject_page_metadata():
                             ["git", "log", "-1", "--format=%aI", "--", source_file],
                             cwd=project_root,
                             capture_output=True,
-                            text=True,
+                            **_SUBPROCESS_TEXT_KWARGS,
                             timeout=5,
                         )
                         if result.returncode == 0 and result.stdout.strip():
@@ -4055,7 +4060,7 @@ def inject_page_metadata():
                             ],
                             cwd=project_root,
                             capture_output=True,
-                            text=True,
+                            **_SUBPROCESS_TEXT_KWARGS,
                             timeout=5,
                         )
                         if result.returncode == 0 and result.stdout.strip():
@@ -4679,7 +4684,7 @@ def generate_markdown_pages():
                 ["quarto", "pandoc", "-f", "html", "-t", "gfm", "--wrap=none"],
                 input=main_html,
                 capture_output=True,
-                text=True,
+                **_SUBPROCESS_TEXT_KWARGS,
                 timeout=30,
             )
 
