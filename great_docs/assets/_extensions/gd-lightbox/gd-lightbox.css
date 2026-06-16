@@ -76,6 +76,96 @@ body.gd-lightbox-open {
   margin-top: -1rem;
 }
 
+/* ---------------------------------------------------------------------------
+   Gallery Stack (in-page cover that opens a gallery in the lightbox)
+   --------------------------------------------------------------------------- */
+
+.gd-gallery {
+  position: relative;
+  display: inline-block;
+  margin: 1.5rem 0;
+  max-width: 480px;
+}
+
+/* The cover is a normal lightbox wrapper; drop its standalone margin. */
+.gd-gallery .gd-lightbox-wrapper {
+  margin: 0;
+}
+
+/* Matte frame around the cover photo. */
+.gd-gallery .gd-gallery-cover {
+  padding: 6px;
+  background: var(--gd-lightbox-caption-bg, #fff);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+}
+
+/* Offset "photos" peeking out behind the cover to suggest a stack. */
+.gd-gallery .gd-gallery-cover::before,
+.gd-gallery .gd-gallery-cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: var(--gd-lightbox-caption-bg, #fff);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  z-index: -1;
+  transition: transform 220ms ease;
+}
+
+.gd-gallery .gd-gallery-cover::before {
+  transform: rotate(-3deg) translate(-7px, 5px);
+}
+
+.gd-gallery .gd-gallery-cover::after {
+  transform: rotate(3deg) translate(7px, 5px);
+  z-index: -2;
+}
+
+/* Fan the stack out a little on hover. */
+.gd-gallery:hover .gd-gallery-cover::before {
+  transform: rotate(-6deg) translate(-14px, 7px);
+}
+
+.gd-gallery:hover .gd-gallery-cover::after {
+  transform: rotate(6deg) translate(14px, 7px);
+}
+
+/* Image count badge. */
+.gd-gallery-badge {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.65);
+  border-radius: 20px;
+  pointer-events: none;
+}
+
+.gd-gallery-badge svg {
+  display: block;
+}
+
+/* Hidden gallery members stay in the DOM for the engine but take no space. */
+.gd-gallery-rest {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gd-gallery .gd-gallery-cover::before,
+  .gd-gallery .gd-gallery-cover::after {
+    transition: none;
+  }
+}
+
 .gd-lightbox-wrapper:hover,
 .gd-lightbox-wrapper:focus-visible {
   transform: translateY(-2px);

@@ -553,6 +553,20 @@ SPEC = {
 
             ---
 
+            ### Gallery Stack (single cover)
+
+            A `.lightbox-gallery` collapses a set of images into one framed,
+            stacked cover that takes a fixed amount of space. Click it to page
+            through the whole gallery in the lightbox:
+
+            ::: {.lightbox-gallery}
+            ![Pipeline](images/pipeline.svg){caption="Build pipeline"}
+            ![API reference](images/api-reference.svg){caption="API reference"}
+            ![Config panel](images/config-panel.svg){caption="Configuration panel"}
+            :::
+
+            ---
+
             ### Annotated Gallery
 
             A gallery where each image also has annotations. Click any image,

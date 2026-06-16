@@ -20,6 +20,7 @@
 local assets_injected = false
 local lightbox_mode = nil -- nil = not yet read, "auto", "true", "false", "explicit"
 local image_counter = 0
+local gallery_counter = 0
 
 --- Read the document-level lightbox mode from Meta.
 local function read_meta(meta)
@@ -266,6 +267,69 @@ local function render_compare_div(div)
     return pandoc.RawBlock("html", html)
 end
 
+--- Render a .lightbox-gallery fenced div as a single stacked "cover" that
+--- opens the whole set as a gallery in the lightbox. The first image becomes
+--- the visible, framed cover; the remaining images are emitted as hidden
+--- lightbox items in the same auto-generated group, so the existing engine
+--- can page through them. This keeps a multi-image gallery to a compact,
+--- fixed footprint in the page body.
+--- @param div pandoc.Div
+--- @return pandoc.RawBlock|nil
+local function render_gallery_div(div)
+    local images = {}
+    div:walk({
+        Image = function(img)
+            table.insert(images, img)
+            return nil
+        end
+    })
+    if #images == 0 then return nil end
+
+    gallery_counter = gallery_counter + 1
+    local group = "gd-gallery-" .. tostring(gallery_counter)
+    local attrs = div.attributes or {}
+
+    -- Bind every image to the shared group; tag the cover vs. the hidden items.
+    for i, img in ipairs(images) do
+        img.attributes["group"] = group
+        table.insert(img.classes, i == 1 and "gd-gallery-cover" or "gd-gallery-item")
+    end
+
+    -- A single image needs no stack: render it as an ordinary lightbox image.
+    if #images == 1 then
+        return render_lightbox_image(images[1])
+    end
+
+    local cover_html = render_lightbox_image(images[1]).text
+    local rest_parts = {}
+    for i = 2, #images do
+        table.insert(rest_parts, render_lightbox_image(images[i]).text)
+    end
+
+    -- Optional fixed footprint, e.g. {.lightbox-gallery width="360px"}.
+    local style = ""
+    if attrs["width"] then
+        style = ' style="max-width:' .. attrs["width"] .. '"'
+    end
+
+    -- Count badge with a "layers" glyph.
+    local badge = '<span class="gd-gallery-badge" aria-hidden="true">'
+        .. '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        .. 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        .. '<polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>'
+        .. '<polyline points="2 17 12 22 22 17"></polyline>'
+        .. '<polyline points="2 12 12 17 22 12"></polyline>'
+        .. '</svg>' .. tostring(#images) .. '</span>'
+
+    local html = '<div class="gd-gallery"' .. style .. '>'
+        .. cover_html
+        .. badge
+        .. '<div class="gd-gallery-rest" hidden>' .. table.concat(rest_parts, "") .. '</div>'
+        .. '</div>'
+
+    return pandoc.RawBlock("html", html)
+end
+
 --- Main filter: process images in the document.
 --- Note: gd-lightbox.js and gd-lightbox.css are injected globally via core.py
 --- using the quarto:offset pattern (handles subdirectory pages correctly).
@@ -278,8 +342,15 @@ return {
         end
     },
     {
-        -- Process .lightbox-compare fenced divs and code output cells
+        -- Top-down so container divs (gallery, compare) are handled before
+        -- their inner images are otherwise transformed by the Para handler.
+        traverse = "topdown",
+
+        -- Process .lightbox-gallery / .lightbox-compare divs and code outputs
         Div = function(div)
+            if has_class(div, "lightbox-gallery") then
+                return render_gallery_div(div)
+            end
             if has_class(div, "lightbox-compare") then
                 return render_compare_div(div)
             end
