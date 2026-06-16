@@ -919,10 +919,13 @@
 
     if (!currentGroup || currentGroup.length <= 1) {
       filmstrip.style.display = "none";
+      overlay.classList.remove(PREFIX + "-has-filmstrip");
       return;
     }
 
     filmstrip.style.display = "";
+    // Reserve bottom space so the caption clears the filmstrip (see CSS).
+    overlay.classList.add(PREFIX + "-has-filmstrip");
     filmstrip.innerHTML = "";
 
     currentGroup.forEach(function (item, i) {

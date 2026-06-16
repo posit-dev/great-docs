@@ -58,10 +58,21 @@ body.gd-lightbox-open {
 .gd-lightbox-wrapper {
   position: relative;
   display: inline-block;
+  /* Breathing room so body text above/below isn't tight against the image.
+     Margin (not padding) keeps the space outside the rounded, clipped box. */
+  margin: 1.5rem 0;
   cursor: zoom-in;
   border-radius: 8px;
   overflow: hidden;
   transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+/* Keep a set of stacked images close together while preserving the 1.5rem
+   gap to surrounding body text. Each consecutive image is pulled up to offset
+   the previous one's bottom margin, leaving a small 0.5rem gap between images.
+   The first and last images in a run keep their full margin against text. */
+.gd-lightbox-wrapper + .gd-lightbox-wrapper {
+  margin-top: -1rem;
 }
 
 .gd-lightbox-wrapper:hover,
@@ -211,6 +222,19 @@ body.gd-lightbox-open {
 .gd-lightbox-overlay.gd-lightbox-panning .gd-lightbox-main-img {
   cursor: grabbing;
   transition: none;
+}
+
+/* Gallery mode reserves extra bottom space so the centered image and its
+   caption clear the filmstrip dock (which is absolutely positioned at the
+   bottom and would otherwise overlap a caption under a large image). The
+   content stays centered, so the toolbar at the top is cleared too. */
+.gd-lightbox-overlay.gd-lightbox-has-filmstrip .gd-lightbox-content {
+  max-height: calc(100vh - 220px);
+}
+
+.gd-lightbox-overlay.gd-lightbox-has-filmstrip .gd-lightbox-image-wrap,
+.gd-lightbox-overlay.gd-lightbox-has-filmstrip .gd-lightbox-main-img {
+  max-height: calc(100vh - 300px);
 }
 
 /* ---------------------------------------------------------------------------
@@ -478,6 +502,15 @@ body.gd-lightbox-open {
     max-width: 100vw;
     max-height: calc(100vh - 140px);
     border-radius: 0;
+  }
+
+  .gd-lightbox-overlay.gd-lightbox-has-filmstrip .gd-lightbox-content {
+    max-height: calc(100vh - 180px);
+  }
+
+  .gd-lightbox-overlay.gd-lightbox-has-filmstrip .gd-lightbox-image-wrap,
+  .gd-lightbox-overlay.gd-lightbox-has-filmstrip .gd-lightbox-main-img {
+    max-height: calc(100vh - 260px);
   }
 
   .gd-lightbox-nav {
