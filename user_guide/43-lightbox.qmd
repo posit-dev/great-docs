@@ -151,6 +151,39 @@ To advance the gallery automatically, add an `autoplay` interval. The value acce
 
 Manual navigation resets the autoplay timer, so a reader who takes control is not interrupted mid-view.
 
+## Gallery Stack
+
+A long gallery laid out inline takes a lot of vertical space. The `.lightbox-gallery` fenced div collapses a set of images into a single framed cover with a stacked-photo effect and a count badge. It occupies a fixed, compact footprint in the page, and clicking it opens the whole set as a gallery in the lightbox.
+
+```markdown
+::: {.lightbox-gallery}
+![Singapore](../assets/city-singapore.jpg){caption="Singapore"}
+![Hong Kong](../assets/city-hong-kong.jpg){caption="Hong Kong"}
+![Zurich](../assets/city-zurich.jpg){caption="Zurich"}
+![Florence](../assets/city-florence.jpg){caption="Florence"}
+![Warsaw](../assets/city-warsaw.jpg){caption="Warsaw"}
+:::
+```
+
+::: {.lightbox-gallery}
+![Singapore](../assets/city-singapore.jpg){caption="Singapore"}
+![Hong Kong](../assets/city-hong-kong.jpg){caption="Hong Kong"}
+![Zurich](../assets/city-zurich.jpg){caption="Zurich"}
+![Florence](../assets/city-florence.jpg){caption="Florence"}
+![Warsaw](../assets/city-warsaw.jpg){caption="Warsaw"}
+:::
+
+The first image becomes the visible cover; the rest are bound into the same gallery behind it. Each image keeps its own `caption`, and once open, the full set of controls (filmstrip, arrows, autoplay, zoom) works as usual.
+
+Constrain the footprint with a `width` attribute on the div:
+
+```markdown
+::: {.lightbox-gallery width="360px"}
+![Singapore](../assets/city-singapore.jpg){caption="Singapore"}
+![Hong Kong](../assets/city-hong-kong.jpg){caption="Hong Kong"}
+:::
+```
+
 ## Zooming and Panning
 
 Every enlarged image can be magnified with the toolbar zoom controls. The toolbar shows a zoom-out button, the current zoom level, a zoom-in button, and a reset-to-fit button.
