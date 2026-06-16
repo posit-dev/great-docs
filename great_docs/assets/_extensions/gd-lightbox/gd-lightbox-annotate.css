@@ -36,6 +36,14 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
+/* Lift the active/hovered marker's whole stacking context above the other
+   markers so its tooltip is never painted behind a neighbouring marker.
+   (The tooltip is a child of the marker, so raising the marker raises it.) */
+.gd-annotate-marker:hover,
+.gd-annotate-marker.gd-annotate-active {
+  z-index: 30;
+}
+
 .gd-annotate-marker:focus-visible {
   outline: 3px solid var(--bs-primary, #0d6efd);
   outline-offset: 3px;

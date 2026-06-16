@@ -59,11 +59,12 @@ body.gd-lightbox-open {
   position: relative;
   display: inline-block;
   /* Breathing room so body text above/below isn't tight against the image.
-     Margin (not padding) keeps the space outside the rounded, clipped box. */
+     Margin (not padding) keeps the space outside the rounded image box. */
   margin: 1.5rem 0;
   cursor: zoom-in;
   border-radius: 8px;
-  overflow: hidden;
+  /* No overflow clipping: annotation tooltips must be free to extend past the
+     image edge onto the page. The rounded corners live on the image instead. */
   transition: transform 200ms ease, box-shadow 200ms ease;
 }
 
@@ -90,6 +91,7 @@ body.gd-lightbox-open {
   display: block;
   max-width: 100%;
   height: auto;
+  border-radius: inherit;
 }
 
 /* Expand button overlay */
