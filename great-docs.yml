@@ -1,17 +1,6 @@
 # Great Docs Configuration
 # See https://posit-dev.github.io/great-docs/user-guide/configuration.html
 
-# Announcement Banner
-# -------------------
-# Site-wide banner above the navbar.
-# Simple form: announcement: "Your message here"
-# Dict form with options:
-announcement:
-  content: "🎉 New post: [Ten Great Things We Added to Great Docs](https://opensource.posit.co/blog/2026-05-13_great-docs-ten-things/)"
-  type: info
-  style: mint
-  dismissable: true
-
 # Author Information
 # ------------------
 # Rich author metadata for display in the landing page sidebar
@@ -92,18 +81,20 @@ hero:
 # -----------------------
 # Publish multiple versions of the site from a single source tree.
 versions:
-  - label: "0.14.0 (dev)"
+  - label: "0.14.1 (dev)"
+    tag: dev
+    version: "0.14.1"
+    prerelease: true
+  - label: "0.14.0"
     tag: dev
     version: "0.14.0"
-    prerelease: true
+    latest: true
   - label: "0.13.1"
     tag: "0.13.1"
     version: "0.13.1"
-    latest: true
   - label: "0.13.0"
     tag: "0.13.0"
     version: "0.13.0"
-    latest: true
   - label: "0.12.0"
     tag: "0.12.0"
     version: "0.12.0"
