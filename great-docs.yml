@@ -86,7 +86,7 @@ versions:
     version: "0.14.1"
     prerelease: true
   - label: "0.14.0"
-    tag: dev
+    tag: "0.14.0"
     version: "0.14.0"
     latest: true
   - label: "0.13.1"
