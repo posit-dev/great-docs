@@ -23995,6 +23995,10 @@ def test_build_watch_mode():
             docs._config.has_versions = False
             docs._config.changelog_enabled = False
             docs._config.sections = None
+            # Disable the attribution footer so its git remote lookup (a second
+            # subprocess.run) doesn't run; this test only cares about the
+            # quarto preview invocation.
+            docs._config.attribution = False
 
             docs.project_path.mkdir(parents=True, exist_ok=True)
 
