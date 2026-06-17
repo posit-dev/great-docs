@@ -4516,11 +4516,11 @@ html:not(.theme-loaded) *::after {
     -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent 85%);
 }
 
-/* Re-enable pointer events only on the homepage hero area so the
-   dark-mode starfield can track the cursor there. */
-.gd-hero #gd-starfield {
-    pointer-events: auto;
-}
+/* The starfield canvas is purely decorative and fully autonomous (it does
+   not track the cursor), so it must never capture pointer events. It is
+   position: fixed across the whole viewport, so leaving pointer-events on
+   would block clicks for the entire page — not just the hero. The base
+   #gd-starfield rule already sets pointer-events: none; keep it that way. */
 
 /* Everything in the hero except the canvas must sit above it */
 .gd-hero > *:not(#gd-starfield) {
