@@ -89,11 +89,15 @@ Click-based CLIs get rich, sectioned reference pages with usage signatures, type
 
 ### MCP Server Reference
 
-If your package ships an [MCP](https://modelcontextprotocol.io/) server, Great Docs generates structured reference pages for every tool, resource, and prompt it exposes. Parameters, types, required/optional markers, and descriptions are extracted automatically from your server definitions.
+If your package ships an [MCP](https://modelcontextprotocol.io/) server, Great Docs generates structured reference pages for every tool, resource, and prompt it exposes. Parameters, types, required/optional markers, and descriptions are extracted automatically from your server definitions. Both standard MCP and [FastMCP](https://gofastmcp.com/) servers are detected automatically.
 
 ### Terminal Recordings
 
 Teach your CLI visually with Termshow: record terminal sessions, edit them in a browser-based visual editor, and embed the results as animated SVG players in your documentation. Recordings are lightweight, theme-aware, and play inline without JavaScript dependencies. It so incredibly useful in onboarding guides, tutorials, and landing pages.
+
+### Lightbox
+
+Any image can expand into a focused, full-screen view. Add a `.lightbox` class to a single image or set `lightbox: auto` on a page to enlarge them all. The viewer supports zoom and panning, multi-image galleries with a filmstrip, captions and credits, dark-mode variants, image annotations, before/after comparison, and a copy/download toolbar. Assets load automatically, so there's nothing to install or enable.
 
 ### Dark Mode
 
@@ -129,6 +133,7 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 **Site Features**
 
 - Dark mode toggle with persistent preference
+- Lightbox image viewer (zoom, pan, galleries)
 - GitHub widget with live star/fork counts
 - Sidebar search filter for large APIs
 - Source links to GitHub for every item
@@ -208,6 +213,7 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 **Shortcodes & Widgets**
 
 - Color swatches (inline and grid)
+- Lightbox (zoom, galleries, annotations, before/after compare)
 - Terminal recordings (record, edit, embed)
 - Collapsible details sections
 - Keyboard keys styling
@@ -419,6 +425,7 @@ Full documentation is available at **[posit-dev.github.io/great-docs](https://po
 - [Linting](https://posit-dev.github.io/great-docs/user-guide/linting.html): documentation quality checks
 - [SEO](https://posit-dev.github.io/great-docs/user-guide/seo.html): search engine optimization
 - [Terminal Recordings](https://posit-dev.github.io/great-docs/user-guide/terminal-recordings.html): record, edit, and embed terminal sessions
+- [Lightbox](https://posit-dev.github.io/great-docs/user-guide/lightbox.html): full-screen image viewer with zoom, galleries, and annotations
 
 ## Requirements
 
