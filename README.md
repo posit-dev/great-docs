@@ -39,7 +39,7 @@ And it's battle-tested: every release runs against [300+ synthetic packages](htt
 <p align="center"><em>Great Docs documents itself — <a href="https://posit-dev.github.io/great-docs/">explore the live site</a>.</em></p>
 
 <p align="center">
-<video src="https://posit-dev.github.io/great-docs/assets/great-docs-tour.mp4" controls muted playsinline width="720"></video>
+<video src="https://github.com/user-attachments/assets/ce662762-287d-486d-bfdc-65ea6ccc5dfb" controls muted playsinline width="720"></video>
 </p>
 <p align="center"><em>A 22-second tour of a generated site: going through some of the site's many useful pages.</em></p>
 
