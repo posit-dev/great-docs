@@ -10,6 +10,8 @@
 <a href="https://pypistats.org/packages/great-docs"><img src="https://img.shields.io/pypi/dm/great-docs" alt="Downloads"></a>
 <a href="https://choosealicense.com/licenses/mit/"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
 <a href="https://github.com/posit-dev/great-docs/actions/workflows/test.yml"><img src="https://github.com/posit-dev/great-docs/actions/workflows/test.yml/badge.svg?branch=main" alt="CI"></a>
+</p>
+<p align="center">
 <a href="https://www.repostatus.org/#active"><img src="https://www.repostatus.org/badges/latest/active.svg" alt="Repo Status"></a>
 <a href="https://posit-dev.github.io/gdg/"><img src="https://img.shields.io/badge/Great%20Docs%20Gauntlet-300%2B%20test%20sites-7c3aed?logo=githubpages&logoColor=white" alt="Great Docs Gauntlet"></a>
 </p>
