@@ -21,8 +21,22 @@
 <a href="https://deepwiki.com/posit-dev/great-docs"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 <a href="https://www.contributor-covenant.org/version/3/0/"><img src="https://img.shields.io/badge/Contributor%20Covenant-v3.0%20adopted-ff69b4.svg" alt="Contributor Covenant"></a>
 </p>
+<p align="center">
+<a href="#get-started-in-60-seconds">Quickstart</a> ·
+<a href="#full-feature-set">Features</a> ·
+<a href="#configuration">Configuration</a> ·
+<a href="#recipes">Recipes</a> ·
+<a href="https://posit-dev.github.io/great-docs/">Docs</a>
+</p>
 
 ---
+
+> [!TIP]
+> **📺 Featured on Talk Python:** [**the "Great Docs" live stream**](https://www.youtube.com/live/rj2hY2Bsi30)
+>
+> See Great Docs in action and hear the story behind it: a full walkthrough on Talk Python.
+>
+> <a href="https://www.youtube.com/live/rj2hY2Bsi30"><img src="https://img.youtube.com/vi/rj2hY2Bsi30/maxresdefault.jpg" alt="Watch the Great Docs live stream on Talk Python" width="480"></a>
 
 Great Docs turns your Python package into a polished documentation site in minutes. It auto-discovers your public API, detects your docstring format, generates structured reference pages, and renders a modern site, all from a single command. When you're ready to customize, there's a deep set of tools and options waiting for you.
 
@@ -36,7 +50,7 @@ And it's battle-tested: every release runs against [300+ synthetic packages](htt
 <p align="center">
 <video src="https://github.com/user-attachments/assets/ce662762-287d-486d-bfdc-65ea6ccc5dfb" controls muted playsinline width="720"></video>
 </p>
-<p align="center"><em>A 22-second tour of a generated site: going through some of the site's many useful pages. Great Docs documents itself — <a href="https://posit-dev.github.io/great-docs/">explore the live site</a>.</em></p>
+<p align="center"><em>A 22-second tour of a generated site: going through some of the site's many useful pages. Great Docs documents itself -> <a href="https://posit-dev.github.io/great-docs/">explore the live site</a>.</em></p>
 
 ## Why Great Docs?
 
@@ -49,6 +63,22 @@ Writing documentation shouldn't be harder than writing the code it describes. Mo
 - **Deep when you need it**: user guides, multi-version docs, freeze caching, link checking, proofreading, SEO, internationalization (20+ languages), and more (all opt-in)
 - **AI-ready**: auto-generates `llms.txt`, agent skills, and markdown pages for LLM consumption
 - **Deploys anywhere**: one command creates a GitHub Actions workflow for GitHub Pages
+
+## How It Compares
+
+Most Python documentation tools hand you a framework and ask you to assemble the site yourself. Great Docs assembles a complete site for you first, then gets out of the way when you want control.
+
+| | Great Docs | Sphinx | MkDocs | pdoc |
+| --- | :---: | :---: | :---: | :---: |
+| Polished site with **zero config** | ✅ | ➖ | ➖ | ✅ |
+| API reference from your docstrings | ✅ | ✅ | plugin | ✅ |
+| Prose guides, recipes, custom pages | ✅ | ✅ | ✅ | ➖ |
+| Click CLI **and** MCP server reference | ✅ | ➖ | ➖ | ➖ |
+| Dark mode, search, theming built in | ✅ | theme | theme | basic |
+| AI-ready: `llms.txt`, agent skills | ✅ | ➖ | ➖ | ➖ |
+| Link check, lint, proofread, SEO | ✅ | partial | plugins | ➖ |
+
+Great Docs is built on [Quarto](https://quarto.org/), so you get its rendering power (executable code, math, diagrams) without having to wire any of it up.
 
 ## Get Started in 60 Seconds
 
@@ -126,6 +156,10 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 </p>
 
 ## Full Feature Set
+
+<details>
+<summary><em>80+ capabilities across 8 categories (click to expand)</em></summary>
+<br>
 
 <table>
 <tr>
@@ -254,6 +288,8 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 </tr>
 </table>
 
+</details>
+
 ## Configuration
 
 All configuration lives in a single `great-docs.yml` file in your project root. The `init` command generates it for you, but you can customize everything:
@@ -363,7 +399,11 @@ Beyond `init`, `build`, and `preview`, Great Docs includes a full suite of quali
 
 ## Recipes
 
-The documentation includes 24 step-by-step recipes:
+The documentation includes 24 step-by-step recipes.
+
+<details>
+<summary><em>Browse all 24 recipes (click to expand)</em></summary>
+<br>
 
 ### Content & API
 
@@ -413,9 +453,15 @@ The documentation includes 24 step-by-step recipes:
 | [Proofread Documentation](https://posit-dev.github.io/great-docs/recipes/proofread-documentation.html) | Catch spelling and grammar issues          |
 | [Use Freeze Cache](https://posit-dev.github.io/great-docs/recipes/use-freeze-cache.html)               | Cache expensive notebooks across builds    |
 
+</details>
+
 ## Documentation
 
-Full documentation is available at **[posit-dev.github.io/great-docs](https://posit-dev.github.io/great-docs/)**:
+Full documentation is available at **[posit-dev.github.io/great-docs](https://posit-dev.github.io/great-docs/)**.
+
+<details>
+<summary><em>Full guide index (27 pages, click to expand)</em></summary>
+<br>
 
 - [Installation](https://posit-dev.github.io/great-docs/user-guide/installation.html): setup and requirements
 - [Quick Start](https://posit-dev.github.io/great-docs/user-guide/quickstart.html): first site in minutes
@@ -444,6 +490,8 @@ Full documentation is available at **[posit-dev.github.io/great-docs](https://po
 - [SEO](https://posit-dev.github.io/great-docs/user-guide/seo.html): search engine optimization
 - [Terminal Recordings](https://posit-dev.github.io/great-docs/user-guide/terminal-recordings.html): record, edit, and embed terminal sessions
 - [Lightbox](https://posit-dev.github.io/great-docs/user-guide/lightbox.html): full-screen image viewer with zoom, galleries, and annotations
+
+</details>
 
 ## Requirements
 
