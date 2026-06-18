@@ -386,6 +386,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_termshow",  # 192
     # 193: Lightbox extension showcase
     "gdtest_lightbox",  # 193
+    # 194: Hero name suppressed (hero.name: false) — regression for #218
+    "gdtest_hero_no_name",  # 194
 ]
 
 
@@ -2159,6 +2161,14 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "(lightbox: true), dark-mode image variants (naming convention and "
         "explicit dark= attribute), gallery grouping with filmstrip navigation, "
         "captions and credits, .nolightbox opt-out, and deep-linking."
+    ),
+    # ── 194: Hero name suppressed (regression for #218) ──────────────
+    "gdtest_hero_no_name": (
+        "Hero with the name suppressed via hero.name: false plus a "
+        "hero-specific logo override. Tests that setting hero.name: false "
+        "removes the name entirely instead of falling back to the package "
+        "or display name, while the hero still renders the overridden logo. "
+        "Regression coverage for issue #218."
     ),
 }
 
