@@ -10,6 +10,14 @@
 <a href="https://pypistats.org/packages/great-docs"><img src="https://img.shields.io/pypi/dm/great-docs" alt="Downloads"></a>
 <a href="https://choosealicense.com/licenses/mit/"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
 <a href="https://github.com/posit-dev/great-docs/actions/workflows/test.yml"><img src="https://github.com/posit-dev/great-docs/actions/workflows/test.yml/badge.svg?branch=main" alt="CI"></a>
+<a href="https://www.repostatus.org/#active"><img src="https://www.repostatus.org/badges/latest/active.svg" alt="Repo Status"></a>
+<a href="https://posit-dev.github.io/gdg/"><img src="https://img.shields.io/badge/Great%20Docs%20Gauntlet-300%2B%20test%20sites-7c3aed?logo=githubpages&logoColor=white" alt="Great Docs Gauntlet"></a>
+</p>
+<p align="center">
+<a href="https://posit-dev.github.io/great-docs/"><img src="https://img.shields.io/badge/docs-project_website-blue.svg" alt="Documentation"></a>
+<a href="https://github.com/posit-dev/great-docs/graphs/contributors"><img src="https://img.shields.io/github/contributors/posit-dev/great-docs" alt="Contributors"></a>
+<a href="https://deepwiki.com/posit-dev/great-docs"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+<a href="https://www.contributor-covenant.org/version/3/0/"><img src="https://img.shields.io/badge/Contributor%20Covenant-v3.0%20adopted-ff69b4.svg" alt="Contributor Covenant"></a>
 </p>
 
 ---
@@ -190,7 +198,7 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 - SEO auditing (sitemap, robots.txt, canonical URLs, structured data)
 - API diff between versions
 - Build timings reporting
-- Tested against ~300 synthetic packages via the [Great Docs Gauntlet](https://posit-dev.github.io/gdg/)
+- Tested against 300+ synthetic packages via the [Great Docs Gauntlet](https://posit-dev.github.io/gdg/)
 - 15,600+ tests
 
 </td>
