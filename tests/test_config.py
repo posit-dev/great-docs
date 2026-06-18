@@ -441,9 +441,9 @@ class TestHeroName:
         assert cfg.hero_name == "Custom Name"
 
     def test_suppressed(self, tmp_project: Path):
-        """Covers line 587 (hero name = false → None)."""
+        """Covers line 587 (hero name = false → False)."""
         cfg = _make_config(tmp_project, "hero:\n  name: false\n")
-        assert cfg.hero_name is None
+        assert cfg.hero_name is False
 
 
 class TestHeroTagline:

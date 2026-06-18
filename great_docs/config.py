@@ -1074,7 +1074,7 @@ class Config:
         return hero.get("logo_height", "200px") if hero else "200px"
 
     @property
-    def hero_name(self) -> str | None:
+    def hero_name(self) -> str | bool | None:
         """Get the hero name, falling back to display_name.
 
         Returns `None` when explicitly suppressed (`false`).
@@ -1082,7 +1082,7 @@ class Config:
         hero = self.hero
         val = hero.get("name") if hero else None
         if val is False:
-            return None
+            return False
         if val is not None:
             return val
         return self.display_name

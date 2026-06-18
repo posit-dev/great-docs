@@ -3417,6 +3417,41 @@ def test_hero_no_logo_text_only():
 
 @pytest.mark.dedicated
 @requires_bs4
+def test_hero_no_name_suppressed():
+    """hero.name: false should suppress the name entirely (regression for #218).
+
+    The name must not fall back to the package / display name, while the
+    hero-specific logo override is still rendered.
+    """
+    pkg = "gdtest_hero_no_name"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    soup = _load_html(_site_dir(pkg) / "index.html")
+    hero = soup.select_one("div.gd-hero")
+    assert hero is not None, "Hero should be present"
+
+    # No name element at all — not the display_name, not the package name
+    name_el = hero.select_one(".gd-hero-name")
+    assert name_el is None, "hero.name: false should remove the name entirely"
+    hero_text = hero.get_text()
+    assert "Hero No Name" not in hero_text, "display_name should not leak into the hero"
+    assert "gdtest-hero-no-name" not in hero_text, "package name should not leak into the hero"
+
+    # The hero-specific logo override should still be used
+    logo = hero.select_one("img.gd-hero-logo")
+    assert logo is not None, "Hero logo override should still render"
+    assert "hero-logo.svg" in logo.get("src", ""), "Hero should use the override logo"
+    assert "120px" in logo.get("style", ""), "Hero logo height override should apply"
+
+    # Navbar should still use the lettermark logo
+    nav_logo = soup.select_one(".navbar-logo")
+    assert nav_logo is not None, "Navbar logo should still be present"
+    assert "lettermark" in nav_logo.get("src", ""), "Navbar should use the lettermark"
+
+
+@pytest.mark.dedicated
+@requires_bs4
 def test_hero_explicit_badges_list():
     """Explicit badge list should appear in hero instead of auto-extracted ones."""
     pkg = "gdtest_hero_explicit_badges"
