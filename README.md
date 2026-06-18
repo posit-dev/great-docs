@@ -13,7 +13,7 @@
 </p>
 <p align="center">
 <a href="https://www.repostatus.org/#active"><img src="https://www.repostatus.org/badges/latest/active.svg" alt="Repo Status"></a>
-<a href="https://posit-dev.github.io/gdg/"><img src="https://img.shields.io/badge/Great%20Docs%20Gauntlet-300%2B%20test%20sites-7c3aed?logo=githubpages&logoColor=white" alt="Great Docs Gauntlet"></a>
+<a href="https://posit-dev.github.io/gdg/"><img src="https://img.shields.io/badge/Great%20Docs%20Gauntlet-300%2B%20test%20sites-7c3aed?logo=pytest&logoColor=white" alt="Great Docs Gauntlet"></a>
 </p>
 <p align="center">
 <a href="https://posit-dev.github.io/great-docs/"><img src="https://img.shields.io/badge/docs-project_website-blue.svg" alt="Documentation"></a>
