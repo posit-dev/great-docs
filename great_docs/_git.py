@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from ._subprocess import TEXT_MODE_KWARGS
+
 if TYPE_CHECKING:
     pass
 
@@ -76,7 +78,7 @@ def get_file_created_date(
             ],
             cwd=project_root,
             capture_output=True,
-            text=True,
+            **TEXT_MODE_KWARGS,
             timeout=10,
         )
 
@@ -160,7 +162,7 @@ def get_file_modified_date(
             ],
             cwd=project_root,
             capture_output=True,
-            text=True,
+            **TEXT_MODE_KWARGS,
             timeout=10,
         )
 
@@ -228,7 +230,7 @@ def get_file_contributors(
             ],
             cwd=project_root,
             capture_output=True,
-            text=True,
+            **TEXT_MODE_KWARGS,
             timeout=10,
         )
 
@@ -268,7 +270,7 @@ def is_git_repository(path: Path) -> bool:
             ["git", "rev-parse", "--git-dir"],
             cwd=path,
             capture_output=True,
-            text=True,
+            **TEXT_MODE_KWARGS,
             timeout=5,
         )
         return result.returncode == 0

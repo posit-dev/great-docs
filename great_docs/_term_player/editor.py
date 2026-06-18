@@ -13,6 +13,8 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from typing import Any
 
+from great_docs._subprocess import TEXT_MODE_KWARGS
+
 from .manifest import generate_manifest
 from .parser import Event, Recording, TermInfo, parse_termshow
 from .script import (
@@ -504,7 +506,7 @@ def _generate_preview_html(editor_data: dict, script_data: dict) -> str:
             ["quarto", "render", "preview.qmd", "--quiet"],
             cwd=str(tmp_dir),
             capture_output=True,
-            text=True,
+            **TEXT_MODE_KWARGS,
             timeout=30,
         )
         if result.returncode != 0:
