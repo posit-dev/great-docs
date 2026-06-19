@@ -5747,9 +5747,15 @@ class GreatDocs:
 
 """
 
-        # Reassemble with margin content inserted after frontmatter
+        # Reassemble with the metadata margin sidebar placed AFTER the body.
+        # On desktop `.gd-meta-sidebar` is absolutely positioned into the right
+        # margin (see great-docs.scss), so its position in the DOM is
+        # irrelevant there. On mobile it falls back into normal document flow;
+        # emitting it after the body keeps the hero/content first rather than
+        # pushing it below the metadata panel (links/developers/etc.). See
+        # https://github.com/posit-dev/great-docs/issues/220.
         if margin_content:
-            blended_content = f"{frontmatter_block}\n{hero_block}::: {{.gd-meta-sidebar}}\n{margin_content}\n:::\n\n{body}"
+            blended_content = f"{frontmatter_block}\n{hero_block}{body}\n\n::: {{.gd-meta-sidebar}}\n{margin_content}\n:::\n"
         else:
             blended_content = f"{frontmatter_block}\n{hero_block}{body}"
 
