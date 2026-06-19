@@ -11885,17 +11885,16 @@ body-classes: "gd-homepage"
             config["format"]["html"]["include-after-body"].append(tooltips_script_entry)
 
         # Add color-swatch script (always enabled — loaded after tooltips)
-        # Use inline loader to resolve path relative to site root (Quarto does not
-        # rewrite bare src= paths for scripts appended after its processing pass).
+        # Use an inline loader that resolves the path against the site root via
+        # Quarto's quarto:offset meta tag (always present). Bare src= paths and
+        # canonical-URL stripping both 404 on nested pages; quarto:offset is the
+        # robust pattern shared with termshow.js, on-this-page.js, etc.
         color_swatch_entry = {
             "text": (
-                "<script>"
-                "(function(){var s=document.createElement('script');"
-                "s.src=(document.querySelector('link[rel=\"canonical\"]')||{href:location.href})"
-                ".href.replace(/\\/[^\\/]*$/,'').replace(/\\/[^\\/]*$/,'')+'/color-swatch.js';"
-                "var h=document.currentScript;"
-                "h.parentNode.insertBefore(s,h.nextSibling);})()"
-                "</script>"
+                "<script>(function(){var s=document.createElement('script');"
+                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
+                "s.src=(m?m.content:'')+'color-swatch.js';"
+                "document.body.appendChild(s);})();</script>"
             )
         }
         # Remove any stale plain <script src="color-swatch.js"> entries so the
@@ -11921,7 +11920,29 @@ body-classes: "gd-homepage"
             config["format"]["html"]["include-after-body"].append(responsive_tables_script_entry)
 
         # Add video embed script (always enabled — lazy loading + YouTube thumbnails)
-        video_embed_script_entry = {"text": '<script src="video-embed.js"></script>'}
+        # Use an inline loader that resolves the path against the site root via
+        # Quarto's quarto:offset meta tag (always present). A bare src= path 404s
+        # on nested pages; quarto:offset is the robust pattern shared with
+        # termshow.js, on-this-page.js, etc.
+        video_embed_script_entry = {
+            "text": (
+                "<script>(function(){var s=document.createElement('script');"
+                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
+                "s.src=(m?m.content:'')+'video-embed.js';"
+                "document.body.appendChild(s);})();</script>"
+            )
+        }
+        # Remove any stale plain <script src="video-embed.js"> entries so the
+        # dynamic loader below is used instead.
+        config["format"]["html"]["include-after-body"] = [
+            item
+            for item in config["format"]["html"]["include-after-body"]
+            if not (
+                isinstance(item, dict)
+                and "video-embed.js" in item.get("text", "")
+                and "createElement" not in item.get("text", "")
+            )
+        ]
         has_video_embed = any(
             "video-embed.js" in str(item) for item in config["format"]["html"]["include-after-body"]
         )
