@@ -15794,7 +15794,6 @@ body-classes: "gd-homepage"
         """
         import functools
         import http.server
-        import socketserver
         import sys
         import threading
         import webbrowser
@@ -15810,10 +15809,15 @@ body-classes: "gd-homepage"
             http.server.SimpleHTTPRequestHandler,
             directory=str(site_path),
         )
-        socketserver.TCPServer.allow_reuse_address = True
+        # Reap half-open sockets (e.g. Safari's idle speculative connections) so a
+        # stalled connection cannot tie up a worker thread indefinitely.
+        http.server.SimpleHTTPRequestHandler.timeout = 10
+        http.server.ThreadingHTTPServer.allow_reuse_address = True
 
         try:
-            httpd = socketserver.TCPServer(("", port), handler)
+            # Use a threading server so one idle/speculative connection (notably from
+            # Safari) cannot block the whole preview. See issue #219.
+            httpd = http.server.ThreadingHTTPServer(("", port), handler)
         except OSError:
             print(f"❌ Port {port} is already in use. Try a different port.")
             sys.exit(1)
@@ -15956,7 +15960,6 @@ body-classes: "gd-homepage"
         """
         import functools
         import http.server
-        import socketserver
         import sys
         import threading
         import webbrowser
@@ -15979,11 +15982,16 @@ body-classes: "gd-homepage"
             http.server.SimpleHTTPRequestHandler,
             directory=str(site_path),
         )
+        # Reap half-open sockets (e.g. Safari's idle speculative connections) so a
+        # stalled connection cannot tie up a worker thread indefinitely.
+        http.server.SimpleHTTPRequestHandler.timeout = 10
         # Allow quick restart after Ctrl-C
-        socketserver.TCPServer.allow_reuse_address = True
+        http.server.ThreadingHTTPServer.allow_reuse_address = True
 
         try:
-            httpd = socketserver.TCPServer(("", port), handler)
+            # Use a threading server so one idle/speculative connection (notably from
+            # Safari) cannot block the whole preview. See issue #219.
+            httpd = http.server.ThreadingHTTPServer(("", port), handler)
         except OSError:
             print(f"❌ Port {port} is already in use. Try a different port.")
             sys.exit(1)

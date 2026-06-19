@@ -25569,7 +25569,10 @@ def test_preview_port_in_use():
         (site_dir / "index.html").write_text("<html></html>", encoding="utf-8")
 
         with (
-            patch("socketserver.TCPServer", side_effect=OSError("Address in use")),
+            patch(
+                "http.server.ThreadingHTTPServer",
+                side_effect=OSError("Address in use"),
+            ),
             pytest.raises(SystemExit),
         ):
             docs.preview(port=9999)
@@ -25577,7 +25580,7 @@ def test_preview_port_in_use():
 
 def test_preview_serves_and_stops():
     """Test preview() starts server and handles KeyboardInterrupt."""
-    import http.server  # noqa: F401  # ensure module is loaded before patching socketserver
+    import http.server  # noqa: F401  # ensure module is loaded before patching the server
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
@@ -25591,7 +25594,7 @@ def test_preview_serves_and_stops():
         mock_timer = MagicMock()
 
         with (
-            patch("socketserver.TCPServer", return_value=mock_server),
+            patch("http.server.ThreadingHTTPServer", return_value=mock_server),
             patch("threading.Timer", return_value=mock_timer),
             patch("webbrowser.open"),
         ):
