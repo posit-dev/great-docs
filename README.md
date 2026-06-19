@@ -82,6 +82,9 @@ Great Docs is built on [Quarto](https://quarto.org/), so you get its rendering p
 
 ## Get Started in 60 Seconds
 
+> [!IMPORTANT]
+> Great Docs needs two things on your system: **Python 3.11+** and **[Quarto](https://quarto.org/docs/get-started/)**, the rendering engine. Quarto is a separate, one-time install (it isn't a Python package), so set it up before running the commands below. See [Requirements](#requirements) for details.
+
 ### Install
 
 ```bash
