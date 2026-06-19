@@ -40006,7 +40006,7 @@ def test_update_quarto_config_video_embed_not_duplicated():
 
 
 def test_update_quarto_config_video_embed_script_tag_format():
-    """video-embed.js is included as a proper script tag in include-after-body."""
+    """video-embed.js uses the quarto:offset loader so nested pages resolve it."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
@@ -40024,7 +40024,12 @@ def test_update_quarto_config_video_embed_script_tag_format():
         ]
 
         assert len(video_entries) == 1
-        assert video_entries[0]["text"] == '<script src="video-embed.js"></script>'
+        # Robust path resolution: derive the site root from quarto:offset rather
+        # than a bare relative src= that 404s on nested pages (issue #212).
+        text = video_entries[0]["text"]
+        assert "quarto:offset" in text
+        assert "video-embed.js" in text
+        assert 'src="video-embed.js"' not in text
 
 
 def test_prepare_build_directory_copies_video_embed_js():
@@ -40726,6 +40731,32 @@ def test_on_this_page_script_tag_uses_quarto_offset():
 
         assert len(otp_entries) == 1
         assert "quarto:offset" in str(otp_entries[0])
+
+
+def test_color_swatch_script_tag_uses_quarto_offset():
+    """The color-swatch include-after-body entry uses the quarto:offset pattern.
+
+    The previous loader derived the path from canonical/location.href by stripping
+    two path segments, which produced wrong paths (404s) on nested pages such as
+    /docs/examples/foo.html (issue #212). quarto:offset resolves the site root
+    correctly at any depth.
+    """
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir)
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        after_body = result["format"]["html"]["include-after-body"]
+        swatch_entries = [item for item in after_body if "color-swatch.js" in str(item)]
+
+        assert len(swatch_entries) == 1
+        text = str(swatch_entries[0])
+        assert "quarto:offset" in text
+        assert "canonical" not in text
 
 
 def test_on_this_page_not_duplicated():
