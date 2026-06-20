@@ -1943,6 +1943,32 @@ class GreatDocs:
     # Page Tags Methods
     # =========================================================================
 
+    def _section_build_dir(self, section_cfg: dict[str, object]) -> Path | None:
+        """
+        Resolve the build-time destination directory for a custom section.
+
+        Mirrors the slug logic in `_process_sections` so that tag and status
+        scanning look at the same directory the section files were copied into.
+        The build directory is derived from `section_cfg["dir"]` (not the title),
+        which is what `_process_sections` uses as the copy destination.
+
+        Parameters
+        ----------
+        section_cfg
+            A single entry from the `sections` config.
+
+        Returns
+        -------
+        Path | None
+            The build directory under `project_path`, or `None` if the section
+            has no `dir`.
+        """
+        src_dir = section_cfg.get("dir")
+        if not src_dir or not isinstance(src_dir, str):
+            return None
+        slug = src_dir.replace("_", "-").replace(" ", "-").lower()
+        return self.project_path / slug
+
     def _collect_page_tags(self) -> dict[str, list[dict[str, str]]]:
         """
         Scan all built .qmd files for tags in frontmatter.
@@ -1972,9 +1998,12 @@ class GreatDocs:
         # Also scan custom sections (skip if already covered above)
         for section_cfg in self._config.sections:
             title = section_cfg.get("title", "")
-            slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") if title else ""
-            section_dir = self.project_path / slug
-            if section_dir.is_dir() and section_dir.resolve() not in seen_dirs:
+            section_dir = self._section_build_dir(section_cfg)
+            if (
+                section_dir is not None
+                and section_dir.is_dir()
+                and section_dir.resolve() not in seen_dirs
+            ):
                 scan_dirs.append((section_dir, title))
                 seen_dirs.add(section_dir.resolve())
 
@@ -2213,15 +2242,15 @@ class GreatDocs:
         # and per-page tag_location overrides from frontmatter
         # Re-scan tagged directories
         page_tag_locations: dict[str, str] = {}
-        scan_dir_names = ["user-guide", "recipes"]
+        scan_dirs: list[Path] = [self.project_path / "user-guide", self.project_path / "recipes"]
+        seen_dirs: set[Path] = {d.resolve() for d in scan_dirs}
         # Include custom section directories
         for section_cfg in self._config.sections:
-            title = section_cfg.get("title", "")
-            slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") if title else ""
-            if slug and slug not in scan_dir_names:
-                scan_dir_names.append(slug)
-        for scan_dir_name in scan_dir_names:
-            scan_dir = self.project_path / scan_dir_name
+            section_dir = self._section_build_dir(section_cfg)
+            if section_dir is not None and section_dir.resolve() not in seen_dirs:
+                scan_dirs.append(section_dir)
+                seen_dirs.add(section_dir.resolve())
+        for scan_dir in scan_dirs:
             if not scan_dir.is_dir():
                 continue
             for qmd_file in sorted(scan_dir.rglob("*.qmd")):
@@ -2497,10 +2526,12 @@ class GreatDocs:
                 scan_dirs.append(d)
                 seen_dirs.add(d.resolve())
         for section_cfg in self._config.sections:
-            title = section_cfg.get("title", "")
-            slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") if title else ""
-            section_dir = self.project_path / slug
-            if section_dir.is_dir() and section_dir.resolve() not in seen_dirs:
+            section_dir = self._section_build_dir(section_cfg)
+            if (
+                section_dir is not None
+                and section_dir.is_dir()
+                and section_dir.resolve() not in seen_dirs
+            ):
                 scan_dirs.append(section_dir)
                 seen_dirs.add(section_dir.resolve())
 
@@ -2709,7 +2740,9 @@ class GreatDocs:
                 print(f"   ⚠️  Section '{title}' directory '{src_dir}' has no .qmd/.md files")
                 continue
 
-            # Determine the slug for the build directory (lowercase, hyphenated)
+            # Determine the slug for the build directory (lowercase, hyphenated).
+            # `_section_build_dir` mirrors this formula so tag/status scanning
+            # resolves the same destination directory.
             slug = src_dir.replace("_", "-").replace(" ", "-").lower()
             dest_dir = self.project_path / slug
             dest_dir.mkdir(parents=True, exist_ok=True)
