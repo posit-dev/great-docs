@@ -214,6 +214,36 @@ class TestCollectPageTags:
             "overlaps the built-in recipes directory"
         )
 
+    def test_custom_section_nested_dir(self, tmp_path: Path):
+        """A custom section with a nested `dir` is scanned at its build path, not its title slug."""
+        gd = _bootstrap_project(
+            tmp_path,
+            "tags:\n  enabled: true\nsections:\n  - title: Examples\n    dir: docs/examples\n",
+        )
+        # _process_sections copies to project_path / "docs/examples" (slug from dir)
+        section_dir = gd.project_path / "docs" / "examples"
+        _make_qmd(section_dir / "example1.qmd", "Example One", tags=["Demo"])
+
+        result = gd._collect_page_tags()
+
+        assert "Demo" in result
+        assert len(result["Demo"]) == 1
+        assert result["Demo"][0]["href"] == "docs/examples/example1.qmd"
+        assert result["Demo"][0]["section"] == "Examples"
+
+    def test_section_build_dir_uses_dir_not_title(self, tmp_path: Path):
+        """`_section_build_dir` derives the path from `dir`, with the title ignored."""
+        gd = _bootstrap_project(tmp_path)
+        assert gd._section_build_dir({"title": "Examples", "dir": "docs/examples"}) == (
+            gd.project_path / "docs" / "examples"
+        )
+        # Underscores and spaces are normalized to hyphens and lowercased
+        assert gd._section_build_dir({"title": "Foo", "dir": "My_Cool Dir"}) == (
+            gd.project_path / "my-cool-dir"
+        )
+        # No `dir` → None
+        assert gd._section_build_dir({"title": "Examples"}) is None
+
 
 # ── Tag Hierarchy Tests ──────────────────────────────────────────────────────
 
@@ -409,6 +439,24 @@ class TestGenerateTagsJson:
 
         data = json.loads((gd.project_path / "_tags.json").read_text())
         assert "user-guide/page.qmd" not in data["page_tag_locations"]
+
+    def test_nested_section_rescan_picks_up_tag_location(self, tmp_path: Path):
+        """The re-scan in `_generate_tags_json` uses the section build dir, not the title slug."""
+        gd = _bootstrap_project(
+            tmp_path,
+            "tags:\n  enabled: true\nsections:\n  - title: Examples\n    dir: docs/examples\n",
+        )
+        section_dir = gd.project_path / "docs" / "examples"
+        _make_qmd(
+            section_dir / "ex.qmd", "Example", tags=["Demo"], extra="tag-location: bottom"
+        )
+
+        tag_index = gd._collect_page_tags()
+        gd._generate_tags_json(tag_index)
+
+        data = json.loads((gd.project_path / "_tags.json").read_text())
+        assert "docs/examples/ex.qmd" in data["page_tags"]
+        assert data["page_tag_locations"]["docs/examples/ex.qmd"] == "bottom"
 
 
 # ── Tag Slug Tests ───────────────────────────────────────────────────────────
