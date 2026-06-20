@@ -194,6 +194,19 @@ class TestCollectPageStatuses:
 
         assert result["tutorials/first.qmd"] == "new"
 
+    def test_custom_section_nested_dir_scanned(self, tmp_path: Path):
+        """A custom section with a nested `dir` is scanned at its build path, not its title slug."""
+        gd = _bootstrap_project(
+            tmp_path,
+            "page_status:\n  enabled: true\nsections:\n  - title: Examples\n    dir: docs/examples\n",
+        )
+        section_dir = gd.project_path / "docs" / "examples"
+        _make_qmd(section_dir / "ex.qmd", "Example", status="new")
+
+        result = gd._collect_page_statuses()
+
+        assert result["docs/examples/ex.qmd"] == "new"
+
 
 # ── JSON Generation Tests ───────────────────────────────────────────────────
 

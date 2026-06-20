@@ -388,6 +388,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_lightbox",  # 193
     # 194: Hero name suppressed (hero.name: false) — regression for #218
     "gdtest_hero_no_name",  # 194
+    # 195: Tags in a custom section with a nested dir — regression for #213
+    "gdtest_sec_nested_tags",  # 195
 ]
 
 
@@ -612,6 +614,7 @@ DIMENSIONS: dict[str, dict[str, str]] = {
     # Page tags axes
     "T1": {"axis": "tags", "label": "Page tags with hierarchy + shadow"},
     "T3": {"axis": "tags", "label": "Tag location top vs. bottom with per-page overrides"},
+    "T4": {"axis": "tags", "label": "Tags in a custom section with a nested dir"},
     # Page status axes
     "T2": {"axis": "status", "label": "Page status badges in sidebar + pages"},
 }
@@ -2169,6 +2172,15 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "removes the name entirely instead of falling back to the package "
         "or display name, while the hero still renders the overridden logo. "
         "Regression coverage for issue #218."
+    ),
+    "gdtest_sec_nested_tags": (
+        "A custom section titled 'Examples' published from a nested directory "
+        "(dir: docs/examples) whose path does not match the title-derived slug. "
+        "Two of its pages carry flat and hierarchical tags. Tests that page tag "
+        "scanning resolves the same build directory used to copy the section "
+        "(great-docs/docs/examples/) rather than the wrong title-slug path, so "
+        "tagged pages in the section appear in tags/index.qmd and in the "
+        "client-side tag data. Regression coverage for issue #213."
     ),
 }
 
