@@ -4851,6 +4851,50 @@ def test_process_sections_discovers_and_copies():
         assert "examples" in sidebar_ids
 
 
+def test_copy_section_files_strips_numeric_directory_prefixes():
+    """Section files in numerically-prefixed subdirs are copied to unprefixed paths."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        source_dir = project_path / "examples"
+        topic_a = source_dir / "01-topic-a"
+        topic_b = source_dir / "02-topic-b"
+        topic_a.mkdir(parents=True)
+        topic_b.mkdir(parents=True)
+
+        intro = topic_a / "intro.qmd"
+        intro.write_text(
+            "---\ntitle: Intro\n---\n\nSee [demo](../02-topic-b/widget_demo.qmd) for details.\n"
+        )
+        widget = topic_b / "widget_demo.qmd"
+        widget.write_text("---\ntitle: Widget Demo\n---\n\nDemo content\n")
+
+        dest_dir = project_path / "great-docs" / "examples"
+        dest_dir.mkdir(parents=True)
+
+        docs = GreatDocs(project_path=tmp_dir)
+        copied = docs._copy_section_files([intro, widget], source_dir, dest_dir)
+
+        # Files land at unprefixed directory paths
+        assert (dest_dir / "topic-a" / "intro.qmd").exists()
+        assert (dest_dir / "topic-b" / "widget_demo.qmd").exists()
+
+        # The prefixed directory paths must NOT exist
+        assert not (dest_dir / "01-topic-a").exists()
+        assert not (dest_dir / "02-topic-b").exists()
+
+        # Reported filenames use the cleaned directory parts
+        filenames = {entry["filename"] for entry in copied}
+
+        assert "topic-a/intro.qmd" in filenames
+        assert "topic-b/widget_demo.qmd" in filenames
+
+        # The cross-reference was rewritten to the unprefixed (and now-correct) path
+        intro_content = (dest_dir / "topic-a" / "intro.qmd").read_text()
+
+        assert "../topic-b/widget_demo.qmd" in intro_content
+        assert "02-topic-b" not in intro_content
+
+
 def test_process_sections_no_index_by_default():
     """Test that sections do NOT generate an index page by default."""
     with tempfile.TemporaryDirectory() as tmp_dir:
