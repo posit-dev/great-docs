@@ -2869,7 +2869,18 @@ class GreatDocs:
 
             # Strip numeric prefix from filename (e.g., 01-intro.qmd -> intro.qmd)
             clean_name = self._strip_numeric_prefix(rel.name)
-            dest_file = dest_dir / rel.parent / clean_name
+
+            # Strip numeric prefixes from subdirectory parts too (e.g.,
+            # 02-topic-b/page.qmd -> topic-b/page.qmd), mirroring the user-guide
+            # copy. This keeps on-disk paths in sync with the link rewriting done
+            # by _fix_numeric_prefix_links, which strips prefixes from every path
+            # component.
+            clean_parent = (
+                Path(*[self._strip_numeric_prefix(p) for p in rel.parent.parts])
+                if rel.parent.parts
+                else rel.parent
+            )
+            dest_file = dest_dir / clean_parent / clean_name
 
             # Ensure subdirectories exist
             dest_file.parent.mkdir(parents=True, exist_ok=True)
@@ -2909,8 +2920,8 @@ class GreatDocs:
 
             copied.append(
                 {
-                    "filename": str(rel.parent / clean_name)
-                    if rel.parent != Path(".")
+                    "filename": str(clean_parent / clean_name)
+                    if clean_parent != Path(".")
                     else clean_name,
                     "title": title,
                     "description": description,

@@ -386,10 +386,12 @@ ALL_PACKAGES: list[str] = [
     "gdtest_termshow",  # 192
     # 193: Lightbox extension showcase
     "gdtest_lightbox",  # 193
-    # 194: Hero name suppressed (hero.name: false) — regression for #218
+    # 194: Hero name suppressed (hero.name: false)
     "gdtest_hero_no_name",  # 194
-    # 195: Tags in a custom section with a nested dir — regression for #213
+    # 195: Tags in a custom section with a nested dir
     "gdtest_sec_nested_tags",  # 195
+    # 196: Cross-refs into numeric-prefix section subdirs
+    "gdtest_sec_xref_subdirs",  # 196
 ]
 
 
@@ -576,6 +578,7 @@ DIMENSIONS: dict[str, dict[str, str]] = {
     "N9": {"axis": "sections", "label": "Single-page sidebar hide"},
     "N10": {"axis": "sections", "label": "Section index hero cards"},
     "N11": {"axis": "sections", "label": "dir_titles + numeric prefix subdirs"},
+    "N12": {"axis": "sections", "label": "Cross-refs into numeric-prefix subdirs"},
     # Reference axes
     "P1": {"axis": "reference", "label": "Explicit reference"},
     "P2": {"axis": "reference", "label": "members: false"},
@@ -2165,13 +2168,12 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "explicit dark= attribute), gallery grouping with filmstrip navigation, "
         "captions and credits, .nolightbox opt-out, and deep-linking."
     ),
-    # ── 194: Hero name suppressed (regression for #218) ──────────────
+    # ── 194: Hero name suppressed ────────────────────────────────────
     "gdtest_hero_no_name": (
         "Hero with the name suppressed via hero.name: false plus a "
         "hero-specific logo override. Tests that setting hero.name: false "
         "removes the name entirely instead of falling back to the package "
-        "or display name, while the hero still renders the overridden logo. "
-        "Regression coverage for issue #218."
+        "or display name, while the hero still renders the overridden logo."
     ),
     "gdtest_sec_nested_tags": (
         "A custom section titled 'Examples' published from a nested directory "
@@ -2180,7 +2182,17 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "scanning resolves the same build directory used to copy the section "
         "(great-docs/docs/examples/) rather than the wrong title-slug path, so "
         "tagged pages in the section appear in tags/index.qmd and in the "
-        "client-side tag data. Regression coverage for issue #213."
+        "client-side tag data."
+    ),
+    "gdtest_sec_xref_subdirs": (
+        "A custom 'Examples' section whose pages live in numerically-prefixed "
+        "subdirectories (01-topic-a/, 02-topic-b/) and cross-reference one "
+        "another, plus an auto-discovery user-guide page that links into the "
+        "section. Link rewriting strips numeric prefixes from every path "
+        "component, so the section copy must strip prefixes from subdirectory "
+        "names too — otherwise files land at examples/02-topic-b/ while links "
+        "point at examples/topic-b/, producing dead cross-references. Verifies "
+        "the on-disk section paths and the rewritten links agree."
     ),
 }
 
