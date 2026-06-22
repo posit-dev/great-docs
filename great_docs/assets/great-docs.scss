@@ -1559,23 +1559,75 @@ body.quarto-light .navbar .navbar-toggler-icon {
     flex-wrap: nowrap;
 }
 
-/* Compact widget tray on narrow phones (iPhone portrait) */
-@media (max-width: 430px) {
+/* ----------------------------------------------------------------------
+   Mobile navbar: two centered rows
+   ----------------------------------------------------------------------
+   Below the lg breakpoint Quarto lays the navbar out as a single flex row
+   in which the hamburger toggle pushes the brand around, making it
+   impossible to truly center the logo/title. We force a deliberate
+   two-row layout instead:
+
+     Row 1 — the brand/logo, horizontally centered. The hamburger toggle is
+             taken out of flow (absolutely pinned to the left) so its width
+             never shifts the brand off-center.
+     Row 2 — the widget tray (#gd-navbar-widgets: theme toggle, search,
+             GitHub, version) centered as a group.
+   -------------------------------------------------------------------- */
+@media (max-width: 991.98px) {
     .navbar .container-fluid {
+        display: flex;
         flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        row-gap: 8px;
+        padding-top: 8px;
+        padding-bottom: 8px;
     }
-    .navbar-brand.navbar-brand-logo {
-        padding-right: 100%;
+
+    /* Hamburger pinned left and removed from flow so it can't shift the
+       brand off-center. */
+    .navbar .navbar-toggler {
+        position: absolute;
+        left: 10px;
+        top: 12px;
+        margin: 0;
+        z-index: 3;
     }
-    .quarto-navbar-tools {
+
+    /* Row 1: centered brand/logo */
+    .navbar .navbar-brand-container.mx-auto {
+        order: 1;
         flex: 0 0 100%;
+        margin: 0;
+        display: flex;
         justify-content: center;
-        order: 99;
-        padding-top: 4px;
-        padding-bottom: 4px;
     }
-    #gd-navbar-widgets {
+    .navbar .navbar-brand-container.mx-auto .navbar-brand {
+        margin: 0;
+        padding-right: 0;
+    }
+
+    /* Row 2: centered widget tray */
+    .navbar .quarto-navbar-tools {
+        order: 2;
+        flex: 0 0 100%;
+        display: flex;
         justify-content: center;
+        margin: 0;
+        padding: 0;
+    }
+    .navbar #gd-navbar-widgets {
+        justify-content: center;
+        flex: 0 1 auto;
+        width: auto;
+        margin: 0;
+    }
+
+    /* If the collapse menu is ever expanded it drops to its own row */
+    .navbar #navbarCollapse {
+        order: 3;
+        flex: 0 0 100%;
     }
 }
 
