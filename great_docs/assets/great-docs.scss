@@ -1574,23 +1574,33 @@ body.quarto-light .navbar .navbar-toggler-icon {
              GitHub, version) centered as a group.
    -------------------------------------------------------------------- */
 @media (max-width: 991.98px) {
+    /* Drop the navbar's own vertical padding (Bootstrap defaults to a tall
+       ~17px top/bottom) so the two rows sit snug against the header edges
+       and page content rides higher on load. */
+    .navbar {
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
     .navbar .container-fluid {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         justify-content: center;
         position: relative;
-        row-gap: 8px;
-        padding-top: 8px;
-        padding-bottom: 8px;
+        row-gap: 6px;
+        padding-top: 6px;
+        padding-bottom: 6px;
     }
 
     /* Hamburger pinned left and removed from flow so it can't shift the
-       brand off-center. */
+       brand off-center. `top` is the midpoint between a short text title
+       (~44px row) and a max-height logo (~56px row) so it stays vertically
+       centered against the brand in both cases. */
     .navbar .navbar-toggler {
         position: absolute;
         left: 10px;
-        top: 12px;
+        top: 15px;
         margin: 0;
         z-index: 3;
     }
@@ -1602,10 +1612,41 @@ body.quarto-light .navbar .navbar-toggler-icon {
         margin: 0;
         display: flex;
         justify-content: center;
+        /* Quarto reserves `calc(100% - 115px)` here for the toggler/tools in
+           its single-row layout. Our brand has its own full-width row, so
+           reclaim that space (the title's own max-width below still keeps it
+           clear of the absolutely-positioned hamburger). */
+        max-width: 100%;
     }
     .navbar .navbar-brand-container.mx-auto .navbar-brand {
         margin: 0;
+        /* Drop the brand link's own vertical padding: with the title set to
+           `display: block` below its pill padding now counts toward layout
+           height, so this keeps the header as tight as the logo/short-name
+           cases (no extra ~11px). */
+        padding-top: 0;
+        padding-bottom: 0;
         padding-right: 0;
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    /* Long text display names: navbar-widgets.js first steps the font size
+       down to fit; this is the width cap it fits against and the final
+       ellipsis fallback when even the smallest step overflows. `display:
+       block` keeps the truncation inside the title pill (clipping at the
+       brand link instead would slice the pill's border). The 132px cap
+       reserves ~66px each side so the (centered) title clears the
+       absolutely-positioned hamburger button (~59px wide incl. padding).
+       The "…" is a visible nudge that a shorter `display_name` belongs in
+       great-docs.yml. Logo brands have no .navbar-title, so they are
+       unaffected. */
+    .navbar .navbar-title {
+        display: block;
+        max-width: calc(100vw - 132px);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     /* Row 2: centered widget tray */
