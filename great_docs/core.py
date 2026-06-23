@@ -9839,12 +9839,12 @@ jupyter: python3
             '<path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>'
         )
 
+        package_name = self._detect_package_name()
         pypi_setting = self._config.pypi
         if pypi_setting is not False:
             if isinstance(pypi_setting, str):
                 pypi_url = pypi_setting
             else:
-                package_name = self._detect_package_name()
                 pypi_url = f"https://pypi.org/project/{package_name}/" if package_name else None
             if pypi_url:
                 links_items.append(
