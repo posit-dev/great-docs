@@ -12927,6 +12927,48 @@ def test_build_metadata_margin_pypi_custom_url():
         assert "pypi.org" not in result
 
 
+def test_build_metadata_margin_pypi_disabled_with_citation():
+    """`pypi: false` must not break the citation section."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "testpkg"\n', encoding="utf-8")
+        config_file = Path(tmp_dir) / "great-docs.yml"
+        config_file.write_text("pypi: false\n", encoding="utf-8")
+        gd_dir = Path(tmp_dir) / "great-docs"
+        gd_dir.mkdir()
+
+        # The citation page must live in project_path (the great-docs/ dir)
+        # for the citation section to render.
+        (gd_dir / "citation.qmd").write_text("# Citation\n", encoding="utf-8")
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._build_metadata_margin()
+
+        assert "pypi.org" not in result
+        assert "citation.qmd" in result
+        assert "testpkg" in result
+
+
+def test_build_metadata_margin_pypi_custom_url_with_citation():
+    """A custom PyPI URL string must not break citation."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "testpkg"\n', encoding="utf-8")
+        config_file = Path(tmp_dir) / "great-docs.yml"
+        config_file.write_text(
+            'pypi: "https://packages.example.com/simple/testpkg"\n',
+            encoding="utf-8",
+        )
+        gd_dir = Path(tmp_dir) / "great-docs"
+        gd_dir.mkdir()
+        (gd_dir / "citation.qmd").write_text("# Citation\n", encoding="utf-8")
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._build_metadata_margin()
+
+        assert "packages.example.com/simple/testpkg" in result
+        assert "citation.qmd" in result
+        assert "testpkg" in result
+
+
 def test_build_metadata_margin_with_license():
     """_build_metadata_margin omits license when no LICENSE file exists."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -12952,6 +12994,7 @@ def test_build_metadata_margin_with_license_qmd():
         pyproject.write_text('[project]\nname = "pkg"\n', encoding="utf-8")
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
+
         # Create license.qmd in the build directory
         (gd_dir / "license.qmd").write_text("---\ntitle: License\n---\n", encoding="utf-8")
         docs = GreatDocs(project_path=tmp_dir)
