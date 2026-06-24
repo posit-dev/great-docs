@@ -12368,87 +12368,87 @@ body-classes: "gd-homepage"
                     toggler_stroke = "rgba(0,0,0,0.65)"
 
                 if mode == "light":
-                    selector = "html.quarto-light, :root[data-bs-theme='light']"
+                    prefixes = ("html.quarto-light", ":root[data-bs-theme='light']")
                 else:
-                    selector = "html.quarto-dark, :root[data-bs-theme='dark']"
+                    prefixes = ("html.quarto-dark", ":root[data-bs-theme='dark']")
 
-                css_parts.append(f"""{selector} {{
+                # Distribute each suffix across both theme prefixes.  Writing
+                # this as a comma-joined `selector` and then appending
+                # ` .navbar` is a trap: `html.quarto-dark, :root[...] .navbar`
+                # parses as two selectors — `html.quarto-dark` (the bare root
+                # element) and `:root[...] .navbar` — so the navbar styling
+                # leaks onto <html>.  Firefox then paints that leaked
+                # background/border in the transparent regions of the blended
+                # homepage as gray bars behind the content (issue #230).
+                def sel(*suffixes: str) -> str:
+                    return ",\n".join(p + suffix for suffix in suffixes for p in prefixes)
+
+                css_parts.append(f"""{sel("")} {{
     --gd-navbar-bg: {bg_hex};
     --gd-navbar-text: {text_hex};
 }}
-{selector} .navbar {{
+{sel(" .navbar")} {{
     background: {bg_hex} !important;
     border-bottom: 1px solid {border_col};
 }}
-{selector} .navbar .navbar-title,
-{selector} .navbar .nav-link {{
+{sel(" .navbar .navbar-title", " .navbar .nav-link")} {{
     color: {text_hex} !important;
 }}
-{selector} .navbar .nav-link:hover {{
+{sel(" .navbar .nav-link:hover")} {{
     background-color: {hover_bg} !important;
     color: {text_hex} !important;
 }}
-{selector} .navbar .nav-item:has(#github-widget) .nav-link:hover {{
+{sel(" .navbar .nav-item:has(#github-widget) .nav-link:hover")} {{
     background-color: transparent !important;
 }}
-{selector} .navbar .nav-link.active {{
+{sel(" .navbar .nav-link.active")} {{
     text-decoration-color: {active_underline} !important;
 }}
-{selector} .navbar .dark-mode-toggle,
-{selector} #quarto-search .aa-DetachedSearchButton {{
+{sel(" .navbar .dark-mode-toggle", " #quarto-search .aa-DetachedSearchButton")} {{
     background: {btn_bg};
     border-color: {btn_border};
     color: {text_hex};
 }}
-{selector} .navbar .dark-mode-toggle:hover,
-{selector} #quarto-search .aa-DetachedSearchButton:hover {{
+{sel(" .navbar .dark-mode-toggle:hover", " #quarto-search .aa-DetachedSearchButton:hover")} {{
     background: {btn_hover_bg};
     border-color: {btn_hover_border};
 }}
-{selector} .navbar .gh-widget-trigger {{
+{sel(" .navbar .gh-widget-trigger")} {{
     background: {btn_bg};
     border-color: {btn_border};
     color: {text_hex};
 }}
-{selector} .navbar .gh-widget-trigger:hover {{
+{sel(" .navbar .gh-widget-trigger:hover")} {{
     background: {btn_hover_bg};
     border-color: {btn_hover_border};
 }}
-{selector} .navbar .quarto-navbar-tools button,
-{selector} .navbar .quarto-navbar-tools .quarto-navigation-tool {{
+{sel(" .navbar .quarto-navbar-tools button", " .navbar .quarto-navbar-tools .quarto-navigation-tool")} {{
     background: {btn_bg};
     border-color: {btn_border};
     color: {text_hex};
 }}
-{selector} .navbar .quarto-navbar-tools button:hover,
-{selector} .navbar .quarto-navbar-tools .quarto-navigation-tool:hover {{
+{sel(" .navbar .quarto-navbar-tools button:hover", " .navbar .quarto-navbar-tools .quarto-navigation-tool:hover")} {{
     background: {btn_hover_bg};
     border-color: {btn_hover_border};
 }}
-{selector} .navbar .nav-item.compact .nav-link,
-{selector} .navbar .gd-navbar-icon {{
+{sel(" .navbar .nav-item.compact .nav-link", " .navbar .gd-navbar-icon")} {{
     background: {btn_bg};
     border: 1px solid {btn_border};
     border-radius: 6px;
     color: {text_hex};
 }}
-{selector} .navbar .nav-item.compact .nav-link:hover,
-{selector} .navbar .gd-navbar-icon:hover {{
+{sel(" .navbar .nav-item.compact .nav-link:hover", " .navbar .gd-navbar-icon:hover")} {{
     background: {btn_hover_bg};
     border-color: {btn_hover_border};
 }}
-{selector} .navbar .navbar-toggler-icon {{
+{sel(" .navbar .navbar-toggler-icon")} {{
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='{toggler_stroke}' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") !important;
 }}
-{selector} .navbar .bi,
-{selector} .navbar .aa-SubmitIcon,
-{selector} .navbar .aa-SearchIcon,
-{selector} .navbar .aa-DetachedSearchButtonIcon,
-{selector} .navbar .aa-DetachedSearchButtonIcon svg {{
+{sel(" .navbar .bi", " .navbar .aa-SubmitIcon", " .navbar .aa-SearchIcon", " .navbar .aa-DetachedSearchButtonIcon", " .navbar .aa-DetachedSearchButtonIcon svg")} {{
     color: {text_hex} !important;
     fill: {text_hex} !important;
 }}
-{selector} .navbar .version-badge {{
+{sel(" .navbar .version-badge")} {{
     color: {text_hex};
     opacity: 0.75;
     background-color: {btn_bg};
