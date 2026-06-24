@@ -15414,6 +15414,58 @@ def test_update_quarto_config_navbar_color_light_only():
         assert "quarto-light" in css_items[0]
 
 
+def test_update_quarto_config_navbar_color_does_not_leak_onto_root():
+    """`navbar_color` CSS must scope every rule to `.navbar`, never the bare root."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        (Path(tmp_dir) / "pyproject.toml").write_text(
+            '[project]\nname = "mypkg"\n', encoding="utf-8"
+        )
+        (Path(tmp_dir) / "great-docs.yml").write_text(
+            "navbar_color:\n  light: '#c76e00'\n  dark: '#0a2540'\n", encoding="utf-8"
+        )
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(quarto_yml, "w") as f:
+            write_yaml(
+                {
+                    "project": {"type": "website"},
+                    "website": {"navbar": {"left": []}, "sidebar": []},
+                    "format": {"html": {}},
+                },
+                f,
+            )
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml, "r") as f:
+            result = read_yaml(f)
+
+        after_body = result["format"]["html"].get("include-after-body", [])
+        css = "".join(
+            item["text"] if isinstance(item, dict) else str(item)
+            for item in after_body
+            if "navbar_color overrides" in str(item)
+        )
+
+        # The buggy form leaves a bare root prefix joined by a comma directly
+        # before a descendant — these substrings must never appear.
+        assert "html.quarto-dark, :root[data-bs-theme='dark'] .navbar" not in css
+        assert "html.quarto-light, :root[data-bs-theme='light'] .navbar" not in css
+
+        # Every prefix must be scoped to .navbar (descendant combinator present).
+        assert "html.quarto-dark .navbar" in css
+        assert ":root[data-bs-theme='dark'] .navbar" in css
+
+        # The CSS-variable block on the bare root is intentional and kept.
+        assert "--gd-navbar-bg:" in css
+
+
 def test_update_quarto_config_announcement_banner():
     """Test _update_quarto_config injects announcement banner meta+script."""
 
