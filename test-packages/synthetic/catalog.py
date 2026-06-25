@@ -392,6 +392,10 @@ ALL_PACKAGES: list[str] = [
     "gdtest_sec_nested_tags",  # 195
     # 196: Cross-refs into numeric-prefix section subdirs
     "gdtest_sec_xref_subdirs",  # 196
+    # 197: Project-level bibliography forwarded into _quarto.yml
+    "gdtest_bibliography",  # 197
+    # 198: Project-level bibliography with a custom (numeric) CSL style
+    "gdtest_bibliography_csl",  # 198
 ]
 
 
@@ -614,6 +618,8 @@ DIMENSIONS: dict[str, dict[str, str]] = {
     "K54": {"axis": "config", "label": "inline_methods: default (5)"},
     "K55": {"axis": "config", "label": "inline_methods: true (never split)"},
     "K56": {"axis": "config", "label": "inline_methods: false (always split)"},
+    "K57": {"axis": "config", "label": "project-level bibliography"},
+    "K58": {"axis": "config", "label": "citation style (CSL)"},
     # Page tags axes
     "T1": {"axis": "tags", "label": "Page tags with hierarchy + shadow"},
     "T3": {"axis": "tags", "label": "Tag location top vs. bottom with per-page overrides"},
@@ -2193,6 +2199,29 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "names too — otherwise files land at examples/02-topic-b/ while links "
         "point at examples/topic-b/, producing dead cross-references. Verifies "
         "the on-disk section paths and the rewritten links agree."
+    ),
+    "gdtest_bibliography": (
+        "A package whose great-docs.yml sets a single project-level "
+        "`bibliography: docs/references.bib` key (issue #214) and then cites it "
+        "from four different contexts with no per-page `bibliography:` "
+        "frontmatter: the homepage (README→index.qmd), a top-level user-guide "
+        "page, a user-guide page nested one subdirectory deep, and a function "
+        "docstring on a generated API reference page. One key (knuth1984) is "
+        "shared across pages to prove a single bibliography serves the whole "
+        "project. Great Docs should copy the .bib into the build directory and "
+        "write `bibliography: references.bib` into _quarto.yml, so Quarto's "
+        "citeproc resolves every citation inline and renders a References "
+        "section on each page — regardless of nesting depth. If the wiring is "
+        "missing you'll see raw [@knuth1984] text and no references, exactly the "
+        "bug this verifies is fixed."
+    ),
+    "gdtest_bibliography_csl": (
+        "Like gdtest_bibliography, but great-docs.yml also sets the optional "
+        "`csl: docs/numeric.csl` key. The custom Citation Style Language file is "
+        "copied into the build and wired into _quarto.yml, so citations render as "
+        "bracketed numbers ([1], [2]) and the reference list is numbered, instead "
+        "of the default Chicago author-date style. Confirms CSL selection works "
+        "end to end (issue #214's optional CSL support)."
     ),
 }
 
