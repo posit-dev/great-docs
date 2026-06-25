@@ -11199,6 +11199,23 @@ body-classes: "gd-homepage"
         # Disable Quarto's built-in GLightbox — we supply gd-lightbox instead
         config["lightbox"] = False
 
+        # Forward project-level bibliography/CSL from great-docs.yml. The files
+        # are copied into the build directory (see _prepare_build_directory), so
+        # the _quarto.yml keys reference them by basename.
+        bib_files = self._config.bibliography
+        if bib_files:
+            bib_names = [Path(b).name for b in bib_files]
+            config["bibliography"] = bib_names[0] if len(bib_names) == 1 else bib_names
+            print(f"Using bibliography: {', '.join(bib_names)}")
+            # Note: the auto-generated references heading is localized by Quarto
+            # itself from the document `lang` (set below), e.g. "Les références"
+            # for French. We deliberately do not set `reference-section-title`:
+            # under our `shift-heading-level-by: -1` it would be demoted to a
+            # stray <p> and duplicated alongside Quarto's appendix heading.
+        csl_path = self._config.csl
+        if csl_path:
+            config["csl"] = Path(csl_path).name
+
         # Set document language for Quarto built-in i18n (search widget, etc.)
         if self._config.language and self._config.language != "en":
             config["lang"] = self._config.language  # pragma: no cover
