@@ -1281,6 +1281,39 @@ class Config:
         return scripts
 
     @property
+    def bibliography(self) -> list[str]:
+        """Get the normalized list of bibliography file paths.
+
+        Accepts a single path string or a list of paths in `great-docs.yml`. Paths are relative to
+        the project root.
+
+        Returns
+        -------
+        list[str]
+            List of bibliography (`.bib`) file paths, or an empty list if none.
+        """
+        raw = self.get("bibliography")
+        if isinstance(raw, str):
+            return [raw]
+        if isinstance(raw, list):
+            return [s for s in raw if isinstance(s, str)]
+        return []
+
+    @property
+    def csl(self) -> str | None:
+        """Get the citation style language (CSL) file path.
+
+        Returns
+        -------
+        str | None
+            Path to the `.csl` file relative to the project root, or `None`.
+        """
+        raw = self.get("csl")
+        if isinstance(raw, str):
+            return raw
+        return None
+
+    @property
     def nav_icons(self) -> dict[str, dict[str, str]] | None:
         """Get the normalized navigation icons configuration.
 
