@@ -939,6 +939,42 @@ def _setup_blended_homepage(pkg_dir: Path, spec: dict) -> GreatDocs:
 
 
 @pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
+def test_L3_bibliography_wired_into_quarto_config(pkg_name: str, tmp_path: Path):
+    """Project-level bibliography is copied into the build dir and wired into _quarto.yml."""
+    pkg_dir, spec = _make_package(pkg_name, tmp_path)
+    expected = spec.get("expected", {})
+    if not expected.get("has_bibliography"):
+        pytest.skip("No 'has_bibliography' in spec expected outcomes")
+
+    from yaml12 import read_yaml
+
+    docs = GreatDocs(project_path=str(pkg_dir))
+
+    # The generated great-docs.yml already carries the bibliography key, so the
+    # build directory prep alone should copy the file and wire the config.
+    docs._prepare_build_directory()
+
+    bib_file = expected["bibliography_file"]
+
+    # The .bib file is copied into the build directory by basename.
+    assert (docs.project_path / bib_file).exists(), (
+        f"{bib_file!r} should be copied into the build dir {docs.project_path}"
+    )
+
+    # _quarto.yml references the bibliography by basename.
+    quarto_yml = docs.project_path / "_quarto.yml"
+
+    assert quarto_yml.exists(), "_quarto.yml was not created"
+
+    with open(quarto_yml, encoding="utf-8") as f:
+        config = read_yaml(f)
+
+    assert config.get("bibliography") == bib_file, (
+        f"Expected bibliography {bib_file!r} in _quarto.yml, got {config.get('bibliography')!r}"
+    )
+
+
+@pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
 def test_L3_blended_homepage_index_content(pkg_name: str, tmp_path: Path):
     """In blended mode, index.qmd contains first UG page content + metadata sidebar."""
     pkg_dir, spec = _make_package(pkg_name, tmp_path)
