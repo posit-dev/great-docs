@@ -10184,3 +10184,332 @@ def test_DED_tbl_explorer_user_guide():
     assert ug.exists(), "User guide should exist"
     pages = list(ug.glob("*.html"))
     assert len(pages) >= 5, f"Should have several UG pages, got {len(pages)}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: bibliography — Project-level bibliography forwarded into _quarto.yml
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_BIBLIOGRAPHY_PKG = "gdtest_bibliography"
+
+# Rendered citation pages, by their path under _site/. The single project-level
+# bibliography in great-docs.yml must serve every one of these contexts.
+_BIB_HOMEPAGE = "index.html"  # built from README at the project root
+_BIB_TOPLEVEL_UG = "user-guide/citations.html"
+_BIB_NESTED_UG = "user-guide/advanced/decomposition.html"  # one subdir deep
+_BIB_REFERENCE = "reference/weave.html"  # citation inside an API docstring
+
+
+def _bibliography_page(relpath: str) -> "str | None":
+    """Return a rendered bibliography-site page by its path under _site/.
+
+    Returns None if the page is absent so callers can skip cleanly.
+    """
+    page = _site_dir(_BIBLIOGRAPHY_PKG) / relpath
+    return page.read_text(encoding="utf-8") if page.exists() else None
+
+
+def _bibliography_ug_html() -> "str | None":
+    """Return the rendered top-level citations user-guide page HTML, or None."""
+    return _bibliography_page(_BIB_TOPLEVEL_UG)
+
+
+@pytest.mark.dedicated
+def test_DED_bibliography_file_copied_into_build_dir():
+    """gdtest_bibliography: references.bib is copied into the build directory."""
+    pkg = _BIBLIOGRAPHY_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    # _site_dir(pkg).parent is the great-docs/ build directory.
+    build_dir = _site_dir(pkg).parent
+    assert (build_dir / "references.bib").exists(), (
+        "references.bib should be copied into the build directory by basename"
+    )
+
+
+@pytest.mark.dedicated
+def test_DED_bibliography_wired_into_quarto_yml():
+    """gdtest_bibliography: _quarto.yml carries bibliography: references.bib."""
+    pkg = _BIBLIOGRAPHY_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    from yaml12 import read_yaml
+
+    quarto_yml = _site_dir(pkg).parent / "_quarto.yml"
+    assert quarto_yml.exists(), "_quarto.yml should exist in the build directory"
+    with open(quarto_yml, encoding="utf-8") as f:
+        config = read_yaml(f)
+    assert config.get("bibliography") == "references.bib", (
+        f"Expected bibliography: references.bib, got {config.get('bibliography')!r}"
+    )
+
+
+@pytest.mark.dedicated
+def test_DED_bibliography_citations_resolve():
+    """gdtest_bibliography: [@key] citations resolve (no raw citation text)."""
+    pkg = _BIBLIOGRAPHY_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    html = _bibliography_ug_html()
+    assert html is not None, "Citations user-guide page should have rendered to HTML"
+
+    # The raw citation markup must NOT survive into the output
+    assert "[@knuth1984]" not in html, "Raw [@knuth1984] markup should be resolved"
+    assert "[@lamport1994]" not in html, "Raw [@lamport1994] markup should be resolved"
+
+    # citeproc emits per-entry anchors for each resolved key.
+    assert "ref-knuth1984" in html, "Resolved citation anchor for knuth1984 missing"
+    assert "ref-lamport1994" in html, "Resolved citation anchor for lamport1994 missing"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_bibliography_references_section_rendered():
+    """gdtest_bibliography: a References section with both entries is rendered."""
+    pkg = _BIBLIOGRAPHY_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    html = _bibliography_ug_html()
+    assert html is not None, "Citations user-guide page should have rendered to HTML"
+
+    soup = BeautifulSoup(html, "html.parser")
+    refs = soup.find(id="refs")
+    assert refs is not None, "A References section (#refs) should be rendered"
+
+    refs_text = refs.get_text()
+    # Both cited works should appear in the formatted reference list.
+    assert "Knuth" in refs_text, "Knuth reference should appear in the bibliography"
+    assert "Lamport" in refs_text, "Lamport reference should appear in the bibliography"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_bibliography_homepage_citation_resolves():
+    """gdtest_bibliography: the homepage (README→index.qmd) resolves its citation.
+
+    The homepage also contains a source-tree viewer that legitimately displays
+    raw `.qmd`/README source, so we don't assert the absence of raw `[@key]`
+    text here — we check for the *resolved* citation link and the refs list.
+    """
+    pkg = _BIBLIOGRAPHY_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    html = _bibliography_page(_BIB_HOMEPAGE)
+    assert html is not None, "Homepage index.html should exist"
+
+    soup = BeautifulSoup(html, "html.parser")
+    # A resolved inline citation links to the bibliography entry.
+    assert soup.select('a[href="#ref-knuth1984"]'), (
+        "Homepage should contain a resolved citation link to #ref-knuth1984"
+    )
+    refs = soup.find(id="refs")
+    assert refs is not None, "Homepage should render a References section"
+    assert "Knuth" in refs.get_text(), "Homepage references should list the Knuth entry"
+
+
+@pytest.mark.dedicated
+def test_DED_bibliography_nested_page_citations_resolve():
+    """gdtest_bibliography: a user-guide page one subdir deep resolves citations."""
+    pkg = _BIBLIOGRAPHY_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    html = _bibliography_page(_BIB_NESTED_UG)
+    assert html is not None, (
+        f"Nested user-guide page {_BIB_NESTED_UG!r} should have rendered to HTML"
+    )
+
+    # Authored .qmd pages have no source viewer, so raw markup must be gone.
+    assert "[@parnas1972]" not in html, "Raw [@parnas1972] markup should be resolved"
+    assert "[@knuth1984]" not in html, "Raw [@knuth1984] markup should be resolved"
+    assert "ref-parnas1972" in html, "Resolved anchor for parnas1972 missing"
+    assert "ref-knuth1984" in html, "Resolved anchor for knuth1984 missing"
+
+
+@pytest.mark.dedicated
+def test_DED_bibliography_shared_key_across_pages():
+    """gdtest_bibliography: one key (knuth1984) resolves on every citing page.
+
+    Proves a single bibliography genuinely serves the whole project rather than
+    each page coincidentally resolving its own — the same key is cited on the
+    homepage, a top-level user-guide page, and a nested user-guide page.
+    """
+    pkg = _BIBLIOGRAPHY_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    for relpath in (_BIB_HOMEPAGE, _BIB_TOPLEVEL_UG, _BIB_NESTED_UG):
+        html = _bibliography_page(relpath)
+        assert html is not None, f"{relpath!r} should have rendered"
+        assert "ref-knuth1984" in html, f"Shared key knuth1984 should resolve on {relpath!r}"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_bibliography_docstring_citation_resolves():
+    """gdtest_bibliography: a citation inside an API docstring resolves too.
+
+    The weave() docstring cites [@knuth1984]. Generated API reference pages go
+    through a different rendering pipeline than authored .qmd pages, so this
+    confirms the project-level bibliography reaches docstring-sourced content.
+    """
+    pkg = _BIBLIOGRAPHY_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    html = _bibliography_page(_BIB_REFERENCE)
+    assert html is not None, f"Reference page {_BIB_REFERENCE!r} should exist"
+
+    assert "[@knuth1984]" not in html, "Raw [@knuth1984] in docstring should be resolved"
+    soup = BeautifulSoup(html, "html.parser")
+    assert soup.select('a[href="#ref-knuth1984"]'), (
+        "Docstring citation should resolve to a #ref-knuth1984 link"
+    )
+    refs = soup.find(id="refs")
+    assert refs is not None, "Reference page should render a References section"
+    assert "Knuth" in refs.get_text(), "Reference page bibliography should list Knuth"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_bibliography_auto_generated_heading():
+    """gdtest_bibliography: the nested page gets an auto-generated References heading.
+
+    The nested page authors no manual References heading, so Quarto generates the
+    section and Great Docs titles it via reference-section-title (English here).
+    This proves the heading-rendering mechanism that i18n localization relies on.
+    """
+    pkg = _BIBLIOGRAPHY_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    html = _bibliography_page(_BIB_NESTED_UG)
+    assert html is not None, f"{_BIB_NESTED_UG!r} should have rendered"
+
+    soup = BeautifulSoup(html, "html.parser")
+    headings = [h.get_text().strip() for h in soup.find_all(["h1", "h2", "h3"])]
+    assert "References" in headings, (
+        f"An auto-generated 'References' heading should appear; got {headings}"
+    )
+    assert soup.find(id="refs") is not None, "Auto-generated #refs section should exist"
+
+    # Regression: shift-heading-level-by: -1 demotes the in-body reference title
+    # to a <p>, leaving a duplicate alongside the appendix heading. Post-render
+    # must strip that orphan so "References" appears exactly once.
+    assert "<p>References</p>" not in html, (
+        "Orphaned duplicate <p>References</p> should be removed (post-render)"
+    )
+    block_titles = [
+        el.get_text().strip()
+        for el in soup.find_all(["h1", "h2", "h3", "h4", "p"])
+        if el.get_text().strip() == "References"
+    ]
+    assert len(block_titles) == 1, (
+        f"'References' should appear exactly once as a heading; found {len(block_titles)}"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: i18n bibliography — localized references heading
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_i18n_french_references_heading_localized():
+    """gdtest_i18n_french: the auto-generated references heading is French.
+
+    With site.language: fr and a project-level bibliography, Great Docs sets
+    reference-section-title to the French translation, so Quarto renders
+    'Références' rather than the English 'References'.
+    """
+    pkg = "gdtest_i18n_french"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    expected = _get_expected(pkg)
+    page = _site_dir(pkg) / expected["references_page"]
+    if not page.exists():
+        pytest.skip(f"{page} not rendered")
+    html = page.read_text(encoding="utf-8")
+
+    soup = BeautifulSoup(html, "html.parser")
+    headings = [h.get_text().strip() for h in soup.find_all(["h1", "h2", "h3"])]
+    title = expected["references_heading_i18n"]  # "Références"
+    assert title in headings, f"Expected localized heading {title!r}; got {headings}"
+    # The English default must not leak through.
+    assert "References" not in headings, "English 'References' should not appear"
+    assert "ref-knuth1984" in html, "Citation should resolve on the French page"
+
+    # Regression: the localized title must not be duplicated as an orphan <p>.
+    assert f"<p>{title}</p>" not in html, (
+        f"Orphaned duplicate <p>{title}</p> should be removed (post-render)"
+    )
+    block_titles = [
+        el.get_text().strip()
+        for el in soup.find_all(["h1", "h2", "h3", "h4", "p"])
+        if el.get_text().strip() == title
+    ]
+    assert len(block_titles) == 1, (
+        f"{title!r} should appear exactly once; found {len(block_titles)}"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: bibliography_csl — custom CSL style
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_BIBLIOGRAPHY_CSL_PKG = "gdtest_bibliography_csl"
+
+
+@pytest.mark.dedicated
+def test_DED_bibliography_csl_file_copied_and_wired():
+    """gdtest_bibliography_csl: the .csl file is copied and wired into _quarto.yml."""
+    pkg = _BIBLIOGRAPHY_CSL_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    from yaml12 import read_yaml
+
+    build_dir = _site_dir(pkg).parent
+    assert (build_dir / "numeric.csl").exists(), (
+        "the .csl file should be copied into the build directory by basename"
+    )
+    with open(build_dir / "_quarto.yml", encoding="utf-8") as f:
+        config = read_yaml(f)
+    assert config.get("csl") == "numeric.csl", (
+        f"Expected csl: numeric.csl in _quarto.yml, got {config.get('csl')!r}"
+    )
+    assert config.get("bibliography") == "references.bib"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_bibliography_csl_applies_numeric_style():
+    """gdtest_bibliography_csl: the custom CSL changes citation formatting.
+
+    The numeric style renders inline citations as bracketed numbers ([1], [2])
+    instead of the default Chicago author-date "(Knuth 1984)". Confirming the
+    numbers appear proves Quarto actually used the configured .csl file.
+    """
+    pkg = _BIBLIOGRAPHY_CSL_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    ug = _site_dir(pkg) / "user-guide"
+    page = ug / "citations.html"
+    if not page.exists():
+        pages = list(ug.glob("*.html"))
+        page = pages[0] if pages else None
+    assert page is not None and page.exists(), "citations page should have rendered"
+    html = page.read_text(encoding="utf-8")
+    soup = BeautifulSoup(html, "html.parser")
+
+    cite_links = soup.select('a[role="doc-biblioref"]')
+    assert cite_links, "should have resolved citation links"
+    cite_texts = [a.get_text().strip() for a in cite_links]
+    # Numeric style → every inline citation label is a number.
+    assert all(t.isdigit() for t in cite_texts), (
+        f"Expected numeric citation labels from the custom CSL, got {cite_texts}"
+    )
+    assert {"1", "2"} <= set(cite_texts), (
+        f"Expected numbered citations [1] and [2], got {cite_texts}"
+    )
+    # And NOT the default author-date rendering.
+    assert "Knuth 1984" not in html, "Default author-date style should not appear"
+    # References still resolve.
+    assert soup.find(id="refs") is not None, "References section should render"
+    assert "ref-knuth1984" in html, "Citation anchor should resolve"

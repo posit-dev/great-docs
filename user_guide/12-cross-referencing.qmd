@@ -2,7 +2,7 @@
 title: "Cross-Referencing"
 guide-section: "Config & Theming"
 bread-crumbs: false
-tags: [Content, Configuration]
+tags: [Content, Configuration, Citations]
 ---
 
 # Cross-Referencing
@@ -10,7 +10,9 @@ tags: [Content, Configuration]
 Documentation becomes much more useful when readers can follow connections between related items.
 Without links, someone reading the `encode()` page has no easy way to discover that `decode()`
 exists, or that a higher-level `Pipeline` class ties everything together. Cross-references turn
-isolated pages into a connected web.
+isolated pages into a connected web. This page covers that internal linking, and ends with
+citations: linking your prose outward to the papers, specifications, and books your work builds
+on.
 
 Great Docs provides a linking system called GDLS (Great Docs Linking System) that automatically
 creates clickable navigation between your API reference pages. GDLS operates at three levels, each
@@ -268,14 +270,108 @@ Code autolinks require no effort on your part, since they happen automatically. 
 common words like `Config` or `Data` might match a symbol unexpectedly. If you notice unwanted links
 in the rendered output, add `{.gd-no-link}` to the specific code span.
 
+## Citations & Bibliography
+
+Cross-references connect the pages *within* your documentation; citations connect your prose to the
+work it builds on (e.g., a paper, a specification, a book, etc.). Great Docs supports academic
+citations and a generated **References** section, driven by a single project-level bibliography.
+
+Point `bibliography:` at a `.bib` file (path relative to the project root):
+
+```{.yaml filename="great-docs.yml"}
+bibliography: docs/references.bib
+```
+
+Then cite by key anywhere (no per-page frontmatter required):
+
+```markdown
+Literate programming was introduced by Knuth [@knuth1984].
+```
+
+That renders as "…by Knuth (Knuth 1984)", linked to a References section. At build time Great Docs
+copies the `.bib` into the build directory and wires it into the generated `_quarto.yml`, so the
+bibliography is available to *every* page: User Guide pages, custom sections, the homepage, and even
+the docstrings that become your API reference.
+
+### Writing citations
+
+Citations use standard [Pandoc citation
+syntax](https://quarto.org/docs/authoring/citations.html#sec-citations). The citation key is the
+identifier from your `.bib` entry (`knuth1984` above), prefixed with `@`.
+
+| You write | Renders as |
+|-----------|------------|
+| `[@knuth1984]` | (Knuth 1984) |
+| `@knuth1984` | Knuth (1984) |
+| `[@knuth1984; @lamport1994]` | (Knuth 1984; Lamport 1994) |
+| `[see @knuth1984, pp. 33-35]` | (see Knuth 1984, 33–35) |
+| `[-@knuth1984]` | (1984) |
+
+Wrap a key in square brackets for a parenthetical citation, drop them for an in-text citation where
+the author becomes part of the sentence, separate multiple keys with semicolons, and add a prefix,
+locator, or leading `-` to suppress the author.
+
+### The references section
+
+When a page contains at least one citation, Great Docs renders a **References** section listing
+every work cited. By default it appears at the end of the page. To place it somewhere specific, add
+an empty `#refs` div where you want it:
+
+```markdown
+## References
+
+::: {#refs}
+:::
+```
+
+Quarto fills that div with the reference list instead of appending one at the end, and uses your
+heading as-is (it won't add a second one).
+
+### Multiple bibliography files
+
+Pass a list to combine several `.bib` files; all entries become citable from any page:
+
+```{.yaml filename="great-docs.yml"}
+bibliography:
+  - docs/references.bib
+  - docs/software.bib
+```
+
+### Citation style
+
+By default citations follow the Chicago author-date style. To use a different
+[CSL](https://citationstyles.org) style, point `csl:` at a `.csl` file (relative to the project
+root); Great Docs copies it into the build alongside the bibliography. Find styles in the
+[Zotero Style Repository](https://www.zotero.org/styles).
+
+```{.yaml filename="great-docs.yml"}
+bibliography: docs/references.bib
+csl: docs/nature.csl
+```
+
+### Localized headings
+
+If your site sets a [language](internationalization.qmd), the auto-generated references heading is
+localized automatically. So a French site (`site.language: fr`) renders **Les références**, with the
+entries themselves formatted for that language too.
+
+::: {.callout-note}
+If citations render as literal `[@key]` text with no References section, the key doesn't match a
+`.bib` entry or the bibliography wasn't found. So check the key spelling and that `bibliography:`
+resolves from the project root. A missing file warns (`"Bibliography file not found"`) and the build
+continues without it.
+:::
+
 ## Next Steps
 
 Cross-references turn a collection of standalone reference pages into a connected web of
-documentation. Use `%seealso` for structured navigation, interlinks for inline mentions, and let
-code autolinks handle the rest automatically.
+documentation. Use `%seealso` for structured navigation, interlinks for inline mentions, code
+autolinks for the rest, and a project-level `bibliography:` to cite external work.
 
 - [Writing Docstrings](writing-docstrings.qmd) covers how to write effective docstrings that work
 well with cross-referencing
 - [API Documentation](api-documentation.qmd) covers how API discovery and page organization work
 - [User Guides](user-guides.qmd) explains how to link from User Guide pages to API reference pages
+- [Internationalization](internationalization.qmd) localizes the References heading and the rest of
+the UI
 - [Linting](linting.qmd) can catch broken cross-references during the build

@@ -259,6 +259,22 @@ class GreatDocs:
             else:
                 print(f"Warning: Pre-render script not found: {script_path}")
 
+        # Copy bibliography and CSL files into the build directory so that
+        # project-level citations resolve (see _update_quarto_config for wiring)
+        for bib_path in self._config.bibliography:
+            src = self.project_root / bib_path
+            if src.is_file():
+                shutil.copy2(src, self.project_path / src.name)
+            else:
+                print(f"Warning: Bibliography file not found: {bib_path}")
+        csl_path = self._config.csl
+        if csl_path:
+            csl_src = self.project_root / csl_path
+            if csl_src.is_file():
+                shutil.copy2(csl_src, self.project_path / csl_src.name)
+            else:
+                print(f"Warning: CSL file not found: {csl_path}")
+
         # Copy qrenderer assets
         renderer_src = self.assets_path / "_renderer.py"
         if renderer_src.exists():
@@ -11182,6 +11198,23 @@ body-classes: "gd-homepage"
 
         # Disable Quarto's built-in GLightbox — we supply gd-lightbox instead
         config["lightbox"] = False
+
+        # Forward project-level bibliography/CSL from great-docs.yml. The files
+        # are copied into the build directory (see _prepare_build_directory), so
+        # the _quarto.yml keys reference them by basename.
+        bib_files = self._config.bibliography
+        if bib_files:
+            bib_names = [Path(b).name for b in bib_files]
+            config["bibliography"] = bib_names[0] if len(bib_names) == 1 else bib_names
+            print(f"Using bibliography: {', '.join(bib_names)}")
+            # Note: the auto-generated references heading is localized by Quarto
+            # itself from the document `lang` (set below), e.g. "Les références"
+            # for French. We deliberately do not set `reference-section-title`:
+            # under our `shift-heading-level-by: -1` it would be demoted to a
+            # stray <p> and duplicated alongside Quarto's appendix heading.
+        csl_path = self._config.csl
+        if csl_path:
+            config["csl"] = Path(csl_path).name
 
         # Set document language for Quarto built-in i18n (search widget, etc.)
         if self._config.language and self._config.language != "en":

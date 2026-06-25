@@ -43,6 +43,9 @@ SPEC = {
         "copy_code": True,
         "page_metadata": True,
         "funding": {"name": "Fondation pour la Recherche"},
+        # Project-level bibliography; the auto-generated references heading must
+        # be localized to French ("R\u00e9f\u00e9rences") via reference-section-title.
+        "bibliography": "docs/references.bib",
     },
     "files": {
         "gdtest_i18n_french/__init__.py": '''\
@@ -232,6 +235,13 @@ SPEC = {
             | CSV      | .csv      | Oui          |
             | JSON     | .json     | Non          |
             | Parquet  | .parquet  | Oui          |
+
+            ## Fondements
+
+            Cette approche s'appuie sur les travaux fondateurs en programmation
+            lettrée [@knuth1984]. Aucune en-tête de bibliographie n'est ajoutée
+            à la main : Great Docs génère automatiquement la section, dont le
+            titre est traduit en français.
         """,
         "user_guide/02-configuration.qmd": """\
             ---
@@ -303,6 +313,20 @@ SPEC = {
 
             MIT
         """,
+        # Project-level bibliography (outside the build tree). The citing page
+        # adds no manual heading, so Quarto generates the references section and
+        # Great Docs localizes its title to French.
+        "docs/references.bib": """\
+            @article{knuth1984,
+              title = {Literate Programming},
+              author = {Knuth, Donald E.},
+              year = {1984},
+              journal = {The Computer Journal},
+              volume = {27},
+              number = {2},
+              pages = {97--111},
+            }
+        """,
     },
     "expected": {
         "detected_name": "gdtest-i18n-french",
@@ -315,13 +339,22 @@ SPEC = {
             "valider",
         ],
         "num_exports": 4,
-        "section_titles": ["Classes", "Functions"],
+        # A French site localizes the auto-generated API section titles, so
+        # "Functions" renders as "Fonctions" ("Classes" is identical in French).
+        "section_titles": ["Classes", "Fonctions"],
         "has_user_guide": True,
         "user_guide_files": [
             "01-demarrage-rapide.qmd",
             "02-configuration.qmd",
             "03-table-explorer.qmd",
         ],
+        # Bibliography with an auto-generated, French-localized references title.
+        # The heading is localized by Quarto itself from `lang: fr` — its
+        # built-in French string is "Les références".
+        "has_bibliography": True,
+        "bibliography_file": "references.bib",
+        "references_heading_i18n": "Les références",
+        "references_page": "user-guide/demarrage-rapide.html",
         "coverage_exclude": ['nodoc', 'bigcl', 'supp', 'hdg'],
 },
 }

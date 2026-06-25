@@ -893,6 +893,108 @@ li a {
     text-underline-offset: 4px;
 }
 
+/* ==========================================================================
+   Citations & Bibliography (Quarto citeproc output)
+   Theme-aware via --gd-* tokens, so light/dark stay consistent. Without these
+   rules, inline citations fall through to the generic link color (black in
+   light mode, so they don't read as links) and the reference list inherits
+   Bootstrap defaults with no spacing between entries.
+   ========================================================================== */
+
+/* Inline citations, e.g. (Knuth 1984): distinct accent color with a dotted
+   underline in both modes so they're clearly navigable cross-references. */
+.citation a[role="doc-biblioref"] {
+    color: var(--gd-citation-color);
+    text-decoration: underline dotted;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+}
+
+.citation a[role="doc-biblioref"]:hover {
+    color: var(--gd-citation-color);
+    text-decoration-style: solid;
+}
+
+/* Separate a manually-placed reference list from the body. When an author puts
+   `::: {#refs}` under their own heading, #refs sits in a content section
+   (.level1); border that section so the rule lands above the heading. Scoped to
+   .level1 so it does NOT double up with the appendix border below. The metrics
+   mirror Quarto's #quarto-appendix (2rem above the rule, 1.5rem below) so the
+   manual and auto-generated paths look identical. */
+section.level1:has(> #refs) {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--gd-border-color);
+}
+
+/* Zero the heading's own top margin so the gap below the rule equals the
+   section padding (otherwise the heading's default margin makes the whitespace
+   above and below the rule uneven). Matches the appendix heading (margin-top:0). */
+section.level1:has(> #refs) > :first-child {
+    margin-top: 0;
+}
+
+/* Fallback when citeproc appends a bare #refs with no section wrapper. */
+#refs:not(section > #refs) {
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--gd-border-color);
+}
+
+/* Auto-generated bibliographies render in Quarto's #quarto-appendix block,
+   which already supplies a top border for separation. Quarto's default theme
+   gives it a light background and border that don't adapt to dark mode, so the
+   reference list shows up as a white card with low-contrast text. Re-theme it. */
+html.quarto-dark #quarto-appendix.default,
+body.quarto-dark #quarto-appendix.default {
+    background-color: transparent;
+    border-top-color: var(--gd-border-color);
+}
+
+/* Quarto renders the appendix bibliography title at body-text size, which looks
+   inconsistent next to a manually-authored "## References" section heading (a
+   full-size section heading). Promote it to the section-heading scale so the
+   References section looks the same whether the heading is auto-generated or
+   authored by hand. Two ids + !important override Quarto's own
+   `.quarto-appendix-heading { font-size: 1em !important }`. */
+#quarto-appendix #quarto-bibliography > .quarto-appendix-heading {
+    font-size: 1.85rem !important;
+    font-weight: 500;
+    margin-bottom: 1rem;
+}
+
+/* Reference list: slightly smaller and softened for hierarchy, with breathing
+   room between entries (Bootstrap leaves them flush against each other). Use
+   0.9em to match Quarto's own appendix rule
+   (`#quarto-appendix .quarto-appendix-contents > *:not(h2) { font-size: .9em }`)
+   so a manually-placed #refs is the same size as the auto-generated one. */
+#refs {
+    font-size: 0.9em;
+    color: var(--gd-text-secondary);
+}
+
+#refs .csl-entry {
+    margin-bottom: 0.6rem;
+}
+
+#refs .csl-entry:last-child {
+    margin-bottom: 0;
+}
+
+/* Unify the hanging indent across both paths. Quarto's appendix applies the
+   hanging indent per-entry (body flush left, wrapped lines indented 1em), but a
+   manually-placed #refs gets the default `div.hanging-indent` rule that shifts
+   the whole list by 1.5em. Force the per-entry form everywhere so every citation
+   starts hard left with consistent wrap indentation. */
+#refs.hanging-indent {
+    margin-left: 0;
+}
+
+#refs.hanging-indent .csl-entry {
+    margin-left: 1em;
+    text-indent: -1em;
+}
+
 /* Author/funder icon links in the landing page margin sidebar */
 .column-margin a:has(.bi),
 .column-margin a:has(.fa-brands),
@@ -3369,6 +3471,7 @@ body.quarto-dark .gd-keyboard-btn {
     --gd-highlight-color: rgba(255, 243, 205, 0.5);
     --gd-active-link: rgb(244, 121, 0);
     --gd-accent-blue: rgba(101, 180, 237, 0.75);
+    --gd-citation-color: #1a6cae;
 
     /* Syntax highlighting - light mode */
     --gd-syn-class: #0e84b5;
@@ -3406,6 +3509,7 @@ body.quarto-dark {
     --gd-highlight-color: rgba(255, 193, 7, 0.2);
     --gd-active-link: #ff9f43;
     --gd-accent-blue: rgba(101, 180, 237, 0.6);
+    --gd-citation-color: #7cb8e8;
 
     /* Syntax highlighting - dark mode (optimized for contrast) */
     --gd-syn-class: #56c8ff;
@@ -6285,6 +6389,47 @@ html[data-bs-theme="dark"] .gd-page-metadata {
         padding: 6px 10px;
         position: relative;
         z-index: 1;
+    }
+}
+
+/* Citation / cross-reference hover popovers.
+   Quarto shows the full reference on hover using a tippy box with
+   theme="quarto", whose default surface is light. In dark mode that flashes a
+   white panel over the page, so give it a dark surface, border, and arrow that
+   track the GD theme tokens. */
+html.quarto-dark .tippy-box[data-theme~="quarto"],
+body.quarto-dark .tippy-box[data-theme~="quarto"] {
+    background-color: var(--gd-bg-secondary);
+    color: var(--gd-text-primary);
+    border: 1px solid var(--gd-border-color);
+
+    .csl-entry {
+        color: var(--gd-text-primary);
+    }
+
+    a {
+        color: var(--gd-citation-color);
+    }
+
+    /* Arrow fill + per-placement borders (tippy colors the arrow via borders) */
+    > .tippy-arrow {
+        color: var(--gd-bg-secondary);
+    }
+
+    &[data-placement^="top"] > .tippy-arrow::before {
+        border-top-color: var(--gd-bg-secondary);
+    }
+
+    &[data-placement^="bottom"] > .tippy-arrow::before {
+        border-bottom-color: var(--gd-bg-secondary);
+    }
+
+    &[data-placement^="left"] > .tippy-arrow::before {
+        border-left-color: var(--gd-bg-secondary);
+    }
+
+    &[data-placement^="right"] > .tippy-arrow::before {
+        border-right-color: var(--gd-bg-secondary);
     }
 }
 

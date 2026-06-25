@@ -16696,6 +16696,170 @@ def test_prepare_build_directory_copies_js_files():
         assert (docs.project_path / "responsive-tables.js").exists()
 
 
+def test_config_bibliography_normalization():
+    """Config.bibliography normalizes string, list, and missing values."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+
+        # Single string -> one-element list
+        (root / "great-docs.yml").write_text(
+            "package: mypkg\nbibliography: docs/references.bib\n", encoding="utf-8"
+        )
+        assert Config(root).bibliography == ["docs/references.bib"]
+
+        # List -> filtered list
+        (root / "great-docs.yml").write_text(
+            "package: mypkg\nbibliography:\n  - docs/a.bib\n  - docs/b.bib\n",
+            encoding="utf-8",
+        )
+        assert Config(root).bibliography == ["docs/a.bib", "docs/b.bib"]
+
+        # Missing -> empty list
+        (root / "great-docs.yml").write_text("package: mypkg\n", encoding="utf-8")
+        cfg = Config(root)
+        assert cfg.bibliography == []
+        assert cfg.csl is None
+
+        # CSL string
+        (root / "great-docs.yml").write_text(
+            "package: mypkg\ncsl: docs/nature.csl\n", encoding="utf-8"
+        )
+        assert Config(root).csl == "docs/nature.csl"
+
+
+def test_prepare_build_directory_copies_bibliography():
+    """_prepare_build_directory copies the .bib file and wires _quarto.yml."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+
+        (root / "pyproject.toml").write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+        (root / "README.md").write_text("# My Pkg\n", encoding="utf-8")
+        (root / "great-docs.yml").write_text(
+            "package: mypkg\nbibliography: docs/references.bib\n", encoding="utf-8"
+        )
+        docs_dir = root / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "references.bib").write_text("@book{key, title={T}}\n", encoding="utf-8")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        with patch.object(docs, "_add_api_reference_config"):
+            with patch.object(docs, "_update_sidebar_from_sections"):
+                with patch.object(docs, "_update_reference_index_frontmatter"):
+                    docs._prepare_build_directory()
+
+        # .bib copied into build dir by basename
+        assert (docs.project_path / "references.bib").exists()
+
+        # _quarto.yml references it by basename
+        with open(docs.project_path / "_quarto.yml", "r") as f:
+            config = read_yaml(f)
+        assert config["bibliography"] == "references.bib"
+
+
+def test_prepare_build_directory_copies_multiple_bib_and_csl():
+    """_prepare_build_directory handles multiple .bib files plus a CSL file."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+
+        (root / "pyproject.toml").write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+        (root / "README.md").write_text("# My Pkg\n", encoding="utf-8")
+        (root / "great-docs.yml").write_text(
+            "package: mypkg\n"
+            "bibliography:\n  - docs/refs.bib\n  - docs/software.bib\n"
+            "csl: docs/nature.csl\n",
+            encoding="utf-8",
+        )
+        docs_dir = root / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "refs.bib").write_text("@book{a, title={A}}\n", encoding="utf-8")
+        (docs_dir / "software.bib").write_text("@misc{b, title={B}}\n", encoding="utf-8")
+        (docs_dir / "nature.csl").write_text("<style/>\n", encoding="utf-8")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        with patch.object(docs, "_add_api_reference_config"):
+            with patch.object(docs, "_update_sidebar_from_sections"):
+                with patch.object(docs, "_update_reference_index_frontmatter"):
+                    docs._prepare_build_directory()
+
+        assert (docs.project_path / "refs.bib").exists()
+        assert (docs.project_path / "software.bib").exists()
+        assert (docs.project_path / "nature.csl").exists()
+
+        with open(docs.project_path / "_quarto.yml", "r") as f:
+            config = read_yaml(f)
+        assert config["bibliography"] == ["refs.bib", "software.bib"]
+        assert config["csl"] == "nature.csl"
+
+
+def test_prepare_build_directory_bibliography_missing_warns(capsys):
+    """A configured but missing .bib/.csl file warns instead of failing the build."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+
+        (root / "pyproject.toml").write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+        (root / "README.md").write_text("# My Pkg\n", encoding="utf-8")
+        (root / "great-docs.yml").write_text(
+            "package: mypkg\nbibliography: docs/missing.bib\ncsl: docs/missing.csl\n",
+            encoding="utf-8",
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        with patch.object(docs, "_add_api_reference_config"):
+            with patch.object(docs, "_update_sidebar_from_sections"):
+                with patch.object(docs, "_update_reference_index_frontmatter"):
+                    docs._prepare_build_directory()
+
+        out = capsys.readouterr().out
+        assert "Bibliography file not found" in out
+        assert "CSL file not found" in out
+        assert not (docs.project_path / "missing.bib").exists()
+
+
+def test_bibliography_does_not_set_reference_section_title():
+    """Great Docs leaves the references heading to Quarto's native localization.
+
+    Under `shift-heading-level-by: -1` an explicit `reference-section-title`
+    is demoted to a stray `<p>` and duplicated next to Quarto's appendix
+    heading, so Great Docs must not set it. Quarto localizes the heading from
+    `lang` (e.g. "Les références" for French).
+    """
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+        (root / "pyproject.toml").write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+        (root / "README.md").write_text("# My Pkg\n", encoding="utf-8")
+        docs_dir = root / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "references.bib").write_text("@book{k, title={T}}\n", encoding="utf-8")
+        (root / "great-docs.yml").write_text(
+            "package: mypkg\nbibliography: docs/references.bib\nsite:\n  language: fr\n",
+            encoding="utf-8",
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        with patch.object(docs, "_add_api_reference_config"):
+            with patch.object(docs, "_update_sidebar_from_sections"):
+                with patch.object(docs, "_update_reference_index_frontmatter"):
+                    docs._prepare_build_directory()
+
+        with open(docs.project_path / "_quarto.yml", encoding="utf-8") as f:
+            config = read_yaml(f)
+
+        # The bibliography is still wired up...
+        assert config.get("bibliography") == "references.bib"
+        assert config.get("lang") == "fr"
+
+        # ...but the references heading is left to Quarto (no explicit override).
+        assert "reference-section-title" not in config
+
+
 def test_prepare_build_directory_optional_js_copy_page():
     """Test _prepare_build_directory copies copy-page.js when markdown_pages_widget is set."""
 
