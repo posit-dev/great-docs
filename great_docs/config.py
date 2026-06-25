@@ -1930,6 +1930,17 @@ def create_default_config() -> str:
 # file frontmatter if needed for special cases.
 # jupyter: python3             # Default: python3
 
+# Bibliography & Citations
+# ------------------------
+# Project-level bibliography for [@citation-key] syntax. Paths are relative to
+# the project root; the file(s) are copied into the build directory and wired
+# into _quarto.yml so every page can cite without per-page frontmatter.
+# bibliography: docs/references.bib       # single file
+# bibliography:                           # or multiple files
+#   - docs/references.bib
+#   - docs/software.bib
+# csl: docs/nature.csl                    # optional citation style
+
 # API Reference Structure
 # -----------------------
 # Explicit control over API reference sections. If not provided, sections are
