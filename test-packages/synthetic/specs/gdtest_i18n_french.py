@@ -339,7 +339,9 @@ SPEC = {
             "valider",
         ],
         "num_exports": 4,
-        "section_titles": ["Classes", "Functions"],
+        # A French site localizes the auto-generated API section titles, so
+        # "Functions" renders as "Fonctions" ("Classes" is identical in French).
+        "section_titles": ["Classes", "Fonctions"],
         "has_user_guide": True,
         "user_guide_files": [
             "01-demarrage-rapide.qmd",
