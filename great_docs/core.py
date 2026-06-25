@@ -259,6 +259,22 @@ class GreatDocs:
             else:
                 print(f"Warning: Pre-render script not found: {script_path}")
 
+        # Copy bibliography and CSL files into the build directory so that
+        # project-level citations resolve (see _update_quarto_config for wiring)
+        for bib_path in self._config.bibliography:
+            src = self.project_root / bib_path
+            if src.is_file():
+                shutil.copy2(src, self.project_path / src.name)
+            else:
+                print(f"Warning: Bibliography file not found: {bib_path}")
+        csl_path = self._config.csl
+        if csl_path:
+            csl_src = self.project_root / csl_path
+            if csl_src.is_file():
+                shutil.copy2(csl_src, self.project_path / csl_src.name)
+            else:
+                print(f"Warning: CSL file not found: {csl_path}")
+
         # Copy qrenderer assets
         renderer_src = self.assets_path / "_renderer.py"
         if renderer_src.exists():
