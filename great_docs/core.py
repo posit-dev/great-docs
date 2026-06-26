@@ -8,8 +8,8 @@ from pathlib import Path
 
 from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
 
-from .config import Config
 from ._subprocess import TEXT_MODE_KWARGS
+from .config import Config
 
 # Quarto's default input file types, enumerated as render globs. Used to seed
 # `project.render` whenever we also add `!` exclusions. A recursive `**` glob
@@ -8596,6 +8596,51 @@ class GreatDocs:
         self._write_object_types_json(categories)
 
         return sections if sections else None
+
+    def documented_symbol_names(self, package_name: str) -> list[str]:
+        """Dotted reference-page stems for the documented public API
+
+        Each stem names one published reference page: a top-level class or
+        function, a submodule-qualified class (`scores.CosineScore`), or a
+        method (`scores.CosineScore.fit`). The set is the same one the rendered
+        reference documents — the explicit `reference:` config when present,
+        otherwise auto-discovery — so a versioned snapshot and the live build
+        describe the same API surface. Empty when the package documents nothing.
+
+        Parameters
+        ----------
+        package_name
+            The package name (may contain dashes).
+
+        Returns
+        -------
+        list[str]
+            Dotted stems, deduplicated, in first-occurrence order.
+        """
+        sections = self._create_api_sections_from_config(package_name)
+        if not sections:
+            return []
+
+        names: list[str] = []
+        for section in sections:
+            for item in section.get("contents", []):
+                if isinstance(item, str):
+                    names.append(item)
+                elif isinstance(item, dict):
+                    name = item.get("name", "")
+                    if not name:
+                        continue
+                    names.append(name)
+                    for member in item.get("members", []) or []:
+                        names.append(f"{name}.{member}")
+
+        seen: set[str] = set()
+        unique: list[str] = []
+        for name in names:
+            if name not in seen:
+                seen.add(name)
+                unique.append(name)
+        return unique
 
     def _create_api_sections_with_config(self, package_name: str) -> list | None:
         """
