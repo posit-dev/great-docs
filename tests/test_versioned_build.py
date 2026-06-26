@@ -3630,3 +3630,67 @@ class TestIsValidRefName:
 
     def test_absent_stem_invalid(self):
         assert not _is_valid_ref_name("scores.CosineScore", {"TopClass"})
+
+
+# ---------------------------------------------------------------------------
+# TestGitRefRebuildKeepsSubmodulePages
+# ---------------------------------------------------------------------------
+
+import subprocess as _subprocess
+import textwrap
+
+
+def _git(root, *a):
+    """Run `git *a` in `root`, raising CalledProcessError on a non-zero exit"""
+    _subprocess.run(["git", *a], cwd=root, check=True, capture_output=True)
+
+
+def _repo_with_submodule_tag(root: Path) -> None:
+    """Git repo tagged v0.1.0 whose documented API lives under a submodule"""
+    _git(root, "init")
+    _git(root, "config", "user.email", "t@t.co")
+    _git(root, "config", "user.name", "t")
+    (root / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "0.1.0"\n')
+    pkg = root / "mypkg"
+    (pkg / "sub").mkdir(parents=True)
+    (pkg / "__init__.py").write_text("from mypkg import sub\n__all__ = ['sub']\n")
+    (pkg / "sub" / "__init__.py").write_text(
+        "from mypkg.sub.things import Widget\n__all__ = ['Widget']\n"
+    )
+    (pkg / "sub" / "things.py").write_text("class Widget:\n    def fit(self): ...\n")
+    (root / "great-docs.yml").write_text(
+        textwrap.dedent(
+            """
+            reference:
+              - title: API
+                contents:
+                  - name: sub.Widget
+                    members: [fit]
+            """
+        )
+    )
+    _git(root, "add", "-A")
+    _git(root, "commit", "-m", "v010")
+    _git(root, "tag", "v0.1.0")
+
+
+class TestGitRefRebuildKeepsSubmodulePages:
+    def test_submodule_pages_survive(self, tmp_path: Path):
+        _repo_with_submodule_tag(tmp_path)
+        # Simulate the dev build's reference pages copied into the version dir.
+        ref = tmp_path / "build" / "reference"
+        ref.mkdir(parents=True)
+        for stem in ("sub.Widget", "sub.Widget.fit"):
+            (ref / f"{stem}.qmd").write_text(
+                f"---\ntitle: {stem}\n---\n# {stem} {{.doc-heading}}\n"
+            )
+        (ref / "index.qmd").write_text("---\ntitle: API\n---\n")
+
+        entry = VersionEntry(label="0.1.0", tag="0.1.0", git_ref="v0.1.0")
+        from great_docs._versioned_build import _rebuild_api_from_git_ref
+
+        pages = _rebuild_api_from_git_ref(tmp_path / "build", tmp_path, entry)
+
+        assert (ref / "sub.Widget.qmd").exists()
+        assert (ref / "sub.Widget.fit.qmd").exists()
+        assert "reference/sub.Widget.html" in pages

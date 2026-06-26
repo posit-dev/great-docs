@@ -1032,7 +1032,13 @@ def _rebuild_api_from_git_ref(
         if not pkg_name:
             return []
 
-        snap = snapshot_at_tag(project_root, git_ref, pkg_name)
+        from great_docs.core import GreatDocs
+
+        documented = GreatDocs(project_path=str(project_root)).documented_symbol_names(pkg_name)
+
+        snap = snapshot_at_tag(
+            project_root, git_ref, pkg_name, documented_names=documented or None
+        )
         if snap is None:
             return []
 
