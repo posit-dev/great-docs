@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from great_docs._api_diff import (
+    _EVOLUTION_TABLE_CSS,
     ApiDiff,
     ApiSnapshot,
     CallEdge,
@@ -20,7 +21,6 @@ from great_docs._api_diff import (
     SymbolHistory,
     SymbolHistoryEntry,
     SymbolInfo,
-    _EVOLUTION_TABLE_CSS,
     _annotation_str,
     _augment_params_with_separators,
     _describe_param_change,
@@ -2444,3 +2444,54 @@ def test_snapshot_from_griffe_no_exports():
         snap = snapshot_from_griffe("mypkg", "v1.0")
     assert "public_fn" in snap.symbols
     assert "_private" not in snap.symbols
+
+
+def _write_griffe_pkg(root: Path) -> None:
+    """A package whose public API lives under a submodule, for snapshot tests"""
+    pkg = root / "mypkg"
+    sub = pkg / "sub"
+    sub.mkdir(parents=True)
+    (pkg / "__init__.py").write_text(
+        "from mypkg import sub\nfrom mypkg.core import TopClass\n__all__ = ['TopClass', 'sub']\n"
+    )
+    (pkg / "core.py").write_text("class TopClass:\n    def go(self): ...\n")
+    (sub / "__init__.py").write_text(
+        "from mypkg.sub.things import Widget\n__all__ = ['Widget']\n"
+    )
+    (sub / "things.py").write_text(
+        "class Widget:\n    def fit(self, x: int) -> None: ...\n"
+    )
+
+
+class TestDeepSnapshot:
+    """Tests for deep symbol capture in snapshot_from_griffe."""
+
+    def test_captures_documented_nested_symbols(self, tmp_path: Path):
+        """Captures nested symbols when documented_names is provided."""
+        _write_griffe_pkg(tmp_path)
+        snap = snapshot_from_griffe(
+            "mypkg",
+            version="dev",
+            documented_names=["TopClass", "sub.Widget", "sub.Widget.fit"],
+            search_paths=[str(tmp_path)],
+        )
+        assert set(snap.symbols) == {"TopClass", "sub.Widget", "sub.Widget.fit"}
+        assert snap.symbols["sub.Widget"].kind == "class"
+        assert snap.symbols["sub.Widget.fit"].kind == "function"
+
+    def test_omits_names_that_do_not_resolve(self, tmp_path: Path):
+        """Omits names from documented_names that cannot be resolved."""
+        _write_griffe_pkg(tmp_path)
+        snap = snapshot_from_griffe(
+            "mypkg",
+            version="dev",
+            documented_names=["sub.Widget", "sub.Nonexistent"],
+            search_paths=[str(tmp_path)],
+        )
+        assert set(snap.symbols) == {"sub.Widget"}
+
+    def test_default_behavior_unchanged_top_level(self, tmp_path: Path):
+        """Default behavior (no documented_names) unchanged — captures top-level only."""
+        _write_griffe_pkg(tmp_path)
+        snap = snapshot_from_griffe("mypkg", version="dev", search_paths=[str(tmp_path)])
+        assert set(snap.symbols) == {"TopClass", "sub"}
