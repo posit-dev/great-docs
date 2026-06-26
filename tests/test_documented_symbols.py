@@ -53,3 +53,49 @@ def test_returns_empty_without_reference_config(tmp_path: Path):
     (tmp_path / "great-docs.yml").write_text("logo: assets/logo.png\n")
     gd = GreatDocs(project_path=str(tmp_path))
     assert gd.documented_symbol_names("mypkg") == []
+
+
+def test_resolver_matches_renderer_sections(tmp_path: Path):
+    """Resolver output equals flattened renderer sections — the two cannot silently diverge."""
+    _write_pkg(tmp_path)
+    gd = GreatDocs(project_path=str(tmp_path))
+    sections = gd._create_api_sections_from_config("mypkg")
+    expected: list[str] = []
+    for section in sections or []:
+        for item in section.get("contents", []):
+            if isinstance(item, str):
+                expected.append(item)
+            elif isinstance(item, dict):
+                name = item["name"]
+                expected.append(name)
+                expected.extend(f"{name}.{m}" for m in item.get("members", []) or [])
+    assert gd.documented_symbol_names("mypkg") == list(dict.fromkeys(expected))
+
+
+def test_deduplication_preserves_first_occurrence_order(tmp_path: Path):
+    """Symbols that appear more than once are deduplicated, keeping first-occurrence order."""
+    _write_pkg(tmp_path)
+    # Overwrite config with a reference block that repeats TopClass and sub.Widget.fit.
+    (tmp_path / "great-docs.yml").write_text(
+        textwrap.dedent(
+            """
+            reference:
+              - title: Section A
+                contents:
+                  - TopClass
+                  - name: sub.Widget
+                    members:
+                      - fit
+              - title: Section B
+                contents:
+                  - TopClass
+                  - sub.Widget.fit
+            """
+        )
+    )
+    gd = GreatDocs(project_path=str(tmp_path))
+    names = gd.documented_symbol_names("mypkg")
+    # Duplicates removed; first-occurrence order is: TopClass, sub.Widget, sub.Widget.fit.
+    assert names == ["TopClass", "sub.Widget", "sub.Widget.fit"]
+    # No duplicates.
+    assert len(names) == len(set(names))
