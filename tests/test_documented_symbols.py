@@ -56,20 +56,33 @@ def test_returns_empty_without_reference_config(tmp_path: Path):
 
 
 def test_resolver_matches_renderer_sections(tmp_path: Path):
-    """Resolver output equals flattened renderer sections — the two cannot silently diverge."""
+    """Resolver and renderer each match an independent ground-truth stem list.
+
+    Both sides are verified against a hard-coded expectation derived from the
+    `_write_pkg` fixture config, so divergence bugs cannot hide behind a
+    circular comparison.
+    """
     _write_pkg(tmp_path)
     gd = GreatDocs(project_path=str(tmp_path))
+
+    # Ground truth: stems that the _write_pkg fixture config declares.
+    expected = ["TopClass", "sub.Widget", "sub.Widget.fit"]
+
+    # Resolver must match ground truth.
+    assert gd.documented_symbol_names("mypkg") == expected
+
+    # Renderer sections, flattened independently, must also match ground truth.
     sections = gd._create_api_sections_from_config("mypkg")
-    expected: list[str] = []
+    renderer_stems: list[str] = []
     for section in sections or []:
         for item in section.get("contents", []):
             if isinstance(item, str):
-                expected.append(item)
+                renderer_stems.append(item)
             elif isinstance(item, dict):
                 name = item["name"]
-                expected.append(name)
-                expected.extend(f"{name}.{m}" for m in item.get("members", []) or [])
-    assert gd.documented_symbol_names("mypkg") == list(dict.fromkeys(expected))
+                renderer_stems.append(name)
+                renderer_stems.extend(f"{name}.{m}" for m in item.get("members", []) or [])
+    assert list(dict.fromkeys(renderer_stems)) == expected
 
 
 def test_deduplication_preserves_first_occurrence_order(tmp_path: Path):
