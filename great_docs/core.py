@@ -2,6 +2,7 @@ import json
 import os
 import re
 import shutil
+import sys
 from datetime import datetime
 from importlib import resources
 from pathlib import Path
@@ -6264,11 +6265,18 @@ class GreatDocs:
             normalized = package_name.replace("-", "_")
             if normalized != package_name:
                 print(
-                    f"Could not locate __init__.py for package '{package_name}' (module name: '{normalized}')"
+                    f"Could not locate __init__.py for package '{package_name}' (module name: '{normalized}')",
+                    file=sys.stderr,
                 )
-                print(f"Tip: Ensure a '{normalized}/' directory exists with an __init__.py file")
+                print(
+                    f"Tip: Ensure a '{normalized}/' directory exists with an __init__.py file",
+                    file=sys.stderr,
+                )
             else:
-                print(f"Could not locate __init__.py for package '{package_name}'")
+                print(
+                    f"Could not locate __init__.py for package '{package_name}'",
+                    file=sys.stderr,
+                )
             return None
 
         print(f"Found package __init__.py at: {init_file.relative_to(self.project_root)}")
@@ -6381,10 +6389,14 @@ class GreatDocs:
             try:
                 pkg = self._get_griffe_package(normalized_name)
             except Exception as e:
-                print(f"Warning: Could not load package with griffe ({type(e).__name__})")
+                print(
+                    f"Warning: Could not load package with griffe ({type(e).__name__})",
+                    file=sys.stderr,
+                )
                 if package_name != normalized_name:
                     print(
-                        f"   (Looking for module '{normalized_name}' from project '{package_name}')"
+                        f"   (Looking for module '{normalized_name}' from project '{package_name}')",
+                        file=sys.stderr,
                     )
                 return None
 
@@ -6828,7 +6840,7 @@ class GreatDocs:
         """
         exports = self._discover_package_exports(package_name)
         if exports is None:
-            print("Falling back to __all__ discovery")
+            print("Falling back to __all__ discovery", file=sys.stderr)
             return self._parse_package_exports(package_name)
         return exports
 
@@ -7264,7 +7276,10 @@ class GreatDocs:
             try:
                 pkg = self._get_griffe_package(normalized_name)
             except Exception as e:
-                print(f"Warning: Could not load package with griffe ({type(e).__name__})")
+                print(
+                    f"Warning: Could not load package with griffe ({type(e).__name__})",
+                    file=sys.stderr,
+                )
                 # Fallback: use importlib + inspect to categorize exports
                 return self._categorize_api_objects_fallback(normalized_name, exports)
 
@@ -8039,7 +8054,10 @@ class GreatDocs:
             try:
                 pkg = self._get_griffe_package(normalized_name)
             except Exception as e:
-                print(f"Warning: Could not load package with griffe ({type(e).__name__})")
+                print(
+                    f"Warning: Could not load package with griffe ({type(e).__name__})",
+                    file=sys.stderr,
+                )
                 return {}
 
             directive_map = {}
@@ -8617,7 +8635,13 @@ class GreatDocs:
         list[str]
             Dotted stems, deduplicated, in first-occurrence order.
         """
-        sections = self._create_api_sections_from_config(package_name)
+        import contextlib
+        import io
+
+        # Suppress diagnostic prints from the resolution/filtering pipeline — this is a
+        # programmatic query method and its callers own their own output streams.
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            sections = self._create_api_sections_with_config(package_name)
         if not sections:
             return []
 
@@ -8666,7 +8690,6 @@ class GreatDocs:
             sections = config_sections
         else:
             # Fall back to auto-generated sections from discovered exports
-            print("No reference config found, using auto-discovery")
             sections = self._create_api_sections(package_name)
 
         # Apply %nodoc filtering to remove excluded items
