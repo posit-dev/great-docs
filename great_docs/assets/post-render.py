@@ -4380,11 +4380,6 @@ def generate_markdown_pages():
         if not html_file.endswith(".html"):
             continue
 
-        # Skip skill.html as the raw skill.md is served directly as a resource
-        # and should not be overwritten by a generated .md from rendered HTML
-        if rel == "skill.html" or rel == os.path.join("skill.html"):
-            continue
-
         try:
             with open(html_file, "r", encoding="utf-8") as f:
                 content = f.read()
@@ -4733,28 +4728,6 @@ def generate_markdown_pages():
 if _gd_options.get("markdown_pages", True):
     generate_markdown_pages()
 print("##GD:PASS:Markdown pages generated", flush=True)
-
-
-# ── Clean up skill.html ──────────────────────────────────────────────────────
-# Quarto renders skill.md → skill.html despite the !skill.md exclusion in
-# project.render when skill.md is also in project.resources.  The raw skill.md
-# is served as-is; the rendered skills.html page is the intended viewer.
-# Delete the spurious skill.html so it doesn't confuse users or agents.
-_skill_html = os.path.join("_site", "skill.html")
-if os.path.exists(_skill_html):
-    os.remove(_skill_html)
-    print("Removed spurious _site/skill.html (raw skill.md is served directly)")
-
-# Fix links in skills.html that Quarto rewrote from skill.md → skill.html
-_skills_page = os.path.join("_site", "skills.html")
-if os.path.exists(_skills_page):
-    with open(_skills_page, "r", encoding="utf-8") as f:
-        _skills_content = f.read()
-    _fixed = _skills_content.replace('href="./skill.html"', 'href="skill.md"')
-    if _fixed != _skills_content:
-        with open(_skills_page, "w", encoding="utf-8") as f:
-            f.write(_fixed)
-        print("Fixed skill.md link in skills.html")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

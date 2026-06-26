@@ -3256,6 +3256,34 @@ def test_assets_config_update_only_when_copied():
         assert "assets/**" not in config["project"]["resources"]
 
 
+def test_skill_render_exclusion_uses_enumerated_globs():
+    """_update_quarto_config() excludes skill.md without a recursive ** glob.
+
+    A recursive "**" in the render list overpowers any "!" negation, so Quarto
+    would render skill.md → skill.html anyway (see issue #228). The render list
+    must enumerate Quarto's default input globs instead.
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._update_quarto_config()
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        with open(quarto_yml, "r") as f:
+            config = read_yaml(f)
+
+        render = config["project"]["render"]
+        assert "!skill.md" in render
+        assert "**" not in render
+        assert "*.qmd" in render
+        assert "*.md" in render
+
+
 def test_user_guide_config_option_overrides_default_dir():
     """Test that user_guide config option takes precedence over user_guide/ directory."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -9416,6 +9444,10 @@ def test_process_custom_pages_passthrough_and_raw():
         assert "custom/app.js" in resources
         assert "custom/widget.html" in resources
         assert "!custom/widget.html" in render
+        # The render list must enumerate Quarto's default input globs rather
+        # than a recursive "**", which would overpower the "!" exclusions.
+        assert "**" not in render
+        assert "*.qmd" in render
 
 
 def test_process_custom_pages_missing_dir():

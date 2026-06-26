@@ -11,6 +11,21 @@ from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
 from .config import Config
 from ._subprocess import TEXT_MODE_KWARGS
 
+# Quarto's default input file types, enumerated as render globs. Used to seed
+# `project.render` whenever we also add `!` exclusions. A recursive `**` glob
+# overpowers any negation that follows it (so `!skill.md` would be ignored),
+# whereas these per-extension globs still match recursively while letting the
+# exclusions take effect.
+_QUARTO_RENDER_GLOBS = [
+    "*.qmd",
+    "*.md",
+    "*.markdown",
+    "*.rmd",
+    "*.Rmd",
+    "*.rmarkdown",
+    "*.ipynb",
+]
+
 
 def _patch_griffe():
     """Ensure griffe has CyclicAliasError and AliasResolutionError at top level.
@@ -3602,7 +3617,7 @@ class GreatDocs:
 
         if render_excludes:
             if "render" not in project:
-                project["render"] = ["**"]
+                project["render"] = list(_QUARTO_RENDER_GLOBS)
             render = project["render"]
             if isinstance(render, str):
                 render = [render]  # pragma: no cover
@@ -11164,10 +11179,12 @@ body-classes: "gd-homepage"
             if "skill.md" not in config["project"]["resources"]:
                 config["project"]["resources"].append("skill.md")
 
-            # Exclude skill.md from rendering (Quarto renders .md by default)
-            # The render list needs "**" first (render everything), then exclusions
+            # Exclude skill.md from rendering (Quarto renders .md by default).
+            # The render list enumerates Quarto's default input globs before the
+            # exclusions; a recursive `**` would overpower the `!skill.md`
+            # negation and render skill.md anyway (see issue #228).
             if "render" not in config["project"]:
-                config["project"]["render"] = ["**"]
+                config["project"]["render"] = list(_QUARTO_RENDER_GLOBS)
             if "!skill.md" not in config["project"]["render"]:
                 config["project"]["render"].append("!skill.md")
 
