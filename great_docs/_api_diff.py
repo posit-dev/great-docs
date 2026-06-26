@@ -907,6 +907,7 @@ def snapshot_at_tag(
     project_root: Path,
     tag: str,
     package_name: str,
+    documented_names: list[str] | None = None,
 ) -> ApiSnapshot | None:
     """
     Build an API snapshot of a package at a specific git tag.
@@ -919,18 +920,26 @@ def snapshot_at_tag(
         Git tag name (e.g., `"v1.0.0"`).
     package_name
         Python package name.
+    documented_names
+        Dotted names to capture, including submodule-qualified and method symbols. When `None`,
+        the snapshot holds only the package's top-level public exports.
 
     Returns
     -------
     ApiSnapshot | None
-        The snapshot, or None if extraction failed.
+        The snapshot, or None if the tag's source could not be extracted.
     """
     tmp_dir = _extract_package_at_tag(project_root, tag, package_name)
     if tmp_dir is None:
         return None
 
     try:
-        snap = snapshot_from_griffe(package_name, version=tag, search_paths=[str(tmp_dir)])
+        snap = snapshot_from_griffe(
+            package_name,
+            version=tag,
+            documented_names=documented_names,
+            search_paths=[str(tmp_dir)],
+        )
 
         # Attempt CLI introspection from the version-specific source
         cli_module = _read_cli_module_at_tag(project_root, tag, package_name)

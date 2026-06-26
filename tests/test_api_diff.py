@@ -2495,3 +2495,53 @@ class TestDeepSnapshot:
         _write_griffe_pkg(tmp_path)
         snap = snapshot_from_griffe("mypkg", version="dev", search_paths=[str(tmp_path)])
         assert set(snap.symbols) == {"TopClass", "sub"}
+
+
+def _git(root: Path, *args: str) -> None:
+    """Run `git *args` in `root`, raising CalledProcessError on a non-zero exit"""
+    subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+
+
+def _init_two_tag_repo(root: Path) -> None:
+    """Git repo with two tags: v0.1.0 has sub.Widget(fit); v0.2.0 adds sub.Widget.transform and sub.Gadget"""
+    _git(root, "init")
+    _git(root, "config", "user.email", "t@t.co")
+    _git(root, "config", "user.name", "t")
+    (root / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "0.2.0"\n')
+    pkg = root / "mypkg"
+    (pkg / "sub").mkdir(parents=True)
+    (pkg / "__init__.py").write_text("from mypkg import sub\n__all__ = ['sub']\n")
+    (pkg / "sub" / "__init__.py").write_text(
+        "from mypkg.sub.things import Widget\n__all__ = ['Widget']\n"
+    )
+    (pkg / "sub" / "things.py").write_text("class Widget:\n    def fit(self): ...\n")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-m", "v010")
+    _git(root, "tag", "v0.1.0")
+
+    (pkg / "sub" / "__init__.py").write_text(
+        "from mypkg.sub.things import Widget, Gadget\n__all__ = ['Widget', 'Gadget']\n"
+    )
+    (pkg / "sub" / "things.py").write_text(
+        "class Widget:\n    def fit(self): ...\n    def transform(self): ...\n\n"
+        "class Gadget:\n    def run(self): ...\n"
+    )
+    _git(root, "add", "-A")
+    _git(root, "commit", "-m", "v020")
+    _git(root, "tag", "v0.2.0")
+
+
+class TestSnapshotAtTagDeep:
+    """Tests for deep symbol capture in snapshot_at_tag."""
+
+    def test_tags_differ_with_documented_names(self, tmp_path: Path):
+        """Two tags with different nested APIs produce different snapshots."""
+        _init_two_tag_repo(tmp_path)
+        documented = ["sub.Widget", "sub.Widget.fit", "sub.Widget.transform", "sub.Gadget"]
+        s1 = snapshot_at_tag(tmp_path, "v0.1.0", "mypkg", documented_names=documented)
+        s2 = snapshot_at_tag(tmp_path, "v0.2.0", "mypkg", documented_names=documented)
+        assert set(s1.symbols) == {"sub.Widget", "sub.Widget.fit"}
+        assert set(s2.symbols) == {
+            "sub.Widget", "sub.Widget.fit", "sub.Widget.transform", "sub.Gadget",
+        }
+        assert set(s1.symbols) != set(s2.symbols)
