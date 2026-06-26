@@ -1160,6 +1160,20 @@ p,h1,h2,h3,#toc-title,#toc-function-reference,.nav-link,.table {
     font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
+/* Great Tables (gt) ship their own font as a self-contained component. The
+   `p { font-family }` rule above targets bare <p> elements, so it overrides
+   gt's font on the report title — which gt wraps in a <p> — while non-<p>
+   cells like the subtitle keep gt's font, producing a mismatched header.
+   Let gt's own content inherit gt's font instead. This is mode-independent
+   (the rule above is not dark-mode specific). Mirrors `table:not(.gt_table)`
+   above and the dark-mode gt exemption in the dark-mode section. */
+.gt_table p,
+.gt_table li,
+.gt_table dd,
+.gt_table dt {
+    font-family: inherit;
+}
+
 .cell-output.cell-output-stdout {
     border-style: solid;
     border-width: 1px;
@@ -3674,6 +3688,35 @@ body.quarto-dark div.sourceCode[data-language="sh"] span {
 body.quarto-dark :not(pre) > code {
     color: #f0a0a0;
     background-color: var(--gd-code-bg);
+}
+
+/* ==========================================================================
+   Dark Mode - Great Tables (gt) exemption
+
+   Great Tables output (e.g. pointblank validation reports, gt tables) is a
+   self-contained, light-themed component that ships its own scoped styles for
+   background, text color, and inline code. The global dark-mode rules above
+   target bare `p`/`li`/`code` elements, so they bleed into gt tables and
+   recolor brief text, source notes, and inline code against gt's own white
+   background — leaving light-gray text and amber-on-dark code islands.
+
+   These selectors are scoped under `.gt_table`, so they outrank the global
+   dark-mode rules and hand styling back to gt's own cascade. `inherit` lets
+   text and code pick up gt's intended colors (including status colors) rather
+   than forcing a fixed value, and `transparent` matches gt's light-mode code
+   background. The cosmetic effect is that gt tables render identically in
+   light and dark mode, as designed. See also `table:not(.gt_table)` above. */
+body.quarto-dark .gt_table p,
+body.quarto-dark .gt_table li,
+body.quarto-dark .gt_table dd,
+body.quarto-dark .gt_table dt {
+    color: inherit;
+}
+
+body.quarto-dark .gt_table code,
+body.quarto-dark .gt_table :not(pre) > code {
+    color: inherit;
+    background-color: transparent;
 }
 
 /* Signature highlighting - dark mode */
