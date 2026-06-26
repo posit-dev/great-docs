@@ -596,7 +596,6 @@ def _rebuild_api_from_snapshot(
     ref_dir = dest_dir / "reference"
 
     snapshot_symbols = set(snap.symbols.keys())
-    snapshot_classes = {name for name, sym in snap.symbols.items() if sym.kind == "class"}
 
     # --- Prune existing pages not in the snapshot ---
     if ref_dir.exists():
@@ -608,7 +607,7 @@ def _rebuild_api_from_snapshot(
             stem = qmd_file.stem
             if stem == "index":
                 continue
-            if not _is_valid_ref_name(stem, snapshot_symbols, snapshot_classes):
+            if not _is_valid_ref_name(stem, snapshot_symbols):
                 qmd_file.unlink()
     else:
         ref_dir.mkdir(parents=True, exist_ok=True)
@@ -679,7 +678,7 @@ def _rebuild_api_from_snapshot(
 
     if _has_rich_index:
         # Preserve the styled index — just remove entries for symbols not in this version
-        _prune_reference_index(index_path, snapshot_symbols, snapshot_classes)
+        _prune_reference_index(index_path, snapshot_symbols)
     else:
         # No existing index or it's a plain placeholder; generate from snapshot
         index_lines = [
@@ -711,7 +710,7 @@ def _rebuild_api_from_snapshot(
     generated.append("reference/index.html")
 
     # --- Update _quarto.yml sidebar to remove missing reference entries ---
-    _prune_quarto_sidebar(dest_dir, "reference", snapshot_symbols, snapshot_classes)
+    _prune_quarto_sidebar(dest_dir, "reference", snapshot_symbols)
 
     return generated
 
@@ -742,20 +741,12 @@ def _format_param(p) -> str:
     return "".join(parts)
 
 
-def _is_valid_ref_name(name: str, valid_symbols: set[str], valid_classes: set[str]) -> bool:
-    """Check if a symbol or method name is valid for this version."""
-    if name == "index" or name in valid_symbols:
-        return True
-    # Method page: `ClassName.method` (check the class prefix)
-    if "." in name:
-        class_name = name.split(".")[0]
-        return class_name in valid_classes
-    return False
+def _is_valid_ref_name(name: str, valid_symbols: set[str]) -> bool:
+    """Whether a reference page stem names a symbol documented in this version"""
+    return name == "index" or name in valid_symbols
 
 
-def _prune_reference_index(
-    index_qmd: Path, valid_symbols: set[str], valid_classes: set[str]
-) -> None:
+def _prune_reference_index(index_qmd: Path, valid_symbols: set[str]) -> None:
     """Remove links/rows for symbols not in the snapshot from reference/index.qmd.
 
     This handles three levels of cleanup:
@@ -778,7 +769,7 @@ def _prune_reference_index(
         qmd_ref = re.search(r"\(([^)]+)\.qmd(?:#[^)]*)?\)", stripped)
         if qmd_ref:
             symbol_name = qmd_ref.group(1)
-            if not _is_valid_ref_name(symbol_name, valid_symbols, valid_classes):
+            if not _is_valid_ref_name(symbol_name, valid_symbols):
                 remove_indices.add(i)
                 # Also remove the following definition-list description line(s)
                 # Pattern: `:   description text` (Pandoc definition list)
@@ -800,7 +791,7 @@ def _prune_reference_index(
         bare_ref = re.match(r"^\s*-\s+(\S+)\.qmd\s*$", stripped)
         if bare_ref:
             symbol_name = bare_ref.group(1)
-            if not _is_valid_ref_name(symbol_name, valid_symbols, valid_classes):
+            if not _is_valid_ref_name(symbol_name, valid_symbols):
                 remove_indices.add(i)
 
     filtered = [line for i, line in enumerate(lines) if i not in remove_indices]
@@ -862,9 +853,7 @@ def _prune_reference_index(
     index_qmd.write_text("\n".join(result), encoding="utf-8")
 
 
-def _prune_quarto_sidebar(
-    dest_dir: Path, section: str, valid_symbols: set[str], valid_classes: set[str]
-) -> None:
+def _prune_quarto_sidebar(dest_dir: Path, section: str, valid_symbols: set[str]) -> None:
     """Remove sidebar entries for missing symbols/commands from _quarto.yml.
 
     Handles both flat string entries (`reference/Name.qmd`) and nested section groups
@@ -914,7 +903,7 @@ def _prune_quarto_sidebar(
                             new_items.append(item)
                         else:
                             stem = Path(item).stem
-                            if _is_valid_ref_name(stem, valid_symbols, valid_classes):
+                            if _is_valid_ref_name(stem, valid_symbols):
                                 new_items.append(item)
                             else:
                                 changed = True
