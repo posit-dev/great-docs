@@ -62,6 +62,7 @@ ALL_PACKAGES: list[str] = [
     "gdtest_index_md",  # 41
     "gdtest_no_readme",  # 42
     "gdtest_index_wins",  # 43
+    "gdtest_index_frontmatter",  # 43b (issue #237 regression)
     # 44–45: Supporting pages
     "gdtest_full_extras",  # 44
     "gdtest_github_contrib",  # 45
@@ -891,6 +892,15 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "index.qmd content ('Index Wins') NOT the README.md. Look for the "
         "text 'This index.qmd should take priority over README.md.' Tests the "
         "full priority chain: index.qmd > index.md > README.md."
+    ),
+    "gdtest_index_frontmatter": (
+        "Regression for issue #237. index.qmd carries its own YAML frontmatter "
+        "(title 'Embedded Frontmatter Title') plus a Quarto code cell with "
+        "`#| code-fold: true`. The landing page must NOT show the raw text "
+        "'title: Embedded Frontmatter Title' (frontmatter is stripped, not "
+        "embedded mid-document), and the code cell must stay folded (cell "
+        "options survive the heading bump). One function (hello) on the "
+        "Reference page."
     ),
     "gdtest_full_extras": (
         "Includes every supporting page type. The sidebar/nav should show "

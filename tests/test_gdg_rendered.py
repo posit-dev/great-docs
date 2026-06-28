@@ -6328,6 +6328,83 @@ def test_DED_index_wins_ref_pages():
     assert (_ref_dir(pkg) / "winner.html").exists(), "winner page missing"
 
 
+# ───────────────────────────────────────────────────────────────────────────────
+# DED: index.qmd frontmatter + cell options (issue #237 regression)
+#
+# The source index.qmd carries its own YAML frontmatter and a Quarto code cell
+# with `#| code-fold` options. The generated homepage must strip the source
+# frontmatter (so it is not embedded mid-document and rendered as raw text) and
+# must bump real headings without mangling `#|` cell-option lines into `##|`.
+# ───────────────────────────────────────────────────────────────────────────────
+_INDEX_FM_PKG = "gdtest_index_frontmatter"
+
+
+def _generated_index_qmd(pkg: str) -> Path:
+    """Return the homepage index.qmd that Great Docs generated for *pkg*."""
+    return _RENDERED_DIR / pkg / "great-docs" / "index.qmd"
+
+
+@pytest.mark.dedicated
+def test_DED_index_frontmatter_stripped():
+    """gdtest_index_frontmatter: source frontmatter is stripped, not embedded."""
+    pkg = _INDEX_FM_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    # Bug 1 root cause: the source file's `---` frontmatter block must not be
+    # embedded into the generated homepage body.
+    generated = _generated_index_qmd(pkg)
+    assert generated.exists(), "generated index.qmd missing"
+    qmd = generated.read_text(encoding="utf-8")
+    assert 'title: "Embedded Frontmatter Title"' not in qmd, (
+        "Source frontmatter was embedded verbatim into the generated index.qmd"
+    )
+
+    # End-to-end: the rendered homepage must not show the raw YAML as text, and
+    # the embedded title must not leak into the page <title>.
+    soup = _load_html(_site_dir(pkg) / "index.html")
+    text = soup.get_text()
+    assert "title: Embedded Frontmatter Title" not in text, (
+        "Raw frontmatter text leaked into the rendered homepage"
+    )
+    page_title = soup.find("title")
+    assert page_title is None or "Embedded Frontmatter Title" not in page_title.get_text(), (
+        "Embedded frontmatter title leaked into the page <title>"
+    )
+
+
+@requires_bs4
+@pytest.mark.dedicated
+def test_DED_index_frontmatter_cell_options_preserved():
+    """gdtest_index_frontmatter: `#|` cell options survive the heading bump."""
+    pkg = _INDEX_FM_PKG
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    # Bug 2 root cause: the heading bump must not touch lines inside fenced code
+    # blocks. A `#` comment inside the cell is what the old `^#\s+` regex
+    # mangled (it turned `# Greet ...` into `## Greet ...`); the hashpipe cell
+    # options must likewise stay intact.
+    qmd = _generated_index_qmd(pkg).read_text(encoding="utf-8")
+    assert "#| code-fold: true" in qmd, "cell option `#| code-fold: true` was lost"
+    assert "# Greet the reader from inside a fenced code cell" in qmd, (
+        "code-cell comment was lost"
+    )
+    assert "## Greet the reader from inside a fenced code cell" not in qmd, (
+        "heading bump mangled a `#` comment inside a fenced code block"
+    )
+
+    # Real headings outside the code fence should still be bumped one level.
+    assert "## Getting Started" in qmd, "expected `# Getting Started` to be bumped to `##`"
+
+    # End-to-end: code-fold renders a <details> disclosure with our summary.
+    soup = _load_html(_site_dir(pkg) / "index.html")
+    summaries = [s.get_text() for s in soup.find_all("summary")]
+    assert any("Show the setup code" in s for s in summaries), (
+        "code cell did not render folded — `#| code-fold` was not honored"
+    )
+
+
 @pytest.mark.dedicated
 def test_DED_no_readme_builds():
     """gdtest_no_readme: package with no README still builds."""

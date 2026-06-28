@@ -10234,6 +10234,46 @@ title: "Security Policy"
 
         return "\n".join(margin_sections) if margin_sections else ""
 
+    @staticmethod
+    def _bump_heading_levels(content: str) -> str:
+        """
+        Bump every Markdown heading up by one level, skipping fenced code blocks.
+
+        Headings (`# ` … `###### `) are promoted one level deeper so that the
+        embedded README body sits below the homepage wrapper. Lines inside
+        fenced code blocks (delimited by ``` or ~~~) are left untouched, which
+        prevents the bump from turning Quarto cell options like
+        `#| code-fold: true` into `##| code-fold: true` (a plain comment Quarto
+        ignores).
+        """
+        import re
+
+        fence_re = re.compile(r"^\s*(`{3,}|~{3,})")
+        heading_re = re.compile(r"^(#{1,6})(\s+)")
+
+        lines = content.split("\n")
+        in_fence = False
+        fence_char = ""
+        for i, line in enumerate(lines):
+            fence_match = fence_re.match(line)
+            if fence_match:
+                marker = fence_match.group(1)
+                if not in_fence:
+                    in_fence = True
+                    fence_char = marker[0]
+                elif marker[0] == fence_char:
+                    in_fence = False
+                    fence_char = ""
+                continue
+
+            if in_fence:
+                continue
+
+            if heading_re.match(line):
+                lines[i] = "#" + line
+
+        return "\n".join(lines)
+
     def _create_index_from_readme(self, force_rebuild: bool = False) -> None:
         """
         Create or update index.qmd from the best available source file.
@@ -10570,6 +10610,13 @@ title: "Authors and Citation"
             if source_file.suffix.lower() == ".rst":
                 readme_content = self._convert_rst_to_markdown(source_file)
 
+            # Strip any leading YAML frontmatter from the source file. The
+            # wrapper template below supplies its own frontmatter, so embedding
+            # the source's frontmatter mid-document would render it as a
+            # horizontal rule plus visible raw YAML text (e.g. index.qmd files,
+            # which universally start with a `---` block).
+            _, readme_content = self._split_frontmatter(readme_content)
+
             # Copy images referenced in the source file to the build directory
             self._copy_readme_images(source_file)
 
@@ -10594,17 +10641,11 @@ title: "Authors and Citation"
                     readme_content = readme_content.replace(first_h1.group(0), "", 1).lstrip("\n")
 
         if source_file is not None:
-            # Adjust heading levels: bump all headings up by one level
-            # This prevents h1 from becoming paragraphs and keeps proper hierarchy
-            # Replace headings from highest to lowest level to avoid double-replacement
-            import re
-
-            readme_content = re.sub(r"^######\s+", r"####### ", readme_content, flags=re.MULTILINE)
-            readme_content = re.sub(r"^#####\s+", r"###### ", readme_content, flags=re.MULTILINE)
-            readme_content = re.sub(r"^####\s+", r"##### ", readme_content, flags=re.MULTILINE)
-            readme_content = re.sub(r"^###\s+", r"#### ", readme_content, flags=re.MULTILINE)
-            readme_content = re.sub(r"^##\s+", r"### ", readme_content, flags=re.MULTILINE)
-            readme_content = re.sub(r"^#\s+", r"## ", readme_content, flags=re.MULTILINE)
+            # Adjust heading levels: bump all headings up by one level. This
+            # prevents h1 from becoming paragraphs and keeps proper hierarchy.
+            # Lines inside fenced code blocks are skipped so Quarto cell options
+            # (`#| code-fold: true`) and shell-style comments aren't mangled.
+            readme_content = self._bump_heading_levels(readme_content)
 
         # Build margin content using the shared helper
         margin_content = self._build_metadata_margin()
