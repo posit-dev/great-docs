@@ -55,9 +55,11 @@ def test_dataclass_parameters():
         assert f"[[{default}]{{.{co}}}]{{.doc-parameter-default}}</code>" in qmd
 
     assert "## Init Parameters {.doc-init-parameters}" in qmd
+
     assert_in_qmd("a", "int", "1", "dv")
 
     assert "## Parameter Attributes {.doc-parameter-attributes}" in qmd
+
     assert_in_qmd("b", "float", "2", "dv")
     assert_in_qmd("c", "float", "3.0", "fl")
 
@@ -73,6 +75,7 @@ def test_dataclass_parameter_docstrings():
     """
 
     qmd = render_code_variable(code, "Base")
+
     assert ":   Parameter a" in qmd
 
 
@@ -86,5 +89,56 @@ def test_contained_docstring_link():
     """
 
     qmd = render_code_variable(code, "Base")
+
     # Methods in summary tables use short name anchors (matching Quarto section IDs)
     assert '<a href="#meth"' in qmd and ">meth()</a>" in qmd
+
+
+def test_dataclass_with_methods_keeps_constructor_signature():
+    """A dataclass that also defines methods must still render its constructor
+    signature.
+
+    Regression: `Class.overloads` is a `dict` keyed by member name, so any
+    class that merely defines a method had a non-empty (truthy) `overloads`
+    and was rendered through the overload path, producing an empty `Name()`
+    usage signature instead of the dataclass constructor.
+    """
+    code = '''
+    from dataclasses import dataclass
+
+    @dataclass
+    class Widget:
+        """A widget."""
+
+        name: str
+        size: int = 1
+
+        def resize(self, size: int) -> None:
+            """Resize the widget."""
+            self.size = size
+    '''
+    qmd = render_code_variable(code, "Widget")
+
+    # The usage signature must include the constructor parameters, not a bare `Widget()`.
+    assert "Widget(name, size=1)" in qmd
+
+
+def test_dataclass_without_methods_keeps_constructor_signature():
+    """Control: a dataclass with only fields renders its constructor signature.
+
+    This already worked before the overloads fix and guards against a regression
+    in the other direction.
+    """
+    code = '''
+    from dataclasses import dataclass
+
+    @dataclass
+    class Widget:
+        """A widget."""
+
+        name: str
+        size: int = 1
+    '''
+    qmd = render_code_variable(code, "Widget")
+
+    assert "Widget(name, size=1)" in qmd
