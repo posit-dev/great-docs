@@ -194,8 +194,19 @@ class __RenderDocCallMixin(RenderDoc):
         """
         name = self.signature_name if self.show_signature_name else ""
 
-        # Check for @overload variants
-        overloads: list[gf.Function] = getattr(self.obj, "overloads", [])
+        # Check for @overload variants.
+        # For functions, `.overloads` is a `list[Function]`. For classes it is a
+        # `dict[str, list[Function]]` keyed by member name, which is non-empty
+        # (and thus truthy) for any class that merely defines methods, even when
+        # none of them are actually overloaded. Flatten it so the check reflects
+        # real overloads and dataclass constructor signatures are not lost.
+        overloads_raw = getattr(self.obj, "overloads", []) or []
+        if isinstance(overloads_raw, dict):
+            overloads: list[gf.Function] = [
+                ov for ovs in overloads_raw.values() for ov in ovs
+            ]
+        else:
+            overloads = list(overloads_raw)
         if overloads:
             return self._render_overload_signatures(name, overloads)
 

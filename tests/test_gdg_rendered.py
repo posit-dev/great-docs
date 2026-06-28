@@ -942,6 +942,40 @@ def test_dataclass_fields_render():
 
 @pytest.mark.dedicated
 @requires_bs4
+def test_dataclass_with_methods_signature_has_fields():
+    """A dataclass that also defines methods must still show its constructor
+    fields in the usage signature.
+
+    `Class.overloads` is a dict keyed by member name, so any class that merely
+    defines a method had a non-empty (truthy) `overloads` and was rendered through
+    the overload path, producing an empty `Name()` signature instead of the
+    dataclass constructor.
+    """
+    pkg = "gdtest_dataclasses"
+    if not _has_rendered_site(pkg):
+        pytest.skip("gdtest_dataclasses not rendered")
+
+    ref = _ref_dir(pkg)
+    page = ref / "Mutable.html"
+    if not page.exists():
+        pytest.skip("Mutable.html not found")
+
+    soup = _load_html(page)
+
+    # Parameters of the rendered constructor signature (`span.va` tokens in the
+    # `.doc-signature` code block).
+    sig_block = soup.select_one("div.doc-signature")
+    assert sig_block is not None, "Mutable.html: no .doc-signature block"
+    sig_params = {s.get_text().strip() for s in sig_block.select("span.va")}
+
+    assert {"label", "count"} <= sig_params, (
+        f"Mutable.html: constructor fields missing from signature (got {sig_params}); "
+        "a dataclass that defines methods rendered an empty signature"
+    )
+
+
+@pytest.mark.dedicated
+@requires_bs4
 def test_async_functions_have_badge():
     """Async functions have an 'async' or 'function' badge."""
     pkg = "gdtest_async_funcs"
