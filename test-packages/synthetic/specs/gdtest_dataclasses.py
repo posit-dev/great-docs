@@ -2,12 +2,15 @@
 gdtest_dataclasses — @dataclass objects.
 
 Dimensions: A1, B1, C5, D1, E6, F6, G1, H7
-Focus: 3 dataclasses: one with default_factory, one frozen, one that also
-       defines methods. Tests dataclass field documentation, __init__
-       generation, and that a dataclass which defines methods still renders its
-       constructor signature (regression: `Class.overloads` is a dict keyed by
-       member name, so any class with methods was rendered through the overload
-       path and lost its constructor parameters).
+Focus: 3 dataclasses: one with default_factory, one frozen (documented with an
+       `Attributes` section), one that also defines methods. Tests dataclass
+       field documentation, __init__ generation, that fields documented under
+       either a `Parameters` or an `Attributes` section render once (no
+       duplicated "Parameter Attributes"), and that a dataclass which defines
+       methods still renders its constructor signature (regression:
+       `Class.overloads` is a dict keyed by member name, so any class with
+       methods was rendered through the overload path and lost its constructor
+       parameters).
 """
 
 SPEC = {
@@ -62,7 +65,10 @@ SPEC = {
                 """
                 An immutable data record.
 
-                Parameters
+                Documented with an ``Attributes`` section (rather than
+                ``Parameters``) to exercise that rendering path.
+
+                Attributes
                 ----------
                 id
                     Unique record identifier.
