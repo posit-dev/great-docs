@@ -142,3 +142,66 @@ def test_dataclass_without_methods_keeps_constructor_signature():
     qmd = render_code_variable(code, "Widget")
 
     assert "Widget(name, size=1)" in qmd
+
+
+def test_dataclass_attributes_section_not_duplicated():
+    """A dataclass documented with an `Attributes` section renders that section
+    once, without a synthesized "Parameter Attributes" duplicate.
+
+    The author may document a dataclass's fields with either a `Parameters` or
+    an `Attributes` section; great-docs must not also auto-generate a
+    "Parameter Attributes" section listing the same fields.
+    """
+    code = '''
+    from dataclasses import dataclass
+
+    @dataclass
+    class Widget:
+        """A widget.
+
+        Attributes
+        ----------
+        name
+            The widget name.
+        size
+            The widget size.
+        """
+
+        name: str
+        size: int = 1
+    '''
+    qmd = render_code_variable(code, "Widget")
+
+    assert "## Attributes {.doc-attributes}" in qmd
+    assert "## Parameter Attributes {.doc-parameter-attributes}" not in qmd
+    # The author's descriptions must be preserved.
+    assert "The widget name." in qmd
+
+
+def test_dataclass_parameters_section_not_duplicated():
+    """A dataclass documented with a `Parameters` section renders that section
+    once, without a synthesized "Parameter Attributes" duplicate.
+    """
+    code = '''
+    from dataclasses import dataclass
+
+    @dataclass
+    class Widget:
+        """A widget.
+
+        Parameters
+        ----------
+        name
+            The widget name.
+        size
+            The widget size.
+        """
+
+        name: str
+        size: int = 1
+    '''
+    qmd = render_code_variable(code, "Widget")
+
+    assert "## Parameters {.doc-parameters}" in qmd
+    assert "## Parameter Attributes {.doc-parameter-attributes}" not in qmd
+    assert "The widget name." in qmd
