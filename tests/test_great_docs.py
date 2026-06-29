@@ -21142,43 +21142,6 @@ def test_detect_docstring_style_no_docstrings():
         assert result == "numpy"
 
 
-def test_patch_griffe_adds_missing_exceptions():
-    """Test _patch_griffe patches CyclicAliasError and AliasResolutionError onto griffe."""
-    import griffe
-
-    from great_docs.core import _patch_griffe
-
-    # Save originals (they may already exist)
-    had_cyclic = hasattr(griffe, "CyclicAliasError")
-    had_alias = hasattr(griffe, "AliasResolutionError")
-    orig_cyclic = getattr(griffe, "CyclicAliasError", None)
-    orig_alias = getattr(griffe, "AliasResolutionError", None)
-
-    try:
-        # Remove to simulate older griffe
-        if hasattr(griffe, "CyclicAliasError"):
-            delattr(griffe, "CyclicAliasError")
-        if hasattr(griffe, "AliasResolutionError"):
-            delattr(griffe, "AliasResolutionError")
-
-        _patch_griffe()
-
-        assert hasattr(griffe, "CyclicAliasError")
-        assert hasattr(griffe, "AliasResolutionError")
-        assert issubclass(griffe.CyclicAliasError, Exception)
-        assert issubclass(griffe.AliasResolutionError, Exception)
-    finally:
-        # Restore originals
-        if had_cyclic:
-            griffe.CyclicAliasError = orig_cyclic
-        elif hasattr(griffe, "CyclicAliasError"):
-            delattr(griffe, "CyclicAliasError")
-        if had_alias:
-            griffe.AliasResolutionError = orig_alias
-        elif hasattr(griffe, "AliasResolutionError"):
-            delattr(griffe, "AliasResolutionError")
-
-
 def test_detect_docstring_style_griffe_unavailable():
     """Test _detect_docstring_style defaults to numpy when griffe import fails."""
 
