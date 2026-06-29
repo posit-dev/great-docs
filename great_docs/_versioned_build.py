@@ -742,8 +742,27 @@ def _format_param(p) -> str:
 
 
 def _is_valid_ref_name(name: str, valid_symbols: set[str]) -> bool:
-    """Whether a reference page stem names a symbol documented in this version"""
-    return name == "index" or name in valid_symbols
+    """Whether a reference page stem names a symbol documented in this version.
+
+    A *deep* snapshot lists every valid stem explicitly (including method
+    stems like `Class.method` and submodule-qualified names like `sub.Widget`)
+    so exact set membership is sufficient and authoritative.
+
+    A *shallow* snapshot holds only the package's top-level exports; it is the
+    back-compat fallback used when no documented set can be resolved (e.g.
+    `documented_symbol_names()` returned nothing). Such a snapshot carries no
+    dotted keys, so a `Class.method` page would be wrongly pruned under exact
+    membership. For that case only, fall back to validating a dotted stem by
+    its top-level prefix, matching the pre-deep-snapshot behavior and keeping
+    the failure mode non-destructive.
+    """
+    if name == "index" or name in valid_symbols:
+        return True
+    # Shallow-snapshot safety net: a snapshot with no dotted keys cannot speak
+    # to method/submodule pages, so keep `Prefix.rest` when `Prefix` is known.
+    if "." in name and not any("." in symbol for symbol in valid_symbols):
+        return name.split(".")[0] in valid_symbols
+    return False
 
 
 def _prune_reference_index(index_qmd: Path, valid_symbols: set[str]) -> None:
@@ -1036,9 +1055,7 @@ def _rebuild_api_from_git_ref(
 
         documented = GreatDocs(project_path=str(project_root)).documented_symbol_names(pkg_name)
 
-        snap = snapshot_at_tag(
-            project_root, git_ref, pkg_name, documented_names=documented or None
-        )
+        snap = snapshot_at_tag(project_root, git_ref, pkg_name, documented_names=documented or None)
         if snap is None:
             return []
 
