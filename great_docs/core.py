@@ -28,28 +28,6 @@ _QUARTO_RENDER_GLOBS = [
 ]
 
 
-def _patch_griffe():
-    """Ensure griffe has CyclicAliasError and AliasResolutionError at top level.
-
-    Older griffe versions don't re-export these from the top-level package. This patches them in so
-    `griffe.CyclicAliasError` etc. work everywhere.
-    """
-    import griffe
-
-    if hasattr(griffe, "CyclicAliasError") and hasattr(griffe, "AliasResolutionError"):
-        return
-
-    try:
-        from griffe.exceptions import AliasResolutionError, CyclicAliasError
-    except ImportError:
-        from griffe._internal.exceptions import AliasResolutionError, CyclicAliasError
-
-    if not hasattr(griffe, "CyclicAliasError"):
-        griffe.CyclicAliasError = CyclicAliasError
-    if not hasattr(griffe, "AliasResolutionError"):
-        griffe.AliasResolutionError = AliasResolutionError
-
-
 class QuartoNotFoundError(RuntimeError):
     """Raised when the Quarto CLI is not available on the system."""
 
@@ -184,8 +162,6 @@ class GreatDocs:
             The loaded griffe package object.
         """
         import griffe
-
-        _patch_griffe()
 
         if self._griffe_pkg_cache is None:
             self._griffe_pkg_cache = {}
@@ -6384,8 +6360,6 @@ class GreatDocs:
         try:
             import griffe
 
-            _patch_griffe()
-
             # Normalize package name (replace dashes with underscores)
             normalized_name = package_name.replace("-", "_")
 
@@ -6626,8 +6600,6 @@ class GreatDocs:
         try:
             import griffe
 
-            _patch_griffe()
-
             # Normalize package name
             normalized_name = package_name.replace("-", "_")
 
@@ -6768,8 +6740,6 @@ class GreatDocs:
 
         try:
             import griffe
-
-            _patch_griffe()
 
             from great_docs._renderer.introspection import get_object as qd_get_object
         except ImportError:  # pragma: no cover
@@ -7043,7 +7013,8 @@ class GreatDocs:
         except Exception:  # pragma: no cover
             labels = set()  # pragma: no cover
 
-        # griffe >= 0.40 has a dedicated "type alias" kind
+        # griffe gives PEP 695 type aliases a dedicated "type alias" kind.
+        # Reading `.kind` can raise for an unresolved alias, hence the guard.
         try:
             if obj.kind.value == "type alias":
                 return "type_alias"
@@ -7246,8 +7217,6 @@ class GreatDocs:
         """
         try:
             import griffe
-
-            _patch_griffe()
 
             # Load the package using griffe
             normalized_name = package_name.replace("-", "_")
@@ -8056,8 +8025,6 @@ class GreatDocs:
         try:
             import griffe
 
-            _patch_griffe()
-
             normalized_name = package_name.replace("-", "_")
 
             try:
@@ -8237,8 +8204,6 @@ class GreatDocs:
             A categories dict compatible with `_write_object_types_json`.
         """
         import griffe
-
-        _patch_griffe()
 
         normalized_name = package_name.replace("-", "_")
 
