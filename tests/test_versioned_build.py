@@ -1623,10 +1623,25 @@ class TestIsValidRefNameLegacy:
 
         assert _is_valid_ref_name("MyClass.method", {"MyClass", "MyClass.method"}) is True
 
-    def test_method_stem_invalid_when_not_in_snapshot(self):
+    def test_method_stem_invalid_when_absent_from_deep_snapshot(self):
+        # A deep snapshot carries dotted keys, so a method stem that is not
+        # itself present is authoritatively invalid (the method was dropped).
         from great_docs._versioned_build import _is_valid_ref_name
 
-        assert _is_valid_ref_name("MyClass.method", {"MyClass"}) is False
+        assert _is_valid_ref_name("MyClass.gone", {"MyClass", "MyClass.kept"}) is False
+
+    def test_method_stem_kept_under_shallow_snapshot(self):
+        # A shallow snapshot has no dotted keys; pruning a `Class.method` page
+        # under exact membership would reintroduce the #190 regression, so the
+        # class-prefix safety net keeps it.
+        from great_docs._versioned_build import _is_valid_ref_name
+
+        assert _is_valid_ref_name("MyClass.method", {"MyClass", "func"}) is True
+
+    def test_method_stem_dropped_when_class_absent_under_shallow_snapshot(self):
+        from great_docs._versioned_build import _is_valid_ref_name
+
+        assert _is_valid_ref_name("Gone.method", {"MyClass"}) is False
 
     def test_unknown_symbol(self):
         from great_docs._versioned_build import _is_valid_ref_name
@@ -2162,6 +2177,7 @@ class TestPreprocessVersionUpcoming:
         # Build for 0.4 (the prerelease)
         dest = tmp_path / "build"
         pages = preprocess_version(source, dest, versions[0], versions)
+
         assert "new-feature.html" in pages
 
     def test_upcoming_page_via_frontmatter_key(self, tmp_path: Path):
@@ -2176,9 +2192,11 @@ class TestPreprocessVersionUpcoming:
         )
 
         versions = self._setup_versions()
-        # Build for 0.3 — future.qmd should be included but flagged as upcoming
+
+        # Build for 0.3: future.qmd should be included but flagged as upcoming
         dest = tmp_path / "build"
         pages = preprocess_version(source, dest, versions[1], versions)
+
         assert "future.html" in pages
 
     def test_badge_expiry_per_page_override(self, tmp_path: Path):
@@ -2197,6 +2215,7 @@ class TestPreprocessVersionUpcoming:
         dest = tmp_path / "build"
         preprocess_version(source, dest, versions[1], versions)
         content = (dest / "page.qmd").read_text()
+
         # With expiry="1 releases", badge for 0.2 should be expired when building 0.3
         # (0.3 is 1 release after 0.2)
         assert "gd-badge" not in content  # badge was suppressed
@@ -2230,7 +2249,6 @@ class TestPreprocessVersionUpcoming:
 
 class TestRebuildApiFromSnapshotEdge:
     def test_no_ref_dir_creates_it(self, tmp_path: Path):
-        from great_docs._versioned_build import _rebuild_api_from_snapshot
 
         # Create a minimal snapshot
         snap_path = tmp_path / "snap.json"
@@ -2254,12 +2272,12 @@ class TestRebuildApiFromSnapshotEdge:
 
         entry = _make_entry("0.2")
         pages = _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+
         assert "reference/MyFunc.html" in pages
         assert (dest_dir / "reference" / "MyFunc.qmd").exists()
         assert (dest_dir / "reference" / "index.qmd").exists()
 
     def test_preserves_rich_pages(self, tmp_path: Path):
-        from great_docs._versioned_build import _rebuild_api_from_snapshot
 
         snap_path = tmp_path / "snap.json"
         snap = ApiSnapshot(
@@ -2282,7 +2300,6 @@ class TestRebuildApiFromSnapshotEdge:
         assert "Rich content" in (ref_dir / "GT.qmd").read_text()
 
     def test_generates_index_with_classes_and_functions(self, tmp_path: Path):
-        from great_docs._versioned_build import _rebuild_api_from_snapshot
 
         snap_path = tmp_path / "snap.json"
         snap = ApiSnapshot(
@@ -2308,7 +2325,6 @@ class TestRebuildApiFromSnapshotEdge:
         assert "my_func" in index_content
 
     def test_prunes_existing_pages_not_in_snapshot(self, tmp_path: Path):
-        from great_docs._versioned_build import _rebuild_api_from_snapshot
 
         snap_path = tmp_path / "snap.json"
         snap = ApiSnapshot(
@@ -2331,6 +2347,71 @@ class TestRebuildApiFromSnapshotEdge:
         assert (ref_dir / "kept.qmd").exists()
         assert not (ref_dir / "removed.qmd").exists()
         assert (ref_dir / "index.qmd").exists()
+
+    def test_shallow_snapshot_keeps_method_pages(self, tmp_path: Path):
+        # Regression guard for #190: when the documented set can't be resolved,
+        # the snapshot is shallow (top-level keys only). Method pages must NOT
+        # be destructively pruned just because `Class.method` is not a key.
+
+        snap_path = tmp_path / "snap.json"
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="pkg",
+            symbols={"Big": SymbolInfo(name="Big", kind="class")},
+        )
+        snap.save(snap_path)
+
+        dest_dir = tmp_path / "build"
+        ref_dir = dest_dir / "reference"
+        ref_dir.mkdir(parents=True)
+        (ref_dir / "Big.qmd").write_text("---\ntitle: Big\n---\n")
+        (ref_dir / "Big.m0.qmd").write_text("---\ntitle: Big.m0\n---\n")
+        (ref_dir / "Big.m1.qmd").write_text("---\ntitle: Big.m1\n---\n")
+        (ref_dir / "Orphan.method.qmd").write_text("---\ntitle: Orphan.method\n---\n")
+        (ref_dir / "index.qmd").write_text("---\ntitle: API\n---\n")
+
+        entry = _make_entry("0.2")
+        _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+
+        # Methods of a documented class survive under the shallow fallback.
+        assert (ref_dir / "Big.qmd").exists()
+        assert (ref_dir / "Big.m0.qmd").exists()
+        assert (ref_dir / "Big.m1.qmd").exists()
+
+        # A method whose class is absent is still pruned.
+        assert not (ref_dir / "Orphan.method.qmd").exists()
+
+    def test_deep_snapshot_prunes_dropped_method_pages(self, tmp_path: Path):
+        # With a deep snapshot (dotted keys present), exact membership governs:
+        # a method page absent from the snapshot is correctly pruned.
+        from great_docs._versioned_build import _rebuild_api_from_snapshot
+
+        snap_path = tmp_path / "snap.json"
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="pkg",
+            symbols={
+                "Big": SymbolInfo(name="Big", kind="class"),
+                "Big.m0": SymbolInfo(name="Big.m0", kind="function"),
+            },
+        )
+        snap.save(snap_path)
+
+        dest_dir = tmp_path / "build"
+        ref_dir = dest_dir / "reference"
+        ref_dir.mkdir(parents=True)
+        (ref_dir / "Big.qmd").write_text("---\ntitle: Big\n---\n")
+        (ref_dir / "Big.m0.qmd").write_text("---\ntitle: Big.m0\n---\n")
+        (ref_dir / "Big.m1.qmd").write_text("---\ntitle: Big.m1\n---\n")
+        (ref_dir / "index.qmd").write_text("---\ntitle: API\n---\n")
+
+        entry = _make_entry("0.2")
+        _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+
+        assert (ref_dir / "Big.qmd").exists()
+        assert (ref_dir / "Big.m0.qmd").exists()
+        # m1 is no longer documented at this version → pruned.
+        assert not (ref_dir / "Big.m1.qmd").exists()
 
     def test_rich_index_pruned_not_regenerated(self, tmp_path: Path):
         from great_docs._versioned_build import _rebuild_api_from_snapshot
