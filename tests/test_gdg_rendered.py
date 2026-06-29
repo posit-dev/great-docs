@@ -976,6 +976,37 @@ def test_dataclass_with_methods_signature_has_fields():
 
 @pytest.mark.dedicated
 @requires_bs4
+def test_dataclass_attributes_section_not_duplicated():
+    """A dataclass documented with an `Attributes` section renders it once,
+    without a synthesized "Parameter Attributes" duplicate.
+
+    Fields may be documented with either a `Parameters` or an `Attributes`
+    section; great-docs must not also auto-generate a "Parameter Attributes"
+    section listing the same fields. (`Record` in this package uses an
+    `Attributes` section.)
+    """
+    pkg = "gdtest_dataclasses"
+    if not _has_rendered_site(pkg):
+        pytest.skip("gdtest_dataclasses not rendered")
+
+    ref = _ref_dir(pkg)
+    page = ref / "Record.html"
+    if not page.exists():
+        pytest.skip("Record.html not found")
+
+    soup = _load_html(page)
+
+    assert soup.select_one("section.doc-attributes") is not None, (
+        "Record.html: expected an Attributes section"
+    )
+    assert soup.select_one("section.doc-parameter-attributes") is None, (
+        "Record.html: 'Attributes'-documented dataclass should not also render a "
+        "synthesized 'Parameter Attributes' section"
+    )
+
+
+@pytest.mark.dedicated
+@requires_bs4
 def test_async_functions_have_badge():
     """Async functions have an 'async' or 'function' badge."""
     pkg = "gdtest_async_funcs"

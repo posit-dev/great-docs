@@ -71,7 +71,16 @@ class __RenderDocClass(RenderDocMembersMixin, RenderDocCallMixin, RenderDoc):
     def docstring_sections_content(self):
         items = super().docstring_sections_content
         titles = set(item[0] for item in items)
-        if not self.is_dataclass or "Parameters" in titles or not len(self.parameters):
+        # When the author documents the fields themselves (via either a
+        # `Parameters` or an `Attributes` docstring section), don't also
+        # synthesize a "Parameter Attributes" section — that would duplicate the
+        # same fields. Which of the two sections to use is left to the docs writer.
+        if (
+            not self.is_dataclass
+            or "Parameters" in titles
+            or "Attributes" in titles
+            or not len(self.parameters)
+        ):
             return items
 
         # Create and insert Parameter Attributes
