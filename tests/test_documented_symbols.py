@@ -22,9 +22,7 @@ def _write_pkg(root: Path) -> None:
         )
     )
     (pkg / "core.py").write_text("class TopClass:\n    def go(self): ...\n")
-    (sub / "__init__.py").write_text(
-        "from mypkg.sub.things import Widget\n__all__ = ['Widget']\n"
-    )
+    (sub / "__init__.py").write_text("from mypkg.sub.things import Widget\n__all__ = ['Widget']\n")
     (sub / "things.py").write_text("class Widget:\n    def fit(self): ...\n")
     (root / "great-docs.yml").write_text(
         textwrap.dedent(
@@ -46,6 +44,29 @@ def test_flattens_config_into_dotted_stems(tmp_path: Path):
     gd = GreatDocs(project_path=str(tmp_path))
     names = gd.documented_symbol_names("mypkg")
     assert names == ["TopClass", "sub.Widget", "sub.Widget.fit"]
+
+
+def test_does_not_write_build_artifacts(tmp_path: Path):
+    """`documented_symbol_names` is a read-only query: it must leave no files behind.
+
+    The resolution pipeline (via `_create_api_sections_from_config`) normally
+    writes `_object_types.json` (and a `_constant_values.json` sidecar). Calling
+    it as a programmatic query (e.g., from `api-snapshot` / `api-diff`) must not
+    drop those artifacts into the project tree.
+    """
+    _write_pkg(tmp_path)
+    gd = GreatDocs(project_path=str(tmp_path))
+
+    names = gd.documented_symbol_names("mypkg")
+    assert names  # sanity: the config path (which performs the write) ran
+
+    artifacts = list(tmp_path.rglob("_object_types.json")) + list(
+        tmp_path.rglob("_constant_values.json")
+    )
+    assert artifacts == [], f"query left build artifacts behind: {artifacts}"
+
+    # The flag is reset so a subsequent real build can still write artifacts.
+    assert gd._suppress_artifact_writes is False
 
 
 def test_returns_empty_without_reference_config(tmp_path: Path):
