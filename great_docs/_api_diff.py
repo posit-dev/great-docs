@@ -532,13 +532,25 @@ def _symbol_info_for_dotted(pkg, dotted: str) -> SymbolInfo | None:
     None means the symbol does not exist in this source — a name component is
     missing, or an alias cannot be resolved to a real object.
     """
-    import griffe
+    # Resolve the alias-error classes defensively: older griffe exposes them
+    # only under `griffe.exceptions`, and this module never runs the top-level
+    # `_patch_griffe()` shim that `core` relies on.
+    try:
+        from griffe import AliasResolutionError, CyclicAliasError
+    except ImportError:  # pragma: no cover - depends on installed griffe version
+        try:
+            from griffe.exceptions import AliasResolutionError, CyclicAliasError
+        except ImportError:
+            from griffe._internal.exceptions import (
+                AliasResolutionError,
+                CyclicAliasError,
+            )
 
     obj = pkg
     for part in dotted.split("."):
         try:
             members = obj.members
-        except (griffe.AliasResolutionError, griffe.CyclicAliasError):
+        except (AliasResolutionError, CyclicAliasError):
             return None
         if part not in members:
             return None
@@ -546,7 +558,7 @@ def _symbol_info_for_dotted(pkg, dotted: str) -> SymbolInfo | None:
 
     try:
         kind = obj.kind.value
-    except (griffe.AliasResolutionError, griffe.CyclicAliasError):
+    except (AliasResolutionError, CyclicAliasError):
         return None
 
     return SymbolInfo(
