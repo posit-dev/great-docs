@@ -151,6 +151,10 @@ class GreatDocs:
         # Whether API reference was successfully configured (set during build)
         self._has_api_reference = True
 
+        # When True, suppress writes of build artifacts (e.g. `_object_types.json`)
+        # so read-only queries like `documented_symbol_names()` leave no files behind.
+        self._suppress_artifact_writes = False
+
         # Whether MCP pages were actually generated (None = not yet determined)
         self._mcp_pages_generated: bool | None = None
 
@@ -7141,6 +7145,11 @@ class GreatDocs:
         categories
             Dictionary returned by `_categorize_api_objects`.
         """
+        # Read-only callers (e.g. `documented_symbol_names`) must not drop
+        # build artifacts into the project root.
+        if self._suppress_artifact_writes:
+            return
+
         import json
 
         # Map each category key to the type label used by post-render
@@ -8640,8 +8649,17 @@ class GreatDocs:
 
         # Suppress diagnostic prints from the resolution/filtering pipeline — this is a
         # programmatic query method and its callers own their own output streams.
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            sections = self._create_api_sections_with_config(package_name)
+        # `_suppress_artifact_writes` additionally prevents the pipeline from writing
+        # `_object_types.json` (and its sidecar) into the project root.
+        self._suppress_artifact_writes = True
+        try:
+            with (
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(io.StringIO()),
+            ):
+                sections = self._create_api_sections_with_config(package_name)
+        finally:
+            self._suppress_artifact_writes = False
         if not sections:
             return []
 
