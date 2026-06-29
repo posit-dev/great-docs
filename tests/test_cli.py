@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -1503,3 +1504,56 @@ def test_api_snapshot_force_overwrite(mock_detect, mock_snap):
         result = runner.invoke(cli, ["api-snapshot", "--force", "--project-path", "."])
         assert result.exit_code == 0
         assert "3 symbols" in result.output
+
+
+def _git(root, *a):
+    """Run `git *a` in `root`, raising CalledProcessError on a non-zero exit"""
+    subprocess.run(["git", *a], cwd=root, check=True, capture_output=True)
+
+
+def _two_tag_repo(root: Path) -> None:
+    """Git repo whose documented submodule API grows between tags v0.1.0 and v0.2.0"""
+    _git(root, "init")
+    _git(root, "config", "user.email", "t@t.co")
+    _git(root, "config", "user.name", "t")
+    (root / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "0.2.0"\n')
+    pkg = root / "mypkg"
+    (pkg / "sub").mkdir(parents=True)
+    (pkg / "__init__.py").write_text("from mypkg import sub\n__all__ = ['sub']\n")
+    (pkg / "sub" / "__init__.py").write_text(
+        "from mypkg.sub.things import Widget\n__all__ = ['Widget']\n"
+    )
+    (pkg / "sub" / "things.py").write_text("class Widget:\n    def fit(self): ...\n")
+    (root / "great-docs.yml").write_text(
+        "reference:\n  - title: API\n    contents:\n"
+        "      - name: sub.Widget\n        members: [fit]\n"
+    )
+    _git(root, "add", "-A")
+    _git(root, "commit", "-m", "v010")
+    _git(root, "tag", "v0.1.0")
+    (pkg / "sub" / "things.py").write_text(
+        "class Widget:\n    def fit(self): ...\n    def transform(self): ...\n"
+    )
+    (root / "great-docs.yml").write_text(
+        "reference:\n  - title: API\n    contents:\n"
+        "      - name: sub.Widget\n        members: [fit, transform]\n"
+    )
+    _git(root, "add", "-A")
+    _git(root, "commit", "-m", "v020")
+    _git(root, "tag", "v0.2.0")
+
+
+def test_api_snapshot_all_tags_differ(tmp_path: Path):
+    """api-snapshot --all-tags produces snapshots that differ when the reference config grows."""
+    _two_tag_repo(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["api-snapshot", "--all-tags", "--project-path", str(tmp_path)]
+    )
+    assert result.exit_code == 0, result.output
+    snaps = tmp_path / ".great-docs" / "snapshots"
+    s1 = json.loads((snaps / "v0.1.0.json").read_text())["symbols"]
+    s2 = json.loads((snaps / "v0.2.0.json").read_text())["symbols"]
+    assert set(s1) == {"sub.Widget", "sub.Widget.fit"}
+    assert "sub.Widget.transform" in s2
+    assert set(s1) != set(s2)

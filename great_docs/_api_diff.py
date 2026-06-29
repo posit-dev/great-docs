@@ -526,11 +526,59 @@ def _extract_decorators(obj) -> list[str]:
     return decorators
 
 
+def _symbol_info_for_dotted(pkg, dotted: str) -> SymbolInfo | None:
+    """SymbolInfo for the symbol named `dotted` in `pkg`, or None if absent
+
+    None means the symbol does not exist in this source — a name component is
+    missing, or an alias cannot be resolved to a real object.
+    """
+    # Resolve the alias-error classes defensively: older griffe exposes them
+    # only under `griffe.exceptions`, and this module never runs the top-level
+    # `_patch_griffe()` shim that `core` relies on.
+    try:
+        from griffe import AliasResolutionError, CyclicAliasError
+    except ImportError:  # pragma: no cover - depends on installed griffe version
+        try:
+            from griffe.exceptions import AliasResolutionError, CyclicAliasError
+        except ImportError:
+            from griffe._internal.exceptions import (
+                AliasResolutionError,
+                CyclicAliasError,
+            )
+
+    obj = pkg
+    for part in dotted.split("."):
+        try:
+            members = obj.members
+        except (AliasResolutionError, CyclicAliasError):
+            return None
+        if part not in members:
+            return None
+        obj = members[part]
+
+    try:
+        kind = obj.kind.value
+    except (AliasResolutionError, CyclicAliasError):
+        return None
+
+    return SymbolInfo(
+        name=dotted,
+        kind=kind,
+        parameters=_extract_parameters(obj) if kind in ("function", "class") else [],
+        bases=_extract_bases(obj) if kind == "class" else [],
+        decorators=_extract_decorators(obj),
+        is_async=getattr(obj, "is_async", False),
+        return_annotation=_annotation_str(
+            getattr(obj, "annotation", None) or getattr(obj, "returns", None)
+        ),
+    )
+
+
 def snapshot_from_griffe(
-    package_name: str, version: str, search_paths: list[str] | None = None
+    package_name: str, version: str, documented_names: list[str] | None = None, search_paths: list[str] | None = None
 ) -> ApiSnapshot:
     """
-    Build an API snapshot by loading a package with griffe.
+    Build an API snapshot of a package's public API.
 
     Parameters
     ----------
@@ -538,6 +586,9 @@ def snapshot_from_griffe(
         The Python package name (e.g., `"great_tables"`).
     version
         Version label for this snapshot.
+    documented_names
+        Dotted names to capture, including submodule-qualified and method symbols. When `None`,
+        the snapshot holds only the package's top-level public exports.
     search_paths
         Additional paths to search for the package source. When loading a historical version
         extracted to a temp directory, pass its path here.
@@ -545,6 +596,8 @@ def snapshot_from_griffe(
     Returns
     -------
     ApiSnapshot
+        Snapshot keyed by symbol name — dotted names when `documented_names` is given,
+        bare top-level names otherwise.
     """
     import griffe
 
@@ -555,6 +608,14 @@ def snapshot_from_griffe(
         loader_kwargs["search_paths"] = search_paths
 
     pkg = griffe.load(normalized, **loader_kwargs)
+
+    if documented_names:
+        symbols: dict[str, SymbolInfo] = {}
+        for dotted in documented_names:
+            info = _symbol_info_for_dotted(pkg, dotted)
+            if info is not None:
+                symbols[dotted] = info
+        return ApiSnapshot(version=version, package_name=normalized, symbols=symbols)
 
     # Determine public exports
     exports: list[str] = []
@@ -858,6 +919,7 @@ def snapshot_at_tag(
     project_root: Path,
     tag: str,
     package_name: str,
+    documented_names: list[str] | None = None,
 ) -> ApiSnapshot | None:
     """
     Build an API snapshot of a package at a specific git tag.
@@ -870,18 +932,26 @@ def snapshot_at_tag(
         Git tag name (e.g., `"v1.0.0"`).
     package_name
         Python package name.
+    documented_names
+        Dotted names to capture, including submodule-qualified and method symbols. When `None`,
+        the snapshot holds only the package's top-level public exports.
 
     Returns
     -------
     ApiSnapshot | None
-        The snapshot, or None if extraction failed.
+        The snapshot, or None if the tag's source could not be extracted.
     """
     tmp_dir = _extract_package_at_tag(project_root, tag, package_name)
     if tmp_dir is None:
         return None
 
     try:
-        snap = snapshot_from_griffe(package_name, version=tag, search_paths=[str(tmp_dir)])
+        snap = snapshot_from_griffe(
+            package_name,
+            version=tag,
+            documented_names=documented_names,
+            search_paths=[str(tmp_dir)],
+        )
 
         # Attempt CLI introspection from the version-specific source
         cli_module = _read_cli_module_at_tag(project_root, tag, package_name)

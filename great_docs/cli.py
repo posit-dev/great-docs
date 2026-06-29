@@ -2657,11 +2657,23 @@ def api_diff_cmd(
 
         # --- Graph mode ---
         if graph:
+            from great_docs.core import GreatDocs
+
+            documented = (
+                GreatDocs(project_path=str(project_root)).documented_symbol_names(
+                    result.package_name
+                )
+                or None
+            )
             # Build graph for the new version
             if new_version.upper() == "HEAD":
-                snap = snapshot_from_griffe(result.package_name, version="HEAD")
+                snap = snapshot_from_griffe(
+                    result.package_name, version="HEAD", documented_names=documented
+                )
             else:
-                snap = snapshot_at_tag(project_root, new_version, result.package_name)
+                snap = snapshot_at_tag(
+                    project_root, new_version, result.package_name, documented_names=documented
+                )
             if snap is None:
                 click.echo("Could not build snapshot for graph.", err=True)
                 sys.exit(1)
@@ -2916,6 +2928,10 @@ def api_snapshot_cmd(
         )
         sys.exit(1)
 
+    from great_docs.core import GreatDocs
+
+    documented = GreatDocs(project_path=str(project_root)).documented_symbol_names(pkg_name) or None
+
     # Default snapshot directory
     snap_dir = project_root / ".great-docs" / "snapshots"
 
@@ -2948,9 +2964,9 @@ def api_snapshot_cmd(
 
         try:
             if tag == "HEAD":
-                snap = snapshot_from_griffe(pkg_name, version="dev")
+                snap = snapshot_from_griffe(pkg_name, version="dev", documented_names=documented)
             else:
-                snap = snapshot_at_tag(project_root, tag, pkg_name)
+                snap = snapshot_at_tag(project_root, tag, pkg_name, documented_names=documented)
 
             if snap is None:
                 click.echo(f"  ✗  {tag}: could not build snapshot", err=True)

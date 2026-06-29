@@ -9,6 +9,7 @@ from great_docs._api_diff import ApiSnapshot, ParameterInfo, SymbolInfo
 from great_docs._versioned_build import (
     _compute_excluded_section_dirs,
     _in_excluded_section,
+    _is_valid_ref_name,
     _merge_tree,
     _prune_cli_pages,
     _prune_reference_index,
@@ -28,7 +29,6 @@ from great_docs._versioned_build import (
     write_version_map,
 )
 from great_docs._versioning import VersionEntry, parse_versions_config
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -846,6 +846,7 @@ class TestInjectUpcomingStatus:
 class TestUpdatePageStatusJson:
     def test_adds_upcoming_pages(self, tmp_path):
         import json
+
         from great_docs._versioned_build import _update_page_status_json
 
         status_path = tmp_path / "_page_status.json"
@@ -865,6 +866,7 @@ class TestUpdatePageStatusJson:
 
     def test_preserves_existing_status(self, tmp_path):
         import json
+
         from great_docs._versioned_build import _update_page_status_json
 
         status_path = tmp_path / "_page_status.json"
@@ -884,6 +886,7 @@ class TestUpdatePageStatusJson:
 
     def test_no_version_uses_true(self, tmp_path):
         import json
+
         from great_docs._versioned_build import _update_page_status_json
 
         status_path = tmp_path / "_page_status.json"
@@ -1434,9 +1437,9 @@ class TestRewriteCliIndex:
 
 class TestPruneQuartoCliSidebar:
     def test_removes_invalid_sidebar_entries(self, tmp_path: Path):
-        from great_docs._versioned_build import _prune_quarto_cli_sidebar
-
         import yaml
+
+        from great_docs._versioned_build import _prune_quarto_cli_sidebar
 
         quarto = tmp_path / "_quarto.yml"
         config = {
@@ -1604,26 +1607,46 @@ class TestFormatSignature:
 # ---------------------------------------------------------------------------
 
 
-class TestIsValidRefName:
+class TestIsValidRefNameLegacy:
     def test_index_always_valid(self):
         from great_docs._versioned_build import _is_valid_ref_name
 
-        assert _is_valid_ref_name("index", set(), set()) is True
+        assert _is_valid_ref_name("index", set()) is True
 
     def test_symbol_in_set(self):
         from great_docs._versioned_build import _is_valid_ref_name
 
-        assert _is_valid_ref_name("MyClass", {"MyClass", "func"}, set()) is True
+        assert _is_valid_ref_name("MyClass", {"MyClass", "func"}) is True
 
-    def test_method_of_valid_class(self):
+    def test_method_stem_valid_when_in_snapshot(self):
         from great_docs._versioned_build import _is_valid_ref_name
 
-        assert _is_valid_ref_name("MyClass.method", set(), {"MyClass"}) is True
+        assert _is_valid_ref_name("MyClass.method", {"MyClass", "MyClass.method"}) is True
+
+    def test_method_stem_invalid_when_absent_from_deep_snapshot(self):
+        # A deep snapshot carries dotted keys, so a method stem that is not
+        # itself present is authoritatively invalid (the method was dropped).
+        from great_docs._versioned_build import _is_valid_ref_name
+
+        assert _is_valid_ref_name("MyClass.gone", {"MyClass", "MyClass.kept"}) is False
+
+    def test_method_stem_kept_under_shallow_snapshot(self):
+        # A shallow snapshot has no dotted keys; pruning a `Class.method` page
+        # under exact membership would reintroduce the #190 regression, so the
+        # class-prefix safety net keeps it.
+        from great_docs._versioned_build import _is_valid_ref_name
+
+        assert _is_valid_ref_name("MyClass.method", {"MyClass", "func"}) is True
+
+    def test_method_stem_dropped_when_class_absent_under_shallow_snapshot(self):
+        from great_docs._versioned_build import _is_valid_ref_name
+
+        assert _is_valid_ref_name("Gone.method", {"MyClass"}) is False
 
     def test_unknown_symbol(self):
         from great_docs._versioned_build import _is_valid_ref_name
 
-        assert _is_valid_ref_name("Unknown", {"Known"}, set()) is False
+        assert _is_valid_ref_name("Unknown", {"Known"}) is False
 
 
 # ---------------------------------------------------------------------------
@@ -1647,7 +1670,7 @@ class TestPruneReferenceIndex:
             "[`MyClass`](MyClass.qmd)\n\n"
         )
 
-        _prune_reference_index(index, {"MyFunc", "MyClass"}, {"MyClass"})
+        _prune_reference_index(index, {"MyFunc", "MyClass"})
 
         content = index.read_text()
         assert "MyFunc" in content
@@ -1668,7 +1691,7 @@ class TestPruneReferenceIndex:
             "[`kept`](kept.qmd)\n\n"
         )
 
-        _prune_reference_index(index, {"kept"}, set())
+        _prune_reference_index(index, {"kept"})
 
         content = index.read_text()
         assert "Old Section" not in content
@@ -1683,9 +1706,9 @@ class TestPruneReferenceIndex:
 
 class TestPruneQuartoSidebar:
     def test_removes_invalid_reference_entries(self, tmp_path: Path):
-        from great_docs._versioned_build import _prune_quarto_sidebar
-
         import yaml
+
+        from great_docs._versioned_build import _prune_quarto_sidebar
 
         quarto = tmp_path / "_quarto.yml"
         config = {
@@ -1704,7 +1727,7 @@ class TestPruneQuartoSidebar:
         }
         quarto.write_text(yaml.dump(config), encoding="utf-8")
 
-        _prune_quarto_sidebar(tmp_path, "reference", {"MyFunc", "MyClass"}, {"MyClass"})
+        _prune_quarto_sidebar(tmp_path, "reference", {"MyFunc", "MyClass"})
 
         result = yaml.safe_load(quarto.read_text())
         contents = result["website"]["sidebar"][0]["contents"]
@@ -1714,9 +1737,9 @@ class TestPruneQuartoSidebar:
         assert "OldFunc" not in stems
 
     def test_removes_empty_section_groups(self, tmp_path: Path):
-        from great_docs._versioned_build import _prune_quarto_sidebar
-
         import yaml
+
+        from great_docs._versioned_build import _prune_quarto_sidebar
 
         quarto = tmp_path / "_quarto.yml"
         config = {
@@ -1737,7 +1760,7 @@ class TestPruneQuartoSidebar:
         }
         quarto.write_text(yaml.dump(config), encoding="utf-8")
 
-        _prune_quarto_sidebar(tmp_path, "reference", {"Kept"}, set())
+        _prune_quarto_sidebar(tmp_path, "reference", {"Kept"})
 
         result = yaml.safe_load(quarto.read_text())
         contents = result["website"]["sidebar"][0]["contents"]
@@ -1760,8 +1783,8 @@ class TestValidateGitRefIsTag:
 
     def test_valid_pattern_accepted_format(self, tmp_path: Path):
         # v0.3.0 matches the pattern but we can't verify git without a repo
-        from unittest.mock import patch
         import subprocess
+        from unittest.mock import patch
 
         mock_result = type("R", (), {"returncode": 0, "stdout": "v0.3.0\n"})()
         with patch("subprocess.run", return_value=mock_result):
@@ -1775,8 +1798,8 @@ class TestValidateGitRefIsTag:
             assert _validate_git_ref_is_tag(tmp_path, "v0.2.0") is False
 
     def test_timeout_returns_false(self, tmp_path: Path):
-        from unittest.mock import patch
         import subprocess
+        from unittest.mock import patch
 
         with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("git", 10)):
             assert _validate_git_ref_is_tag(tmp_path, "v1.0") is False
@@ -1893,6 +1916,7 @@ class TestMergeTree:
 class TestRenderSingleVersion:
     def test_success(self, tmp_path: Path):
         from unittest.mock import patch
+
         from great_docs._versioned_build import _render_single_version
 
         mock_result = type("R", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
@@ -1902,8 +1926,9 @@ class TestRenderSingleVersion:
         assert build_dir == str(tmp_path)
 
     def test_timeout(self, tmp_path: Path):
-        from unittest.mock import patch
         import subprocess
+        from unittest.mock import patch
+
         from great_docs._versioned_build import _render_single_version
 
         with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("quarto", 600)):
@@ -1913,6 +1938,7 @@ class TestRenderSingleVersion:
 
     def test_exception(self, tmp_path: Path):
         from unittest.mock import patch
+
         from great_docs._versioned_build import _render_single_version
 
         with patch("subprocess.run", side_effect=OSError("No quarto")):
@@ -1929,6 +1955,7 @@ class TestRenderSingleVersion:
 class TestRenderVersionsParallel:
     def test_streaming_mode_with_callback(self, tmp_path: Path):
         from unittest.mock import MagicMock, patch
+
         from great_docs._versioned_build import render_versions_parallel
 
         d1 = tmp_path / "v1"
@@ -2091,6 +2118,7 @@ class TestPruneCliPagesForVersion:
 
     def test_loads_snapshot_and_prunes(self, tmp_path: Path):
         from unittest.mock import MagicMock, patch
+
         from great_docs._versioned_build import _prune_cli_pages_for_version
 
         entry = VersionEntry(tag="0.2", label="0.2", latest=False, git_ref="v0.2.0")
@@ -2149,6 +2177,7 @@ class TestPreprocessVersionUpcoming:
         # Build for 0.4 (the prerelease)
         dest = tmp_path / "build"
         pages = preprocess_version(source, dest, versions[0], versions)
+
         assert "new-feature.html" in pages
 
     def test_upcoming_page_via_frontmatter_key(self, tmp_path: Path):
@@ -2163,9 +2192,11 @@ class TestPreprocessVersionUpcoming:
         )
 
         versions = self._setup_versions()
-        # Build for 0.3 — future.qmd should be included but flagged as upcoming
+
+        # Build for 0.3: future.qmd should be included but flagged as upcoming
         dest = tmp_path / "build"
         pages = preprocess_version(source, dest, versions[1], versions)
+
         assert "future.html" in pages
 
     def test_badge_expiry_per_page_override(self, tmp_path: Path):
@@ -2184,6 +2215,7 @@ class TestPreprocessVersionUpcoming:
         dest = tmp_path / "build"
         preprocess_version(source, dest, versions[1], versions)
         content = (dest / "page.qmd").read_text()
+
         # With expiry="1 releases", badge for 0.2 should be expired when building 0.3
         # (0.3 is 1 release after 0.2)
         assert "gd-badge" not in content  # badge was suppressed
@@ -2217,7 +2249,6 @@ class TestPreprocessVersionUpcoming:
 
 class TestRebuildApiFromSnapshotEdge:
     def test_no_ref_dir_creates_it(self, tmp_path: Path):
-        from great_docs._versioned_build import _rebuild_api_from_snapshot
 
         # Create a minimal snapshot
         snap_path = tmp_path / "snap.json"
@@ -2241,12 +2272,12 @@ class TestRebuildApiFromSnapshotEdge:
 
         entry = _make_entry("0.2")
         pages = _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+
         assert "reference/MyFunc.html" in pages
         assert (dest_dir / "reference" / "MyFunc.qmd").exists()
         assert (dest_dir / "reference" / "index.qmd").exists()
 
     def test_preserves_rich_pages(self, tmp_path: Path):
-        from great_docs._versioned_build import _rebuild_api_from_snapshot
 
         snap_path = tmp_path / "snap.json"
         snap = ApiSnapshot(
@@ -2269,7 +2300,6 @@ class TestRebuildApiFromSnapshotEdge:
         assert "Rich content" in (ref_dir / "GT.qmd").read_text()
 
     def test_generates_index_with_classes_and_functions(self, tmp_path: Path):
-        from great_docs._versioned_build import _rebuild_api_from_snapshot
 
         snap_path = tmp_path / "snap.json"
         snap = ApiSnapshot(
@@ -2295,7 +2325,6 @@ class TestRebuildApiFromSnapshotEdge:
         assert "my_func" in index_content
 
     def test_prunes_existing_pages_not_in_snapshot(self, tmp_path: Path):
-        from great_docs._versioned_build import _rebuild_api_from_snapshot
 
         snap_path = tmp_path / "snap.json"
         snap = ApiSnapshot(
@@ -2318,6 +2347,71 @@ class TestRebuildApiFromSnapshotEdge:
         assert (ref_dir / "kept.qmd").exists()
         assert not (ref_dir / "removed.qmd").exists()
         assert (ref_dir / "index.qmd").exists()
+
+    def test_shallow_snapshot_keeps_method_pages(self, tmp_path: Path):
+        # Regression guard for #190: when the documented set can't be resolved,
+        # the snapshot is shallow (top-level keys only). Method pages must NOT
+        # be destructively pruned just because `Class.method` is not a key.
+
+        snap_path = tmp_path / "snap.json"
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="pkg",
+            symbols={"Big": SymbolInfo(name="Big", kind="class")},
+        )
+        snap.save(snap_path)
+
+        dest_dir = tmp_path / "build"
+        ref_dir = dest_dir / "reference"
+        ref_dir.mkdir(parents=True)
+        (ref_dir / "Big.qmd").write_text("---\ntitle: Big\n---\n")
+        (ref_dir / "Big.m0.qmd").write_text("---\ntitle: Big.m0\n---\n")
+        (ref_dir / "Big.m1.qmd").write_text("---\ntitle: Big.m1\n---\n")
+        (ref_dir / "Orphan.method.qmd").write_text("---\ntitle: Orphan.method\n---\n")
+        (ref_dir / "index.qmd").write_text("---\ntitle: API\n---\n")
+
+        entry = _make_entry("0.2")
+        _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+
+        # Methods of a documented class survive under the shallow fallback.
+        assert (ref_dir / "Big.qmd").exists()
+        assert (ref_dir / "Big.m0.qmd").exists()
+        assert (ref_dir / "Big.m1.qmd").exists()
+
+        # A method whose class is absent is still pruned.
+        assert not (ref_dir / "Orphan.method.qmd").exists()
+
+    def test_deep_snapshot_prunes_dropped_method_pages(self, tmp_path: Path):
+        # With a deep snapshot (dotted keys present), exact membership governs:
+        # a method page absent from the snapshot is correctly pruned.
+        from great_docs._versioned_build import _rebuild_api_from_snapshot
+
+        snap_path = tmp_path / "snap.json"
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="pkg",
+            symbols={
+                "Big": SymbolInfo(name="Big", kind="class"),
+                "Big.m0": SymbolInfo(name="Big.m0", kind="function"),
+            },
+        )
+        snap.save(snap_path)
+
+        dest_dir = tmp_path / "build"
+        ref_dir = dest_dir / "reference"
+        ref_dir.mkdir(parents=True)
+        (ref_dir / "Big.qmd").write_text("---\ntitle: Big\n---\n")
+        (ref_dir / "Big.m0.qmd").write_text("---\ntitle: Big.m0\n---\n")
+        (ref_dir / "Big.m1.qmd").write_text("---\ntitle: Big.m1\n---\n")
+        (ref_dir / "index.qmd").write_text("---\ntitle: API\n---\n")
+
+        entry = _make_entry("0.2")
+        _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+
+        assert (ref_dir / "Big.qmd").exists()
+        assert (ref_dir / "Big.m0.qmd").exists()
+        # m1 is no longer documented at this version → pruned.
+        assert not (ref_dir / "Big.m1.qmd").exists()
 
     def test_rich_index_pruned_not_regenerated(self, tmp_path: Path):
         from great_docs._versioned_build import _rebuild_api_from_snapshot
@@ -2370,7 +2464,7 @@ class TestPruneReferenceIndexDefinitionList:
             ":   Another kept description.\n"
         )
 
-        _prune_reference_index(index, {"kept_func", "another_kept"}, set())
+        _prune_reference_index(index, {"kept_func", "another_kept"})
 
         content = index.read_text()
         assert "kept_func" in content
@@ -2384,7 +2478,7 @@ class TestPruneReferenceIndexDefinitionList:
         index = tmp_path / "index.qmd"
         index.write_text("---\ntitle: API\n---\n\n- OldFunc.qmd\n- KeptFunc.qmd\n")
 
-        _prune_reference_index(index, {"KeptFunc"}, set())
+        _prune_reference_index(index, {"KeptFunc"})
 
         content = index.read_text()
         assert "KeptFunc" in content
@@ -2399,9 +2493,9 @@ class TestPruneReferenceIndexDefinitionList:
 class TestPruneQuartoSidebarSubPath:
     def test_keeps_sub_paths(self, tmp_path: Path):
         """Sub-paths like reference/cli/build.qmd are kept (not pruned)."""
-        from great_docs._versioned_build import _prune_quarto_sidebar
-
         import yaml
+
+        from great_docs._versioned_build import _prune_quarto_sidebar
 
         quarto = tmp_path / "_quarto.yml"
         config = {
@@ -2420,7 +2514,7 @@ class TestPruneQuartoSidebarSubPath:
         }
         quarto.write_text(yaml.dump(config), encoding="utf-8")
 
-        _prune_quarto_sidebar(tmp_path, "reference", {"MyFunc"}, set())
+        _prune_quarto_sidebar(tmp_path, "reference", {"MyFunc"})
 
         result = yaml.safe_load(quarto.read_text())
         contents = result["website"]["sidebar"][0]["contents"]
@@ -2429,15 +2523,15 @@ class TestPruneQuartoSidebarSubPath:
         assert "reference/Removed.qmd" not in contents
 
     def test_no_matching_sidebar_does_nothing(self, tmp_path: Path):
-        from great_docs._versioned_build import _prune_quarto_sidebar
-
         import yaml
+
+        from great_docs._versioned_build import _prune_quarto_sidebar
 
         quarto = tmp_path / "_quarto.yml"
         config = {"website": {"sidebar": [{"id": "other", "contents": ["guide.qmd"]}]}}
         quarto.write_text(yaml.dump(config), encoding="utf-8")
 
-        _prune_quarto_sidebar(tmp_path, "reference", {"func"}, set())
+        _prune_quarto_sidebar(tmp_path, "reference", {"func"})
 
         # File should be unchanged since no sidebar matches
         result = yaml.safe_load(quarto.read_text())
@@ -2446,13 +2540,13 @@ class TestPruneQuartoSidebarSubPath:
     def test_no_quarto_yml_does_nothing(self, tmp_path: Path):
         from great_docs._versioned_build import _prune_quarto_sidebar
 
-        _prune_quarto_sidebar(tmp_path, "reference", {"func"}, set())
+        _prune_quarto_sidebar(tmp_path, "reference", {"func"})
 
     def test_empty_yaml_does_nothing(self, tmp_path: Path):
         from great_docs._versioned_build import _prune_quarto_sidebar
 
         (tmp_path / "_quarto.yml").write_text("", encoding="utf-8")
-        _prune_quarto_sidebar(tmp_path, "reference", {"func"}, set())
+        _prune_quarto_sidebar(tmp_path, "reference", {"func"})
 
 
 # ---------------------------------------------------------------------------
@@ -2463,6 +2557,7 @@ class TestPruneQuartoSidebarSubPath:
 class TestRebuildApiFromGitRefCache:
     def test_cache_hit_uses_cached_snapshot(self, tmp_path: Path):
         from unittest.mock import patch
+
         from great_docs._versioned_build import _rebuild_api_from_git_ref
 
         entry = VersionEntry(tag="0.2", label="0.2", latest=False, git_ref="v0.2.0")
@@ -2489,6 +2584,7 @@ class TestRebuildApiFromGitRefCache:
 
     def test_cache_miss_calls_snapshot_at_tag(self, tmp_path: Path):
         from unittest.mock import MagicMock, patch
+
         from great_docs._versioned_build import _rebuild_api_from_git_ref
 
         entry = VersionEntry(tag="0.2", label="0.2", latest=False, git_ref="v0.2.0")
@@ -2519,6 +2615,7 @@ class TestRebuildApiFromGitRefCache:
 
     def test_cache_miss_no_package_returns_empty(self, tmp_path: Path):
         from unittest.mock import patch
+
         from great_docs._versioned_build import _rebuild_api_from_git_ref
 
         entry = VersionEntry(tag="0.2", label="0.2", latest=False, git_ref="v0.2.0")
@@ -2538,6 +2635,7 @@ class TestRebuildApiFromGitRefCache:
 
     def test_cache_miss_snapshot_fails_returns_empty(self, tmp_path: Path):
         from unittest.mock import patch
+
         from great_docs._versioned_build import _rebuild_api_from_git_ref
 
         entry = VersionEntry(tag="0.2", label="0.2", latest=False, git_ref="v0.2.0")
@@ -2618,8 +2716,9 @@ class TestRewriteQuartoYmlEdge:
         _rewrite_quarto_yml_for_version(tmp_path, entry, "0.3")  # no crash
 
     def test_non_latest_title_gets_version_suffix(self, tmp_path: Path):
-        from great_docs._versioned_build import _rewrite_quarto_yml_for_version
         from yaml12 import read_yaml, write_yaml
+
+        from great_docs._versioned_build import _rewrite_quarto_yml_for_version
 
         dest = tmp_path / "vdir"
         dest.mkdir()
@@ -2641,8 +2740,9 @@ class TestRewriteQuartoYmlEdge:
 
     def test_include_in_header_str_converted_to_list(self, tmp_path: Path):
         """If include-in-header is a string, it's converted to a list."""
-        from great_docs._versioned_build import _rewrite_quarto_yml_for_version
         from yaml12 import read_yaml, write_yaml
+
+        from great_docs._versioned_build import _rewrite_quarto_yml_for_version
 
         dest = tmp_path / "vdir"
         dest.mkdir()
@@ -2883,6 +2983,7 @@ class TestRunVersionedBuild:
 class TestRenderSingleVersionStreaming:
     def test_successful_render_with_progress(self, tmp_path: Path):
         from unittest.mock import MagicMock, patch
+
         from great_docs._versioned_build import _render_single_version_streaming
 
         # Mock subprocess.Popen
@@ -2907,6 +3008,7 @@ class TestRenderSingleVersionStreaming:
 
     def test_popen_failure_returns_error(self, tmp_path: Path):
         from unittest.mock import patch
+
         from great_docs._versioned_build import _render_single_version_streaming
 
         with patch("subprocess.Popen", side_effect=OSError("not found")):
@@ -2918,6 +3020,7 @@ class TestRenderSingleVersionStreaming:
 
     def test_with_env_vars(self, tmp_path: Path):
         from unittest.mock import MagicMock, patch
+
         from great_docs._versioned_build import _render_single_version_streaming
 
         mock_proc = MagicMock()
@@ -2942,6 +3045,7 @@ class TestRenderSingleVersionStreaming:
 class TestRenderVersionsParallelStreaming:
     def test_streaming_mode_ordered_results(self, tmp_path: Path):
         from unittest.mock import MagicMock, patch
+
         from great_docs._versioned_build import render_versions_parallel
 
         d1 = tmp_path / "v1"
@@ -3013,8 +3117,8 @@ class TestPruneSidebarContentsHref:
 
 class TestPruneCliPagesForVersionFull:
     def test_prunes_cli_pages_via_snapshot(self, tmp_path: Path):
-        from great_docs._versioned_build import _prune_cli_pages_for_version
         from great_docs._api_diff import ApiSnapshot, CliCommandInfo
+        from great_docs._versioned_build import _prune_cli_pages_for_version
 
         entry = VersionEntry(tag="0.2", label="0.2", latest=False, git_ref="v0.2.0")
 
@@ -3172,6 +3276,7 @@ class TestRenderVersionsParallelNonStreaming:
     def test_multi_dir_uses_process_pool(self, tmp_path: Path):
         from concurrent.futures import Future
         from unittest.mock import MagicMock, patch
+
         from great_docs._versioned_build import render_versions_parallel
 
         d1 = tmp_path / "v1"
@@ -3249,9 +3354,9 @@ class TestPreprocessVersionGitRef:
 
 class TestPruneQuartoSidebarNestedSectionGroup:
     def test_removes_empty_section_group(self, tmp_path: Path):
-        from great_docs._versioned_build import _prune_quarto_sidebar
-
         import yaml
+
+        from great_docs._versioned_build import _prune_quarto_sidebar
 
         quarto = tmp_path / "_quarto.yml"
         config = {
@@ -3275,7 +3380,7 @@ class TestPruneQuartoSidebarNestedSectionGroup:
         }
         quarto.write_text(yaml.dump(config), encoding="utf-8")
 
-        _prune_quarto_sidebar(tmp_path, "reference", {"kept"}, set())
+        _prune_quarto_sidebar(tmp_path, "reference", {"kept"})
 
         result = yaml.safe_load(quarto.read_text())
         contents = result["website"]["sidebar"][0]["contents"]
@@ -3284,9 +3389,9 @@ class TestPruneQuartoSidebarNestedSectionGroup:
         assert contents[0] == "reference/kept.qmd"
 
     def test_partially_prunes_section_group(self, tmp_path: Path):
-        from great_docs._versioned_build import _prune_quarto_sidebar
-
         import yaml
+
+        from great_docs._versioned_build import _prune_quarto_sidebar
 
         quarto = tmp_path / "_quarto.yml"
         config = {
@@ -3309,7 +3414,7 @@ class TestPruneQuartoSidebarNestedSectionGroup:
         }
         quarto.write_text(yaml.dump(config), encoding="utf-8")
 
-        _prune_quarto_sidebar(tmp_path, "reference", {"kept"}, set())
+        _prune_quarto_sidebar(tmp_path, "reference", {"kept"})
 
         result = yaml.safe_load(quarto.read_text())
         contents = result["website"]["sidebar"][0]["contents"]
@@ -3327,6 +3432,7 @@ class TestPruneQuartoSidebarNestedSectionGroup:
 class TestRenderVersionsParallelSingleNonStreaming:
     def test_single_dir_no_callback(self, tmp_path: Path):
         from unittest.mock import patch
+
         from great_docs._versioned_build import render_versions_parallel
 
         d1 = tmp_path / "v1"
@@ -3349,8 +3455,9 @@ class TestRenderVersionsParallelSingleNonStreaming:
 
 class TestPruneCliPagesFull:
     def test_prunes_and_rewrites_index(self, tmp_path: Path):
-        from great_docs._versioned_build import _prune_cli_pages
         from unittest.mock import MagicMock
+
+        from great_docs._versioned_build import _prune_cli_pages
 
         # Create a mock snapshot with cli_commands
         snap = MagicMock()
@@ -3385,16 +3492,18 @@ class TestPruneCliPagesFull:
         assert "old-cmd" not in index_content
 
     def test_no_cli_dir_returns_early(self, tmp_path: Path):
-        from great_docs._versioned_build import _prune_cli_pages
         from unittest.mock import MagicMock
+
+        from great_docs._versioned_build import _prune_cli_pages
 
         snap = MagicMock()
         snap.cli_commands = None
         _prune_cli_pages(tmp_path, snap)  # No crash
 
     def test_no_cli_commands_returns_early(self, tmp_path: Path):
-        from great_docs._versioned_build import _prune_cli_pages
         from unittest.mock import MagicMock
+
+        from great_docs._versioned_build import _prune_cli_pages
 
         cli_dir = tmp_path / "reference" / "cli"
         cli_dir.mkdir(parents=True)
@@ -3584,3 +3693,85 @@ class TestRunVersionedBuildEmptyRender:
 
         # Render should NOT have been called
         assert render_called == []
+
+
+# ---------------------------------------------------------------------------
+# _is_valid_ref_name
+# ---------------------------------------------------------------------------
+
+
+class TestIsValidRefName:
+    def test_index_always_valid(self):
+        assert _is_valid_ref_name("index", set())
+
+    def test_member_stem_valid_when_in_snapshot(self):
+        syms = {"scores.CosineScore", "scores.CosineScore.fit"}
+        assert _is_valid_ref_name("scores.CosineScore", syms)
+        assert _is_valid_ref_name("scores.CosineScore.fit", syms)
+
+    def test_absent_stem_invalid(self):
+        assert not _is_valid_ref_name("scores.CosineScore", {"TopClass"})
+
+
+# ---------------------------------------------------------------------------
+# TestGitRefRebuildKeepsSubmodulePages
+# ---------------------------------------------------------------------------
+
+import subprocess as _subprocess
+import textwrap
+
+
+def _git(root, *a):
+    """Run `git *a` in `root`, raising CalledProcessError on a non-zero exit"""
+    _subprocess.run(["git", *a], cwd=root, check=True, capture_output=True)
+
+
+def _repo_with_submodule_tag(root: Path) -> None:
+    """Git repo tagged v0.1.0 whose documented API lives under a submodule"""
+    _git(root, "init")
+    _git(root, "config", "user.email", "t@t.co")
+    _git(root, "config", "user.name", "t")
+    (root / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "0.1.0"\n')
+    pkg = root / "mypkg"
+    (pkg / "sub").mkdir(parents=True)
+    (pkg / "__init__.py").write_text("from mypkg import sub\n__all__ = ['sub']\n")
+    (pkg / "sub" / "__init__.py").write_text(
+        "from mypkg.sub.things import Widget\n__all__ = ['Widget']\n"
+    )
+    (pkg / "sub" / "things.py").write_text("class Widget:\n    def fit(self): ...\n")
+    (root / "great-docs.yml").write_text(
+        textwrap.dedent(
+            """
+            reference:
+              - title: API
+                contents:
+                  - name: sub.Widget
+                    members: [fit]
+            """
+        )
+    )
+    _git(root, "add", "-A")
+    _git(root, "commit", "-m", "v010")
+    _git(root, "tag", "v0.1.0")
+
+
+class TestGitRefRebuildKeepsSubmodulePages:
+    def test_submodule_pages_survive(self, tmp_path: Path):
+        _repo_with_submodule_tag(tmp_path)
+        # Simulate the dev build's reference pages copied into the version dir.
+        ref = tmp_path / "build" / "reference"
+        ref.mkdir(parents=True)
+        for stem in ("sub.Widget", "sub.Widget.fit"):
+            (ref / f"{stem}.qmd").write_text(
+                f"---\ntitle: {stem}\n---\n# {stem} {{.doc-heading}}\n"
+            )
+        (ref / "index.qmd").write_text("---\ntitle: API\n---\n")
+
+        entry = VersionEntry(label="0.1.0", tag="0.1.0", git_ref="v0.1.0")
+        from great_docs._versioned_build import _rebuild_api_from_git_ref
+
+        pages = _rebuild_api_from_git_ref(tmp_path / "build", tmp_path, entry)
+
+        assert (ref / "sub.Widget.qmd").exists()
+        assert (ref / "sub.Widget.fit.qmd").exists()
+        assert "reference/sub.Widget.html" in pages
