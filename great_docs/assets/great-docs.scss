@@ -1419,6 +1419,41 @@ a.sidebar-item-text.sidebar-link.text-start > span {
     padding-bottom: 8px;
 }
 
+/* CLI reference: present command groups (e.g. SKILL, TERMSHOW) as small uppercase
+   pills so they read as command groups, distinct from leaf commands. Scoped to the
+   CLI reference pages via the doc-cli-reference body class. */
+body.doc-cli-reference #quarto-sidebar .sidebar-item-section
+    > .sidebar-item-container
+    > .sidebar-item-text
+    .menu-text {
+    display: inline-block;
+    text-transform: uppercase;
+    font-family: $font-family-monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+    padding: 0.1rem 0.4rem;
+    border-radius: 0.25rem;
+    border: 1px solid $label-cli-group-color;
+    color: $label-cli-group-color;
+    background-color: tint-color($label-cli-group-color, 90%);
+}
+
+/* Give each CLI command group a little breathing room above its pill. */
+body.doc-cli-reference #quarto-sidebar .sidebar-item-section {
+    margin-top: 0.4rem;
+}
+
+/* The first command group follows a plain leaf command (no section
+   padding-bottom above it), so it needs extra top margin to match the gap that
+   later groups (e.g. TERMSHOW) get from the preceding group's padding-bottom. */
+body.doc-cli-reference
+    #quarto-sidebar
+    li.sidebar-item:not(.sidebar-item-section)
+    + li.sidebar-item-section {
+    margin-top: 0.9rem;
+}
+
 /* ==========================================================================
    Floating Sidebar Navigation (desktop only)
    Transforms #quarto-sidebar into a pinned, independently-scrollable panel
@@ -2872,7 +2907,7 @@ html.quarto-dark .gd-badge-deprecated,
     margin-left: 0;
     margin-right: 0.6rem;
     margin-bottom: 0.2rem;
-    padding-top: 1.25rem;
+    padding-top: 0.5rem;
     padding-bottom: 0.6rem;
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     background: transparent;
