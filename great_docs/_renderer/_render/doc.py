@@ -632,7 +632,13 @@ class __RenderDoc(RenderBase):
         3. fall back to griffe's package-parent-relative path when neither the
            override nor the repository root is available.
         """
-        filepath = getattr(self.obj, "filepath", None)
+        # griffe's `filepath` is a property that raises ValueError for objects
+        # without a parent module (e.g. synthetic objects), so a bare getattr
+        # default won't shield us — catch it explicitly.
+        try:
+            filepath = self.obj.filepath
+        except (ValueError, AttributeError):
+            filepath = None
 
         # 1. Explicit override for monorepos: `<source.path>/<filename>`.
         source_path = package_info("SOURCE_PATH")
