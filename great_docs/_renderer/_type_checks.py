@@ -129,7 +129,9 @@ def is_field_init_false(el: gf.Parameter) -> bool:
 
 
 @lru_cache(4)
-def package_info(key: Literal["GITHUB_REPO_URL", "PACKAGE_ROOT"]) -> str | None:
+def package_info(
+    key: Literal["GITHUB_REPO_URL", "GIT_REF", "PACKAGE_ROOT", "SOURCE_PATH"],
+) -> str | None:
     """
     Return some bit of package information
 

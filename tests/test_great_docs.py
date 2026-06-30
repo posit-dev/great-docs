@@ -14955,6 +14955,101 @@ def test_build_github_source_url_absolute_path():
         assert "/blob/dev/" in result
 
 
+def _render_doc_source_relative_path(obj):
+    """Invoke the renderer's `_source_relative_path` with a stand-in griffe object."""
+    import great_docs._renderer._render.doc as docmod
+    from great_docs._renderer import _type_checks
+
+    _type_checks.package_info.cache_clear()
+    cls = vars(docmod)["__RenderDoc"]
+    fake_self = types.SimpleNamespace(obj=obj)
+    return cls.__dict__["_source_relative_path"](fake_self)
+
+
+def test_render_source_relative_path_preserves_src_layout(monkeypatch):
+    """Renderer source links must keep the `src/` prefix for src-layout packages.
+
+    Regression test: griffe's `relative_package_filepath` is relative to the
+    package's parent (a search path such as `src/`), so it drops the leading
+    `src/` and yields a GitHub blob URL that 404s. The renderer should instead
+    compute the path relative to the repository root.
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+        src_file = root / "src" / "raghilda" / "embedding.py"
+        src_file.parent.mkdir(parents=True)
+        src_file.write_text("x = 1", encoding="utf-8")
+
+        monkeypatch.delenv("SOURCE_PATH", raising=False)
+        monkeypatch.setenv("PACKAGE_ROOT", str(root))
+
+        # griffe would report the path relative to the `src/` search path.
+        obj = types.SimpleNamespace(
+            filepath=src_file,
+            relative_package_filepath=Path("raghilda/embedding.py"),
+        )
+
+        assert _render_doc_source_relative_path(obj) == "src/raghilda/embedding.py"
+
+
+def test_render_source_relative_path_source_path_override(monkeypatch):
+    """An explicit `source.path` override is used verbatim for monorepos."""
+    obj = types.SimpleNamespace(
+        filepath=Path("/anywhere/embedding.py"),
+        relative_package_filepath=Path("raghilda/embedding.py"),
+    )
+    monkeypatch.setenv("SOURCE_PATH", "packages/raghilda/src")
+    monkeypatch.setenv("PACKAGE_ROOT", "/some/root")
+
+    assert (
+        _render_doc_source_relative_path(obj) == "packages/raghilda/src/embedding.py"
+    )
+
+
+def test_render_source_relative_path_falls_back_to_griffe(monkeypatch):
+    """Without repo root or override, fall back to griffe's package-relative path."""
+    obj = types.SimpleNamespace(
+        filepath=Path("/anywhere/raghilda/embedding.py"),
+        relative_package_filepath=Path("raghilda/embedding.py"),
+    )
+    monkeypatch.delenv("SOURCE_PATH", raising=False)
+    monkeypatch.delenv("PACKAGE_ROOT", raising=False)
+
+    assert _render_doc_source_relative_path(obj) == "raghilda/embedding.py"
+
+
+def test_init_exports_package_root_env(monkeypatch):
+    """GreatDocs.__init__ exports PACKAGE_ROOT so the renderer can resolve paths."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+        # Register the vars so monkeypatch restores them even though __init__
+        # writes os.environ directly.
+        monkeypatch.setenv("PACKAGE_ROOT", "sentinel")
+        monkeypatch.delenv("SOURCE_PATH", raising=False)
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        assert os.environ.get("PACKAGE_ROOT") == str(docs._find_package_root())
+        # No source.path configured -> SOURCE_PATH stays unset.
+        assert "SOURCE_PATH" not in os.environ
+
+
+def test_init_exports_source_path_env(monkeypatch):
+    """A configured source.path is exported as SOURCE_PATH for the renderer."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("source:\n  path: packages/mypkg/src\n", encoding="utf-8")
+        # Register so monkeypatch restores it after __init__ writes os.environ.
+        monkeypatch.setenv("SOURCE_PATH", "sentinel")
+
+        GreatDocs(project_path=tmp_dir)
+
+        assert os.environ.get("SOURCE_PATH") == "packages/mypkg/src"
+
+
 def test_detect_git_ref_configured_branch():
     """Test _detect_git_ref uses configured branch from metadata."""
 
