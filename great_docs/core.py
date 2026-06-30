@@ -147,6 +147,14 @@ class GreatDocs:
         if url:
             os.environ["GITHUB_REPO_URL"] = str(url)
         os.environ["GIT_REF"] = self._detect_git_ref()
+        # The repository root, so the renderer can build source-link paths
+        # relative to it (preserving `src/` and other non-flat layouts)
+        # instead of griffe's package-parent-relative path, which 404s.
+        os.environ["PACKAGE_ROOT"] = str(self._find_package_root())
+        # Optional explicit source-path override for monorepos (source.path).
+        source_path = self._config.source_path
+        if source_path:
+            os.environ["SOURCE_PATH"] = str(source_path)
 
     def _get_griffe_package(self, package_name: str):
         """Load a griffe package, using a per-build cache to avoid redundant loads.
