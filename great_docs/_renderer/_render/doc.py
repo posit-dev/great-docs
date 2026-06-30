@@ -4,6 +4,7 @@ import re
 from copy import copy
 from dataclasses import dataclass
 from functools import cached_property, singledispatchmethod
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import griffe as gf
@@ -600,22 +601,58 @@ class __RenderDoc(RenderBase):
         if not base_url or base_url == "None":
             return None
         branch = package_info("GIT_REF")
-        try:
-            relative_path = self.obj.relative_package_filepath
-        except (ValueError, AttributeError):
+        rel_str = self._source_relative_path()
+        if rel_str is None:
             return None
         # Suppress source links for compiled extensions (PyO3, Cython,
         # pybind11, C extensions). The file path points at a binary
         # artifact and `lineno` is None, producing broken `#LNone` anchors.
-        rel_str = str(relative_path)
         if rel_str.endswith((".so", ".pyd", ".dylib", ".abi3.so")):
             return None
         start, end = self.obj.lineno, self.obj.endlineno
         if start is None:
             return None
         anchor = f"#L{start}-L{end}" if end is not None and start != end else f"#L{start}"
-        url = f"{base_url}/blob/{branch}/{relative_path}{anchor}"
+        url = f"{base_url}/blob/{branch}/{rel_str}{anchor}"
         return Link("Source", url, attr=Attr(attributes={"target": "_blank", "rel": "noopener"}))
+
+    def _source_relative_path(self) -> str | None:
+        """
+        Path of the object's source file relative to the repository root.
+
+        griffe's ``relative_package_filepath`` is relative to the package's
+        *parent* directory (a griffe search path), so for ``src/`` layouts and
+        other non-flat layouts it drops the leading directory (e.g. ``src/``),
+        producing a GitHub blob URL that 404s. To match the repository layout we
+        instead:
+
+        1. honour an explicit ``source.path`` override for monorepos, then
+        2. compute the path relative to the repository root from the object's
+           absolute filepath (preserving ``src/`` etc.), and only
+        3. fall back to griffe's package-parent-relative path when neither the
+           override nor the repository root is available.
+        """
+        filepath = getattr(self.obj, "filepath", None)
+
+        # 1. Explicit override for monorepos: `<source.path>/<filename>`.
+        source_path = package_info("SOURCE_PATH")
+        if source_path and filepath is not None:
+            return f"{source_path}/{Path(filepath).name}"
+
+        # 2. Path relative to the repository root, preserving the real layout.
+        package_root = package_info("PACKAGE_ROOT")
+        if package_root and filepath is not None:
+            try:
+                rel = Path(filepath).resolve().relative_to(Path(package_root).resolve())
+                return rel.as_posix()
+            except (ValueError, OSError):
+                pass
+
+        # 3. Legacy fallback: griffe's package-parent-relative path.
+        try:
+            return Path(self.obj.relative_package_filepath).as_posix()
+        except (ValueError, AttributeError):
+            return None
 
 
 class RenderDoc(__RenderDoc):
