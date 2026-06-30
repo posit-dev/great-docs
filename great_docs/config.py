@@ -593,6 +593,44 @@ class Config:
         return self.get("cli.name")
 
     @property
+    def cli_title(self) -> str | None:
+        """Get the custom CLI reference index title, if set.
+
+        Supports `cli: {title: "Custom Title"}` in great-docs.yml. Returns `None` when no custom
+        title is configured (the caller falls back to a translated default).
+        """
+        return self.get("cli.title")
+
+    @property
+    def cli_desc(self) -> str | None:
+        """Get the CLI reference index intro paragraph, if set.
+
+        Supports `cli: {desc: "Intro text..."}` in great-docs.yml. Returns `None` when no
+        description is configured.
+        """
+        return self.get("cli.desc")
+
+    @property
+    def cli_sections(self) -> list[dict[str, Any]]:
+        """Get the explicit CLI reference index sections.
+
+        Mirrors the `reference:` config. Supports a list of section dicts under `cli.sections`::
+
+            cli:
+              sections:
+                - title: Project setup
+                  desc: "..."
+                  contents: [init, config, uninstall]
+
+        Each `contents` entry is a top-level command name (string). Returns an empty list when no
+        explicit sections are configured (triggering auto-grouping by command group).
+        """
+        val = self.get("cli.sections", [])
+        if isinstance(val, list):
+            return val
+        return []
+
+    @property
     def mcp_enabled(self) -> bool:
         """Check if MCP server documentation is enabled."""
         return self.get("mcp.enabled", False)
@@ -1792,6 +1830,15 @@ def create_default_config() -> str:
 #   enabled: false             # Enable CLI documentation (default: false)
 #   module: my_package.cli     # Module containing Click commands (auto-detected)
 #   name: cli                  # Name of the Click command object (auto-detected)
+#   title: CLI Reference       # Optional title for the CLI index page + sidebar section
+#   desc: >-                   # Optional intro paragraph shown atop the CLI index page
+#     Command-line interface for my-package.
+#   sections:                  # Optional explicit grouping/ordering for the CLI index page.
+#     - title: Project setup   # When omitted, commands are auto-grouped in code order
+#       desc: Create and configure a project.
+#       contents: [init, config]
+#     - title: Building
+#       contents: [build, preview]
 
 # Changelog (GitHub Releases)
 # ---------------------------

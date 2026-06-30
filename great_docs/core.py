@@ -4172,18 +4172,44 @@ class GreatDocs:
         generated_files: list[str | dict] = []
         generated_paths: list[str] = []
 
-        # Generate main CLI page
-        main_page = self._generate_cli_command_page(cli_info, is_main=True)
-        main_path = cli_ref_dir / "index.qmd"
-        with open(main_path, "w") as f:
-            f.write(main_page)
-        generated_files.append("reference/cli/index.qmd")
-        generated_paths.append(str(main_path.relative_to(self.project_path)))
+        entry_name = cli_info.get("entry_point_name") or cli_info["name"]
+        entry_safe = entry_name.replace("-", "_")
+
+        # Generate the CLI index (landing) page — a listing of all commands, modelled on the
+        # API reference index page rather than the root command's own --help dump.
+        index_page = self._generate_cli_index_page(cli_info, entry_safe)
+        index_path = cli_ref_dir / "index.qmd"
+        with open(index_path, "w") as f:
+            f.write(index_page)
+        # Label the index entry explicitly (mirrors the "API Index" link) so it reads distinctly
+        # from the enclosing "CLI Reference" sidebar section title.
+        from ._translations import get_translation
+
+        cli_index_label = get_translation("cli_index", self._config.language)
+        generated_files.append({"text": cli_index_label, "href": "reference/cli/index.qmd"})
+        generated_paths.append(str(index_path.relative_to(self.project_path)))
+
+        # Generate the root command page (global options, usage, full --help) on its own page so
+        # the index can stay a pure listing.
+        root_page = self._generate_cli_command_page(cli_info, is_main=True)
+        root_path = cli_ref_dir / f"{entry_safe}.qmd"
+        with open(root_path, "w") as f:
+            f.write(root_page)
+        generated_files.append(f"reference/cli/{entry_safe}.qmd")
+        generated_paths.append(str(root_path.relative_to(self.project_path)))
 
         # Generate pages for subcommands
-        generated_files.extend(
-            self._generate_subcommand_pages(cli_info, cli_ref_dir, _paths=generated_paths)
+        subcommand_items = self._generate_subcommand_pages(
+            cli_info, cli_ref_dir, _paths=generated_paths
         )
+
+        # When explicit sections are configured, order the flat top-level command entries to
+        # match the index sections (group entries keep their relative order at the end).
+        if self._config.cli_sections:
+            subcommand_items = self._order_cli_sidebar_items(
+                subcommand_items, self._config.cli_sections
+            )
+        generated_files.extend(subcommand_items)
 
         # Print grouped summary
         if generated_paths:
@@ -4192,6 +4218,117 @@ class GreatDocs:
                 print(f"  - {p}")
 
         return generated_files
+
+    def _generate_cli_index_page(self, cli_info: dict, entry_safe: str) -> str:
+        """
+        Generate the CLI reference index (landing) page.
+
+        Models the API reference index page: an optional intro paragraph followed by one or more
+        ``## Section {.doc-group}`` blocks, each a definition list of command links with their
+        short help. Sections come from ``cli.sections`` in great-docs.yml when configured;
+        otherwise commands are auto-grouped (leaf commands first, in code order, then one section
+        per command group).
+
+        Parameters
+        ----------
+        cli_info
+            The root command info dict (from `_extract_click_command`).
+        entry_safe
+            The filesystem-safe name of the entry point (used to link the root command page).
+
+        Returns
+        -------
+        str
+            Quarto markdown content for ``reference/cli/index.qmd``.
+        """
+        from ._translations import get_translation
+
+        lang = self._config.language
+        title = self._config.cli_title or get_translation("cli_reference", lang)
+
+        lines: list[str] = []
+
+        # --- Front matter (mirrors the API reference index) ---
+        lines.append("---")
+        lines.append(f'title: "{title}"')
+        lines.append("body-classes: doc-reference doc-cli-reference")
+        lines.append("sidebar: cli-reference")
+        lines.append("page-navigation: false")
+        lines.append("html-table-processing: none")
+        lines.append("---")
+        lines.append("")
+
+        # No body `# {title}` heading: the frontmatter title provides the page title block (as on
+        # the API reference index), which keeps the `## {.doc-group}` sections at level 2.
+
+        # --- Intro paragraph ---
+        if self._config.cli_desc:
+            lines.append("::: {.doc-description}")
+            lines.append(self._config.cli_desc.strip())
+            lines.append(":::")
+            lines.append("")
+
+        entry_name = cli_info.get("entry_point_name") or cli_info["name"]
+        top_commands = [c for c in cli_info.get("commands", []) if not c.get("hidden")]
+        by_name = {c["name"]: c for c in top_commands}
+
+        def emit_entry(cmd: dict, href: str) -> None:
+            label = "doc-label-cli-group" if cmd.get("is_group") else "doc-label-cli"
+            name = cmd["name"]
+            short = (cmd.get("short_help") or "").strip()
+            lines.append(f"[{name}]({href}){{.doc-function .doc-label .{label}}}")
+            lines.append(f":   {short}" if short else ":   &nbsp;")
+            lines.append("")
+
+        def emit_section(section_title: str, section_desc: str | None = None) -> None:
+            lines.append(f"## {section_title} {{.doc-group}}")
+            lines.append("")
+            if section_desc:
+                lines.append("::: {.doc-description}")
+                lines.append(section_desc.strip())
+                lines.append(":::")
+                lines.append("")
+
+        # --- Root command link (global options / usage live one click away) ---
+        root_short = (cli_info.get("short_help") or "").strip()
+        lines.append(
+            f"[{entry_name}]({entry_safe}.qmd){{.doc-function .doc-label .doc-label-cli-group}}"
+        )
+        lines.append(f":   {root_short}" if root_short else ":   &nbsp;")
+        lines.append("")
+
+        cli_sections = self._config.cli_sections
+        if cli_sections:
+            # Author-controlled sections: list exactly the named top-level commands, in order.
+            for section in cli_sections:
+                emit_section(section.get("title", ""), section.get("desc"))
+                for cmd_name in section.get("contents", []):
+                    cmd = by_name.get(cmd_name)
+                    if not cmd:
+                        continue
+                    emit_entry(cmd, f"{cmd_name.replace('-', '_')}.qmd")
+        else:
+            # Auto layout: leaf commands first (code order), then one section per group.
+            leaf = [c for c in top_commands if not c.get("is_group")]
+            groups = [c for c in top_commands if c.get("is_group")]
+
+            if leaf:
+                emit_section(get_translation("cli_commands", lang))
+                for cmd in leaf:
+                    emit_entry(cmd, f"{cmd['name'].replace('-', '_')}.qmd")
+
+            for group in groups:
+                gsafe = group["name"].replace("-", "_")
+                emit_section(group["name"], (group.get("short_help") or "").strip() or None)
+                # The group's own overview page, then each subcommand.
+                emit_entry(group, f"{gsafe}.qmd")
+                for sub in group.get("commands", []):
+                    if sub.get("hidden"):
+                        continue
+                    ssafe = sub["name"].replace("-", "_")
+                    emit_entry(sub, f"{gsafe}/{ssafe}.qmd")
+
+        return "\n".join(lines)
 
     def _generate_subcommand_pages(
         self,
@@ -4278,7 +4415,7 @@ class GreatDocs:
         lines.append(
             f'title: "[{title}]{{.doc-object-name .doc-function .doc-label .{label_class}}}"'
         )
-        lines.append("body-classes: doc-api-page")
+        lines.append("body-classes: doc-api-page doc-cli-reference")
         lines.append("sidebar: cli-reference")
         lines.append("page-navigation: false")
         lines.append("html-table-processing: none")
@@ -4494,6 +4631,47 @@ class GreatDocs:
         return "\n".join(lines)
 
     @staticmethod
+    def _order_cli_sidebar_items(
+        items: list[str | dict], cli_sections: list[dict]
+    ) -> list[str | dict]:
+        """
+        Reorder flat top-level command entries to match the configured `cli.sections` order.
+
+        String entries (leaf commands) are sorted to follow the order in which their command
+        names appear across the configured sections; commands not mentioned keep their original
+        (code) order after the configured ones. Group `{"section": ...}` dicts retain their
+        relative order and are appended at the end.
+
+        Parameters
+        ----------
+        items
+            The sidebar items produced by `_generate_subcommand_pages`.
+        cli_sections
+            The `cli.sections` config list.
+
+        Returns
+        -------
+        list[str | dict]
+            The reordered sidebar items.
+        """
+        # Build the desired rank for each "reference/cli/<safe>.qmd" path.
+        rank: dict[str, int] = {}
+        for section in cli_sections:
+            for cmd_name in section.get("contents", []):
+                safe = cmd_name.replace("-", "_")
+                rank.setdefault(f"reference/cli/{safe}.qmd", len(rank))
+
+        strings = [i for i in items if isinstance(i, str)]
+        groups = [i for i in items if not isinstance(i, str)]
+
+        # Configured commands first (in section order); unmentioned ones keep their code order.
+        base = len(rank)
+        ordered = sorted(
+            enumerate(strings), key=lambda iv: (rank.get(iv[1], base + iv[0]),)
+        )
+        return [path for _, path in ordered] + groups
+
+    @staticmethod
     def _count_cli_sidebar_items(items: list) -> int:
         """Count the total number of .qmd pages in a (possibly nested) sidebar list."""
         count = 0
@@ -4501,7 +4679,11 @@ class GreatDocs:
             if isinstance(item, str):
                 count += 1
             elif isinstance(item, dict):
-                count += GreatDocs._count_cli_sidebar_items(item.get("contents", []))
+                if item.get("href"):
+                    # A labeled link entry (e.g. the index link) is a single page.
+                    count += 1
+                else:
+                    count += GreatDocs._count_cli_sidebar_items(item.get("contents", []))
         return count
 
     def _update_sidebar_with_cli(self, cli_files: list[str | dict]) -> None:
@@ -4543,10 +4725,15 @@ class GreatDocs:
                 break
 
         if not cli_section_exists:
+            from ._translations import get_translation
+
+            cli_section_title = self._config.cli_title or get_translation(
+                "cli_reference", self._config.language
+            )
             # Add CLI section
             cli_section = {
                 "id": "cli-reference",
-                "title": "CLI Reference",
+                "title": cli_section_title,
                 "contents": cli_files,
             }
             sidebar.append(cli_section)
@@ -10830,15 +11017,21 @@ body-classes: "gd-homepage"
             return
 
         # Add API reference configuration with sensible defaults
-        # Use the importable name (actual module name) for the package field
-        ref_title = self._config.reference_title or "Reference"
+        # Use the importable name (actual module name) for the package field.
+        # The reference index *page* title defaults to "API Reference" (consistent with the
+        # "CLI Reference" / "MCP Reference" index titles). The *navbar* keeps the shorter
+        # "Reference" umbrella label, since that entry covers the API, CLI, and MCP references
+        # via the reference switcher (and other code locates it by the literal text "Reference").
+        ref_title = self._config.reference_title or "API Reference"
+        nav_title = self._config.reference_title or "Reference"
         ref_desc = self._config.reference_desc
 
-        # Translate default reference title for i18n
+        # Translate default titles for i18n
         if not self._config.reference_title and self._config.language != "en":
             from ._translations import get_translation  # pragma: no cover
 
-            ref_title = get_translation("reference", self._config.language)  # pragma: no cover
+            ref_title = get_translation("api_reference", self._config.language)  # pragma: no cover
+            nav_title = get_translation("reference", self._config.language)  # pragma: no cover
 
         # Configure the API reference
         api_ref_config = {
@@ -10886,7 +11079,7 @@ body-classes: "gd-homepage"
                 for item in left
             )
             if not has_ref:
-                left.append({"text": ref_title, "href": "reference/index.qmd"})
+                left.append({"text": nav_title, "href": "reference/index.qmd"})
                 navbar["left"] = left
 
         # Add reference sidebar

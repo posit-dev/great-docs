@@ -604,11 +604,12 @@ def test_L3_cli_sidebar_flat_paths(pkg_name: str, tmp_path: Path):
     sidebar_items = docs._generate_cli_reference_pages(cli_info)
     assert len(sidebar_items) >= 1, "No sidebar items generated"
 
-    # First item should be the main index page
-    assert sidebar_items[0] == "reference/cli/index.qmd"
+    # First item should be the labeled index link
+    assert isinstance(sidebar_items[0], dict)
+    assert sidebar_items[0].get("href") == "reference/cli/index.qmd"
 
-    # Every item should be a plain path string (no section dicts)
-    for item in sidebar_items:
+    # Remaining items should be plain path strings (flat CLI -> no section dicts)
+    for item in sidebar_items[1:]:
         assert isinstance(item, str), f"Expected plain path string, got dict: {item}"
         assert item.startswith("reference/cli/"), (
             f"Sidebar path {item!r} does not start with 'reference/cli/'"
@@ -636,11 +637,14 @@ def test_L3_cli_sidebar_nested_structure(pkg_name: str, tmp_path: Path):
     sidebar_items = docs._generate_cli_reference_pages(cli_info)
     assert len(sidebar_items) >= 2, "Too few sidebar items for a grouped CLI"
 
-    # First item should be the main index
-    assert sidebar_items[0] == "reference/cli/index.qmd"
+    # First item should be the labeled index link
+    assert isinstance(sidebar_items[0], dict)
+    assert sidebar_items[0].get("href") == "reference/cli/index.qmd"
 
-    # Collect section dicts from the sidebar items
-    section_items = [item for item in sidebar_items if isinstance(item, dict)]
+    # Collect group section dicts (the index link dict has 'href', not 'section')
+    section_items = [
+        item for item in sidebar_items if isinstance(item, dict) and "section" in item
+    ]
     assert len(section_items) > 0, (
         f"No section dicts found in sidebar items; "
         f"nested groups should use {{section: ..., contents: [...]}} structure. "

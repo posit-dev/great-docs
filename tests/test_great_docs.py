@@ -11656,9 +11656,112 @@ def test_generate_cli_reference_pages_basic():
         }
         result = docs._generate_cli_reference_pages(cli_info)
 
-        assert "reference/cli/index.qmd" in result
+        # The index is now a labeled listing entry (not the root command page).
+        assert {"text": "CLI Index", "href": "reference/cli/index.qmd"} in result
         assert (docs.project_path / "reference" / "cli" / "index.qmd").exists()
+        # The root command page now lives on its own page (entry name -> safe name).
+        assert "reference/cli/tool.qmd" in result
+        assert (docs.project_path / "reference" / "cli" / "tool.qmd").exists()
         assert (docs.project_path / "reference" / "cli" / "build.qmd").exists()
+
+
+def test_generate_cli_index_page_auto_layout():
+    """_generate_cli_index_page auto-groups leaf commands then command groups."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        cli_info = {
+            "name": "tool",
+            "entry_point_name": "tool",
+            "short_help": "A tool.",
+            "is_group": True,
+            "commands": [
+                {"name": "build", "short_help": "Build it.", "is_group": False, "commands": []},
+                {"name": "init", "short_help": "Init it.", "is_group": False, "commands": []},
+                {
+                    "name": "skill",
+                    "short_help": "Manage skills.",
+                    "is_group": True,
+                    "commands": [
+                        {"name": "install", "short_help": "Install.", "commands": []},
+                    ],
+                },
+            ],
+        }
+
+        page = docs._generate_cli_index_page(cli_info, "tool")
+
+        # Front matter mirrors the API reference index, plus the CLI scoping class.
+        assert "body-classes: doc-reference doc-cli-reference" in page
+        assert "sidebar: cli-reference" in page
+        # Root command link is present with the group pill.
+        assert "[tool](tool.qmd){.doc-function .doc-label .doc-label-cli-group}" in page
+        # Leaf commands are listed (code order) under the auto "Commands" section.
+        assert "## Commands {.doc-group}" in page
+        assert "[build](build.qmd){.doc-function .doc-label .doc-label-cli}" in page
+        assert page.index("[build]") < page.index("[init]")
+        # The group gets its own section, with its overview and subcommand links.
+        assert "## skill {.doc-group}" in page
+        assert "[skill](skill.qmd){.doc-function .doc-label .doc-label-cli-group}" in page
+        assert "[install](skill/install.qmd){.doc-function .doc-label .doc-label-cli}" in page
+
+
+def test_generate_cli_index_page_configured_sections():
+    """cli.sections drives index section titles, ordering, and intro."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._config._config["cli"] = {
+            "title": "Command Line",
+            "desc": "Drive everything from the terminal.",
+            "sections": [
+                {"title": "Building", "desc": "Make the site.", "contents": ["build"]},
+                {"title": "Setup", "contents": ["init"]},
+            ],
+        }
+
+        cli_info = {
+            "name": "tool",
+            "entry_point_name": "tool",
+            "short_help": "A tool.",
+            "is_group": True,
+            "commands": [
+                {"name": "init", "short_help": "Init it.", "is_group": False, "commands": []},
+                {"name": "build", "short_help": "Build it.", "is_group": False, "commands": []},
+            ],
+        }
+
+        page = docs._generate_cli_index_page(cli_info, "tool")
+
+        assert 'title: "Command Line"' in page
+        assert "Drive everything from the terminal." in page
+        assert "## Building {.doc-group}" in page
+        assert "Make the site." in page
+        assert "## Setup {.doc-group}" in page
+        # Configured order wins: Building (build) appears before Setup (init).
+        assert page.index("## Building") < page.index("## Setup")
+
+
+def test_order_cli_sidebar_items_honors_sections():
+    """_order_cli_sidebar_items reorders flat entries to match cli.sections."""
+    items = [
+        "reference/cli/init.qmd",
+        "reference/cli/build.qmd",
+        "reference/cli/scan.qmd",
+        {"section": "skill", "contents": ["reference/cli/skill.qmd"]},
+    ]
+    sections = [
+        {"title": "Building", "contents": ["build"]},
+        {"title": "Setup", "contents": ["init"]},
+    ]
+    ordered = GreatDocs._order_cli_sidebar_items(items, sections)
+
+    # build, then init (configured order); scan keeps code order after; group last.
+    assert ordered == [
+        "reference/cli/build.qmd",
+        "reference/cli/init.qmd",
+        "reference/cli/scan.qmd",
+        {"section": "skill", "contents": ["reference/cli/skill.qmd"]},
+    ]
 
 
 def test_generate_subcommand_pages_nested():
