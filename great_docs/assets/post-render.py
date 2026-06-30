@@ -3362,12 +3362,15 @@ def process_cli_reference_pages():
         with open(html_file, "r", encoding="utf-8") as file:
             content = file.read()
 
-        # Add 'cli-title' class to h1.title elements
-        # This matches the pattern: <h1 class="title">
-        content = content.replace('<h1 class="title">', '<h1 class="title cli-title">')
+        cmd_name = os.path.basename(html_file).replace(".html", "")
+
+        # Add 'cli-title' class to h1.title elements so command-page titles match the monospaced
+        # API object-page style. The CLI index is a listing page (like the API reference index),
+        # so its plain "CLI Reference" title is left unstyled to match the API index title.
+        if cmd_name != "index":
+            content = content.replace('<h1 class="title">', '<h1 class="title cli-title">')
 
         # Replace breadcrumb with a "CLI / great-docs cmd" title bar label
-        cmd_name = os.path.basename(html_file).replace(".html", "")
         _cli_label = _t("cli", "CLI")
         _bc_pat = r'<nav class="quarto-page-breadcrumbs[^"]*"[^>]*>.*?</nav>'
         if cmd_name != "index":
@@ -3382,12 +3385,12 @@ def process_cli_reference_pages():
                 f"</h1>"
             )
         else:
-            # CLI index: show "CLI / great-docs"
+            # CLI index: show "CLI / Index" to mirror the API reference index ("API / Index").
             _cli_title_html = (
                 f'<h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title">'
                 f'<span class="gd-ref-title-prefix">{_cli_label}</span>'
                 f'<span class="gd-ref-title-sep">/</span>'
-                f'<span class="gd-ref-title-name">great-docs</span>'
+                f'<span class="gd-ref-title-name">Index</span>'
                 f"</h1>"
             )
         content = re.sub(_bc_pat, _cli_title_html, content, flags=re.DOTALL)
@@ -3715,6 +3718,7 @@ print("##GD:PASS:Script paths fixed", flush=True)
 for _idx_label, _idx_path in [
     ("homepage", os.path.join("_site", "index.html")),
     ("reference index", os.path.join("_site", "reference", "index.html")),
+    ("CLI reference index", os.path.join("_site", "reference", "cli", "index.html")),
 ]:
     if os.path.isfile(_idx_path):
         with open(_idx_path, "r", encoding="utf-8") as f:
@@ -3764,20 +3768,22 @@ print("##GD:PASS:Sidebar body classes injected", flush=True)
 
 def style_api_index_sidebar_item():
     """
-    Apply inline styles to the 'API Index' sidebar link so it visually separates from the monospace
-    reference entries.
+    Apply inline styles to the 'API Index' / 'CLI Index' sidebar links so they visually separate
+    from the monospace reference entries.
 
-    Targets the `<a>` whose href ends with 'reference/index.html' and its parent
-    `<div class="sidebar-item-container">`.
+    Targets the `<a>` whose href ends with 'reference/index.html' (API index) or
+    'reference/cli/index.html' (CLI index) and its parent `<div class="sidebar-item-container">`.
     """
     import re
 
-    print("Styling API Index sidebar item...")
+    print("Styling reference index sidebar items...")
     count = 0
     font = (
         "&quot;Open Sans&quot;, -apple-system, BlinkMacSystemFont, "
         "&quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, sans-serif"
     )
+    # Match the API index link, or the CLI index link (the extra '/cli' segment is optional).
+    href_pat = r'href="[^"]*reference/(?:cli/)?index\.html"'
 
     for html_file in all_html_files:
         rel_path = os.path.relpath(html_file, "_site")
@@ -3787,11 +3793,9 @@ def style_api_index_sidebar_item():
         with open(html_file, "r", encoding="utf-8") as f:
             content = f.read()
 
-        # Find the sidebar-item-container div immediately followed by the
-        # API Index link (href ending in reference/index.html)
+        # Find the sidebar-item-container div immediately followed by the index link.
         match = re.search(
-            r'(<div class="sidebar-item-container")(>\s*'
-            r'<a )([^>]*href="[^"]*reference/index\.html"[^>]*>)',
+            r'(<div class="sidebar-item-container")(>\s*<a )([^>]*' + href_pat + r"[^>]*>)",
             content,
         )
         if not match:
@@ -3818,7 +3822,7 @@ def style_api_index_sidebar_item():
                 f.write(new_content)
             count += 1
 
-    print(f"Styled API Index sidebar item in {count} reference HTML files")
+    print(f"Styled reference index sidebar items in {count} reference HTML files")
 
 
 style_api_index_sidebar_item()
