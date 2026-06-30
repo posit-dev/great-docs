@@ -184,14 +184,15 @@ def _prune_cli_pages(dest_dir: Path, snap: object) -> None:
         return
 
     # Build the set of valid command file stems from the snapshot.
-    # CliCommandInfo.subcommands holds the actual commands; the group itself
-    # maps to `index.qmd`.
+    # CliCommandInfo.subcommands holds the actual commands; the index page maps to `index.qmd`
+    # and the root command's own page maps to the entry point's safe name.
     valid_stems: set[str] = {"index"}
-    valid_names: set[str] = set()
+    entry_name = getattr(cli_commands, "name", "") or ""
+    if entry_name:
+        valid_stems.add(entry_name.replace("-", "_"))
     for sub in getattr(cli_commands, "subcommands", []):
         # Click command names use hyphens; file stems use underscores
         valid_stems.add(sub.name.replace("-", "_"))
-        valid_names.add(sub.name)
 
     # Remove QMD files for commands not present at this version
     for qmd_file in list(cli_ref_dir.iterdir()):
@@ -200,47 +201,53 @@ def _prune_cli_pages(dest_dir: Path, snap: object) -> None:
         if qmd_file.stem not in valid_stems:
             qmd_file.unlink()
 
-    # Rewrite the index.qmd to remove stale commands from the help text
+    # Rewrite the index.qmd to remove stale commands from the listing
     index_qmd = cli_ref_dir / "index.qmd"
-    if index_qmd.exists() and valid_names:
-        _rewrite_cli_index(index_qmd, valid_names)
+    if index_qmd.exists():
+        _rewrite_cli_index(index_qmd, valid_stems)
 
     # Prune the CLI sidebar in _quarto.yml
     _prune_quarto_cli_sidebar(dest_dir, valid_stems)
 
 
-def _rewrite_cli_index(index_qmd: Path, valid_names: set[str]) -> None:
-    """Remove lines for non-existent commands from the CLI index help block."""
+def _rewrite_cli_index(index_qmd: Path, valid_stems: set[str]) -> None:
+    """Remove command entries for non-existent commands from the CLI index listing.
+
+    The index is a definition list of ``[name](href){...}`` entries. An entry is kept when the
+    first path component of its href (e.g. ``init`` from ``init.qmd``, or ``skill`` from
+    ``skill/install.qmd``) is a valid command stem at this version. Dropping an entry also drops
+    its ``:   description`` line and the trailing blank line.
+    """
     content = index_qmd.read_text(encoding="utf-8")
     lines = content.split("\n")
+    entry_re = re.compile(r"^\[[^\]]+\]\((?P<href>[^)]+)\)\{")
+
     new_lines: list[str] = []
-    in_commands_block = False
+    i = 0
+    n = len(lines)
+    while i < n:
+        match = entry_re.match(lines[i].strip())
+        if match:
+            stem = match.group("href").split("/")[0]
+            if stem.endswith(".qmd"):
+                stem = stem[:-4]
+            elif stem.endswith(".md"):
+                stem = stem[:-3]
 
-    for line in lines:
-        stripped = line.strip()
-
-        # Detect the "Commands:" header in the help text
-        if stripped == "Commands:":
-            in_commands_block = True
-            new_lines.append(line)
+            if stem in valid_stems:
+                new_lines.append(lines[i])
+                i += 1
+            else:
+                # Skip the link line, its ":   description" line, and one trailing blank line.
+                i += 1
+                if i < n and lines[i].lstrip().startswith(":"):
+                    i += 1
+                if i < n and not lines[i].strip():
+                    i += 1
             continue
 
-        if in_commands_block:
-            # End of commands block: blank line or closing fence
-            if not stripped or stripped.startswith("```") or stripped.startswith(":::"):
-                in_commands_block = False
-                new_lines.append(line)
-                continue
-
-            # Each command line looks like "  command-name   Description text..."
-            # Extract the command name (first non-whitespace token)
-            tokens = stripped.split()
-            if tokens and tokens[0] in valid_names:
-                new_lines.append(line)
-            # Skip lines for commands not in valid_names
-            continue
-
-        new_lines.append(line)
+        new_lines.append(lines[i])
+        i += 1
 
     index_qmd.write_text("\n".join(new_lines), encoding="utf-8")
 
