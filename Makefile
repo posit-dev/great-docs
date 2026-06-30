@@ -161,6 +161,10 @@ docs-install: ## Install documentation dependencies
 site-build: ## Build the great-docs site
 	@great-docs build
 
+.PHONY: adopters
+adopters: ## Regenerate ADOPTERS.md from a GitHub code search (requires gh CLI)
+	@$(PYTHON) scripts/update_adopters.py
+
 .PHONY: hub-build
 hub-build: ## Full build of the Great Docs Gauntlet (200 packages, port 3333)
 	@$(PYTHON) test-packages/render_all.py --build
