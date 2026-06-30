@@ -19,11 +19,15 @@ if TYPE_CHECKING:
 
 def is_typealias(obj: gf.Object | gf.Alias) -> bool:
     """
-    Return True if obj is a declaration of a TypeAlias
+    True when obj is a type alias
+
+    Covers both PEP 695 ``type X = ...`` aliases, which griffe models as a
+    dedicated `TypeAlias`, and explicit ``X: TypeAlias = ...`` attributes.
     """
-    # TODO:
-    # Figure out if this handles new-style typealiases introduced
-    # in python 3.12 to handle
+    # `isinstance` avoids resolving aliases, which can raise for unresolved
+    # targets; PEP 695 aliases are a distinct type rather than an Attribute.
+    if isinstance(obj, gf.TypeAlias):
+        return True
     if not (isinstance(obj, gf.Attribute) and obj.annotation):
         return False
     elif isinstance(obj.annotation, gf.ExprName):
