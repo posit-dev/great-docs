@@ -1419,20 +1419,29 @@ class TestRewriteCliIndex:
 
         index = tmp_path / "index.qmd"
         index.write_text(
-            "---\ntitle: CLI\n---\n\n"
-            "```\n"
-            "Commands:\n"
-            "  build      Build the docs\n"
-            "  preview    Preview the site\n"
-            "  old-cmd    Deprecated command\n"
-            "```\n"
+            "---\ntitle: CLI Reference\n---\n\n"
+            "# CLI Reference\n\n"
+            "## Commands {.doc-group}\n\n"
+            "[build](build.qmd){.doc-function .doc-label .doc-label-cli}\n"
+            ":   Build the docs\n\n"
+            "[preview](preview.qmd){.doc-function .doc-label .doc-label-cli}\n"
+            ":   Preview the site\n\n"
+            "[old-cmd](old_cmd.qmd){.doc-function .doc-label .doc-label-cli}\n"
+            ":   Deprecated command\n\n"
+            "## skill {.doc-group}\n\n"
+            "[install](skill/install.qmd){.doc-function .doc-label .doc-label-cli}\n"
+            ":   Install a skill\n\n"
         )
 
-        _rewrite_cli_index(index, {"build", "preview"})
+        # Note: stems use underscores; "skill" group is valid so its subcommand is kept.
+        _rewrite_cli_index(index, {"index", "build", "preview", "skill"})
         content = index.read_text()
-        assert "build" in content
-        assert "preview" in content
-        assert "old-cmd" not in content
+        assert "[build](build.qmd)" in content
+        assert "[preview](preview.qmd)" in content
+        assert "[old-cmd]" not in content
+        assert "Deprecated command" not in content
+        # Nested subcommand of a surviving group is retained.
+        assert "[install](skill/install.qmd)" in content
 
 
 class TestPruneQuartoCliSidebar:
@@ -3471,9 +3480,14 @@ class TestPruneCliPagesFull:
         cli_dir = tmp_path / "reference" / "cli"
         cli_dir.mkdir(parents=True)
         (cli_dir / "index.qmd").write_text(
-            "---\ntitle: CLI\n---\n\n```\nUsage: gd [OPTIONS]\n\n"
-            "Commands:\n  build    Build docs\n  serve    Serve docs\n"
-            "  old-cmd  Old command\n```\n"
+            "---\ntitle: CLI Reference\n---\n\n# CLI Reference\n\n"
+            "## Commands {.doc-group}\n\n"
+            "[build](build.qmd){.doc-function .doc-label .doc-label-cli}\n"
+            ":   Build docs\n\n"
+            "[serve](serve.qmd){.doc-function .doc-label .doc-label-cli}\n"
+            ":   Serve docs\n\n"
+            "[old-cmd](old_cmd.qmd){.doc-function .doc-label .doc-label-cli}\n"
+            ":   Old command\n\n"
         )
         (cli_dir / "build.qmd").write_text("Build cmd")
         (cli_dir / "serve.qmd").write_text("Serve cmd")
