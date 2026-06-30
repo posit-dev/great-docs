@@ -305,7 +305,6 @@ reference:
       contents:
         - name: GreatDocs
           members: false
-
     - title: GreatDocs Methods
       desc: >-
         Methods for installing dependencies, building the documentation site, launching a live
@@ -316,7 +315,6 @@ reference:
         - GreatDocs.build
         - GreatDocs.preview
         - GreatDocs.check_links
-
     - title: Table Preview/Explorer
       desc: >-
         Generate styled HTML table previews from any tabular data source with `tbl_preview()`, and
@@ -326,10 +324,8 @@ reference:
         - enable_tbl_preview
         - disable_tbl_preview
         - tbl_explorer
-
     - title: Skills
-      desc: >-
-        Install, check, and list Agent Skills from the Python API.
+      desc: Install, check, and list Agent Skills from the Python API.
       contents:
         - install_skill
         - check_skill
@@ -341,6 +337,29 @@ cli:
   enabled: true
   module: great_docs.cli
   name: cli
+  desc: >-
+    The `great-docs` command-line interface drives the full documentation
+    workflow: from initializing a project and building the site to checking
+    links, recording terminal sessions, and publishing to GitHub Pages.
+  sections:
+    - title: Project setup
+      desc: Initialize a project, manage its configuration, and remove Great Docs.
+      contents: [init, config, uninstall]
+    - title: Building & previewing
+      desc: Build the documentation site, preview it locally, and freeze executable content.
+      contents: [build, preview, freeze]
+    - title: Analysis & quality
+      desc: Inspect the project, validate links, and check SEO, prose, and style.
+      contents: [scan, timings, check-links, seo, lint, proofread]
+    - title: API tracking
+      desc: Snapshot the public API and diff it across versions.
+      contents: [api-snapshot, api-diff]
+    - title: Publishing & versions
+      desc: Set up GitHub Pages, manage versioned builds, and generate the changelog.
+      contents: [setup-github-pages, versions, changelog]
+    - title: Command groups
+      desc: Grouped commands for Agent Skills and terminal session recordings.
+      contents: [skill, termshow]
 
 # MCP Server Documentation
 # ------------------------
