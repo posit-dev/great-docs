@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0e1018;color:#eceefb;margin:0;padding:56px 64px}
+h1{color:#6ea8ff;font-size:44px;margin:0 0 6px}p.sub{color:#9aa0bd;font-size:20px;margin:0 0 34px}
+.panel{background:#171a2b;border:1px solid #262a44;border-radius:16px;padding:34px;max-width:760px}
+.row{display:flex;align-items:center;gap:16px;margin-bottom:26px}
+button{font-size:20px;padding:12px 26px;border-radius:12px;border:0;background:#6ea8ff;color:#04101f;font-weight:700;cursor:pointer}
+select{font-size:18px;padding:10px 12px;border-radius:10px;background:#0e1018;color:#eceefb;border:1px solid #33385a}
+#status{font-size:24px;color:#a6e3a1;min-height:30px}
+.swatch{height:66px;border-radius:12px;margin-top:22px;background:linear-gradient(90deg,#440154,#3b528b,#21918c,#5ec962,#fde725)}
+.swatch.magma{background:linear-gradient(90deg,#000004,#3b0f70,#8c2981,#de4968,#fe9f6d,#fcfdbf)}
+</style></head><body>
+<h1>Palette Explorer</h1><p class="sub">Recolor a table column, live</p>
+<div class="panel">
+  <div class="row"><button id="go">Recolor</button>
+  <select id="palette"><option value="viridis">viridis</option><option value="magma">magma</option></select></div>
+  <div id="status">Ready.</div>
+  <div id="result" class="swatch"></div>
+</div>
+<script>
+document.getElementById('go').onclick=function(){document.getElementById('status').textContent='Recolored with viridis!';};
+document.getElementById('palette').onchange=function(e){var v=e.target.value;document.getElementById('status').textContent='Palette: '+v;document.getElementById('result').className='swatch '+v;};
+</script></body></html>
