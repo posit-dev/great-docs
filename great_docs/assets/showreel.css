@@ -22,8 +22,17 @@
   user-select: none;
 }
 
+/* Light palette, applied in increasing order of authority:
+   1. the OS prefers light (fallback — only for `theme: auto` reels, which carry
+      no [data-theme]) so standalone/preview embeds still adapt;
+   2. the surrounding docs are light (Quarto sets [data-bs-theme] on <html>), so
+      an embedded reel matches the page regardless of the visitor's OS setting;
+   3. the reel explicitly asks for light.
+   The ancestor [data-bs-theme] rules outrank the media query on specificity, so
+   the page theme always wins over the OS — which is what keeps the player
+   looking identical across Chrome and Safari on the same page. */
 @media (prefers-color-scheme: light) {
-  .gd-showreel:not([data-theme="dark"]) {
+  .gd-showreel:not([data-theme]) {
     --sr-bg: #f3f4fb;
     --sr-fg: #15172a;
     --sr-muted: #5b617c;
@@ -31,12 +40,22 @@
     --sr-control-bg: rgba(255, 255, 255, 0.82);
   }
 }
+[data-bs-theme="light"] .gd-showreel:not([data-theme="dark"]),
 .gd-showreel[data-theme="light"] {
   --sr-bg: #f3f4fb;
   --sr-fg: #15172a;
   --sr-muted: #5b617c;
   --sr-surface: #ffffff;
   --sr-control-bg: rgba(255, 255, 255, 0.82);
+}
+/* Re-assert dark when the docs are dark, so a light OS preference can't leak a
+   light reel into a dark page (the media query above would otherwise apply). */
+[data-bs-theme="dark"] .gd-showreel:not([data-theme="light"]) {
+  --sr-bg: #0e0f1a;
+  --sr-fg: #f5f6fb;
+  --sr-muted: #aab0c6;
+  --sr-surface: #181a2b;
+  --sr-control-bg: rgba(12, 13, 24, 0.72);
 }
 
 /* --- Stage ------------------------------------------------------------ */
@@ -129,7 +148,9 @@
   padding: 0.45em 1.1em;
   border-radius: 999px;
   background: var(--sr-accent);
-  color: #0b1020;
+  /* Ink is chosen from the accent's luminance in JS (--sr-on-accent); the
+     fallback suits the default light accent when no brand accent is set. */
+  color: var(--sr-on-accent, #0b1020);
   font-weight: 700;
   font-size: clamp(0.85rem, 1.8vw, 1.05rem);
 }
@@ -287,7 +308,8 @@
   transform: translateX(-50%);
   max-width: 80%;
   padding: 0.4em 0.9em;
-  background: rgba(8, 9, 18, 0.66);
+  /* A denser bubble keeps captions legible even over a light scene. */
+  background: rgba(8, 9, 18, 0.78);
   color: #fff;
   font-size: clamp(0.85rem, 2vw, 1.2rem);
   line-height: 1.35;
@@ -307,7 +329,9 @@
 }
 .gd-sr-cap-word.is-spoken { color: #fff; }
 .gd-sr-cap-word.is-active {
-  color: var(--sr-accent);
+  /* The caption bubble is always near-black, so lighten the accent toward white
+     — a saturated brand accent (e.g. #2563eb) is otherwise dark-on-dark here. */
+  color: color-mix(in srgb, var(--sr-accent), #fff 50%);
   text-shadow: 0 0 10px color-mix(in srgb, var(--sr-accent) 55%, transparent);
 }
 
@@ -333,7 +357,7 @@
   display: grid;
   place-items: center;
 }
-.gd-sr-btn:hover { background: rgba(255, 255, 255, 0.1); }
+.gd-sr-btn:hover { background: color-mix(in srgb, var(--sr-fg) 12%, transparent); }
 .gd-sr-btn.is-on { color: var(--sr-accent); }
 
 .gd-sr-track {
@@ -350,7 +374,9 @@
   right: 0;
   height: 4px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.18);
+  /* Derive from the foreground so the track stays visible in both themes —
+     a fixed white was invisible on the light control bar. */
+  background: color-mix(in srgb, var(--sr-fg) 24%, transparent);
 }
 .gd-sr-fill {
   position: absolute;
