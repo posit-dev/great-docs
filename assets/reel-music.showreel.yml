@@ -1,0 +1,20 @@
+showreel:
+  title: "Music and sound"
+  theme: auto
+  brand: { accent: "#2563eb" }
+voice: { engine: piper, name: en_US-amy-medium }
+music: { file: reel-ambient.mp3, gain_db: -20, fade_in: 0.6, fade_out: 1.2 }
+sfx: { enabled: true, transition: whoosh, gain_db: -8 }
+defaults: { transition: crossfade, captions: true }
+scenes:
+  - id: t
+    type: title
+    title: "Music and sound"
+    subtitle: "an ambient bed, ducked under narration"
+    say: "A music bed plays underneath, and automatically ducks while the narration speaks."
+    motion: { type: none }
+  - id: c
+    type: card
+    title: "Whoosh"
+    body: "synthesized transition sounds"
+    say: "And each transition gets a synthesized whoosh."
