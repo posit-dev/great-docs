@@ -592,7 +592,31 @@ def test_render_embed_html_self_contained(tmp_path):
     assert "data:image/png;base64," in html
 
 
-def test_prerender_showreels_writes_embed(tmp_path):
+def test_embed_inlines_music_and_sfx(tmp_path):
+    # Regression: the music bed and SFX files must be inlined as data URIs in the
+    # embed, else the rendered guide serves nothing and the reel plays silently.
+    from great_docs._showreel import render_embed_html
+
+    (tmp_path / "bed.mp3").write_bytes(b"ID3" + b"\x00" * 128)
+    (tmp_path / "logo.svg").write_text("<svg xmlns='http://www.w3.org/2000/svg'/>", encoding="utf-8")
+    spec = (
+        "showreel: { title: M, brand: { accent: '#2563eb', logo: logo.svg } }\n"
+        "voice: { engine: silent }\n"
+        "music: { file: bed.mp3, gain_db: -20 }\n"
+        "sfx: { enabled: true, transition: whoosh }\n"
+        "scenes:\n"
+        "  - id: a\n    type: title\n    title: One\n    say: first scene here\n"
+        "  - id: b\n    type: card\n    title: Two\n    say: second scene here now\n"
+    )
+    out = tmp_path / "out"
+    build_showreel(_write_spec(tmp_path, spec), out, engine="silent")
+    html = render_embed_html(out, element_id="gd-showreel-m")
+    # The music bed, the synthesized whoosh, and the brand logo all land inline; the
+    # bundle-relative "media/" paths must not survive into the shipped manifest.
+    assert "data:audio" in html
+    assert "data:image/svg" in html
+    assert '"file": "media/' not in html
+    assert '"logo": "media/' not in html
     from great_docs._showreel import prerender_showreels
 
     (tmp_path / "reels").mkdir()
