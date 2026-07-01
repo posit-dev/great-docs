@@ -14624,6 +14624,18 @@ body-classes: "gd-homepage"
         except ImportError:
             return
 
+        # Auto-detect a project-local Piper voices dir so reels can be narrated
+        # without setting an env var. Download voices there, e.g.:
+        #   python -m piper.download_voices en_US-amy-medium --data-dir .piper-voices
+        import os as _os
+
+        if not _os.environ.get("SHOWREEL_PIPER_DATA_DIR"):
+            for cand in (self.project_root / ".piper-voices", self.project_root / ".showreel-voices"):
+                if cand.is_dir():
+                    _os.environ["SHOWREEL_PIPER_DATA_DIR"] = str(cand)
+                    log.detail(f"Using Piper voices from {cand.name}/")
+                    break
+
         rendered_count = 0
         for spec_file in spec_files:
             name = spec_file.name[: -len(".showreel.yml")]
