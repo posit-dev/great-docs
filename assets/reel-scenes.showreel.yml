@@ -1,0 +1,33 @@
+showreel:
+  title: "Scene types"
+  theme: auto
+  brand: { accent: "#2563eb", logo: logo.svg }
+voice: { engine: piper, name: en_US-amy-medium }
+defaults:
+  transition: crossfade
+  captions: true
+  motion: { type: ken_burns, zoom: 1.06 }
+scenes:
+  - id: intro
+    type: title
+    title: "Scene types"
+    subtitle: "One reel, many kinds of scene"
+    say: "A reel is a sequence of scenes. Here are a few of the kinds."
+    motion: { type: none }
+  - id: img
+    type: image
+    src: city-florence.jpg
+    say: "An image scene, with a gentle Ken Burns move."
+  - id: code
+    type: code
+    language: python
+    say: "A code scene, highlighted at build time."
+    steps:
+      - code: |
+          from great_tables import GT
+          GT(data)
+  - id: card
+    type: card
+    title: "And more"
+    body: "web pages, notebooks, and cards"
+    say: "Plus live web pages, notebooks, and title cards."
