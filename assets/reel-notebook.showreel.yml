@@ -1,0 +1,12 @@
+showreel:
+  title: "Notebook"
+  theme: auto
+voice: { engine: piper, name: en_US-amy-medium }
+scenes:
+  - id: nb
+    type: notebook
+    notebook: reel-notebook.py
+    runtime: marimo
+    viewport: { width: 1100, height: 720 }
+    capture: { mode: full, settle_ms: 1500 }
+    say: "A marimo notebook, executed at build time and captured as the scene."
