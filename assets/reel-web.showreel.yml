@@ -1,0 +1,18 @@
+showreel:
+  title: "Web capture"
+  theme: dark
+voice: { engine: piper, name: en_US-amy-medium }
+scenes:
+  - id: app
+    type: web
+    url: reel-explorer.html
+    viewport: { width: 1280, height: 760, scale: 1 }
+    cursor: synthetic
+    say: "A live web page, captured in a real browser as the cursor drives it through each step."
+    steps:
+      - wait_for: "#go"
+      - capture: { label: "start" }
+      - click: "#go"
+      - capture: { label: "recolored" }
+      - select: { selector: "#palette", value: "magma" }
+      - capture: { label: "magma" }
