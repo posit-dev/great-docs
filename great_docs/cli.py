@@ -3385,6 +3385,183 @@ termshow.add_command(term_edit)
 cli.add_command(termshow)
 
 
+# ---------------------------------------------------------------------------
+# showreel commands
+# ---------------------------------------------------------------------------
+
+
+@click.group()
+def showreel() -> None:
+    """Scripted, narrated demo videos for documentation.
+
+    Author a `name.showreel.yml` spec, synthesize a voiceover, and render it as
+    a crisp web player (with an MP4 export path planned). See SHOWREEL_PLAN.md.
+    """
+    pass
+
+
+def _resolve_spec_path(source: str) -> Path:
+    """Accept a name, a stem, or a full path and return the spec file path."""
+    p = Path(source)
+    if p.exists():
+        return p
+    for cand in (
+        Path(source + ".showreel.yml"),
+        Path(source + ".showreel.yaml"),
+        Path(source).with_suffix(".showreel.yml"),
+    ):
+        if cand.exists():
+            return cand
+    return p
+
+
+@click.command("new")
+@click.argument("name", type=str)
+@click.option("--title", type=str, default=None, help="Reel title")
+def showreel_new(name: str, title: str | None) -> None:
+    """Scaffold a starter NAME.showreel.yml spec."""
+    from ._showreel import scaffold_spec
+
+    stem = name
+    for suffix in (".showreel.yml", ".showreel.yaml", ".yml", ".yaml"):
+        if stem.endswith(suffix):
+            stem = stem[: -len(suffix)]
+            break
+    out = Path(f"{stem}.showreel.yml")
+    if out.exists():
+        raise click.ClickException(f"{out} already exists")
+    out.write_text(scaffold_spec(stem, title), encoding="utf-8")
+    click.echo(f"✓ Created {out}")
+    click.echo(f"  Build:   great-docs showreel build {stem}")
+    click.echo(f"  Preview: great-docs showreel preview {stem}")
+
+
+@click.command("build")
+@click.argument("source", type=str)
+@click.option("--output-dir", "-o", type=click.Path(), default=None, help="Output directory")
+@click.option("--engine", type=str, default=None, help="Voice engine override (piper|silent)")
+def showreel_build(source: str, output_dir: str | None, engine: str | None) -> None:
+    """Build a showreel into player assets (manifest + audio + preview)."""
+    from ._showreel import build_showreel
+
+    spec = _resolve_spec_path(source)
+    result = build_showreel(spec, output_dir, engine=engine)
+    m = result.manifest
+    click.echo(f"✓ Built {m.title!r} → {result.output_dir}/")
+    click.echo(
+        f"  {len(m.scenes)} scenes | {m.duration:.1f}s | voice: {result.engine}"
+        f" ({result.audio_scenes} narrated)"
+    )
+
+
+@click.command("preview")
+@click.argument("source", type=str)
+@click.option("--output-dir", "-o", type=click.Path(), default=None, help="Output directory")
+@click.option("--engine", type=str, default=None, help="Voice engine override (piper|silent)")
+@click.option("--port", type=int, default=8771, help="Preview server port")
+@click.option("--no-browser", is_flag=True, help="Don't auto-open the browser")
+def showreel_preview(
+    source: str, output_dir: str | None, engine: str | None, port: int, no_browser: bool
+) -> None:
+    """Build a showreel and serve the player locally."""
+    from ._showreel import build_showreel, serve_preview
+
+    spec = _resolve_spec_path(source)
+    result = build_showreel(spec, output_dir, engine=engine)
+    click.echo(f"✓ Built {result.manifest.title!r} ({result.manifest.duration:.1f}s)")
+    serve_preview(result.output_dir, port=port, open_browser=not no_browser)
+
+
+@click.command("export")
+@click.argument("source", type=str)
+@click.option("--output-dir", "-o", type=click.Path(), default=None, help="Build output directory")
+@click.option("--out", "out_file", type=click.Path(), default=None, help="Output video path")
+@click.option(
+    "--format", "fmt", type=click.Choice(["mp4", "webm", "gif"]), default="mp4", help="Output format"
+)
+@click.option("--engine", type=str, default=None, help="Voice engine override (piper|silent)")
+@click.option("--fps", type=int, default=30, help="Frames per second")
+@click.option("--height", type=int, default=720, help="Output height in pixels")
+def showreel_export(
+    source: str,
+    output_dir: str | None,
+    out_file: str | None,
+    fmt: str,
+    engine: str | None,
+    fps: int,
+    height: int,
+) -> None:
+    """Build a showreel and export a video (mp4/webm/gif) via headless capture + ffmpeg."""
+    from ._showreel import build_showreel, export_showreel
+
+    spec = _resolve_spec_path(source)
+    result = build_showreel(spec, output_dir, engine=engine)
+    click.echo(f"✓ Built {result.manifest.title!r} ({result.manifest.duration:.1f}s)")
+    click.echo(f"  Capturing frames in headless Chrome ({fmt})…")
+    video = export_showreel(result.output_dir, out_file, fmt=fmt, fps=fps, height=height)
+    size_mb = video.stat().st_size / 1e6
+    click.echo(f"✓ Exported {video} ({size_mb:.1f} MB)")
+
+
+@click.command("poster")
+@click.argument("source", type=str)
+@click.option("--output-dir", "-o", type=click.Path(), default=None, help="Build output directory")
+@click.option("--out", "out_file", type=click.Path(), default=None, help="Output PNG path")
+@click.option("--engine", type=str, default=None, help="Voice engine override (piper|silent)")
+@click.option("--at", type=float, default=None, help="Time (s) of the frame to capture")
+@click.option("--height", type=int, default=720, help="Output height in pixels")
+def showreel_poster(
+    source: str, output_dir: str | None, out_file: str | None,
+    engine: str | None, at: float | None, height: int,
+) -> None:
+    """Build a showreel and capture a social/OG poster image (PNG)."""
+    from ._showreel import build_showreel, export_poster
+
+    spec = _resolve_spec_path(source)
+    result = build_showreel(spec, output_dir, engine=engine)
+    png = export_poster(result.output_dir, out_file, at=at, height=height)
+    click.echo(f"✓ Poster → {png} ({png.stat().st_size / 1000:.0f} KB)")
+
+
+@click.command("edit")
+@click.argument("source", type=str)
+@click.option("--port", type=int, default=8770, help="Editor server port")
+@click.option("--no-browser", is_flag=True, help="Don't auto-open the browser")
+def showreel_edit(source: str, port: int, no_browser: bool) -> None:
+    """Open the Showreel Studio editor (browser NLE) for a reel.
+
+    Builds the reel for preview and serves a scene editor with a live player,
+    a properties panel, save/rebuild, and an agent-drivable command API
+    (window.__studio) with a copilot toggle.
+    """
+    from ._showreel.editor import serve_editor
+
+    spec = _resolve_spec_path(source)
+    serve_editor(spec, port=port, no_browser=no_browser)
+
+
+@click.command("voices")
+def showreel_voices() -> None:
+    """List available voice (TTS) engines."""
+    from ._showreel.voice import _ENGINES
+
+    for name, cls in _ENGINES.items():
+        available = cls().available()
+        mark = "✓" if available else "·"
+        note = "" if available else "  (not installed)"
+        click.echo(f"  {mark} {name}{note}")
+
+
+showreel.add_command(showreel_new)
+showreel.add_command(showreel_build)
+showreel.add_command(showreel_preview)
+showreel.add_command(showreel_export)
+showreel.add_command(showreel_poster)
+showreel.add_command(showreel_edit)
+showreel.add_command(showreel_voices)
+cli.add_command(showreel)
+
+
 def main() -> None:
     """Main CLI entry point for great-docs."""
     cli()
