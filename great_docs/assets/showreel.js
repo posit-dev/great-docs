@@ -370,14 +370,22 @@
     if (!wrap || !sEl._steps || !sEl._steps.length) return;
     var availW = wrap.clientWidth, availH = wrap.clientHeight;
     if (!availW || !availH) return; // not laid out yet — try again next frame
+    // Reserve room for the caption so tall code shrinks to sit above it, then
+    // center the code in the remaining (upper) space.
+    var sc = sEl._scene;
+    var capReserve = (sc && sc.say && sc.captions !== false) ? availH * 0.24 : 0;
+    var fitH = availH - capReserve;
     var maxW = 1, maxH = 1;
     sEl._steps.forEach(function (s) {
       s.inner.style.transform = "none"; // measure natural size
       var code = s.inner.querySelector(".gd-sr-code");
       if (code) { maxW = Math.max(maxW, code.offsetWidth); maxH = Math.max(maxH, code.offsetHeight); }
     });
-    var scale = Math.min(1, (availW * 0.97) / maxW, (availH * 0.97) / maxH);
-    sEl._steps.forEach(function (s) { s.inner.style.transform = "scale(" + scale.toFixed(4) + ")"; });
+    var scale = Math.min(1, (availW * 0.97) / maxW, (fitH * 0.97) / maxH);
+    sEl._steps.forEach(function (s) {
+      s.inner.style.transform = "scale(" + scale.toFixed(4) + ")";
+      s.el.style.paddingBottom = capReserve.toFixed(0) + "px"; // center above the caption
+    });
     sEl._fitted = true;
   };
 
