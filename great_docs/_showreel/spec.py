@@ -198,11 +198,15 @@ def _parse_scene(raw: dict[str, Any], index: int, defaults: dict[str, Any]) -> S
 
     say, say_prompt = _parse_say(raw.get("say"))
 
-    motion = (
-        Motion.from_value(raw["motion"])
-        if "motion" in raw
-        else Motion.from_value(defaults.get("motion"))
-    )
+    # Text scenes (title/card) stay centered by default: a global pan/zoom
+    # default would drift the text off-center by the final frame. Image and
+    # capture scenes inherit the default motion. Any scene can set `motion:`.
+    if "motion" in raw:
+        motion = Motion.from_value(raw["motion"])
+    elif stype in ("title", "card"):
+        motion = Motion()  # type "none"
+    else:
+        motion = Motion.from_value(defaults.get("motion"))
 
     duration = raw.get("duration")
     if isinstance(duration, str) and duration.strip().lower() == "auto":
