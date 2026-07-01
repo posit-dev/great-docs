@@ -5,7 +5,7 @@ showreel:
 voice: { engine: piper, name: en_US-amy-medium }
 music: { file: reel-ambient.mp3, gain_db: -20, fade_in: 0.6, fade_out: 1.2 }
 sfx: { enabled: true, transition: whoosh, gain_db: -8 }
-defaults: { transition: crossfade, captions: true }
+defaults: { transition: crossfade, captions: true , lead_in: 0.5 }
 scenes:
   - id: t
     type: title
