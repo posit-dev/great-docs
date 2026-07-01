@@ -3,7 +3,7 @@ showreel:
   theme: auto
   brand: { accent: "#2563eb" }
 voice: { engine: piper, name: en_US-amy-medium }
-defaults: { transition: crossfade, captions: true }
+defaults: { transition: crossfade, captions: true , lead_in: 0.5 }
 scenes:
   - id: t
     type: title
