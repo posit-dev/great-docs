@@ -174,14 +174,15 @@
 .gd-sr-code-inner {
   position: relative;
   display: inline-block;
-  max-width: 100%;
+  /* Natural width; JS auto-fit scales it down so the widest line fits the
+     frame, keeping the block centered at any size (scroll is useless here). */
+  transform-origin: center center;
 }
 .gd-sr-code-inner .gd-sr-code {
   margin: 0;
   border-radius: 12px;
   background: var(--sr-code-bg, #1b1d2a);
   box-shadow: 0 12px 40px -16px rgba(0, 0, 0, 0.7);
-  overflow: hidden;
 }
 .gd-sr-code-inner .gd-sr-code pre {
   margin: 0;
@@ -191,11 +192,14 @@
   line-height: 1.6;
   tab-size: 2;
   white-space: pre;
-  overflow-x: auto;
+  /* Size exactly to the widest line so the block (and the full-row focus
+     highlight) never overflow. JS auto-fit then scales it to fit the frame.
+     Scrolling is meaningless in a video frame — keep code lines short. */
+  width: max-content;
+  overflow: visible;
 }
 .gd-sr-code-inner .gd-sr-code .hll {
-  display: inline-block;
-  width: 100%;
+  display: block;
   background: rgba(110, 168, 255, 0.16);
   box-shadow: inset 3px 0 0 var(--sr-accent);
 }
