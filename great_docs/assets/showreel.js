@@ -150,6 +150,15 @@
     });
     this._sfxFired = this._sfx.map(function () { return false; });
 
+    // Re-fit code scenes when the stage resizes (invalidate; render refits).
+    if (window.ResizeObserver) {
+      this._ro = new ResizeObserver(function () {
+        self._sceneEls.forEach(function (s) { if (s._steps) s._fitted = false; });
+        if (!self.playing) self.render();
+      });
+      this._ro.observe(this.stage);
+    }
+
     this.root.tabIndex = 0;
     this.root.addEventListener("keydown", function (ev) { self._onKey(ev); });
   };
