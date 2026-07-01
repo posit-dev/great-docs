@@ -361,6 +361,25 @@
     return { ops: ops, idx: idx, frac: frac };
   }
 
+  // Auto-fit: uniformly scale a code scene's blocks so the widest line and the
+  // tallest step fit the frame, keeping the block centered at any size. One
+  // scale for all steps (so they don't resize between magic-move steps).
+  Player.prototype._fitCode = function (sEl) {
+    var wrap = sEl.querySelector(".gd-sr-code-wrap");
+    if (!wrap || !sEl._steps || !sEl._steps.length) return;
+    var availW = wrap.clientWidth, availH = wrap.clientHeight;
+    if (!availW || !availH) return; // not laid out yet — try again next frame
+    var maxW = 1, maxH = 1;
+    sEl._steps.forEach(function (s) {
+      s.inner.style.transform = "none"; // measure natural size
+      var code = s.inner.querySelector(".gd-sr-code");
+      if (code) { maxW = Math.max(maxW, code.offsetWidth); maxH = Math.max(maxH, code.offsetHeight); }
+    });
+    var scale = Math.min(1, (availW * 0.97) / maxW, (availH * 0.97) / maxH);
+    sEl._steps.forEach(function (s) { s.inner.style.transform = "scale(" + scale.toFixed(4) + ")"; });
+    sEl._fitted = true;
+  };
+
   Player.prototype._renderCode = function (sEl, p) {
     var steps = sEl._steps, n = steps.length;
     var x = xfade(p, n, 0.18);
