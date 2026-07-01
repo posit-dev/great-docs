@@ -1,0 +1,53 @@
+# A small narrated demo reel used by the Demo Reels user-guide page.
+# Builds fully offline (silent voice, no capture) so it renders anywhere.
+# Set voice.engine to piper for a real voiceover locally.
+showreel:
+  title: "data_color()"
+  description: "A short tour of Great Tables' data_color() method."
+  theme: auto
+  brand:
+    accent: "#2563eb"
+
+voice:
+  engine: silent
+
+defaults:
+  transition: crossfade
+  captions: true
+  motion: { type: ken_burns, zoom: 1.06, from: center, to: top-left }
+
+scenes:
+  - id: intro
+    type: title
+    title: "data_color()"
+    subtitle: "Color scales for any column"
+    say: "Great Tables turns a column of numbers into a color gradient."
+    motion: { type: none }
+
+  - id: code
+    type: code
+    language: python
+    say: "One method call does it, and you can pick any palette."
+    steps:
+      - code: |
+          from great_tables import GT
+          GT(data)
+        typing: true
+      - code: |
+          from great_tables import GT
+
+          (
+            GT(data)
+            .data_color(
+              columns="population",
+              palette="viridis"
+            )
+          )
+        focus: [5, 6, 7, 8]
+
+  - id: outro
+    type: card
+    title: "Try it"
+    body: "pip install great-tables"
+    cta: "posit-dev.github.io/great-tables"
+    say: "Install it today and start coloring."
