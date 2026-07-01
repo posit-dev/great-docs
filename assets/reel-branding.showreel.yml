@@ -1,0 +1,18 @@
+showreel:
+  title: "Branding"
+  theme: auto
+  brand: { accent: "#2563eb", logo: logo.svg }
+voice: { engine: piper, name: en_US-amy-medium }
+defaults: { transition: crossfade, captions: true }
+scenes:
+  - id: t
+    type: title
+    title: "Great Tables"
+    subtitle: "Your logo, your colors"
+    say: "Set a brand logo and accent color, and every title card is on brand."
+    motion: { type: none }
+  - id: c
+    type: card
+    title: "On brand"
+    body: "logo stings and accent color"
+    say: "The logo animates in, and the accent colors the captions and controls."
