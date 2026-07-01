@@ -14592,6 +14592,55 @@ body-classes: "gd-homepage"
             "social_cards_twitter_site": self._config.social_cards_twitter_site,
         }
 
+    def _prerender_showreel(self, log) -> None:
+        """Pre-render *.showreel.yml reels into a self-contained embed.html.
+
+        Discovers all ``*.showreel.yml`` specs in the project root, builds each
+        into ``great-docs/showreel/<name>/`` (synthesizing narration, capturing
+        web/notebook scenes, composing the manifest), and writes an ``embed.html``
+        the ``{{< showreel >}}`` shortcode injects.
+        """
+        # Skip build outputs, caches, and Quarto project dirs so we only pick up
+        # authored specs (not copies inside per-version build artifacts).
+        skip_dirs = {
+            "great-docs",
+            "_site",
+            "_freeze",
+            "_great_docs_build",
+            ".great-docs-build",
+            ".quarto",
+        }
+        spec_files = []
+        for f in self.project_root.rglob("*.showreel.yml"):
+            rel = f.relative_to(self.project_root)
+            if any(part in skip_dirs for part in rel.parts):
+                continue
+            spec_files.append(f)
+        if not spec_files:
+            return
+
+        try:
+            from great_docs._showreel import build_showreel, render_embed_html
+        except ImportError:
+            return
+
+        rendered_count = 0
+        for spec_file in spec_files:
+            name = spec_file.name[: -len(".showreel.yml")]
+            output_dir = self.project_path / "showreel" / name
+            try:
+                build_showreel(spec_file, output_dir)
+                (output_dir / "embed.html").write_text(
+                    render_embed_html(output_dir, element_id=f"gd-showreel-{name}"),
+                    encoding="utf-8",
+                )
+                rendered_count += 1
+            except Exception as e:
+                log.warn(f"showreel: failed to build {spec_file.name}: {e}")
+
+        if rendered_count:
+            log.detail(f"Pre-rendered {rendered_count} showreel(s)")
+
     def _prerender_term_player(self, log) -> None:
         """Pre-render .termshow recordings into SVG keyframes + manifest.json.
 
