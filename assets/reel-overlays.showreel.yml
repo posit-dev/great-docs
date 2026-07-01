@@ -1,0 +1,18 @@
+showreel:
+  title: "Overlays and cursor"
+  theme: auto
+  brand: { accent: "#2563eb" }
+voice: { engine: piper, name: en_US-amy-medium }
+scenes:
+  - id: shot
+    type: image
+    src: great-docs-site.png
+    duration: 7.0
+    motion: { type: none }
+    say: "Spotlight a region, glide a cursor in, and drop a callout to guide the eye."
+    cursor:
+      - { at: 0.3, x: 0.22, y: 0.5 }
+      - { at: 2.4, x: 0.5, y: 0.42, click: true }
+    overlays:
+      - { at: 0.6, duration: 5.5, type: spotlight, rect: [0.05, 0.28, 0.24, 0.5] }
+      - { at: 2.6, duration: 3.5, type: callout, rect: [0.05, 0.28, 0.24, 0.12], text: "the hero", color: "#8be9fd" }
