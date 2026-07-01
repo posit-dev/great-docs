@@ -1,0 +1,13 @@
+showreel:
+  title: "Karaoke captions"
+  theme: auto
+  brand: { accent: "#2563eb" }
+voice: { engine: piper, name: en_US-amy-medium }
+defaults: { transition: crossfade, captions: true }
+scenes:
+  - id: t
+    type: title
+    title: "Word-synced captions"
+    subtitle: "each word lights up as it is spoken"
+    say: "Captions are word synced. Watch each word brighten exactly as the narration reaches it."
+    motion: { type: none }
