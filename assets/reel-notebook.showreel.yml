@@ -2,6 +2,7 @@ showreel:
   title: "Notebook"
   theme: auto
 voice: { engine: piper, name: en_US-amy-medium }
+defaults: { lead_in: 0.5 }
 scenes:
   - id: nb
     type: notebook
