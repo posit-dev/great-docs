@@ -1,0 +1,10 @@
+showreel:
+  title: "Image scene"
+  theme: auto
+voice: { engine: piper, name: en_US-amy-medium }
+scenes:
+  - id: img
+    type: image
+    src: city-toronto-nighttime.png
+    say: "An image fills the frame, with a slow Ken Burns pan and zoom to bring it to life."
+    motion: { type: ken_burns, zoom: 1.12, from: bottom-right, to: top-left }
