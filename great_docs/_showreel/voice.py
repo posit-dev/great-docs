@@ -89,8 +89,15 @@ class PiperEngine:
         return shutil.which("piper") is not None
 
     def synthesize(self, text: str, voice: VoiceSpec, out_path: Path) -> Synthesis:
+        import os
+
         out_path.parent.mkdir(parents=True, exist_ok=True)
         cmd = ["piper", "--model", voice.name, "--output_file", str(out_path)]
+        # Point piper at a directory of downloaded voice models, if configured.
+        # (`voice.name` may also be an absolute path to a .onnx model.)
+        data_dir = os.environ.get("SHOWREEL_PIPER_DATA_DIR") or os.environ.get("PIPER_DATA_DIR")
+        if data_dir:
+            cmd += ["--data-dir", data_dir]
         try:
             subprocess.run(
                 cmd,
@@ -158,4 +165,24 @@ def synthesize_line(
         dur = _wav_duration(out_path)
         return Synthesis(duration=dur, words=_even_word_timings(text, dur), audio_path=out_path)
 
-    return engine.synthesize(text, voice, out_path)
+    try:
+        return engine.synthesize(text, voice, out_path)
+    except Exception as exc:
+        # A voice engine can be present but fail at runtime (e.g. Piper is on
+        # PATH but its voice model isn't installed). Fall back to silent so the
+        # reel still builds (without audio) rather than failing the whole reel.
+        _warn_voice_fallback(engine.name, exc)
+        return SilentEngine().synthesize(text, voice, out_path)
+
+
+_warned_engines: set[str] = set()
+
+
+def _warn_voice_fallback(engine_name: str, exc: Exception) -> None:
+    if engine_name in _warned_engines:
+        return
+    _warned_engines.add(engine_name)
+    print(
+        f"  ! voice engine {engine_name!r} failed ({exc}); using silent audio. "
+        "Install a voice and set SHOWREEL_PIPER_DATA_DIR for narration."
+    )
