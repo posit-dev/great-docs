@@ -4,6 +4,7 @@ showreel:
   brand: { accent: "#2563eb", logo: logo.svg }
 voice: { engine: piper, name: en_US-amy-medium }
 defaults:
+  lead_in: 0.5
   transition: crossfade
   captions: true
   motion: { type: ken_burns, zoom: 1.06 }
