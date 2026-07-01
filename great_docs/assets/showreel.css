@@ -1,0 +1,380 @@
+/* showreel player — narrated demo reels for Great Docs.
+   Vanilla CSS, theme-aware, no framework. See SHOWREEL_PLAN.md. */
+
+.gd-showreel {
+  --sr-bg: #0e0f1a;
+  --sr-fg: #f5f6fb;
+  --sr-muted: #aab0c6;
+  --sr-accent: #6ea8ff;
+  --sr-surface: #181a2b;
+  --sr-control-bg: rgba(12, 13, 24, 0.72);
+  --sr-radius: 12px;
+  position: relative;
+  width: 100%;
+  max-width: 960px;
+  margin: 1.25rem auto;
+  color: var(--sr-fg);
+  font-family: var(--sr-font, "Inter", system-ui, -apple-system, "Segoe UI", sans-serif);
+  border-radius: var(--sr-radius);
+  overflow: hidden;
+  background: var(--sr-bg);
+  box-shadow: 0 18px 50px -20px rgba(0, 0, 0, 0.6);
+  user-select: none;
+}
+
+@media (prefers-color-scheme: light) {
+  .gd-showreel:not([data-theme="dark"]) {
+    --sr-bg: #f3f4fb;
+    --sr-fg: #15172a;
+    --sr-muted: #5b617c;
+    --sr-surface: #ffffff;
+    --sr-control-bg: rgba(255, 255, 255, 0.82);
+  }
+}
+.gd-showreel[data-theme="light"] {
+  --sr-bg: #f3f4fb;
+  --sr-fg: #15172a;
+  --sr-muted: #5b617c;
+  --sr-surface: #ffffff;
+  --sr-control-bg: rgba(255, 255, 255, 0.82);
+}
+
+/* --- Stage ------------------------------------------------------------ */
+.gd-sr-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--sr-bg);
+  overflow: hidden;
+}
+.gd-showreel[data-aspect="9:16"] .gd-sr-stage { aspect-ratio: 9 / 16; }
+.gd-showreel[data-aspect="1:1"] .gd-sr-stage { aspect-ratio: 1 / 1; }
+.gd-showreel[data-aspect="4:3"] .gd-sr-stage { aspect-ratio: 4 / 3; }
+
+.gd-sr-scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0; /* opacity is driven by the clock in JS (deterministic) */
+  pointer-events: none;
+}
+
+/* Export mode: freeze residual CSS transitions/animations for byte-stable frames. */
+.gd-sr-exporting,
+.gd-sr-exporting * {
+  transition: none !important;
+  animation: none !important;
+}
+
+.gd-sr-motion {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform;
+  transform-origin: center center;
+}
+
+.gd-sr-scene img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Title + card scenes */
+.gd-sr-text {
+  text-align: center;
+  padding: 8% 10%;
+  max-width: 90%;
+}
+.gd-sr-logo {
+  display: block;
+  height: clamp(38px, 8vw, 68px);
+  width: auto;
+  margin: 0 auto 1.1rem;
+  opacity: 0;
+  transform-origin: center;
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.45));
+}
+.gd-sr-text .sr-title {
+  font-size: clamp(1.8rem, 5vw, 3.4rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin: 0;
+  background: linear-gradient(120deg, var(--sr-fg), var(--sr-accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.gd-sr-text .sr-subtitle {
+  font-size: clamp(1rem, 2.4vw, 1.5rem);
+  color: var(--sr-muted);
+  margin: 0.75rem 0 0;
+  font-weight: 500;
+}
+.gd-sr-text .sr-body {
+  font-size: clamp(1.05rem, 2.6vw, 1.7rem);
+  margin: 0.5rem 0 0;
+  font-family: var(--sr-code-font, "JetBrains Mono", ui-monospace, monospace);
+  color: var(--sr-fg);
+}
+.gd-sr-text .sr-cta {
+  display: inline-block;
+  margin-top: 1.4rem;
+  padding: 0.45em 1.1em;
+  border-radius: 999px;
+  background: var(--sr-accent);
+  color: #0b1020;
+  font-weight: 700;
+  font-size: clamp(0.85rem, 1.8vw, 1.05rem);
+}
+.gd-sr-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sr-muted);
+  background: var(--sr-control-bg);
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+/* --- Web/notebook keyframe slideshow --------------------------------- */
+.gd-sr-frames { position: relative; width: 100%; height: 100%; }
+.gd-sr-frame {
+  position: absolute;
+  inset: 0;
+  opacity: 0; /* clock-driven */
+}
+.gd-sr-frame img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+
+/* --- Code scenes ------------------------------------------------------ */
+.gd-sr-code-wrap {
+  position: relative;
+  width: 86%;
+  max-width: 900px;
+  height: 78%;
+  margin: auto;
+}
+.gd-sr-code-step {
+  position: absolute;
+  inset: 0;
+  opacity: 0; /* clock-driven */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gd-sr-code-inner {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+.gd-sr-code-inner .gd-sr-code {
+  margin: 0;
+  border-radius: 12px;
+  background: var(--sr-code-bg, #1b1d2a);
+  box-shadow: 0 12px 40px -16px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+.gd-sr-code-inner .gd-sr-code pre {
+  margin: 0;
+  padding: 1.3em 1.5em;
+  font-family: var(--sr-code-font, "JetBrains Mono", ui-monospace, monospace);
+  font-size: clamp(0.8rem, 1.7vw, 1.15rem);
+  line-height: 1.6;
+  tab-size: 2;
+  white-space: pre;
+  overflow-x: auto;
+}
+.gd-sr-code-inner .gd-sr-code .hll {
+  display: inline-block;
+  width: 100%;
+  background: rgba(110, 168, 255, 0.16);
+  box-shadow: inset 3px 0 0 var(--sr-accent);
+}
+.gd-sr-caret {
+  position: absolute;
+  top: 1.3em;
+  bottom: 1.3em;
+  width: 2px;
+  background: var(--sr-accent);
+  animation: gd-sr-blink 1s step-end infinite;
+}
+@keyframes gd-sr-blink { 50% { opacity: 0; } }
+
+/* --- Overlays (highlights / callouts) -------------------------------- */
+.gd-sr-ov {
+  position: absolute;
+  pointer-events: none;
+  transition: opacity 0.15s linear;
+  box-sizing: border-box;
+}
+.gd-sr-ov-box {
+  border: 2.5px solid var(--ov-color);
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25), 0 0 14px -2px var(--ov-color);
+}
+.gd-sr-ov-spotlight {
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(6, 7, 14, 0.62), 0 0 0 2px var(--ov-color) inset;
+}
+.gd-sr-ov-label,
+.gd-sr-ov-callout .gd-sr-ov-label {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 9px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background: var(--ov-color);
+  color: #0b1020;
+  font-weight: 700;
+  font-size: clamp(0.7rem, 1.5vw, 0.95rem);
+  padding: 0.3em 0.7em;
+  border-radius: 7px;
+  box-shadow: 0 6px 18px -6px rgba(0, 0, 0, 0.6);
+}
+.gd-sr-ov-callout { border: 2.5px solid var(--ov-color); border-radius: 8px; }
+.gd-sr-ov-callout .gd-sr-ov-label::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--ov-color);
+}
+.gd-sr-ov-label:only-child { /* a bare label with no box */ position: absolute; }
+
+/* --- Synthetic cursor ------------------------------------------------- */
+.gd-sr-cursor {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  margin: -3px 0 0 -3px;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+  transition: opacity 0.2s linear;
+  z-index: 5;
+}
+.gd-sr-cursor-ripple {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--sr-accent);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.3);
+}
+
+/* --- Captions (lower third) ------------------------------------------ */
+.gd-sr-captions {
+  position: absolute;
+  left: 50%;
+  bottom: 11%;
+  transform: translateX(-50%);
+  max-width: 80%;
+  padding: 0.4em 0.9em;
+  background: rgba(8, 9, 18, 0.66);
+  color: #fff;
+  font-size: clamp(0.85rem, 2vw, 1.2rem);
+  line-height: 1.35;
+  text-align: center;
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.gd-sr-captions.is-visible { opacity: 1; }
+.gd-showreel.captions-off .gd-sr-captions { display: none; }
+
+/* Karaoke: words dim until spoken, brighten as the narration reaches them. */
+.gd-sr-cap-word {
+  color: rgba(255, 255, 255, 0.42);
+  transition: color 0.12s linear;
+}
+.gd-sr-cap-word.is-spoken { color: #fff; }
+.gd-sr-cap-word.is-active {
+  color: var(--sr-accent);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--sr-accent) 55%, transparent);
+}
+
+/* --- Controls --------------------------------------------------------- */
+.gd-sr-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.5rem 0.8rem 0.7rem;
+  background: var(--sr-control-bg);
+}
+.gd-sr-btn {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--sr-fg);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+.gd-sr-btn:hover { background: rgba(255, 255, 255, 0.1); }
+.gd-sr-btn.is-on { color: var(--sr-accent); }
+
+.gd-sr-track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.gd-sr-rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.18);
+}
+.gd-sr-fill {
+  position: absolute;
+  left: 0;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--sr-accent);
+  width: 0%;
+}
+.gd-sr-tick {
+  position: absolute;
+  top: 50%;
+  width: 3px;
+  height: 11px;
+  transform: translate(-50%, -50%);
+  background: var(--sr-muted);
+  border-radius: 2px;
+}
+.gd-sr-tick:hover { background: var(--sr-fg); }
+.gd-sr-time {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  color: var(--sr-muted);
+}
+.gd-sr-speed { font-size: 0.78rem; min-width: 34px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gd-sr-scene { transition: none; }
+  .gd-sr-motion { transform: none !important; }
+}
