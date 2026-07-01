@@ -15759,6 +15759,9 @@ body-classes: "gd-homepage"
             # ── Pre-render termshow recordings ──────────────────────
             self._prerender_term_player(log)
 
+            # ── Pre-render showreel demo reels ──────────────────────
+            self._prerender_showreel(log)
+
             # ── Step 16: Build site with Quarto ────────────────────────
             step += 1
             log.step_start(step, "Build site with Quarto")
