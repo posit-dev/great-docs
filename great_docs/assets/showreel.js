@@ -69,6 +69,7 @@
     this._raf = null;
     this._last = 0;
     this._activeIdx = -1;
+    this._audioIdx = -1; // scene index whose narration is currently playing
     this._build();
     this.seek(0);
   }
@@ -322,22 +323,32 @@
         this._renderOverlays(sEl, this.time - sc.start);
         this._renderCursor(sEl, this.time - sc.start);
       }
-      // Audio: only the current scene's clip plays (export mutes; ffmpeg muxes).
-      var au = this._audioFor(sEl);
-      if (au) {
-        if (i === idx && this.playing && !this.exporting) {
-          var want = this.time - sc.start;
-          if (Math.abs(au.currentTime - want) > 0.25) au.currentTime = clamp(want, 0, au.duration || want);
-          au.playbackRate = this.speed;
-          if (au.paused) au.play().catch(function () {});
-        } else if (!au.paused) {
-          au.pause();
-        }
-      }
     }
+    this._syncAudio(idx);
     this._renderCaptions(idx);
     if (this.duration) this.fill.style.width = (100 * this.time / this.duration) + "%";
     this.timeEl.textContent = fmt(this.time) + " / " + fmt(this.duration);
+  };
+
+  // Play the active scene's narration. The audio clip is seeked ONCE when its
+  // scene becomes active, then left to play on its own clock — re-seeking every
+  // frame fights the audio's start-up latency and stutters it word-by-word.
+  Player.prototype._syncAudio = function (idx) {
+    if (this.exporting || !this.playing) return;
+    if (this._audioIdx === idx) return; // same scene: already playing, don't touch
+    if (this._audioIdx >= 0 && this._sceneEls[this._audioIdx]) {
+      var prev = this._audioFor(this._sceneEls[this._audioIdx]);
+      if (prev && !prev.paused) prev.pause();
+    }
+    this._audioIdx = idx;
+    var au = this._audioFor(this._sceneEls[idx]);
+    if (!au) return;
+    var sc = this.scenes[idx];
+    var want = this.time - sc.start;
+    want = au.duration > 0 ? clamp(want, 0, au.duration) : Math.max(0, want);
+    try { au.currentTime = want; } catch (e) {}
+    au.playbackRate = this.speed;
+    au.play().catch(function () {});
   };
 
   // Export mode: freeze residual CSS transitions/animations so each seeked
@@ -530,6 +541,7 @@
     if (this._raf) cancelAnimationFrame(this._raf);
     this._sceneEls.forEach(function (s) { if (s._audio && !s._audio.paused) s._audio.pause(); });
     if (this._music && !this._music.paused) this._music.pause();
+    this._audioIdx = -1; // re-sync narration to the clock on resume
   };
 
   Player.prototype.toggle = function () { this.playing ? this.pause() : this.play(); };
@@ -537,6 +549,7 @@
   Player.prototype.seek = function (t) {
     this.time = clamp(t, 0, this.duration);
     this._sceneEls.forEach(function (s) { if (s._audio) s._audio.pause(); });
+    this._audioIdx = -1; // narration re-syncs to the new position on next play
     this._syncSfxFired();
     this.render();
   };
