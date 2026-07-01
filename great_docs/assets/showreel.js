@@ -312,6 +312,7 @@
         var p = clamp((this.time - sc.start) / span, 0, 1);
         if (sc.type === "code" && sEl._steps) {
           sEl._motion.style.transform = "";
+          if (!sEl._fitted) this._fitCode(sEl);
           this._renderCode(sEl, p);
         } else {
           sEl._motion.style.transform = motionTransform(sc.motion, p);
