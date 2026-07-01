@@ -170,3 +170,5 @@ test-packages/synthetic/_rendered/
 
 # Bad practice to track lockfile if used as a package
 uv.lock
+.piper-voices/
+.showreel-voices/
