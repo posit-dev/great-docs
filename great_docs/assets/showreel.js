@@ -38,6 +38,29 @@
     return base ? base + "/" + p : p;
   }
 
+  // Serialize play()/pause() on a media element. Calling pause() while a play()
+  // promise is still pending rejects it with AbortError and, on some browsers,
+  // leaves the element's audio suppressed until it settles — the "audio goes
+  // mute for a few consecutive plays, then recovers" bug. We track the desired
+  // state (`__want`) and whether a transition is in flight (`__busy`), and only
+  // act once the pending promise resolves, so play and pause never collide.
+  function mediaPlay(a) {
+    if (!a) return;
+    a.__want = 1;
+    if (a.__busy) return; // transition in flight; honored when it settles
+    a.__busy = true;
+    var settle = function () { a.__busy = false; if (a.__want === 0) mediaPause(a); };
+    var pr;
+    try { pr = a.play(); } catch (e) { a.__busy = false; return; }
+    if (pr && pr.then) pr.then(settle, settle); else a.__busy = false;
+  }
+  function mediaPause(a) {
+    if (!a) return;
+    a.__want = 0;
+    if (a.__busy) return; // play() pending; its settle handler will pause
+    if (!a.paused) { try { a.pause(); } catch (e) {} }
+  }
+
   // Compute a transform string for a scene's motion at progress p in [0,1].
   function motionTransform(motion, p) {
     if (!motion || motion.type === "none" || !motion.type) return "";
@@ -338,7 +361,7 @@
     if (this._audioIdx === idx) return; // same scene: already playing, don't touch
     if (this._audioIdx >= 0 && this._sceneEls[this._audioIdx]) {
       var prev = this._audioFor(this._sceneEls[this._audioIdx]);
-      if (prev && !prev.paused) prev.pause();
+      if (prev) mediaPause(prev);
     }
     this._audioIdx = idx;
     var au = this._audioFor(this._sceneEls[idx]);
@@ -348,7 +371,7 @@
     want = au.duration > 0 ? clamp(want, 0, au.duration) : Math.max(0, want);
     try { au.currentTime = want; } catch (e) {}
     au.playbackRate = this.speed;
-    au.play().catch(function () {});
+    mediaPlay(au);
   };
 
   // Export mode: freeze residual CSS transitions/animations so each seeked
@@ -531,7 +554,13 @@
     this.playing = true;
     this.playBtn.innerHTML = "&#10073;&#10073;";
     this._last = performance.now();
-    if (this._music && !this.exporting) this._music.play().catch(function () {});
+    if (this._music && !this.exporting) {
+      // Restart the bed from the top when playing from the start, so replays
+      // don't resume the loop from wherever it left off.
+      if (this.time === 0) { try { this._music.currentTime = 0; } catch (e) {} }
+      this._music.playbackRate = this.speed;
+      mediaPlay(this._music);
+    }
     this._raf = requestAnimationFrame(this._tick.bind(this));
   };
 
@@ -539,8 +568,8 @@
     this.playing = false;
     this.playBtn.innerHTML = "&#9654;";
     if (this._raf) cancelAnimationFrame(this._raf);
-    this._sceneEls.forEach(function (s) { if (s._audio && !s._audio.paused) s._audio.pause(); });
-    if (this._music && !this._music.paused) this._music.pause();
+    this._sceneEls.forEach(function (s) { if (s._audio) mediaPause(s._audio); });
+    if (this._music) mediaPause(this._music);
     this._audioIdx = -1; // re-sync narration to the clock on resume
   };
 
@@ -548,7 +577,7 @@
 
   Player.prototype.seek = function (t) {
     this.time = clamp(t, 0, this.duration);
-    this._sceneEls.forEach(function (s) { if (s._audio) s._audio.pause(); });
+    this._sceneEls.forEach(function (s) { if (s._audio) mediaPause(s._audio); });
     this._audioIdx = -1; // narration re-syncs to the new position on next play
     this._syncSfxFired();
     this.render();
