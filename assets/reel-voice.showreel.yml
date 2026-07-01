@@ -1,0 +1,18 @@
+showreel:
+  title: "Narration"
+  theme: auto
+  brand: { accent: "#2563eb" }
+voice: { engine: piper, name: en_US-amy-medium }
+defaults: { transition: crossfade, captions: true }
+scenes:
+  - id: t
+    type: title
+    title: "A generated voiceover"
+    subtitle: "no recording booth required"
+    say: "Every scene's narration is synthesized with a local voice, so the whole reel speaks for itself."
+    motion: { type: none }
+  - id: c
+    type: card
+    title: "Just write the lines"
+    body: "the build produces the audio"
+    say: "You write the lines; the build turns them into speech and times the scenes to match."
