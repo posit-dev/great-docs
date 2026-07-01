@@ -40,6 +40,20 @@ def _inline_assets(build_dir: Path, manifest: dict) -> dict:
         audio = sc.get("audio")
         if audio and (build_dir / audio).exists():
             sc["audio"] = _data_uri(build_dir / audio)
+    music = manifest.get("music")
+    if isinstance(music, dict):
+        mfile = music.get("file")
+        if mfile and (build_dir / mfile).exists():
+            music["file"] = _data_uri(build_dir / mfile)
+    for ev in manifest.get("sfx", []):
+        efile = ev.get("file")
+        if efile and (build_dir / efile).exists():
+            ev["file"] = _data_uri(build_dir / efile)
+    brand = manifest.get("brand")
+    if isinstance(brand, dict):
+        logo = brand.get("logo")
+        if logo and (build_dir / logo).exists():
+            brand["logo"] = _data_uri(build_dir / logo)
     return manifest
 
 
