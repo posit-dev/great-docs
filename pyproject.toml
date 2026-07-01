@@ -50,6 +50,14 @@ svg = [
 mcp = [
     "mcp>=1.0.0",
 ]
+showreel = [
+    "nokap>=0.1.0",        # Chrome/CDP capture for web & notebook scenes (P1)
+    "marimo>=0.20.0",      # notebook scenes (P1)
+    "piper-tts>=1.2.0",    # default local voice engine
+]
+showreel-align = [
+    "whisperx>=3.1.0",     # optional word-level caption alignment (P3)
+]
 dev = [
     "pytest>=6.0",
     "pytest-cov>=3.0",
