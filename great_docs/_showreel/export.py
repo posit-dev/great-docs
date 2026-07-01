@@ -277,7 +277,7 @@ def export_showreel(
         _encode_gif(ffmpeg, frames_pattern, fps, out_file, gif_fps=gif_fps, width=gif_width)
     else:
         clips: list[tuple[float, Path, float]] = [
-            (float(sc["start"]), build_dir / sc["audio"], 0.0)
+            (float(sc["start"]) + float(sc.get("lead_in", 0.0)), build_dir / sc["audio"], 0.0)
             for sc in manifest["scenes"]
             if sc.get("audio") and (build_dir / sc["audio"]).exists()
         ]

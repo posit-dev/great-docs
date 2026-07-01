@@ -91,15 +91,19 @@ CODE_STEP_SECONDS = 2.6
 
 
 def _resolve_duration(sc: Scene, syn_duration: float | None) -> float:
+    # An explicit duration is the author's contract — the lead-in lives inside it.
     if sc.duration is not None:
         return sc.duration
+    # For auto durations the lead-in is added on top, so the whole narration (or
+    # content pacing) still plays after the dead air.
+    lead = sc.lead_in
     if syn_duration is not None:
-        return round(syn_duration + TAIL_PADDING, 3)
+        return round(lead + syn_duration + TAIL_PADDING, 3)
     if sc.type == "code" and sc.code_steps:
-        return round(CODE_STEP_SECONDS * len(sc.code_steps) + 0.8, 3)
+        return round(lead + CODE_STEP_SECONDS * len(sc.code_steps) + 0.8, 3)
     if sc.type in ("web", "notebook") and sc.keyframes:
-        return round(CODE_STEP_SECONDS * len(sc.keyframes) + 0.8, 3)
-    return DEFAULT_SILENT_SCENE
+        return round(lead + CODE_STEP_SECONDS * len(sc.keyframes) + 0.8, 3)
+    return round(lead + DEFAULT_SILENT_SCENE, 3)
 
 
 def build_showreel(

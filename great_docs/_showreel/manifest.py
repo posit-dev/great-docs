@@ -43,6 +43,8 @@ class Manifest:
         }
         if sc.is_deferred:
             data["deferred"] = True
+        if sc.lead_in:
+            data["lead_in"] = round(sc.lead_in, 3)
         if sc.audio:
             data["audio"] = sc.audio
         if sc.say:

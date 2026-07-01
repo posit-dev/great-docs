@@ -108,6 +108,7 @@ class Scene:
     say: str = ""  # resolved literal narration text
     say_prompt: str = ""  # AI directive (recorded in P0, generated in P5)
     duration: float | None = None  # None => auto (derived from narration)
+    lead_in: float = 0.0  # dead-air seconds before narration begins (Keynote's "time before")
     transition: str = "crossfade"
     transition_duration: float = 0.5
     captions: bool = True
@@ -213,6 +214,21 @@ def _parse_scene(raw: dict[str, Any], index: int, defaults: dict[str, Any]) -> S
         duration = None
     duration = float(duration) if duration is not None else None
 
+    # A lead-in holds the scene's visual before narration starts (dead air), the
+    # way Keynote's "start after" delays a build. Accept a few spellings; a
+    # per-scene value overrides the `defaults` value.
+    def _first(*keys: str) -> Any:
+        for k in keys:
+            if k in raw:
+                return raw[k]
+        for k in keys:
+            if k in defaults:
+                return defaults[k]
+        return None
+
+    lead_raw = _first("lead_in", "lead-in", "time_before", "time-before")
+    lead_in = max(0.0, float(lead_raw)) if lead_raw is not None else 0.0
+
     voice = VoiceSpec.from_dict(raw["voice"]) if isinstance(raw.get("voice"), dict) else None
 
     code_steps: list[CodeStep] = []
@@ -275,6 +291,7 @@ def _parse_scene(raw: dict[str, Any], index: int, defaults: dict[str, Any]) -> S
         say=say,
         say_prompt=say_prompt,
         duration=duration,
+        lead_in=lead_in,
         transition=str(raw.get("transition", defaults.get("transition", "crossfade"))),
         transition_duration=float(
             raw.get("transition_duration", defaults.get("transition_duration", 0.5))
