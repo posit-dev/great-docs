@@ -103,6 +103,38 @@ def test_duration_auto_vs_explicit(tmp_path):
     assert show.scenes[1].duration == pytest.approx(4.0)
 
 
+def test_lead_in_parsing_and_defaults(tmp_path):
+    spec = (
+        "voice: { engine: silent }\n"
+        "defaults: { lead_in: 0.5 }\n"
+        "scenes:\n"
+        "  - id: a\n    type: title\n    title: A\n    say: hi\n"  # inherits default
+        "  - id: b\n    type: title\n    title: B\n    say: hi\n    lead_in: 1.2\n"  # overrides
+        "  - id: c\n    type: title\n    title: C\n    say: hi\n    time_before: 0.8\n"  # alias
+    )
+    show = load_showreel(_write_spec(tmp_path, spec))
+    assert show.scenes[0].lead_in == pytest.approx(0.5)
+    assert show.scenes[1].lead_in == pytest.approx(1.2)
+    assert show.scenes[2].lead_in == pytest.approx(0.8)
+
+
+def test_lead_in_extends_auto_duration_and_manifest(tmp_path):
+    # A lead-in pushes narration later and lengthens an auto scene by that much,
+    # and it surfaces in the manifest so the player/export can delay the audio.
+    base = "voice: { engine: silent }\nscenes:\n  - id: a\n    type: title\n    title: A\n    say: welcome to the show\n"
+    plain = build_showreel(_write_spec(tmp_path, base), tmp_path / "plain", engine="silent")
+    withlead = build_showreel(
+        _write_spec(tmp_path, base.replace("say: welcome", "lead_in: 0.75\n    say: welcome"), name="b.showreel.yml"),
+        tmp_path / "lead",
+        engine="silent",
+    )
+    d0 = plain.manifest.scenes[0]
+    d1 = withlead.manifest.scenes[0]
+    assert d1.end - d0.end == pytest.approx(0.75, abs=1e-3)  # scene grew by the lead-in
+    sc = withlead.manifest.to_dict()["scenes"][0]
+    assert sc["lead_in"] == pytest.approx(0.75)
+
+
 def test_duplicate_scene_id_raises(tmp_path):
     bad = SPEC.replace("id: bye", "id: intro")
     with pytest.raises(ShowreelSpecError, match="Duplicate scene id"):
