@@ -375,6 +375,17 @@
   // frame fights the audio's start-up latency and stutters it word-by-word.
   Player.prototype._syncAudio = function (idx) {
     if (this.exporting || !this.playing) return;
+    var sc = this.scenes[idx];
+    var lead = sc.lead_in || 0;
+    // Hold the narration silent through the lead-in (dead air before speaking).
+    if (this.time - sc.start < lead) {
+      if (this._audioIdx !== -1 && this._sceneEls[this._audioIdx]) {
+        var held = this._audioFor(this._sceneEls[this._audioIdx]);
+        if (held) mediaPause(held);
+      }
+      this._audioIdx = -1;
+      return;
+    }
     if (this._audioIdx === idx) return; // same scene: already playing, don't touch
     if (this._audioIdx >= 0 && this._sceneEls[this._audioIdx]) {
       var prev = this._audioFor(this._sceneEls[this._audioIdx]);
@@ -383,8 +394,7 @@
     this._audioIdx = idx;
     var au = this._audioFor(this._sceneEls[idx]);
     if (!au) return;
-    var sc = this.scenes[idx];
-    var want = this.time - sc.start;
+    var want = this.time - sc.start - lead;
     want = au.duration > 0 ? clamp(want, 0, au.duration) : Math.max(0, want);
     try { au.currentTime = want; } catch (e) {}
     au.playbackRate = this.speed;
@@ -540,12 +550,14 @@
 
   Player.prototype._renderCaptions = function (idx) {
     var sc = this.scenes[idx];
-    var show = this.captionsOn && sc && sc.captions !== false && sc.say;
+    // Narration-relative time: the caption tracks speech, which starts after the
+    // lead-in, so the bubble stays hidden through the dead air.
+    var lt = sc ? this.time - sc.start - (sc.lead_in || 0) : 0;
+    var show = this.captionsOn && sc && sc.captions !== false && sc.say && lt >= 0;
     if (!show) { this.capEl.classList.remove("is-visible"); return; }
     this.capEl.classList.add("is-visible");
     if (this._capIdx !== idx) { this._buildCaption(sc); this._capIdx = idx; }
     if (this._capWords) {
-      var lt = this.time - sc.start;
       for (var i = 0; i < this._capWords.length; i++) {
         var w = this._capWords[i];
         w.el.classList.toggle("is-spoken", lt >= w.start);
