@@ -61,6 +61,19 @@
     if (!a.paused) { try { a.pause(); } catch (e) {} }
   }
 
+  // Pick a legible ink (near-black or white) for text sitting ON a solid color,
+  // from that color's perceived luminance. Lets a brand accent be any shade —
+  // a dark accent gets white text, a light accent gets dark text — instead of
+  // assuming the accent is always light (which left dark text on a blue pill).
+  function contrastInk(color) {
+    var h = String(color).trim().replace(/^#/, "");
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return null; // non-hex: leave to CSS default
+    var n = parseInt(h, 16);
+    var lum = 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255);
+    return lum > 140 ? "#0b1020" : "#ffffff";
+  }
+
   // Compute a transform string for a scene's motion at progress p in [0,1].
   function motionTransform(motion, p) {
     if (!motion || motion.type === "none" || !motion.type) return "";
@@ -103,7 +116,11 @@
     if (this.m.aspect) this.root.setAttribute("data-aspect", this.m.aspect);
     if (this.m.theme && this.m.theme !== "auto") this.root.setAttribute("data-theme", this.m.theme);
     var brand = this.m.brand || {};
-    if (brand.accent) this.root.style.setProperty("--sr-accent", brand.accent);
+    if (brand.accent) {
+      this.root.style.setProperty("--sr-accent", brand.accent);
+      var ink = contrastInk(brand.accent);
+      if (ink) this.root.style.setProperty("--sr-on-accent", ink);
+    }
     if (brand.font) this.root.style.setProperty("--sr-font", brand.font);
     if (brand.code_font) this.root.style.setProperty("--sr-code-font", brand.code_font);
 
