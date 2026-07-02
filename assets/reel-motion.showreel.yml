@@ -7,16 +7,16 @@ scenes:
   - id: a
     type: image
     src: city-zurich.jpg
-    say: "Ken Burns drifts across the frame."
-    motion: { type: ken_burns, zoom: 1.1, from: top-left, to: bottom-right }
+    say: "A pan and zoom drifts across the frame."
+    motion: { type: pan-zoom, zoom: 1.1, from: top-left, to: bottom-right }
   - id: b
     type: image
     src: city-singapore.jpg
     say: "Zoom pushes straight in."
-    motion: { type: zoom, zoom: 1.16 }
+    motion: { type: scale, zoom: 1.16 }
   - id: c
     type: image
     src: city-chicago-panoramic-skyline.png
     say: "And a hard cut lands on the final shot."
     transition: cut
-    motion: { type: pan, zoom: 1.12, from: left, to: right }
+    motion: { type: move, zoom: 1.12, from: left, to: right }

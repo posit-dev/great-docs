@@ -42,11 +42,23 @@ class VoiceSpec:
         )
 
 
+# Motion type names follow Keynote's Action-build vocabulary (`move`, `scale`),
+# with `pan-zoom` for the combined drift-and-zoom. Older cinematography names are
+# accepted as aliases so existing specs keep working.
+_MOTION_ALIASES = {
+    "ken_burns": "pan-zoom",
+    "ken-burns": "pan-zoom",
+    "kenburns": "pan-zoom",
+    "zoom": "scale",
+    "pan": "move",
+}
+
+
 @dataclass
 class Motion:
     """A camera move applied over a scene's duration (player-side, scrub-accurate)."""
 
-    type: str = "none"  # none | ken_burns | zoom | pan
+    type: str = "none"  # none | pan-zoom | scale | move
     zoom: float = 1.06
     start: str = "center"  # corresponds to YAML `from`
     end: str = "center"  # corresponds to YAML `to`
@@ -55,8 +67,9 @@ class Motion:
     def from_value(cls, value: Any) -> Motion:
         if not isinstance(value, dict):
             return cls()
+        raw_type = str(value.get("type", "none"))
         return cls(
-            type=str(value.get("type", "none")),
+            type=_MOTION_ALIASES.get(raw_type, raw_type),
             zoom=float(value.get("zoom", 1.06)),
             start=str(value.get("from", "center")),
             end=str(value.get("to", "center")),
@@ -392,20 +405,20 @@ voice:
 defaults:
   transition: crossfade
   captions: true
-  motion: {{ type: ken_burns, zoom: 1.06, from: center, to: top-left }}
+  motion: {{ type: pan-zoom, zoom: 1.06, from: center, to: top-left }}
 
 scenes:
   - id: intro
     type: title
     title: "{title}"
     subtitle: "Built with Great Docs showreel"
-    say: "Welcome — let me show you what this can do."
+    say: "Welcome, let me show you what this can do."
     motion: {{ type: none }}
 
   - id: shot
     type: image
     src: assets/screenshot.png
-    say: "Here's the feature in action, with a gentle Ken Burns pan."
+    say: "Here's the feature in action, with a gentle pan and zoom."
 
   - id: outro
     type: card

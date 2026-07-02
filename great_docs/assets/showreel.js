@@ -81,10 +81,11 @@
     var a = anchor(motion.from), b = anchor(motion.to);
     var ax = lerp(a[0], b[0], p), ay = lerp(a[1], b[1], p);
     var scale, maxShift;
-    if (motion.type === "pan") {
+    if (motion.type === "move" || motion.type === "pan") {
+      // Hold a fixed zoom and translate across the frame.
       scale = zoom;
       maxShift = (scale - 1) * 50;
-    } else { // ken_burns or zoom
+    } else { // scale (zoom) or pan-zoom (ken_burns): ease the zoom over time
       scale = lerp(1.0, zoom, p);
       maxShift = (scale - 1) * 50;
     }

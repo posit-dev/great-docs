@@ -180,7 +180,7 @@
       function (v) { if (v.trim() === "") delete sc.duration; else sc.duration = parseFloat(v); touch(); });
     selectField("Transition", ["crossfade", "cut"], sc.transition || "crossfade",
       function (v) { sc.transition = v; touch(); });
-    selectField("Motion", ["ken_burns", "zoom", "pan", "none"], (sc.motion && sc.motion.type) || "ken_burns",
+    selectField("Motion", ["pan-zoom", "scale", "move", "none"], (sc.motion && sc.motion.type) || "pan-zoom",
       function (v) { sc.motion = Object.assign({}, sc.motion, { type: v }); touch(); });
   }
 
@@ -277,7 +277,7 @@
         return {
           index: i, id: sc.id, type: sc.type, say: sayText(sc),
           title: sc.title, duration: sc.duration != null ? sc.duration : "auto",
-          transition: sc.transition || "crossfade", motion: (sc.motion || {}).type || "ken_burns",
+          transition: sc.transition || "crossfade", motion: (sc.motion || {}).type || "pan-zoom",
         };
       }),
     };

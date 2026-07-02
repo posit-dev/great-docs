@@ -7,5 +7,5 @@ scenes:
   - id: img
     type: image
     src: city-toronto-nighttime.png
-    say: "An image fills the frame, with a slow Ken Burns pan and zoom to bring it to life."
-    motion: { type: ken_burns, zoom: 1.12, from: bottom-right, to: top-left }
+    say: "An image fills the frame, with a slow pan and zoom to bring it to life."
+    motion: { type: pan-zoom, zoom: 1.12, from: bottom-right, to: top-left }

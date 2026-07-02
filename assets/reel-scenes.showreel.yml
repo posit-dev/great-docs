@@ -7,7 +7,7 @@ defaults:
   lead_in: 0.5
   transition: crossfade
   captions: true
-  motion: { type: ken_burns, zoom: 1.06 }
+  motion: { type: pan-zoom, zoom: 1.06 }
 scenes:
   - id: intro
     type: title
@@ -18,7 +18,7 @@ scenes:
   - id: img
     type: image
     src: city-florence.jpg
-    say: "An image scene, with a gentle Ken Burns move."
+    say: "An image scene, with a gentle pan and zoom."
   - id: code
     type: code
     language: python

@@ -38,7 +38,7 @@ voice:
 defaults:
   transition: crossfade
   captions: true
-  motion: { type: ken_burns, zoom: 1.1, from: center, to: top-left }
+  motion: { type: pan-zoom, zoom: 1.1, from: center, to: top-left }
 
 scenes:
   - id: intro
@@ -91,10 +91,23 @@ def test_defaults_inherited_and_overridden(tmp_path):
     show = load_showreel(_write_spec(tmp_path))
     # intro overrides motion to none
     assert show.scenes[0].motion.type == "none"
-    # pic inherits default ken_burns motion
-    assert show.scenes[1].motion.type == "ken_burns"
+    # pic inherits the default pan-zoom motion
+    assert show.scenes[1].motion.type == "pan-zoom"
     assert show.scenes[1].motion.zoom == pytest.approx(1.1)
     assert show.scenes[1].motion.end == "top-left"
+
+
+def test_motion_type_aliases(tmp_path):
+    # Keynote-style names are canonical; the old cinematography names still parse.
+    spec = (
+        "scenes:\n"
+        "  - id: a\n    type: image\n    src: x.png\n    motion: { type: ken_burns }\n"
+        "  - id: b\n    type: image\n    src: x.png\n    motion: { type: zoom }\n"
+        "  - id: c\n    type: image\n    src: x.png\n    motion: { type: pan }\n"
+        "  - id: d\n    type: image\n    src: x.png\n    motion: { type: pan-zoom }\n"
+    )
+    show = load_showreel(_write_spec(tmp_path, spec))
+    assert [s.motion.type for s in show.scenes] == ["pan-zoom", "scale", "move", "pan-zoom"]
 
 
 def test_duration_auto_vs_explicit(tmp_path):
