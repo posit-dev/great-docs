@@ -90,7 +90,7 @@ def _is_external_alias(obj: dc.Alias | dc.Object, mod: dc.Module) -> bool:
 
 
 def _sections_from_package(mod: dc.Module) -> list[SpecSection]:
-    """Default API sections derived from a package module's exported members"""
+    """Derive default API sections from a package module's exported members"""
 
     has_all = "__all__" in mod.members
 
@@ -128,7 +128,7 @@ def _sections_from_package(mod: dc.Module) -> list[SpecSection]:
 
 
 def _to_simple_dict(el: object) -> object:
-    """Recursive plain-dict representation of a spec node tree, suitable for YAML"""
+    """Recursively convert a spec node tree to a plain-dict representation, suitable for YAML"""
     if isinstance(el, _Walkable):
         return {
             k: _to_simple_dict(v)
@@ -171,13 +171,12 @@ def _resolve_alias(obj: dc.Alias | dc.Object, get_object: _GetObject) -> dc.Obje
 
 class _Resolver:
     """
-    A translator from authored `spec` nodes to resolved `content` nodes
+    A translator from the `spec` tree to the resolved `content` tree
 
-    Each authored `SpecObject` is located in griffe and rebuilt as a concrete
-    `Doc`; sections and their entries are rebuilt as their `content`
-    counterparts. State carried across a translation (`crnt_package`,
-    `options`, `dynamic`) mirrors the inheritance of these settings down the
-    authored tree.
+    Each `SpecObject` is located in griffe and rebuilt as a concrete
+    `Doc`; sections and their entries become their `content` counterparts.
+    Package, options, and dynamic-mode settings are inherited from a section
+    by the objects nested under it.
     """
 
     def __init__(
@@ -226,11 +225,11 @@ class _Resolver:
         return new
 
     def resolve_sections(self, sections: list[SpecSection]) -> list[Section]:
-        """The authored sections translated into resolved `content.Section`s"""
+        """Resolve the `spec` sections into `content.Section`s"""
         return [self._resolve_section(s) for s in sections]
 
     def _resolve_section(self, el: SpecSection) -> Section:
-        """A top-level authored section rebuilt with each entry wrapped in a `Page`"""
+        """A top-level `spec` section rebuilt with each entry wrapped in a `Page`"""
         old_package = self.crnt_package
         old_options = self.options
 
@@ -255,7 +254,7 @@ class _Resolver:
 
     def _resolve_entry(self, el: SpecEntry) -> Page | Text:
         """
-        A single section entry rebuilt as its resolved `content` counterpart
+        Rebuild a single section entry as its resolved `content` counterpart
 
         A documented object becomes its own single-object `Page`; a free-text
         block stays inline as a `Text`.
@@ -268,11 +267,11 @@ class _Resolver:
         raise TypeError(f"Cannot resolve section entry of type: {type(el)}")
 
     def _resolve_text(self, el: SpecText) -> Text:
-        """An authored free-text block rebuilt as a `content.Text`"""
+        """Rebuild a `spec` free-text block as a `content.Text`"""
         return Text(kind=el.kind, contents=el.contents)
 
     def _resolve_object(self, el: SpecObject) -> Doc:
-        """An authored `SpecObject` located in griffe and rebuilt as a concrete `Doc`"""
+        """Locate a `SpecObject` in griffe and rebuild it as a concrete `Doc`"""
         old_package = self.crnt_package
         # A member `SpecObject` carries its parent's path as `package`; adopt it
         # so the member's full path is computed relative to the parent.
@@ -285,7 +284,7 @@ class _Resolver:
             self.crnt_package = old_package
 
     def _resolve_documented_object(self, el: SpecObject) -> Doc:
-        """The subject object located in griffe and rebuilt with its resolved members"""
+        """Locate the subject object in griffe and rebuild it with its resolved members"""
         pkg = self.crnt_package
         if pkg is None:
             path = el.name
@@ -349,7 +348,7 @@ class _Resolver:
         )
 
     def _fetch_members(self, el: SpecObject, obj: dc.Object | dc.Alias) -> list[str]:
-        """Member paths to document for a given `SpecObject` element and its resolved object"""
+        """Fetch the member paths to document for a given `SpecObject` element and its resolved object"""
         if el.members is not None:
             return el.members
 
@@ -417,7 +416,7 @@ def resolve(
     package: str | None = None,
     settings: Settings | None = None,
 ) -> list[Section]:
-    """Resolved sections ready for rendering, translated from the authored spec tree"""
+    """Resolve the `spec` tree into sections ready for rendering"""
 
     parser = settings.parser if settings is not None else "numpy"
     dynamic = settings.dynamic if settings is not None else None
@@ -437,7 +436,7 @@ def resolve(
 
 
 def _autogenerate_sections(r: _Resolver, package: str | None) -> list[SpecSection]:
-    """Default sections introspected from `package`, with the equivalent config echoed to stdout"""
+    """Introspect default sections from `package`, echoing the equivalent config to stdout"""
     print("Autogenerating contents (since no contents specified in config)")
 
     assert isinstance(package, str)

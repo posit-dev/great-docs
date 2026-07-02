@@ -1,9 +1,9 @@
-"""Writing / IO layer for the renderer.
+"""
+The API-reference files produced from a resolved content tree
 
-Free functions and `PageWriter` that turn resolved nodes into files on
-disk.  `APIReference.build` delegates every write operation to this module;
-nothing here reaches back into `APIReference` except `write_typing_information`,
-which accepts the instance as a parameter to avoid circular imports.
+The reference index, one page per documented object, the sidebar YAML, and
+the typing pages — written to disk by `write_index`, `PageWriter`,
+`write_sidebar`, and `write_typing_information`.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ _log = logging.getLogger(__name__)
 
 
 def merge_frontmatter(content: str, extra: dict[str, Any]) -> str:
-    """Content string with `extra` keys merged into its YAML frontmatter.
+    """Merge `extra` keys into a content string's YAML frontmatter.
 
     If `content` already has a frontmatter block (``---`` header), the
     extra keys are inserted into that block. Otherwise a new block is
@@ -125,7 +125,7 @@ def _generate_sidebar(
     out_page_suffix: str,
     sidebar: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Quarto sidebar YAML structure for the given resolved sections.
+    """Generate the Quarto sidebar YAML structure for the given resolved sections.
 
     Produces a ``{"website": {"sidebar": [...]}}`` dict suitable for writing
     directly to a ``.yml`` file.
@@ -206,7 +206,7 @@ def write_index(
     out_index: str,
     header_level: int,
 ) -> str:
-    """Path of the written API index page.
+    """Write the API index page, returning its path.
 
     Renders the reference summary page from `api_ref` plus its resolved
     `sections` and writes it to ``<dir>/<out_index>``.
@@ -245,7 +245,7 @@ def write_sidebar(
     dir: str,
     out_page_suffix: str,
 ) -> None:
-    """Sidebar YAML file written to the configured ``sidebar["file"]``.
+    """Write the sidebar YAML file to the configured ``sidebar["file"]``.
 
     Generates a Quarto sidebar configuration from the resolved `sections` and
     writes it to the path in ``api_ref.settings.sidebar["file"]``.
@@ -274,7 +274,7 @@ def write_typing_information(
     typing_module_paths: list[str],
     api_ref: APIReference,
 ) -> None:
-    """API reference pages for protocols, type variables, and type aliases.
+    """Write the API reference pages for protocols, type variables, and type aliases.
 
     One ``.qmd`` page per entry in `typing_module_paths`, written alongside
     the rest of the reference output and registered in the reference's inventory.
@@ -299,7 +299,7 @@ def write_typing_information(
 
 
 class PageWriter:
-    """Renderer that writes individual API doc pages to disk.
+    """Writer for the per-object API-reference pages
 
     Each page is rendered to Quarto Markdown, its frontmatter is extended with
     navigation and table-processing directives, and the file is written only

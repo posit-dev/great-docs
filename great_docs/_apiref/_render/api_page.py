@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 class __RenderAPIPage(RenderPageMixin, RenderBase):
     """
-    Render an API Page object (content.Page)
+    Render an API page object (`content.Page`)
     """
 
     def __post_init__(self):
@@ -101,5 +101,5 @@ class __RenderAPIPage(RenderPageMixin, RenderBase):
 
 class RenderAPIPage(__RenderAPIPage):
     """
-    Extend Rendering of an API Page
+    Extension point for the rendering of an API page
     """

@@ -82,7 +82,7 @@ def escape_indents(s: str) -> str:
 
 def markdown_escape(s: str) -> str:
     """
-    Escape string that may be interpreted as markdown
+    Escape a string that may be interpreted as markdown
 
     This function is deliberately not robust to all possibilities. It
     will improve as needed.
@@ -94,7 +94,7 @@ def markdown_escape(s: str) -> str:
 
 def _highlight_func(m: re.Match[str]) -> str:
     """
-    Return matched group(string) wrapped in a Span for a string
+    Wrap the matched group in a `Span` for a string
 
     Helper function for highlight_repr_value
     """
@@ -135,7 +135,7 @@ def highlight_repr_value(value: str) -> str:
 
 def format_see_also(s: str) -> str:
     """
-    Convert qualified names in the see also section content into interlinks
+    Convert qualified names in see-also section content into interlinks
     """
 
     def replace_func(m: re.Match[str]) -> str:
@@ -150,7 +150,7 @@ def format_see_also(s: str) -> str:
 
 def format_name(doc: content.Doc, format: DisplayNameFormat = "relative") -> str:
     """
-    Return a name to use for the object
+    Build a name to use for the object
 
     Parameters
     ----------
@@ -181,7 +181,7 @@ def repr_obj(obj: Any) -> str:
 @repr_obj.register
 def _(obj: gf.Expr) -> str:
     """
-    Representation of an expression as code
+    Represent an expression as code
     """
     # We expect the obj expression to consist of
     # a combination of only strings and name expressions
@@ -191,7 +191,7 @@ def _(obj: gf.Expr) -> str:
 @repr_obj.register
 def _(s: str) -> str:
     """
-    Repr of str enclosed double quotes
+    Enclose the repr of `s` in double quotes
     """
     if len(s) >= 2 and (s[0] == s[-1] == "'"):
         s = f'"{s[1:-1]}"'
@@ -201,14 +201,14 @@ def _(s: str) -> str:
 @repr_obj.register
 def _(obj: gf.ExprName) -> str:
     """
-    A named expression
+    Represent a named expression as its bare name
     """
     return obj.name
 
 
 def formatted_signature(name: str, params: list[str]) -> str:
     """
-    Return a formatted signature of function/method
+    Format a signature of a function/method
 
     Parameters
     ----------
@@ -237,7 +237,7 @@ def formatted_signature(name: str, params: list[str]) -> str:
 
 def pretty_code(s: str) -> str:
     """
-    Make code that will not be highlighted by pandoc pretty
+    Make code that pandoc will not syntax-highlight presentable
 
     code inside html <code></code> tags (and without <pre> tags)
     makes it possible to have links & interlinks. But the white
@@ -256,7 +256,7 @@ def pretty_code(s: str) -> str:
 
 def render_formatted_expr(el: gf.Expr) -> str:
     """
-    Format and render expression
+    Render an expression as ruff-formatted code
 
     Uses ruff for formatting
 
@@ -325,7 +325,7 @@ def format_str(source: str) -> str:
 
 def format_value(value: str | gf.Expr | None = None) -> str:
     """
-    Render a value
+    Render a value as escaped, highlighted markdown
 
     Parameters
     ----------

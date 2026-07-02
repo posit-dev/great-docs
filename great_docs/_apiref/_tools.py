@@ -31,7 +31,7 @@ __all__ = (
 
 def _canonical_path(klass: type | MethodType) -> str:
     """
-    Return the canonical path to python type object
+    Return the canonical path to a python type object
     """
     if not isinstance(klass, type):
         klass = klass.__class__
@@ -43,7 +43,7 @@ def _canonical_path(klass: type | MethodType) -> str:
 
 def _render(obj: gf.Object) -> str:
     """
-    Render gf.Object to qmd
+    Render a `gf.Object` to qmd
     """
 
     def toDocObject(obj: gf.Object) -> "DocType":
@@ -71,9 +71,9 @@ def _render(obj: gf.Object) -> str:
 
 def render_code_variable(code: str, name: str | None = None) -> str:
     """
-    Render named variable in code to qmd
+    Render a named variable in code to qmd
 
-    If name is None, return code rendered as a module
+    If name is None, render the code as a module
     """
     with gf.temporary_visited_package(
         "package", {"__init__.py": code}, docstring_parser="numpy"
@@ -84,9 +84,7 @@ def render_code_variable(code: str, name: str | None = None) -> str:
 
 def render_type_object(path: str | type | MethodType) -> str:
     """
-    Render python object to qmd
-
-    If name is None, return code rendered as a module
+    Render a python object to qmd
     """
     if not isinstance(path, str):
         path = _canonical_path(path)

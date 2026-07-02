@@ -205,7 +205,7 @@ class InterLink(Link):
 
 class shortcode(Inline):
     """
-    Create quarto shortcode
+    A quarto shortcode
 
     Parameters
     ----------

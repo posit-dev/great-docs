@@ -16,7 +16,7 @@ class Manifest:
 
 
 class _ManifestBuilder(NodeVisitor):
-    """Accumulated pages and inventory items produced by a single traversal of a resolved tree."""
+    """A resolved section tree's pages (to write) and inventory items (to index)"""
 
     def __init__(self, base_dir: str) -> None:
         self.base_dir = base_dir
@@ -24,7 +24,7 @@ class _ManifestBuilder(NodeVisitor):
         self.pages: list[Page] = []
 
     def find_page_node(self) -> Page:
-        """The nearest `Page` ancestor of the current node in the traversal context."""
+        """Find the nearest `Page` enclosing the current node"""
         crnt_node = ctx_node.get()
 
         while True:
@@ -70,7 +70,7 @@ class _ManifestBuilder(NodeVisitor):
 
 
 def build_manifest(sections: list[Section], *, dir: str) -> Manifest:
-    """All pages and inventory items found in a resolved section list."""
+    """Build the manifest of pages and inventory items found in a resolved section list"""
 
     b = _ManifestBuilder(base_dir=dir)
     _ = b.visit(sections)
@@ -101,7 +101,7 @@ class _PackagePrefixRemover(NodeTransformer):
 
 
 def remove_package_prefix(sections: list[Section], package: str) -> list[Section]:
-    """Resolved sections with the leading package name removed from every `Page` path."""
+    """Remove the leading package name from every `Page` path in resolved sections"""
 
     remover = _PackagePrefixRemover(package)
     return remover.visit(sections)  # type: ignore[return-value]

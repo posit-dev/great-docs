@@ -13,7 +13,7 @@ from ._walkable import _Walkable as NodeBase
 
 
 def transform(el: object) -> object:
-    """Return a more specific docstring element, or simply return the original one."""
+    """Cast `el` to a more specific docstring element, falling back to `el` itself"""
 
     if isinstance(el, tuple):
         try:
@@ -53,7 +53,7 @@ class _DocstringSectionPatched(ds.DocstringSection):
 
     @staticmethod
     def split_sections(text: str) -> list[tuple[str, str]]:
-        """Return tuples of (title, body) for all numpydoc style sections in the text."""
+        """Split text into (title, body) tuples for all numpydoc style sections"""
         import re
 
         comp = re.compile(r"^([\S \t]+)\n-+$\n?", re.MULTILINE)
@@ -81,7 +81,7 @@ class _DocstringSectionPatched(ds.DocstringSection):
 
     @classmethod
     def transform(cls, el: ds.DocstringSection) -> list[ds.DocstringSection]:
-        """Attempt to cast DocstringSection element to more specific section type."""
+        """Cast `el` to a more specific `DocstringSection` type, when possible"""
 
         if not isinstance(el, (ds.DocstringSectionText, ds.DocstringSectionAdmonition)):
             return [el]
@@ -133,7 +133,7 @@ class ExampleText:
 
 
 def tuple_to_data(el: "tuple[ds.DocstringSectionKind, str]") -> ExampleCode | ExampleText:
-    """Re-format funky tuple setup in example section to be a class."""
+    """Build an `ExampleCode` or `ExampleText` from the example-section tuple"""
     assert len(el) == 2
 
     kind, value = el
@@ -149,7 +149,7 @@ def tuple_to_data(el: "tuple[ds.DocstringSectionKind, str]") -> ExampleCode | Ex
 
 
 def fields(el: object) -> list[str] | list[int] | None:
-    """Return the relevant fields for an object, for preview purposes.
+    """List the relevant fields for an object, for preview purposes
 
     Replaces plum dispatch with isinstance-based dispatch.
     """
@@ -245,7 +245,7 @@ class Formatter:
         self.compact = compact
 
     def format(self, call: object, depth: int = 0, pad: int = 0) -> str:
-        """Return a nice tree, with boxes for nodes."""
+        """Format `call` as a tree diagram, with boxes for nodes"""
 
         call = transform(call)
 
@@ -311,7 +311,7 @@ def preview(
     compact: bool = False,
     as_string: bool = False,
 ) -> str | None:
-    """Print a friendly representation of a griffe object."""
+    """Print a friendly representation of a griffe object, or return it as a string"""
 
     res = Formatter(max_depth=max_depth, compact=compact).format(ast)
 

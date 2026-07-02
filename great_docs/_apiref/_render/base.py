@@ -56,7 +56,7 @@ class __RenderBase(Block):
 
     def __str__(self):
         """
-        The documentation as quarto markdown
+        Return the documentation as quarto markdown
         """
         return str(
             Blocks(
@@ -130,14 +130,14 @@ class __RenderBase(Block):
 
     def render_summary(self) -> Sequence[DefinitionItem]:
         """
-        Return a line(s) item that summarises the object
+        Return a line item, or items, that summarises the object
         """
         return []
 
 
 class RenderBase(__RenderBase):
     """
-    Extend the base render class
+    Extension point for the base render class
 
     This class is meant for internal use. Users should not have
     to extend it.

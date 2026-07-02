@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 class __RenderDocClass(RenderDocMembersMixin, RenderDocCallMixin, RenderDoc):
     """
-    Render documentation for a class (nodes.DocClass)
+    Render documentation for a class (`content.DocClass`)
     """
 
     def __post_init__(self):
@@ -35,7 +35,7 @@ class __RenderDocClass(RenderDocMembersMixin, RenderDocCallMixin, RenderDoc):
     @cached_property
     def is_dataclass(self):
         """
-        Return True if the class object is a dataclass
+        Whether the class object is a dataclass
         """
         return "dataclass" in self.obj.labels
 
@@ -136,5 +136,5 @@ class __RenderDocClass(RenderDocMembersMixin, RenderDocCallMixin, RenderDoc):
 
 class RenderDocClass(__RenderDocClass):
     """
-    Extend Rendering of a nodes.DocClass object
+    Extension point for the rendering of a `content.DocClass` object
     """

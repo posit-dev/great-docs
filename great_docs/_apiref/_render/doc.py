@@ -56,7 +56,7 @@ if TYPE_CHECKING:
 @dataclass
 class __RenderDoc(RenderBase):
     """
-    Render a nodes.Doc object
+    Render a `content.Doc` object
     """
 
     show_title: bool = True
@@ -160,7 +160,7 @@ class __RenderDoc(RenderBase):
     @cached_property
     def kind(self) -> DocObjectKind:
         """
-        Return the object's kind
+        The object's kind
 
         class, function, method, property, attribute, module, alias
         """
@@ -169,7 +169,7 @@ class __RenderDoc(RenderBase):
     @cached_property
     def label(self) -> str:
         """
-        Return a label for the object
+        A label for the object
         """
         return get_label(self.obj).lower()
 
@@ -299,7 +299,7 @@ class __RenderDoc(RenderBase):
         default: str | gf.Expr | None,
     ) -> Inline:
         """
-        Create code snippet that declares a variable
+        Create a code snippet that declares a variable
 
         This applies to function parameters and module/class attributes
 
@@ -367,7 +367,7 @@ class __RenderDoc(RenderBase):
 
     def render_docstring_subject(self) -> BlockContent:
         """
-        Render the subject of docstring
+        Render the subject of the docstring
         """
         return Div(Para(self.docstring_subject), Attr(classes=["doc-subject"]))
 
@@ -453,7 +453,7 @@ class __RenderDoc(RenderBase):
 
     def render_body(self) -> BlockContent:
         """
-        Render the docsting of the Doc object
+        Render the docstring of the Doc object
         """
         return None if not self.docstring_sections else Blocks(self.docstring_sections)
 
@@ -501,7 +501,7 @@ class __RenderDoc(RenderBase):
     @render_docstring_section.register
     def _(self, el: gf.DocstringSectionAdmonition):
         """
-        This catches unofficial numpydoc sections
+        Render an unofficial numpydoc section
         """
         return _convert_rst_text(el.value.description)
 
@@ -516,7 +516,7 @@ class __RenderDoc(RenderBase):
     @render_docstring_section.register
     def _(self, el: qast.DocstringSectionSeeAlso):
         """
-        Render See Also section
+        Render the See Also section
         """
         content = format_see_also(el.value)
         items: list[DefinitionItem] = []
@@ -532,8 +532,8 @@ class __RenderDoc(RenderBase):
     @render_docstring_section.register(gf.DocstringSectionModules)
     def _(self, el):
         """
-        Suppress collection-style sections (Methods, Functions, Classes, Modules, Attributes)
-        emitted by the numpy parser.
+        Suppress collection-style sections (Methods, Functions, Classes, Modules,
+        Attributes) emitted by the numpy parser
 
         These sections are hand-written summaries of class/module members (e.g.,
         `Methods\\n-------\\nfoo(x)\\n    Description.`). Great Docs already auto-generates the same
@@ -584,7 +584,7 @@ class __RenderDoc(RenderBase):
 
     def render_usage_source(self) -> BlockContent:
         """
-        Row with usage and source
+        Render a row with usage and source
         """
         source = self.source_link if self.show_source_link else None
         return Div(
@@ -618,7 +618,7 @@ class __RenderDoc(RenderBase):
 
     def _source_relative_path(self) -> str | None:
         """
-        Path of the object's source file relative to the repository root.
+        Compute the path of the object's source file, relative to the repository root.
 
         griffe's ``relative_package_filepath`` is relative to the package's
         *parent* directory (a griffe search path), so for ``src/`` layouts and
@@ -663,7 +663,7 @@ class __RenderDoc(RenderBase):
 
 class RenderDoc(__RenderDoc):
     """
-    Extend rendering of all objects that have docstrings
+    Extension point for the rendering of all objects that have docstrings
 
     These are modules, classes, functions and attributes.
     """

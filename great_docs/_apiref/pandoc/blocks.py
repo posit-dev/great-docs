@@ -326,7 +326,7 @@ class RawHTMLBlockTag(Block):
 
     def __str__(self):
         """
-        Return tag content as markdown
+        Return the tag content as markdown
         """
         content = blockcontent_to_str(self.content)
         attr = (self.attr and f" {self.attr.html}") or ""

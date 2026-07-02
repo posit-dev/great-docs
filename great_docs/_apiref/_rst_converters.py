@@ -1,4 +1,4 @@
-"""RST / Sphinx / Google-style docstring → Markdown converters.
+"""RST / Sphinx / Google-style docstring → Markdown converters
 
 All text-level transforms that convert reStructuredText markup, Sphinx field
 lists, and Google-style sections into Quarto-compatible Markdown live here.
@@ -66,7 +66,7 @@ _RST_DIRECTIVES = frozenset(
 
 
 def _replace_rst_code_block(m: re.Match) -> str:
-    """Callback for _RST_CODE_BLOCK_RE — converts one RST ``::`` block."""
+    """Convert one RST ``::`` block to markdown; used as an `_RST_CODE_BLOCK_RE` callback"""
     prefix_text = m.group(1)
     indented_block = m.group(3)
 
@@ -102,7 +102,7 @@ def _replace_rst_code_block(m: re.Match) -> str:
 
 
 def _smart_dedent(text: str) -> str:
-    """Dedent text using the first non-blank line's indent as the margin.
+    """Dedent text using the first non-blank line's indent as the margin
 
     Unlike `textwrap.dedent`, this tolerates lines with *less* indentation than the margin (e.g. a
     string-literal continuation at column 0 that made `inspect.cleandoc` choose margin=0). We strip
@@ -133,7 +133,7 @@ def _smart_dedent(text: str) -> str:
 
 
 def _convert_rst_text(text: str) -> str:
-    """Apply all RST -> Markdown transforms to a docstring text section."""
+    """Apply all RST -> Markdown transforms to a docstring text section"""
     # Defensive coercion: some docstring section types (especially those produced
     # by dynamically-inspected PyO3 modules or by section kinds without a
     # dedicated singledispatch handler) may pass a non-string `el.value` here
@@ -183,7 +183,7 @@ _RST_CITATION_RE = re.compile(
 
 
 def _convert_rst_citations(text: str) -> str:
-    """Convert RST `.. [N] body` citation markers to a numbered markdown list.
+    """Convert RST `.. [N] body` citation markers to a numbered markdown list
 
     Input like::
 
@@ -228,7 +228,7 @@ def _convert_rst_citations(text: str) -> str:
 
 
 def _convert_rst_simple_tables(text: str) -> str:
-    """Convert RST simple tables (`=====` delimited) to Markdown pipe tables."""
+    """Convert RST simple tables (`=====` delimited) to Markdown pipe tables"""
     lines = text.split("\n")
     result: list[str] = []
     i = 0
@@ -281,7 +281,7 @@ def _convert_rst_simple_tables(text: str) -> str:
 
 
 def _convert_rst_grid_tables(text: str) -> str:
-    """Convert RST grid tables (`+---+` delimited) to Markdown pipe tables."""
+    """Convert RST grid tables (`+---+` delimited) to Markdown pipe tables"""
     lines = text.split("\n")
     result: list[str] = []
     i = 0
@@ -320,7 +320,7 @@ def _convert_rst_grid_tables(text: str) -> str:
 
 
 def _rst_simple_table_to_md(table_lines: list[str]) -> str | None:
-    """Convert an RST simple table (list of raw lines) to a Markdown pipe table."""
+    """Convert an RST simple table (list of raw lines) to a Markdown pipe table"""
     separators = [
         (idx, line) for idx, line in enumerate(table_lines) if re.match(r"^=+(\s+=+)+\s*$", line)
     ]
@@ -388,7 +388,7 @@ def _rst_simple_table_to_md(table_lines: list[str]) -> str | None:
 
 
 def _rst_grid_table_to_md(table_lines: list[str]) -> str | None:
-    """Convert an RST grid table (list of raw lines) to a Markdown pipe table."""
+    """Convert an RST grid table (list of raw lines) to a Markdown pipe table"""
     border_line = table_lines[0]
     col_positions = [m.start() for m in re.finditer(r"\+", border_line)]
 
@@ -457,7 +457,7 @@ _SPHINX_ROLE_RE = re.compile(rf":(?:py:)?(?P<role>{_SPHINX_ROLE_NAMES}):`(?P<inn
 
 
 def _convert_sphinx_roles(text: str) -> str:
-    """Convert Sphinx cross-reference roles to markdown code spans.
+    """Convert Sphinx cross-reference roles to markdown code spans
 
     ``:func:`name``` → ```name()```
     ``:class:`name``` → ```name```
@@ -505,7 +505,7 @@ _RST_DIRECTIVE_NAME_PAT = "|".join(re.escape(n) for n in _ALL_RST_DIRECTIVE_NAME
 
 
 def _rst_directive_to_callout(name: str, body: str, inline: str = "") -> str:
-    """Build a Quarto callout div from a parsed RST directive."""
+    """Build a Quarto callout div from a parsed RST directive"""
     if name in _RST_VERSION_DIRECTIVES:
         label = _RST_VERSION_LABELS[name]
         # Version number may be on the inline portion or the start of body
@@ -525,7 +525,7 @@ def _rst_directive_to_callout(name: str, body: str, inline: str = "") -> str:
 
 
 def _convert_rst_directives(text: str) -> str:
-    """Convert RST admonition / version directives to Quarto callout blocks.
+    """Convert RST admonition / version directives to Quarto callout blocks
 
     Handles inline form (``.. note:: body``) and block form
     (``.. note::\\n\\n    indented body``).
@@ -600,7 +600,7 @@ _BOLD_SECTION_PAT = "|".join(re.escape(n) for n in _BOLD_SECTION_NAMES)
 
 
 def _convert_bold_section_headers(text: str, heading_level: int) -> str:
-    r"""Convert ``**Examples**::`` bold headers into proper QMD section headings.
+    r"""Convert ``**Examples**::`` bold headers into proper QMD section headings
 
     ``**Examples**::`` → ``## Examples {.doc-section .doc-section-examples}``
     """
@@ -634,7 +634,7 @@ _SPHINX_FIELD_BLOCK_RE = re.compile(r"(?:^|\n)(?=:(?:param|type|returns?|rtype|r
 
 def _convert_sphinx_fields(text: str, heading_level: int) -> str:
     """Parse Sphinx-style ``:param:`` / ``:returns:`` / ``:raises:`` field lists
-    and generate proper QMD section headings with Markdown pipe tables.
+    and generate proper QMD section headings with Markdown pipe tables
     """
     if not _SPHINX_FIELD_BLOCK_RE.search(text):
         return text
@@ -756,7 +756,7 @@ _GOOGLE_SECTION_RE = re.compile(
 
 
 def _parse_google_entries(body: str) -> list[tuple[str, str]]:
-    """Parse indented ``name: description`` entries from a Google-style section body.
+    """Parse indented ``name: description`` entries from a Google-style section body
 
     Returns a list of ``(name, description)`` tuples.
     """
@@ -778,7 +778,7 @@ def _parse_google_entries(body: str) -> list[tuple[str, str]]:
 
 
 def _parse_google_raises(body: str) -> list[tuple[str, str]]:
-    """Parse ``ExceptionType: description`` entries from a Raises section."""
+    """Parse ``ExceptionType: description`` entries from a Raises section"""
     entry_re = re.compile(r"^(?P<exc>[A-Z]\w+)\s*:\s*(?P<desc>.*)$")
     entries: list[tuple[str, str]] = []
     for line in body.splitlines():
@@ -796,7 +796,7 @@ def _parse_google_raises(body: str) -> list[tuple[str, str]]:
 
 def _convert_google_sections(text: str, heading_level: int) -> str:
     """Parse Google-style docstring sections (`Args:`, `Returns:`, etc.) and generate proper QMD
-    section headings with tables or prose blocks.
+    section headings with tables or prose blocks
     """
     if not _GOOGLE_SECTION_RE.search(text):
         return text
@@ -907,7 +907,7 @@ def _convert_google_sections(text: str, heading_level: int) -> str:
 
 
 def _fence_doctest_blocks(text: str) -> str:
-    """Wrap unfenced ``>>>`` doctest lines in ````python`` fenced code blocks.
+    """Wrap unfenced ``>>>`` doctest lines in ````python`` fenced code blocks
 
     Detects consecutive lines that start with ``>>>`` or ``...`` (doctest
     continuation) and wraps each group in a fenced code block so Quarto renders

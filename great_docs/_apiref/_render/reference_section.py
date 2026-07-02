@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 @dataclass
 class __RenderReferenceSection(RenderBase):
     """
-    Render a section object (content.Section)
+    Render a section object (`content.Section`)
 
     This is a section of the index/reference page
     """
@@ -36,7 +36,7 @@ class __RenderReferenceSection(RenderBase):
 
     def render_title(self) -> BlockContent:
         """
-        Render title or subtitle of section
+        Render the title or subtitle of section
 
         Markup and Styling
         ------------------
@@ -112,5 +112,5 @@ class __RenderReferenceSection(RenderBase):
 
 class RenderReferenceSection(__RenderReferenceSection):
     """
-    Extend rendering of a section on the api-reference page
+    Extension point for the rendering of a section on the api-reference page
     """

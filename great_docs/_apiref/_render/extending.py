@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 def extend_base_class(cls: type[RenderBase]):
     """
-    Copy methods & attributes defined in cls into it's immediate base class
+    Copy the methods & attributes defined in `cls` into its immediate base class
 
     This helps with customising the Render classes
 
@@ -45,9 +45,7 @@ def extend_base_class(cls: type[RenderBase]):
 
 def set_class_attr(cls: type[RenderBase], name: str, value: Any):
     """
-    Set class attribute
-
-    Properly handles super() in functions and properties.
+    Set a class attribute, with proper handling of `super()` in functions and properties
 
     Unlike the builtin setattr, this function ensures that values
     that are functions/methods or properties that use super() will
@@ -68,7 +66,7 @@ def set_class_attr(cls: type[RenderBase], name: str, value: Any):
     # function is a closure, we rebuild it with __class__ changed to the
     # class being attached to.
     def adjust_closure(obj: T) -> T:
-        """Adjust __class__ closure for a function"""
+        """Adjust the `__class__` closure for a function"""
         if isinstance(obj, FunctionType) and obj.__closure__:
             obj = FunctionType(
                 obj.__code__.replace(co_freevars=("__class__",)),
@@ -99,7 +97,7 @@ def set_class_attr(cls: type[RenderBase], name: str, value: Any):
 
 def exclude_parameters(spec: dict[str, str | Sequence[str]]):
     """
-    Exclude the parameters of functions/class in the documentation
+    Exclude the parameters of functions/classes from the documentation
 
     When a function has a deprecated parameter, we may want to exclude it from
     the documentation. Use this function in your `_renderer.py` file to
@@ -158,7 +156,7 @@ def exclude_parameters(spec: dict[str, str | Sequence[str]]):
 
 def exclude_attributes(spec: dict[str, str | Sequence[str]]):
     """
-    Exclude the parameters of functions/class in the documentation
+    Exclude the attributes of classes from the documentation
 
     When a function has a deprecated attribute, we may want to exclude it from
     the documentation. Use this function in your `_renderer.py` file to

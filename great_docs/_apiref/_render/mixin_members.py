@@ -260,7 +260,7 @@ class __RenderDocMembersMixin(RenderDoc):
 
     def render_attributes(self) -> RenderedMembersGroup | None:
         """
-        Render the function members of the Doc
+        Render the attribute members of the Doc
         """
         return self._render_members_group("attributes") if self.show_attributes else None
 
@@ -272,13 +272,13 @@ class __RenderDocMembersMixin(RenderDoc):
 
     def render_function_member_pages(self) -> RenderedMemberPagesGroup | None:
         """
-        Render the function members of the Doc
+        Render the member pages of functions
         """
         return self._render_member_pages_group("functions") if self.show_functions else None
 
     def render_attribute_member_pages(self) -> RenderedMemberPagesGroup | None:
         """
-        Render the function members of the Doc
+        Render the member pages of attributes
         """
         return self._render_member_pages_group("attributes") if self.show_attributes else None
 
@@ -292,7 +292,7 @@ class __RenderDocMembersMixin(RenderDoc):
         Parameters
         ----------
         docables
-            List of nodes.Doc subclasses. One for each member.
+            List of `content.Doc` subclasses. One for each member.
 
         member_group
             An identifier for the type of the members.
@@ -341,12 +341,12 @@ class __RenderDocMembersMixin(RenderDoc):
         group: Literal["classes", "functions", "attributes"],
     ) -> RenderedMemberPagesGroup | None:
         """
-        Render all of class, function or attribute members
+        Render all of the class, function or attribute member pages
 
         Parameters
         ----------
         docables
-            List of nodes.Doc subclasses. One for each member.
+            List of `content.Doc` subclasses. One for each member.
 
         member_group
             An identifier for the type of the members.
@@ -396,5 +396,5 @@ class __RenderDocMembersMixin(RenderDoc):
 
 class RenderDocMembersMixin(__RenderDocMembersMixin, RenderDoc):
     """
-    Extend Rendering of objects that have members
+    Extension point for the rendering of objects that have members
     """

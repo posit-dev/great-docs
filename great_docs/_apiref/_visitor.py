@@ -76,7 +76,7 @@ class NodeVisitor:
 
 
 class NodeTransformer(NodeVisitor):
-    """A transformed node tree that reuses the subtrees left unchanged"""
+    """A node tree rebuilt with only the changed nodes replaced"""
 
     def _enter_dataclass(self, el: NodeBase) -> NodeBase:
         new_kwargs: dict[str, object] = {}

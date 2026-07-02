@@ -11,16 +11,15 @@ class _Walkable:
     """
     Base of every value in the API-reference model
 
-    Membership marks a value as a traversable node of the reference
-    tree, giving it a shallow `copy()` and field iteration.
+    Membership marks a value as a node of the reference tree.
     """
 
     def copy(self) -> _Walkable:
-        """Shallow copy of this node"""
+        """Return a shallow copy of this node"""
         return copy.copy(self)
 
     def _iter_fields(self) -> Generator[tuple[str, object], None, None]:
-        """(field_name, value) pairs for every dataclass field on this node"""
+        """Iterate (field_name, value) pairs for every dataclass field on this node"""
         for f in dc_fields(self):
             yield f.name, getattr(self, f.name)
 

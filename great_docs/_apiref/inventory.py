@@ -19,7 +19,7 @@ class InventoryItem(_Walkable):
 
 
 def convert_inventory(inv: "dict[str, Any] | object", out_name: str | None = None) -> None:
-    """Convert an inventory to JSON.
+    """Write an inventory to a JSON file
 
     Parameters
     ----------
@@ -58,7 +58,7 @@ def create_inventory(
     uri: "str | Callable[..., str] | None" = None,
     dispname: "str | Callable[..., str] | None" = None,
 ) -> dict[str, Any]:
-    """Return a inventory as a dictionary.
+    """Build the inventory as a dictionary of project, version, count, and items
 
     Parameters
     ----------
@@ -101,7 +101,7 @@ def _create_inventory_item(
     dispname: "str | Callable" = "-",
     priority: str = "1",
 ) -> dict:
-    """Create a single inventory item dict."""
+    """Build a single inventory entry as a dict"""
 
     if isinstance(item, InventoryItem):
         return {

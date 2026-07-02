@@ -36,7 +36,7 @@ class TypeSections(Block):
     def __post_init__(self) -> None:
         def make_render(item: inventory.InventoryItem):
             """
-            Create RenderDoc object
+            Create a `RenderDoc` for a typing object
             """
             docable = griffe_to_doc(item.obj)
             return get_render_type(docable)(docable, 3)
@@ -71,7 +71,7 @@ class TypeSections(Block):
     @cached_property
     def items(self) -> list[inventory.InventoryItem]:
         """
-        Return all type information items
+        All type-information items — protocols, type variables, and type aliases
         """
         return [
             *self.protocols_items,
@@ -124,9 +124,9 @@ class TypeInformation(Block):
     @cached_property
     def base_uri(self) -> str:
         """
-        Relative base filepath (w.r.t) to the build directory
+        The module's output path, relative to the build directory
 
-        It does not have an extenstion.
+        It does not have an extension.
 
         With the right extensions, this is where:
             - the module's aliases should be written (.qmd)
@@ -141,7 +141,7 @@ class TypeInformation(Block):
     def sections(self) -> TypeSections:
         def make_item(obj: gf.Object | gf.Alias) -> inventory.InventoryItem:
             """
-            Return item of typing object
+            Build an `InventoryItem` for a typing object
             """
             return inventory.InventoryItem(
                 name=obj.canonical_path,
@@ -164,7 +164,7 @@ class TypeInformation(Block):
 
     def write(self) -> None:
         """
-        Write typing information to qmd file
+        Write the typing-information page to its `.qmd` file
         """
         self.api_ref.items.extend(self.sections.items)
         filepath = Path(f"{self.base_uri}.qmd")

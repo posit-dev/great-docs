@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 @dataclass
 class __RenderDocAttribute(RenderDoc):
     """
-    Render documentation for an attribute (nodes.DocAttribute)
+    Render documentation for an attribute (`content.DocAttribute`)
     """
 
     show_signature_annotation: bool = True
@@ -50,7 +50,7 @@ class __RenderDocAttribute(RenderDoc):
 
     def render_description(self) -> BlockContent:
         """
-        Render description for attributes: subject above signature, no Usage label.
+        Render description for attributes: subject above signature, no Usage label
         """
         return Blocks(
             [
@@ -62,8 +62,8 @@ class __RenderDocAttribute(RenderDoc):
     @cached_property
     def docstring_sections_content(self):
         """
-        Filter out Returns sections for properties since the type
-        is already shown in the signature.
+        The docstring sections, excluding Returns for properties since the type
+        is already shown in the signature
         """
         items = super().docstring_sections_content
         return [(title, section) for title, section in items if title != "Returns"]
@@ -71,5 +71,5 @@ class __RenderDocAttribute(RenderDoc):
 
 class RenderDocAttribute(__RenderDocAttribute):
     """
-    Extend Rendering of a nodes.DocAttribute object
+    Extension point for the rendering of a `content.DocAttribute` object
     """

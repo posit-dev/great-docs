@@ -1,4 +1,6 @@
-"""The `APIReference` façade and its `Settings`, built from a Quarto config block."""
+"""
+The `APIReference` façade and its `Settings`, built from a Quarto config block
+"""
 
 from __future__ import annotations
 
@@ -112,7 +114,7 @@ class APIReference:
 
     @staticmethod
     def _select_block(config: dict[str, Any] | str | Path) -> dict[str, Any]:
-        """The `api-reference:` (or legacy `quartodoc:`) mapping for a config dict, file path, or full _quarto.yml"""
+        """Select the `api-reference:` (or legacy `quartodoc:`) mapping from a config dict, file path, or full _quarto.yml"""
         if isinstance(config, (str, Path)):
             loaded = read_yaml(str(config))
             cfg: dict[str, Any] = cast("dict[str, Any]", loaded) if isinstance(loaded, dict) else {}
@@ -124,7 +126,7 @@ class APIReference:
         return dict(cast("dict[str, Any]", block))
 
     def build(self, filter: str = "*") -> None:
-        """Reference pages, index, inventory, and (optionally) sidebar written to disk"""
+        """Write reference pages, index, inventory, and (optionally) sidebar to disk"""
         s = self.settings
 
         if s.source_dir:

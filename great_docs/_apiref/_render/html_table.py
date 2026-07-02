@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 def _md_link_to_html(text: str) -> str:
     """
-    Convert markdown links to HTML anchor tags.
+    Convert markdown links to HTML anchor tags
 
     Handles the pandoc-style link format: [content](url){.class1 .class2}
     """
@@ -42,7 +42,7 @@ def html_table(
     table_class: str = "gd-summary-table",
 ) -> str:
     """
-    Render rows as an HTML table.
+    Render rows as an HTML table
 
     Styling is handled by the .gd-summary-table class in great-docs.scss,
     which overrides Bootstrap defaults for a cleaner appearance.

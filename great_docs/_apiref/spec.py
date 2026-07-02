@@ -1,9 +1,9 @@
-"""Authored (input) shapes of the API-reference tree
+"""
+Our representation of the parts in the api-reference in the config file
 
-Every class here is a raw, spec-level node as written by the user in YAML:
-strings and dicts that name an object to document, plus the section/text
-wrappers around them. Parsed into the `SpecEntry` tree consumed by
-`resolve`, which turns it into the resolved family in `content.py`.
+i.e The specification of what is to be documented.
+Every class here is a `spec`-level node from the `api-reference:` config:
+strings and dicts that name an object to document.
 """
 
 from __future__ import annotations
@@ -94,7 +94,7 @@ class SpecText(_Walkable):
 
 @dataclass
 class SpecSection(_Walkable):
-    """A section of content on the reference index page, as authored"""
+    """A section of the reference index page, as written in the config"""
 
     kind: str = "section"
     title: str | None = None
@@ -124,7 +124,7 @@ SpecEntry = SpecSection | SpecObject | SpecText
 
 
 def _coerce_spec_object(value: str | dict[str, Any]) -> SpecObject:
-    """A `SpecObject` built from a YAML string or dict entry"""
+    """Coerce a YAML string or dict entry into a `SpecObject`"""
     if isinstance(value, dict):
         return SpecObject(**value)
     return SpecObject(name=value)

@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 class __RenderDocModule(RenderDocMembersMixin, RenderDoc):
     """
-    Render documentation for a module (nodes.DocModule)
+    Render documentation for a module (`content.DocModule`)
     """
 
     def __post_init__(self):
@@ -40,5 +40,5 @@ class __RenderDocModule(RenderDocMembersMixin, RenderDoc):
 
 class RenderDocModule(__RenderDocModule):
     """
-    Extend Rendering of a nodes.DocModule object
+    Extension point for the rendering of a `content.DocModule` object
     """

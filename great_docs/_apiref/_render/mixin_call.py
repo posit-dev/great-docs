@@ -72,7 +72,7 @@ class __RenderDocCallMixin(RenderDoc):
         _RST_DIRECTIVE_RE = re.compile(r"^\.\.\s+\w+::")
 
         def _is_rst_directive_item(item: DocstringDefinitionType) -> bool:
-            """Check if a definition item is actually a misinterpreted RST directive."""
+            """Whether a definition item is actually a misinterpreted RST directive"""
             ann = getattr(item, "annotation", None)
             return bool(ann and isinstance(ann, str) and _RST_DIRECTIVE_RE.match(ann.strip()))
 
@@ -160,7 +160,7 @@ class __RenderDocCallMixin(RenderDoc):
     @cached_property
     def parameters(self) -> gf.Parameters:
         """
-        Return the parameters of the callable
+        The parameters of the callable
         """
         from .._globals import EXCLUDE_PARAMETERS
 
@@ -215,7 +215,7 @@ class __RenderDocCallMixin(RenderDoc):
         )
 
     def _render_overload_signatures(self, name: str, overloads: list[gf.Function]) -> BlockContent:
-        """Render multiple @overload signatures as a single code block."""
+        """Render multiple `@overload` signatures as a single code block"""
         sig_lines: list[str] = []
         for ov in overloads:
             if not hasattr(ov, "parameters"):
@@ -276,7 +276,7 @@ class __RenderDocCallMixin(RenderDoc):
 
     def render_signature_parameter(self, el: gf.Parameter) -> str:
         """
-        Parameter for the function/method signature
+        Render a parameter for the function/method signature
 
         This is a single item in the brackets of
 
@@ -303,5 +303,5 @@ class __RenderDocCallMixin(RenderDoc):
 
 class RenderDocCallMixin(__RenderDocCallMixin):
     """
-    Extend Rendering of objects that can be called
+    Extension point for the rendering of objects that can be called
     """

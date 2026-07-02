@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 class __RenderReferencePage(RenderPageMixin, RenderBase):
     """
-    Render the API Reference Page
+    Render the API Reference page
     """
 
     def __init__(
@@ -91,5 +91,5 @@ class __RenderReferencePage(RenderPageMixin, RenderBase):
 
 class RenderReferencePage(__RenderReferencePage):
     """
-    Extend rendering of the API Reference page
+    Extension point for the rendering of the API Reference page
     """

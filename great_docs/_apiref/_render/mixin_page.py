@@ -22,5 +22,5 @@ class __RenderPageMixin(RenderBase):
 
 class RenderPageMixin(__RenderPageMixin):
     """
-    Extend Rendering of pages
+    Extension point for the rendering of pages
     """

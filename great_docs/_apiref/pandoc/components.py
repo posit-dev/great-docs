@@ -18,7 +18,7 @@ __all__ = ("Attr",)
 @dataclass
 class Attr:
     """
-    Create a new set of attributes (Attr)
+    A set of attributes (`Attr`)
     """
 
     identifier: Optional[str] = None

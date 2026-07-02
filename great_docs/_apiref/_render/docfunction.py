@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 class __RenderDocFunction(RenderDocCallMixin, RenderDoc):
     """
-    Render documentation for a function (nodes.DocFunction)
+    Render documentation for a function (`content.DocFunction`)
     """
 
     def __post_init__(self):
@@ -29,5 +29,5 @@ class __RenderDocFunction(RenderDocCallMixin, RenderDoc):
 
 class RenderDocFunction(__RenderDocFunction):
     """
-    Extend Rendering of a nodes.DocFunction object
+    Extension point for the rendering of a `content.DocFunction` object
     """

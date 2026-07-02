@@ -1,8 +1,10 @@
-"""Griffe object access layer for the renderer.
+"""
+Griffe object access
 
-Thin wrappers around griffe's static-analysis API that load, look up, and
-mutate `Object` / `Alias` nodes.  Nothing in this module writes files or
-drives build logic; all I/O lives elsewhere.
+The located `Object` / `Alias` nodes that model a package's public API — the
+source of truth for every documented object's signature and docstring, loaded
+and normalized from griffe's static analysis (with an optional dynamic-import
+mode).
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ DEFAULT_OPTIONS: dict[str, dict[str, object]] = {}
 
 
 def get_parser_defaults(name: str) -> dict[str, object]:
-    """Default parser options registered for the named docstring style.
+    """Get the default parser options registered for the named docstring style.
 
     Returns an empty dict when no defaults have been registered for `name`.
     """
@@ -44,7 +46,7 @@ def get_object(
     dynamic: bool | str = False,
     loader: GriffeLoader | None = None,
 ) -> dc.Object | dc.Alias:
-    """Griffe object at the given import path.
+    """Get the griffe object at the given import path.
 
     Parameters
     ----------
@@ -115,7 +117,7 @@ def get_object(
 
 
 def _resolve_target(obj: dc.Alias) -> dc.Object:
-    """The concrete `Object` at the end of an alias chain.
+    """Resolve the alias chain to the concrete `Object` at its end.
 
     Follows `Alias.target` links until a non-alias node is reached.
 
@@ -138,7 +140,10 @@ def _resolve_target(obj: dc.Alias) -> dc.Object:
 
 
 def replace_docstring(obj: dc.Object | dc.Alias, f: object = None) -> None:
-    """Replace a griffe object's docstring in place with the runtime docstring.
+    """Replace the griffe object's docstring in place with the imported runtime docstring
+
+    Callable attributes (the `method = some_function` pattern) are also
+    promoted to functions so they render with a signature.
 
     Parameters
     ----------
@@ -256,7 +261,7 @@ def dynamic_alias(
     target: str | None = None,
     loader: GriffeLoader | None = None,
 ) -> dc.Object | dc.Alias:
-    """Griffe object for `path`, resolved via a dynamic import.
+    """Resolve a griffe object for `path` via a dynamic import.
 
     Parameters
     ----------

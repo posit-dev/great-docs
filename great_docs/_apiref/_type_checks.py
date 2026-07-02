@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 def is_typealias(obj: gf.Object | gf.Alias) -> bool:
     """
-    True when obj is a type alias
+    Whether `obj` is a type alias
 
     Covers both PEP 695 ``type X = ...`` aliases, which griffe models as a
     dedicated `TypeAlias`, and explicit ``X: TypeAlias = ...`` attributes.
@@ -39,7 +39,7 @@ def is_typealias(obj: gf.Object | gf.Alias) -> bool:
 
 def is_protocol(obj: gf.Object | gf.Alias) -> bool:
     """
-    Return True if obj is a class defining a typing Protocol
+    Whether `obj` is a class defining a typing `Protocol`
     """
     return (
         isinstance(obj, gf.Class)
@@ -51,7 +51,7 @@ def is_protocol(obj: gf.Object | gf.Alias) -> bool:
 
 def is_typevar(obj: gf.Object | gf.Alias) -> bool:
     """
-    Return True if obj is a declaration of a TypeVar
+    Whether `obj` is a declaration of a `TypeVar`
     """
     return (
         isinstance(obj, gf.Attribute)
@@ -64,7 +64,7 @@ def is_typevar(obj: gf.Object | gf.Alias) -> bool:
 
 def is_initvar(obj: str | gf.Expr | None) -> TypeGuard[gf.ExprSubscript]:
     """
-    Return True if object is an an InitVar annotation
+    Whether `obj` is an `InitVar` annotation
     """
     return (
         isinstance(obj, gf.ExprSubscript)
@@ -97,7 +97,7 @@ class isDoc:
 
 def griffe_to_doc(obj: gf.Object | gf.Alias, *, deep: bool = True) -> DocType:
     """
-    Convert griffe object to a documentable type
+    Convert a griffe object to a documentable type
 
     The function recursively includes all members.
     """
@@ -107,14 +107,14 @@ def griffe_to_doc(obj: gf.Object | gf.Alias, *, deep: bool = True) -> DocType:
 
 def no_init(default: T) -> T:
     """
-    Set defaut value of a dataclass field that will not be __init__ed
+    Set the default value of a dataclass field that will not be `__init__`ed
     """
     return field(init=False, default=default)
 
 
 def is_field_init_false(el: gf.Parameter) -> bool:
     """
-    Return True if parameter is a field(init=False, ...) expression
+    Whether `el` is a `field(init=False, ...)` expression
     """
     if not (
         isinstance(el.default, gf.ExprCall)
@@ -133,7 +133,7 @@ def package_info(
     key: Literal["GITHUB_REPO_URL", "GIT_REF", "PACKAGE_ROOT", "SOURCE_PATH"],
 ) -> str | None:
     """
-    Return some bit of package information
+    Look up a piece of package metadata by `key`
 
     This information has been put into the environment GreatDocs.__init___
 
