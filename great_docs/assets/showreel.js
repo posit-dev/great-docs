@@ -233,6 +233,9 @@
       var img = el("img", null, motion);
       img.src = srcUrl(this.base, sc.src);
       img.alt = layer.title || sc.id;
+      // "contain" shows the whole image (tables/diagrams) on the stage bg; the
+      // default "cover" fills the frame for full-bleed photos.
+      if (sc.fit === "contain") img.style.objectFit = "contain";
     } else if (sc.keyframes && sc.keyframes.length && !sc.deferred) {
       var fwrap = el("div", "gd-sr-frames", motion);
       scene._frames = sc.keyframes.map(function (kf) {
