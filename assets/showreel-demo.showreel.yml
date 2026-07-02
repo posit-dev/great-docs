@@ -14,6 +14,7 @@ voice:
 defaults:
   transition: crossfade
   captions: true
+  lead_in: 0.5
   motion: { type: ken_burns, zoom: 1.06, from: center, to: top-left }
 
 scenes:
@@ -44,6 +45,23 @@ scenes:
             )
           )
         focus: [5, 6, 7, 8]
+
+  # Before/after: the same table portion, plain then color-scaled. Both images
+  # are identical in size and framing (fit: contain, motion: none), so the
+  # crossfade reads as the color washing into the Population column.
+  - id: table-plain
+    type: image
+    src: reel-datacolor-before.png
+    fit: contain
+    motion: { type: none }
+    say: "Here's a column of plain numbers."
+
+  - id: table-color
+    type: image
+    src: reel-datacolor-after.png
+    fit: contain
+    motion: { type: none }
+    say: "data_color turns it into a gradient you can read at a glance."
 
   - id: outro
     type: card
