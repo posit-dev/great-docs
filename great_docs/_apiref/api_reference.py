@@ -16,8 +16,8 @@ from .inventory import convert_inventory, create_inventory
 from .resolve import resolve
 from .spec import SpecOptions, SpecSection
 from .write import (
-    PageWriter,
     write_index,
+    write_pages,
     write_sidebar,
     write_typing_information,
 )
@@ -147,7 +147,7 @@ class APIReference:
         )
 
         _log.info("Writing docs pages")
-        PageWriter().write_all(
+        write_pages(
             pages,
             dir=s.dir,
             out_page_suffix=s.out_page_suffix,

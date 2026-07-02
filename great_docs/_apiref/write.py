@@ -2,7 +2,7 @@
 The API-reference files produced from a resolved content tree
 
 The reference index, one page per documented object, the sidebar YAML, and
-the typing pages — written to disk by `write_index`, `PageWriter`,
+the typing pages — written to disk by `write_index`, `write_pages`,
 `write_sidebar`, and `write_typing_information`.
 """
 
@@ -294,74 +294,61 @@ def write_typing_information(
 
 
 # ---------------------------------------------------------------------------
-# PageWriter
+# Pages
 # ---------------------------------------------------------------------------
 
 
-class PageWriter:
-    """Writer for the per-object API-reference pages
+def write_pages(
+    pages: list[Page],
+    *,
+    dir: str,
+    out_page_suffix: str,
+    rewrite_all_pages: bool,
+    header_level: int,
+    filter: str,
+) -> None:
+    """Write API doc pages to `<dir>/<page.path><out_page_suffix>`
 
-    Each page is rendered to Quarto Markdown, its frontmatter is extended with
-    navigation and table-processing directives, and the file is written only
-    when its content has changed (unless `rewrite_all_pages` is `True`).
+    Each page is Quarto Markdown whose frontmatter carries navigation and
+    table-processing directives. A file whose content has not changed is
+    left untouched (unless `rewrite_all_pages` is `True`).
+
+    Parameters
+    ----------
+    pages :
+        Resolved page nodes to render and write.
+    dir :
+        Output directory (created per-page if absent).
+    out_page_suffix :
+        File suffix appended to each page path (e.g. `".qmd"`).
+    rewrite_all_pages :
+        When `True`, overwrite every file regardless of whether content
+        changed.
+    header_level :
+        Heading depth for the rendered page content.
+    filter :
+        Glob pattern; pages whose path does not match are neither rendered
+        nor written. `"*"` writes all pages.
     """
+    from ._render.api_page import RenderAPIPage
 
-    def write_all(
-        self,
-        pages: list[Page],
-        *,
-        dir: str,
-        out_page_suffix: str,
-        rewrite_all_pages: bool,
-        header_level: int,
-        filter: str,
-    ) -> None:
-        """API doc pages written to ``<dir>/<page.path><out_page_suffix>``.
+    for page in pages:
+        if filter != "*" and not fnmatchcase(page.path, filter):
+            _log.info(f"Skipping {page.path} (no filter match)")
+            continue
 
-        Skips unchanged files when `rewrite_all_pages` is ``False``.  When
-        `filter` is not ``"*"``, only pages whose path matches the glob are
-        written.
+        _log.info(f"Rendering {page.path}")
+        rendered = str(RenderAPIPage(page, header_level))
 
-        Parameters
-        ----------
-        pages :
-            Resolved page nodes to render and write.
-        dir :
-            Output directory (created per-page if absent).
-        out_page_suffix :
-            File suffix appended to each page path (e.g. ``".qmd"``).
-        rewrite_all_pages :
-            When ``True``, overwrite every file regardless of whether content
-            changed.
-        header_level :
-            Heading depth for the rendered page content.
-        filter :
-            Glob pattern; pages whose path does not match are skipped.
-            ``"*"`` writes all pages.
-        """
-        from ._render.api_page import RenderAPIPage
+        rendered = merge_frontmatter(
+            rendered, {"page-navigation": False, "html-table-processing": "none"}
+        )
 
-        for page in pages:
-            _log.info(f"Rendering {page.path}")
-            rendered = str(RenderAPIPage(page, header_level))
+        html_path = Path(dir) / (page.path + out_page_suffix)
+        html_path.parent.mkdir(exist_ok=True, parents=True)
 
-            rendered = merge_frontmatter(
-                rendered, {"page-navigation": False, "html-table-processing": "none"}
-            )
-
-            html_path = Path(dir) / (page.path + out_page_suffix)
-            html_path.parent.mkdir(exist_ok=True, parents=True)
-
-            if filter != "*":
-                is_match = fnmatchcase(page.path, filter)
-                if is_match:
-                    _log.info("Matched filter")
-                else:
-                    _log.info("Skipping write (no filter match)")
-                    continue
-
-            if rewrite_all_pages or (not html_path.exists()) or (html_path.read_text() != rendered):
-                _log.info(f"Writing: {page.path}")
-                _ = html_path.write_text(rendered)
-            else:
-                _log.info("Skipping write (content unchanged)")
+        if rewrite_all_pages or (not html_path.exists()) or (html_path.read_text() != rendered):
+            _log.info(f"Writing: {page.path}")
+            _ = html_path.write_text(rendered)
+        else:
+            _log.info("Skipping write (content unchanged)")
