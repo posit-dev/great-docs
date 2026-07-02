@@ -122,6 +122,7 @@ class Scene:
     cta: str = ""
     # image
     src: str = ""
+    fit: str = "cover"  # "cover" fills the frame (photos); "contain" shows all (tables/diagrams)
     # code
     language: str = "python"
     code_steps: list[CodeStep] = field(default_factory=list)
@@ -304,6 +305,7 @@ def _parse_scene(raw: dict[str, Any], index: int, defaults: dict[str, Any]) -> S
         body=str(raw.get("body", "")),
         cta=str(raw.get("cta", "")),
         src=str(raw.get("src", "")),
+        fit="contain" if str(raw.get("fit", "cover")).lower() == "contain" else "cover",
         language=str(raw.get("language", "python")),
         code_steps=code_steps,
         sfx=[c for c in (raw.get("sfx") or []) if isinstance(c, dict)],
