@@ -4,7 +4,8 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from ._griffe import dataclasses as dc
+import griffe as gf
+
 from ._walkable import _Walkable  # pyright: ignore[reportPrivateUsage]
 
 
@@ -12,7 +13,7 @@ from ._walkable import _Walkable  # pyright: ignore[reportPrivateUsage]
 class InventoryItem(_Walkable):
     """A documented object with a URI pointing to its rendered location"""
 
-    obj: dc.Object | dc.Alias
+    obj: gf.Object | gf.Alias
     name: str = ""
     uri: str | None = None
     dispname: str | None = None

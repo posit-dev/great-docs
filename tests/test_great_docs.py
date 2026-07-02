@@ -24,7 +24,7 @@ import pytest
 import requests
 from click.testing import CliRunner
 from PIL import Image as PILImage
-from griffe import DocstringSectionKind, ExprName
+from griffe import AliasResolutionError, DocstringSectionKind, ExprName
 from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
 from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
 
@@ -59,14 +59,6 @@ from great_docs._apiref._globals import (
     EXCLUDE_CLASSES,
     EXCLUDE_FUNCTIONS,
     EXCLUDE_PARAMETERS,
-)
-from great_docs._apiref._griffe import (
-    AliasResolutionError,
-    dataclasses as dc,
-    dataclasses as gdc,
-    docstrings as ds,
-    docstrings as gds,
-    expressions as expr,
 )
 from great_docs._apiref._griffe.docstrings import DCDocstringSection
 from great_docs._apiref._render import (
@@ -6342,7 +6334,7 @@ def test_to_simple_dict_base_dataclass():
 
 
 def test_to_simple_dict_nested_dataclass():
-    doc = DocFunction(name="func1", obj=gdc.Function("func1"))
+    doc = DocFunction(name="func1", obj=gf.Function("func1"))
     page = Page(path="p", contents=[doc])
     result = _to_simple_dict(page)
     assert isinstance(result, dict)
@@ -6400,27 +6392,27 @@ def test_non_default_entries_auto_options_empty():
 
 
 def test_resolve_alias_non_alias_passthrough():
-    func = gdc.Function("myfunc")
+    func = gf.Function("myfunc")
     result = _resolve_alias(func, lambda p: None)
     assert result is func
 
 
 def test_resolve_alias_resolves_target():
-    mod = gdc.Module("pkg")
-    func = gdc.Function("f")
+    mod = gf.Module("pkg")
+    func = gf.Function("f")
     mod.set_member("f", func)
-    alias = gdc.Alias("f_alias", target=func, parent=mod)
+    alias = gf.Alias("f_alias", target=func, parent=mod)
     result = _resolve_alias(alias, lambda p: None)
     assert result is func
 
 
 def test_resolve_alias_error_fallback():
-    sentinel = gdc.Function("resolved_func")
+    sentinel = gf.Function("resolved_func")
 
     def get_object(path):
         return sentinel
 
-    mock_alias = MagicMock(spec=gdc.Alias)
+    mock_alias = MagicMock(spec=gf.Alias)
     mock_alias.is_alias = True
 
     inner_alias = MagicMock()
@@ -6433,8 +6425,8 @@ def test_resolve_alias_error_fallback():
 
 
 def test_is_external_alias_non_alias_returns_false():
-    func = gdc.Function("myfunc")
-    mod = gdc.Module("pkg")
+    func = gf.Function("myfunc")
+    mod = gf.Module("pkg")
     assert _is_external_alias(func, mod) is False
 
 
@@ -6446,9 +6438,9 @@ def test_is_external_alias_internal():
     mock_alias.is_alias = True
     mock_alias.target_path = "mypkg.internal_func"
     mock_alias.modules_collection = {"mypkg.internal_func": target}
-    mock_alias.__class__ = gdc.Alias
+    mock_alias.__class__ = gf.Alias
 
-    mod = gdc.Module("mypkg")
+    mod = gf.Module("mypkg")
     assert _is_external_alias(mock_alias, mod) is False
 
 
@@ -6456,9 +6448,9 @@ def test_is_external_alias_external_target():
     mock_alias = MagicMock(spec=[])
     mock_alias.is_alias = True
     mock_alias.target_path = "other_pkg.func"
-    mock_alias.__class__ = gdc.Alias
+    mock_alias.__class__ = gf.Alias
 
-    mod = gdc.Module("mypkg")
+    mod = gf.Module("mypkg")
     assert _is_external_alias(mock_alias, mod) is True
 
 
@@ -6466,12 +6458,12 @@ def test_is_external_alias_key_error_returns_true():
     mock_alias = MagicMock(spec=[])
     mock_alias.is_alias = True
     mock_alias.target_path = "mypkg.submod.missing"
-    mock_alias.__class__ = gdc.Alias
+    mock_alias.__class__ = gf.Alias
     mock_mc = MagicMock()
     mock_mc.__getitem__ = MagicMock(side_effect=KeyError("missing"))
     mock_alias.modules_collection = mock_mc
 
-    mod = gdc.Module("mypkg")
+    mod = gf.Module("mypkg")
     assert _is_external_alias(mock_alias, mod) is True
 
 
@@ -6479,19 +6471,19 @@ def test_is_external_alias_cyclic_raises():
     mock_alias = MagicMock(spec=[])
     mock_alias.is_alias = True
     mock_alias.target_path = "mypkg.something"
-    mock_alias.__class__ = gdc.Alias
+    mock_alias.__class__ = gf.Alias
     mock_alias.modules_collection = {"mypkg.something": mock_alias}
 
-    mod = gdc.Module("mypkg")
+    mod = gf.Module("mypkg")
     with pytest.raises(Exception, match="Cyclic Alias"):
         _is_external_alias(mock_alias, mod)
 
 
 def test_auto_package_module_with_all():
-    mod = gdc.Module("mypkg")
-    func = gdc.Function("public_func")
+    mod = gf.Module("mypkg")
+    func = gf.Function("public_func")
     mod.set_member("public_func", func)
-    all_attr = gdc.Attribute("__all__")
+    all_attr = gf.Attribute("__all__")
     mod.set_member("__all__", all_attr)
     mod.exports = {"public_func"}
 
@@ -6503,8 +6495,8 @@ def test_auto_package_module_with_all():
 
 
 def test_auto_package_without_all_warns(capsys):
-    mod = gdc.Module("mypkg")
-    func = gdc.Function("public_func")
+    mod = gf.Module("mypkg")
+    func = gf.Function("public_func")
     mod.set_member("public_func", func)
 
     sections = _auto_package(mod)
@@ -6517,10 +6509,10 @@ def test_auto_package_without_all_warns(capsys):
 
 
 def test_auto_package_filters_dunder_members():
-    mod = gdc.Module("mypkg")
-    func = gdc.Function("__init__")
+    mod = gf.Module("mypkg")
+    func = gf.Function("__init__")
     mod.set_member("__init__", func)
-    pub = gdc.Function("pub")
+    pub = gf.Function("pub")
     mod.set_member("pub", pub)
 
     sections = _auto_package(mod)
@@ -6530,10 +6522,10 @@ def test_auto_package_filters_dunder_members():
 
 
 def test_auto_package_filters_submodules():
-    mod = gdc.Module("mypkg")
-    submod = gdc.Module("sub")
+    mod = gf.Module("mypkg")
+    submod = gf.Module("sub")
     mod.set_member("sub", submod)
-    func = gdc.Function("pub")
+    func = gf.Function("pub")
     mod.set_member("pub", func)
 
     sections = _auto_package(mod)
@@ -6543,9 +6535,9 @@ def test_auto_package_filters_submodules():
 
 
 def test_auto_package_with_docstring():
-    mod = gdc.Module("mypkg")
-    mod.docstring = gdc.Docstring("Summary text here.", parent=mod)
-    func = gdc.Function("pub")
+    mod = gf.Module("mypkg")
+    mod.docstring = gf.Docstring("Summary text here.", parent=mod)
+    func = gf.Function("pub")
     mod.set_member("pub", func)
 
     sections = _auto_package(mod)
@@ -6553,8 +6545,8 @@ def test_auto_package_with_docstring():
 
 
 def test_auto_package_without_docstring():
-    mod = gdc.Module("mypkg")
-    func = gdc.Function("pub")
+    mod = gf.Module("mypkg")
+    func = gf.Function("pub")
     mod.set_member("pub", func)
 
     sections = _auto_package(mod)
@@ -6562,15 +6554,15 @@ def test_auto_package_without_docstring():
 
 
 def test_auto_package_docstring_non_text_first():
-    mod = gdc.Module("mypkg")
-    mod.docstring = gdc.Docstring("Parameters\n----------\nx : int\n    A param.", parent=mod)
+    mod = gf.Module("mypkg")
+    mod.docstring = gf.Docstring("Parameters\n----------\nx : int\n    A param.", parent=mod)
     parsed = mod.docstring.parsed
-    if parsed and isinstance(parsed[0], gds.DocstringSectionText):
+    if parsed and isinstance(parsed[0], gf.DocstringSectionText):
         mock_docstring = MagicMock()
-        mock_docstring.parsed = [gds.DocstringSectionParameters(value=[])]
+        mock_docstring.parsed = [gf.DocstringSectionParameters(value=[])]
         mod.docstring = mock_docstring
 
-    func = gdc.Function("pub")
+    func = gf.Function("pub")
     mod.set_member("pub", func)
 
     sections = _auto_package(mod)
@@ -6578,17 +6570,17 @@ def test_auto_package_docstring_non_text_first():
 
 
 def test_auto_package_filters_external_aliases():
-    mod = gdc.Module("mypkg")
+    mod = gf.Module("mypkg")
 
     mock_alias = MagicMock(spec=[])
     mock_alias.is_alias = True
     mock_alias.target_path = "other_pkg.ext_f"
-    mock_alias.__class__ = gdc.Alias
+    mock_alias.__class__ = gf.Alias
     mock_alias.is_module = False
     mock_alias.is_exported = True
     mod.set_member("ext_f", mock_alias)
 
-    pub = gdc.Function("pub")
+    pub = gf.Function("pub")
     mod.set_member("pub", pub)
 
     sections = _auto_package(mod)
@@ -6598,12 +6590,12 @@ def test_auto_package_filters_external_aliases():
 
 
 def test_auto_package_unexported_filtered():
-    mod = gdc.Module("mypkg")
-    f1 = gdc.Function("exported_func")
+    mod = gf.Module("mypkg")
+    f1 = gf.Function("exported_func")
     mod.set_member("exported_func", f1)
-    f2 = gdc.Function("not_exported")
+    f2 = gf.Function("not_exported")
     mod.set_member("not_exported", f2)
-    all_attr = gdc.Attribute("__all__")
+    all_attr = gf.Attribute("__all__")
     mod.set_member("__all__", all_attr)
     mod.exports = {"exported_func"}
 
@@ -6614,8 +6606,8 @@ def test_auto_package_unexported_filtered():
 
 
 def test_collect_single_doc():
-    mod = gdc.Module("pkg")
-    func_obj = gdc.Function("myfunc")
+    mod = gf.Module("pkg")
+    func_obj = gf.Function("myfunc")
     mod.set_member("myfunc", func_obj)
     doc = DocFunction(name="myfunc", obj=func_obj, anchor="pkg.myfunc")
     page = Page(path="reference", contents=[doc])
@@ -6646,8 +6638,8 @@ def test_collect_with_canonical_path_diff():
 
 
 def test_collect_nested_section():
-    mod = gdc.Module("pkg")
-    func_obj = gdc.Function("myfunc")
+    mod = gf.Module("pkg")
+    func_obj = gf.Function("myfunc")
     mod.set_member("myfunc", func_obj)
     doc = DocFunction(name="myfunc", obj=func_obj, anchor="pkg.myfunc")
     page = Page(path="ref", contents=[doc])
@@ -6681,7 +6673,7 @@ def test_bp_clean_member_path_no_colon():
 
 
 def test_bp_get_object_fixed_success():
-    obj = gdc.Function("myfunc")
+    obj = gf.Function("myfunc")
 
     def get_object(path, **kwargs):
         return obj
@@ -6704,14 +6696,14 @@ def test_bp_visit_sets_package():
     trans = _bp_make_trans()
     assert trans.crnt_package is None
 
-    func = gdc.Function("myfunc")
+    func = gf.Function("myfunc")
     trans2 = _bp_make_trans({"myfunc": func})
     result = trans2._resolve_object(Auto(name="myfunc"))
     assert isinstance(result, DocFunction)
 
 
 def test_bp_visit_restores_package():
-    func = gdc.Function("f")
+    func = gf.Function("f")
     trans = _bp_make_trans({"pkg:f": func})
     trans.crnt_package = "pkg"
 
@@ -6720,7 +6712,7 @@ def test_bp_visit_restores_package():
 
 
 def test_bp_visit_sets_options():
-    func = gdc.Function("f")
+    func = gf.Function("f")
     trans = _bp_make_trans({"f": func})
 
     opts = AutoOptions(include_private=True)
@@ -6729,7 +6721,7 @@ def test_bp_visit_sets_options():
 
 
 def test_bp_enter_auto_basic_function():
-    func = gdc.Function("myfunc")
+    func = gf.Function("myfunc")
     trans = _bp_make_trans({"myfunc": func})
     result = trans._resolve_object(Auto(name="myfunc"))
     assert isinstance(result, DocFunction)
@@ -6737,7 +6729,7 @@ def test_bp_enter_auto_basic_function():
 
 
 def test_bp_enter_auto_basic_class():
-    cls = gdc.Class("MyClass")
+    cls = gf.Class("MyClass")
     trans = _bp_make_trans({"MyClass": cls})
     result = trans._resolve_object(Auto(name="MyClass"))
     assert isinstance(result, DocClass)
@@ -6745,7 +6737,7 @@ def test_bp_enter_auto_basic_class():
 
 
 def test_bp_enter_auto_basic_attribute():
-    attr = gdc.Attribute("myattr")
+    attr = gf.Attribute("myattr")
     trans = _bp_make_trans({"myattr": attr})
     result = trans._resolve_object(Auto(name="myattr"))
     assert isinstance(result, DocAttribute)
@@ -6753,7 +6745,7 @@ def test_bp_enter_auto_basic_attribute():
 
 
 def test_bp_enter_auto_with_package():
-    func = gdc.Function("f")
+    func = gf.Function("f")
     trans = _bp_make_trans({"pkg:f": func})
     trans.crnt_package = "pkg"
     result = trans._resolve_object(Auto(name="f"))
@@ -6762,7 +6754,7 @@ def test_bp_enter_auto_with_package():
 
 
 def test_bp_enter_auto_colon_in_pkg():
-    func = gdc.Function("method")
+    func = gf.Function("method")
     trans = _bp_make_trans({"pkg.mod:Class.method": func})
     trans.crnt_package = "pkg.mod:Class"
     result = trans._resolve_object(Auto(name="method"))
@@ -6770,7 +6762,7 @@ def test_bp_enter_auto_colon_in_pkg():
 
 
 def test_bp_enter_auto_colon_in_name():
-    func = gdc.Function("method")
+    func = gf.Function("method")
     trans = _bp_make_trans({"pkg.mod:method": func})
     trans.crnt_package = "pkg"
     result = trans._resolve_object(Auto(name="mod:method"))
@@ -6778,9 +6770,9 @@ def test_bp_enter_auto_colon_in_name():
 
 
 def test_bp_enter_auto_children_separate():
-    cls = gdc.Class("MyClass")
-    method = gdc.Function("my_method")
-    method.docstring = gdc.Docstring("A method.", parent=method)
+    cls = gf.Class("MyClass")
+    method = gf.Function("my_method")
+    method.docstring = gf.Docstring("A method.", parent=method)
     cls.set_member("my_method", method)
 
     trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
@@ -6791,9 +6783,9 @@ def test_bp_enter_auto_children_separate():
 
 
 def test_bp_enter_auto_children_embedded():
-    cls = gdc.Class("MyClass")
-    method = gdc.Function("my_method")
-    method.docstring = gdc.Docstring("A method.", parent=method)
+    cls = gf.Class("MyClass")
+    method = gf.Function("my_method")
+    method.docstring = gf.Docstring("A method.", parent=method)
     cls.set_member("my_method", method)
 
     trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
@@ -6804,9 +6796,9 @@ def test_bp_enter_auto_children_embedded():
 
 
 def test_bp_enter_auto_children_flat():
-    cls = gdc.Class("MyClass")
-    method = gdc.Function("my_method")
-    method.docstring = gdc.Docstring("A method.", parent=method)
+    cls = gf.Class("MyClass")
+    method = gf.Function("my_method")
+    method.docstring = gf.Docstring("A method.", parent=method)
     cls.set_member("my_method", method)
 
     trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
@@ -6817,9 +6809,9 @@ def test_bp_enter_auto_children_flat():
 
 
 def test_bp_enter_auto_children_linked():
-    cls = gdc.Class("MyClass")
-    method = gdc.Function("my_method")
-    method.docstring = gdc.Docstring("A method.", parent=method)
+    cls = gf.Class("MyClass")
+    method = gf.Function("my_method")
+    method.docstring = gf.Docstring("A method.", parent=method)
     cls.set_member("my_method", method)
 
     trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
@@ -6830,9 +6822,9 @@ def test_bp_enter_auto_children_linked():
 
 
 def test_bp_enter_auto_unsupported_children():
-    cls = gdc.Class("MyClass")
-    method = gdc.Function("my_method")
-    method.docstring = gdc.Docstring("A method.", parent=method)
+    cls = gf.Class("MyClass")
+    method = gf.Function("my_method")
+    method.docstring = gf.Docstring("A method.", parent=method)
     cls.set_member("my_method", method)
 
     trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
@@ -6843,7 +6835,7 @@ def test_bp_enter_auto_unsupported_children():
 
 
 def test_bp_enter_auto_dynamic_from_auto():
-    func = gdc.Function("f")
+    func = gf.Function("f")
     captured = {}
 
     def get_object(path, **kwargs):
@@ -6856,7 +6848,7 @@ def test_bp_enter_auto_dynamic_from_auto():
 
 
 def test_bp_enter_auto_dynamic_from_transformer():
-    func = gdc.Function("f")
+    func = gf.Function("f")
     captured = {}
 
     def get_object(path, **kwargs):
@@ -6870,7 +6862,7 @@ def test_bp_enter_auto_dynamic_from_transformer():
 
 
 def test_bp_enter_auto_options_merge():
-    func = gdc.Function("f")
+    func = gf.Function("f")
     trans = _bp_make_trans({"f": func})
     trans.options = AutoOptions(signature_name="full")
 
@@ -6880,9 +6872,9 @@ def test_bp_enter_auto_options_merge():
 
 
 def test_bp_enter_auto_member_options():
-    cls = gdc.Class("MyClass")
-    method = gdc.Function("m")
-    method.docstring = gdc.Docstring("A method.", parent=method)
+    cls = gf.Class("MyClass")
+    method = gf.Function("m")
+    method.docstring = gf.Docstring("A method.", parent=method)
     cls.set_member("m", method)
 
     member_opts = AutoOptions(signature_name="short")
@@ -6895,12 +6887,12 @@ def test_bp_enter_auto_member_options():
 
 
 def test_bp_enter_auto_module_members_skipped():
-    mod = gdc.Module("pkg")
-    submod = gdc.Module("sub")
-    submod.docstring = gdc.Docstring("Submodule.", parent=submod)
+    mod = gf.Module("pkg")
+    submod = gf.Module("sub")
+    submod.docstring = gf.Docstring("Submodule.", parent=submod)
     mod.set_member("sub", submod)
-    func = gdc.Function("f")
-    func.docstring = gdc.Docstring("A func.", parent=func)
+    func = gf.Function("f")
+    func.docstring = gf.Docstring("A func.", parent=func)
     mod.set_member("f", func)
 
     trans = _bp_make_trans({"pkg": mod, "pkg:f": func, "pkg:sub": submod})
@@ -6913,17 +6905,17 @@ def test_bp_enter_auto_module_members_skipped():
 def test_fetch_members_explicit():
     trans = _bp_make_trans()
     auto = Auto(name="X", members=["a", "b"])
-    obj = gdc.Class("X")
+    obj = gf.Class("X")
     assert trans._fetch_members(auto, obj) == ["a", "b"]
 
 
 def test_fetch_members_filter_private():
-    cls = gdc.Class("X")
-    pub = gdc.Function("pub")
-    pub.docstring = gdc.Docstring("doc", parent=pub)
+    cls = gf.Class("X")
+    pub = gf.Function("pub")
+    pub.docstring = gf.Docstring("doc", parent=pub)
     cls.set_member("pub", pub)
-    priv = gdc.Function("_priv")
-    priv.docstring = gdc.Docstring("doc", parent=priv)
+    priv = gf.Function("_priv")
+    priv.docstring = gf.Docstring("doc", parent=priv)
     cls.set_member("_priv", priv)
 
     trans = _bp_make_trans()
@@ -6933,9 +6925,9 @@ def test_fetch_members_filter_private():
 
 
 def test_fetch_members_include_private():
-    cls = gdc.Class("X")
-    priv = gdc.Function("_priv")
-    priv.docstring = gdc.Docstring("doc", parent=priv)
+    cls = gf.Class("X")
+    priv = gf.Function("_priv")
+    priv.docstring = gf.Docstring("doc", parent=priv)
     cls.set_member("_priv", priv)
 
     trans = _bp_make_trans()
@@ -6944,9 +6936,9 @@ def test_fetch_members_include_private():
 
 
 def test_fetch_members_dunder_with_docstring_kept():
-    cls = gdc.Class("X")
-    enter = gdc.Function("__enter__")
-    enter.docstring = gdc.Docstring("Enter.", parent=enter)
+    cls = gf.Class("X")
+    enter = gf.Function("__enter__")
+    enter.docstring = gf.Docstring("Enter.", parent=enter)
     cls.set_member("__enter__", enter)
 
     trans = _bp_make_trans()
@@ -6955,8 +6947,8 @@ def test_fetch_members_dunder_with_docstring_kept():
 
 
 def test_fetch_members_dunder_without_docstring_filtered():
-    cls = gdc.Class("X")
-    init = gdc.Function("__init__")
+    cls = gf.Class("X")
+    init = gf.Function("__init__")
     cls.set_member("__init__", init)
 
     trans = _bp_make_trans()
@@ -6965,11 +6957,11 @@ def test_fetch_members_dunder_without_docstring_filtered():
 
 
 def test_fetch_members_filter_empty():
-    cls = gdc.Class("X")
-    nodoc = gdc.Function("nodoc")
+    cls = gf.Class("X")
+    nodoc = gf.Function("nodoc")
     cls.set_member("nodoc", nodoc)
-    withdoc = gdc.Function("withdoc")
-    withdoc.docstring = gdc.Docstring("Has doc.", parent=withdoc)
+    withdoc = gf.Function("withdoc")
+    withdoc.docstring = gf.Docstring("Has doc.", parent=withdoc)
     cls.set_member("withdoc", withdoc)
 
     trans = _bp_make_trans()
@@ -6979,8 +6971,8 @@ def test_fetch_members_filter_empty():
 
 
 def test_fetch_members_include_empty():
-    cls = gdc.Class("X")
-    nodoc = gdc.Function("nodoc")
+    cls = gf.Class("X")
+    nodoc = gf.Function("nodoc")
     cls.set_member("nodoc", nodoc)
 
     trans = _bp_make_trans()
@@ -6989,12 +6981,12 @@ def test_fetch_members_include_empty():
 
 
 def test_fetch_members_filter_attributes():
-    cls = gdc.Class("X")
-    attr = gdc.Attribute("myattr")
-    attr.docstring = gdc.Docstring("doc", parent=attr)
+    cls = gf.Class("X")
+    attr = gf.Attribute("myattr")
+    attr.docstring = gf.Docstring("doc", parent=attr)
     cls.set_member("myattr", attr)
-    func = gdc.Function("myfunc")
-    func.docstring = gdc.Docstring("doc", parent=func)
+    func = gf.Function("myfunc")
+    func.docstring = gf.Docstring("doc", parent=func)
     cls.set_member("myfunc", func)
 
     trans = _bp_make_trans()
@@ -7004,12 +6996,12 @@ def test_fetch_members_filter_attributes():
 
 
 def test_fetch_members_filter_classes():
-    mod = gdc.Module("pkg")
-    inner_cls = gdc.Class("Inner")
-    inner_cls.docstring = gdc.Docstring("doc", parent=inner_cls)
+    mod = gf.Module("pkg")
+    inner_cls = gf.Class("Inner")
+    inner_cls.docstring = gf.Docstring("doc", parent=inner_cls)
     mod.set_member("Inner", inner_cls)
-    func = gdc.Function("f")
-    func.docstring = gdc.Docstring("doc", parent=func)
+    func = gf.Function("f")
+    func.docstring = gf.Docstring("doc", parent=func)
     mod.set_member("f", func)
 
     trans = _bp_make_trans()
@@ -7019,12 +7011,12 @@ def test_fetch_members_filter_classes():
 
 
 def test_fetch_members_filter_functions():
-    mod = gdc.Module("pkg")
-    func = gdc.Function("f")
-    func.docstring = gdc.Docstring("doc", parent=func)
+    mod = gf.Module("pkg")
+    func = gf.Function("f")
+    func.docstring = gf.Docstring("doc", parent=func)
     mod.set_member("f", func)
-    cls = gdc.Class("C")
-    cls.docstring = gdc.Docstring("doc", parent=cls)
+    cls = gf.Class("C")
+    cls.docstring = gf.Docstring("doc", parent=cls)
     mod.set_member("C", cls)
 
     trans = _bp_make_trans()
@@ -7034,12 +7026,12 @@ def test_fetch_members_filter_functions():
 
 
 def test_fetch_members_exclude():
-    cls = gdc.Class("X")
-    f1 = gdc.Function("f1")
-    f1.docstring = gdc.Docstring("doc", parent=f1)
+    cls = gf.Class("X")
+    f1 = gf.Function("f1")
+    f1.docstring = gf.Docstring("doc", parent=f1)
     cls.set_member("f1", f1)
-    f2 = gdc.Function("f2")
-    f2.docstring = gdc.Docstring("doc", parent=f2)
+    f2 = gf.Function("f2")
+    f2.docstring = gf.Docstring("doc", parent=f2)
     cls.set_member("f2", f2)
 
     trans = _bp_make_trans()
@@ -7051,14 +7043,14 @@ def test_fetch_members_exclude():
 def test_fetch_members_include_raises():
     trans = _bp_make_trans()
     with pytest.raises(NotImplementedError, match="include argument"):
-        trans._fetch_members(Auto(name="X", include="pattern"), gdc.Class("X"))
+        trans._fetch_members(Auto(name="X", include="pattern"), gf.Class("X"))
 
 
 def test_fetch_members_order_alphabetical():
-    cls = gdc.Class("X")
+    cls = gf.Class("X")
     for name in ["zebra", "apple", "mango"]:
-        f = gdc.Function(name)
-        f.docstring = gdc.Docstring("doc", parent=f)
+        f = gf.Function(name)
+        f.docstring = gf.Docstring("doc", parent=f)
         cls.set_member(name, f)
 
     trans = _bp_make_trans()
@@ -7067,10 +7059,10 @@ def test_fetch_members_order_alphabetical():
 
 
 def test_fetch_members_order_source():
-    cls = gdc.Class("X")
+    cls = gf.Class("X")
     for name in ["zebra", "apple", "mango"]:
-        f = gdc.Function(name)
-        f.docstring = gdc.Docstring("doc", parent=f)
+        f = gf.Function(name)
+        f.docstring = gf.Docstring("doc", parent=f)
         cls.set_member(name, f)
 
     trans = _bp_make_trans()
@@ -7081,17 +7073,17 @@ def test_fetch_members_order_source():
 def test_fetch_members_order_invalid():
     trans = _bp_make_trans()
     with pytest.raises(ValueError, match="Unsupported value of member_order"):
-        trans._fetch_members(Auto(name="X", member_order="random"), gdc.Class("X"))
+        trans._fetch_members(Auto(name="X", member_order="random"), gf.Class("X"))
 
 
 def test_fetch_members_module_exports_filter():
-    mod = gdc.Module("pkg")
-    f1 = gdc.Function("exported_f")
-    f1.docstring = gdc.Docstring("doc", parent=f1)
+    mod = gf.Module("pkg")
+    f1 = gf.Function("exported_f")
+    f1.docstring = gf.Docstring("doc", parent=f1)
     f1.labels.add("exported")
     mod.set_member("exported_f", f1)
-    f2 = gdc.Function("internal_f")
-    f2.docstring = gdc.Docstring("doc", parent=f2)
+    f2 = gf.Function("internal_f")
+    f2.docstring = gf.Docstring("doc", parent=f2)
     mod.set_member("internal_f", f2)
     mod.exports = {"exported_f"}
 
@@ -7102,16 +7094,16 @@ def test_fetch_members_module_exports_filter():
 
 
 def test_fetch_members_filter_imports():
-    mod = gdc.Module("pkg")
-    func = gdc.Function("local_f")
-    func.docstring = gdc.Docstring("doc", parent=func)
+    mod = gf.Module("pkg")
+    func = gf.Function("local_f")
+    func.docstring = gf.Docstring("doc", parent=func)
     mod.set_member("local_f", func)
 
-    other_mod = gdc.Module("other")
-    ext_f = gdc.Function("ext_f")
-    ext_f.docstring = gdc.Docstring("doc", parent=ext_f)
+    other_mod = gf.Module("other")
+    ext_f = gf.Function("ext_f")
+    ext_f.docstring = gf.Docstring("doc", parent=ext_f)
     other_mod.set_member("ext_f", ext_f)
-    alias = gdc.Alias("ext_f", target=ext_f, parent=mod)
+    alias = gf.Alias("ext_f", target=ext_f, parent=mod)
     mod.set_member("ext_f", alias)
 
     trans = _bp_make_trans()
@@ -7121,16 +7113,16 @@ def test_fetch_members_filter_imports():
 
 
 def test_fetch_members_include_imports():
-    mod = gdc.Module("pkg")
-    func = gdc.Function("local_f")
-    func.docstring = gdc.Docstring("doc", parent=func)
+    mod = gf.Module("pkg")
+    func = gf.Function("local_f")
+    func.docstring = gf.Docstring("doc", parent=func)
     mod.set_member("local_f", func)
 
-    other_mod = gdc.Module("other")
-    ext_f = gdc.Function("ext_f")
-    ext_f.docstring = gdc.Docstring("doc", parent=ext_f)
+    other_mod = gf.Module("other")
+    ext_f = gf.Function("ext_f")
+    ext_f.docstring = gf.Docstring("doc", parent=ext_f)
     other_mod.set_member("ext_f", ext_f)
-    alias = gdc.Alias("ext_f", target=ext_f, parent=mod)
+    alias = gf.Alias("ext_f", target=ext_f, parent=mod)
     mod.set_member("ext_f", alias)
 
     trans = _bp_make_trans()
@@ -7140,7 +7132,7 @@ def test_fetch_members_include_imports():
 
 
 def test_bp_sections_resolved():
-    func = gdc.Function("f")
+    func = gf.Function("f")
     trans = _bp_make_trans({"pkg:f": func})
     trans.crnt_package = "pkg"
 
@@ -7151,9 +7143,9 @@ def test_bp_sections_resolved():
 
 
 def test_bp_auto_generate_sections(capsys):
-    mod = gdc.Module("pkg")
-    func = gdc.Function("f")
-    func.docstring = gdc.Docstring("A func.", parent=func)
+    mod = gf.Module("pkg")
+    func = gf.Function("f")
+    func.docstring = gf.Docstring("A func.", parent=func)
     mod.set_member("f", func)
     mod.exports = {"f"}
     func.labels.add("exported")
@@ -7168,7 +7160,7 @@ def test_bp_auto_generate_sections(capsys):
 
 
 def test_bp_exit_section_wraps_non_page():
-    func = gdc.Function("f")
+    func = gf.Function("f")
     trans = _bp_make_trans({"pkg:f": func})
     trans.crnt_package = "pkg"
 
@@ -7198,7 +7190,7 @@ def test_page_stripper_no_strip_single_part():
 
 
 def test_page_stripper_nested_pages():
-    doc = DocFunction(name="f", obj=gdc.Function("f"))
+    doc = DocFunction(name="f", obj=gf.Function("f"))
     page = Page(path="mypkg.mod.func", contents=[doc])
     section = Section(title="T", contents=[page])
     result = _PagePackageStripper("mypkg").visit(section)
@@ -7206,21 +7198,21 @@ def test_page_stripper_nested_pages():
 
 
 def test_strip_package_name_basic():
-    doc = DocFunction(name="f", obj=gdc.Function("f"))
+    doc = DocFunction(name="f", obj=gf.Function("f"))
     page = Page(path="pkg.mod.func", contents=[doc])
     result = remove_package_prefix(page, "pkg")
     assert result.path == "mod.func"
 
 
 def test_strip_package_name_no_match():
-    doc = DocFunction(name="f", obj=gdc.Function("f"))
+    doc = DocFunction(name="f", obj=gf.Function("f"))
     page = Page(path="other.func", contents=[doc])
     result = remove_package_prefix(page, "pkg")
     assert result.path == "other.func"
 
 
 def test_blueprint_entry_basic():
-    func = gdc.Function("myfunc")
+    func = gf.Function("myfunc")
 
     def get_object(path, **kwargs):
         return func
@@ -7231,7 +7223,7 @@ def test_blueprint_entry_basic():
 
 
 def test_blueprint_entry_with_package():
-    func = gdc.Function("f")
+    func = gf.Function("f")
 
     def get_object(path, **kwargs):
         if path == "mypkg:f":
@@ -7245,7 +7237,7 @@ def test_blueprint_entry_with_package():
 
 
 def test_blueprint_entry_with_dynamic():
-    func = gdc.Function("f")
+    func = gf.Function("f")
     captured = {}
 
     def get_object(path, **kwargs):
@@ -28333,12 +28325,13 @@ def test_get_object_module_only():
 
 def test_get_object_with_shared_loader():
     """get_object reuses a loader if provided."""
-    from great_docs._apiref._griffe import (
+    from griffe import (
         GriffeLoader,
         LinesCollection,
         ModulesCollection,
         Parser,
     )
+
     from great_docs._apiref.introspect import get_object
 
     loader = GriffeLoader(
@@ -28393,10 +28386,10 @@ def test_get_object_nested_path():
 def test_resolve_target_direct():
     """_resolve_target returns the target when it's not an Alias."""
 
-    mod = dc.Module(name="testmod")
-    func = dc.Function(name="my_func", lineno=1)
+    mod = gf.Module(name="testmod")
+    func = gf.Function(name="my_func", lineno=1)
     mod.set_member("my_func", func)
-    alias = dc.Alias("my_alias", func, parent=mod)
+    alias = gf.Alias("my_alias", func, parent=mod)
     result = _resolve_target(alias)
 
     assert result is func
@@ -28405,11 +28398,11 @@ def test_resolve_target_direct():
 def test_resolve_target_chained():
     """_resolve_target follows chained aliases."""
 
-    mod = dc.Module(name="testmod")
-    func = dc.Function(name="my_func", lineno=1)
+    mod = gf.Module(name="testmod")
+    func = gf.Function(name="my_func", lineno=1)
     mod.set_member("my_func", func)
-    alias1 = dc.Alias("alias1", func, parent=mod)
-    alias2 = dc.Alias("alias2", alias1, parent=mod)
+    alias1 = gf.Alias("alias1", func, parent=mod)
+    alias2 = gf.Alias("alias2", alias1, parent=mod)
     result = _resolve_target(alias2)
 
     assert result is func
@@ -28505,7 +28498,7 @@ def test_replace_docstring_alias():
 
     obj = get_object("json:dumps")
     mod = get_object("json")
-    alias = dc.Alias("my_alias", obj, parent=mod)
+    alias = gf.Alias("my_alias", obj, parent=mod)
     replace_docstring(alias)
 
 
@@ -28585,7 +28578,7 @@ def test_canonical_path_class_no_module():
 def test_is_valueless_class_attribute_no_value():
     """_is_valueless returns True for class-attribute with no value."""
 
-    attr = dc.Attribute(name="x", lineno=1, value=None)
+    attr = gf.Attribute(name="x", lineno=1, value=None)
     attr.labels.add("class-attribute")
 
     assert _is_valueless(attr) is True
@@ -28594,7 +28587,7 @@ def test_is_valueless_class_attribute_no_value():
 def test_is_valueless_instance_attribute():
     """_is_valueless returns True for instance-attribute."""
 
-    attr = dc.Attribute(name="x", lineno=1)
+    attr = gf.Attribute(name="x", lineno=1)
     attr.labels.add("instance-attribute")
 
     assert _is_valueless(attr) is True
@@ -28603,7 +28596,7 @@ def test_is_valueless_instance_attribute():
 def test_is_valueless_class_attribute_with_value():
     """_is_valueless returns False for class-attribute with a value."""
 
-    attr = dc.Attribute(name="x", lineno=1, value="42")
+    attr = gf.Attribute(name="x", lineno=1, value="42")
     attr.labels.add("class-attribute")
 
     assert _is_valueless(attr) is False
@@ -28612,7 +28605,7 @@ def test_is_valueless_class_attribute_with_value():
 def test_is_valueless_unlabelled_attribute():
     """_is_valueless returns False for an attribute with none of the labels."""
 
-    attr = dc.Attribute(name="x", lineno=1, value=None)
+    attr = gf.Attribute(name="x", lineno=1, value=None)
 
     assert _is_valueless(attr) is False
 
@@ -28620,7 +28613,7 @@ def test_is_valueless_unlabelled_attribute():
 def test_is_valueless_function():
     """_is_valueless returns False for a function."""
 
-    func = dc.Function(name="f", lineno=1)
+    func = gf.Function(name="f", lineno=1)
 
     assert _is_valueless(func) is False
 
@@ -28628,7 +28621,7 @@ def test_is_valueless_function():
 def test_is_valueless_module_attribute_no_value():
     """_is_valueless returns True for module-attribute with no value."""
 
-    attr = dc.Attribute(name="x", lineno=1, value=None)
+    attr = gf.Attribute(name="x", lineno=1, value=None)
     attr.labels.add("module-attribute")
 
     assert _is_valueless(attr) is True
@@ -28768,12 +28761,13 @@ def test_dynamic_alias_nonexistent_attr_raises():
 
 def test_dynamic_alias_with_loader():
     """dynamic_alias accepts a shared loader."""
-    from great_docs._apiref._griffe import (
+    from griffe import (
         GriffeLoader,
         LinesCollection,
         ModulesCollection,
         Parser,
     )
+
     from great_docs._apiref.introspect import dynamic_alias
 
     loader = GriffeLoader(
@@ -30217,7 +30211,7 @@ def test_cli_main_entry_point():
 def test_ast_transform_tuple_examples():
     """transform() converts an examples tuple to ExampleCode."""
 
-    kind_cls = type(ds.DocstringSectionText("x").kind)
+    kind_cls = type(gf.DocstringSectionText("x").kind)
     result = transform((kind_cls["examples"], "print(1)"))
 
     assert isinstance(result, ExampleCode)
@@ -30227,7 +30221,7 @@ def test_ast_transform_tuple_examples():
 def test_ast_transform_tuple_text():
     """transform() converts a text tuple to ExampleText."""
 
-    kind_cls = type(ds.DocstringSectionText("x").kind)
+    kind_cls = type(gf.DocstringSectionText("x").kind)
     result = transform((kind_cls["text"], "some description"))
 
     assert isinstance(result, ExampleText)
@@ -30237,7 +30231,7 @@ def test_ast_transform_tuple_text():
 def test_ast_transform_tuple_unsupported_passthrough():
     """transform() returns unsupported tuple type unchanged when ValueError is raised."""
 
-    kind_cls = type(ds.DocstringSectionText("x").kind)
+    kind_cls = type(gf.DocstringSectionText("x").kind)
 
     # 'parameters' kind is not handled by tuple_to_data, so ValueError → passthrough
     result = transform((kind_cls["parameters"], "stuff"))
@@ -30249,7 +30243,7 @@ def test_ast_transform_tuple_unsupported_passthrough():
 def test_ast_transform_docstring_section_list():
     """transform() processes a list of DocstringSection objects."""
 
-    sections = [ds.DocstringSectionText("Hello world")]
+    sections = [gf.DocstringSectionText("Hello world")]
     result = transform(sections)
 
     assert isinstance(result, list)
@@ -30266,7 +30260,7 @@ def test_ast_transform_passthrough():
 def test_ast_tuple_to_data_examples():
     """tuple_to_data converts examples kind to ExampleCode."""
 
-    kind_cls = type(ds.DocstringSectionText("x").kind)
+    kind_cls = type(gf.DocstringSectionText("x").kind)
     result = tuple_to_data((kind_cls["examples"], "x = 1"))
 
     assert isinstance(result, ExampleCode)
@@ -30276,7 +30270,7 @@ def test_ast_tuple_to_data_examples():
 def test_ast_tuple_to_data_text():
     """tuple_to_data converts text kind to ExampleText."""
 
-    kind_cls = type(ds.DocstringSectionText("x").kind)
+    kind_cls = type(gf.DocstringSectionText("x").kind)
     result = tuple_to_data((kind_cls["text"], "description"))
 
     assert isinstance(result, ExampleText)
@@ -30286,7 +30280,7 @@ def test_ast_tuple_to_data_text():
 def test_ast_tuple_to_data_unsupported_raises():
     """tuple_to_data raises ValueError for unsupported kinds."""
 
-    kind_cls = type(ds.DocstringSectionText("x").kind)
+    kind_cls = type(gf.DocstringSectionText("x").kind)
     with pytest.raises(ValueError, match="Unsupported"):
         tuple_to_data((kind_cls["parameters"], "stuff"))
 
@@ -30325,7 +30319,7 @@ def test_ast_split_sections_empty():
 def test_ast_transform_docstring_section_text():
     """transform() converts DocstringSectionText with known subsections."""
 
-    text_section = ds.DocstringSectionText(
+    text_section = gf.DocstringSectionText(
         "See Also\n--------\nother_func\n\nNotes\n-----\nImportant note.\n"
     )
     result = _DocstringSectionPatched.transform(text_section)
@@ -30338,17 +30332,17 @@ def test_ast_transform_docstring_section_text():
 def test_ast_transform_docstring_section_text_plain():
     """transform() returns plain DocstringSectionText when no subsections found."""
 
-    text_section = ds.DocstringSectionText("Just a plain paragraph.")
+    text_section = gf.DocstringSectionText("Just a plain paragraph.")
     result = _DocstringSectionPatched.transform(text_section)
 
     assert len(result) == 1
-    assert isinstance(result[0], ds.DocstringSectionText)
+    assert isinstance(result[0], gf.DocstringSectionText)
 
 
 def test_ast_transform_docstring_section_admonition_known():
     """transform() converts DocstringSectionAdmonition with known title."""
 
-    adm_section = ds.DocstringSectionAdmonition(
+    adm_section = gf.DocstringSectionAdmonition(
         kind="warning", text="Be careful!", title="Warnings"
     )
     result = _DocstringSectionPatched.transform(adm_section)
@@ -30361,7 +30355,7 @@ def test_ast_transform_docstring_section_admonition_known():
 def test_ast_transform_docstring_section_admonition_unknown():
     """transform() returns unknown DocstringSectionAdmonition unchanged."""
 
-    adm_section = ds.DocstringSectionAdmonition(kind="custom", text="stuff", title="Custom Section")
+    adm_section = gf.DocstringSectionAdmonition(kind="custom", text="stuff", title="Custom Section")
     result = _DocstringSectionPatched.transform(adm_section)
 
     assert len(result) == 1
@@ -30371,7 +30365,7 @@ def test_ast_transform_docstring_section_admonition_unknown():
 def test_ast_transform_docstring_section_passthrough():
     """transform() returns non-text, non-admonition sections unchanged."""
 
-    params_section = ds.DocstringSectionParameters([])
+    params_section = gf.DocstringSectionParameters([])
     result = _DocstringSectionPatched.transform(params_section)
 
     assert result == [params_section]
@@ -30381,8 +30375,8 @@ def test_ast_transform_all():
     """transform_all() processes list of mixed sections."""
 
     sections = [
-        ds.DocstringSectionText("Notes\n-----\nA note.\n"),
-        ds.DocstringSectionParameters([]),
+        gf.DocstringSectionText("Notes\n-----\nA note.\n"),
+        gf.DocstringSectionParameters([]),
     ]
     result = _DocstringSectionPatched.transform_all(sections)
 
@@ -30408,83 +30402,83 @@ def test_ast_fields_example_text():
 
 
 def test_ast_fields_function():
-    """fields() returns expected fields for dc.Function."""
+    """fields() returns expected fields for gf.Function."""
     from great_docs._apiref._ast import fields
 
-    func = dc.Function(name="my_func", lineno=1)
+    func = gf.Function(name="my_func", lineno=1)
     result = fields(func)
 
     assert result == ["name", "annotation", "parameters", "docstring"]
 
 
 def test_ast_fields_attribute():
-    """fields() returns expected fields for dc.Attribute."""
+    """fields() returns expected fields for gf.Attribute."""
     from great_docs._apiref._ast import fields
 
-    attr = dc.Attribute(name="x", lineno=1)
+    attr = gf.Attribute(name="x", lineno=1)
     result = fields(attr)
 
     assert result == ["name", "annotation"]
 
 
 def test_ast_fields_docstring():
-    """fields() returns expected fields for dc.Docstring."""
+    """fields() returns expected fields for gf.Docstring."""
     from great_docs._apiref._ast import fields
 
-    ds_obj = dc.Docstring("Hello", parser="numpy")
+    ds_obj = gf.Docstring("Hello", parser="numpy")
     result = fields(ds_obj)
 
     assert result == ["parser", "parsed"]
 
 
 def test_ast_fields_parameter():
-    """fields() returns expected fields for dc.Parameter."""
+    """fields() returns expected fields for gf.Parameter."""
     from great_docs._apiref._ast import fields
 
-    param = dc.Parameter(name="x")
+    param = gf.Parameter(name="x")
     result = fields(param)
 
     assert result == ["annotation", "kind", "name", "default"]
 
 
 def test_ast_fields_docstring_parameter():
-    """fields() returns expected fields for ds.DocstringParameter."""
+    """fields() returns expected fields for gf.DocstringParameter."""
     from great_docs._apiref._ast import fields
 
-    dp = ds.DocstringParameter(name="x", description="a number", annotation="int")
+    dp = gf.DocstringParameter(name="x", description="a number", annotation="int")
     result = fields(dp)
 
     assert result == ["annotation", "default", "description", "name", "value"]
 
 
 def test_ast_fields_docstring_named_element():
-    """fields() returns expected fields for ds.DocstringNamedElement."""
+    """fields() returns expected fields for gf.DocstringNamedElement."""
     from great_docs._apiref._ast import fields
 
-    ne = ds.DocstringNamedElement(name="x", description="desc")
+    ne = gf.DocstringNamedElement(name="x", description="desc")
     result = fields(ne)
 
     assert result == ["name", "annotation", "description"]
 
 
 def test_ast_fields_docstring_section():
-    """fields() returns expected fields for ds.DocstringSection."""
+    """fields() returns expected fields for gf.DocstringSection."""
     from great_docs._apiref._ast import fields
 
-    sec = ds.DocstringSectionText("hello")
+    sec = gf.DocstringSectionText("hello")
     result = fields(sec)
 
     assert result == ["kind", "title", "value"]
 
 
 def test_ast_fields_alias():
-    """fields() follows alias target for dc.Alias."""
+    """fields() follows alias target for gf.Alias."""
     from great_docs._apiref._ast import fields
 
-    mod = dc.Module(name="testmod")
-    func = dc.Function(name="f", lineno=1)
+    mod = gf.Module(name="testmod")
+    func = gf.Function(name="f", lineno=1)
     mod.set_member("f", func)
-    alias = dc.Alias("f", func, parent=mod)
+    alias = gf.Alias("f", func, parent=mod)
     result = fields(alias)
 
     # Should match fields of the target (Function)
@@ -30499,10 +30493,10 @@ def test_ast_fields_alias_unresolvable():
     from great_docs._apiref._ast import fields
 
     mc = ModulesCollection()
-    mod = dc.Module(name="testmod")
+    mod = gf.Module(name="testmod")
     mc["testmod"] = mod
 
-    alias = dc.Alias("missing_target", "nonexistent.module.func", parent=mod)
+    alias = gf.Alias("missing_target", "nonexistent.module.func", parent=mod)
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         result = fields(alias)
@@ -30513,10 +30507,10 @@ def test_ast_fields_alias_unresolvable():
 
 
 def test_ast_fields_object():
-    """fields() returns discovered attributes for dc.Object (Module)."""
+    """fields() returns discovered attributes for gf.Object (Module)."""
     from great_docs._apiref._ast import fields
 
-    mod = dc.Module(name="mymod")
+    mod = gf.Module(name="mymod")
     result = fields(mod)
 
     assert "name" in result
@@ -30550,10 +30544,10 @@ def test_ast_fields_list():
 
 
 def test_ast_fields_parameters():
-    """fields() returns indices for dc.Parameters."""
+    """fields() returns indices for gf.Parameters."""
     from great_docs._apiref._ast import fields
 
-    params = dc.Parameters(dc.Parameter(name="a"), dc.Parameter(name="b"))
+    params = gf.Parameters(gf.Parameter(name="a"), gf.Parameter(name="b"))
     result = fields(params)
 
     assert result == [0, 1]
@@ -30667,7 +30661,7 @@ def test_ast_formatter_format_griffe_function():
     """Formatter.format renders a griffe Function as a tree."""
 
     f = Formatter()
-    func = dc.Function(name="my_func", lineno=1)
+    func = gf.Function(name="my_func", lineno=1)
     result = f.format(func)
 
     assert "Function" in result
@@ -30687,10 +30681,10 @@ def test_ast_formatter_format_nested():
     """Formatter.format handles nested structures."""
 
     f = Formatter()
-    func = dc.Function(
+    func = gf.Function(
         name="my_func",
         lineno=1,
-        docstring=dc.Docstring("A docstring", parser="numpy"),
+        docstring=gf.Docstring("A docstring", parser="numpy"),
     )
     result = f.format(func)
 
@@ -30757,12 +30751,12 @@ def test_ast_docstring_section_warnings():
 
 
 def test_ast_fields_docstring_element():
-    """fields() returns expected fields for ds.DocstringElement."""
+    """fields() returns expected fields for gf.DocstringElement."""
     from great_docs._apiref._ast import fields
 
     # DocstringElement is the base; DocstringReturn is a subclass not matching
     # DocstringNamedElement or DocstringParameter
-    elem = ds.DocstringElement(annotation="int", description="returns an int")
+    elem = gf.DocstringElement(annotation="int", description="returns an int")
     result = fields(elem)
 
     assert result == ["annotation", "description"]
@@ -30771,10 +30765,10 @@ def test_ast_fields_docstring_element():
 # Helper to build a griffe class with attribute/function/class members
 def _build_class_with_members():
     """Build a griffe Class with one attribute, one function, one inner class."""
-    cls_obj = dc.Class(name="MyClass", lineno=1)
-    attr_obj = dc.Attribute(name="my_attr", lineno=2)
-    func_obj = dc.Function(name="method", lineno=3)
-    inner_obj = dc.Class(name="Inner", lineno=4)
+    cls_obj = gf.Class(name="MyClass", lineno=1)
+    attr_obj = gf.Attribute(name="my_attr", lineno=2)
+    func_obj = gf.Function(name="method", lineno=3)
+    inner_obj = gf.Class(name="Inner", lineno=4)
     cls_obj.set_member("my_attr", attr_obj)
     cls_obj.set_member("method", func_obj)
     cls_obj.set_member("Inner", inner_obj)
@@ -30788,10 +30782,10 @@ def _build_class_with_members():
 
 def _build_class_with_member_pages():
     """Build a griffe Class with MemberPage members."""
-    cls_obj = dc.Class(name="MyClass", lineno=1)
-    attr_obj = dc.Attribute(name="my_attr", lineno=2)
-    func_obj = dc.Function(name="method", lineno=3)
-    inner_obj = dc.Class(name="Inner", lineno=4)
+    cls_obj = gf.Class(name="MyClass", lineno=1)
+    attr_obj = gf.Attribute(name="my_attr", lineno=2)
+    func_obj = gf.Function(name="method", lineno=3)
+    inner_obj = gf.Class(name="Inner", lineno=4)
     cls_obj.set_member("my_attr", attr_obj)
     cls_obj.set_member("method", func_obj)
     cls_obj.set_member("Inner", inner_obj)
@@ -30874,7 +30868,7 @@ def test_mixin_render_body_with_member_pages():
 def test_mixin_render_body_no_members():
     """render_body returns just docstring when no members."""
 
-    cls_obj = dc.Class(name="Empty", lineno=1)
+    cls_obj = gf.Class(name="Empty", lineno=1)
     doc_cls = content.DocClass(name="Empty", obj=cls_obj, members=[])
     render = RenderDocClass(doc_cls, level=1)
 
@@ -30887,7 +30881,7 @@ def test_mixin_render_body_no_members():
 def test_mixin_render_body_invalid_member_type_raises():
     """render_body raises ValueError for unrecognized member types."""
 
-    cls_obj = dc.Class(name="Bad", lineno=1)
+    cls_obj = gf.Class(name="Bad", lineno=1)
     # Use a plain string as a member — not Doc or MemberPage
     doc_cls = content.DocClass(name="Bad", obj=cls_obj, members=["not_a_doc"])
     render = RenderDocClass(doc_cls, level=1)
@@ -31276,8 +31270,8 @@ def test_mixin_render_members_group_no_summary_global():
 def test_mixin_render_members_group_empty_returns_none():
     """_render_members_group returns None when no members of that type."""
 
-    cls_obj = dc.Class(name="FuncOnly", lineno=1)
-    func_obj = dc.Function(name="method", lineno=2)
+    cls_obj = gf.Class(name="FuncOnly", lineno=1)
+    func_obj = gf.Function(name="method", lineno=2)
     cls_obj.set_member("method", func_obj)
     doc_func = content.DocFunction(name="method", obj=func_obj)
     doc_cls = content.DocClass(name="FuncOnly", obj=cls_obj, members=[doc_func])
@@ -31332,8 +31326,8 @@ def test_mixin_render_member_pages_group_no_summary():
 def test_mixin_render_member_pages_group_empty_returns_none():
     """_render_member_pages_group returns None when no pages of that type."""
 
-    cls_obj = dc.Class(name="FuncOnly", lineno=1)
-    func_obj = dc.Function(name="method", lineno=2)
+    cls_obj = gf.Class(name="FuncOnly", lineno=1)
+    func_obj = gf.Function(name="method", lineno=2)
     cls_obj.set_member("method", func_obj)
 
     doc_func = content.DocFunction(name="method", obj=func_obj)
@@ -31422,8 +31416,8 @@ def test_mixin_render_member_pages_group_has_summary_table():
 def test_mixin_render_functions_module_uses_functions_slug():
     """For DocModule, render_functions uses 'Functions' not 'Methods'."""
 
-    mod_obj = dc.Module(name="mymod")
-    func_obj = dc.Function(name="func", lineno=1)
+    mod_obj = gf.Module(name="mymod")
+    func_obj = gf.Function(name="func", lineno=1)
     mod_obj.set_member("func", func_obj)
 
     doc_func = content.DocFunction(name="func", obj=func_obj)
@@ -31439,10 +31433,10 @@ def test_mixin_render_functions_module_uses_functions_slug():
 def test_mixin_render_members_module_uses_functions_slug():
     """For DocModule, render_members has 'Functions' group not 'Methods'."""
 
-    mod_obj = dc.Module(name="mymod", filepath=Path("/tmp/mymod.py"))
-    func_obj = dc.Function(name="func", lineno=1)
-    cls_obj = dc.Class(name="Cls", lineno=2)
-    attr_obj = dc.Attribute(name="val", lineno=3)
+    mod_obj = gf.Module(name="mymod", filepath=Path("/tmp/mymod.py"))
+    func_obj = gf.Function(name="func", lineno=1)
+    cls_obj = gf.Class(name="Cls", lineno=2)
+    attr_obj = gf.Attribute(name="val", lineno=3)
     mod_obj.set_member("func", func_obj)
     mod_obj.set_member("Cls", cls_obj)
     mod_obj.set_member("val", attr_obj)
@@ -33131,19 +33125,19 @@ def test_rstconv_simple_table_two_sep_via_wrapper():
 def test_docclass_attributes_excludes_dataclass_params():
     """DocClass.attributes filters out dataclass params when is_dataclass=True."""
 
-    cls_obj = dc.Class(name="DC", lineno=1)
+    cls_obj = gf.Class(name="DC", lineno=1)
     cls_obj.labels.add("dataclass")
 
     # Create attributes on the class
-    attr_x = dc.Attribute(name="x", lineno=2)
+    attr_x = gf.Attribute(name="x", lineno=2)
     attr_x.annotation = gf.ExprName("int")
-    attr_y = dc.Attribute(name="y", lineno=3)
+    attr_y = gf.Attribute(name="y", lineno=3)
     attr_y.annotation = gf.ExprName("str")
     cls_obj.set_member("x", attr_x)
     cls_obj.set_member("y", attr_y)
 
     # Create init function with parameter "x"
-    init_fn = dc.Function(name="__init__", lineno=4)
+    init_fn = gf.Function(name="__init__", lineno=4)
     init_fn.parameters = gf.Parameters(
         gf.Parameter("self", kind=gf.ParameterKind.positional_or_keyword),
         gf.Parameter(
@@ -33172,14 +33166,14 @@ def test_docclass_attributes_excludes_dataclass_params():
 def test_docclass_parameter_attributes_with_dataclass():
     """DocClass.parameter_attributes returns params found in class attributes."""
 
-    cls_obj = dc.Class(name="DC2", lineno=1)
+    cls_obj = gf.Class(name="DC2", lineno=1)
     cls_obj.labels.add("dataclass")
 
-    attr_a = dc.Attribute(name="a", lineno=2)
+    attr_a = gf.Attribute(name="a", lineno=2)
     attr_a.annotation = gf.ExprName("int")
     cls_obj.set_member("a", attr_a)
 
-    init_fn = dc.Function(name="__init__", lineno=3)
+    init_fn = gf.Function(name="__init__", lineno=3)
     init_fn.parameters = gf.Parameters(
         gf.Parameter("self", kind=gf.ParameterKind.positional_or_keyword),
         gf.Parameter(
@@ -33202,15 +33196,15 @@ def test_docclass_parameter_attributes_with_dataclass():
 def test_docclass_init_parameters_with_dataclass():
     """DocClass.init_parameters returns params NOT in class attributes."""
 
-    cls_obj = dc.Class(name="DC3", lineno=1)
+    cls_obj = gf.Class(name="DC3", lineno=1)
     cls_obj.labels.add("dataclass")
 
     # "a" is in attributes, "b" is NOT in attributes
-    attr_a = dc.Attribute(name="a", lineno=2)
+    attr_a = gf.Attribute(name="a", lineno=2)
     attr_a.annotation = gf.ExprName("int")
     cls_obj.set_member("a", attr_a)
 
-    init_fn = dc.Function(name="__init__", lineno=3)
+    init_fn = gf.Function(name="__init__", lineno=3)
     init_fn.parameters = gf.Parameters(
         gf.Parameter("self", kind=gf.ParameterKind.positional_or_keyword),
         gf.Parameter(
@@ -33240,7 +33234,7 @@ def test_docclass_init_parameters_with_dataclass():
 def test_docmodule_render_signature_no_signature_name():
     """DocModule.render_signature() returns None when signature_name is falsy."""
 
-    mod_obj = dc.Module(name="my_module")
+    mod_obj = gf.Module(name="my_module")
     doc_mod = content.DocModule(name="my_module", obj=mod_obj)
 
     with patch.dict(os.environ, {}, clear=False):
@@ -33255,7 +33249,7 @@ def test_docmodule_render_signature_no_signature_name():
 def test_docmodule_render_signature_with_name():
     """DocModule.render_signature() returns Div when signature_name is set."""
 
-    mod_obj = dc.Module(name="my_module")
+    mod_obj = gf.Module(name="my_module")
     doc_mod = content.DocModule(name="my_module", obj=mod_obj)
 
     with patch.dict(os.environ, {}, clear=False):
@@ -33272,7 +33266,7 @@ def test_docmodule_render_signature_with_name():
 def test_docmodule_post_init_narrows_types():
     """DocModule.__post_init__() narrows self.doc and self.obj types."""
 
-    mod_obj = dc.Module(name="test_mod")
+    mod_obj = gf.Module(name="test_mod")
     doc_mod = content.DocModule(name="test_mod", obj=mod_obj)
 
     with patch.dict(os.environ, {}, clear=False):
@@ -33297,7 +33291,7 @@ def test_get_render_type_raises_for_unmapped_type():
 def test_renderbase_title_property():
     """RenderBase.title calls render_title()."""
 
-    mod_obj = dc.Module(name="tmod")
+    mod_obj = gf.Module(name="tmod")
     doc_mod = content.DocModule(name="tmod", obj=mod_obj)
 
     with patch.dict(os.environ, {}, clear=False):
@@ -33349,7 +33343,7 @@ def test_extract_directives_seealso_empty_entry():
 def test_docattribute_render_signature_type_kind():
     """DocAttribute.render_signature() clears name/annotation for TypeAlias kind."""
 
-    attr_obj = dc.Attribute(name="MyType", lineno=1)
+    attr_obj = gf.Attribute(name="MyType", lineno=1)
     attr_obj.annotation = gf.ExprName("str")
 
     # Set the kind to TYPE_ALIAS so kind.value is "type alias" which contains "type"
@@ -33387,7 +33381,7 @@ def test_mixin_page_render_title():
 def test_get_render_type_valid_type():
     """get_render_type() returns correct class for a mapped type."""
 
-    obj = DocClass(name="X", obj=dc.Class(name="X", lineno=1))
+    obj = DocClass(name="X", obj=gf.Class(name="X", lineno=1))
     result = get_render_type(obj)
     assert result is RenderDocClass
 
@@ -33406,17 +33400,17 @@ def test_renderbase_summary_property():
 def test_docclass_attribute_member_pages_dataclass():
     """DocClass.attribute_member_pages filters dataclass params."""
 
-    cls_obj = dc.Class(name="DC4", lineno=1)
+    cls_obj = gf.Class(name="DC4", lineno=1)
     cls_obj.labels.add("dataclass")
 
-    attr_x = dc.Attribute(name="x", lineno=2)
+    attr_x = gf.Attribute(name="x", lineno=2)
     attr_x.annotation = gf.ExprName("int")
-    attr_y = dc.Attribute(name="y", lineno=3)
+    attr_y = gf.Attribute(name="y", lineno=3)
     attr_y.annotation = gf.ExprName("str")
     cls_obj.set_member("x", attr_x)
     cls_obj.set_member("y", attr_y)
 
-    init_fn = dc.Function(name="__init__", lineno=4)
+    init_fn = gf.Function(name="__init__", lineno=4)
     init_fn.parameters = gf.Parameters(
         gf.Parameter("self", kind=gf.ParameterKind.positional_or_keyword),
         gf.Parameter(
@@ -33443,7 +33437,7 @@ def test_docclass_attribute_member_pages_dataclass():
 def test_docclass_parameter_attributes_non_dataclass():
     """DocClass.parameter_attributes returns empty for non-dataclass."""
 
-    cls_obj = dc.Class(name="RegularClass", lineno=1)
+    cls_obj = gf.Class(name="RegularClass", lineno=1)
     doc_cls = content.DocClass(name="RegularClass", obj=cls_obj, members=[])
 
     with patch.dict(os.environ, {}, clear=False):
@@ -33457,7 +33451,7 @@ def test_docclass_parameter_attributes_non_dataclass():
 def test_docclass_init_parameters_non_dataclass():
     """DocClass.init_parameters returns empty for non-dataclass."""
 
-    cls_obj = dc.Class(name="RegularClass2", lineno=1)
+    cls_obj = gf.Class(name="RegularClass2", lineno=1)
     doc_cls = content.DocClass(name="RegularClass2", obj=cls_obj, members=[])
 
     with patch.dict(os.environ, {}, clear=False):
@@ -34805,9 +34799,9 @@ def _make_class_page_with_members(name="MyClass"):
     rendered Attributes and Methods sections in addition to the
     duplicated class header.
     """
-    cls_obj = dc.Class(name=name, lineno=1)
-    attr_obj = dc.Attribute(name="my_attr", lineno=2)
-    func_obj = dc.Function(name="method", lineno=3)
+    cls_obj = gf.Class(name=name, lineno=1)
+    attr_obj = gf.Attribute(name="my_attr", lineno=2)
+    func_obj = gf.Function(name="method", lineno=3)
     cls_obj.set_member("my_attr", attr_obj)
     cls_obj.set_member("method", func_obj)
     doc_attr = content.DocAttribute(name="my_attr", obj=attr_obj)

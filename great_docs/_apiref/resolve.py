@@ -6,17 +6,9 @@ from functools import partial
 from textwrap import indent
 from typing import TYPE_CHECKING, Any, Callable, cast
 
+import griffe as gf
 from yaml12 import format_yaml
 
-from ._griffe import (
-    AliasResolutionError,
-    GriffeLoader,
-    LinesCollection,
-    ModulesCollection,
-    Parser,
-)
-from ._griffe import dataclasses as dc
-from ._griffe import docstrings as ds
 from ._visitor import ObjectNotFoundError
 from ._walkable import MISSING, _Walkable  # pyright: ignore[reportPrivateUsage]
 from .content import Doc, Link, MemberPage, Page, Section, Text
@@ -58,20 +50,20 @@ if TYPE_CHECKING:
 _log = logging.getLogger(__name__)
 
 # Type alias for the griffe object loader callable used throughout this module.
-_GetObject = Callable[..., dc.Object]
+_GetObject = Callable[..., gf.Object]
 
 
-def _is_external_alias(obj: dc.Alias | dc.Object, mod: dc.Module) -> bool:
+def _is_external_alias(obj: gf.Alias | gf.Object, mod: gf.Module) -> bool:
     """Whether an object is an alias whose target lives outside the given module's package"""
     package_name = mod.path.split(".")[0]
 
-    if not isinstance(obj, dc.Alias):
+    if not isinstance(obj, gf.Alias):
         return False
 
-    crnt_target: dc.Alias | dc.Object = obj
+    crnt_target: gf.Alias | gf.Object = obj
 
     while crnt_target.is_alias:
-        assert isinstance(crnt_target, dc.Alias)
+        assert isinstance(crnt_target, gf.Alias)
         if not crnt_target.target_path.startswith(package_name):
             return True
 
@@ -89,7 +81,7 @@ def _is_external_alias(obj: dc.Alias | dc.Object, mod: dc.Module) -> bool:
     return False
 
 
-def _sections_from_package(mod: dc.Module) -> list[SpecSection]:
+def _sections_from_package(mod: gf.Module) -> list[SpecSection]:
     """Derive default API sections from a package module's exported members"""
 
     has_all = "__all__" in mod.members
@@ -117,7 +109,7 @@ def _sections_from_package(mod: dc.Module) -> list[SpecSection]:
 
     if mod.docstring and mod.docstring.parsed:
         mod_summary = mod.docstring.parsed[0]
-        if isinstance(mod_summary, ds.DocstringSectionText):
+        if isinstance(mod_summary, gf.DocstringSectionText):
             desc = mod_summary.value
         else:
             desc = ""
@@ -147,25 +139,25 @@ def _non_default_entries(el: SpecOptions) -> dict[str, Any]:
     return {k: getattr(el, k) for k in fields}
 
 
-def _resolve_alias(obj: dc.Alias | dc.Object, get_object: _GetObject) -> dc.Object:
+def _resolve_alias(obj: gf.Alias | gf.Object, get_object: _GetObject) -> gf.Object:
     """The concrete griffe `Object` reached by following an alias chain"""
-    if not isinstance(obj, dc.Alias):
+    if not isinstance(obj, gf.Alias):
         return obj
 
     max_tries = 100
 
-    new_obj: dc.Alias | dc.Object = obj
+    new_obj: gf.Alias | gf.Object = obj
     for _ in range(max_tries):
         if not new_obj.is_alias:
             break
 
-        assert isinstance(new_obj, dc.Alias)
+        assert isinstance(new_obj, gf.Alias)
         try:
             new_obj = new_obj.target
-        except AliasResolutionError as e:
+        except gf.AliasResolutionError as e:
             new_obj = get_object(e.alias.target_path)
 
-    assert isinstance(new_obj, dc.Object)
+    assert isinstance(new_obj, gf.Object)
     return new_obj
 
 
@@ -187,11 +179,11 @@ class _Resolver:
         if get_object is None:
             from .introspect import get_object as _get_object
 
-            loader = GriffeLoader(
-                docstring_parser=Parser(parser),
+            loader = gf.GriffeLoader(
+                docstring_parser=gf.Parser(parser),
                 docstring_options=get_parser_defaults(parser),  # type: ignore[arg-type]
-                modules_collection=ModulesCollection(),
-                lines_collection=LinesCollection(),
+                modules_collection=gf.ModulesCollection(),
+                lines_collection=gf.LinesCollection(),
             )
             self.get_object: _GetObject = cast("_GetObject", partial(_get_object, loader=loader))
         else:
@@ -201,7 +193,7 @@ class _Resolver:
         self.options: SpecOptions | None = None
         self.dynamic: bool = False
 
-    def get_object_fixed(self, path: str, **kwargs: object) -> dc.Object:
+    def get_object_fixed(self, path: str, **kwargs: object) -> gf.Object:
         """The griffe `Object` at `path`, re-raised as `ObjectNotFoundError` if absent"""
         try:
             return self.get_object(path, **kwargs)
@@ -341,12 +333,12 @@ class _Resolver:
             signature_name=el.signature_name,
         )
 
-    def _fetch_members(self, el: SpecObject, obj: dc.Object | dc.Alias) -> list[str]:
+    def _fetch_members(self, el: SpecObject, obj: gf.Object | gf.Alias) -> list[str]:
         """Fetch the member paths to document for a given `SpecObject` element and its resolved object"""
         if el.members is not None:
             return el.members
 
-        options: dict[str, dc.Object | dc.Alias] = (
+        options: dict[str, gf.Object | gf.Alias] = (
             dict(obj.all_members) if el.include_inherited else dict(obj.members)
         )
 
@@ -436,7 +428,7 @@ def _autogenerate_sections(r: _Resolver, package: str | None) -> list[SpecSectio
     assert isinstance(package, str)
 
     mod = r.get_object_fixed(package)
-    assert isinstance(mod, dc.Module)
+    assert isinstance(mod, gf.Module)
     sections = _sections_from_package(mod)
 
     if not sections:

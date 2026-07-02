@@ -15,7 +15,7 @@ from ._render.mixin_members import RenderDocMembersMixin
 from ._render.reference_page import RenderReferencePage
 from ._render.reference_section import RenderReferenceSection
 
-# Re-exports from consolidated _renderer module
+# Re-exports from the _apiref submodules
 from .api_reference import APIReference
 from .collect import build_manifest, remove_package_prefix
 from .introspect import get_object

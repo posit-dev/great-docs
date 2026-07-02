@@ -6,9 +6,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Type
 
-from ._griffe import AliasResolutionError
-from ._griffe import dataclasses as dc
-from ._griffe import docstrings as ds
+import griffe as gf
+
 from ._walkable import _Walkable as NodeBase
 
 
@@ -21,7 +20,7 @@ def transform(el: object) -> object:
         except ValueError:
             pass
 
-    elif isinstance(el, list) and len(el) and isinstance(el[0], ds.DocstringSection):
+    elif isinstance(el, list) and len(el) and isinstance(el[0], gf.DocstringSection):
         return _DocstringSectionPatched.transform_all(el)
 
     return el
@@ -36,7 +35,7 @@ class DocstringSectionKindPatched(Enum):
     warnings = "warnings"
 
 
-class _DocstringSectionPatched(ds.DocstringSection):
+class _DocstringSectionPatched(gf.DocstringSection):
     _registry: "dict[str, Type[_DocstringSectionPatched]]" = {}
 
     def __init__(self, value: str, title: "str | None" = None) -> None:
@@ -80,20 +79,20 @@ class _DocstringSectionPatched(ds.DocstringSection):
         return results
 
     @classmethod
-    def transform(cls, el: ds.DocstringSection) -> list[ds.DocstringSection]:
+    def transform(cls, el: gf.DocstringSection) -> list[gf.DocstringSection]:
         """Cast `el` to a more specific `DocstringSection` type, when possible"""
 
-        if not isinstance(el, (ds.DocstringSectionText, ds.DocstringSectionAdmonition)):
+        if not isinstance(el, (gf.DocstringSectionText, gf.DocstringSectionAdmonition)):
             return [el]
 
         results = []
 
-        if isinstance(el, ds.DocstringSectionText):
+        if isinstance(el, gf.DocstringSectionText):
             splits = cls.split_sections(el.value)
             for title, body in splits:
-                sub_cls = cls._registry.get(title.lower(), ds.DocstringSectionText)
+                sub_cls = cls._registry.get(title.lower(), gf.DocstringSectionText)
                 results.append(sub_cls(body, title))
-        elif isinstance(el, ds.DocstringSectionAdmonition):
+        elif isinstance(el, gf.DocstringSectionAdmonition):
             sub_cls = cls._registry.get(el.title.lower(), None)
             if sub_cls:
                 results.append(sub_cls(el.value.contents, el.title))
@@ -103,7 +102,7 @@ class _DocstringSectionPatched(ds.DocstringSection):
         return results or [el]
 
     @classmethod
-    def transform_all(cls, el: list[ds.DocstringSection]) -> list[ds.DocstringSection]:
+    def transform_all(cls, el: list[gf.DocstringSection]) -> list[gf.DocstringSection]:
         return sum(map(cls.transform, el), [])
 
 
@@ -132,7 +131,7 @@ class ExampleText:
     value: str
 
 
-def tuple_to_data(el: "tuple[ds.DocstringSectionKind, str]") -> ExampleCode | ExampleText:
+def tuple_to_data(el: "tuple[gf.DocstringSectionKind, str]") -> ExampleCode | ExampleText:
     """Build an `ExampleCode` or `ExampleText` from the example-section tuple"""
     assert len(el) == 2
 
@@ -161,43 +160,43 @@ def fields(el: object) -> list[str] | list[int] | None:
         return [field.name for field in _fields(el)]
 
     # griffe types (most specific first)
-    if isinstance(el, dc.Function):
+    if isinstance(el, gf.Function):
         return ["name", "annotation", "parameters", "docstring"]
 
-    if isinstance(el, dc.Attribute):
+    if isinstance(el, gf.Attribute):
         return ["name", "annotation"]
 
-    if isinstance(el, dc.Docstring):
+    if isinstance(el, gf.Docstring):
         return ["parser", "parsed"]
 
-    if isinstance(el, dc.Parameter):
+    if isinstance(el, gf.Parameter):
         return ["annotation", "kind", "name", "default"]
 
     # docstring types
-    if isinstance(el, ds.DocstringParameter):
+    if isinstance(el, gf.DocstringParameter):
         return ["annotation", "default", "description", "name", "value"]
 
-    if isinstance(el, ds.DocstringNamedElement):
+    if isinstance(el, gf.DocstringNamedElement):
         return ["name", "annotation", "description"]
 
-    if isinstance(el, ds.DocstringElement):
+    if isinstance(el, gf.DocstringElement):
         return ["annotation", "description"]
 
-    if isinstance(el, ds.DocstringSection):
+    if isinstance(el, gf.DocstringSection):
         return ["kind", "title", "value"]
 
     # Alias (must come before Object since Alias also has Object-like behavior)
-    if isinstance(el, dc.ObjectAliasMixin) and isinstance(el, dc.Alias):
+    if isinstance(el, gf.ObjectAliasMixin) and isinstance(el, gf.Alias):
         try:
             return fields(el.target)
-        except AliasResolutionError:
+        except gf.AliasResolutionError:
             warnings.warn(
                 f"Could not resolve Alias target `{el.target_path}`."
                 " This often occurs because the module was not loaded."
             )
             return ["name", "target_path"]
 
-    if isinstance(el, dc.Object):
+    if isinstance(el, gf.Object):
         options = [
             "name",
             "canonical_path",
@@ -223,7 +222,7 @@ def fields(el: object) -> list[str] | list[int] | None:
     if isinstance(el, dict):
         return list(el.keys())
 
-    if isinstance(el, (list, dc.Parameters)):
+    if isinstance(el, (list, gf.Parameters)):
         return list(range(len(el)))
 
     return None
@@ -287,7 +286,7 @@ class Formatter:
         return "".join([call_str, *padded])
 
     def get_field(self, obj: object, k: str | int) -> object:
-        if isinstance(obj, (dict, list, dc.Parameters)):
+        if isinstance(obj, (dict, list, gf.Parameters)):
             return obj[k]
 
         return getattr(obj, k)
@@ -306,7 +305,7 @@ class Formatter:
 
 
 def preview(
-    ast: "dc.Object | ds.Docstring | object",
+    ast: "gf.Object | gf.Docstring | object",
     max_depth: int = 999,
     compact: bool = False,
     as_string: bool = False,

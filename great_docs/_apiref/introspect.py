@@ -13,13 +13,7 @@ import inspect
 from types import ModuleType
 from typing import cast
 
-from ._griffe import (
-    GriffeLoader,
-    LinesCollection,
-    ModulesCollection,
-    Parser,
-)
-from ._griffe import dataclasses as dc
+import griffe as gf
 
 # Parser defaults ==============================================================
 
@@ -42,8 +36,8 @@ def get_object(
     parser: str = "numpy",
     load_aliases: bool = True,
     dynamic: bool | str = False,
-    loader: GriffeLoader | None = None,
-) -> dc.Object | dc.Alias:
+    loader: gf.GriffeLoader | None = None,
+) -> gf.Object | gf.Alias:
     """Get the griffe object at the given import path.
 
     Parameters
@@ -66,11 +60,11 @@ def get_object(
 
         raw_defaults = get_parser_defaults(parser)
         docstring_options = cast(DocstringOptions, raw_defaults) if raw_defaults else None
-        loader = GriffeLoader(
-            docstring_parser=Parser(parser),
+        loader = gf.GriffeLoader(
+            docstring_parser=gf.Parser(parser),
             docstring_options=docstring_options,
-            modules_collection=ModulesCollection(),
-            lines_collection=LinesCollection(),
+            modules_collection=gf.ModulesCollection(),
+            lines_collection=gf.LinesCollection(),
         )
 
     try:
@@ -97,10 +91,10 @@ def get_object(
     f_parent = loader.modules_collection[griffe_path.rsplit(".", 1)[0]]
     f_data = loader.modules_collection[griffe_path]
 
-    if isinstance(f_parent, dc.Alias) and isinstance(f_data, (dc.Function, dc.Attribute)):
-        f_data = dc.Alias(f_data.name, f_data, parent=f_parent)
+    if isinstance(f_parent, gf.Alias) and isinstance(f_data, (gf.Function, gf.Attribute)):
+        f_data = gf.Alias(f_data.name, f_data, parent=f_parent)
 
-    if isinstance(f_data, dc.Alias) and load_aliases:
+    if isinstance(f_data, gf.Alias) and load_aliases:
         target_mod = f_data.target_path.split(".")[0]
         if target_mod != module:
             _ = loader.load(target_mod)
@@ -108,7 +102,7 @@ def get_object(
     return f_data
 
 
-def _resolve_target(obj: dc.Alias) -> dc.Object:
+def _resolve_target(obj: gf.Alias) -> gf.Object:
     """Resolve the alias chain to the concrete `Object` at its end.
 
     Follows `Alias.target` links until a non-alias node is reached.
@@ -121,7 +115,7 @@ def _resolve_target(obj: dc.Alias) -> dc.Object:
     target = obj.target
 
     count = 0
-    while isinstance(target, dc.Alias):
+    while isinstance(target, gf.Alias):
         count += 1
         if count > 100:
             raise ValueError("Attempted to resolve target, but may be infinitely recursing?")
@@ -131,7 +125,7 @@ def _resolve_target(obj: dc.Alias) -> dc.Object:
     return target
 
 
-def replace_docstring(obj: dc.Object | dc.Alias, f: object = None) -> None:
+def replace_docstring(obj: gf.Object | gf.Alias, f: object = None) -> None:
     """Replace the griffe object's docstring in place with the imported runtime docstring
 
     Callable attributes (the `method = some_function` pattern) are also
@@ -147,22 +141,22 @@ def replace_docstring(obj: dc.Object | dc.Alias, f: object = None) -> None:
     """
     import importlib
 
-    if isinstance(obj, dc.Alias):
+    if isinstance(obj, gf.Alias):
         obj = _resolve_target(obj)
 
-    if isinstance(obj, dc.Class):
+    if isinstance(obj, gf.Class):
         for child_obj in obj.members.values():
             replace_docstring(child_obj)
 
     if f is None:
         mod = importlib.import_module(obj.module.canonical_path)
 
-        if isinstance(obj.parent, dc.Class):
+        if isinstance(obj.parent, gf.Class):
             # Walk up the parent chain to resolve nested classes
             # e.g., for Node.add_child inside Tree, we need mod.Tree.Node
             parent_chain: list[str] = []
-            p: dc.Object | dc.Alias | None = obj.parent
-            while isinstance(p, dc.Class):
+            p: gf.Object | gf.Alias | None = obj.parent
+            while isinstance(p, gf.Class):
                 parent_chain.append(p.name)
                 p = p.parent
             parent_chain.reverse()
@@ -191,12 +185,12 @@ def replace_docstring(obj: dc.Object | dc.Alias, f: object = None) -> None:
     # Kind.ATTRIBUTE. If the runtime value is actually a function, promote it
     # to a Function object so it gets proper function-style rendering.
     if (
-        isinstance(obj, dc.Attribute)
+        isinstance(obj, gf.Attribute)
         and callable(f)
         and hasattr(f, "__code__")
         and obj.parent is not None
     ):
-        func_obj = dc.Function(
+        func_obj = gf.Function(
             name=obj.name,
             lineno=obj.lineno,
             endlineno=obj.endlineno,
@@ -205,26 +199,26 @@ def replace_docstring(obj: dc.Object | dc.Alias, f: object = None) -> None:
         # Extract parameters from runtime signature
         try:
             sig = inspect.signature(cast("type", f))
-            params: list[dc.Parameter] = []
+            params: list[gf.Parameter] = []
             _kind_map = {
-                inspect.Parameter.POSITIONAL_ONLY: dc.ParameterKind.positional_only,
-                inspect.Parameter.POSITIONAL_OR_KEYWORD: dc.ParameterKind.positional_or_keyword,
-                inspect.Parameter.VAR_POSITIONAL: dc.ParameterKind.var_positional,
-                inspect.Parameter.KEYWORD_ONLY: dc.ParameterKind.keyword_only,
-                inspect.Parameter.VAR_KEYWORD: dc.ParameterKind.var_keyword,
+                inspect.Parameter.POSITIONAL_ONLY: gf.ParameterKind.positional_only,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD: gf.ParameterKind.positional_or_keyword,
+                inspect.Parameter.VAR_POSITIONAL: gf.ParameterKind.var_positional,
+                inspect.Parameter.KEYWORD_ONLY: gf.ParameterKind.keyword_only,
+                inspect.Parameter.VAR_KEYWORD: gf.ParameterKind.var_keyword,
             }
             for pname, param in sig.parameters.items():
-                kind = _kind_map.get(param.kind, dc.ParameterKind.positional_or_keyword)
+                kind = _kind_map.get(param.kind, gf.ParameterKind.positional_or_keyword)
                 default = (
                     str(param.default) if param.default is not inspect.Parameter.empty else None
                 )
-                params.append(dc.Parameter(name=pname, kind=kind, default=default))
-            func_obj.parameters = dc.Parameters(*params)
+                params.append(gf.Parameter(name=pname, kind=kind, default=default))
+            func_obj.parameters = gf.Parameters(*params)
         except (ValueError, TypeError):
             pass
 
         old = obj.docstring
-        func_obj.docstring = dc.Docstring(
+        func_obj.docstring = gf.Docstring(
             value=doc,
             lineno=getattr(old, "lineno", None),
             endlineno=getattr(old, "endlineno", None),
@@ -236,7 +230,7 @@ def replace_docstring(obj: dc.Object | dc.Alias, f: object = None) -> None:
         return
 
     old = obj.docstring
-    new = dc.Docstring(
+    new = gf.Docstring(
         value=doc,
         lineno=getattr(old, "lineno", None),
         endlineno=getattr(old, "endlineno", None),
@@ -251,8 +245,8 @@ def replace_docstring(obj: dc.Object | dc.Alias, f: object = None) -> None:
 def dynamic_alias(
     path: str,
     target: str | None = None,
-    loader: GriffeLoader | None = None,
-) -> dc.Object | dc.Alias:
+    loader: gf.GriffeLoader | None = None,
+) -> gf.Object | gf.Alias:
     """Resolve a griffe object for `path` via a dynamic import.
 
     Parameters
@@ -347,9 +341,9 @@ def dynamic_alias(
             parent_path = mod_name.rsplit(".", 1)[0]
 
         parent = get_object(parent_path, loader=loader, dynamic=True)
-        if isinstance(parent, (dc.Module, dc.Class, dc.Alias)):
-            return dc.Alias(attr_name, obj, parent=parent)
-        return dc.Alias(attr_name, obj)
+        if isinstance(parent, (gf.Module, gf.Class, gf.Alias)):
+            return gf.Alias(attr_name, obj, parent=parent)
+        return gf.Alias(attr_name, obj)
 
 
 def _canonical_path(crnt_part: object, qualname: str) -> str | None:
@@ -386,14 +380,14 @@ def _canonical_path(crnt_part: object, qualname: str) -> str | None:
     return None
 
 
-def _is_valueless(obj: dc.Object | dc.Alias) -> bool:
+def _is_valueless(obj: gf.Object | gf.Alias) -> bool:
     """Whether `obj` is an attribute that carries no runtime value.
 
     True for class/module attributes with no assigned value, and for
     all instance attributes (which are declaration-only in griffe's static
     model).
     """
-    if isinstance(obj, dc.Attribute):
+    if isinstance(obj, gf.Attribute):
         if obj.labels & {"class-attribute", "module-attribute"} and obj.value is None:
             return True
         elif "instance-attribute" in obj.labels:

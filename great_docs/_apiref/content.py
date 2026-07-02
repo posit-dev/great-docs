@@ -15,14 +15,14 @@ from typing import TYPE_CHECKING, Any
 from ._walkable import _Walkable  # pyright: ignore[reportPrivateUsage]
 
 if TYPE_CHECKING:
-    from ._griffe import dataclasses as dc
+    import griffe as gf
 
 
 @dataclass
 class Doc(_Walkable):
     """A resolved Python object ready to be rendered as documentation"""
 
-    obj: dc.Object | dc.Alias
+    obj: gf.Object | gf.Alias
     name: str = ""
     anchor: str = ""
     signature_name: str = "relative"
@@ -31,7 +31,7 @@ class Doc(_Walkable):
     def from_griffe(
         cls,
         name: str,
-        obj: dc.Object | dc.Alias,
+        obj: gf.Object | gf.Alias,
         members: list[Any] | None = None,
         anchor: str | None = None,
         flat: bool = False,
@@ -119,7 +119,7 @@ class Page(_Walkable):
     )
 
     @property
-    def obj(self) -> dc.Object | dc.Alias:
+    def obj(self) -> gf.Object | gf.Alias:
         if len(self.contents) == 1:
             return self.contents[0].obj
         raise ValueError(
@@ -159,7 +159,7 @@ class Text(_Walkable):
 class Link(_Walkable):
     """A cross-reference link to a documented object"""
 
-    obj: dc.Object | dc.Alias
+    obj: gf.Object | gf.Alias
     name: str = ""
 
 
