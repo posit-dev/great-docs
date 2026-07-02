@@ -135,6 +135,24 @@ def test_lead_in_extends_auto_duration_and_manifest(tmp_path):
     assert sc["lead_in"] == pytest.approx(0.75)
 
 
+def test_image_fit_option(tmp_path):
+    spec = (
+        "scenes:\n"
+        "  - id: a\n    type: image\n    src: photo.png\n"  # default cover
+        "  - id: b\n    type: image\n    src: table.png\n    fit: contain\n"
+    )
+    show = load_showreel(_write_spec(tmp_path, spec))
+    assert show.scenes[0].fit == "cover"
+    assert show.scenes[1].fit == "contain"
+    # Only the non-default "contain" is carried into the manifest.
+    (tmp_path / "photo.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 40)
+    (tmp_path / "table.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 40)
+    r = build_showreel(_write_spec(tmp_path, spec, name="c.showreel.yml"), tmp_path / "out", engine="silent")
+    scenes = r.manifest.to_dict()["scenes"]
+    assert "fit" not in scenes[0]
+    assert scenes[1]["fit"] == "contain"
+
+
 def test_duplicate_scene_id_raises(tmp_path):
     bad = SPEC.replace("id: bye", "id: intro")
     with pytest.raises(ShowreelSpecError, match="Duplicate scene id"):
