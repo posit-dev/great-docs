@@ -61,6 +61,8 @@ class Manifest:
             }
         if sc.type == "image":
             data["src"] = sc.src
+            if sc.fit == "contain":
+                data["fit"] = sc.fit
         if sc.keyframes:
             data["keyframes"] = sc.keyframes
         if sc.type == "code":
