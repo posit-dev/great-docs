@@ -162,12 +162,12 @@ class __RenderDocCallMixin(RenderDoc):
         """
         The parameters of the callable
         """
-        from .._globals import EXCLUDE_PARAMETERS
+        from .._globals import EXCLUSIONS
 
         obj = self.obj
         parameters = obj.parameters
 
-        exclude = EXCLUDE_PARAMETERS.get(self.obj.path, ())
+        exclude = EXCLUSIONS.parameters.get(self.obj.path, ())
         if isinstance(exclude, str):
             exclude = (exclude,)
         exclude = set(exclude)

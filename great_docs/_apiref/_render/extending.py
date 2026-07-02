@@ -149,9 +149,9 @@ def exclude_parameters(spec: dict[str, str | Sequence[str]]):
     [](`~great_docs.renderer.exclude_attributes`)
     to remove it from there as well.
     """
-    from .._globals import EXCLUDE_PARAMETERS
+    from .._globals import EXCLUSIONS
 
-    EXCLUDE_PARAMETERS.update(spec)
+    EXCLUSIONS.parameters.update(spec)
 
 
 def exclude_attributes(spec: dict[str, str | Sequence[str]]):
@@ -200,9 +200,9 @@ def exclude_attributes(spec: dict[str, str | Sequence[str]]):
     })
     ```
     """
-    from .._globals import EXCLUDE_ATTRIBUTES
+    from .._globals import EXCLUSIONS
 
-    EXCLUDE_ATTRIBUTES.update(spec)
+    EXCLUSIONS.attributes.update(spec)
 
 
 def exclude_functions(spec: dict[str, str | Sequence[str]]):
@@ -245,9 +245,9 @@ def exclude_functions(spec: dict[str, str | Sequence[str]]):
     })
     ```
     """
-    from .._globals import EXCLUDE_FUNCTIONS
+    from .._globals import EXCLUSIONS
 
-    EXCLUDE_FUNCTIONS.update(spec)
+    EXCLUSIONS.functions.update(spec)
 
 
 def exclude_classes(spec: dict[str, str | Sequence[str]]):
@@ -289,6 +289,6 @@ def exclude_classes(spec: dict[str, str | Sequence[str]]):
     })
     ```
     """
-    from .._globals import EXCLUDE_CLASSES
+    from .._globals import EXCLUSIONS
 
-    EXCLUDE_CLASSES.update(spec)
+    EXCLUSIONS.classes.update(spec)

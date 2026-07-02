@@ -131,9 +131,9 @@ class __RenderDocMembersMixin(RenderDoc):
         For a module, this will be the objects at the top level that
         are not classes or functions.
         """
-        from .._globals import EXCLUDE_ATTRIBUTES
+        from .._globals import EXCLUSIONS
 
-        exclude = EXCLUDE_ATTRIBUTES.get(self.obj.path, ())
+        exclude = EXCLUSIONS.attributes.get(self.obj.path, ())
         if isinstance(exclude, str):
             exclude = (exclude,)
         exclude = set(exclude)
@@ -159,9 +159,9 @@ class __RenderDocMembersMixin(RenderDoc):
                 pass
         ```
         """
-        from .._globals import EXCLUDE_CLASSES
+        from .._globals import EXCLUSIONS
 
-        exclude = EXCLUDE_CLASSES.get(self.obj.path, ())
+        exclude = EXCLUSIONS.classes.get(self.obj.path, ())
         if isinstance(exclude, str):
             exclude = (exclude,)
         exclude = set(exclude)
@@ -177,9 +177,9 @@ class __RenderDocMembersMixin(RenderDoc):
         For a class, this will be the instance methods, static methods
         and class methods.
         """
-        from .._globals import EXCLUDE_FUNCTIONS
+        from .._globals import EXCLUSIONS
 
-        exclude = EXCLUDE_FUNCTIONS.get(self.obj.path, ())
+        exclude = EXCLUSIONS.functions.get(self.obj.path, ())
         if isinstance(exclude, str):
             exclude = (exclude,)
         exclude = set(exclude)
@@ -194,9 +194,9 @@ class __RenderDocMembersMixin(RenderDoc):
         For a module, this will be the objects at the top level that
         are not classes or functions.
         """
-        from .._globals import EXCLUDE_ATTRIBUTES
+        from .._globals import EXCLUSIONS
 
-        exclude = EXCLUDE_ATTRIBUTES.get(self.obj.path, ())
+        exclude = EXCLUSIONS.attributes.get(self.obj.path, ())
         if isinstance(exclude, str):
             exclude = (exclude,)
         exclude = set(exclude)
@@ -213,9 +213,9 @@ class __RenderDocMembersMixin(RenderDoc):
         """
         Member pages of classes are classes
         """
-        from .._globals import EXCLUDE_CLASSES
+        from .._globals import EXCLUSIONS
 
-        exclude = EXCLUDE_CLASSES.get(self.obj.path, ())
+        exclude = EXCLUSIONS.classes.get(self.obj.path, ())
         if isinstance(exclude, str):
             exclude = (exclude,)
         exclude = set(exclude)
@@ -232,9 +232,9 @@ class __RenderDocMembersMixin(RenderDoc):
         """
         Member pages of functions
         """
-        from .._globals import EXCLUDE_FUNCTIONS
+        from .._globals import EXCLUSIONS
 
-        exclude = EXCLUDE_FUNCTIONS.get(self.obj.path, ())
+        exclude = EXCLUSIONS.functions.get(self.obj.path, ())
         if isinstance(exclude, str):
             exclude = (exclude,)
         exclude = set(exclude)

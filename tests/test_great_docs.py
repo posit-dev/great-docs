@@ -54,12 +54,7 @@ from great_docs._apiref._format import (
     HAS_RUFF,
     repr_obj,
 )
-from great_docs._apiref._globals import (
-    EXCLUDE_ATTRIBUTES,
-    EXCLUDE_CLASSES,
-    EXCLUDE_FUNCTIONS,
-    EXCLUDE_PARAMETERS,
-)
+from great_docs._apiref._globals import EXCLUSIONS
 from great_docs._apiref._griffe.docstrings import DCDocstringSection
 from great_docs._apiref._render import (
     get_render_type,
@@ -31000,111 +30995,111 @@ def test_mixin_function_member_pages_property():
 
 
 def test_mixin_attributes_exclude_filter():
-    """attributes property respects EXCLUDE_ATTRIBUTES."""
+    """attributes property respects EXCLUSIONS.attributes."""
 
     _, doc_cls = _build_class_with_members()
     render = RenderDocClass(doc_cls, level=1)
 
-    old = _globals.EXCLUDE_ATTRIBUTES.copy()
+    old = _globals.EXCLUSIONS.attributes.copy()
     try:
-        _globals.EXCLUDE_ATTRIBUTES["MyClass"] = ("my_attr",)
+        _globals.EXCLUSIONS.attributes["MyClass"] = ("my_attr",)
         if "attributes" in render.__dict__:
             del render.__dict__["attributes"]
         attrs = render.attributes
         assert len(attrs) == 0
     finally:
-        _globals.EXCLUDE_ATTRIBUTES.clear()
-        _globals.EXCLUDE_ATTRIBUTES.update(old)
+        _globals.EXCLUSIONS.attributes.clear()
+        _globals.EXCLUSIONS.attributes.update(old)
 
 
 def test_mixin_functions_exclude_filter():
-    """functions property respects EXCLUDE_FUNCTIONS."""
+    """functions property respects EXCLUSIONS.functions."""
 
     _, doc_cls = _build_class_with_members()
     render = RenderDocClass(doc_cls, level=1)
 
-    old = _globals.EXCLUDE_FUNCTIONS.copy()
+    old = _globals.EXCLUSIONS.functions.copy()
     try:
-        _globals.EXCLUDE_FUNCTIONS["MyClass"] = ("method",)
+        _globals.EXCLUSIONS.functions["MyClass"] = ("method",)
         if "functions" in render.__dict__:
             del render.__dict__["functions"]
         funcs = render.functions
         assert len(funcs) == 0
     finally:
-        _globals.EXCLUDE_FUNCTIONS.clear()
-        _globals.EXCLUDE_FUNCTIONS.update(old)
+        _globals.EXCLUSIONS.functions.clear()
+        _globals.EXCLUSIONS.functions.update(old)
 
 
 def test_mixin_classes_exclude_filter():
-    """classes property respects EXCLUDE_CLASSES."""
+    """classes property respects EXCLUSIONS.classes."""
 
     _, doc_cls = _build_class_with_members()
     render = RenderDocClass(doc_cls, level=1)
 
-    old = _globals.EXCLUDE_CLASSES.copy()
+    old = _globals.EXCLUSIONS.classes.copy()
     try:
-        _globals.EXCLUDE_CLASSES["MyClass"] = "Inner"
+        _globals.EXCLUSIONS.classes["MyClass"] = "Inner"
         if "classes" in render.__dict__:
             del render.__dict__["classes"]
         classes = render.classes
         assert len(classes) == 0
     finally:
-        _globals.EXCLUDE_CLASSES.clear()
-        _globals.EXCLUDE_CLASSES.update(old)
+        _globals.EXCLUSIONS.classes.clear()
+        _globals.EXCLUSIONS.classes.update(old)
 
 
 def test_mixin_attribute_member_pages_exclude_filter():
-    """attribute_member_pages respects EXCLUDE_ATTRIBUTES."""
+    """attribute_member_pages respects EXCLUSIONS.attributes."""
 
     _, doc_cls = _build_class_with_member_pages()
     render = RenderDocClass(doc_cls, level=1)
 
-    old = _globals.EXCLUDE_ATTRIBUTES.copy()
+    old = _globals.EXCLUSIONS.attributes.copy()
     try:
-        _globals.EXCLUDE_ATTRIBUTES["MyClass"] = "my_attr"
+        _globals.EXCLUSIONS.attributes["MyClass"] = "my_attr"
         if "attribute_member_pages" in render.__dict__:
             del render.__dict__["attribute_member_pages"]
         pages = render.attribute_member_pages
         assert len(pages) == 0
     finally:
-        _globals.EXCLUDE_ATTRIBUTES.clear()
-        _globals.EXCLUDE_ATTRIBUTES.update(old)
+        _globals.EXCLUSIONS.attributes.clear()
+        _globals.EXCLUSIONS.attributes.update(old)
 
 
 def test_mixin_class_member_pages_exclude_filter():
-    """class_member_pages respects EXCLUDE_CLASSES."""
+    """class_member_pages respects EXCLUSIONS.classes."""
 
     _, doc_cls = _build_class_with_member_pages()
     render = RenderDocClass(doc_cls, level=1)
 
-    old = _globals.EXCLUDE_CLASSES.copy()
+    old = _globals.EXCLUSIONS.classes.copy()
     try:
-        _globals.EXCLUDE_CLASSES["MyClass"] = ("Inner",)
+        _globals.EXCLUSIONS.classes["MyClass"] = ("Inner",)
         if "class_member_pages" in render.__dict__:
             del render.__dict__["class_member_pages"]
         pages = render.class_member_pages
         assert len(pages) == 0
     finally:
-        _globals.EXCLUDE_CLASSES.clear()
-        _globals.EXCLUDE_CLASSES.update(old)
+        _globals.EXCLUSIONS.classes.clear()
+        _globals.EXCLUSIONS.classes.update(old)
 
 
 def test_mixin_function_member_pages_exclude_filter():
-    """function_member_pages respects EXCLUDE_FUNCTIONS."""
+    """function_member_pages respects EXCLUSIONS.functions."""
 
     _, doc_cls = _build_class_with_member_pages()
     render = RenderDocClass(doc_cls, level=1)
 
-    old = _globals.EXCLUDE_FUNCTIONS.copy()
+    old = _globals.EXCLUSIONS.functions.copy()
     try:
-        _globals.EXCLUDE_FUNCTIONS["MyClass"] = "method"
+        _globals.EXCLUSIONS.functions["MyClass"] = "method"
         if "function_member_pages" in render.__dict__:
             del render.__dict__["function_member_pages"]
         pages = render.function_member_pages
         assert len(pages) == 0
     finally:
-        _globals.EXCLUDE_FUNCTIONS.clear()
-        _globals.EXCLUDE_FUNCTIONS.update(old)
+        _globals.EXCLUSIONS.functions.clear()
+        _globals.EXCLUSIONS.functions.update(old)
 
 
 def test_mixin_render_classes():
@@ -34160,52 +34155,52 @@ def test_set_class_attr_cached_property():
 
 
 def test_exclude_parameters_updates_globals():
-    """exclude_parameters updates the EXCLUDE_PARAMETERS global dict."""
+    """exclude_parameters updates the EXCLUSIONS.parameters global dict."""
 
-    original = dict(EXCLUDE_PARAMETERS)
+    original = dict(EXCLUSIONS.parameters)
     try:
         exclude_parameters({"test.MyClass": "param1"})
-        assert "test.MyClass" in EXCLUDE_PARAMETERS
-        assert EXCLUDE_PARAMETERS["test.MyClass"] == "param1"
+        assert "test.MyClass" in EXCLUSIONS.parameters
+        assert EXCLUSIONS.parameters["test.MyClass"] == "param1"
     finally:
-        EXCLUDE_PARAMETERS.clear()
-        EXCLUDE_PARAMETERS.update(original)
+        EXCLUSIONS.parameters.clear()
+        EXCLUSIONS.parameters.update(original)
 
 
 def test_exclude_attributes_updates_globals():
-    """exclude_attributes updates the EXCLUDE_ATTRIBUTES global dict."""
+    """exclude_attributes updates the EXCLUSIONS.attributes global dict."""
 
-    original = dict(EXCLUDE_ATTRIBUTES)
+    original = dict(EXCLUSIONS.attributes)
     try:
         exclude_attributes({"test.MyClass": ("a", "b")})
-        assert "test.MyClass" in EXCLUDE_ATTRIBUTES
+        assert "test.MyClass" in EXCLUSIONS.attributes
     finally:
-        EXCLUDE_ATTRIBUTES.clear()
-        EXCLUDE_ATTRIBUTES.update(original)
+        EXCLUSIONS.attributes.clear()
+        EXCLUSIONS.attributes.update(original)
 
 
 def test_exclude_functions_updates_globals():
-    """exclude_functions updates the EXCLUDE_FUNCTIONS global dict."""
+    """exclude_functions updates the EXCLUSIONS.functions global dict."""
 
-    original = dict(EXCLUDE_FUNCTIONS)
+    original = dict(EXCLUSIONS.functions)
     try:
         exclude_functions({"test.MyClass": "func_a"})
-        assert "test.MyClass" in EXCLUDE_FUNCTIONS
+        assert "test.MyClass" in EXCLUSIONS.functions
     finally:
-        EXCLUDE_FUNCTIONS.clear()
-        EXCLUDE_FUNCTIONS.update(original)
+        EXCLUSIONS.functions.clear()
+        EXCLUSIONS.functions.update(original)
 
 
 def test_exclude_classes_updates_globals():
-    """exclude_classes updates the EXCLUDE_CLASSES global dict."""
+    """exclude_classes updates the EXCLUSIONS.classes global dict."""
 
-    original = dict(EXCLUDE_CLASSES)
+    original = dict(EXCLUSIONS.classes)
     try:
         exclude_classes({"test.MyClass": "Contained1"})
-        assert "test.MyClass" in EXCLUDE_CLASSES
+        assert "test.MyClass" in EXCLUSIONS.classes
     finally:
-        EXCLUDE_CLASSES.clear()
-        EXCLUDE_CLASSES.update(original)
+        EXCLUSIONS.classes.clear()
+        EXCLUSIONS.classes.update(original)
 
 
 def test_render_reference_section_title():
@@ -34611,51 +34606,51 @@ def test_set_class_attr_static_method():
 
 
 def test_exclude_parameters_function():
-    """exclude_parameters updates EXCLUDE_PARAMETERS."""
+    """exclude_parameters updates EXCLUSIONS.parameters."""
 
-    original = dict(EXCLUDE_PARAMETERS)
+    original = dict(EXCLUSIONS.parameters)
     try:
         exclude_parameters({"pkg.Cls": ("p1", "p2")})
-        assert EXCLUDE_PARAMETERS["pkg.Cls"] == ("p1", "p2")
+        assert EXCLUSIONS.parameters["pkg.Cls"] == ("p1", "p2")
     finally:
-        EXCLUDE_PARAMETERS.clear()
-        EXCLUDE_PARAMETERS.update(original)
+        EXCLUSIONS.parameters.clear()
+        EXCLUSIONS.parameters.update(original)
 
 
 def test_exclude_attributes_function():
-    """exclude_attributes updates EXCLUDE_ATTRIBUTES."""
+    """exclude_attributes updates EXCLUSIONS.attributes."""
 
-    original = dict(EXCLUDE_ATTRIBUTES)
+    original = dict(EXCLUSIONS.attributes)
     try:
         exclude_attributes({"pkg.Cls": ("a", "b")})
-        assert EXCLUDE_ATTRIBUTES["pkg.Cls"] == ("a", "b")
+        assert EXCLUSIONS.attributes["pkg.Cls"] == ("a", "b")
     finally:
-        EXCLUDE_ATTRIBUTES.clear()
-        EXCLUDE_ATTRIBUTES.update(original)
+        EXCLUSIONS.attributes.clear()
+        EXCLUSIONS.attributes.update(original)
 
 
 def test_exclude_functions_function():
-    """exclude_functions updates EXCLUDE_FUNCTIONS."""
+    """exclude_functions updates EXCLUSIONS.functions."""
 
-    original = dict(EXCLUDE_FUNCTIONS)
+    original = dict(EXCLUSIONS.functions)
     try:
         exclude_functions({"pkg.Cls": "fn"})
-        assert EXCLUDE_FUNCTIONS["pkg.Cls"] == "fn"
+        assert EXCLUSIONS.functions["pkg.Cls"] == "fn"
     finally:
-        EXCLUDE_FUNCTIONS.clear()
-        EXCLUDE_FUNCTIONS.update(original)
+        EXCLUSIONS.functions.clear()
+        EXCLUSIONS.functions.update(original)
 
 
 def test_exclude_classes_function():
-    """exclude_classes updates EXCLUDE_CLASSES."""
+    """exclude_classes updates EXCLUSIONS.classes."""
 
-    original = dict(EXCLUDE_CLASSES)
+    original = dict(EXCLUSIONS.classes)
     try:
         exclude_classes({"pkg.Mod": "OldClass"})
-        assert EXCLUDE_CLASSES["pkg.Mod"] == "OldClass"
+        assert EXCLUSIONS.classes["pkg.Mod"] == "OldClass"
     finally:
-        EXCLUDE_CLASSES.clear()
-        EXCLUDE_CLASSES.update(original)
+        EXCLUSIONS.classes.clear()
+        EXCLUSIONS.classes.update(original)
 
 
 def test_render_reference_page_render_body():

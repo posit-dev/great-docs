@@ -1,35 +1,23 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 
 
-EXCLUDE_PARAMETERS: dict[str, str | Sequence[str]] = {}
-"""
-The parameters of callables to exclude from the documentation.
+@dataclass
+class Exclusions:
+    """Members left out of the generated documentation
 
-The specification is {callable_object_path: parameter_name | parameter_names}.
-"""
+    Each mapping is keyed by a parent object's path (as shown on the API
+    page); the value names the member — or members — of that object to
+    leave out: parameters of a callable, or attributes, functions, and
+    classes of a class or module.
+    """
 
-EXCLUDE_ATTRIBUTES: dict[str, str | Sequence[str]] = {}
-"""
-The attributes to exclude from the documentation.
+    parameters: dict[str, str | Sequence[str]] = field(default_factory=dict[str, str | Sequence[str]])
+    attributes: dict[str, str | Sequence[str]] = field(default_factory=dict[str, str | Sequence[str]])
+    functions: dict[str, str | Sequence[str]] = field(default_factory=dict[str, str | Sequence[str]])
+    classes: dict[str, str | Sequence[str]] = field(default_factory=dict[str, str | Sequence[str]])
 
-The specification is {parent_object_path: attribute_name | attribute_names}.
-"""
 
-EXCLUDE_FUNCTIONS: dict[str, str | Sequence[str]] = {}
-"""
-The functions to exclude from the documentation.
-
-The specification is {parent_object_path: class_name | function_names}.
-"""
-
-EXCLUDE_CLASSES: dict[str, str | Sequence[str]] = {}
-"""
-The classes to exclude from the documentation.
-
-The specification is {parent_object_path: class_name | class_names}.
-"""
+EXCLUSIONS = Exclusions()
