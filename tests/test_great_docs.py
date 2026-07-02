@@ -165,8 +165,6 @@ from great_docs._apiref.write import _insert_contents, merge_frontmatter as _mer
 from great_docs._apiref.inventory import (
     convert_inventory,
     create_inventory,
-    _create_inventory_item,
-    _maybe_call,
 )
 from great_docs._apiref._walkable import MISSING, _Walkable
 from great_docs._apiref.content import (
@@ -6672,23 +6670,13 @@ def test_find_page_node_no_page():
             ctx_node.reset(token)
 
 
-def test_bp_append_member_path_no_colon():
-    result = BlueprintTransformer._append_member_path("pkg.mod", "MyClass")
-    assert result == "pkg.mod:MyClass"
-
-
-def test_bp_append_member_path_with_colon():
-    result = BlueprintTransformer._append_member_path("pkg.mod:MyClass", "method")
-    assert result == "pkg.mod:MyClass.method"
-
-
 def test_bp_clean_member_path_with_colon():
-    result = BlueprintTransformer._clean_member_path("pkg.mod", "pkg.mod:MyClass.method")
+    result = BlueprintTransformer._clean_member_path("pkg.mod:MyClass.method")
     assert result == "pkg.mod.MyClass.method"
 
 
 def test_bp_clean_member_path_no_colon():
-    result = BlueprintTransformer._clean_member_path("pkg.mod", "simple")
+    result = BlueprintTransformer._clean_member_path("simple")
     assert result == "simple"
 
 
@@ -28343,24 +28331,6 @@ def test_get_object_module_only():
     assert obj.name == "json"
 
 
-def test_get_object_deprecated_object_name():
-    """get_object with the deprecated object_name parameter still works."""
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        obj = get_object("json", object_name="dumps")
-    assert obj.name == "dumps"
-
-
-def test_get_object_deprecated_object_name_warns():
-    """get_object with object_name emits a DeprecationWarning."""
-
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        get_object("json", object_name="dumps")
-    assert any(issubclass(x.category, DeprecationWarning) for x in w)
-
-
 def test_get_object_with_shared_loader():
     """get_object reuses a loader if provided."""
     from great_docs._apiref._griffe import (
@@ -28635,6 +28605,14 @@ def test_is_valueless_class_attribute_with_value():
 
     attr = dc.Attribute(name="x", lineno=1, value="42")
     attr.labels.add("class-attribute")
+
+    assert _is_valueless(attr) is False
+
+
+def test_is_valueless_unlabelled_attribute():
+    """_is_valueless returns False for an attribute with none of the labels."""
+
+    attr = dc.Attribute(name="x", lineno=1, value=None)
 
     assert _is_valueless(attr) is False
 
@@ -33713,18 +33691,6 @@ def test_is_initvar_false():
     assert is_initvar("something") is False
 
 
-def test_isdoc_module():
-    """isDoc.Module checks obj.is_attribute."""
-
-    el = MagicMock()
-    el.obj.is_attribute = True
-    assert isDoc.Module(el) is True
-
-    el2 = MagicMock()
-    el2.obj.is_attribute = False
-    assert isDoc.Module(el2) is False
-
-
 def test_griffe_to_doc():
     """griffe_to_doc converts griffe object to layout Doc."""
 
@@ -34103,45 +34069,12 @@ def test_convert_inventory_dict(tmp_path):
     assert result == inv
 
 
-def test_convert_inventory_requires_out_name():
-    """convert_inventory raises TypeError if out_name not given."""
-
-    with pytest.raises(TypeError, match="out_name is required"):
-        convert_inventory({})
-
-
-def test_convert_inventory_unsupported_type():
-    """convert_inventory raises TypeError for unsupported types."""
-
-    with pytest.raises(TypeError, match="Unsupported inventory type"):
-        convert_inventory(42, out_name="/tmp/test.json")
-
-
-def test_convert_inventory_sphobjinv(tmp_path):
-    """convert_inventory handles sphobjinv-like Inventory objects."""
-
-    mock_inv = MagicMock()
-    mock_inv.json_dict.return_value = {
-        "project": "myproj",
-        "version": "2.0",
-        "count": 1,
-        "py:function:myproj.func": {"name": "myproj.func", "domain": "py"},
-    }
-    out = str(tmp_path / "inv.json")
-    convert_inventory(mock_inv, out_name=out)
-
-    with open(out) as f:
-        result = json.load(f)
-
-    assert result["project"] == "myproj"
-    assert "items" in result
-
-
 def test_create_inventory_basic():
     """create_inventory returns a properly structured dict."""
 
     obj = gf.Function(name="my_func", lineno=1)
-    result = create_inventory("myproj", "1.0", [obj])
+    item = InventoryItem(name="myproj.my_func", obj=obj, uri="my_func.html")
+    result = create_inventory("myproj", "1.0", [item])
 
     assert result["project"] == "myproj"
     assert result["version"] == "1.0"
@@ -34168,59 +34101,14 @@ def test_create_inventory_with_layout_item():
     assert result["items"][0]["dispname"] == "my_func"
 
 
-def test_create_inventory_custom_uri_and_dispname():
-    """create_inventory uses custom uri/dispname callables."""
+def test_create_inventory_default_dispname():
+    """create_inventory falls back to "-" when an item has no dispname."""
 
     obj = gf.Function(name="my_func", lineno=1)
-    result = create_inventory(
-        "myproj",
-        "1.0",
-        [obj],
-        uri=lambda s: f"api/{s.name}.html",
-        dispname=lambda s: s.name.upper(),
-    )
-
-    assert result["items"][0]["uri"] == "api/my_func.html"
-    assert result["items"][0]["dispname"] == "MY_FUNC"
-
-
-def test_create_inventory_string_dispname():
-    """create_inventory uses string dispname directly."""
-
-    obj = gf.Function(name="my_func", lineno=1)
-    result = create_inventory("myproj", "1.0", [obj], dispname="-")
+    item = InventoryItem(name="myproj.my_func", obj=obj, uri="my_func.html")
+    result = create_inventory("myproj", "1.0", [item])
 
     assert result["items"][0]["dispname"] == "-"
-
-
-def test_create_inventory_item_unsupported_type():
-    """_create_inventory_item raises TypeError for unsupported items."""
-
-    with pytest.raises(TypeError, match="Unsupported item type"):
-        _create_inventory_item("not_an_item", uri="test.html")
-
-
-def test_maybe_call_with_callable():
-    """_maybe_call invokes a callable."""
-
-    result = _maybe_call(lambda x: x.upper(), "hello")
-
-    assert result == "HELLO"
-
-
-def test_maybe_call_with_string():
-    """_maybe_call returns the string directly."""
-
-    result = _maybe_call("fixed", "ignored")
-
-    assert result == "fixed"
-
-
-def test_maybe_call_unsupported_type():
-    """_maybe_call raises TypeError for non-string non-callable."""
-
-    with pytest.raises(TypeError, match="Expected string or callable"):
-        _maybe_call(42, "obj")
 
 
 def test_extend_base_class_copies_methods():

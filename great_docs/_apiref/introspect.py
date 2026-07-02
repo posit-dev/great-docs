@@ -10,7 +10,6 @@ mode).
 from __future__ import annotations
 
 import inspect
-import warnings
 from types import ModuleType
 from typing import cast
 
@@ -40,7 +39,6 @@ def get_parser_defaults(name: str) -> dict[str, object]:
 
 def get_object(
     path: str,
-    object_name: str | None = None,
     parser: str = "numpy",
     load_aliases: bool = True,
     dynamic: bool | str = False,
@@ -53,8 +51,6 @@ def get_object(
     path :
         An import path to the object. This should have the form `path.to.module:object`.
         For example, `my_package:get_object` or `my_package:MyClass.render`.
-    object_name :
-        (Deprecated). A function name.
     parser :
         A docstring parser to use.
     load_aliases :
@@ -65,10 +61,6 @@ def get_object(
     loader :
         An existing griffe loader to reuse. A fresh loader is created when omitted.
     """
-    if object_name is not None:
-        warnings.warn("object_name argument is deprecated in get_object", DeprecationWarning)
-        path = f"{path}:{object_name}"
-
     if loader is None:
         from griffe import DocstringOptions
 
@@ -306,12 +298,9 @@ def dynamic_alias(
                 crnt_part = getattr(crnt_part, attr_name)
             except AttributeError:
                 if canonical_path:
-                    try:
-                        obj = get_object(canonical_path, loader=loader)
-                        if _is_valueless(obj):
-                            return obj
-                    except Exception as e:
-                        raise e
+                    obj = get_object(canonical_path, loader=loader)
+                    if _is_valueless(obj):
+                        return obj
 
                 raise AttributeError(f"No attribute named `{attr_name}` in the path `{path}`.")
 
@@ -405,7 +394,7 @@ def _is_valueless(obj: dc.Object | dc.Alias) -> bool:
     model).
     """
     if isinstance(obj, dc.Attribute):
-        if obj.labels.union({"class-attribute", "module-attribute"}) and obj.value is None:
+        if obj.labels & {"class-attribute", "module-attribute"} and obj.value is None:
             return True
         elif "instance-attribute" in obj.labels:
             return True

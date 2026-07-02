@@ -294,7 +294,7 @@ class Formatter:
 
     def fmt_pipe(self, x: str, is_final: bool = False, pad: int = 0) -> str:
         if not is_final:
-            connector = self.icon_connector if not is_final else "  "
+            connector = self.icon_connector
             prefix = self.icon_pipe
         else:
             connector = "  "

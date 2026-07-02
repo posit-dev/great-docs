@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from ._griffe import dataclasses as dc
 from ._walkable import _Walkable  # pyright: ignore[reportPrivateUsage]
@@ -18,118 +18,51 @@ class InventoryItem(_Walkable):
     dispname: str | None = None
 
 
-def convert_inventory(inv: "dict[str, Any] | object", out_name: str | None = None) -> None:
+def convert_inventory(inv: dict[str, Any], out_name: str) -> None:
     """Write an inventory to a JSON file
 
     Parameters
     ----------
-    inv: dict or sphobjinv.Inventory
-        Inventory data. If a dict, writes directly as JSON.
-        If an sphobjinv Inventory, converts to dict first.
-    out_name: str, optional
+    inv :
+        Inventory data.
+    out_name :
         Output file name.
     """
-    if out_name is None:
-        raise TypeError("out_name is required")
-
-    # If it's already our simplified dict format, write directly
-    if isinstance(inv, dict):
-        with open(out_name, "w") as f:
-            json.dump(inv, f)
-        return
-
-    # Try sphobjinv Inventory format (backwards compat)
-    try:
-        obj = inv.json_dict()
-        long = list(obj.items())
-        meta, entries = long[:3], [v for k, v in long[3:]]
-        out = dict(meta)
-        out["items"] = entries
-        with open(out_name, "w") as f:
-            json.dump(out, f)
-    except AttributeError:
-        raise TypeError(f"Unsupported inventory type: {type(inv)}")
+    with open(out_name, "w") as f:
+        json.dump(inv, f)
 
 
 def create_inventory(
     project: str,
     version: str,
-    items: "list[Any]",
-    uri: "str | Callable[..., str] | None" = None,
-    dispname: "str | Callable[..., str] | None" = None,
+    items: list[InventoryItem],
 ) -> dict[str, Any]:
     """Build the inventory as a dictionary of project, version, count, and items
 
     Parameters
     ----------
-    project: str
+    project :
         Name of the project.
-    version: str
+    version :
         Version of the project.
-    items: list
-        List of InventoryItem or griffe object items to include.
-    uri:
-        Link relative to the docs. Not used when items are InventoryItem.
-    dispname:
-        Display name. Not used when items are InventoryItem.
-
-    Returns
-    -------
-    dict
-        Inventory dictionary with project, version, count, and items.
+    items :
+        Documented objects to include.
     """
-    if uri is None:
-        uri = lambda s: f"{s.canonical_path}.html"
-    if dispname is None:
-        dispname = "-"
-
-    inv_items = []
-    for item in items:
-        inv_items.append(_create_inventory_item(item, uri, dispname))
-
     return {
         "project": project,
         "version": version,
-        "count": len(inv_items),
-        "items": inv_items,
+        "count": len(items),
+        "items": [_create_inventory_item(item) for item in items],
     }
 
 
-def _create_inventory_item(
-    item: "InventoryItem | dc.Object | dc.Alias",
-    uri: "str | Callable",
-    dispname: "str | Callable" = "-",
-    priority: str = "1",
-) -> dict:
+def _create_inventory_item(item: InventoryItem, priority: str = "1") -> dict[str, Any]:
     """Build a single inventory entry as a dict"""
-
-    if isinstance(item, InventoryItem):
-        return {
-            "name": item.name,
-            "domain": "py",
-            "role": item.obj.kind.value,
-            "priority": priority,
-            "uri": item.uri,
-            "dispname": item.dispname or "-",
-        }
-    elif isinstance(item, (dc.Object, dc.Alias)):
-        target = item
-        return {
-            "name": target.path,
-            "domain": "py",
-            "role": target.kind.value,
-            "priority": priority,
-            "uri": _maybe_call(uri, target),
-            "dispname": _maybe_call(dispname, target),
-        }
-    else:
-        raise TypeError(f"Unsupported item type: {type(item)}")
-
-
-def _maybe_call(s: "str | Callable", obj: object) -> str:
-    if callable(s):
-        return s(obj)
-    elif isinstance(s, str):
-        return s
-
-    raise TypeError(f"Expected string or callable, received: {type(s)}")
+    return {
+        "name": item.name,
+        "domain": "py",
+        "role": item.obj.kind.value,
+        "priority": priority,
+        "uri": item.uri,
+        "dispname": item.dispname or "-",
+    }

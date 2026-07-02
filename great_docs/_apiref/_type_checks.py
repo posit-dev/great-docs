@@ -90,10 +90,6 @@ class isDoc:
     def Attribute(el: DocMemberType) -> TypeGuard[content.DocAttribute]:
         return el.obj.is_attribute
 
-    @staticmethod
-    def Module(el: DocMemberType) -> TypeGuard[content.DocModule]:
-        return el.obj.is_attribute
-
 
 def griffe_to_doc(obj: gf.Object | gf.Alias, *, deep: bool = True) -> DocType:
     """

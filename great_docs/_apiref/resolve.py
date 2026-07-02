@@ -201,12 +201,6 @@ class _Resolver:
         self.options: SpecOptions | None = None
         self.dynamic: bool = False
 
-    @staticmethod
-    def _append_member_path(path: str, new: str) -> str:
-        if ":" in path:
-            return f"{path}.{new}"
-        return f"{path}:{new}"
-
     def get_object_fixed(self, path: str, **kwargs: object) -> dc.Object:
         """The griffe `Object` at `path`, re-raised as `ObjectNotFoundError` if absent"""
         try:
@@ -219,7 +213,7 @@ class _Resolver:
             )
 
     @staticmethod
-    def _clean_member_path(path: str, new: str) -> str:
+    def _clean_member_path(new: str) -> str:
         if ":" in new:
             return new.replace(":", ".")
         return new
@@ -318,7 +312,7 @@ class _Resolver:
 
         children: list[object] = []
         for entry in raw_members:
-            relative_path = self._clean_member_path(path, entry)
+            relative_path = self._clean_member_path(entry)
 
             member_doc = self._resolve_object(SpecObject(name=relative_path, **member_options))
             # A doc resolved from griffe always carries its object.

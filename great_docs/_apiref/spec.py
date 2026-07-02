@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from dataclasses import fields as dc_fields
 from enum import Enum
-from typing import Any, ClassVar, cast
+from typing import Any, cast
 
 from ._walkable import MISSING, _Walkable  # pyright: ignore[reportPrivateUsage]
 
@@ -52,14 +52,6 @@ class SpecOptions(_Walkable):
     # comes from a default.  Used by option-merging logic to distinguish
     # "caller set this to False" from "this is the default False".
     _fields_specified: tuple[str, ...] = field(default=(), init=False, repr=False, compare=False)
-
-    # Class-level defaults used by _non_default_entries
-    _field_defaults: ClassVar[dict[str, Any]] = {}
-
-    def __init_subclass__(cls, **kwargs: object) -> None:
-        super().__init_subclass__(**kwargs)
-        # Will be populated after class is fully defined
-        cls._field_defaults = {}
 
     def __init__(self, **kwargs: object) -> None:
         # Custom __init__ to record which fields the caller supplied explicitly.
