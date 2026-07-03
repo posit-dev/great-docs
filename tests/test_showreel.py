@@ -402,6 +402,28 @@ def test_code_scene_builds_highlighted_html(tmp_path):
     assert ".gd-sr-code" in m["code_css"]
 
 
+def test_code_step_note(tmp_path):
+    spec = (
+        "scenes:\n"
+        "  - id: c\n    type: code\n    language: python\n    captions: false\n"
+        "    steps:\n"
+        '      - code: "GT(df)"\n        note: "Start with the raw table."\n'
+        '      - code: "GT(df).data_color()"\n        focus: [1]\n'
+        '        note: "One `data_color()` call adds the scale."\n        note_side: top\n'
+    )
+    show = load_showreel(_write_spec(tmp_path, spec))
+    steps = show.scenes[0].code_steps
+    assert steps[0].note == "Start with the raw table." and steps[0].note_side == "auto"
+    assert steps[1].note_side == "top"
+    r = build_showreel(_write_spec(tmp_path, spec, name="n.showreel.yml"), tmp_path / "out", engine="silent")
+    d = r.manifest.to_dict()["scenes"][0]["code_steps"]
+    assert "note" not in d[0] or d[0]["note"]  # step 0 note serialized
+    assert d[0]["note"] == "Start with the raw table."
+    # Inline markdown in the note is rendered to HTML with the accent code.
+    assert "<code>data_color()</code>" in d[1]["note"]
+    assert d[1]["note_side"] == "top"
+
+
 # --- overlays + cursor -----------------------------------------------------
 
 OVERLAY_SPEC = """\
@@ -443,6 +465,26 @@ def test_overlay_cursor_in_manifest(tmp_path):
     assert len(sc["overlays"]) == 2
     assert sc["overlays"][0]["type"] == "spotlight"
     assert sc["cursor"][1]["click"] is True
+
+
+def test_annotate_region_callout(tmp_path):
+    (tmp_path / "t.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 40)
+    spec = (
+        "scenes:\n"
+        "  - id: out\n    type: image\n    src: t.png\n    fit: contain\n"
+        "    annotate:\n"
+        '      - rect: [0.4, 0.05, 0.25, 0.2]\n        note: "`data_color()` scales it"\n        at: 0.5\n        duration: 3\n'
+        '      - rect: [0.1, 0.1, 0.2, 0.2]\n        note: "row labels"\n        side: left\n'
+    )
+    show = load_showreel(_write_spec(tmp_path, spec))
+    ann = show.scenes[0].annotate
+    assert len(ann) == 2
+    assert ann[0].rect == [0.4, 0.05, 0.25, 0.2] and ann[0].at == 0.5
+    assert ann[1].side == "left" and ann[1].duration == -1.0  # default: until scene end
+    r = build_showreel(_write_spec(tmp_path, spec, name="a.showreel.yml"), tmp_path / "out", engine="silent")
+    d = r.manifest.to_dict()["scenes"][0]["annotate"]
+    assert d[0]["rect"] == [0.4, 0.05, 0.25, 0.2]
+    assert "<code>data_color()</code>" in d[0]["note"]  # note rendered as markdown
 
 
 def test_cursor_string_form_ignored(tmp_path):
