@@ -29,6 +29,7 @@ scenes:
 
           GT(top5)
         typing: true
+        note: "Start with the five most populous cities."
       - code: |
           from great_tables import GT, md
           from great_tables.data import towny
@@ -44,10 +45,22 @@ scenes:
               .tab_spanner(md("*Location*"), ["latitude", "longitude"], id="loc")
           )
         focus: [10, 11, 12]
+        note: "Three `tab_spanner()` calls group the columns under shared headers."
 
   - id: output
     type: image
     src: reel-code-output.png
     fit: contain
-    duration: 4.5
+    duration: 6.5
     motion: { type: none }
+    # Region callouts point at parts of the rendered table; the note dodges into
+    # the clear space beside each region. Rects are relative to the image.
+    annotate:
+      - rect: [0.44, 0.04, 0.26, 0.20]
+        note: "`tab_spanner()` groups two columns under one header."
+        at: 0.6
+        duration: 2.6
+      - rect: [0.20, 0.04, 0.24, 0.20]
+        note: "`md(\"*Location*\")` even italicizes the label."
+        at: 3.4
+        duration: 2.6
