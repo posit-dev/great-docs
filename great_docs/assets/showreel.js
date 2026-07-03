@@ -195,7 +195,10 @@
     // Re-fit code scenes when the stage resizes (invalidate; render refits).
     if (window.ResizeObserver) {
       this._ro = new ResizeObserver(function () {
-        self._sceneEls.forEach(function (s) { if (s._steps) s._fitted = false; });
+        self._sceneEls.forEach(function (s) {
+          if (s._steps) s._fitted = false;
+          if (s._annots) s._annotsLaid = false; // re-place notes at the new size
+        });
         if (!self.playing) self.render();
       });
       this._ro.observe(this.stage);
@@ -268,7 +271,16 @@
         inner.innerHTML = cs.html;
         var caret = el("span", "gd-sr-caret", inner);
         caret.style.display = "none";
-        return { el: stepEl, inner: inner, caret: caret, typing: cs.typing };
+        var note = null;
+        if (cs.note) {
+          // A per-step annotation that dodges the code (placed by _fitCode).
+          note = el("div", "gd-sr-note gd-sr-code-note", stepEl);
+          note.innerHTML = cs.note;
+        }
+        return {
+          el: stepEl, inner: inner, caret: caret, typing: cs.typing,
+          note: note, focus: cs.focus || [], noteSide: cs.note_side || "auto",
+        };
       });
     } else {
       var box = el("div", "gd-sr-text", motion);
@@ -294,6 +306,11 @@
     scene._overlays = (sc.overlays || []).map(function (ov) {
       return self._buildOverlay(ov, scene);
     });
+    // Region annotations: mark a part of the output and dodge a note beside it.
+    scene._annots = (sc.annotate || []).map(function (an) {
+      return self._buildAnnotation(an, scene);
+    });
+    scene._annotsLaid = false;
     scene._cursorKeys = sc.cursor || [];
     scene._cursor = scene._cursorKeys.length ? self._buildCursor(scene) : null;
 
@@ -317,6 +334,99 @@
       pill.textContent = ov.text;
     }
     return { el: o, ov: ov };
+  };
+
+  Player.prototype._buildAnnotation = function (an, parent) {
+    var g = el("div", "gd-sr-annot", parent); // fills the scene; opacity = fade
+    g.style.opacity = "0";
+    var region = el("div", "gd-sr-annot-region", g);
+    var note = el("div", "gd-sr-note gd-sr-annot-note", g);
+    note.innerHTML = an.note || "";
+    return { g: g, region: region, note: note, an: an };
+  };
+
+  // Position each region marker over its target and dodge its note into the
+  // clear space beside the target. The rect is relative to the scene's visual
+  // (image/figure), so it lands on the right part of a contained table.
+  Player.prototype._layoutAnnotations = function (sEl) {
+    var annots = sEl._annots;
+    if (!annots || !annots.length) return;
+    var vis = sEl.querySelector(".gd-sr-figure-img") || sEl.querySelector("img") || sEl;
+    var sr = sEl.getBoundingClientRect(), vr = vis.getBoundingClientRect();
+    if (!sr.width || !sr.height || !vr.width || !vr.height) return; // visual not ready
+    sEl._annotsLaid = true;
+    var W = sr.width, H = sr.height;
+    var vx = vr.left - sr.left, vy = vr.top - sr.top, vw = vr.width, vh = vr.height;
+    // A contained <img> fills its element but letterboxes the picture inside it;
+    // use the VISIBLE picture box so rects land right and notes dodge into the
+    // real margin.
+    if (vis.tagName === "IMG" && vis.naturalWidth && vis.naturalHeight &&
+        getComputedStyle(vis).objectFit === "contain") {
+      var cs = Math.min(vw / vis.naturalWidth, vh / vis.naturalHeight);
+      var cw = vis.naturalWidth * cs, ch = vis.naturalHeight * cs;
+      vx += (vw - cw) / 2; vy += (vh - ch) / 2; vw = cw; vh = ch;
+    }
+    var pad = 0.03 * Math.min(W, H);
+    annots.forEach(function (a) {
+      var r = a.an.rect;
+      var tx = vx + r[0] * vr.width, ty = vy + r[1] * vr.height;
+      var tw = r[2] * vr.width, th = r[3] * vr.height;
+      a.region.style.left = (tx / W * 100).toFixed(3) + "%";
+      a.region.style.top = (ty / H * 100).toFixed(3) + "%";
+      a.region.style.width = (tw / W * 100).toFixed(3) + "%";
+      a.region.style.height = (th / H * 100).toFixed(3) + "%";
+      // Dodge into the letterbox margin around the visual (so the note never
+      // covers other content), on the side nearest the region. Fall back to the
+      // region-relative space only when the visual fills the frame.
+      var mTop = vy, mBot = H - (vy + vh), mLeft = vx, mRight = W - (vx + vw);
+      var side = a.an.side;
+      if (side === "auto") {
+        var vert = Math.max(mTop, mBot), horiz = Math.max(mLeft, mRight);
+        if (vert >= horiz && vert >= 24) side = ty + th / 2 < vy + vh / 2 ? "top" : "bottom";
+        else if (horiz >= 24) side = tx + tw / 2 < vx + vw / 2 ? "left" : "right";
+        else {
+          var sT = ty, sB = H - (ty + th), sL = tx, sR = W - (tx + tw), best = Math.max(sT, sB, sL, sR);
+          side = best === sB ? "bottom" : best === sT ? "top" : best === sR ? "right" : "left";
+        }
+      }
+      var nb = a.note, cx = tx + tw / 2, cy = ty + th / 2;
+      nb.style.left = nb.style.right = nb.style.top = nb.style.bottom = nb.style.transform = "";
+      // Anchor to the visual's edge (letterbox) when a margin was chosen, else to
+      // the region edge.
+      var useMargin = (side === "top" && mTop >= 24) || (side === "bottom" && mBot >= 24) ||
+        (side === "left" && mLeft >= 24) || (side === "right" && mRight >= 24);
+      if (side === "left" || side === "right") {
+        var edgeL = useMargin ? vx : tx, edgeR = useMargin ? vx + vw : tx + tw;
+        var availW = (side === "left" ? edgeL : W - edgeR) - 2 * pad;
+        nb.style.maxWidth = Math.max(90, Math.min(0.42 * W, availW)) + "px";
+        nb.style.maxHeight = (H - 2 * pad) + "px";
+        nb.style.top = clamp(cy, pad, H - pad) + "px";
+        nb.style.transform = "translateY(-50%)";
+        if (side === "left") nb.style.right = (W - edgeL + pad) + "px";
+        else nb.style.left = (edgeR + pad) + "px";
+      } else {
+        var edgeT = useMargin ? vy : ty, edgeB = useMargin ? vy + vh : ty + th;
+        nb.style.maxWidth = Math.min(0.7 * W, W - 2 * pad) + "px";
+        nb.style.maxHeight = ((side === "top" ? edgeT : H - edgeB) - 2 * pad) + "px";
+        nb.style.left = clamp(cx, pad, W - pad) + "px";
+        nb.style.transform = "translateX(-50%)";
+        if (side === "top") nb.style.bottom = (H - edgeT + pad) + "px";
+        else nb.style.top = (edgeB + pad) + "px";
+      }
+      fitNoteText(nb, parseFloat(nb.style.maxHeight) || H);
+    });
+  };
+
+  Player.prototype._renderAnnotations = function (sEl, lt) {
+    var annots = sEl._annots;
+    if (!annots || !annots.length) return;
+    var sc = sEl._scene, sceneDur = Math.max(0.001, sc.end - sc.start);
+    annots.forEach(function (a) {
+      var an = a.an, t0 = an.at, t1 = an.duration < 0 ? sceneDur : an.at + an.duration, f = an.fade || 0.3;
+      var op = 0;
+      if (lt >= t0 && lt <= t1) op = f > 0 ? clamp(Math.min((lt - t0) / f, (t1 - lt) / f, 1), 0, 1) : 1;
+      a.g.style.opacity = op.toFixed(3);
+    });
   };
 
   Player.prototype._buildCursor = function (parent) {
@@ -379,6 +489,8 @@
         }
         if (sEl._logo) this._animLogo(sEl, this.time - sc.start);
         this._renderOverlays(sEl, this.time - sc.start);
+        if (sEl._annots && sEl._annots.length && !sEl._annotsLaid) this._layoutAnnotations(sEl);
+        this._renderAnnotations(sEl, this.time - sc.start);
         this._renderCursor(sEl, this.time - sc.start);
       }
     }
@@ -444,26 +556,76 @@
   // Auto-fit: uniformly scale a code scene's blocks so the widest line and the
   // tallest step fit the frame, keeping the block centered at any size. One
   // scale for all steps (so they don't resize between magic-move steps).
+  // Vertical position of a step's focused lines within its code block, as a
+  // fraction 0 (top) .. 1 (bottom); -1 when the step highlights nothing. Used
+  // to repel the annotation to the opposite side. Scale-invariant.
+  function focusFraction(codeEl) {
+    var hls = codeEl.querySelectorAll(".hll");
+    if (!hls.length) return -1;
+    var cr = codeEl.getBoundingClientRect();
+    if (!cr.height) return -1;
+    var sum = 0;
+    for (var i = 0; i < hls.length; i++) {
+      var r = hls[i].getBoundingClientRect();
+      sum += r.top + r.height / 2 - cr.top;
+    }
+    return sum / hls.length / cr.height;
+  }
+
+  // Shrink a note's font until its content fits within maxPx of height, so a
+  // long annotation never overflows its band.
+  function fitNoteText(nb, maxPx) {
+    nb.style.fontSize = "";
+    nb.style.maxHeight = maxPx + "px";
+    for (var guard = 0; guard < 12 && nb.scrollHeight > maxPx; guard++) {
+      var fs = parseFloat(getComputedStyle(nb).fontSize) || 16;
+      nb.style.fontSize = fs * 0.92 + "px";
+    }
+  }
+
   Player.prototype._fitCode = function (sEl) {
     var wrap = sEl.querySelector(".gd-sr-code-wrap");
     if (!wrap || !sEl._steps || !sEl._steps.length) return;
     var availW = wrap.clientWidth, availH = wrap.clientHeight;
     if (!availW || !availH) return; // not laid out yet — try again next frame
-    // Reserve room for the caption so tall code shrinks to sit above it, then
-    // center the code in the remaining (upper) space.
     var sc = sEl._scene;
-    var capReserve = (sc && sc.say && sc.captions !== false) ? availH * 0.24 : 0;
-    var fitH = availH - capReserve;
+    // A note band (when any step is annotated) or the caption reserve shrinks the
+    // code so it never sits under the text.
+    var hasNotes = sEl._steps.some(function (s) { return s.note; });
+    var band = hasNotes ? Math.round(availH * 0.34) : 0;
+    var capReserve = (!hasNotes && sc && sc.say && sc.captions !== false) ? availH * 0.24 : 0;
+    var fitH = availH - band - capReserve;
+
+    // Pass 1: measure natural code size + each step's focus position.
     var maxW = 1, maxH = 1;
     sEl._steps.forEach(function (s) {
-      s.inner.style.transform = "none"; // measure natural size
+      s.inner.style.transform = "none";
       var code = s.inner.querySelector(".gd-sr-code");
-      if (code) { maxW = Math.max(maxW, code.offsetWidth); maxH = Math.max(maxH, code.offsetHeight); }
+      if (code) {
+        maxW = Math.max(maxW, code.offsetWidth);
+        maxH = Math.max(maxH, code.offsetHeight);
+        s._focusFrac = focusFraction(code);
+      }
     });
     var scale = Math.min(1, (availW * 0.97) / maxW, (fitH * 0.97) / maxH);
+
+    // Pass 2: scale the code, then dodge each note to the side away from the
+    // focus and push the code into the opposite region.
     sEl._steps.forEach(function (s) {
       s.inner.style.transform = "scale(" + scale.toFixed(4) + ")";
-      s.el.style.paddingBottom = capReserve.toFixed(0) + "px"; // center above the caption
+      s.el.style.paddingTop = "0px";
+      s.el.style.paddingBottom = capReserve.toFixed(0) + "px";
+      if (!s.note) return;
+      var side = s.noteSide;
+      if (side !== "top" && side !== "bottom") {
+        side = s._focusFrac > 0.5 ? "top" : "bottom"; // repel from the focus
+      }
+      if (side === "top") { s.el.style.paddingTop = band + "px"; s.el.style.paddingBottom = "0px"; }
+      else { s.el.style.paddingBottom = band + "px"; s.el.style.paddingTop = "0px"; }
+      var nb = s.note;
+      nb.style.top = side === "top" ? "0px" : "";
+      nb.style.bottom = side === "bottom" ? "0px" : "";
+      fitNoteText(nb, band - 18);
     });
     sEl._fitted = true;
   };
