@@ -26,7 +26,7 @@ class ChildrenStyle(Enum):
     linked = "linked"
 
 
-@dataclass
+@dataclass(init=False)
 class SpecOptions(Walkable):
     """Documentation options that apply to a `SpecObject` element and, optionally, its members"""
 
@@ -56,6 +56,15 @@ class SpecOptions(Walkable):
 
     def __init__(self, **kwargs: object) -> None:
         # Custom __init__ to record which fields the caller supplied explicitly.
+        # Subclasses must be decorated with `@dataclass(init=False)`; a plain
+        # `@dataclass` regenerates `__init__` and leaves `_fields_specified`
+        # permanently empty.
+        field_names = {f.name for f in dc_fields(self.__class__) if not f.name.startswith("_")}
+        if unknown := kwargs.keys() - field_names:
+            names = ", ".join(sorted(unknown))
+            raise TypeError(
+                f"{self.__class__.__name__}() got unexpected keyword argument(s): {names}"
+            )
         for f in dc_fields(self.__class__):
             if f.name.startswith("_"):
                 continue
@@ -69,7 +78,7 @@ class SpecOptions(Walkable):
         object.__setattr__(self, "_fields_specified", tuple(kwargs.keys()))
 
 
-@dataclass
+@dataclass(init=False)
 class SpecObject(SpecOptions):
     """A Python object to be located and documented, specified by name"""
 

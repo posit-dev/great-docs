@@ -6879,6 +6879,38 @@ def test_bp_enter_auto_member_options():
     assert len(result.members) == 1
 
 
+def test_auto_records_specified_fields():
+    auto = Auto(name="f", include_private=True)
+    assert auto._fields_specified == ("name", "include_private")
+
+
+def test_auto_rejects_unknown_fields():
+    with pytest.raises(TypeError, match="bogus"):
+        Auto(name="f", bogus=True)
+
+
+def test_bp_options_preserve_entry_name():
+    func = gf.Function("f")
+    func.docstring = gf.Docstring("A func.", parent=func)
+
+    trans = _bp_make_trans({"f": func})
+    trans.options = AutoOptions(include_private=True)
+
+    result = trans._resolve_object(Auto(name="f"))
+    assert result.name == "f"
+
+
+def test_bp_entry_options_win_over_section_options():
+    func = gf.Function("f")
+    func.docstring = gf.Docstring("A func.", parent=func)
+
+    trans = _bp_make_trans({"f": func})
+    trans.options = AutoOptions(signature_name="doc")
+
+    result = trans._resolve_object(Auto(name="f", signature_name="full"))
+    assert result.signature_name == "full"
+
+
 def test_bp_enter_auto_module_members_skipped():
     mod = gf.Module("pkg")
     submod = gf.Module("sub")
