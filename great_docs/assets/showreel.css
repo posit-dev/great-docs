@@ -104,6 +104,44 @@
   display: block;
 }
 
+/* --- Figure scenes (a visual over a chunk of supporting text) --------- */
+.gd-sr-figure {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.6rem, 2.4vw, 1.5rem);
+  padding: clamp(1rem, 4vw, 2.6rem);
+  box-sizing: border-box;
+}
+/* Beats `.gd-sr-scene img` so the visual is contained, not cropped, and shares
+   the frame with the text below. */
+.gd-sr-figure .gd-sr-figure-img {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.gd-sr-figure-text {
+  flex: 0 0 auto;
+  max-width: 90%;
+  text-align: center;
+  color: var(--sr-fg);
+  font-size: clamp(1rem, 2.7vw, 1.7rem);
+  line-height: 1.4;
+  font-weight: 500;
+}
+.gd-sr-figure-text code {
+  font-family: var(--sr-code-font, "JetBrains Mono", ui-monospace, monospace);
+  color: var(--sr-accent);
+  font-size: 0.92em;
+}
+.gd-sr-figure-text strong { font-weight: 700; }
+
 /* Title + card scenes */
 .gd-sr-text {
   text-align: center;

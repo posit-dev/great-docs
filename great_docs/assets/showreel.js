@@ -230,7 +230,21 @@
     var motion = el("div", "gd-sr-motion", scene);
     var layer = sc.layer || {};
 
-    if (sc.type === "image" && sc.src) {
+    if (sc.type === "figure") {
+      // A visual stacked over a chunk of supporting prose (the text is
+      // build-time-rendered HTML with inline code styled in the accent).
+      var fig = el("div", "gd-sr-figure", motion);
+      if (sc.src) {
+        var fim = el("img", "gd-sr-figure-img", fig);
+        fim.src = srcUrl(this.base, sc.src);
+        fim.alt = sc.id;
+        if (sc.fit !== "cover") fim.style.objectFit = "contain";
+      }
+      if (sc.text) {
+        var ftx = el("div", "gd-sr-figure-text", fig);
+        ftx.innerHTML = sc.text;
+      }
+    } else if (sc.type === "image" && sc.src) {
       var img = el("img", null, motion);
       img.src = srcUrl(this.base, sc.src);
       img.alt = layer.title || sc.id;
