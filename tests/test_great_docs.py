@@ -120,20 +120,19 @@ from great_docs._apiref._type_checks import (
     isDoc,
 )
 from great_docs._apiref.resolve import (
-    resolve as _blueprint,
-    resolve as blueprint_func,
+    resolve,
     ObjectNotFoundError,
     _Resolver,
     _autogenerate_sections,
-    _sections_from_package as _auto_package,
+    _sections_from_package,
     _is_external_alias,
     _non_default_entries,
     _to_simple_dict,
 )
 from great_docs._apiref.collect import (
     build_manifest,
-    _ManifestBuilder as CollectTransformer,
-    _PackagePrefixRemover as _PagePackageStripper,
+    _ManifestBuilder,
+    _PackagePrefixRemover,
     remove_package_prefix,
 )
 from great_docs._apiref.spec import SpecSection
@@ -166,8 +165,8 @@ from great_docs._apiref.content import (
 )
 from great_docs._apiref.inventory import InventoryItem
 from great_docs._apiref.spec import ChildrenStyle
-from great_docs._apiref.spec import SpecObject as Auto
-from great_docs._apiref.spec import SpecOptions as AutoOptions
+from great_docs._apiref.spec import SpecObject
+from great_docs._apiref.spec import SpecOptions
 from great_docs._apiref.pandoc.blocks import (
     Block,
     blockcontent_to_str,
@@ -6307,7 +6306,7 @@ class TestGdgSite144DocstringTables:
         assert "42.5" in html
 
 
-def _bp_make_trans(objects=None):
+def _make_resolver(objects=None):
     """Helper: create a _Resolver backed by a dict of objects."""
     objects = objects or {}
 
@@ -6366,20 +6365,20 @@ def test_to_simple_dict_summary_details():
     assert result == {"name": "n", "desc": "d"}
 
 
-def test_non_default_entries_auto_no_fields():
-    auto = Auto()
-    result = _non_default_entries(auto)
+def test_non_default_entries_no_fields():
+    spec_obj = SpecObject()
+    result = _non_default_entries(spec_obj)
     assert result == {}
 
 
-def test_non_default_entries_auto_options_specified():
-    opts = AutoOptions(signature_name="full", include_private=True)
+def test_non_default_entries_options_specified():
+    opts = SpecOptions(signature_name="full", include_private=True)
     result = _non_default_entries(opts)
     assert result == {"signature_name": "full", "include_private": True}
 
 
-def test_non_default_entries_auto_options_empty():
-    opts = AutoOptions()
+def test_non_default_entries_options_empty():
+    opts = SpecOptions()
     result = _non_default_entries(opts)
     assert result == {}
 
@@ -6472,7 +6471,7 @@ def test_is_external_alias_cyclic_raises():
         _is_external_alias(mock_alias, mod)
 
 
-def test_auto_package_module_with_all():
+def test_sections_from_package_module_with_all():
     mod = gf.Module("mypkg")
     func = gf.Function("public_func")
     mod.set_member("public_func", func)
@@ -6480,19 +6479,19 @@ def test_auto_package_module_with_all():
     mod.set_member("__all__", all_attr)
     mod.exports = {"public_func"}
 
-    sections = _auto_package(mod)
+    sections = _sections_from_package(mod)
     assert len(sections) == 1
     assert sections[0].title == "mypkg"
     names = [c.name for c in sections[0].contents]
     assert "public_func" in names
 
 
-def test_auto_package_without_all_warns(capsys):
+def test_sections_from_package_without_all_warns(capsys):
     mod = gf.Module("mypkg")
     func = gf.Function("public_func")
     mod.set_member("public_func", func)
 
-    sections = _auto_package(mod)
+    sections = _sections_from_package(mod)
     captured = capsys.readouterr()
     assert "WARNING" in captured.out
     assert "does not define an __all__" in captured.out
@@ -6501,52 +6500,52 @@ def test_auto_package_without_all_warns(capsys):
     assert "public_func" in names
 
 
-def test_auto_package_filters_dunder_members():
+def test_sections_from_package_filters_dunder_members():
     mod = gf.Module("mypkg")
     func = gf.Function("__init__")
     mod.set_member("__init__", func)
     pub = gf.Function("pub")
     mod.set_member("pub", pub)
 
-    sections = _auto_package(mod)
+    sections = _sections_from_package(mod)
     names = [c.name for c in sections[0].contents]
     assert "__init__" not in names
     assert "pub" in names
 
 
-def test_auto_package_filters_submodules():
+def test_sections_from_package_filters_submodules():
     mod = gf.Module("mypkg")
     submod = gf.Module("sub")
     mod.set_member("sub", submod)
     func = gf.Function("pub")
     mod.set_member("pub", func)
 
-    sections = _auto_package(mod)
+    sections = _sections_from_package(mod)
     names = [c.name for c in sections[0].contents]
     assert "sub" not in names
     assert "pub" in names
 
 
-def test_auto_package_with_docstring():
+def test_sections_from_package_with_docstring():
     mod = gf.Module("mypkg")
     mod.docstring = gf.Docstring("Summary text here.", parent=mod)
     func = gf.Function("pub")
     mod.set_member("pub", func)
 
-    sections = _auto_package(mod)
+    sections = _sections_from_package(mod)
     assert sections[0].desc == "Summary text here."
 
 
-def test_auto_package_without_docstring():
+def test_sections_from_package_without_docstring():
     mod = gf.Module("mypkg")
     func = gf.Function("pub")
     mod.set_member("pub", func)
 
-    sections = _auto_package(mod)
+    sections = _sections_from_package(mod)
     assert sections[0].desc == ""
 
 
-def test_auto_package_docstring_non_text_first():
+def test_sections_from_package_docstring_non_text_first():
     mod = gf.Module("mypkg")
     mod.docstring = gf.Docstring("Parameters\n----------\nx : int\n    A param.", parent=mod)
     parsed = mod.docstring.parsed
@@ -6558,11 +6557,11 @@ def test_auto_package_docstring_non_text_first():
     func = gf.Function("pub")
     mod.set_member("pub", func)
 
-    sections = _auto_package(mod)
+    sections = _sections_from_package(mod)
     assert sections[0].desc == ""
 
 
-def test_auto_package_filters_external_aliases():
+def test_sections_from_package_filters_external_aliases():
     mod = gf.Module("mypkg")
 
     mock_alias = MagicMock(spec=[])
@@ -6576,13 +6575,13 @@ def test_auto_package_filters_external_aliases():
     pub = gf.Function("pub")
     mod.set_member("pub", pub)
 
-    sections = _auto_package(mod)
+    sections = _sections_from_package(mod)
     names = [c.name for c in sections[0].contents]
     assert "ext_f" not in names
     assert "pub" in names
 
 
-def test_auto_package_unexported_filtered():
+def test_sections_from_package_unexported_filtered():
     mod = gf.Module("mypkg")
     f1 = gf.Function("exported_func")
     mod.set_member("exported_func", f1)
@@ -6592,7 +6591,7 @@ def test_auto_package_unexported_filtered():
     mod.set_member("__all__", all_attr)
     mod.exports = {"exported_func"}
 
-    sections = _auto_package(mod)
+    sections = _sections_from_package(mod)
     names = [c.name for c in sections[0].contents]
     assert "exported_func" in names
     assert "not_exported" not in names
@@ -6645,189 +6644,189 @@ def test_collect_nested_section():
 
 
 def test_find_page_node_no_page():
-    trans = CollectTransformer(base_dir="api")
+    builder = _ManifestBuilder(base_dir="api")
     with pytest.raises(ValueError, match="No page detected"):
         root_node = Node(level=0, value=None, parent=None)
         token = ctx_node.set(root_node)
         try:
-            trans.find_page_node()
+            builder.find_page_node()
         finally:
             ctx_node.reset(token)
 
 
-def test_bp_clean_member_path_with_colon():
+def test_resolver_clean_member_path_with_colon():
     result = _Resolver._clean_member_path("pkg.mod:MyClass.method")
     assert result == "pkg.mod.MyClass.method"
 
 
-def test_bp_clean_member_path_no_colon():
+def test_resolver_clean_member_path_no_colon():
     result = _Resolver._clean_member_path("simple")
     assert result == "simple"
 
 
-def test_bp_get_object_or_raise_success():
+def test_resolver_get_object_or_raise_success():
     obj = gf.Function("myfunc")
 
     def get_object(path, **kwargs):
         return obj
 
-    trans = _Resolver(get_object=get_object)
-    result = trans.get_object_or_raise("pkg.myfunc")
+    resolver = _Resolver(get_object=get_object)
+    result = resolver.get_object_or_raise("pkg.myfunc")
     assert result is obj
 
 
-def test_bp_get_object_or_raise_key_error():
+def test_resolver_get_object_or_raise_key_error():
     def get_object(path, **kwargs):
         raise KeyError("pkg.missing")
 
-    trans = _Resolver(get_object=get_object)
+    resolver = _Resolver(get_object=get_object)
     with pytest.raises(ObjectNotFoundError, match="Cannot find an object named"):
-        trans.get_object_or_raise("pkg.missing")
+        resolver.get_object_or_raise("pkg.missing")
 
 
-def test_bp_visit_sets_package():
-    trans = _bp_make_trans()
-    assert trans.current_package is None
+def test_resolver_sets_package():
+    resolver = _make_resolver()
+    assert resolver.current_package is None
 
     func = gf.Function("myfunc")
-    trans2 = _bp_make_trans({"myfunc": func})
-    result = trans2._resolve_object(Auto(name="myfunc"))
+    resolver2 = _make_resolver({"myfunc": func})
+    result = resolver2._resolve_object(SpecObject(name="myfunc"))
     assert isinstance(result, DocFunction)
 
 
-def test_bp_visit_restores_package():
+def test_resolver_restores_package():
     func = gf.Function("f")
-    trans = _bp_make_trans({"pkg:f": func})
-    trans.current_package = "pkg"
+    resolver = _make_resolver({"pkg:f": func})
+    resolver.current_package = "pkg"
 
-    trans._resolve_object(Auto(name="f"))
-    assert trans.current_package == "pkg"
+    resolver._resolve_object(SpecObject(name="f"))
+    assert resolver.current_package == "pkg"
 
 
-def test_bp_visit_sets_options():
+def test_resolver_sets_options():
     func = gf.Function("f")
-    trans = _bp_make_trans({"f": func})
+    resolver = _make_resolver({"f": func})
 
-    opts = AutoOptions(include_private=True)
-    SpecSection(title="Test", options=opts, contents=[Auto(name="f")])
-    assert trans.options is None
+    opts = SpecOptions(include_private=True)
+    SpecSection(title="Test", options=opts, contents=[SpecObject(name="f")])
+    assert resolver.options is None
 
 
-def test_bp_enter_auto_basic_function():
+def test_resolve_object_basic_function():
     func = gf.Function("myfunc")
-    trans = _bp_make_trans({"myfunc": func})
-    result = trans._resolve_object(Auto(name="myfunc"))
+    resolver = _make_resolver({"myfunc": func})
+    result = resolver._resolve_object(SpecObject(name="myfunc"))
     assert isinstance(result, DocFunction)
     assert result.obj is func
 
 
-def test_bp_enter_auto_basic_class():
+def test_resolve_object_basic_class():
     cls = gf.Class("MyClass")
-    trans = _bp_make_trans({"MyClass": cls})
-    result = trans._resolve_object(Auto(name="MyClass"))
+    resolver = _make_resolver({"MyClass": cls})
+    result = resolver._resolve_object(SpecObject(name="MyClass"))
     assert isinstance(result, DocClass)
     assert result.obj is cls
 
 
-def test_bp_enter_auto_basic_attribute():
+def test_resolve_object_basic_attribute():
     attr = gf.Attribute("myattr")
-    trans = _bp_make_trans({"myattr": attr})
-    result = trans._resolve_object(Auto(name="myattr"))
+    resolver = _make_resolver({"myattr": attr})
+    result = resolver._resolve_object(SpecObject(name="myattr"))
     assert isinstance(result, DocAttribute)
     assert result.obj is attr
 
 
-def test_bp_enter_auto_with_package():
+def test_resolve_object_with_package():
     func = gf.Function("f")
-    trans = _bp_make_trans({"pkg:f": func})
-    trans.current_package = "pkg"
-    result = trans._resolve_object(Auto(name="f"))
+    resolver = _make_resolver({"pkg:f": func})
+    resolver.current_package = "pkg"
+    result = resolver._resolve_object(SpecObject(name="f"))
     assert isinstance(result, DocFunction)
     assert result.obj is func
 
 
-def test_bp_enter_auto_colon_in_pkg():
+def test_resolve_object_colon_in_pkg():
     func = gf.Function("method")
-    trans = _bp_make_trans({"pkg.mod:Class.method": func})
-    trans.current_package = "pkg.mod:Class"
-    result = trans._resolve_object(Auto(name="method"))
+    resolver = _make_resolver({"pkg.mod:Class.method": func})
+    resolver.current_package = "pkg.mod:Class"
+    result = resolver._resolve_object(SpecObject(name="method"))
     assert isinstance(result, DocFunction)
 
 
-def test_bp_enter_auto_colon_in_name():
+def test_resolve_object_colon_in_name():
     func = gf.Function("method")
-    trans = _bp_make_trans({"pkg.mod:method": func})
-    trans.current_package = "pkg"
-    result = trans._resolve_object(Auto(name="mod:method"))
+    resolver = _make_resolver({"pkg.mod:method": func})
+    resolver.current_package = "pkg"
+    result = resolver._resolve_object(SpecObject(name="mod:method"))
     assert isinstance(result, DocFunction)
 
 
-def test_bp_enter_auto_children_separate():
+def test_resolve_object_children_separate():
     cls = gf.Class("MyClass")
     method = gf.Function("my_method")
     method.docstring = gf.Docstring("A method.", parent=method)
     cls.set_member("my_method", method)
 
-    trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
-    result = trans._resolve_object(Auto(name="MyClass", children=ChildrenStyle.separate))
+    resolver = _make_resolver({"MyClass": cls, "MyClass:my_method": method})
+    result = resolver._resolve_object(SpecObject(name="MyClass", children=ChildrenStyle.separate))
     assert isinstance(result, DocClass)
     assert len(result.members) == 1
     assert isinstance(result.members[0], MemberPage)
 
 
-def test_bp_enter_auto_children_embedded():
+def test_resolve_object_children_embedded():
     cls = gf.Class("MyClass")
     method = gf.Function("my_method")
     method.docstring = gf.Docstring("A method.", parent=method)
     cls.set_member("my_method", method)
 
-    trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
-    result = trans._resolve_object(Auto(name="MyClass", children=ChildrenStyle.embedded))
+    resolver = _make_resolver({"MyClass": cls, "MyClass:my_method": method})
+    result = resolver._resolve_object(SpecObject(name="MyClass", children=ChildrenStyle.embedded))
     assert isinstance(result, DocClass)
     assert len(result.members) == 1
     assert isinstance(result.members[0], DocFunction)
 
 
-def test_bp_enter_auto_children_flat():
+def test_resolve_object_children_flat():
     cls = gf.Class("MyClass")
     method = gf.Function("my_method")
     method.docstring = gf.Docstring("A method.", parent=method)
     cls.set_member("my_method", method)
 
-    trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
-    result = trans._resolve_object(Auto(name="MyClass", children=ChildrenStyle.flat))
+    resolver = _make_resolver({"MyClass": cls, "MyClass:my_method": method})
+    result = resolver._resolve_object(SpecObject(name="MyClass", children=ChildrenStyle.flat))
     assert isinstance(result, DocClass)
     assert result.flat is True
     assert len(result.members) == 1
 
 
-def test_bp_enter_auto_children_linked():
+def test_resolve_object_children_linked():
     cls = gf.Class("MyClass")
     method = gf.Function("my_method")
     method.docstring = gf.Docstring("A method.", parent=method)
     cls.set_member("my_method", method)
 
-    trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
-    result = trans._resolve_object(Auto(name="MyClass", children=ChildrenStyle.linked))
+    resolver = _make_resolver({"MyClass": cls, "MyClass:my_method": method})
+    result = resolver._resolve_object(SpecObject(name="MyClass", children=ChildrenStyle.linked))
     assert isinstance(result, DocClass)
     assert len(result.members) == 1
     assert isinstance(result.members[0], Link)
 
 
-def test_bp_enter_auto_unsupported_children():
+def test_resolve_object_unsupported_children():
     cls = gf.Class("MyClass")
     method = gf.Function("my_method")
     method.docstring = gf.Docstring("A method.", parent=method)
     cls.set_member("my_method", method)
 
-    trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
-    auto = Auto(name="MyClass")
-    auto.children = "bad_value"
+    resolver = _make_resolver({"MyClass": cls, "MyClass:my_method": method})
+    spec_obj = SpecObject(name="MyClass")
+    spec_obj.children = "bad_value"
     with pytest.raises(ValueError, match="Unsupported value of children"):
-        trans._resolve_object(auto)
+        resolver._resolve_object(spec_obj)
 
 
-def test_bp_enter_auto_dynamic_from_auto():
+def test_resolve_object_dynamic_from_entry():
     func = gf.Function("f")
     captured = {}
 
@@ -6835,12 +6834,12 @@ def test_bp_enter_auto_dynamic_from_auto():
         captured.update(kwargs)
         return func
 
-    trans = _Resolver(get_object=get_object)
-    trans._resolve_object(Auto(name="f", dynamic=True))
+    resolver = _Resolver(get_object=get_object)
+    resolver._resolve_object(SpecObject(name="f", dynamic=True))
     assert captured.get("dynamic") is True
 
 
-def test_bp_enter_auto_dynamic_from_transformer():
+def test_resolve_object_dynamic_from_resolver():
     func = gf.Function("f")
     captured = {}
 
@@ -6848,71 +6847,71 @@ def test_bp_enter_auto_dynamic_from_transformer():
         captured.update(kwargs)
         return func
 
-    trans = _Resolver(get_object=get_object)
-    trans.dynamic = True
-    trans._resolve_object(Auto(name="f"))
+    resolver = _Resolver(get_object=get_object)
+    resolver.dynamic = True
+    resolver._resolve_object(SpecObject(name="f"))
     assert captured.get("dynamic") is True
 
 
-def test_bp_enter_auto_options_merge():
+def test_resolve_object_options_merge():
     func = gf.Function("f")
-    trans = _bp_make_trans({"f": func})
-    trans.options = AutoOptions(signature_name="full")
+    resolver = _make_resolver({"f": func})
+    resolver.options = SpecOptions(signature_name="full")
 
-    result = trans._resolve_object(Auto(name="f"))
+    result = resolver._resolve_object(SpecObject(name="f"))
     assert isinstance(result, DocFunction)
     assert result.signature_name == "full"
 
 
-def test_bp_enter_auto_member_options():
+def test_resolve_object_member_options():
     cls = gf.Class("MyClass")
     method = gf.Function("m")
     method.docstring = gf.Docstring("A method.", parent=method)
     cls.set_member("m", method)
 
-    member_opts = AutoOptions(signature_name="short")
-    trans = _bp_make_trans({"MyClass": cls, "MyClass:m": method})
-    result = trans._resolve_object(
-        Auto(name="MyClass", member_options=member_opts, children=ChildrenStyle.embedded)
+    member_opts = SpecOptions(signature_name="short")
+    resolver = _make_resolver({"MyClass": cls, "MyClass:m": method})
+    result = resolver._resolve_object(
+        SpecObject(name="MyClass", member_options=member_opts, children=ChildrenStyle.embedded)
     )
     assert isinstance(result, DocClass)
     assert len(result.members) == 1
 
 
-def test_auto_records_specified_fields():
-    auto = Auto(name="f", include_private=True)
-    assert auto._fields_specified == ("name", "include_private")
+def test_spec_object_records_specified_fields():
+    spec_obj = SpecObject(name="f", include_private=True)
+    assert spec_obj._fields_specified == ("name", "include_private")
 
 
-def test_auto_rejects_unknown_fields():
+def test_spec_object_rejects_unknown_fields():
     with pytest.raises(TypeError, match="bogus"):
-        Auto(name="f", bogus=True)
+        SpecObject(name="f", bogus=True)
 
 
-def test_bp_options_preserve_entry_name():
+def test_resolver_options_preserve_entry_name():
     func = gf.Function("f")
     func.docstring = gf.Docstring("A func.", parent=func)
 
-    trans = _bp_make_trans({"f": func})
-    trans.options = AutoOptions(include_private=True)
+    resolver = _make_resolver({"f": func})
+    resolver.options = SpecOptions(include_private=True)
 
-    result = trans._resolve_object(Auto(name="f"))
+    result = resolver._resolve_object(SpecObject(name="f"))
     assert result.name == "f"
 
 
-def test_bp_entry_options_win_over_section_options():
+def test_resolver_entry_options_win_over_section_options():
     func = gf.Function("f")
     func.docstring = gf.Docstring("A func.", parent=func)
 
-    trans = _bp_make_trans({"f": func})
-    trans.options = AutoOptions(signature_name="doc")
+    resolver = _make_resolver({"f": func})
+    resolver.options = SpecOptions(signature_name="doc")
 
-    result = trans._resolve_object(Auto(name="f", signature_name="full"))
+    result = resolver._resolve_object(SpecObject(name="f", signature_name="full"))
     assert result.signature_name == "full"
 
 
 def test_spec_options_replace_preserves_specified_fields():
-    opts = AutoOptions(include_private=True)
+    opts = SpecOptions(include_private=True)
     new = opts.replace(members=["a"])
 
     assert new.include_private is True
@@ -6938,7 +6937,7 @@ def test_node_transformer_preserves_specified_fields():
     assert "include_private" not in obj._fields_specified
 
 
-def test_bp_enter_auto_module_members_skipped():
+def test_resolve_object_module_members_skipped():
     mod = gf.Module("pkg")
     submod = gf.Module("sub")
     submod.docstring = gf.Docstring("Submodule.", parent=submod)
@@ -6947,18 +6946,18 @@ def test_bp_enter_auto_module_members_skipped():
     func.docstring = gf.Docstring("A func.", parent=func)
     mod.set_member("f", func)
 
-    trans = _bp_make_trans({"pkg": mod, "pkg:f": func, "pkg:sub": submod})
-    result = trans._resolve_object(Auto(name="pkg"))
+    resolver = _make_resolver({"pkg": mod, "pkg:f": func, "pkg:sub": submod})
+    result = resolver._resolve_object(SpecObject(name="pkg"))
     assert isinstance(result, DocModule)
     member_names = [m.name if hasattr(m, "name") else str(m) for m in result.members]
     assert not any("sub" in n for n in member_names)
 
 
 def test_fetch_members_explicit():
-    trans = _bp_make_trans()
-    auto = Auto(name="X", members=["a", "b"])
+    resolver = _make_resolver()
+    spec_obj = SpecObject(name="X", members=["a", "b"])
     obj = gf.Class("X")
-    assert trans._fetch_members(auto, obj) == ["a", "b"]
+    assert resolver._fetch_members(spec_obj, obj) == ["a", "b"]
 
 
 def test_fetch_members_filter_private():
@@ -6970,8 +6969,8 @@ def test_fetch_members_filter_private():
     priv.docstring = gf.Docstring("doc", parent=priv)
     cls.set_member("_priv", priv)
 
-    trans = _bp_make_trans()
-    result = trans._fetch_members(Auto(name="X", include_private=False), cls)
+    resolver = _make_resolver()
+    result = resolver._fetch_members(SpecObject(name="X", include_private=False), cls)
     assert "pub" in result
     assert "_priv" not in result
 
@@ -6982,8 +6981,8 @@ def test_fetch_members_include_private():
     priv.docstring = gf.Docstring("doc", parent=priv)
     cls.set_member("_priv", priv)
 
-    trans = _bp_make_trans()
-    result = trans._fetch_members(Auto(name="X", include_private=True), cls)
+    resolver = _make_resolver()
+    result = resolver._fetch_members(SpecObject(name="X", include_private=True), cls)
     assert "_priv" in result
 
 
@@ -6993,8 +6992,8 @@ def test_fetch_members_dunder_with_docstring_kept():
     enter.docstring = gf.Docstring("Enter.", parent=enter)
     cls.set_member("__enter__", enter)
 
-    trans = _bp_make_trans()
-    result = trans._fetch_members(Auto(name="X", include_private=False), cls)
+    resolver = _make_resolver()
+    result = resolver._fetch_members(SpecObject(name="X", include_private=False), cls)
     assert "__enter__" in result
 
 
@@ -7003,8 +7002,8 @@ def test_fetch_members_dunder_without_docstring_filtered():
     init = gf.Function("__init__")
     cls.set_member("__init__", init)
 
-    trans = _bp_make_trans()
-    result = trans._fetch_members(Auto(name="X", include_private=False), cls)
+    resolver = _make_resolver()
+    result = resolver._fetch_members(SpecObject(name="X", include_private=False), cls)
     assert "__init__" not in result
 
 
@@ -7016,8 +7015,8 @@ def test_fetch_members_filter_empty():
     withdoc.docstring = gf.Docstring("Has doc.", parent=withdoc)
     cls.set_member("withdoc", withdoc)
 
-    trans = _bp_make_trans()
-    result = trans._fetch_members(Auto(name="X", include_empty=False), cls)
+    resolver = _make_resolver()
+    result = resolver._fetch_members(SpecObject(name="X", include_empty=False), cls)
     assert "withdoc" in result
     assert "nodoc" not in result
 
@@ -7027,8 +7026,8 @@ def test_fetch_members_include_empty():
     nodoc = gf.Function("nodoc")
     cls.set_member("nodoc", nodoc)
 
-    trans = _bp_make_trans()
-    result = trans._fetch_members(Auto(name="X", include_empty=True), cls)
+    resolver = _make_resolver()
+    result = resolver._fetch_members(SpecObject(name="X", include_empty=True), cls)
     assert "nodoc" in result
 
 
@@ -7041,8 +7040,8 @@ def test_fetch_members_filter_attributes():
     func.docstring = gf.Docstring("doc", parent=func)
     cls.set_member("myfunc", func)
 
-    trans = _bp_make_trans()
-    result = trans._fetch_members(Auto(name="X", include_attributes=False), cls)
+    resolver = _make_resolver()
+    result = resolver._fetch_members(SpecObject(name="X", include_attributes=False), cls)
     assert "myfunc" in result
     assert "myattr" not in result
 
@@ -7056,8 +7055,8 @@ def test_fetch_members_filter_classes():
     func.docstring = gf.Docstring("doc", parent=func)
     mod.set_member("f", func)
 
-    trans = _bp_make_trans()
-    result = trans._fetch_members(Auto(name="pkg", include_classes=False), mod)
+    resolver = _make_resolver()
+    result = resolver._fetch_members(SpecObject(name="pkg", include_classes=False), mod)
     assert "f" in result
     assert "Inner" not in result
 
@@ -7071,8 +7070,8 @@ def test_fetch_members_filter_functions():
     cls.docstring = gf.Docstring("doc", parent=cls)
     mod.set_member("C", cls)
 
-    trans = _bp_make_trans()
-    result = trans._fetch_members(Auto(name="pkg", include_functions=False), mod)
+    resolver = _make_resolver()
+    result = resolver._fetch_members(SpecObject(name="pkg", include_functions=False), mod)
     assert "C" in result
     assert "f" not in result
 
@@ -7086,16 +7085,16 @@ def test_fetch_members_exclude():
     f2.docstring = gf.Docstring("doc", parent=f2)
     cls.set_member("f2", f2)
 
-    trans = _bp_make_trans()
-    result = trans._fetch_members(Auto(name="X", exclude=["f1"]), cls)
+    resolver = _make_resolver()
+    result = resolver._fetch_members(SpecObject(name="X", exclude=["f1"]), cls)
     assert "f2" in result
     assert "f1" not in result
 
 
 def test_fetch_members_include_raises():
-    trans = _bp_make_trans()
+    resolver = _make_resolver()
     with pytest.raises(NotImplementedError, match="include argument"):
-        trans._fetch_members(Auto(name="X", include="pattern"), gf.Class("X"))
+        resolver._fetch_members(SpecObject(name="X", include="pattern"), gf.Class("X"))
 
 
 def test_fetch_members_order_alphabetical():
@@ -7105,8 +7104,8 @@ def test_fetch_members_order_alphabetical():
         f.docstring = gf.Docstring("doc", parent=f)
         cls.set_member(name, f)
 
-    trans = _bp_make_trans()
-    result = trans._fetch_members(Auto(name="X", member_order="alphabetical"), cls)
+    resolver = _make_resolver()
+    result = resolver._fetch_members(SpecObject(name="X", member_order="alphabetical"), cls)
     assert result == sorted(result)
 
 
@@ -7117,15 +7116,15 @@ def test_fetch_members_order_source():
         f.docstring = gf.Docstring("doc", parent=f)
         cls.set_member(name, f)
 
-    trans = _bp_make_trans()
-    result = trans._fetch_members(Auto(name="X", member_order="source"), cls)
+    resolver = _make_resolver()
+    result = resolver._fetch_members(SpecObject(name="X", member_order="source"), cls)
     assert result == ["zebra", "apple", "mango"]
 
 
 def test_fetch_members_order_invalid():
-    trans = _bp_make_trans()
+    resolver = _make_resolver()
     with pytest.raises(ValueError, match="Unsupported value of member_order"):
-        trans._fetch_members(Auto(name="X", member_order="random"), gf.Class("X"))
+        resolver._fetch_members(SpecObject(name="X", member_order="random"), gf.Class("X"))
 
 
 def test_fetch_members_module_exports_filter():
@@ -7139,8 +7138,8 @@ def test_fetch_members_module_exports_filter():
     mod.set_member("internal_f", f2)
     mod.exports = {"exported_f"}
 
-    trans = _bp_make_trans()
-    result = trans._fetch_members(Auto(name="pkg"), mod)
+    resolver = _make_resolver()
+    result = resolver._fetch_members(SpecObject(name="pkg"), mod)
     assert "exported_f" in result
     assert "internal_f" not in result
 
@@ -7158,8 +7157,8 @@ def test_fetch_members_filter_imports():
     alias = gf.Alias("ext_f", target=ext_f, parent=mod)
     mod.set_member("ext_f", alias)
 
-    trans = _bp_make_trans()
-    result = trans._fetch_members(Auto(name="pkg", include_imports=False), mod)
+    resolver = _make_resolver()
+    result = resolver._fetch_members(SpecObject(name="pkg", include_imports=False), mod)
     assert "local_f" in result
     assert "ext_f" not in result
 
@@ -7177,24 +7176,24 @@ def test_fetch_members_include_imports():
     alias = gf.Alias("ext_f", target=ext_f, parent=mod)
     mod.set_member("ext_f", alias)
 
-    trans = _bp_make_trans()
-    result = trans._fetch_members(Auto(name="pkg", include_imports=True), mod)
+    resolver = _make_resolver()
+    result = resolver._fetch_members(SpecObject(name="pkg", include_imports=True), mod)
     assert "local_f" in result
     assert "ext_f" in result
 
 
-def test_bp_sections_resolved():
+def test_resolver_sections_resolved():
     func = gf.Function("f")
-    trans = _bp_make_trans({"pkg:f": func})
-    trans.current_package = "pkg"
+    resolver = _make_resolver({"pkg:f": func})
+    resolver.current_package = "pkg"
 
-    sections = [SpecSection(title="API", contents=[Auto(name="f")])]
-    result = trans.resolve_sections(sections)
+    sections = [SpecSection(title="API", contents=[SpecObject(name="f")])]
+    result = resolver.resolve_sections(sections)
     assert isinstance(result, list)
     assert len(result) == 1
 
 
-def test_bp_auto_generate_sections(capsys):
+def test_resolver_autogenerate_sections(capsys):
     mod = gf.Module("pkg")
     func = gf.Function("f")
     func.docstring = gf.Docstring("A func.", parent=func)
@@ -7202,8 +7201,8 @@ def test_bp_auto_generate_sections(capsys):
     mod.exports = {"f"}
     func.labels.add("exported")
 
-    trans = _bp_make_trans({"pkg": mod, "pkg:f": func})
-    sections = _autogenerate_sections(trans, "pkg")
+    resolver = _make_resolver({"pkg": mod, "pkg:f": func})
+    sections = _autogenerate_sections(resolver, "pkg")
 
     captured = capsys.readouterr()
     assert "Autogenerating contents" in captured.out
@@ -7211,41 +7210,41 @@ def test_bp_auto_generate_sections(capsys):
     assert len(sections) == 1
 
 
-def test_bp_exit_section_wraps_non_page():
+def test_resolver_exit_section_wraps_non_page():
     func = gf.Function("f")
-    trans = _bp_make_trans({"pkg:f": func})
-    trans.current_package = "pkg"
+    resolver = _make_resolver({"pkg:f": func})
+    resolver.current_package = "pkg"
 
-    sections = [SpecSection(title="API", contents=[Auto(name="f")])]
-    result = trans.resolve_sections(sections)
+    sections = [SpecSection(title="API", contents=[SpecObject(name="f")])]
+    result = resolver.resolve_sections(sections)
     section = result[0]
     for item in section.contents:
         assert isinstance(item, Page)
 
 
-def test_page_stripper_strips_prefix():
+def test_package_prefix_remover_strips_prefix():
     page = Page(path="mypkg.submod.func")
-    result = _PagePackageStripper("mypkg").visit(page)
+    result = _PackagePrefixRemover("mypkg").visit(page)
     assert result.path == "submod.func"
 
 
-def test_page_stripper_no_strip_different():
+def test_package_prefix_remover_no_strip_different():
     page = Page(path="other.submod.func")
-    result = _PagePackageStripper("mypkg").visit(page)
+    result = _PackagePrefixRemover("mypkg").visit(page)
     assert result.path == "other.submod.func"
 
 
-def test_page_stripper_no_strip_single_part():
+def test_package_prefix_remover_no_strip_single_part():
     page = Page(path="mypkg")
-    result = _PagePackageStripper("mypkg").visit(page)
+    result = _PackagePrefixRemover("mypkg").visit(page)
     assert result.path == "mypkg"
 
 
-def test_page_stripper_nested_pages():
+def test_package_prefix_remover_nested_pages():
     doc = DocFunction(name="f", obj=gf.Function("f"))
     page = Page(path="mypkg.mod.func", contents=[doc])
     section = Section(title="T", contents=[page])
-    result = _PagePackageStripper("mypkg").visit(section)
+    result = _PackagePrefixRemover("mypkg").visit(section)
     assert result.contents[0].path == "mod.func"
 
 
@@ -7263,18 +7262,18 @@ def test_strip_package_name_no_match():
     assert result.path == "other.func"
 
 
-def test_blueprint_entry_basic():
+def test_resolver_basic():
     func = gf.Function("myfunc")
 
     def get_object(path, **kwargs):
         return func
 
-    trans = _Resolver(get_object=get_object)
-    result = trans._resolve_object(Auto(name="myfunc"))
+    resolver = _Resolver(get_object=get_object)
+    result = resolver._resolve_object(SpecObject(name="myfunc"))
     assert isinstance(result, DocFunction)
 
 
-def test_blueprint_entry_with_package():
+def test_resolver_with_package():
     func = gf.Function("f")
 
     def get_object(path, **kwargs):
@@ -7282,13 +7281,13 @@ def test_blueprint_entry_with_package():
             return func
         raise KeyError(path)
 
-    trans = _Resolver(get_object=get_object)
-    trans.current_package = "mypkg"
-    result = trans._resolve_object(Auto(name="f"))
+    resolver = _Resolver(get_object=get_object)
+    resolver.current_package = "mypkg"
+    result = resolver._resolve_object(SpecObject(name="f"))
     assert isinstance(result, DocFunction)
 
 
-def test_blueprint_entry_with_dynamic():
+def test_resolver_with_dynamic():
     func = gf.Function("f")
     captured = {}
 
@@ -7296,9 +7295,9 @@ def test_blueprint_entry_with_dynamic():
         captured.update(kwargs)
         return func
 
-    trans = _Resolver(get_object=get_object)
-    trans.dynamic = True
-    trans._resolve_object(Auto(name="f"))
+    resolver = _Resolver(get_object=get_object)
+    resolver.dynamic = True
+    resolver._resolve_object(SpecObject(name="f"))
     assert captured.get("dynamic") is True
 
 
@@ -29242,7 +29241,7 @@ def test_api_reference_generate_sidebar_basic():
                     }
                 }
             )
-            resolved = blueprint_func(ref.sections, package=ref.package, settings=ref.settings)
+            resolved = resolve(ref.sections, package=ref.package, settings=ref.settings)
 
             sidebar = write._generate_sidebar(
                 resolved,
@@ -30570,12 +30569,12 @@ def test_ast_fields_object():
     assert "docstring" in result
 
 
-def test_ast_fields_layout_base():
-    """fields() returns non-default fields for a LayoutBase subclass."""
+def test_ast_fields_walkable():
+    """fields() returns non-default fields for a Walkable subclass."""
     from great_docs._apiref._ast import fields
 
-    auto = Auto(name="my_func")
-    result = fields(auto)
+    spec_obj = SpecObject(name="my_func")
+    result = fields(spec_obj)
     assert "name" in result
 
 
@@ -33738,7 +33737,7 @@ def test_is_initvar_false():
 
 
 def test_griffe_to_doc():
-    """griffe_to_doc converts griffe object to layout Doc."""
+    """griffe_to_doc converts a griffe object to a content Doc."""
 
     func = gf.Function(name="my_func", lineno=1)
     result = griffe_to_doc(func, deep=False)

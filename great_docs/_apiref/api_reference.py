@@ -126,7 +126,7 @@ class APIReference:
 
         from .collect import build_manifest
 
-        _log.info("Generating blueprint.")
+        _log.info("Resolving sections.")
         resolved = resolve(self.sections, package=self.package, settings=s)
 
         _log.info("Collecting pages and inventory items.")
