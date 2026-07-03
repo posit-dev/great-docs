@@ -1,0 +1,53 @@
+# Shown in the Code scenes section of the Demo Reels guide. A magic-move through
+# a Great Tables snippet, then a crossfade to the table it renders. No voice: the
+# code and its output carry the scene.
+showreel:
+  title: "Code to output"
+  theme: auto
+  brand: { accent: "#2563eb" }
+
+voice:
+  engine: silent
+
+defaults:
+  transition: crossfade
+  captions: false
+
+scenes:
+  - id: code
+    type: code
+    language: python
+    duration: 8.0
+    steps:
+      - code: |
+          from great_tables import GT, md
+          from great_tables.data import towny
+
+          cols = ["name", "latitude", "longitude", "population_2016",
+                  "density_2016", "population_2021", "density_2021"]
+          top5 = towny.nlargest(5, "population_2021")[cols]
+
+          GT(top5)
+        typing: true
+      - code: |
+          from great_tables import GT, md
+          from great_tables.data import towny
+
+          cols = ["name", "latitude", "longitude", "population_2016",
+                  "density_2016", "population_2021", "density_2021"]
+          top5 = towny.nlargest(5, "population_2021")[cols]
+
+          (
+              GT(top5)
+              .tab_spanner("Population", ["population_2016", "population_2021"])
+              .tab_spanner("Density", ["density_2016", "density_2021"])
+              .tab_spanner(md("*Location*"), ["latitude", "longitude"], id="loc")
+          )
+        focus: [10, 11, 12]
+
+  - id: output
+    type: image
+    src: reel-code-output.png
+    fit: contain
+    duration: 4.5
+    motion: { type: none }
