@@ -11,8 +11,15 @@ import griffe as gf
 
 from great_docs._apiref._render._label import get_label
 
-from .. import _ast as qast
 from .. import content
+from .._docstring_sections import (
+    DocstringSectionNotes,
+    DocstringSectionSeeAlso,
+    DocstringSectionWarnings,
+    ExampleCode,
+    ExampleText,
+    transform,
+)
 from .._format import (
     HAS_RUFF,
     format_name,
@@ -391,7 +398,7 @@ class __RenderDoc(RenderBase):
 
         sections = cast(
             "list[gf.DocstringSection]",
-            qast.transform(self.obj.docstring.parsed),
+            transform(self.obj.docstring.parsed),
         )
 
         # Remove the docstring subject from the top of the docstring
@@ -473,10 +480,10 @@ class __RenderDoc(RenderBase):
         [](`~functools.singledispatchmethod`) method for that type
         of section.
         """
-        new_el = qast.transform(el)
-        if isinstance(new_el, qast.ExampleCode):
+        new_el = transform(el)
+        if isinstance(new_el, ExampleCode):
             return CodeBlock(el.value, Attr(classes=["python"]))
-        if isinstance(new_el, qast.ExampleText):
+        if isinstance(new_el, ExampleText):
             return fence_doctest_blocks(el.value)
         return convert_rst_text(el.value)
 
@@ -486,7 +493,7 @@ class __RenderDoc(RenderBase):
 
     @render_docstring_section.register
     def _(self, el: gf.DocstringSectionExamples):
-        return Blocks([self.render_docstring_section(qast.transform(c)) for c in el.value])
+        return Blocks([self.render_docstring_section(transform(c)) for c in el.value])
 
     @render_docstring_section.register
     def _(self, el: gf.DocstringSectionDeprecated):
@@ -512,15 +519,15 @@ class __RenderDoc(RenderBase):
         return convert_rst_text(el.value.description)
 
     @render_docstring_section.register
-    def _(self, el: qast.DocstringSectionWarnings):
+    def _(self, el: DocstringSectionWarnings):
         return convert_rst_text(el.value)
 
     @render_docstring_section.register
-    def _(self, el: qast.DocstringSectionNotes):
+    def _(self, el: DocstringSectionNotes):
         return convert_rst_text(el.value)
 
     @render_docstring_section.register
-    def _(self, el: qast.DocstringSectionSeeAlso):
+    def _(self, el: DocstringSectionSeeAlso):
         """
         Render the See Also section
         """

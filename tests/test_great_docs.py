@@ -33,18 +33,18 @@ from great_docs._directives import DocDirectives, extract_directives
 from great_docs._apiref import _globals
 from great_docs._apiref import content
 from great_docs._apiref import spec
-from great_docs._apiref._ast import (
+from great_docs._apiref._docstring_sections import (
     DocstringSectionKindPatched,
     DocstringSectionNotes,
     DocstringSectionSeeAlso,
     DocstringSectionWarnings,
     ExampleCode,
     ExampleText,
-    Formatter,
     transform,
     tuple_to_data,
     _DocstringSectionPatched,
 )
+from great_docs._apiref._preview import Formatter
 from great_docs._apiref._format import (
     format_name,
     format_see_also,
@@ -30436,7 +30436,8 @@ def test_ast_transform_all():
 
 def test_ast_fields_example_code():
     """fields() returns dataclass field names for ExampleCode."""
-    from great_docs._apiref._ast import ExampleCode, fields
+    from great_docs._apiref._docstring_sections import ExampleCode
+    from great_docs._apiref._preview import fields
 
     ec = ExampleCode("print(1)")
     result = fields(ec)
@@ -30445,7 +30446,8 @@ def test_ast_fields_example_code():
 
 def test_ast_fields_example_text():
     """fields() returns dataclass field names for ExampleText."""
-    from great_docs._apiref._ast import ExampleText, fields
+    from great_docs._apiref._docstring_sections import ExampleText
+    from great_docs._apiref._preview import fields
 
     et = ExampleText("description")
     result = fields(et)
@@ -30454,7 +30456,7 @@ def test_ast_fields_example_text():
 
 def test_ast_fields_function():
     """fields() returns expected fields for gf.Function."""
-    from great_docs._apiref._ast import fields
+    from great_docs._apiref._preview import fields
 
     func = gf.Function(name="my_func", lineno=1)
     result = fields(func)
@@ -30464,7 +30466,7 @@ def test_ast_fields_function():
 
 def test_ast_fields_attribute():
     """fields() returns expected fields for gf.Attribute."""
-    from great_docs._apiref._ast import fields
+    from great_docs._apiref._preview import fields
 
     attr = gf.Attribute(name="x", lineno=1)
     result = fields(attr)
@@ -30474,7 +30476,7 @@ def test_ast_fields_attribute():
 
 def test_ast_fields_docstring():
     """fields() returns expected fields for gf.Docstring."""
-    from great_docs._apiref._ast import fields
+    from great_docs._apiref._preview import fields
 
     ds_obj = gf.Docstring("Hello", parser="numpy")
     result = fields(ds_obj)
@@ -30484,7 +30486,7 @@ def test_ast_fields_docstring():
 
 def test_ast_fields_parameter():
     """fields() returns expected fields for gf.Parameter."""
-    from great_docs._apiref._ast import fields
+    from great_docs._apiref._preview import fields
 
     param = gf.Parameter(name="x")
     result = fields(param)
@@ -30494,7 +30496,7 @@ def test_ast_fields_parameter():
 
 def test_ast_fields_docstring_parameter():
     """fields() returns expected fields for gf.DocstringParameter."""
-    from great_docs._apiref._ast import fields
+    from great_docs._apiref._preview import fields
 
     dp = gf.DocstringParameter(name="x", description="a number", annotation="int")
     result = fields(dp)
@@ -30504,7 +30506,7 @@ def test_ast_fields_docstring_parameter():
 
 def test_ast_fields_docstring_named_element():
     """fields() returns expected fields for gf.DocstringNamedElement."""
-    from great_docs._apiref._ast import fields
+    from great_docs._apiref._preview import fields
 
     ne = gf.DocstringNamedElement(name="x", description="desc")
     result = fields(ne)
@@ -30514,7 +30516,7 @@ def test_ast_fields_docstring_named_element():
 
 def test_ast_fields_docstring_section():
     """fields() returns expected fields for gf.DocstringSection."""
-    from great_docs._apiref._ast import fields
+    from great_docs._apiref._preview import fields
 
     sec = gf.DocstringSectionText("hello")
     result = fields(sec)
@@ -30524,7 +30526,7 @@ def test_ast_fields_docstring_section():
 
 def test_ast_fields_alias():
     """fields() follows alias target for gf.Alias."""
-    from great_docs._apiref._ast import fields
+    from great_docs._apiref._preview import fields
 
     mod = gf.Module(name="testmod")
     func = gf.Function(name="f", lineno=1)
@@ -30541,7 +30543,7 @@ def test_ast_fields_alias_unresolvable():
 
     from griffe import ModulesCollection
 
-    from great_docs._apiref._ast import fields
+    from great_docs._apiref._preview import fields
 
     mc = ModulesCollection()
     mod = gf.Module(name="testmod")
@@ -30559,7 +30561,7 @@ def test_ast_fields_alias_unresolvable():
 
 def test_ast_fields_object():
     """fields() returns discovered attributes for gf.Object (Module)."""
-    from great_docs._apiref._ast import fields
+    from great_docs._apiref._preview import fields
 
     mod = gf.Module(name="mymod")
     result = fields(mod)
@@ -30571,7 +30573,7 @@ def test_ast_fields_object():
 
 def test_ast_fields_walkable():
     """fields() returns non-default fields for a Walkable subclass."""
-    from great_docs._apiref._ast import fields
+    from great_docs._apiref._preview import fields
 
     spec_obj = SpecObject(name="my_func")
     result = fields(spec_obj)
@@ -30580,7 +30582,7 @@ def test_ast_fields_walkable():
 
 def test_ast_fields_dict():
     """fields() returns dict keys."""
-    from great_docs._apiref._ast import fields
+    from great_docs._apiref._preview import fields
 
     result = fields({"a": 1, "b": 2})
     assert result == ["a", "b"]
@@ -30588,7 +30590,7 @@ def test_ast_fields_dict():
 
 def test_ast_fields_list():
     """fields() returns list indices."""
-    from great_docs._apiref._ast import fields
+    from great_docs._apiref._preview import fields
 
     result = fields([10, 20, 30])
     assert result == [0, 1, 2]
@@ -30596,7 +30598,7 @@ def test_ast_fields_list():
 
 def test_ast_fields_parameters():
     """fields() returns indices for gf.Parameters."""
-    from great_docs._apiref._ast import fields
+    from great_docs._apiref._preview import fields
 
     params = gf.Parameters(gf.Parameter(name="a"), gf.Parameter(name="b"))
     result = fields(params)
@@ -30606,7 +30608,7 @@ def test_ast_fields_parameters():
 
 def test_ast_fields_none_for_unknown():
     """fields() returns None for unrecognized types."""
-    from great_docs._apiref._ast import fields
+    from great_docs._apiref._preview import fields
 
     assert fields(42) is None
     assert fields("hello") is None
@@ -30745,7 +30747,8 @@ def test_ast_formatter_format_nested():
 
 def test_ast_preview_print(capsys):
     """preview() prints the formatted tree."""
-    from great_docs._apiref._ast import ExampleCode, preview
+    from great_docs._apiref._docstring_sections import ExampleCode
+    from great_docs._apiref._preview import preview
 
     preview(ExampleCode("x = 1"))
     captured = capsys.readouterr()
@@ -30754,7 +30757,8 @@ def test_ast_preview_print(capsys):
 
 def test_ast_preview_as_string():
     """preview(as_string=True) returns the tree as a string."""
-    from great_docs._apiref._ast import ExampleCode, preview
+    from great_docs._apiref._docstring_sections import ExampleCode
+    from great_docs._apiref._preview import preview
 
     result = preview(ExampleCode("x = 1"), as_string=True)
     assert isinstance(result, str)
@@ -30763,7 +30767,8 @@ def test_ast_preview_as_string():
 
 def test_ast_preview_max_depth():
     """preview() respects max_depth parameter."""
-    from great_docs._apiref._ast import ExampleCode, preview
+    from great_docs._apiref._docstring_sections import ExampleCode
+    from great_docs._apiref._preview import preview
 
     result = preview(ExampleCode("x = 1"), max_depth=0, as_string=True)
     assert "ExampleCode" in result
@@ -30772,7 +30777,8 @@ def test_ast_preview_max_depth():
 
 def test_ast_preview_compact():
     """preview() respects compact parameter."""
-    from great_docs._apiref._ast import ExampleCode, preview
+    from great_docs._apiref._docstring_sections import ExampleCode
+    from great_docs._apiref._preview import preview
 
     result = preview(ExampleCode("x = 1"), compact=True, as_string=True)
     assert "ExampleCode" in result
@@ -30803,7 +30809,7 @@ def test_ast_docstring_section_warnings():
 
 def test_ast_fields_docstring_element():
     """fields() returns expected fields for gf.DocstringElement."""
-    from great_docs._apiref._ast import fields
+    from great_docs._apiref._preview import fields
 
     # DocstringElement is the base; DocstringReturn is a subclass not matching
     # DocstringNamedElement or DocstringParameter
@@ -30989,7 +30995,7 @@ def test_render_section_text_fences_doctests():
 
 def test_render_example_text_fences_doctests():
     """An ExampleText block renders its doctest lines inside a fenced code block."""
-    from great_docs._apiref._ast import ExampleText
+    from great_docs._apiref._docstring_sections import ExampleText
 
     func = gf.Function(name="f", lineno=1)
     doc_fn = content.DocFunction(name="f", obj=func)

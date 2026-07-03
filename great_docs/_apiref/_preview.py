@@ -1,156 +1,22 @@
+"""
+Debug previewer that prints a griffe/docstring object as an indented tree
+
+Development tooling only — nothing in the render pipeline uses it.
+"""
+
 from __future__ import annotations
 
-import re
 import warnings
-from dataclasses import dataclass
 from dataclasses import fields as dc_fields
-from enum import Enum
-from typing import Type
 
 import griffe as gf
 
+from ._docstring_sections import ExampleCode, ExampleText, transform
 from ._walkable import MISSING, Walkable
 
 
-def transform(el: object) -> object:
-    """Cast `el` to a more specific docstring element, falling back to `el` itself"""
-
-    if isinstance(el, tuple):
-        try:
-            return tuple_to_data(el)
-        except ValueError:
-            pass
-
-    elif isinstance(el, list) and len(el) and isinstance(el[0], gf.DocstringSection):
-        return _DocstringSectionPatched.transform_all(el)
-
-    return el
-
-
-# Patch DocstringSection ------------------------------------------------------
-
-
-class DocstringSectionKindPatched(Enum):
-    see_also = "see also"
-    notes = "notes"
-    warnings = "warnings"
-
-
-class _DocstringSectionPatched(gf.DocstringSection):
-    _registry: "dict[str, Type[_DocstringSectionPatched]]" = {}
-
-    def __init__(self, value: str, title: "str | None" = None) -> None:
-        super().__init__(title)
-        self.value = value
-
-    def __init_subclass__(cls, **kwargs: object) -> None:
-        super().__init_subclass__(**kwargs)
-
-        if cls.kind.value in cls._registry:
-            raise KeyError(f"A section for kind {cls.kind} already exists")
-
-        cls._registry[cls.kind.value] = cls
-
-    @staticmethod
-    def split_sections(text: str) -> list[tuple[str, str]]:
-        """Split text into (title, body) tuples for all numpydoc style sections"""
-        comp = re.compile(r"^([\S \t]+)\n-+$\n?", re.MULTILINE)
-
-        current_match = comp.search(text)
-        current_pos = 0
-
-        results = []
-        while current_match is not None:
-            if current_pos == 0 and current_match.start() > 0:
-                results.append(("", text[: current_match.start()]))
-
-            next_pos = current_pos + current_match.end()
-            substr = text[next_pos:]
-            next_match = comp.search(substr)
-
-            title = current_match.groups()[0]
-            body = substr if next_match is None else substr[: next_match.start()]
-
-            results.append((title, body))
-
-            current_match, current_pos = next_match, next_pos
-
-        return results
-
-    @classmethod
-    def transform(cls, el: gf.DocstringSection) -> list[gf.DocstringSection]:
-        """Cast `el` to a more specific `DocstringSection` type, when possible"""
-
-        if not isinstance(el, (gf.DocstringSectionText, gf.DocstringSectionAdmonition)):
-            return [el]
-
-        results = []
-
-        if isinstance(el, gf.DocstringSectionText):
-            splits = cls.split_sections(el.value)
-            for title, body in splits:
-                sub_cls = cls._registry.get(title.lower(), gf.DocstringSectionText)
-                results.append(sub_cls(body, title))
-        elif isinstance(el, gf.DocstringSectionAdmonition):
-            sub_cls = cls._registry.get(el.title.lower(), None)
-            if sub_cls:
-                results.append(sub_cls(el.value.contents, el.title))
-            else:
-                results.append(el)
-
-        return results or [el]
-
-    @classmethod
-    def transform_all(cls, el: list[gf.DocstringSection]) -> list[gf.DocstringSection]:
-        return [section for item in el for section in cls.transform(item)]
-
-
-class DocstringSectionSeeAlso(_DocstringSectionPatched):
-    kind = DocstringSectionKindPatched.see_also
-
-
-class DocstringSectionNotes(_DocstringSectionPatched):
-    kind = DocstringSectionKindPatched.notes
-
-
-class DocstringSectionWarnings(_DocstringSectionPatched):
-    kind = DocstringSectionKindPatched.warnings
-
-
-# Patch Example elements ------------------------------------------------------
-
-
-@dataclass
-class ExampleCode:
-    value: str
-
-
-@dataclass
-class ExampleText:
-    value: str
-
-
-def tuple_to_data(el: "tuple[gf.DocstringSectionKind, str]") -> ExampleCode | ExampleText:
-    """Build an `ExampleCode` or `ExampleText` from the example-section tuple"""
-    assert len(el) == 2
-
-    kind, value = el
-    if kind.value == "examples":
-        return ExampleCode(value)
-    elif kind.value == "text":
-        return ExampleText(value)
-
-    raise ValueError(f"Unsupported first element in tuple: {kind}")
-
-
-# Tree previewer ==============================================================
-
-
 def fields(el: object) -> list[str] | list[int] | None:
-    """List the relevant fields for an object, for preview purposes
-
-    Replaces plum dispatch with isinstance-based dispatch.
-    """
+    """List the relevant fields for an object, for preview purposes"""
 
     # dataclass types (ExampleCode, ExampleText)
     if isinstance(el, (ExampleCode, ExampleText)):
