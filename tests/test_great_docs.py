@@ -6911,6 +6911,33 @@ def test_bp_entry_options_win_over_section_options():
     assert result.signature_name == "full"
 
 
+def test_spec_options_replace_preserves_specified_fields():
+    opts = AutoOptions(include_private=True)
+    new = opts.replace(members=["a"])
+
+    assert new.include_private is True
+    assert new.members == ["a"]
+    assert new._fields_specified == ("include_private", "members")
+
+
+def test_node_transformer_preserves_specified_fields():
+    from great_docs._apiref._visitor import NodeTransformer
+
+    class Renamer(NodeTransformer):
+        def exit(self, el):
+            if el == "f":
+                return "g"
+            return el
+
+    section = spec.SpecSection(title="T", contents=["f"])
+    result = Renamer().visit(section)
+
+    obj = result.contents[0]
+    assert obj.name == "g"
+    assert "name" in obj._fields_specified
+    assert "include_private" not in obj._fields_specified
+
+
 def test_bp_enter_auto_module_members_skipped():
     mod = gf.Module("pkg")
     submod = gf.Module("sub")

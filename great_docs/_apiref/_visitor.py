@@ -66,17 +66,15 @@ class NodeTransformer(NodeVisitor):
     """A node tree rebuilt with only the changed nodes replaced"""
 
     def _enter_dataclass(self, el: Walkable) -> Walkable:
-        new_kwargs: dict[str, object] = {}
-        changed = False
+        changes: dict[str, object] = {}
         for f in dataclasses.fields(el):
             if f.name.startswith("_"):
                 continue
             value = getattr(el, f.name)
             result = self.visit(value)
-            new_kwargs[f.name] = result
             if result is not value:
-                changed = True
-        return el.__class__(**new_kwargs) if changed else el
+                changes[f.name] = result
+        return el.replace(**changes) if changes else el
 
     def _enter_sequence(self, el: list[Any] | tuple[Any, ...]) -> list[Any] | tuple[Any, ...]:
         return el.__class__([self.visit(child) for child in el])

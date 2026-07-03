@@ -12,7 +12,7 @@ import dataclasses
 from dataclasses import dataclass, field
 from dataclasses import fields as dc_fields
 from enum import Enum
-from typing import Any, cast
+from typing import Any, Self, cast
 
 from ._walkable import MISSING, MissingType, Walkable
 
@@ -76,6 +76,21 @@ class SpecOptions(Walkable):
                 object.__setattr__(self, f.name, f.default_factory())
             # else: field has no default — it must be in kwargs or will error
         object.__setattr__(self, "_fields_specified", tuple(kwargs.keys()))
+
+    def replace(self, **changes: object) -> Self:
+        """Return a copy with the given fields replaced
+
+        A replaced field counts as caller-specified from then on; the
+        untouched fields keep their original specified/default standing.
+        (`dataclasses.replace` would instead re-run `__init__` with every
+        field and mark them all as specified.)
+        """
+        new = self.copy()
+        for name, value in changes.items():
+            object.__setattr__(new, name, value)
+        specified = dict.fromkeys((*self._fields_specified, *changes))
+        object.__setattr__(new, "_fields_specified", tuple(specified))
+        return new
 
 
 @dataclass(init=False)

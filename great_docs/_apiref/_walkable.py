@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import dataclasses
 from collections.abc import Generator
 from dataclasses import dataclass
 from dataclasses import fields as dc_fields
@@ -18,6 +19,14 @@ class Walkable:
     def copy(self) -> Self:
         """Return a shallow copy of this node"""
         return copy.copy(self)
+
+    def replace(self, **changes: object) -> Self:
+        """Return a copy of this node with the given fields replaced
+
+        Subclasses that carry state outside their dataclass fields override
+        this to preserve it.
+        """
+        return dataclasses.replace(self, **changes)
 
     def _iter_fields(self) -> Generator[tuple[str, object], None, None]:
         """Iterate (field_name, value) pairs for every dataclass field on this node"""
