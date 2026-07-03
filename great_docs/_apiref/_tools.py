@@ -8,19 +8,12 @@ from typing import TYPE_CHECKING
 
 import griffe as gf
 
-from . import (
-    RenderDocAttribute,
-    RenderDocClass,
-    RenderDocFunction,
-    RenderDocModule,
-)
-from .content import Doc, DocAttribute, DocClass, DocFunction, DocModule
+from ._render import get_render_type
+from ._type_checks import griffe_to_doc
 from .introspect import get_object
 
 if TYPE_CHECKING:
     from types import MethodType
-
-    from .typing import DocType
 
 
 __all__ = (
@@ -41,32 +34,12 @@ def _canonical_path(klass: type | MethodType) -> str:
     return f"{module}.{klass.__qualname__}"
 
 
-def _render(obj: gf.Object) -> str:
+def _render(obj: gf.Object | gf.Alias) -> str:
     """
     Render a `gf.Object` to qmd
     """
-
-    def to_doc(obj: gf.Object) -> "DocType":
-        members = [
-            to_doc(m)
-            for m in obj.members.values()
-            # imported variables are of type gf.Alias and we are
-            # not interested in dealing with them.
-            if not isinstance(m, gf.Alias)
-        ]
-        return Doc.from_griffe(obj.name, obj, members=members)  # pyright: ignore[reportUnknownMemberType]
-
-    match node := to_doc(obj):
-        case DocAttribute():
-            _Render = RenderDocAttribute
-        case DocClass():
-            _Render = RenderDocClass
-        case DocFunction():
-            _Render = RenderDocFunction
-        case DocModule():
-            _Render = RenderDocModule
-
-    return str(_Render(node))
+    node = griffe_to_doc(obj, inherited=False, skip_aliases=True)
+    return str(get_render_type(node)(node))
 
 
 def render_code_variable(code: str, name: str | None = None) -> str:

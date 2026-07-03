@@ -4,17 +4,15 @@ from typing import Literal, TypeAlias
 
 import griffe as gf
 
-from . import (
-    RenderAPIPage,
-    RenderDoc,
-    RenderDocAttribute,
-    RenderDocClass,
-    RenderDocFunction,
-    RenderDocModule,
-    RenderReferencePage,
-    RenderReferenceSection,
-)
 from ._griffe.docstrings import DCDocstringSection
+from ._render.api_page import RenderAPIPage
+from ._render.doc import RenderDoc
+from ._render.docattribute import RenderDocAttribute
+from ._render.docclass import RenderDocClass
+from ._render.docfunction import RenderDocFunction
+from ._render.docmodule import RenderDocModule
+from ._render.reference_page import RenderReferencePage
+from ._render.reference_section import RenderReferenceSection
 from .content import (
     Doc,
     DocAttribute,
