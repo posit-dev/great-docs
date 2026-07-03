@@ -95,10 +95,10 @@ from great_docs._apiref._rst_converters import (
     _convert_rst_directives,
     _convert_rst_grid_tables,
     _convert_rst_simple_tables,
-    _convert_rst_text,
+    convert_rst_text,
     _convert_sphinx_fields,
     _convert_sphinx_roles,
-    _fence_doctest_blocks,
+    fence_doctest_blocks,
     _parse_google_entries,
     _parse_google_raises,
     _replace_rst_code_block,
@@ -31984,26 +31984,26 @@ def test_rstconv_sanitize_allow_markdown():
     assert sanitize("[link](url)", allow_markdown=True) == "[link](url)"
 
 
-def test_rstconv_convert_rst_text_code_block():
-    """_convert_rst_text converts RST :: code blocks to fenced blocks."""
+def test_rstconvconvert_rst_text_code_block():
+    """convert_rst_text converts RST :: code blocks to fenced blocks."""
     text = "Example::\n\n    x = 1\n    y = 2\n"
-    result = _convert_rst_text(text)
+    result = convert_rst_text(text)
 
     assert "```python" in result
     assert "x = 1" in result
 
 
-def test_rstconv_convert_rst_text_math_directive():
-    """_convert_rst_text converts .. math:: to $$...$$ display math."""
+def test_rstconvconvert_rst_text_math_directive():
+    """convert_rst_text converts .. math:: to $$...$$ display math."""
     text = ".. math::\n\n    E = mc^2\n"
-    result = _convert_rst_text(text)
+    result = convert_rst_text(text)
 
     assert "$$" in result
     assert "E = mc^2" in result
 
 
-def test_rstconv_convert_rst_text_math_empty_body():
-    """_convert_rst_text handles .. math:: with empty indented body."""
+def test_rstconvconvert_rst_text_math_empty_body():
+    """convert_rst_text handles .. math:: with empty indented body."""
 
     # Construct text that hits the empty-lines branch of math
     text = ".. math::\n\n    \n"
@@ -32017,7 +32017,7 @@ def test_rstconv_convert_rst_text_math_empty_body():
 def test_rstconv_rst_directive_preserved():
     """Known RST directives like .. note:: are left untouched by code block conversion."""
     text = ".. note::\n\n    This is a note.\n"
-    result = _convert_rst_text(text)
+    result = convert_rst_text(text)
 
     # The note directive should be converted by _convert_rst_directives, not code block handler
     assert "```python" not in result
@@ -32026,7 +32026,7 @@ def test_rstconv_rst_directive_preserved():
 def test_rstconv_code_block_no_prefix():
     """RST :: code block with no prefix text (bare ::)."""
     text = "::\n\n    code_here\n"
-    result = _convert_rst_text(text)
+    result = convert_rst_text(text)
 
     assert "```python" in result
     assert "code_here" in result
@@ -32035,23 +32035,23 @@ def test_rstconv_code_block_no_prefix():
 def test_rstconv_code_block_with_prefix():
     """RST :: code block with prefix text gets prefix: before fenced block."""
     text = "For example::\n\n    x = 1\n"
-    result = _convert_rst_text(text)
+    result = convert_rst_text(text)
 
     assert "```python" in result
     assert "For example:" in result
 
 
 def test_rstconv_inline_math():
-    """_convert_rst_text converts :math:`...` to $...$."""
+    """convert_rst_text converts :math:`...` to $...$."""
     text = "The value is :math:`x^2 + y^2`."
-    result = _convert_rst_text(text)
+    result = convert_rst_text(text)
     assert "$x^2 + y^2$" in result
 
 
 def test_rstconv_quarto_cell_preserved():
-    """_convert_rst_text preserves ```{python} as executable Quarto cells."""
+    """convert_rst_text preserves ```{python} as executable Quarto cells."""
     text = "```{python}\nprint('hi')\n```"
-    result = _convert_rst_text(text)
+    result = convert_rst_text(text)
 
     assert "```{python}" in result
     assert "print('hi')" in result
@@ -32881,9 +32881,9 @@ def test_rstconv_parse_google_raises_empty():
 
 
 def test_rstconv_fence_doctest_basic():
-    """_fence_doctest_blocks wraps >>> lines in fenced blocks."""
+    """fence_doctest_blocks wraps >>> lines in fenced blocks."""
     text = ">>> import os\n>>> os.getcwd()\n"
-    result = _fence_doctest_blocks(text)
+    result = fence_doctest_blocks(text)
 
     assert "```python" in result
     assert ">>> import os" in result
@@ -32891,18 +32891,18 @@ def test_rstconv_fence_doctest_basic():
 
 
 def test_rstconv_fence_doctest_with_continuation():
-    """_fence_doctest_blocks handles ... continuation lines."""
+    """fence_doctest_blocks handles ... continuation lines."""
     text = ">>> for i in range(3):\n...     print(i)\n"
-    result = _fence_doctest_blocks(text)
+    result = fence_doctest_blocks(text)
 
     assert "```python" in result
     assert "... " in result
 
 
 def test_rstconv_fence_doctest_mixed_with_text():
-    """_fence_doctest_blocks preserves non-doctest lines."""
+    """fence_doctest_blocks preserves non-doctest lines."""
     text = "Some text.\n>>> x = 1\nMore text.\n>>> y = 2\n"
-    result = _fence_doctest_blocks(text)
+    result = fence_doctest_blocks(text)
 
     assert "Some text." in result
     assert "More text." in result
@@ -32911,50 +32911,50 @@ def test_rstconv_fence_doctest_mixed_with_text():
 
 
 def test_rstconv_fence_doctest_no_doctest():
-    """_fence_doctest_blocks returns text unchanged without doctest lines."""
+    """fence_doctest_blocks returns text unchanged without doctest lines."""
     text = "Regular text.\nNo doctest here.\n"
-    result = _fence_doctest_blocks(text)
+    result = fence_doctest_blocks(text)
 
     assert "```" not in result
     assert result == text
 
 
 def test_rstconv_fence_doctest_bare_prompt():
-    """_fence_doctest_blocks handles bare >>> without trailing space."""
+    """fence_doctest_blocks handles bare >>> without trailing space."""
     text = ">>>\n"
-    result = _fence_doctest_blocks(text)
+    result = fence_doctest_blocks(text)
 
     assert "```python" in result
 
 
-def test_rstconv_convert_rst_text_all_transforms():
-    """_convert_rst_text applies all transforms in sequence."""
+def test_rstconvconvert_rst_text_all_transforms():
+    """convert_rst_text applies all transforms in sequence."""
     text = "Use :func:`foo` to call.\n\nExample::\n\n    x = 1\n\nInline math :math:`E = mc^2`.\n"
-    result = _convert_rst_text(text)
+    result = convert_rst_text(text)
     assert "`foo()`" in result
     assert "```python" in result
     assert "$E = mc^2$" in result
 
 
-def test_rstconv_convert_rst_text_simple_table():
-    """_convert_rst_text handles RST simple tables."""
+def test_rstconvconvert_rst_text_simple_table():
+    """convert_rst_text handles RST simple tables."""
     text = "=====  =====\nA      B\n=====  =====\n1      2\n=====  =====\n"
-    result = _convert_rst_text(text)
+    result = convert_rst_text(text)
     assert "| A" in result
 
 
-def test_rstconv_convert_rst_text_grid_table():
-    """_convert_rst_text converts RST grid tables."""
+def test_rstconvconvert_rst_text_grid_table():
+    """convert_rst_text converts RST grid tables."""
     text = "+------+------+\n| A    | B    |\n+======+======+\n| 1    | 2    |\n+------+------+\n"
-    result = _convert_rst_text(text)
+    result = convert_rst_text(text)
 
     assert "| A | B |" in result
 
 
-def test_rstconv_convert_rst_text_citations():
-    """_convert_rst_text converts RST citations."""
+def test_rstconvconvert_rst_text_citations():
+    """convert_rst_text converts RST citations."""
     text = ".. [1] Author. Title.\n"
-    result = _convert_rst_text(text)
+    result = convert_rst_text(text)
 
     assert "1. Author. Title." in result
 
@@ -41545,36 +41545,36 @@ def test_keyboard_nav_scss_styles_exist():
 # Quarto executable cell preservation tests ------------------------------------
 
 
-def test_convert_rst_text_preserves_executable_cell_syntax():
-    """_convert_rst_text keeps ```{python} as executable Quarto cells."""
+def testconvert_rst_text_preserves_executable_cell_syntax():
+    """convert_rst_text keeps ```{python} as executable Quarto cells."""
     text = "```{python}\nprint('hi')\n```"
-    result = _convert_rst_text(text)
+    result = convert_rst_text(text)
     assert "```{python}" in result
     assert "print('hi')" in result
 
 
-def test_convert_rst_text_preserves_hashpipe_directives():
-    """_convert_rst_text preserves #| cell options inside code blocks."""
+def testconvert_rst_text_preserves_hashpipe_directives():
+    """convert_rst_text preserves #| cell options inside code blocks."""
     text = "```{python}\n#| eval: false\nprint('hi')\n```"
-    result = _convert_rst_text(text)
+    result = convert_rst_text(text)
     assert "```{python}" in result
     assert "#| eval: false" in result
     assert "print('hi')" in result
 
 
-def test_convert_rst_text_preserves_static_code_blocks():
-    """_convert_rst_text keeps ```python (no braces) as static blocks."""
+def testconvert_rst_text_preserves_static_code_blocks():
+    """convert_rst_text keeps ```python (no braces) as static blocks."""
     text = "```python\nx = 1\n```"
-    result = _convert_rst_text(text)
+    result = convert_rst_text(text)
     assert "```python" in result
     assert "```{python}" not in result
     assert "x = 1" in result
 
 
-def test_convert_rst_text_preserves_multiple_hashpipe_options():
-    """_convert_rst_text preserves multiple #| directives in executable cells."""
+def testconvert_rst_text_preserves_multiple_hashpipe_options():
+    """convert_rst_text preserves multiple #| directives in executable cells."""
     text = "```{python}\n#| eval: false\n#| echo: true\nprint('hi')\n```"
-    result = _convert_rst_text(text)
+    result = convert_rst_text(text)
     assert "#| eval: false" in result
     assert "#| echo: true" in result
 

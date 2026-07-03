@@ -24,7 +24,7 @@ from .._format import (
     repr_obj,
 )
 from .._globals import package_info
-from .._rst_converters import _convert_rst_text  # pyright: ignore[reportPrivateUsage]
+from .._rst_converters import convert_rst_text
 from ..pandoc.blocks import (
     Block,
     BlockContent,
@@ -476,7 +476,7 @@ class __RenderDoc(RenderBase):
         new_el = qast.transform(el)
         if isinstance(new_el, qast.ExampleCode):
             return CodeBlock(el.value, Attr(classes=["python"]))
-        return _convert_rst_text(el.value)
+        return convert_rst_text(el.value)
 
     @render_docstring_section.register
     def _(self, el: gf.DocstringSectionExamples):
@@ -503,15 +503,15 @@ class __RenderDoc(RenderBase):
         """
         Render an unofficial numpydoc section
         """
-        return _convert_rst_text(el.value.description)
+        return convert_rst_text(el.value.description)
 
     @render_docstring_section.register
     def _(self, el: qast.DocstringSectionWarnings):
-        return _convert_rst_text(el.value)
+        return convert_rst_text(el.value)
 
     @render_docstring_section.register
     def _(self, el: qast.DocstringSectionNotes):
-        return _convert_rst_text(el.value)
+        return convert_rst_text(el.value)
 
     @render_docstring_section.register
     def _(self, el: qast.DocstringSectionSeeAlso):

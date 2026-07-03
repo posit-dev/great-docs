@@ -11,7 +11,7 @@ from .._docstring_sections import (
     DCDocstringSectionInitParameters,
     DCDocstringSectionParameterAttributes,
 )
-from .._rst_converters import _convert_rst_text  # pyright: ignore[reportPrivateUsage]
+from .._rst_converters import convert_rst_text
 from ..pandoc.blocks import (
     BlockContent,
     Blocks,
@@ -94,7 +94,7 @@ class __RenderDocCallMixin(RenderDoc):
             # references can be processed. Pandoc does not process any markup
             # within backquotes `...`, but it does if the markup is within
             # html code tags.
-            desc = _convert_rst_text(el.description) if el.description else ""
+            desc = convert_rst_text(el.description) if el.description else ""
             return Code(str(term)).html, desc
 
         normal_items: list[DefinitionItem] = []
@@ -144,7 +144,7 @@ class __RenderDocCallMixin(RenderDoc):
                     directive_text = ann + "\n" + "\n".join("    " + ln for ln in lines)
                 else:
                     directive_text = ann
-                directive_parts.append(_convert_rst_text(directive_text))
+                directive_parts.append(convert_rst_text(directive_text))
             else:
                 normal_items.append(render_section_item(item))
 

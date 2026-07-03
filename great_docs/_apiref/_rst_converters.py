@@ -145,7 +145,7 @@ def _smart_dedent(text: str) -> str:
     return "".join(result)
 
 
-def _convert_rst_text(text: str) -> str:
+def convert_rst_text(text: str) -> str:
     """Apply all RST -> Markdown transforms to a docstring text section"""
     # Defensive coercion: some docstring section types (especially those produced
     # by dynamically-inspected PyO3 modules or by section kinds without a
@@ -888,7 +888,7 @@ def _convert_google_sections(text: str, heading_level: int) -> str:
 # Doctest fencing --------------------------------------------------------------
 
 
-def _fence_doctest_blocks(text: str) -> str:
+def fence_doctest_blocks(text: str) -> str:
     """Wrap unfenced ``>>>`` doctest lines in ````python`` fenced code blocks
 
     Detects consecutive lines that start with ``>>>`` or ``...`` (doctest
