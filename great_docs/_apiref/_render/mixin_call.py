@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, TypeAlias, cast
 import griffe as gf
 
 from .._format import formatted_signature, repr_obj
-from .._griffe.docstrings import (
+from .._docstring_sections import (
     DCDocstringSectionInitParameters,
     DCDocstringSectionParameterAttributes,
 )

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 import griffe as gf
 
-from .._griffe.docstrings import (
+from .._docstring_sections import (
     DCDocstringSectionInitParameters,
     DCDocstringSectionParameterAttributes,
 )

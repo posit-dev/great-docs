@@ -55,7 +55,7 @@ from great_docs._apiref._format import (
     repr_obj,
 )
 from great_docs._apiref._globals import EXCLUSIONS
-from great_docs._apiref._griffe.docstrings import DCDocstringSection
+from great_docs._apiref._docstring_sections import DCDocstringSection
 from great_docs._apiref._render import (
     get_render_type,
     RenderDocAttribute,

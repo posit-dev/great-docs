@@ -4,7 +4,7 @@ from typing import Literal, TypeAlias
 
 import griffe as gf
 
-from ._griffe.docstrings import DCDocstringSection
+from ._docstring_sections import DCDocstringSection
 from ._render.api_page import RenderAPIPage
 from ._render.doc import RenderDoc
 from ._render.docattribute import RenderDocAttribute
