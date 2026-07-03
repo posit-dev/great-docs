@@ -381,6 +381,7 @@ def _parse_scene(raw: dict[str, Any], index: int, defaults: dict[str, Any]) -> S
         runtime=str(raw.get("runtime", "marimo")),
         capture=raw.get("capture") if isinstance(raw.get("capture"), dict) else {},
         overlays=overlays,
+        annotate=annotate,
         cursor=cursor,
     )
 
