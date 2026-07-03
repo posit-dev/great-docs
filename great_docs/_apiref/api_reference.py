@@ -50,6 +50,22 @@ class Settings:
     typing_module_paths: list[str] = field(default_factory=list[str])
     version: str | None = None
 
+    @classmethod
+    def make(cls, block: dict[str, Any]) -> Settings:
+        """Build settings from the non-content keys of an `api-reference:` block"""
+        kwargs: dict[str, Any] = {
+            k: block[k]
+            for k in _SETTINGS_KEYS
+            if k in block and not (k == "out_index" and block[k] is None)
+        }
+        sidebar = kwargs.get("sidebar")
+        if isinstance(sidebar, str):
+            kwargs["sidebar"] = {"file": sidebar}
+        elif isinstance(sidebar, dict) and "file" not in sidebar:
+            # Copy so the caller's config dict is not mutated.
+            kwargs["sidebar"] = {**sidebar, "file": "_api-reference-sidebar.yml"}
+        return cls(**kwargs)
+
 
 # Parity quirk preserved deliberately (do NOT "fix" here): `version` is not
 # read from the config block. The old Builder accepted a `version` param but
@@ -74,19 +90,7 @@ class APIReference:
         block = self._select_block(config)
         block = {k: v for k, v in block.items() if k not in _REMOVED_KEYS}
 
-        settings_kwargs: dict[str, Any] = {
-            k: block[k]
-            for k in _SETTINGS_KEYS
-            if k in block and not (k == "out_index" and block[k] is None)
-        }
-        sidebar = settings_kwargs.get("sidebar")
-        if isinstance(sidebar, str):
-            settings_kwargs["sidebar"] = {"file": sidebar}
-        elif isinstance(sidebar, dict) and "file" not in sidebar:
-            # Copy so the caller's config dict is not mutated.
-            settings_kwargs["sidebar"] = {**sidebar, "file": "_api-reference-sidebar.yml"}
-        self.settings = Settings(**settings_kwargs)
-
+        self.settings = Settings.make(block)
         self.package = block["package"]
         self.title = block.get("title", "Function reference")
         self.desc = block.get("desc")
