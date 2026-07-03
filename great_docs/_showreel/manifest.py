@@ -52,6 +52,7 @@ class Manifest:
     music: dict | None = None
     sfx: list = field(default_factory=list)  # [{time, file, gain_db}]
     code_css: str = ""  # Pygments token CSS for code scenes
+    player: dict = field(default_factory=dict)  # chrome/loop/autoplay options
     scenes: list[Scene] = field(default_factory=list)
 
     def _scene_to_dict(self, sc: Scene) -> dict:
@@ -152,6 +153,8 @@ class Manifest:
             data["sfx"] = self.sfx
         if self.code_css:
             data["code_css"] = self.code_css
+        if self.player:
+            data["player"] = self.player
         return data
 
     def to_json(self) -> str:
@@ -178,5 +181,6 @@ def build_manifest(
         music=show.music,
         sfx=sfx or [],
         code_css=code_css,
+        player=show.player,
         scenes=list(show.scenes),
     )
