@@ -35495,9 +35495,7 @@ def test_type_sections_empty_lists():
         typealiases_items=[],
     )
 
-    assert ts.protocols_renders == []
-    assert ts.typevars_renders == []
-    assert ts.typealiases_renders == []
+    assert [category.renders for category in ts.categories] == [[], [], []]
     assert ts.items == []
     body = ts.render_body()
     assert str(body) == ""
@@ -35528,9 +35526,7 @@ def test_type_sections_items_combines_all():
         )
 
     assert ts.items == [p_item, tv_item, ta_item]
-    assert len(ts.protocols_renders) == 1
-    assert len(ts.typevars_renders) == 1
-    assert len(ts.typealiases_renders) == 1
+    assert [len(category.renders) for category in ts.categories] == [1, 1, 1]
 
 
 def test_type_sections_post_init_protocols_no_summary():

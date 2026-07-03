@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from . import inventory
-from ._render import (
-    RenderDocAttribute,
-    RenderDocClass,
-    get_render_type,
-)
+from ._render import get_render_type
 from ._type_checks import griffe_to_doc, is_protocol, is_typealias, is_typevar
 from .introspect import get_object
 from .pandoc.blocks import (
@@ -22,9 +18,31 @@ from .pandoc.blocks import (
 )
 
 if TYPE_CHECKING:
+    from typing import Any, Callable
+
     import griffe as gf
 
     from .api_reference import APIReference
+
+
+@dataclass
+class _TypeCategory:
+    """One category of typing objects, rendered under its own header"""
+
+    title: str
+    items: list[inventory.InventoryItem]
+    # Turns off the render information that a typing object of this
+    # category does not need.
+    configure: Callable[[Any], None]
+    renders: list[Any] = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.renders = []
+        for item in self.items:
+            docable = griffe_to_doc(item.obj)
+            render = get_render_type(docable)(docable, 3)
+            self.configure(render)
+            self.renders.append(render)
 
 
 @dataclass
@@ -34,36 +52,23 @@ class TypeSections(Block):
     typealiases_items: list[inventory.InventoryItem]
 
     def __post_init__(self) -> None:
-        def make_render(item: inventory.InventoryItem):
-            """
-            Create a `RenderDoc` for a typing object
-            """
-            docable = griffe_to_doc(item.obj)
-            return get_render_type(docable)(docable, 3)
-
-        self.typevars_renders = cast(
-            "list[RenderDocAttribute]",
-            [make_render(item) for item in self.typevars_items],
-        )
-        self.protocols_renders = cast(
-            "list[RenderDocClass]",
-            [make_render(item) for item in self.protocols_items],
-        )
-        self.typealiases_renders = cast(
-            "list[RenderDocAttribute]",
-            [make_render(item) for item in self.typealiases_items],
-        )
-
-        # Turn off unnecessary information
-        for r in self.protocols_renders:
+        def hide_members_summary(r: Any) -> None:
             r.show_members_summary = False
 
-        for r in self.typevars_renders:
+        def hide_signature_name(r: Any) -> None:
             r.show_signature_name = False
 
-        for r in self.typealiases_renders:
+        def hide_signature_name_and_annotation(r: Any) -> None:
             r.show_signature_name = False
             r.show_signature_annotation = False
+
+        self.categories = [
+            _TypeCategory("Protocols", self.protocols_items, hide_members_summary),
+            _TypeCategory("Type Variables", self.typevars_items, hide_signature_name),
+            _TypeCategory(
+                "Type Aliases", self.typealiases_items, hide_signature_name_and_annotation
+            ),
+        ]
 
     def __str__(self) -> str:
         return str(self.render_body())
@@ -73,38 +78,19 @@ class TypeSections(Block):
         """
         All type-information items — protocols, type variables, and type aliases
         """
-        return [
-            *self.protocols_items,
-            *self.typevars_items,
-            *self.typealiases_items,
-        ]
+        return [item for category in self.categories for item in category.items]
 
     def render_body(self) -> BlockContent:
         content: list[Block | str] = []
 
-        if self.protocols_renders:
-            content.extend(
-                [
-                    Header(2, "Protocols"),
-                    *[str(r) for r in self.protocols_renders],
-                ]
-            )
-
-        if self.typevars_renders:
-            content.extend(
-                [
-                    Header(2, "Type Variables"),
-                    *[str(r) for r in self.typevars_renders],
-                ]
-            )
-
-        if self.typealiases_renders:
-            content.extend(
-                [
-                    Header(2, "Type Aliases"),
-                    *[str(r) for r in self.typealiases_renders],
-                ]
-            )
+        for category in self.categories:
+            if category.renders:
+                content.extend(
+                    [
+                        Header(2, category.title),
+                        *[str(r) for r in category.renders],
+                    ]
+                )
 
         return Blocks(content)
 
