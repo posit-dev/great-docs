@@ -1,0 +1,24 @@
+# Demonstrates the `figure` scene: a visual stacked over a chunk of prose, the
+# way the Great Tables README pairs a result with a short explanation. No voice;
+# the reader reads the text on screen.
+showreel:
+  title: "Figure scenes"
+  theme: auto
+  brand: { accent: "#2563eb" }
+
+voice:
+  engine: silent
+
+defaults:
+  transition: crossfade
+
+scenes:
+  - id: labels
+    type: figure
+    src: reel-figure-table.png
+    text: "It's okay to have repeating column labels. Functions like `cols_label()` and `cols_label_with()` make it so easy too."
+
+  - id: color
+    type: figure
+    src: reel-figure-table2.png
+    text: "Add a color scale to any column with a single `data_color()` call, using any palette you like."
