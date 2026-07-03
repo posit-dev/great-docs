@@ -27,6 +27,15 @@ def render_inline_md(text: str) -> str:
     return s
 
 
+def _code_step_to_dict(step) -> dict:
+    """Serialize a CodeStep, rendering any per-step annotation to HTML."""
+    d: dict = {"html": step.html, "focus": step.focus, "typing": step.typing}
+    if step.note:
+        d["note"] = render_inline_md(step.note)
+        d["note_side"] = step.note_side
+    return d
+
+
 @dataclass
 class Manifest:
     """The complete manifest describing a built showreel."""
@@ -87,10 +96,7 @@ class Manifest:
             data["keyframes"] = sc.keyframes
         if sc.type == "code":
             data["language"] = sc.language
-            data["code_steps"] = [
-                {"html": step.html, "focus": step.focus, "typing": step.typing}
-                for step in sc.code_steps
-            ]
+            data["code_steps"] = [_code_step_to_dict(step) for step in sc.code_steps]
         if sc.overlays:
             data["overlays"] = [
                 {
@@ -103,6 +109,18 @@ class Manifest:
                     "fade": round(ov.fade, 3),
                 }
                 for ov in sc.overlays
+            ]
+        if sc.annotate:
+            data["annotate"] = [
+                {
+                    "rect": [round(v, 4) for v in an.rect],
+                    "note": render_inline_md(an.note),
+                    "at": round(an.at, 3),
+                    "duration": round(an.duration, 3),
+                    "fade": round(an.fade, 3),
+                    "side": an.side,
+                }
+                for an in sc.annotate
             ]
         if sc.cursor:
             data["cursor"] = [
