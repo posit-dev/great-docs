@@ -126,6 +126,8 @@ class CodeStep:
     code: str
     focus: list[int] = field(default_factory=list)  # 1-based lines to highlight
     typing: bool = False  # reveal this step with a typing wipe
+    note: str = ""  # on-screen annotation for this step (inline markdown)
+    note_side: str = "auto"  # where the note docks: auto | top | bottom
     html: str = ""  # syntax-highlighted HTML, filled at build time
 
 
