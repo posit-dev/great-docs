@@ -309,6 +309,24 @@ def _parse_scene(raw: dict[str, Any], index: int, defaults: dict[str, Any]) -> S
                 )
             )
 
+    annotate: list[Annotation] = []
+    for an in raw.get("annotate") or []:
+        if isinstance(an, dict):
+            rect = an.get("rect") or [0.3, 0.3, 0.4, 0.2]
+            side = str(an.get("side", "auto")).lower()
+            if side not in ("auto", "top", "bottom", "left", "right"):
+                side = "auto"
+            annotate.append(
+                Annotation(
+                    rect=[float(v) for v in rect][:4],
+                    note=str(an.get("note", "")),
+                    at=float(an.get("at", 0.0)),
+                    duration=float(an.get("duration", -1.0)),
+                    fade=float(an.get("fade", 0.3)),
+                    side=side,
+                )
+            )
+
     cursor: list[CursorKey] = []
     cursor_mode = ""
     raw_cursor = raw.get("cursor")
