@@ -7422,24 +7422,12 @@ class GreatDocs:
             try:
                 from functools import partial
 
-                from griffe import (
-                    GriffeLoader,
-                    LinesCollection,
-                    ModulesCollection,
-                    Parser,
-                )
-
                 from great_docs._apiref.introspect import (
                     get_object as qd_get_object,
                 )
-                from great_docs._apiref.introspect import get_parser_defaults
+                from great_docs._apiref.introspect import make_loader
 
-                _shared_loader = GriffeLoader(
-                    docstring_parser=Parser("numpy"),
-                    docstring_options=get_parser_defaults("numpy"),
-                    modules_collection=ModulesCollection(),
-                    lines_collection=LinesCollection(),
-                )
+                _shared_loader = make_loader("numpy")
                 gd_get_object = partial(
                     qd_get_object, dynamic=True, parser="numpy", loader=_shared_loader
                 )

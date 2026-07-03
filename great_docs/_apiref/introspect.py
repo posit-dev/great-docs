@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import inspect
 from types import ModuleType
-from typing import Callable, cast
+from typing import TYPE_CHECKING, Callable, cast
 
 import griffe as gf
+
+if TYPE_CHECKING:
+    from griffe import DocstringOptions
 
 # Parser defaults ==============================================================
 
@@ -26,6 +29,18 @@ def get_parser_defaults(name: str) -> dict[str, object]:
     Returns an empty dict when no defaults have been registered for `name`.
     """
     return DEFAULT_OPTIONS.get(name, {})
+
+
+def make_loader(parser: str = "numpy") -> gf.GriffeLoader:
+    """Configure a griffe loader with the defaults for a docstring parser"""
+    raw_defaults = get_parser_defaults(parser)
+    docstring_options = cast("DocstringOptions", raw_defaults) if raw_defaults else None
+    return gf.GriffeLoader(
+        docstring_parser=gf.Parser(parser),
+        docstring_options=docstring_options,
+        modules_collection=gf.ModulesCollection(),
+        lines_collection=gf.LinesCollection(),
+    )
 
 
 # Docstring loading / parsing =================================================
@@ -56,16 +71,7 @@ def get_object(
         An existing griffe loader to reuse. A fresh loader is created when omitted.
     """
     if loader is None:
-        from griffe import DocstringOptions
-
-        raw_defaults = get_parser_defaults(parser)
-        docstring_options = cast(DocstringOptions, raw_defaults) if raw_defaults else None
-        loader = gf.GriffeLoader(
-            docstring_parser=gf.Parser(parser),
-            docstring_options=docstring_options,
-            modules_collection=gf.ModulesCollection(),
-            lines_collection=gf.LinesCollection(),
-        )
+        loader = make_loader(parser)
 
     try:
         module, object_path = path.split(":", 1)

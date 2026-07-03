@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from enum import Enum
 from functools import partial
 from textwrap import indent
@@ -9,9 +10,9 @@ from typing import TYPE_CHECKING, Any, Callable, cast
 import griffe as gf
 from yaml12 import format_yaml
 
-from ._walkable import MISSING, Walkable
+from ._walkable import MISSING, MissingType, Walkable
 from .content import Doc, Link, MemberPage, Page, Section, Text
-from .introspect import get_parser_defaults, resolve_alias
+from .introspect import resolve_alias
 from .spec import ChildrenStyle, SpecObject, SpecSection, SpecText
 
 # Dunder members inherited from `object`/`type` (or PyO3 metaclasses) that carry docstrings but are
@@ -43,6 +44,8 @@ _BUILTIN_NOISE_DUNDERS = frozenset(
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from .api_reference import Settings
     from .spec import SpecEntry, SpecOptions
 
@@ -173,13 +176,9 @@ class _Resolver:
     ) -> None:
         if get_object is None:
             from .introspect import get_object as _get_object
+            from .introspect import make_loader
 
-            loader = gf.GriffeLoader(
-                docstring_parser=gf.Parser(parser),
-                docstring_options=get_parser_defaults(parser),  # type: ignore[arg-type]
-                modules_collection=gf.ModulesCollection(),
-                lines_collection=gf.LinesCollection(),
-            )
+            loader = make_loader(parser)
             self.get_object: _GetObject = cast("_GetObject", partial(_get_object, loader=loader))
         else:
             self.get_object = get_object
@@ -189,7 +188,7 @@ class _Resolver:
         self.dynamic: bool = False
 
     def get_object_or_raise(self, path: str, **kwargs: object) -> gf.Object | gf.Alias:
-        """The griffe object at `path`, re-raised as `ObjectNotFoundError` if absent"""
+        """Get the griffe object at `path`, raising `ObjectNotFoundError` if absent"""
         try:
             return self.get_object(path, **kwargs)
         except KeyError as e:
@@ -209,21 +208,36 @@ class _Resolver:
         """Resolve the `spec` sections into `content.Section`s"""
         return [self._resolve_section(s) for s in sections]
 
-    def _resolve_section(self, el: SpecSection) -> Section:
-        """A top-level `spec` section rebuilt with each entry wrapped in a `Page`"""
+    @contextmanager
+    def _scoped(
+        self,
+        *,
+        package: str | MissingType | None = MISSING,
+        options: SpecOptions | None = None,
+    ) -> Iterator[None]:
+        """Scope entries to resolve under the given package and options
+
+        Entries inherit `current_package` and `options` from the enclosing
+        context unless the section or object carries its own.
+        """
         old_package = self.current_package
         old_options = self.options
 
-        if el.package is not MISSING:
-            self.current_package = el.package
-        if el.options is not None:
-            self.options = el.options
+        if package is not MISSING:
+            self.current_package = package
+        if options is not None:
+            self.options = options
 
         try:
-            contents: list[Any] = [self._resolve_entry(entry) for entry in el.contents]
+            yield
         finally:
             self.current_package = old_package
             self.options = old_options
+
+    def _resolve_section(self, el: SpecSection) -> Section:
+        """Rebuild a top-level `spec` section with each entry wrapped in a `Page`"""
+        with self._scoped(package=el.package, options=el.options):
+            contents: list[Any] = [self._resolve_entry(entry) for entry in el.contents]
 
         return Section(
             kind=el.kind,
@@ -253,16 +267,10 @@ class _Resolver:
 
     def _resolve_object(self, el: SpecObject) -> Doc:
         """Locate a `SpecObject` in griffe and rebuild it as a concrete `Doc`"""
-        old_package = self.current_package
         # A member `SpecObject` carries its parent's path as `package`; adopt it
         # so the member's full path is computed relative to the parent.
-        if el.package is not MISSING:
-            self.current_package = el.package
-
-        try:
+        with self._scoped(package=el.package):
             return self._resolve_documented_object(el)
-        finally:
-            self.current_package = old_package
 
     def _resolve_documented_object(self, el: SpecObject) -> Doc:
         """Locate the subject object in griffe and rebuild it with its resolved members"""
