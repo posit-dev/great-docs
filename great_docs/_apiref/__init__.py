@@ -19,7 +19,7 @@ from ._render.reference_section import RenderReferenceSection
 from .api_reference import APIReference
 from .collect import build_manifest, remove_package_prefix
 from .introspect import get_object
-from .inventory import convert_inventory, create_inventory, write_inventory
+from .inventory import create_inventory, write_inventory
 from .resolve import resolve
 from .spec import SpecObject
 
@@ -38,7 +38,6 @@ __all__ = (
     "exclude_classes",
     "exclude_functions",
     "exclude_parameters",
-    # Consolidated from _renderer
     "get_object",
     "APIReference",
     "resolve",
@@ -46,6 +45,5 @@ __all__ = (
     "build_manifest",
     "create_inventory",
     "write_inventory",
-    "convert_inventory",
     "SpecObject",
 )

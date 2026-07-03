@@ -33,11 +33,6 @@ def write_inventory(inv: dict[str, Any], out_name: str) -> None:
         json.dump(inv, f)
 
 
-# Backwards-compatible alias; the old name said "convert" but the function
-# has always written a file.
-convert_inventory = write_inventory
-
-
 def create_inventory(
     project: str,
     version: str,

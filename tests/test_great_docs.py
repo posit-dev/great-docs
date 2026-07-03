@@ -148,8 +148,8 @@ from great_docs._apiref.introspect import (
 from great_docs._apiref import write
 from great_docs._apiref.write import _insert_contents, merge_frontmatter as _merge_frontmatter
 from great_docs._apiref.inventory import (
-    convert_inventory,
     create_inventory,
+    write_inventory,
 )
 from great_docs._apiref.content import (
     Doc,
@@ -6645,7 +6645,7 @@ def test_collect_nested_section():
 
 def test_find_page_node_no_page():
     builder = _ManifestBuilder(base_dir="api")
-    with pytest.raises(ValueError, match="No page detected"):
+    with pytest.raises(ValueError, match="No `Page` ancestor"):
         root_node = Node(level=0, value=None, parent=None)
         token = ctx_node.set(root_node)
         try:
@@ -34161,12 +34161,12 @@ def test_class_label_abc():
     assert _class_label(obj) == "abc"
 
 
-def test_convert_inventory_dict(tmp_path):
-    """convert_inventory writes a dict directly as JSON."""
+def test_write_inventory_dict(tmp_path):
+    """write_inventory writes a dict directly as JSON."""
 
     inv = {"project": "test", "version": "1.0", "items": []}
     out = str(tmp_path / "inv.json")
-    convert_inventory(inv, out_name=out)
+    write_inventory(inv, out_name=out)
 
     with open(out) as f:
         result = json.load(f)

@@ -25,19 +25,14 @@ class _ManifestBuilder(NodeVisitor):
 
     def find_page_node(self) -> Page:
         """Find the nearest `Page` enclosing the current node"""
-        current_node = ctx_node.get()
+        node = ctx_node.get()
 
-        while True:
-            if current_node.value is None:
-                raise ValueError(f"No page detected above current element: {current_node.value}")
+        while node is not None:
+            if isinstance(node.value, Page):
+                return node.value
+            node = node.parent
 
-            if isinstance(current_node.value, Page):
-                return current_node.value
-
-            if current_node.parent is None:
-                raise ValueError("Reached root without finding a Page ancestor")
-
-            current_node = current_node.parent
+        raise ValueError("No `Page` ancestor above the current element")
 
     def exit(self, el: object) -> object:
         if isinstance(el, Doc):
@@ -92,10 +87,7 @@ class _PackagePrefixRemover(NodeTransformer):
     def _exit_page(self, el: Page) -> Page:
         parts = el.path.split(".")
         if parts[0] == self.package and len(parts) > 1:
-            new_path = ".".join(parts[1:])
-            new_el = el.copy()
-            new_el.path = new_path
-            return new_el
+            return el.replace(path=".".join(parts[1:]))
         return el
 
 
