@@ -12,6 +12,19 @@ from dataclasses import dataclass, field
 from .spec import Scene, Showreel
 
 
+def render_inline_md(text: str) -> str:
+    """Render a small subset of inline Markdown to HTML for figure text.
+
+    Supports ``code``, ``**bold**``, and ``*italic*``. Everything else is
+    HTML-escaped first, so authored text can never inject markup.
+    """
+    s = html.escape(text, quote=False)
+    s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
+    s = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", s)
+    s = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", s)
+    return s
+
+
 @dataclass
 class Manifest:
     """The complete manifest describing a built showreel."""
