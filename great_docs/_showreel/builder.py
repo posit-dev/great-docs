@@ -103,6 +103,10 @@ def _resolve_duration(sc: Scene, syn_duration: float | None) -> float:
         return round(lead + CODE_STEP_SECONDS * len(sc.code_steps) + 0.8, 3)
     if sc.type in ("web", "notebook") and sc.keyframes:
         return round(lead + CODE_STEP_SECONDS * len(sc.keyframes) + 0.8, 3)
+    # A figure with no narration is paced to give the reader time to read its text.
+    if sc.type == "figure" and sc.text:
+        words = len(sc.text.split())
+        return round(lead + max(3.5, words / 2.6) + 0.8, 3)
     return round(lead + DEFAULT_SILENT_SCENE, 3)
 
 
@@ -182,7 +186,7 @@ def build_showreel(
             ]
 
         # Copy image assets into the bundle so the preview is self-contained.
-        if sc.type == "image" and sc.src:
+        if sc.type in ("image", "figure") and sc.src:
             src = (spec_path.parent / sc.src).resolve()
             if src.exists():
                 media_dir.mkdir(parents=True, exist_ok=True)
