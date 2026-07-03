@@ -204,6 +204,7 @@ class Showreel:
     voice: VoiceSpec = field(default_factory=VoiceSpec)
     music: dict[str, Any] | None = None
     sfx: dict[str, Any] = field(default_factory=dict)
+    player: dict[str, Any] = field(default_factory=dict)  # chrome/loop/autoplay options
     scenes: list[Scene] = field(default_factory=list)
     duration: float = 0.0
     source_path: Path | None = None
@@ -386,6 +387,24 @@ def _parse_scene(raw: dict[str, Any], index: int, defaults: dict[str, Any]) -> S
     )
 
 
+def _parse_player(raw: Any) -> dict[str, Any]:
+    """Normalize the reel-wide `player:` options. Showreel defaults to minimal
+    chrome; authors opt into the full transport or a chrome-free loop."""
+    p = raw if isinstance(raw, dict) else {}
+    controls = str(p.get("controls", "minimal")).lower()
+    if controls not in ("minimal", "full", "none"):
+        controls = "minimal"
+    play_button = str(p.get("play_button", "below")).lower()
+    if play_button not in ("below", "overlay"):
+        play_button = "below"
+    return {
+        "controls": controls,
+        "play_button": play_button,
+        "loop": bool(p.get("loop", False)),
+        "autoplay": bool(p.get("autoplay", False)),
+    }
+
+
 def load_showreel(path: str | Path) -> Showreel:
     """Load and validate a ``name.showreel.yml`` file."""
     import yaml
@@ -433,6 +452,7 @@ def load_showreel(path: str | Path) -> Showreel:
         voice=voice,
         music=_get("music") if isinstance(_get("music"), dict) else None,
         sfx=_get("sfx") if isinstance(_get("sfx"), dict) else {},
+        player=_parse_player(_get("player")),
         scenes=scenes,
         source_path=p,
     )
