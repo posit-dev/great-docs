@@ -107,6 +107,14 @@
     this._last = 0;
     this._activeIdx = -1;
     this._audioIdx = -1; // scene index whose narration is currently playing
+    // Player chrome/behavior (author-set). Showreel defaults to minimal chrome.
+    var pl = manifest.player || {};
+    this._chrome = pl.controls || "minimal";      // minimal | full | none
+    this._playButton = pl.play_button || "below"; // below | overlay
+    this._loop = !!pl.loop;
+    this._autoplay = !!pl.autoplay;
+    // Autoplay reels are silent loops (browsers block autoplay audio anyway).
+    this._muted = this._autoplay;
     this._build();
     this.seek(0);
   }
@@ -138,39 +146,63 @@
 
     this.capEl = el("div", "gd-sr-captions", stage);
 
-    // Controls
-    var ctr = el("div", "gd-sr-controls", this.root);
-    this.playBtn = el("button", "gd-sr-btn", ctr);
-    this.playBtn.setAttribute("aria-label", "Play/Pause");
-    this.playBtn.innerHTML = "&#9654;";
-    this.playBtn.addEventListener("click", function () { self.toggle(); });
+    this.root.setAttribute("data-chrome", this._chrome);
 
-    var track = el("div", "gd-sr-track", ctr);
-    el("div", "gd-sr-rail", track);
-    this.fill = el("div", "gd-sr-fill", track);
-    (this.scenes || []).forEach(function (sc) {
-      if (!self.duration) return;
-      var tick = el("div", "gd-sr-tick", track);
-      tick.style.left = (100 * sc.start / self.duration) + "%";
-      tick.title = sc.id;
-      tick.addEventListener("click", function (ev) { ev.stopPropagation(); self.seek(sc.start); });
-    });
-    this.track = track;
-    track.addEventListener("click", function (ev) {
-      var r = track.getBoundingClientRect();
-      self.seek(((ev.clientX - r.left) / r.width) * self.duration);
-    });
+    // A large play/pause affordance on the presentation itself; clicking the
+    // stage toggles playback. Used when play_button = overlay.
+    this.bigPlay = null;
+    if (this._playButton === "overlay") {
+      this.root.setAttribute("data-playbutton", "overlay");
+      this.bigPlay = el("button", "gd-sr-bigplay", stage);
+      this.bigPlay.setAttribute("aria-label", "Play/Pause");
+      this.bigPlay.innerHTML = "&#9654;";
+      stage.addEventListener("click", function () { self.toggle(); });
+    }
 
-    this.timeEl = el("div", "gd-sr-time", ctr);
-    this.timeEl.textContent = "0:00 / " + fmt(this.duration);
+    // Control bar. `none` renders no bar; `minimal` is a play button (unless the
+    // overlay owns it) plus a thin progress line; `full` adds ticks, time,
+    // speed, and captions toggle.
+    this.playBtn = this.fill = this.track = this.timeEl = this.speedBtn = this.ccBtn = null;
+    if (this._chrome !== "none") {
+      var ctr = el("div", "gd-sr-controls", this.root);
+      if (this._playButton !== "overlay") {
+        this.playBtn = el("button", "gd-sr-btn", ctr);
+        this.playBtn.setAttribute("aria-label", "Play/Pause");
+        this.playBtn.innerHTML = "&#9654;";
+        this.playBtn.addEventListener("click", function () { self.toggle(); });
+      }
 
-    this.speedBtn = el("button", "gd-sr-btn gd-sr-speed", ctr);
-    this.speedBtn.textContent = "1×";
-    this.speedBtn.addEventListener("click", function () { self.cycleSpeed(); });
+      var track = el("div", "gd-sr-track", ctr);
+      el("div", "gd-sr-rail", track);
+      this.fill = el("div", "gd-sr-fill", track);
+      if (this._chrome === "full") {
+        (this.scenes || []).forEach(function (sc) {
+          if (!self.duration) return;
+          var tick = el("div", "gd-sr-tick", track);
+          tick.style.left = (100 * sc.start / self.duration) + "%";
+          tick.title = sc.id;
+          tick.addEventListener("click", function (ev) { ev.stopPropagation(); self.seek(sc.start); });
+        });
+      }
+      this.track = track;
+      track.addEventListener("click", function (ev) {
+        var r = track.getBoundingClientRect();
+        self.seek(((ev.clientX - r.left) / r.width) * self.duration);
+      });
 
-    this.ccBtn = el("button", "gd-sr-btn is-on", ctr);
-    this.ccBtn.textContent = "CC";
-    this.ccBtn.addEventListener("click", function () { self.toggleCaptions(); });
+      if (this._chrome === "full") {
+        this.timeEl = el("div", "gd-sr-time", ctr);
+        this.timeEl.textContent = "0:00 / " + fmt(this.duration);
+
+        this.speedBtn = el("button", "gd-sr-btn gd-sr-speed", ctr);
+        this.speedBtn.textContent = "1×";
+        this.speedBtn.addEventListener("click", function () { self.cycleSpeed(); });
+
+        this.ccBtn = el("button", "gd-sr-btn is-on", ctr);
+        this.ccBtn.textContent = "CC";
+        this.ccBtn.addEventListener("click", function () { self.toggleCaptions(); });
+      }
+    }
 
     // Background music bed (looped, at configured gain; ducking is ffmpeg-only).
     this._music = null;
@@ -206,6 +238,8 @@
 
     this.root.tabIndex = 0;
     this.root.addEventListener("keydown", function (ev) { self._onKey(ev); });
+
+    this._setupVisibility(); // autoplay in view + pause off-screen
   };
 
   // Mark SFX at or before the current time as already fired (so seeking never
@@ -216,7 +250,7 @@
     }
   };
   Player.prototype._triggerSfx = function () {
-    if (this.exporting) return; // export muxes SFX via ffmpeg
+    if (this.exporting || this._muted) return; // export muxes SFX via ffmpeg; muted loops are silent
     for (var i = 0; i < this._sfx.length; i++) {
       if (!this._sfxFired[i] && this._sfx[i].time <= this.time) {
         this._sfxFired[i] = true;
@@ -496,15 +530,15 @@
     }
     this._syncAudio(idx);
     this._renderCaptions(idx);
-    if (this.duration) this.fill.style.width = (100 * this.time / this.duration) + "%";
-    this.timeEl.textContent = fmt(this.time) + " / " + fmt(this.duration);
+    if (this.fill && this.duration) this.fill.style.width = (100 * this.time / this.duration) + "%";
+    if (this.timeEl) this.timeEl.textContent = fmt(this.time) + " / " + fmt(this.duration);
   };
 
   // Play the active scene's narration. The audio clip is seeked ONCE when its
   // scene becomes active, then left to play on its own clock — re-seeking every
   // frame fights the audio's start-up latency and stutters it word-by-word.
   Player.prototype._syncAudio = function (idx) {
-    if (this.exporting || !this.playing) return;
+    if (this.exporting || !this.playing || this._muted) return;
     var sc = this.scenes[idx];
     var lead = sc.lead_in || 0;
     // Hold the narration silent through the lead-in (dead air before speaking).
@@ -536,6 +570,12 @@
   Player.prototype.setExport = function (on) {
     this.exporting = !!on;
     this.root.classList.toggle("gd-sr-exporting", this.exporting);
+    // The capturer drives the clock via seek(); stop autoplay/pause-on-visibility
+    // from fighting it.
+    if (this.exporting) {
+      if (this.playing) this.pause();
+      if (this._io) { this._io.disconnect(); this._io = null; }
+    }
   };
 
   // Clock-driven crossfade across N items (code steps / web frames). Returns
@@ -752,18 +792,58 @@
     this._last = ts;
     this.time += dt * this.speed;
     this._triggerSfx();
-    if (this.time >= this.duration) { this.time = this.duration; this.pause(); this.render(); return; }
+    if (this.time >= this.duration) {
+      if (this._loop) {
+        // Restart seamlessly: re-arm SFX/narration and the music bed.
+        this.time = 0;
+        this._audioIdx = -1;
+        this._syncSfxFired();
+        if (this._music && !this._muted) { try { this._music.currentTime = 0; } catch (e) {} }
+        this.render();
+        this._raf = requestAnimationFrame(this._tick.bind(this));
+        return;
+      }
+      this.time = this.duration; this.pause(); this.render(); return;
+    }
     this.render();
     this._raf = requestAnimationFrame(this._tick.bind(this));
+  };
+
+  Player.prototype._reducedMotion = function () {
+    return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  };
+
+  // Autoplay when scrolled into view and pause when it leaves; even a manually
+  // started reel pauses off-screen (a good citizen, and it saves CPU).
+  Player.prototype._setupVisibility = function () {
+    var self = this;
+    if (!window.IntersectionObserver) return;
+    this._io = new IntersectionObserver(function (entries) {
+      var e = entries[entries.length - 1];
+      var inView = e.isIntersecting && e.intersectionRatio >= 0.4;
+      if (inView) {
+        if (self._autoplay && !self.exporting && !self.playing && !self._reducedMotion()) self.play();
+      } else if (self.playing) {
+        self.pause();
+      }
+    }, { threshold: [0, 0.4, 1] });
+    this._io.observe(this.root);
+  };
+
+  // Reflect play state on whichever play affordance exists (bar and/or overlay).
+  Player.prototype._setPlayIcon = function (playing) {
+    var glyph = playing ? "&#10073;&#10073;" : "&#9654;";
+    if (this.playBtn) this.playBtn.innerHTML = glyph;
+    if (this.bigPlay) { this.bigPlay.innerHTML = glyph; this.root.classList.toggle("is-playing", playing); }
   };
 
   Player.prototype.play = function () {
     if (this.playing) return;
     if (this.time >= this.duration) this.time = 0;
     this.playing = true;
-    this.playBtn.innerHTML = "&#10073;&#10073;";
+    this._setPlayIcon(true);
     this._last = performance.now();
-    if (this._music && !this.exporting) {
+    if (this._music && !this.exporting && !this._muted) {
       // Restart the bed from the top when playing from the start, so replays
       // don't resume the loop from wherever it left off.
       if (this.time === 0) { try { this._music.currentTime = 0; } catch (e) {} }
@@ -775,7 +855,7 @@
 
   Player.prototype.pause = function () {
     this.playing = false;
-    this.playBtn.innerHTML = "&#9654;";
+    this._setPlayIcon(false);
     if (this._raf) cancelAnimationFrame(this._raf);
     this._sceneEls.forEach(function (s) { if (s._audio) mediaPause(s._audio); });
     if (this._music) mediaPause(this._music);
@@ -795,13 +875,13 @@
   Player.prototype.cycleSpeed = function () {
     var steps = [0.5, 1, 1.5, 2];
     this.speed = steps[(steps.indexOf(this.speed) + 1) % steps.length];
-    this.speedBtn.textContent = this.speed + "×";
+    if (this.speedBtn) this.speedBtn.textContent = this.speed + "×";
   };
 
   Player.prototype.toggleCaptions = function () {
     this.captionsOn = !this.captionsOn;
     this.root.classList.toggle("captions-off", !this.captionsOn);
-    this.ccBtn.classList.toggle("is-on", this.captionsOn);
+    if (this.ccBtn) this.ccBtn.classList.toggle("is-on", this.captionsOn);
     this.render();
   };
 
