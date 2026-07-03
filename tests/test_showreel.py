@@ -166,6 +166,36 @@ def test_image_fit_option(tmp_path):
     assert scenes[1]["fit"] == "contain"
 
 
+def test_figure_scene(tmp_path):
+    (tmp_path / "t.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 40)
+    spec = (
+        "voice: { engine: silent }\n"
+        "scenes:\n"
+        "  - id: f\n    type: figure\n    src: t.png\n"
+        '    text: "Use `cols_label()` for **clear** headers."\n'
+    )
+    show = load_showreel(_write_spec(tmp_path, spec))
+    sc = show.scenes[0]
+    assert sc.type == "figure"
+    assert sc.fit == "contain"  # a figure shows the whole visual by default
+    assert sc.motion.type == "none"  # figures are static unless a motion is set
+    r = build_showreel(_write_spec(tmp_path, spec, name="g.showreel.yml"), tmp_path / "out", engine="silent")
+    d = r.manifest.to_dict()["scenes"][0]
+    assert d["type"] == "figure" and d["src"].startswith("media/")
+    # The text is rendered to HTML with inline markdown honored.
+    assert "<code>cols_label()</code>" in d["text"]
+    assert "<strong>clear</strong>" in d["text"]
+
+
+def test_render_inline_md_escapes_then_formats():
+    from great_docs._showreel.manifest import render_inline_md
+
+    out = render_inline_md("a `f()` <script> **b** *i*")
+    assert "<code>f()</code>" in out
+    assert "&lt;script&gt;" in out  # raw HTML is escaped, never injected
+    assert "<strong>b</strong>" in out and "<em>i</em>" in out
+
+
 def test_duplicate_scene_id_raises(tmp_path):
     bad = SPEC.replace("id: bye", "id: intro")
     with pytest.raises(ShowreelSpecError, match="Duplicate scene id"):
