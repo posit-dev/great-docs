@@ -11,6 +11,10 @@ showreel:
 voice:
   engine: silent
 
+# The opener showcases the full transport (scrubber, ticks, speed, captions).
+player:
+  controls: full
+
 defaults:
   transition: crossfade
   captions: true
