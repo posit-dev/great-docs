@@ -24,7 +24,7 @@ from .._format import (
     repr_obj,
 )
 from .._globals import package_info
-from .._rst_converters import convert_rst_text
+from .._rst_converters import convert_docstring_text, convert_rst_text, fence_doctest_blocks
 from ..pandoc.blocks import (
     Block,
     BlockContent,
@@ -476,7 +476,13 @@ class __RenderDoc(RenderBase):
         new_el = qast.transform(el)
         if isinstance(new_el, qast.ExampleCode):
             return CodeBlock(el.value, Attr(classes=["python"]))
+        if isinstance(new_el, qast.ExampleText):
+            return fence_doctest_blocks(el.value)
         return convert_rst_text(el.value)
+
+    @render_docstring_section.register
+    def _(self, el: gf.DocstringSectionText):
+        return convert_docstring_text(el.value, heading_level=self.level + 1)
 
     @render_docstring_section.register
     def _(self, el: gf.DocstringSectionExamples):

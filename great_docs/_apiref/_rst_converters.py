@@ -186,6 +186,24 @@ def convert_rst_text(text: str) -> str:
     return text
 
 
+def convert_docstring_text(text: str, heading_level: int) -> str:
+    """Fully convert a free-text docstring section to Quarto Markdown
+
+    On top of `convert_rst_text`, unfenced doctest lines become fenced
+    python blocks, and `**Bold**::` headers, Sphinx `:param:` field lists
+    and Google-style `Args:` sections become `.doc-section` headings (with
+    parameter tables where applicable) at `heading_level`.
+    """
+    # The order matters: convert_rst_text consumes `::` code blocks before
+    # the header/field transforms run.
+    text = convert_rst_text(text)
+    text = fence_doctest_blocks(text)
+    text = _convert_bold_section_headers(text, heading_level)
+    text = _convert_sphinx_fields(text, heading_level)
+    text = _convert_google_sections(text, heading_level)
+    return text
+
+
 # RST citation converter ------------------------------------------------------
 
 # Match lines/paragraphs containing `.. [N]` citation markers.

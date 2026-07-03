@@ -30929,6 +30929,75 @@ def test_mixin_render_body_no_members():
     assert body is None or "Members" not in str(body)
 
 
+def test_render_section_text_converts_sphinx_fields():
+    """Sphinx :param:/:returns: fields in free text render as doc-section tables."""
+
+    func = gf.Function(name="f", lineno=1)
+    func.docstring = gf.Docstring(
+        "Do a thing.\n\n:param x: The x value.\n:returns: A result.",
+        parent=func,
+        parser="numpy",
+    )
+    doc_fn = content.DocFunction(name="f", obj=func)
+    out = str(RenderDocFunction(doc_fn, level=1).render_body())
+    assert ".doc-section-parameters" in out
+    assert "| Name | Type | Description | Default |" in out
+
+
+def test_render_section_text_converts_google_sections():
+    """Google-style Args:/Returns: sections in free text render as doc-section tables."""
+
+    func = gf.Function(name="f", lineno=1)
+    func.docstring = gf.Docstring(
+        "Do a thing.\n\nArgs:\n    x: The x value.\n\nReturns:\n    int: A result.",
+        parent=func,
+        parser="numpy",
+    )
+    doc_fn = content.DocFunction(name="f", obj=func)
+    out = str(RenderDocFunction(doc_fn, level=1).render_body())
+    assert ".doc-section-parameters" in out
+    assert ".doc-section-returns" in out
+
+
+def test_render_section_text_converts_bold_headers():
+    """A `**Notes**::` bold header in free text renders as a doc-section heading."""
+
+    func = gf.Function(name="f", lineno=1)
+    func.docstring = gf.Docstring(
+        "Do a thing.\n\n**Notes**::\n\nBe careful.",
+        parent=func,
+        parser="numpy",
+    )
+    doc_fn = content.DocFunction(name="f", obj=func)
+    out = str(RenderDocFunction(doc_fn, level=1).render_body())
+    assert ".doc-section-notes" in out
+
+
+def test_render_section_text_fences_doctests():
+    """Unfenced >>> doctest lines in free text render inside a fenced code block."""
+
+    func = gf.Function(name="f", lineno=1)
+    func.docstring = gf.Docstring(
+        "Do a thing.\n\n>>> f()\n1",
+        parent=func,
+        parser="numpy",
+    )
+    doc_fn = content.DocFunction(name="f", obj=func)
+    out = str(RenderDocFunction(doc_fn, level=1).render_body())
+    assert "```" in out
+
+
+def test_render_example_text_fences_doctests():
+    """An ExampleText block renders its doctest lines inside a fenced code block."""
+    from great_docs._apiref._ast import ExampleText
+
+    func = gf.Function(name="f", lineno=1)
+    doc_fn = content.DocFunction(name="f", obj=func)
+    render = RenderDocFunction(doc_fn, level=1)
+    out = str(render.render_docstring_section(ExampleText(">>> f()\n1")))
+    assert "```" in out
+
+
 def test_mixin_render_body_invalid_member_type_raises():
     """render_body raises ValueError for unrecognized member types."""
 
