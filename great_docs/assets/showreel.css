@@ -225,10 +225,62 @@
 .gd-sr-code-step {
   position: absolute;
   inset: 0;
+  box-sizing: border-box; /* padding reserves the note band inside the frame */
   opacity: 0; /* clock-driven */
   display: flex;
   align-items: center;
   justify-content: center;
+}
+/* Shared annotation box: a blurred, semi-opaque, theme-aware scrim with the
+   brand accent on inline code. Used by code-step notes and region callouts. */
+.gd-sr-note {
+  box-sizing: border-box;
+  padding: 0.55em 0.95em;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sr-surface) 82%, transparent);
+  backdrop-filter: blur(6px);
+  border: 1px solid color-mix(in srgb, var(--sr-fg) 14%, transparent);
+  box-shadow: 0 10px 30px -14px rgba(0, 0, 0, 0.6);
+  color: var(--sr-fg);
+  overflow: hidden;
+}
+.gd-sr-note code {
+  font-family: var(--sr-code-font, "JetBrains Mono", ui-monospace, monospace);
+  color: var(--sr-accent);
+  font-size: 0.94em;
+}
+.gd-sr-note strong { font-weight: 700; }
+
+/* Per-step code note: JS docks it top or bottom, opposite the focused lines. */
+.gd-sr-code-note {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 84%;
+  text-align: center;
+  font-size: clamp(0.85rem, 1.8vw, 1.15rem);
+  line-height: 1.35;
+}
+
+/* --- Region annotations (callouts on a rendered output) --------------- */
+.gd-sr-annot {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.gd-sr-annot-region {
+  position: absolute;
+  border: 2px solid var(--sr-accent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--sr-accent) 12%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sr-accent) 13%, transparent);
+}
+/* JS positions this beside the region (dodging it); text sizing lives here. */
+.gd-sr-annot-note {
+  position: absolute;
+  text-align: center;
+  font-size: clamp(0.78rem, 1.6vw, 1.05rem);
+  line-height: 1.35;
 }
 .gd-sr-code-inner {
   position: relative;
