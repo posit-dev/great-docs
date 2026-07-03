@@ -2,6 +2,8 @@ showreel:
   title: "Motion"
   theme: auto
 voice: { engine: piper, name: en_US-amy-medium }
+# A silent auto-loop: it plays when scrolled into view and pauses when it leaves.
+player: { autoplay: true, loop: true }
 defaults: { transition: crossfade, captions: true , lead_in: 0.5 }
 scenes:
   - id: a
