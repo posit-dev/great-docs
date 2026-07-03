@@ -6,7 +6,9 @@ export consume. Its shape intentionally echoes ``_term_player/manifest.py``.
 
 from __future__ import annotations
 
+import html
 import json
+import re
 from dataclasses import dataclass, field
 
 from .spec import Scene, Showreel
@@ -76,6 +78,11 @@ class Manifest:
             data["src"] = sc.src
             if sc.fit == "contain":
                 data["fit"] = sc.fit
+        if sc.type == "figure":
+            data["src"] = sc.src
+            data["fit"] = sc.fit
+            if sc.text:
+                data["text"] = render_inline_md(sc.text)
         if sc.keyframes:
             data["keyframes"] = sc.keyframes
         if sc.type == "code":
