@@ -311,12 +311,7 @@ def dynamic_alias(
         canonical_path = None
         current_part: object = mod
         for ii, attr_name in enumerate(splits):
-            try:
-                _qualname = ".".join(splits[ii:])
-                new_canonical_path = _canonical_path(current_part, _qualname)
-            except AttributeError:
-                new_canonical_path = None
-
+            new_canonical_path = _probe_canonical_path(current_part, ".".join(splits[ii:]))
             if new_canonical_path is not None:
                 canonical_path = new_canonical_path
 
@@ -330,12 +325,7 @@ def dynamic_alias(
 
                 raise AttributeError(f"No attribute named `{attr_name}` in the path `{path}`.")
 
-        try:
-            _qualname = ""
-            new_canonical_path = _canonical_path(current_part, _qualname)
-        except AttributeError:
-            new_canonical_path = None
-
+        new_canonical_path = _probe_canonical_path(current_part, "")
         if new_canonical_path is not None:
             canonical_path = new_canonical_path
 
@@ -362,20 +352,38 @@ def dynamic_alias(
 
     if obj.canonical_path == path.replace(":", "."):
         return obj
-    else:
-        if object_path:
-            if "." in object_path:
-                prev_member = object_path.rsplit(".", 1)[0]
-                parent_path = f"{mod_name}:{prev_member}"
-            else:
-                parent_path = mod_name
-        else:
-            parent_path = mod_name.rsplit(".", 1)[0]
+    return _alias_into_parent(mod_name, object_path, attr_name, obj, loader)
 
-        parent = get_object(parent_path, loader=loader, dynamic=True)
-        if isinstance(parent, (gf.Module, gf.Class, gf.Alias)):
-            return gf.Alias(attr_name, obj, parent=parent)
-        return gf.Alias(attr_name, obj)
+
+def _alias_into_parent(
+    mod_name: str,
+    object_path: str | None,
+    attr_name: str,
+    obj: gf.Object | gf.Alias,
+    loader: gf.GriffeLoader | None,
+) -> gf.Alias:
+    """Re-expose `obj` as an alias member of the object it was accessed through"""
+    if object_path:
+        if "." in object_path:
+            prev_member = object_path.rsplit(".", 1)[0]
+            parent_path = f"{mod_name}:{prev_member}"
+        else:
+            parent_path = mod_name
+    else:
+        parent_path = mod_name.rsplit(".", 1)[0]
+
+    parent = get_object(parent_path, loader=loader, dynamic=True)
+    if isinstance(parent, (gf.Module, gf.Class, gf.Alias)):
+        return gf.Alias(attr_name, obj, parent=parent)
+    return gf.Alias(attr_name, obj)
+
+
+def _probe_canonical_path(part: object, qualname: str) -> str | None:
+    """Probe for the canonical path of `part`, returning `None` when it does not expose one"""
+    try:
+        return _canonical_path(part, qualname)
+    except AttributeError:
+        return None
 
 
 def _canonical_path(current_part: object, qualname: str) -> str | None:
