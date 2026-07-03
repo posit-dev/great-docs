@@ -433,6 +433,43 @@
   padding: 0.5rem 0.8rem 0.7rem;
   background: var(--sr-control-bg);
 }
+/* Minimal chrome: a slim play button + a thin progress line, nothing else. */
+.gd-showreel[data-chrome="minimal"] .gd-sr-controls {
+  gap: 0.6rem;
+  padding: 0.35rem 0.7rem 0.5rem;
+}
+
+/* Overlay play button: a large affordance on the presentation itself. It shows
+   when paused (or on hover) and fades out while playing. */
+.gd-sr-bigplay {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 68px;
+  height: 68px;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--sr-surface) 76%, transparent);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 10px 34px -10px rgba(0, 0, 0, 0.55);
+  color: var(--sr-fg);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding-left: 4px; /* optically center the play glyph */
+  z-index: 5;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.gd-sr-bigplay:hover { transform: translate(-50%, -50%) scale(1.06); }
+.gd-showreel[data-playbutton="overlay"] .gd-sr-stage { cursor: pointer; }
+.gd-showreel.is-playing .gd-sr-bigplay { opacity: 0; }
+.gd-showreel[data-playbutton="overlay"] .gd-sr-stage:hover .gd-sr-bigplay { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .gd-sr-bigplay { transition: none; }
+}
 .gd-sr-btn {
   flex: none;
   width: 34px;
