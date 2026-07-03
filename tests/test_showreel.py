@@ -196,6 +196,23 @@ def test_render_inline_md_escapes_then_formats():
     assert "<strong>b</strong>" in out and "<em>i</em>" in out
 
 
+def test_player_options(tmp_path):
+    # Defaults: minimal chrome, play button below, no loop/autoplay.
+    base = load_showreel(_write_spec(tmp_path, "scenes:\n  - id: a\n    type: title\n    title: X\n"))
+    assert base.player == {"controls": "minimal", "play_button": "below", "loop": False, "autoplay": False}
+    spec = (
+        "player: { controls: none, play_button: overlay, loop: true, autoplay: true }\n"
+        "scenes:\n  - id: a\n    type: title\n    title: X\n"
+    )
+    show = load_showreel(_write_spec(tmp_path, spec, name="p.showreel.yml"))
+    assert show.player == {"controls": "none", "play_button": "overlay", "loop": True, "autoplay": True}
+    r = build_showreel(_write_spec(tmp_path, spec, name="q.showreel.yml"), tmp_path / "out", engine="silent")
+    assert r.manifest.to_dict()["player"]["autoplay"] is True
+    # An invalid controls value falls back to the default.
+    bad = load_showreel(_write_spec(tmp_path, "player: { controls: fancy }\nscenes:\n  - id: a\n    type: title\n    title: X\n", name="b.showreel.yml"))
+    assert bad.player["controls"] == "minimal"
+
+
 def test_duplicate_scene_id_raises(tmp_path):
     bad = SPEC.replace("id: bye", "id: intro")
     with pytest.raises(ShowreelSpecError, match="Duplicate scene id"):
