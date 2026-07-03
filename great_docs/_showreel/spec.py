@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 # Scene types the player can render on its own (no external capture).
-SUPPORTED_P0_TYPES = frozenset({"title", "card", "image", "code"})
+SUPPORTED_P0_TYPES = frozenset({"title", "card", "image", "code", "figure"})
 # Types that are valid in the spec but not yet renderable; shown as placeholders.
 DEFERRED_TYPES = frozenset({"table", "chart", "video", "termshow"})
 
@@ -133,9 +133,11 @@ class Scene:
     subtitle: str = ""
     body: str = ""
     cta: str = ""
-    # image
+    # image / figure
     src: str = ""
     fit: str = "cover"  # "cover" fills the frame (photos); "contain" shows all (tables/diagrams)
+    # figure: a chunk of supporting prose shown under the visual (inline markdown allowed)
+    text: str = ""
     # code
     language: str = "python"
     code_steps: list[CodeStep] = field(default_factory=list)
@@ -218,7 +220,7 @@ def _parse_scene(raw: dict[str, Any], index: int, defaults: dict[str, Any]) -> S
     # capture scenes inherit the default motion. Any scene can set `motion:`.
     if "motion" in raw:
         motion = Motion.from_value(raw["motion"])
-    elif stype in ("title", "card"):
+    elif stype in ("title", "card", "figure"):
         motion = Motion()  # type "none"
     else:
         motion = Motion.from_value(defaults.get("motion"))
@@ -318,7 +320,11 @@ def _parse_scene(raw: dict[str, Any], index: int, defaults: dict[str, Any]) -> S
         body=str(raw.get("body", "")),
         cta=str(raw.get("cta", "")),
         src=str(raw.get("src", "")),
-        fit="contain" if str(raw.get("fit", "cover")).lower() == "contain" else "cover",
+        # A figure shows a whole visual by default; photos fill the frame.
+        fit="cover"
+        if str(raw.get("fit", "contain" if stype == "figure" else "cover")).lower() == "cover"
+        else "contain",
+        text=str(raw.get("text", "")),
         language=str(raw.get("language", "python")),
         code_steps=code_steps,
         sfx=[c for c in (raw.get("sfx") or []) if isinstance(c, dict)],
