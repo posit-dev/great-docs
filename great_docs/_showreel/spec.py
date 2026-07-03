@@ -175,6 +175,7 @@ class Scene:
     keyframes: list[dict[str, Any]] = field(default_factory=list)
     # overlays + synthetic cursor
     overlays: list[Overlay] = field(default_factory=list)
+    annotate: list[Annotation] = field(default_factory=list)  # region callouts on the output
     cursor: list[CursorKey] = field(default_factory=list)
 
     # Computed at build time
