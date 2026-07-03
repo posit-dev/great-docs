@@ -335,60 +335,60 @@ class _Resolver:
         if el.members is not None:
             return el.members
 
-        options: dict[str, gf.Object | gf.Alias] = (
+        candidates: dict[str, gf.Object | gf.Alias] = (
             dict(obj.all_members) if el.include_inherited else dict(obj.members)
         )
 
         # Always filter built-in noise dunders inherited from `object`/`type`
         # (e.g. `__doc__`, `__module__`). These show up on every PyO3 /
         # C-extension class because their docstrings are inherited from str.
-        options = {k: v for k, v in options.items() if k not in _BUILTIN_NOISE_DUNDERS}
+        candidates = {k: v for k, v in candidates.items() if k not in _BUILTIN_NOISE_DUNDERS}
 
         if obj.is_module and obj.exports is not None:
-            options = {k: v for k, v in options.items() if v.is_exported}
+            candidates = {k: v for k, v in candidates.items() if v.is_exported}
 
         if not el.include_private:
             # Filter out private members (names starting with _), but keep
             # dunder methods that have docstrings — those are intentionally
             # documented (e.g. __enter__, __exit__, __getitem__).
-            options = {
+            candidates = {
                 k: v
-                for k, v in options.items()
+                for k, v in candidates.items()
                 if not k.startswith("_")
                 or (k.startswith("__") and k.endswith("__") and v.docstring is not None)
             }
 
         if not el.include_imports and obj.is_module:
-            options = {k: v for k, v in options.items() if not v.is_alias}
+            candidates = {k: v for k, v in candidates.items() if not v.is_alias}
 
         if not el.include_inherited and obj.is_class:
-            options = {k: v for k, v in options.items() if (v.parent is obj or not v.is_alias)}
+            candidates = {k: v for k, v in candidates.items() if (v.parent is obj or not v.is_alias)}
 
-        for member in options.values():
+        for member in candidates.values():
             _ = resolve_alias(member, self.get_object)
 
         if not el.include_empty:
-            options = {k: v for k, v in options.items() if v.docstring is not None}
+            candidates = {k: v for k, v in candidates.items() if v.docstring is not None}
 
         if not el.include_attributes:
-            options = {k: v for k, v in options.items() if not v.is_attribute}
+            candidates = {k: v for k, v in candidates.items() if not v.is_attribute}
 
         if not el.include_classes:
-            options = {k: v for k, v in options.items() if not v.is_class}
+            candidates = {k: v for k, v in candidates.items() if not v.is_class}
 
         if not el.include_functions:
-            options = {k: v for k, v in options.items() if not v.is_function}
+            candidates = {k: v for k, v in candidates.items() if not v.is_function}
 
         if el.include:
             raise NotImplementedError("include argument currently unsupported.")
 
         if el.exclude:
-            options = {k: v for k, v in options.items() if k not in el.exclude}
+            candidates = {k: v for k, v in candidates.items() if k not in el.exclude}
 
         if el.member_order == "alphabetical":
-            return sorted(options)
+            return sorted(candidates)
         elif el.member_order == "source":
-            return list(options)
+            return list(candidates)
         else:
             raise ValueError(f"Unsupported value of member_order: {el.member_order}")
 

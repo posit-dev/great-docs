@@ -43,7 +43,9 @@ def merge_frontmatter(content: str, extra: dict[str, Any]) -> str:
         YAML key-value pairs to add or overwrite in the frontmatter.
     """
     if content.startswith("---\n"):
-        end = content.index("\n---", 4)
+        end = content.find("\n---", 4)
+        if end == -1:
+            raise ValueError("Frontmatter block opened with `---` is never closed")
         existing_yaml = content[4 : end + 1]  # noqa: E203
         rest = content[end + 4 :]  # after closing ---
         raw = parse_yaml(existing_yaml)
@@ -103,21 +105,6 @@ def _insert_contents(
     return False
 
 
-def _page_to_links(el: Page, *, dir: str, out_page_suffix: str) -> list[str]:
-    """Sidebar link paths for a single page node.
-
-    Parameters
-    ----------
-    el :
-        Resolved page node.
-    dir :
-        Output directory name (e.g. ``"reference"``).
-    out_page_suffix :
-        File suffix for rendered pages (e.g. ``".qmd"``).
-    """
-    return [f"{dir}/{el.path}{out_page_suffix}"]
-
-
 def _generate_sidebar(
     sections: list[Section],
     *,
@@ -159,7 +146,7 @@ def _generate_sidebar(
         links: list[str] = []
         for entry in section.contents:
             if isinstance(entry, Page):
-                links.extend(_page_to_links(entry, dir=dir, out_page_suffix=out_page_suffix))
+                links.append(f"{dir}/{entry.path}{out_page_suffix}")
 
         if in_subsection:
             sub_entry: dict[str, Any] = {"section": section.subtitle, "contents": links}

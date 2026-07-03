@@ -208,7 +208,7 @@ def convert_docstring_text(text: str, heading_level: int) -> str:
 
 # Match lines/paragraphs containing `.. [N]` citation markers.
 _RST_CITATION_RE = re.compile(
-    r"^([ \t]*)\.\.\s+\[(\d+)\]\s+",
+    r"^[ \t]*\.\.\s+\[(\d+)\]\s+",
     re.MULTILINE,
 )
 
@@ -235,7 +235,7 @@ def _convert_rst_citations(text: str) -> str:
     while i < len(lines):
         m = _RST_CITATION_RE.match(lines[i])
         if m:
-            num = m.group(2)
+            num = m.group(1)
             body = lines[i][m.end() :]
             # Collect continuation lines (indented more than the marker)
             while i + 1 < len(lines) and lines[i + 1] and lines[i + 1][0] in (" ", "\t"):
@@ -708,8 +708,8 @@ def _convert_sphinx_fields(text: str, heading_level: int) -> str:
         rows = [
             [
                 pname,
-                sanitize(pinfo["type"], escape_quotes=True) if pinfo["type"] else "",
-                sanitize(pinfo["desc"], allow_markdown=True) if pinfo["desc"] else "",
+                sanitize(pinfo["type"], escape_quotes=True),
+                sanitize(pinfo["desc"], allow_markdown=True),
                 "-",
             ]
             for pname, pinfo in params.items()
@@ -722,8 +722,8 @@ def _convert_sphinx_fields(text: str, heading_level: int) -> str:
         rows = [
             [
                 "",
-                sanitize(rinfo["type"], escape_quotes=True) if rinfo["type"] else "",
-                sanitize(rinfo["desc"], allow_markdown=True) if rinfo["desc"] else "",
+                sanitize(rinfo["type"], escape_quotes=True),
+                sanitize(rinfo["desc"], allow_markdown=True),
             ]
             for rinfo in returns
         ]
@@ -735,8 +735,8 @@ def _convert_sphinx_fields(text: str, heading_level: int) -> str:
         rows = [
             [
                 "",
-                sanitize(exc, escape_quotes=True) if exc else "",
-                sanitize(desc, allow_markdown=True) if desc else "",
+                sanitize(exc, escape_quotes=True),
+                sanitize(desc, allow_markdown=True),
             ]
             for exc, desc in raises
         ]
@@ -781,13 +781,19 @@ _GOOGLE_SECTION_RE = re.compile(
 )
 
 
-def _parse_google_entries(body: str) -> list[tuple[str, str]]:
+# Entries look like: ``name (type): description`` or ``name: desc``
+_GOOGLE_ENTRY_RE = re.compile(r"^(?P<name>[A-Za-z_]\w*)(?:\s*\([^)]*\))?\s*:\s*(?P<desc>.*)$")
+# Raises entries look like: ``ExceptionName: description``
+_GOOGLE_RAISES_RE = re.compile(r"^(?P<name>[A-Z]\w+)\s*:\s*(?P<desc>.*)$")
+
+
+def _parse_google_entries(
+    body: str, entry_re: re.Pattern[str] = _GOOGLE_ENTRY_RE
+) -> list[tuple[str, str]]:
     """Parse indented ``name: description`` entries from a Google-style section body
 
     Returns a list of ``(name, description)`` tuples.
     """
-    # Entries look like: ``name (type): description`` or ``name: desc``
-    entry_re = re.compile(r"^(?P<name>[A-Za-z_]\w*)(?:\s*\([^)]*\))?\s*:\s*(?P<desc>.*)$")
     entries: list[tuple[str, str]] = []
     for line in body.splitlines():
         line = line.strip()
@@ -800,23 +806,6 @@ def _parse_google_entries(body: str) -> list[tuple[str, str]]:
             # Continuation line — append to last entry
             prev_name, prev_desc = entries[-1]
             entries[-1] = (prev_name, (prev_desc + " " + line).strip())
-    return entries
-
-
-def _parse_google_raises(body: str) -> list[tuple[str, str]]:
-    """Parse ``ExceptionType: description`` entries from a Raises section"""
-    entry_re = re.compile(r"^(?P<exc>[A-Z]\w+)\s*:\s*(?P<desc>.*)$")
-    entries: list[tuple[str, str]] = []
-    for line in body.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        m = entry_re.match(line)
-        if m:
-            entries.append((m.group("exc"), m.group("desc").strip()))
-        elif entries:
-            prev_exc, prev_desc = entries[-1]
-            entries[-1] = (prev_exc, (prev_desc + " " + line).strip())
     return entries
 
 
@@ -840,7 +829,7 @@ def _google_section_block(section: str, body: str, hashes: str) -> str:
         return _doc_section("Returns", "returns", hashes, body)
 
     if section in _GOOGLE_RAISE_SECTIONS:
-        entries = _parse_google_raises(body)
+        entries = _parse_google_entries(body, _GOOGLE_RAISES_RE)
         if not entries:
             return body
         rows = [["", exc, sanitize(desc, allow_markdown=True)] for exc, desc in entries]

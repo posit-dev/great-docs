@@ -100,7 +100,7 @@ from great_docs._apiref._rst_converters import (
     _convert_sphinx_roles,
     fence_doctest_blocks,
     _parse_google_entries,
-    _parse_google_raises,
+    _GOOGLE_RAISES_RE,
     _replace_rst_code_block,
     _RST_CODE_BLOCK_RE,
     _rst_directive_to_callout,
@@ -117,7 +117,9 @@ from great_docs._apiref._type_checks import (
     is_protocol,
     is_typealias,
     is_typevar,
-    isDoc,
+    is_doc_attribute,
+    is_doc_class,
+    is_doc_function,
 )
 from great_docs._apiref.resolve import (
     resolve,
@@ -28477,7 +28479,7 @@ def test_replace_docstring_with_explicit_function():
     def custom_func():
         """Custom replacement docstring."""
 
-    replace_docstring(obj, f=custom_func)
+    replace_docstring(obj, runtime_obj=custom_func)
     assert obj.docstring.value == "Custom replacement docstring."
 
 
@@ -28490,7 +28492,7 @@ def test_replace_docstring_none_doc():
         pass
 
     old_docstring = obj.docstring
-    replace_docstring(obj, f=no_doc)
+    replace_docstring(obj, runtime_obj=no_doc)
     # Docstring should be unchanged since f.__doc__ is None
     assert obj.docstring is old_docstring
 
@@ -29334,15 +29336,19 @@ def test_api_reference_generate_sidebar_invalid_contents_type():
         )
 
 
-def test_api_reference_page_to_links():
-    """write._page_to_links converts a Page to link paths."""
+def test_api_reference_sidebar_page_links():
+    """_generate_sidebar renders a Page entry as a dir/path.qmd link."""
 
     ref = _make_api_ref(dir="api")
     page = content.Page(path="my_func", contents=[])
-    links = write._page_to_links(
-        page, dir=ref.settings.dir, out_page_suffix=ref.settings.out_page_suffix
+    section = content.Section(title="Functions", contents=[page])
+    result = write._generate_sidebar(
+        [section],
+        dir=ref.settings.dir,
+        out_page_suffix=ref.settings.out_page_suffix,
+        sidebar=None,
     )
-    assert links == ["api/my_func.qmd"]
+    assert "api/my_func.qmd" in str(result)
 
 
 def test_api_reference_from_config_dict():
@@ -32900,7 +32906,7 @@ def test_rstconv_google_args_continuation_lines():
 def test_rstconv_google_raises_continuation():
     """Google-style Raises entries with continuation lines."""
     body = "ValueError: If x is\n    negative.\nTypeError: Wrong type.\n"
-    entries = _parse_google_raises(body)
+    entries = _parse_google_entries(body, _GOOGLE_RAISES_RE)
 
     assert len(entries) == 2
     assert "negative" in entries[0][1]
@@ -32944,7 +32950,7 @@ def test_rstconv_parse_google_entries_empty():
 def test_rstconv_parse_google_raises_basic():
     """_parse_google_raises parses ExcType: desc pairs."""
     body = "ValueError: If x is negative.\nTypeError: Wrong type.\n"
-    entries = _parse_google_raises(body)
+    entries = _parse_google_entries(body, _GOOGLE_RAISES_RE)
 
     assert len(entries) == 2
     assert entries[0] == ("ValueError", "If x is negative.")
@@ -32952,7 +32958,7 @@ def test_rstconv_parse_google_raises_basic():
 
 def test_rstconv_parse_google_raises_empty():
     """_parse_google_raises with empty body returns empty list."""
-    assert _parse_google_raises("") == []
+    assert _parse_google_entries("", _GOOGLE_RAISES_RE) == []
 
 
 def test_rstconv_fence_doctest_basic():
@@ -33219,7 +33225,7 @@ def test_rstconv_google_section_non_indented_break():
 def test_rstconv_parse_google_raises_blank_lines():
     """_parse_google_raises skips blank lines in the body."""
     body = "ValueError: Bad input.\n\nTypeError: Wrong type.\n"
-    entries = _parse_google_raises(body)
+    entries = _parse_google_entries(body, _GOOGLE_RAISES_RE)
 
     assert len(entries) == 2
     assert entries[0][0] == "ValueError"

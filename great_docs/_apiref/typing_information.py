@@ -18,11 +18,10 @@ from .pandoc.blocks import (
 )
 
 if TYPE_CHECKING:
-    from typing import Any, Callable
-
     import griffe as gf
 
     from .api_reference import APIReference
+    from .typing import RenderObjType
 
 
 @dataclass
@@ -31,17 +30,18 @@ class _TypeCategory:
 
     title: str
     items: list[inventory.InventoryItem]
-    # Turns off the render information that a typing object of this
-    # category does not need.
-    configure: Callable[[Any], None]
-    renders: list[Any] = field(init=False)
+    # Render flags that a typing object of this category does not need,
+    # e.g. {"show_members_summary": False}
+    render_flags: dict[str, bool]
+    renders: list[RenderObjType] = field(init=False)
 
     def __post_init__(self) -> None:
         self.renders = []
         for item in self.items:
             docable = griffe_to_doc(item.obj)
             render = get_render_type(docable)(docable, 3)
-            self.configure(render)
+            for flag, value in self.render_flags.items():
+                setattr(render, flag, value)
             self.renders.append(render)
 
 
@@ -52,21 +52,13 @@ class TypeSections(Block):
     typealiases_items: list[inventory.InventoryItem]
 
     def __post_init__(self) -> None:
-        def hide_members_summary(r: Any) -> None:
-            r.show_members_summary = False
-
-        def hide_signature_name(r: Any) -> None:
-            r.show_signature_name = False
-
-        def hide_signature_name_and_annotation(r: Any) -> None:
-            r.show_signature_name = False
-            r.show_signature_annotation = False
-
         self.categories = [
-            _TypeCategory("Protocols", self.protocols_items, hide_members_summary),
-            _TypeCategory("Type Variables", self.typevars_items, hide_signature_name),
+            _TypeCategory("Protocols", self.protocols_items, {"show_members_summary": False}),
+            _TypeCategory("Type Variables", self.typevars_items, {"show_signature_name": False}),
             _TypeCategory(
-                "Type Aliases", self.typealiases_items, hide_signature_name_and_annotation
+                "Type Aliases",
+                self.typealiases_items,
+                {"show_signature_name": False, "show_signature_annotation": False},
             ),
         ]
 

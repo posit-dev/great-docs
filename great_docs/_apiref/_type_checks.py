@@ -68,22 +68,19 @@ def is_initvar(obj: str | gf.Expr | None) -> TypeGuard[gf.ExprSubscript]:
     )
 
 
-class isDoc:
-    """
-    TypeGuards for nodes.Doc objects
-    """
+def is_doc_function(el: DocMemberType) -> TypeGuard[content.DocFunction]:
+    """Whether the member documents a function"""
+    return el.obj.is_function
 
-    @staticmethod
-    def Function(el: DocMemberType) -> TypeGuard[content.DocFunction]:
-        return el.obj.is_function
 
-    @staticmethod
-    def Class(el: DocMemberType) -> TypeGuard[content.DocClass]:
-        return el.obj.is_class
+def is_doc_class(el: DocMemberType) -> TypeGuard[content.DocClass]:
+    """Whether the member documents a class"""
+    return el.obj.is_class
 
-    @staticmethod
-    def Attribute(el: DocMemberType) -> TypeGuard[content.DocAttribute]:
-        return el.obj.is_attribute
+
+def is_doc_attribute(el: DocMemberType) -> TypeGuard[content.DocAttribute]:
+    """Whether the member documents an attribute"""
+    return el.obj.is_attribute
 
 
 def griffe_to_doc(

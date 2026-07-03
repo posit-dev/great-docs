@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
-from .._type_checks import griffe_to_doc, isDoc
+from .._type_checks import griffe_to_doc, is_doc_attribute, is_doc_class, is_doc_function
 from ..content import Doc, DocClass, MemberPage
 from ..pandoc.blocks import (
     Block,
@@ -138,7 +138,7 @@ class __RenderDocMembersMixin(RenderDoc):
             exclude = (exclude,)
         exclude = set(exclude)
 
-        return [x for x in self.doc.members if isDoc.Attribute(x) and x.name not in exclude]
+        return [x for x in self.doc.members if is_doc_attribute(x) and x.name not in exclude]
 
     @cached_property
     def classes(self) -> list[DocClass]:
@@ -166,7 +166,7 @@ class __RenderDocMembersMixin(RenderDoc):
             exclude = (exclude,)
         exclude = set(exclude)
 
-        return [x for x in self.doc.members if isDoc.Class(x) and x.name not in exclude]
+        return [x for x in self.doc.members if is_doc_class(x) and x.name not in exclude]
 
     @cached_property
     def functions(self) -> list[DocFunction]:
@@ -184,7 +184,7 @@ class __RenderDocMembersMixin(RenderDoc):
             exclude = (exclude,)
         exclude = set(exclude)
 
-        return [x for x in self.doc.members if isDoc.Function(x) and x.name not in exclude]
+        return [x for x in self.doc.members if is_doc_function(x) and x.name not in exclude]
 
     @cached_property
     def attribute_member_pages(self) -> list[MemberPage]:

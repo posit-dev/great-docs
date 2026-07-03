@@ -139,7 +139,7 @@ def resolve_alias(
     return obj
 
 
-def replace_docstring(obj: gf.Object | gf.Alias, f: object = None) -> None:
+def replace_docstring(obj: gf.Object | gf.Alias, runtime_obj: object = None) -> None:
     """Replace the griffe object's docstring in place with the imported runtime docstring
 
     Callable attributes (the `method = some_function` pattern) are also
@@ -149,7 +149,7 @@ def replace_docstring(obj: gf.Object | gf.Alias, f: object = None) -> None:
     ----------
     obj :
         Object whose docstring is replaced.
-    f :
+    runtime_obj :
         The python object whose docstring to use in the replacement. If not
         specified, then attempt to import obj and use its docstring.
     """
@@ -160,15 +160,15 @@ def replace_docstring(obj: gf.Object | gf.Alias, f: object = None) -> None:
         for child_obj in obj.members.values():
             replace_docstring(child_obj)
 
-    if f is None:
-        f = _locate_runtime_object(obj)
-        if f is None:
+    if runtime_obj is None:
+        runtime_obj = _locate_runtime_object(obj)
+        if runtime_obj is None:
             return
 
-    if getattr(f, "__doc__", None) is None:
+    if getattr(runtime_obj, "__doc__", None) is None:
         return
 
-    doc: str = f.__doc__  # type: ignore[assignment]
+    doc: str = runtime_obj.__doc__  # type: ignore[assignment]
 
     # Reclassify callable attributes as functions.
     # When a class uses `method = some_function` pattern, griffe sees it as
@@ -176,11 +176,11 @@ def replace_docstring(obj: gf.Object | gf.Alias, f: object = None) -> None:
     # to a Function object so it gets proper function-style rendering.
     if (
         isinstance(obj, gf.Attribute)
-        and callable(f)
-        and hasattr(f, "__code__")
+        and callable(runtime_obj)
+        and hasattr(runtime_obj, "__code__")
         and obj.parent is not None
     ):
-        _promote_callable_attribute(obj, f, doc)
+        _promote_callable_attribute(obj, runtime_obj, doc)
         return
 
     old = obj.docstring
