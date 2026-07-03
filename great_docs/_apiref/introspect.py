@@ -104,7 +104,7 @@ def get_object(
 
 def resolve_alias(
     obj: gf.Alias | gf.Object,
-    get_object: Callable[..., gf.Object] | None = None,
+    get_object: Callable[..., gf.Object | gf.Alias] | None = None,
 ) -> gf.Object:
     """Resolve the alias chain to the concrete `Object` at its end
 
@@ -147,8 +147,6 @@ def replace_docstring(obj: gf.Object | gf.Alias, f: object = None) -> None:
         The python object whose docstring to use in the replacement. If not
         specified, then attempt to import obj and use its docstring.
     """
-    import importlib
-
     if isinstance(obj, gf.Alias):
         obj = resolve_alias(obj)
 
@@ -157,31 +155,9 @@ def replace_docstring(obj: gf.Object | gf.Alias, f: object = None) -> None:
             replace_docstring(child_obj)
 
     if f is None:
-        mod = importlib.import_module(obj.module.canonical_path)
-
-        if isinstance(obj.parent, gf.Class):
-            # Walk up the parent chain to resolve nested classes
-            # e.g., for Node.add_child inside Tree, we need mod.Tree.Node
-            parent_chain: list[str] = []
-            p: gf.Object | gf.Alias | None = obj.parent
-            while isinstance(p, gf.Class):
-                parent_chain.append(p.name)
-                p = p.parent
-            parent_chain.reverse()
-
-            try:
-                parent_obj: object = mod
-                for attr_name in parent_chain:
-                    parent_obj = getattr(parent_obj, attr_name)
-            except AttributeError:
-                return
-
-            try:
-                f = getattr(parent_obj, obj.name)
-            except AttributeError:
-                return
-        else:
-            f = getattr(mod, obj.name)
+        f = _locate_runtime_object(obj)
+        if f is None:
+            return
 
     if getattr(f, "__doc__", None) is None:
         return
@@ -198,56 +174,98 @@ def replace_docstring(obj: gf.Object | gf.Alias, f: object = None) -> None:
         and hasattr(f, "__code__")
         and obj.parent is not None
     ):
-        func_obj = gf.Function(
-            name=obj.name,
-            lineno=obj.lineno,
-            endlineno=obj.endlineno,
-            parent=obj.parent,
-        )
-        # Extract parameters from runtime signature
-        try:
-            sig = inspect.signature(cast("type", f))
-            params: list[gf.Parameter] = []
-            _kind_map = {
-                inspect.Parameter.POSITIONAL_ONLY: gf.ParameterKind.positional_only,
-                inspect.Parameter.POSITIONAL_OR_KEYWORD: gf.ParameterKind.positional_or_keyword,
-                inspect.Parameter.VAR_POSITIONAL: gf.ParameterKind.var_positional,
-                inspect.Parameter.KEYWORD_ONLY: gf.ParameterKind.keyword_only,
-                inspect.Parameter.VAR_KEYWORD: gf.ParameterKind.var_keyword,
-            }
-            for pname, param in sig.parameters.items():
-                kind = _kind_map.get(param.kind, gf.ParameterKind.positional_or_keyword)
-                default = (
-                    str(param.default) if param.default is not inspect.Parameter.empty else None
-                )
-                params.append(gf.Parameter(name=pname, kind=kind, default=default))
-            func_obj.parameters = gf.Parameters(*params)
-        except (ValueError, TypeError):
-            pass
-
-        old = obj.docstring
-        func_obj.docstring = gf.Docstring(
-            value=doc,
-            lineno=getattr(old, "lineno", None),
-            endlineno=getattr(old, "endlineno", None),
-            parent=func_obj,
-            parser=getattr(old, "parser", None),
-            parser_options=getattr(old, "parser_options", None),
-        )
-        obj.parent.set_member(obj.name, func_obj)
+        _promote_callable_attribute(obj, f, doc)
         return
 
     old = obj.docstring
-    new = gf.Docstring(
-        value=doc,
+    obj.docstring = _clone_docstring(old, doc, getattr(old, "parent", None))
+
+
+def _locate_runtime_object(obj: gf.Object) -> object | None:
+    """Locate the imported runtime object that `obj` documents, or return None if unreachable
+
+    A member of a (possibly nested) class is reached by walking the class
+    chain, e.g. `Node.add_child` inside `Tree` resolves to
+    `mod.Tree.Node.add_child`.
+    """
+    import importlib
+
+    mod = importlib.import_module(obj.module.canonical_path)
+
+    if not isinstance(obj.parent, gf.Class):
+        return getattr(mod, obj.name)
+
+    parent_chain: list[str] = []
+    p: gf.Object | gf.Alias | None = obj.parent
+    while isinstance(p, gf.Class):
+        parent_chain.append(p.name)
+        p = p.parent
+    parent_chain.reverse()
+
+    try:
+        parent_obj: object = mod
+        for attr_name in parent_chain:
+            parent_obj = getattr(parent_obj, attr_name)
+    except AttributeError:
+        return None
+
+    try:
+        return getattr(parent_obj, obj.name)
+    except AttributeError:
+        return None
+
+
+def _promote_callable_attribute(obj: gf.Attribute, f: object, doc: str) -> None:
+    """Re-register the attribute on its parent as a `gf.Function`
+
+    The function carries the runtime signature when it is recoverable, so
+    the member renders function-style instead of attribute-style.
+    """
+    assert obj.parent is not None
+
+    func_obj = gf.Function(
+        name=obj.name,
+        lineno=obj.lineno,
+        endlineno=obj.endlineno,
+        parent=obj.parent,
+    )
+    # Extract parameters from runtime signature
+    try:
+        sig = inspect.signature(cast("type", f))
+        params: list[gf.Parameter] = []
+        _kind_map = {
+            inspect.Parameter.POSITIONAL_ONLY: gf.ParameterKind.positional_only,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD: gf.ParameterKind.positional_or_keyword,
+            inspect.Parameter.VAR_POSITIONAL: gf.ParameterKind.var_positional,
+            inspect.Parameter.KEYWORD_ONLY: gf.ParameterKind.keyword_only,
+            inspect.Parameter.VAR_KEYWORD: gf.ParameterKind.var_keyword,
+        }
+        for pname, param in sig.parameters.items():
+            kind = _kind_map.get(param.kind, gf.ParameterKind.positional_or_keyword)
+            default = (
+                str(param.default) if param.default is not inspect.Parameter.empty else None
+            )
+            params.append(gf.Parameter(name=pname, kind=kind, default=default))
+        func_obj.parameters = gf.Parameters(*params)
+    except (ValueError, TypeError):
+        pass
+
+    func_obj.docstring = _clone_docstring(obj.docstring, doc, func_obj)
+    obj.parent.set_member(obj.name, func_obj)
+
+
+def _clone_docstring(
+    old: gf.Docstring | None, value: str, parent: gf.Object | None
+) -> gf.Docstring:
+    """Clone a docstring with a new value, keeping the old one's position and parser"""
+    return gf.Docstring(
+        value=value,
         lineno=getattr(old, "lineno", None),
         endlineno=getattr(old, "endlineno", None),
-        parent=getattr(old, "parent", None),
+        parent=parent,
         parser=getattr(old, "parser", None),
         parser_options=getattr(old, "parser_options", None),
     )
-
-    obj.docstring = new
 
 
 def dynamic_alias(
