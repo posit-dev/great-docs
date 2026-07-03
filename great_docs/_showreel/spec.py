@@ -274,11 +274,16 @@ def _parse_scene(raw: dict[str, Any], index: int, defaults: dict[str, Any]) -> S
         if isinstance(raw_steps, list):
             for st in raw_steps:
                 if isinstance(st, dict) and "code" in st:
+                    side = str(st.get("note_side", "auto")).lower()
+                    if side not in ("auto", "top", "bottom"):
+                        side = "auto"
                     code_steps.append(
                         CodeStep(
                             code=str(st["code"]).rstrip("\n"),
                             focus=[int(n) for n in (st.get("focus") or [])],
                             typing=bool(st.get("typing", scene_typing)),
+                            note=str(st.get("note", "")),
+                            note_side=side,
                         )
                     )
                 elif isinstance(st, str):
