@@ -93,6 +93,23 @@ class Overlay:
 
 
 @dataclass
+class Annotation:
+    """A region callout on a scene's output: marks a rectangle of the visual and
+    shows a note that auto-dodges to the clear space beside it.
+
+    ``rect`` is relative to the scene's visual (the image, if any), so it targets
+    a part of a rendered table/chart regardless of letterboxing.
+    """
+
+    rect: list[float] = field(default_factory=lambda: [0.3, 0.3, 0.4, 0.2])  # x,y,w,h in 0..1
+    note: str = ""
+    at: float = 0.0  # seconds relative to the scene start
+    duration: float = -1.0  # -1 => until the scene ends
+    fade: float = 0.3
+    side: str = "auto"  # auto | top | bottom | left | right
+
+
+@dataclass
 class CursorKey:
     """A waypoint for the synthetic cursor (normalized stage coords)."""
 
