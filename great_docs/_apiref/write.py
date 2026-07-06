@@ -131,30 +131,31 @@ def _generate_sidebar(
     """
     contents: list[Any] = [f"{dir}/index{out_page_suffix}"]
     in_subsection = False
-    current_entry: dict[str, Any] = {}
+    current_entry: dict[str, Any] | None = None
 
     for section in sections:
         if section.title:
-            if current_entry:
+            if current_entry is not None:
                 contents.append(current_entry)
 
             in_subsection = False
             current_entry = {"section": section.title, "contents": []}
-        elif section.subtitle:
-            in_subsection = True
+        else:
+            in_subsection = bool(section.subtitle)
 
         links: list[str] = []
         for entry in section.contents:
             if isinstance(entry, Page):
                 links.append(f"{dir}/{entry.path}{out_page_suffix}")
 
+        # A section that precedes any titled section attaches at the top level.
+        dest: list[Any] = contents if current_entry is None else current_entry["contents"]
         if in_subsection:
-            sub_entry: dict[str, Any] = {"section": section.subtitle, "contents": links}
-            current_entry["contents"].append(sub_entry)
+            dest.append({"section": section.subtitle, "contents": links})
         else:
-            current_entry["contents"].extend(links)
+            dest.extend(links)
 
-    if current_entry:
+    if current_entry is not None:
         contents.append(current_entry)
 
     if sidebar is None:

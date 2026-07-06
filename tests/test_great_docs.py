@@ -29259,6 +29259,30 @@ def test_api_reference_generate_sidebar_basic():
             sys.modules.pop("introtest_sb", None)
 
 
+def test_api_reference_generate_sidebar_untitled_first_section():
+    """A leading section with contents but no title attaches links at top level"""
+    sections = [
+        Section(contents=[Page(path="func")]),
+        Section(title="Helpers", contents=[Page(path="helper")]),
+    ]
+    sidebar = write._generate_sidebar(
+        sections, dir="reference", out_page_suffix=".qmd", sidebar=None
+    )
+    contents = sidebar["website"]["sidebar"][0]["contents"]
+    assert "reference/func.qmd" in contents
+    assert {"section": "Helpers", "contents": ["reference/helper.qmd"]} in contents
+
+
+def test_api_reference_generate_sidebar_subtitle_first_section():
+    """A leading subtitle-only section becomes a top-level sub-entry"""
+    sections = [Section(subtitle="Internals", contents=[Page(path="func")])]
+    sidebar = write._generate_sidebar(
+        sections, dir="reference", out_page_suffix=".qmd", sidebar=None
+    )
+    contents = sidebar["website"]["sidebar"][0]["contents"]
+    assert {"section": "Internals", "contents": ["reference/func.qmd"]} in contents
+
+
 def test_api_reference_generate_sidebar_with_sidebar_config():
     """write._generate_sidebar uses sidebar config overrides."""
 
