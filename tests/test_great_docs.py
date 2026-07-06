@@ -6647,13 +6647,13 @@ def test_collect_nested_section():
     assert len(items) >= 1
 
 
-def test_find_page_node_no_page():
+def test_enclosing_page_no_page():
     builder = _ManifestBuilder(base_dir="api")
     with pytest.raises(ValueError, match="No `Page` ancestor"):
         root_node = Node(level=0, value=None, parent=None)
         token = ctx_node.set(root_node)
         try:
-            builder.find_page_node()
+            builder.enclosing_page()
         finally:
             ctx_node.reset(token)
 
@@ -29149,7 +29149,7 @@ def test_api_reference_build_with_filter():
                     }
                 }
             )
-            ref.build(filter="alpha")
+            ref.build(page_filter="alpha")
 
             # alpha should be written, beta should not
             assert (Path(tmp_dir) / "reference" / "alpha.qmd").exists()

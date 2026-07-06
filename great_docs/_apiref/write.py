@@ -293,7 +293,7 @@ def write_pages(
     out_page_suffix: str,
     rewrite_all_pages: bool,
     header_level: int,
-    filter: str,
+    page_filter: str,
 ) -> None:
     """Write API doc pages to `<dir>/<page.path><out_page_suffix>`
 
@@ -314,14 +314,14 @@ def write_pages(
         changed.
     header_level :
         Heading depth for the rendered page content.
-    filter :
+    page_filter :
         Glob pattern; pages whose path does not match are neither rendered
         nor written. `"*"` writes all pages.
     """
     from ._render.api_page import RenderAPIPage
 
     for page in pages:
-        if filter != "*" and not fnmatchcase(page.path, filter):
+        if page_filter != "*" and not fnmatchcase(page.path, page_filter):
             _log.info(f"Skipping {page.path} (no filter match)")
             continue
 

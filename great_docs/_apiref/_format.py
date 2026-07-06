@@ -191,7 +191,9 @@ def _(obj: gf.Expr) -> str:
 @repr_obj.register
 def _(s: str) -> str:
     """
-    Enclose the repr of `s` in double quotes
+    Normalize a wrapping pair of single quotes on `s` to double quotes
+
+    A string that is not single-quoted passes through unchanged.
     """
     if len(s) >= 2 and (s[0] == s[-1] == "'"):
         s = f'"{s[1:-1]}"'

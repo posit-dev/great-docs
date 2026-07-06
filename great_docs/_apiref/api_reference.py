@@ -117,7 +117,7 @@ class APIReference:
             raise KeyError("No `api-reference:` section found in your _quarto.yml.")
         return dict(cast("dict[str, Any]", block))
 
-    def build(self, filter: str = "*") -> None:
+    def build(self, page_filter: str = "*") -> None:
         """Write reference pages, index, inventory, and (optionally) sidebar to disk"""
         s = self.settings
 
@@ -145,7 +145,7 @@ class APIReference:
             out_page_suffix=s.out_page_suffix,
             rewrite_all_pages=s.rewrite_all_pages,
             header_level=s.header_level,
-            filter=filter,
+            page_filter=page_filter,
         )
         write_typing_information(s.typing_module_paths, self)
 

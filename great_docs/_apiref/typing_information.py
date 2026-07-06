@@ -41,6 +41,7 @@ class _TypeCategory:
             docable = griffe_to_doc(item.obj)
             render = get_render_type(docable)(docable, 3)
             for flag, value in self.render_flags.items():
+                assert hasattr(render, flag), f"Unknown render flag: {flag}"
                 setattr(render, flag, value)
             self.renders.append(render)
 

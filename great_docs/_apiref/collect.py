@@ -23,7 +23,7 @@ class _ManifestBuilder(NodeVisitor):
         self.items: list[InventoryItem] = []
         self.pages: list[Page] = []
 
-    def find_page_node(self) -> Page:
+    def enclosing_page(self) -> Page:
         """Find the nearest `Page` enclosing the current node"""
         node = ctx_node.get()
 
@@ -42,7 +42,7 @@ class _ManifestBuilder(NodeVisitor):
         return super().exit(el)
 
     def _exit_doc(self, el: Doc) -> Doc:
-        p_el = self.find_page_node()
+        p_el = self.enclosing_page()
 
         uri = f"{self.base_dir}/{p_el.path}.html#{el.anchor}"
 
