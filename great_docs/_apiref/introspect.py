@@ -9,6 +9,7 @@ mode).
 
 from __future__ import annotations
 
+import importlib
 import inspect
 from types import ModuleType
 from typing import TYPE_CHECKING, Callable, cast
@@ -94,18 +95,18 @@ def get_object(
         return dynamic_alias(path, loader=loader)
 
     # Case 2: static loading an object
-    f_parent = loader.modules_collection[griffe_path.rsplit(".", 1)[0]]
-    f_data = loader.modules_collection[griffe_path]
+    parent = loader.modules_collection[griffe_path.rsplit(".", 1)[0]]
+    obj = loader.modules_collection[griffe_path]
 
-    if isinstance(f_parent, gf.Alias) and isinstance(f_data, (gf.Function, gf.Attribute)):
-        f_data = gf.Alias(f_data.name, f_data, parent=f_parent)
+    if isinstance(parent, gf.Alias) and isinstance(obj, (gf.Function, gf.Attribute)):
+        obj = gf.Alias(obj.name, obj, parent=parent)
 
-    if isinstance(f_data, gf.Alias) and load_aliases:
-        target_mod = f_data.target_path.split(".")[0]
+    if isinstance(obj, gf.Alias) and load_aliases:
+        target_mod = obj.target_path.split(".")[0]
         if target_mod != module:
             _ = loader.load(target_mod)
 
-    return f_data
+    return obj
 
 
 def resolve_alias(
@@ -194,8 +195,6 @@ def _locate_runtime_object(obj: gf.Object) -> object | None:
     chain, e.g. `Node.add_child` inside `Tree` resolves to
     `mod.Tree.Node.add_child`.
     """
-    import importlib
-
     mod = importlib.import_module(obj.module.canonical_path)
 
     if not isinstance(obj.parent, gf.Class):
@@ -291,8 +290,6 @@ def dynamic_alias(
     loader :
         An existing griffe loader to reuse. A fresh loader is created when omitted.
     """
-    import importlib
-
     try:
         mod_name, object_path = path.split(":", 1)
     except ValueError:
@@ -300,39 +297,15 @@ def dynamic_alias(
 
     mod = importlib.import_module(mod_name)
 
-    attr_name: str = ""
     if object_path is None:
         attr: object = mod
-        canonical_path: str | None = mod.__name__
-
+        canonical_path: str = mod.__name__
+        attr_name = ""
     else:
-        splits = object_path.split(".")
-
-        canonical_path = None
-        current_part: object = mod
-        for ii, attr_name in enumerate(splits):
-            new_canonical_path = _probe_canonical_path(current_part, ".".join(splits[ii:]))
-            if new_canonical_path is not None:
-                canonical_path = new_canonical_path
-
-            try:
-                current_part = getattr(current_part, attr_name)
-            except AttributeError:
-                if canonical_path:
-                    obj = get_object(canonical_path, loader=loader)
-                    if _is_valueless(obj):
-                        return obj
-
-                raise AttributeError(f"No attribute named `{attr_name}` in the path `{path}`.")
-
-        new_canonical_path = _probe_canonical_path(current_part, "")
-        if new_canonical_path is not None:
-            canonical_path = new_canonical_path
-
-        if canonical_path is None:
-            raise ValueError(f"Cannot find canonical path for `{path}`")
-
-        attr = current_part
+        located = _locate_runtime_attr(mod, object_path, path, loader)
+        if isinstance(located, (gf.Object, gf.Alias)):
+            return located
+        attr, canonical_path, attr_name = located
 
     if target:
         obj = get_object(target, loader=loader)
@@ -353,6 +326,55 @@ def dynamic_alias(
     if obj.canonical_path == path.replace(":", "."):
         return obj
     return _alias_into_parent(mod_name, object_path, attr_name, obj, loader)
+
+
+def _locate_runtime_attr(
+    mod: ModuleType,
+    object_path: str,
+    path: str,
+    loader: gf.GriffeLoader | None,
+) -> tuple[object, str, str] | gf.Object | gf.Alias:
+    """
+    Locate the runtime object at `object_path` in `mod`, its canonical path, and its final name
+
+    Returns the statically-loaded griffe object instead when the path names a
+    declaration-only attribute (one that carries no runtime value).
+
+    Raises
+    ------
+    AttributeError
+        When an attribute in the path does not exist at runtime.
+    ValueError
+        When no canonical import path can be determined.
+    """
+    splits = object_path.split(".")
+
+    attr_name = ""
+    canonical_path: str | None = None
+    current_part: object = mod
+    for ii, attr_name in enumerate(splits):
+        new_canonical_path = _probe_canonical_path(current_part, ".".join(splits[ii:]))
+        if new_canonical_path is not None:
+            canonical_path = new_canonical_path
+
+        try:
+            current_part = getattr(current_part, attr_name)
+        except AttributeError:
+            if canonical_path:
+                obj = get_object(canonical_path, loader=loader)
+                if _is_valueless(obj):
+                    return obj
+
+            raise AttributeError(f"No attribute named `{attr_name}` in the path `{path}`.")
+
+    new_canonical_path = _probe_canonical_path(current_part, "")
+    if new_canonical_path is not None:
+        canonical_path = new_canonical_path
+
+    if canonical_path is None:
+        raise ValueError(f"Cannot find canonical path for `{path}`")
+
+    return current_part, canonical_path, attr_name
 
 
 def _alias_into_parent(
