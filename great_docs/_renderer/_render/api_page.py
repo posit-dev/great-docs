@@ -18,17 +18,17 @@ from .base import RenderBase
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from ..layout import Page
+    from ..content import Page
     from .doc import RenderDoc
 
 
 class __RenderAPIPage(RenderPageMixin, RenderBase):
     """
-    Render an API Page object (layout.Page)
+    Render an API Page object (content.Page)
     """
 
     def __post_init__(self):
-        self.page = cast("Page", self.layout_obj)
+        self.page = cast("Page", self.node)
         """Page in the documentation"""
 
         self.path = f"{self.page.path}.qmd"

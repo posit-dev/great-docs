@@ -45,7 +45,7 @@ def test_doc_object_kind_literals():
 
 
 def test_documentable_union_members():
-    """Documentable includes Doc, Page, Section, and Layout types."""
+    """Documentable includes Doc, Page, and Section types."""
     from great_docs._renderer.typing import Documentable
 
     args = get_args(Documentable)
@@ -56,7 +56,7 @@ def test_documentable_union_members():
     assert "DocModule" in type_names
     assert "Page" in type_names
     assert "Section" in type_names
-    assert "Layout" in type_names
+    assert "Layout" not in type_names
 
 
 def test_render_obj_type_union_members():

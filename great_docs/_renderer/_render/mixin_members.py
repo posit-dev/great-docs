@@ -5,7 +5,7 @@ from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
 from .._type_checks import griffe_to_doc, isDoc
-from ..layout import Doc, DocClass, MemberPage
+from ..content import Doc, DocClass, MemberPage
 from ..pandoc.blocks import (
     Block,
     BlockContent,
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     import griffe as gf
 
-    from ..layout import DocAttribute, DocFunction, DocModule
+    from ..content import DocAttribute, DocFunction, DocModule
 
 
 @dataclass
@@ -292,7 +292,7 @@ class __RenderDocMembersMixin(RenderDoc):
         Parameters
         ----------
         docables
-            List of layout.Doc subclasses. One for each member.
+            List of nodes.Doc subclasses. One for each member.
 
         member_group
             An identifier for the type of the members.
@@ -346,7 +346,7 @@ class __RenderDocMembersMixin(RenderDoc):
         Parameters
         ----------
         docables
-            List of layout.Doc subclasses. One for each member.
+            List of nodes.Doc subclasses. One for each member.
 
         member_group
             An identifier for the type of the members.

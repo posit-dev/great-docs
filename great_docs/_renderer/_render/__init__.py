@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, overload
 
-from ..layout import (
+from ..content import (
     DocAttribute,
     DocClass,
     DocFunction,
     DocModule,
-    Layout,
     Page,
     Section,
 )
@@ -28,7 +27,6 @@ _class_mapping: dict[type[Documentable], type[RenderObjType]] = {
     DocClass: RenderDocClass,
     DocFunction: RenderDocFunction,
     DocModule: RenderDocModule,
-    Layout: RenderReferencePage,
     Page: RenderAPIPage,
     Section: RenderReferenceSection,
 }
@@ -48,10 +46,6 @@ def get_render_type(obj: DocAttribute) -> type[RenderDocAttribute]: ...
 
 @overload
 def get_render_type(obj: DocModule) -> type[RenderDocModule]: ...
-
-
-@overload
-def get_render_type(obj: Layout) -> type[RenderReferencePage]: ...
 
 
 @overload

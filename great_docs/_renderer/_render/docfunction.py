@@ -8,19 +8,19 @@ from .mixin_call import RenderDocCallMixin
 if TYPE_CHECKING:
     import griffe as gf
 
-    from .. import layout
+    from .. import content
 
 
 class __RenderDocFunction(RenderDocCallMixin, RenderDoc):
     """
-    Render documentation for a function (layout.DocFunction)
+    Render documentation for a function (nodes.DocFunction)
     """
 
     def __post_init__(self):
         super().__post_init__()
         # We narrow the type with a TypeAlias since we do not expect
         # any subclasses to have narrower types
-        self.doc: layout.DocFunction = self.doc
+        self.doc: content.DocFunction = self.doc
         self.obj: gf.Function = self.obj
 
         if self.subject_above_signature is None:
@@ -29,5 +29,5 @@ class __RenderDocFunction(RenderDocCallMixin, RenderDoc):
 
 class RenderDocFunction(__RenderDocFunction):
     """
-    Extend Rendering of a layout.DocFunction object
+    Extend Rendering of a nodes.DocFunction object
     """

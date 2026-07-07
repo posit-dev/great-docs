@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, cast
 
 import griffe as gf
 
-from . import layout
+from . import content
 
 if TYPE_CHECKING:
     from typing import Literal, TypeGuard, TypeVar
@@ -75,23 +75,23 @@ def is_initvar(obj: str | gf.Expr | None) -> TypeGuard[gf.ExprSubscript]:
 
 class isDoc:
     """
-    TypeGuards for layout.Doc objects
+    TypeGuards for nodes.Doc objects
     """
 
     @staticmethod
-    def Function(el: DocMemberType) -> TypeGuard[layout.DocFunction]:
+    def Function(el: DocMemberType) -> TypeGuard[content.DocFunction]:
         return el.obj.is_function
 
     @staticmethod
-    def Class(el: DocMemberType) -> TypeGuard[layout.DocClass]:
+    def Class(el: DocMemberType) -> TypeGuard[content.DocClass]:
         return el.obj.is_class
 
     @staticmethod
-    def Attribute(el: DocMemberType) -> TypeGuard[layout.DocAttribute]:
+    def Attribute(el: DocMemberType) -> TypeGuard[content.DocAttribute]:
         return el.obj.is_attribute
 
     @staticmethod
-    def Module(el: DocMemberType) -> TypeGuard[layout.DocModule]:
+    def Module(el: DocMemberType) -> TypeGuard[content.DocModule]:
         return el.obj.is_attribute
 
 
@@ -102,7 +102,7 @@ def griffe_to_doc(obj: gf.Object | gf.Alias, *, deep: bool = True) -> DocType:
     The function recursively includes all members.
     """
     members = [griffe_to_doc(m, deep=deep) for m in obj.all_members.values()] if deep else None
-    return layout.Doc.from_griffe(obj.name, obj, members=members)  # pyright: ignore[reportUnknownMemberType]
+    return content.Doc.from_griffe(obj.name, obj, members=members)  # pyright: ignore[reportUnknownMemberType]
 
 
 def no_init(default: T) -> T:

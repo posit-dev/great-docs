@@ -11,20 +11,20 @@ from .mixin_members import RenderDocMembersMixin
 if TYPE_CHECKING:
     import griffe as gf
 
-    from .. import layout
+    from .. import content
     from ..pandoc.blocks import BlockContent
 
 
 class __RenderDocModule(RenderDocMembersMixin, RenderDoc):
     """
-    Render documentation for a module (layout.DocModule)
+    Render documentation for a module (nodes.DocModule)
     """
 
     def __post_init__(self):
         super().__post_init__()
         # We narrow the type with a TypeAlias since we do not expect
         # any subclasses to have narrower types
-        self.doc: layout.DocModule = self.doc
+        self.doc: content.DocModule = self.doc
         self.obj: gf.Module = self.obj
 
     # TODO: Verify that this is really required.
@@ -40,5 +40,5 @@ class __RenderDocModule(RenderDocMembersMixin, RenderDoc):
 
 class RenderDocModule(__RenderDocModule):
     """
-    Extend Rendering of a layout.DocModule object
+    Extend Rendering of a nodes.DocModule object
     """

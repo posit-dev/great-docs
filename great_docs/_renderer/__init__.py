@@ -14,12 +14,14 @@ from ._render.mixin_call import RenderDocCallMixin
 from ._render.mixin_members import RenderDocMembersMixin
 from ._render.reference_page import RenderReferencePage
 from ._render.reference_section import RenderReferenceSection
-from .blueprint import blueprint, collect, strip_package_name
 
 # Re-exports from consolidated _renderer module
-from .introspection import Builder, get_object
+from .api_reference import APIReference
+from .collect import build_manifest, remove_package_prefix
+from .introspect import get_object
 from .inventory import convert_inventory, create_inventory
-from .layout import Auto, Layout
+from .resolve import resolve
+from .spec import SpecObject
 
 __all__ = (
     "RenderDoc",
@@ -38,12 +40,11 @@ __all__ = (
     "exclude_parameters",
     # Consolidated from _renderer
     "get_object",
-    "Builder",
-    "blueprint",
-    "strip_package_name",
-    "collect",
+    "APIReference",
+    "resolve",
+    "remove_package_prefix",
+    "build_manifest",
     "create_inventory",
     "convert_inventory",
-    "Auto",
-    "Layout",
+    "SpecObject",
 )

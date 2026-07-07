@@ -12,7 +12,7 @@ import griffe as gf
 from great_docs._renderer._render._label import get_label
 
 from .. import _ast as qast
-from .. import layout
+from .. import content
 from .._format import (
     HAS_RUFF,
     format_name,
@@ -56,7 +56,7 @@ if TYPE_CHECKING:
 @dataclass
 class __RenderDoc(RenderBase):
     """
-    Render a layout.Doc object
+    Render a nodes.Doc object
     """
 
     show_title: bool = True
@@ -145,13 +145,13 @@ class __RenderDoc(RenderBase):
     """Format for the signature name"""
 
     def __post_init__(self):
-        # The layout_obj is too general. It is typed to include all
-        # classes of documentable objects. And for layout.Doc objects,
+        # The node field is too general. It is typed to include all
+        # classes of documentable objects. And for nodes.Doc objects,
         # the core object is a griffe object contained within.
         # For convenience, we create attributes with narrower types
         # using cast instead of TypeAlias so that subclasses can
         # create narrower types.
-        self.doc = cast("layout.Doc", self.layout_obj)
+        self.doc = cast("content.Doc", self.node)
         """Doc Object"""
 
         self.obj = cast("gf.Object | gf.Alias", self.doc.obj)

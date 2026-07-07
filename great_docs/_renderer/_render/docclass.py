@@ -14,19 +14,19 @@ from .mixin_call import RenderDocCallMixin
 from .mixin_members import RenderDocMembersMixin
 
 if TYPE_CHECKING:
-    from .. import layout
+    from .. import content
 
 
 class __RenderDocClass(RenderDocMembersMixin, RenderDocCallMixin, RenderDoc):
     """
-    Render documentation for a class (layout.DocClass)
+    Render documentation for a class (nodes.DocClass)
     """
 
     def __post_init__(self):
         super().__post_init__()
         # We narrow the type with a TypeAlias since we do not expect
         # any subclasses to have narrower types
-        self.doc: layout.DocClass = self.doc
+        self.doc: content.DocClass = self.doc
         self.obj: gf.Class = self.obj
 
         if self.subject_above_signature is None:
@@ -40,7 +40,7 @@ class __RenderDocClass(RenderDocMembersMixin, RenderDocCallMixin, RenderDoc):
         return "dataclass" in self.obj.labels
 
     @cached_property
-    def attributes(self) -> list[layout.DocAttribute]:
+    def attributes(self) -> list[content.DocAttribute]:
         """
         Attributes of a class
 
@@ -54,7 +54,7 @@ class __RenderDocClass(RenderDocMembersMixin, RenderDocCallMixin, RenderDoc):
         return attributes
 
     @cached_property
-    def attribute_member_pages(self) -> list[layout.MemberPage]:
+    def attribute_member_pages(self) -> list[content.MemberPage]:
         """
         Member pages of attributes
 
@@ -136,5 +136,5 @@ class __RenderDocClass(RenderDocMembersMixin, RenderDocCallMixin, RenderDoc):
 
 class RenderDocClass(__RenderDocClass):
     """
-    Extend Rendering of a layout.DocClass object
+    Extend Rendering of a nodes.DocClass object
     """

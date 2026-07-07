@@ -25,7 +25,7 @@ from ..pandoc.inlines import Code
 from .doc import RenderDoc
 
 if TYPE_CHECKING:
-    from ..layout import DocClass, DocFunction
+    from ..content import DocClass, DocFunction
     from ..typing import DocstringDefinitionType
 
 # singledispatch needs this type at runtime
@@ -202,9 +202,7 @@ class __RenderDocCallMixin(RenderDoc):
         # real overloads and dataclass constructor signatures are not lost.
         overloads_raw = getattr(self.obj, "overloads", []) or []
         if isinstance(overloads_raw, dict):
-            overloads: list[gf.Function] = [
-                ov for ovs in overloads_raw.values() for ov in ovs
-            ]
+            overloads: list[gf.Function] = [ov for ovs in overloads_raw.values() for ov in ovs]
         else:
             overloads = list(overloads_raw)
         if overloads:

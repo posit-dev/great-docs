@@ -15,13 +15,12 @@ from . import (
     RenderReferenceSection,
 )
 from ._griffe.docstrings import DCDocstringSection
-from .layout import (
+from .content import (
     Doc,
     DocAttribute,
     DocClass,
     DocFunction,
     DocModule,
-    Layout,
     MemberPage,
     Page,
     Section,
@@ -52,9 +51,7 @@ DocstringDefinitionType: TypeAlias = (
     | gf.DocstringWarn
 )
 
-Documentable: TypeAlias = (
-    DocClass | DocFunction | DocAttribute | DocModule | Page | Section | Layout
-)
+Documentable: TypeAlias = DocClass | DocFunction | DocAttribute | DocModule | Page | Section
 
 RenderObjType: TypeAlias = (
     RenderDoc

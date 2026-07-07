@@ -611,7 +611,7 @@ def test_parameter_default_only():
 
 def test_annotation_in_signature():
     """When show_signature_annotation=True, annotations appear in the signature."""
-    from great_docs._renderer import RenderDocFunction, layout
+    from great_docs._renderer import RenderDocFunction, content
 
     code = '''
     def func(x: int, y: str = "hello"):
@@ -632,7 +632,7 @@ def test_annotation_in_signature():
     ) as m:
         obj = m["func"]
 
-    doc = layout.Doc.from_griffe(obj.name, obj)
+    doc = content.Doc.from_griffe(obj.name, obj)
     rd = RenderDocFunction(doc, show_signature_annotation=True)
     qmd = str(rd)
 

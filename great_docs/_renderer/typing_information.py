@@ -5,14 +5,14 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from . import layout
+from . import inventory
 from ._render import (
     RenderDocAttribute,
     RenderDocClass,
     get_render_type,
 )
 from ._type_checks import griffe_to_doc, is_protocol, is_typealias, is_typevar
-from .introspection import Builder, get_object
+from .introspect import get_object
 from .pandoc.blocks import (
     Block,
     BlockContent,
@@ -24,15 +24,17 @@ from .pandoc.blocks import (
 if TYPE_CHECKING:
     import griffe as gf
 
+    from .api_reference import APIReference
+
 
 @dataclass
 class TypeSections(Block):
-    protocols_items: list[layout.Item]
-    typevars_items: list[layout.Item]
-    typealiases_items: list[layout.Item]
+    protocols_items: list[inventory.InventoryItem]
+    typevars_items: list[inventory.InventoryItem]
+    typealiases_items: list[inventory.InventoryItem]
 
     def __post_init__(self) -> None:
-        def make_render(item: layout.Item):
+        def make_render(item: inventory.InventoryItem):
             """
             Create RenderDoc object
             """
@@ -67,7 +69,7 @@ class TypeSections(Block):
         return str(self.render_body())
 
     @cached_property
-    def items(self) -> list[layout.Item]:
+    def items(self) -> list[inventory.InventoryItem]:
         """
         Return all type information items
         """
@@ -110,11 +112,11 @@ class TypeSections(Block):
 @dataclass
 class TypeInformation(Block):
     module_path: str
-    builder: Builder
+    api_ref: APIReference
 
     def __post_init__(self) -> None:
-        self.package = self.builder.package
-        self.dir = self.builder.dir
+        self.package = self.api_ref.package
+        self.dir = self.api_ref.settings.dir
 
     def __str__(self) -> str:
         return str(self.content)
@@ -137,11 +139,11 @@ class TypeInformation(Block):
 
     @cached_property
     def sections(self) -> TypeSections:
-        def make_item(obj: gf.Object | gf.Alias) -> layout.Item:
+        def make_item(obj: gf.Object | gf.Alias) -> inventory.InventoryItem:
             """
             Return item of typing object
             """
-            return layout.Item(
+            return inventory.InventoryItem(
                 name=obj.canonical_path,
                 obj=obj,
                 uri=f"{self.base_uri}.html#{obj.canonical_path}",
@@ -164,6 +166,6 @@ class TypeInformation(Block):
         """
         Write typing information to qmd file
         """
-        self.builder.items.extend(self.sections.items)
+        self.api_ref.items.extend(self.sections.items)
         filepath = Path(f"{self.base_uri}.qmd")
         _ = filepath.write_text(str(self))

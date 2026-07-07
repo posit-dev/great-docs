@@ -16,22 +16,22 @@ from .html_table import html_table
 if TYPE_CHECKING:
     from typing import Literal
 
-    from ..layout import Section
+    from ..content import Section
     from ..typing import RenderObjType
 
 
 @dataclass
 class __RenderReferenceSection(RenderBase):
     """
-    Render a section object (layout.Section)
+    Render a section object (content.Section)
 
     This is a section of the index/reference page
     """
 
-    layout_format: Literal["list", "table"] = "list"
+    display_format: Literal["list", "table"] = "list"
 
     def __post_init__(self):
-        self.section = cast("Section", self.layout_obj)
+        self.section = cast("Section", self.node)
         """Section of the reference page"""
 
     def render_title(self) -> BlockContent:
@@ -73,9 +73,9 @@ class __RenderReferenceSection(RenderBase):
 
         Markup and Styling
         ------------------
-        The output structure depends on the [](`~RenderReferenceSection.layout_format`):
+        The output structure depends on the [](`~RenderReferenceSection.display_format`):
 
-        | Layout Format| HTML Elements    | CSS Selector                          |
+        | Display Format| HTML Elements    | CSS Selector                          |
         |:-------------|:-----------------|:--------------------------------------|
         | List         | `<dl>`{.html}    | `.doc-index .doc-group > dl`{.css}    |
         | Table        | `<table>`{.html} | `.doc-index .doc-group > table`{.css} |
@@ -106,7 +106,7 @@ class __RenderReferenceSection(RenderBase):
 
         render_objs: list[RenderObjType] = [get_render_type(c)(c) for c in self.section.contents]
         rows = [row for r in render_objs for row in r.render_summary()]
-        items = DefinitionList(rows) if self.layout_format == "list" else html_table(rows)
+        items = DefinitionList(rows) if self.display_format == "list" else html_table(rows)
         return items
 
 

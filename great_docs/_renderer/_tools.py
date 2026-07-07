@@ -14,8 +14,8 @@ from . import (
     RenderDocFunction,
     RenderDocModule,
 )
-from . import layout as layout
-from .introspection import get_object
+from .content import Doc, DocAttribute, DocClass, DocFunction, DocModule
+from .introspect import get_object
 
 if TYPE_CHECKING:
     from types import MethodType
@@ -54,19 +54,19 @@ def _render(obj: gf.Object) -> str:
             # not interested in dealing with them.
             if not isinstance(m, gf.Alias)
         ]
-        return layout.Doc.from_griffe(obj.name, obj, members=members)  # pyright: ignore[reportUnknownMemberType]
+        return Doc.from_griffe(obj.name, obj, members=members)  # pyright: ignore[reportUnknownMemberType]
 
-    match layout_obj := toDocObject(obj):
-        case layout.DocAttribute():
+    match node := toDocObject(obj):
+        case DocAttribute():
             _Render = RenderDocAttribute
-        case layout.DocClass():
+        case DocClass():
             _Render = RenderDocClass
-        case layout.DocFunction():
+        case DocFunction():
             _Render = RenderDocFunction
-        case layout.DocModule():
+        case DocModule():
             _Render = RenderDocModule
 
-    return str(_Render(layout_obj))
+    return str(_Render(node))
 
 
 def render_code_variable(code: str, name: str | None = None) -> str:

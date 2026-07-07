@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from great_docs._renderer._render.mixin_page import RenderPageMixin
 
@@ -13,7 +13,8 @@ from ..pandoc.components import Attr
 from .base import RenderBase
 
 if TYPE_CHECKING:
-    from ..layout import Layout
+    from ..api_reference import APIReference
+    from ..content import Section
     from ..pandoc.blocks import BlockContent
 
 
@@ -22,32 +23,42 @@ class __RenderReferencePage(RenderPageMixin, RenderBase):
     Render the API Reference Page
     """
 
-    def __post_init__(self):
-        self.layout = cast("Layout", self.layout_obj)
-        """The layout of the reference page"""
+    def __init__(
+        self,
+        api_ref: APIReference,
+        sections: list[Section],
+        level: int = 1,
+    ) -> None:
+        self.api_ref = api_ref
+        """The API reference being documented"""
 
-        self.sections = self.layout.sections
-        """Top level sections of the quarto config"""
+        self.sections = sections
+        """Resolved top-level sections of the quarto config"""
 
-        self.package = self.layout.package
-        """The package being documented """
+        self.package = api_ref.package
+        """The package being documented"""
 
-        self.options = self.layout.options
+        self.options = api_ref.options
+
+        self.level = level
+        self.show_title = True
+        self.show_description = True
+        self.show_body = True
+
+        self.__post_init__()
 
     def render_description(self) -> BlockContent:
         """
         Render the description of the reference page
         """
         return (
-            Div(self.layout.description, Attr(classes=["doc-description"]))
-            if self.layout.description
-            else None
+            Div(self.api_ref.desc, Attr(classes=["doc-description"])) if self.api_ref.desc else None
         )
 
     def render_metadata(self) -> BlockContent:
         return Meta(
             {
-                "title": self.layout.title,
+                "title": self.api_ref.title,
                 "body-classes": "doc-reference",
                 "page-navigation": False,
                 "html-table-processing": "none",

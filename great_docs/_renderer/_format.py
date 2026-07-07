@@ -19,7 +19,7 @@ from .pandoc.inlines import InterLink, Span
 if TYPE_CHECKING:
     from typing import Any
 
-    from . import layout
+    from . import content
     from .typing import DisplayNameFormat
 
 HAS_RUFF = bool(shutil.which("ruff"))
@@ -148,7 +148,7 @@ def format_see_also(s: str) -> str:
     return SEE_ALSO_MULTILINEITEM_RE.sub(" ", content)
 
 
-def format_name(doc: layout.Doc, format: DisplayNameFormat = "relative") -> str:
+def format_name(doc: content.Doc, format: DisplayNameFormat = "relative") -> str:
     """
     Return a name to use for the object
 

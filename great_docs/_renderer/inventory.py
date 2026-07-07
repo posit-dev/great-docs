@@ -1,13 +1,24 @@
 from __future__ import annotations
 
 import json
-from typing import Callable
+from dataclasses import dataclass
+from typing import Any, Callable
 
-from . import layout
 from ._griffe import dataclasses as dc
+from ._walkable import _Walkable  # pyright: ignore[reportPrivateUsage]
 
 
-def convert_inventory(inv: "dict | object", out_name: str | None = None) -> None:
+@dataclass
+class InventoryItem(_Walkable):
+    """A documented object with a URI pointing to its rendered location"""
+
+    obj: dc.Object | dc.Alias
+    name: str = ""
+    uri: str | None = None
+    dispname: str | None = None
+
+
+def convert_inventory(inv: "dict[str, Any] | object", out_name: str | None = None) -> None:
     """Convert an inventory to JSON.
 
     Parameters
@@ -43,10 +54,10 @@ def convert_inventory(inv: "dict | object", out_name: str | None = None) -> None
 def create_inventory(
     project: str,
     version: str,
-    items: "list",
-    uri: "str | Callable | None" = None,
-    dispname: "str | Callable | None" = None,
-) -> dict:
+    items: "list[Any]",
+    uri: "str | Callable[..., str] | None" = None,
+    dispname: "str | Callable[..., str] | None" = None,
+) -> dict[str, Any]:
     """Return a inventory as a dictionary.
 
     Parameters
@@ -56,11 +67,11 @@ def create_inventory(
     version: str
         Version of the project.
     items: list
-        List of Item or griffe object items to include.
+        List of InventoryItem or griffe object items to include.
     uri:
-        Link relative to the docs. Not used when items are layout.Item.
+        Link relative to the docs. Not used when items are InventoryItem.
     dispname:
-        Display name. Not used when items are layout.Item.
+        Display name. Not used when items are InventoryItem.
 
     Returns
     -------
@@ -85,14 +96,14 @@ def create_inventory(
 
 
 def _create_inventory_item(
-    item: "layout.Item | dc.Object | dc.Alias",
+    item: "InventoryItem | dc.Object | dc.Alias",
     uri: "str | Callable",
     dispname: "str | Callable" = "-",
     priority: str = "1",
 ) -> dict:
     """Create a single inventory item dict."""
 
-    if isinstance(item, layout.Item):
+    if isinstance(item, InventoryItem):
         return {
             "name": item.name,
             "domain": "py",

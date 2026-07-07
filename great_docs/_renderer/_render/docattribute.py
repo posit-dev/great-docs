@@ -12,14 +12,14 @@ from .doc import RenderDoc
 if TYPE_CHECKING:
     import griffe as gf
 
-    from .. import layout
+    from .. import content
     from ..pandoc.blocks import BlockContent
 
 
 @dataclass
 class __RenderDocAttribute(RenderDoc):
     """
-    Render documentation for an attribute (layout.DocAttribute)
+    Render documentation for an attribute (nodes.DocAttribute)
     """
 
     show_signature_annotation: bool = True
@@ -28,7 +28,7 @@ class __RenderDocAttribute(RenderDoc):
         super().__post_init__()
         # We narrow the type with a TypeAlias since we do not expect
         # any subclasses to have narrower types
-        self.doc: layout.DocAttribute = self.doc
+        self.doc: content.DocAttribute = self.doc
         self.obj: gf.Attribute = self.obj
 
         self.subject_above_signature = self.subject_above_signature is None and not self.contained
@@ -71,5 +71,5 @@ class __RenderDocAttribute(RenderDoc):
 
 class RenderDocAttribute(__RenderDocAttribute):
     """
-    Extend Rendering of a layout.DocAttribute object
+    Extend Rendering of a nodes.DocAttribute object
     """

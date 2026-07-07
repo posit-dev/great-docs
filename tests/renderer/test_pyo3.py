@@ -17,7 +17,7 @@ import types
 
 import pytest
 
-from great_docs._renderer.introspection import (
+from great_docs._renderer.introspect import (
     _canonical_path,
     dynamic_alias,
 )

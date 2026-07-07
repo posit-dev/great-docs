@@ -9,7 +9,7 @@ from typing import Type
 from ._griffe import AliasResolutionError
 from ._griffe import dataclasses as dc
 from ._griffe import docstrings as ds
-from .layout import _Base as LayoutBase
+from ._walkable import _Walkable as NodeBase
 
 
 def transform(el: object) -> object:
@@ -209,9 +209,9 @@ def fields(el: object) -> list[str] | list[int] | None:
         ]
         return [opt for opt in options if hasattr(el, opt)]
 
-    # layout dataclass models
-    if isinstance(el, LayoutBase):
-        from .layout import MISSING
+    # node dataclass models
+    if isinstance(el, NodeBase):
+        from ._walkable import MISSING
 
         field_defaults = {f.name: f.default for f in _dc_mod.fields(el)}
         return [

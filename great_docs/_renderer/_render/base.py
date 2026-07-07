@@ -14,7 +14,7 @@ from .extending import extend_base_class
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from .. import layout
+    from .. import content
     from ..pandoc.blocks import DefinitionItem
 
 
@@ -24,17 +24,16 @@ class __RenderBase(Block):
     Render an object
     """
 
-    layout_obj: (
-        layout.DocClass
-        | layout.DocFunction
-        | layout.DocAttribute
-        | layout.DocModule
-        | layout.Page
-        | layout.Section
-        | layout.Link
-        | layout.Layout
+    node: (
+        content.DocClass
+        | content.DocFunction
+        | content.DocAttribute
+        | content.DocModule
+        | content.Page
+        | content.Section
+        | content.Link
     )
-    """Layout object to be documented"""
+    """The node being documented"""
 
     level: int = 1
     """The depth of the object in the documentation"""

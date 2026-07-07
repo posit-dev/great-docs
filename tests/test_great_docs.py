@@ -30,7 +30,9 @@ from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
 
 from great_docs import Config, create_default_config, GreatDocs, load_config
 from great_docs._directives import DocDirectives, extract_directives
-from great_docs._renderer import layout, _globals
+from great_docs._renderer import _globals
+from great_docs._renderer import content
+from great_docs._renderer import spec
 from great_docs._renderer._ast import (
     DocstringSectionKindPatched,
     DocstringSectionNotes,
@@ -120,7 +122,7 @@ from great_docs._renderer._rst_converters import (
     _smart_dedent,
 )
 from great_docs._renderer._tools import render_code_variable, render_type_object
-from great_docs._renderer._transformers import ctx_node, Node, WorkaroundKeyError
+from great_docs._renderer._visitor import ctx_node, Node, ObjectNotFoundError
 from great_docs._renderer._type_checks import (
     griffe_to_doc,
     is_field_init_false,
@@ -131,56 +133,58 @@ from great_docs._renderer._type_checks import (
     isDoc,
     no_init,
 )
-from great_docs._renderer.blueprint import (
-    blueprint as _blueprint,
-    blueprint as blueprint_func,
-    BlueprintTransformer,
-    collect,
-    CollectTransformer,
-    strip_package_name,
-    _auto_package,
+from great_docs._renderer.resolve import (
+    resolve as _blueprint,
+    resolve as blueprint_func,
+    _Resolver as BlueprintTransformer,
+    _autogenerate_sections,
+    _sections_from_package as _auto_package,
     _is_external_alias,
     _non_default_entries,
-    _PagePackageStripper,
     _resolve_alias,
     _to_simple_dict,
 )
-from great_docs._renderer.introspection import (
-    Builder,
+from great_docs._renderer.collect import (
+    build_manifest,
+    _ManifestBuilder as CollectTransformer,
+    _PackagePrefixRemover as _PagePackageStripper,
+    remove_package_prefix,
+)
+from great_docs._renderer.spec import SpecSection
+from great_docs._renderer.api_reference import APIReference, Settings
+from great_docs._renderer.introspect import (
     dynamic_alias,
     get_object,
     get_parser_defaults,
     replace_docstring,
-    _insert_contents,
     _is_valueless,
-    _merge_frontmatter,
     _resolve_target,
 )
+from great_docs._renderer import write
+from great_docs._renderer.write import _insert_contents, merge_frontmatter as _merge_frontmatter
 from great_docs._renderer.inventory import (
     convert_inventory,
     create_inventory,
     _create_inventory_item,
     _maybe_call,
 )
-from great_docs._renderer.layout import (
-    Auto,
-    AutoOptions,
-    ChoicesChildren,
+from great_docs._renderer._walkable import MISSING, _Walkable
+from great_docs._renderer.content import (
     Doc,
     DocAttribute,
     DocClass,
     DocFunction,
     DocModule,
-    Item,
-    Layout,
     Link,
     MemberPage,
-    MISSING,
     Page,
     Section,
-    SummaryDetails,
-    _Base,
+    SummaryItem,
 )
+from great_docs._renderer.inventory import InventoryItem
+from great_docs._renderer.spec import ChildrenStyle
+from great_docs._renderer.spec import SpecObject as Auto
+from great_docs._renderer.spec import SpecOptions as AutoOptions
 from great_docs._renderer.pandoc.blocks import (
     Block,
     blockcontent_to_str,
@@ -6340,7 +6344,7 @@ def test_to_simple_dict_base_dataclass():
 
 
 def test_to_simple_dict_nested_dataclass():
-    doc = DocFunction(name="func1", obj=None)
+    doc = DocFunction(name="func1", obj=gdc.Function("func1"))
     page = Page(path="p", contents=[doc])
     result = _to_simple_dict(page)
     assert isinstance(result, dict)
@@ -6363,7 +6367,7 @@ def test_to_simple_dict_tuple():
 
 
 def test_to_simple_dict_enum():
-    result = _to_simple_dict(ChoicesChildren.embedded)
+    result = _to_simple_dict(ChildrenStyle.embedded)
     assert result == "embedded"
 
 
@@ -6374,7 +6378,7 @@ def test_to_simple_dict_primitive():
 
 
 def test_to_simple_dict_summary_details():
-    sd = SummaryDetails(name="n", desc="d")
+    sd = SummaryItem(name="n", desc="d")
     result = _to_simple_dict(sd)
     assert result == {"name": "n", "desc": "d"}
 
@@ -6618,7 +6622,8 @@ def test_collect_single_doc():
     doc = DocFunction(name="myfunc", obj=func_obj, anchor="pkg.myfunc")
     page = Page(path="reference", contents=[doc])
 
-    pages, items = collect(page, base_dir="api")
+    manifest = build_manifest([page], dir="api")
+    pages, items = manifest.pages, manifest.items
     assert len(pages) == 1
     assert pages[0].path == "reference"
     assert len(items) >= 1
@@ -6634,7 +6639,8 @@ def test_collect_with_canonical_path_diff():
     doc = DocFunction(name="func", obj=func_obj, anchor="pkg.func")
     page = Page(path="reference", contents=[doc])
 
-    pages, items = collect(page, base_dir="api")
+    manifest = build_manifest([page], dir="api")
+    pages, items = manifest.pages, manifest.items
     assert len(items) == 2
     assert items[0].name == "pkg.submod.func"
     assert items[1].name == "pkg.func"
@@ -6649,7 +6655,8 @@ def test_collect_nested_section():
     page = Page(path="ref", contents=[doc])
     section = Section(title="API", contents=[page])
 
-    pages, items = collect(section, base_dir="api")
+    manifest = build_manifest([section], dir="api")
+    pages, items = manifest.pages, manifest.items
     assert len(pages) == 1
     assert len(items) >= 1
 
@@ -6701,7 +6708,7 @@ def test_bp_get_object_fixed_key_error():
         raise KeyError("pkg.missing")
 
     trans = BlueprintTransformer(get_object=get_object)
-    with pytest.raises(WorkaroundKeyError, match="Cannot find an object named"):
+    with pytest.raises(ObjectNotFoundError, match="Cannot find an object named"):
         trans.get_object_fixed("pkg.missing")
 
 
@@ -6711,7 +6718,7 @@ def test_bp_visit_sets_package():
 
     func = gdc.Function("myfunc")
     trans2 = _bp_make_trans({"myfunc": func})
-    result = trans2.visit(Auto(name="myfunc"))
+    result = trans2._resolve_object(Auto(name="myfunc"))
     assert isinstance(result, DocFunction)
 
 
@@ -6720,7 +6727,7 @@ def test_bp_visit_restores_package():
     trans = _bp_make_trans({"pkg:f": func})
     trans.crnt_package = "pkg"
 
-    trans.visit(Auto(name="f"))
+    trans._resolve_object(Auto(name="f"))
     assert trans.crnt_package == "pkg"
 
 
@@ -6729,14 +6736,14 @@ def test_bp_visit_sets_options():
     trans = _bp_make_trans({"f": func})
 
     opts = AutoOptions(include_private=True)
-    Section(title="Test", options=opts, contents=[Auto(name="f")])
+    SpecSection(title="Test", options=opts, contents=[Auto(name="f")])
     assert trans.options is None
 
 
 def test_bp_enter_auto_basic_function():
     func = gdc.Function("myfunc")
     trans = _bp_make_trans({"myfunc": func})
-    result = trans.visit(Auto(name="myfunc"))
+    result = trans._resolve_object(Auto(name="myfunc"))
     assert isinstance(result, DocFunction)
     assert result.obj is func
 
@@ -6744,7 +6751,7 @@ def test_bp_enter_auto_basic_function():
 def test_bp_enter_auto_basic_class():
     cls = gdc.Class("MyClass")
     trans = _bp_make_trans({"MyClass": cls})
-    result = trans.visit(Auto(name="MyClass"))
+    result = trans._resolve_object(Auto(name="MyClass"))
     assert isinstance(result, DocClass)
     assert result.obj is cls
 
@@ -6752,7 +6759,7 @@ def test_bp_enter_auto_basic_class():
 def test_bp_enter_auto_basic_attribute():
     attr = gdc.Attribute("myattr")
     trans = _bp_make_trans({"myattr": attr})
-    result = trans.visit(Auto(name="myattr"))
+    result = trans._resolve_object(Auto(name="myattr"))
     assert isinstance(result, DocAttribute)
     assert result.obj is attr
 
@@ -6761,7 +6768,7 @@ def test_bp_enter_auto_with_package():
     func = gdc.Function("f")
     trans = _bp_make_trans({"pkg:f": func})
     trans.crnt_package = "pkg"
-    result = trans.visit(Auto(name="f"))
+    result = trans._resolve_object(Auto(name="f"))
     assert isinstance(result, DocFunction)
     assert result.obj is func
 
@@ -6770,7 +6777,7 @@ def test_bp_enter_auto_colon_in_pkg():
     func = gdc.Function("method")
     trans = _bp_make_trans({"pkg.mod:Class.method": func})
     trans.crnt_package = "pkg.mod:Class"
-    result = trans.visit(Auto(name="method"))
+    result = trans._resolve_object(Auto(name="method"))
     assert isinstance(result, DocFunction)
 
 
@@ -6778,7 +6785,7 @@ def test_bp_enter_auto_colon_in_name():
     func = gdc.Function("method")
     trans = _bp_make_trans({"pkg.mod:method": func})
     trans.crnt_package = "pkg"
-    result = trans.visit(Auto(name="mod:method"))
+    result = trans._resolve_object(Auto(name="mod:method"))
     assert isinstance(result, DocFunction)
 
 
@@ -6789,7 +6796,7 @@ def test_bp_enter_auto_children_separate():
     cls.set_member("my_method", method)
 
     trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
-    result = trans.visit(Auto(name="MyClass", children=ChoicesChildren.separate))
+    result = trans._resolve_object(Auto(name="MyClass", children=ChildrenStyle.separate))
     assert isinstance(result, DocClass)
     assert len(result.members) == 1
     assert isinstance(result.members[0], MemberPage)
@@ -6802,7 +6809,7 @@ def test_bp_enter_auto_children_embedded():
     cls.set_member("my_method", method)
 
     trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
-    result = trans.visit(Auto(name="MyClass", children=ChoicesChildren.embedded))
+    result = trans._resolve_object(Auto(name="MyClass", children=ChildrenStyle.embedded))
     assert isinstance(result, DocClass)
     assert len(result.members) == 1
     assert isinstance(result.members[0], DocFunction)
@@ -6815,7 +6822,7 @@ def test_bp_enter_auto_children_flat():
     cls.set_member("my_method", method)
 
     trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
-    result = trans.visit(Auto(name="MyClass", children=ChoicesChildren.flat))
+    result = trans._resolve_object(Auto(name="MyClass", children=ChildrenStyle.flat))
     assert isinstance(result, DocClass)
     assert result.flat is True
     assert len(result.members) == 1
@@ -6828,7 +6835,7 @@ def test_bp_enter_auto_children_linked():
     cls.set_member("my_method", method)
 
     trans = _bp_make_trans({"MyClass": cls, "MyClass:my_method": method})
-    result = trans.visit(Auto(name="MyClass", children=ChoicesChildren.linked))
+    result = trans._resolve_object(Auto(name="MyClass", children=ChildrenStyle.linked))
     assert isinstance(result, DocClass)
     assert len(result.members) == 1
     assert isinstance(result.members[0], Link)
@@ -6844,7 +6851,7 @@ def test_bp_enter_auto_unsupported_children():
     auto = Auto(name="MyClass")
     auto.children = "bad_value"
     with pytest.raises(ValueError, match="Unsupported value of children"):
-        trans.visit(auto)
+        trans._resolve_object(auto)
 
 
 def test_bp_enter_auto_dynamic_from_auto():
@@ -6856,7 +6863,7 @@ def test_bp_enter_auto_dynamic_from_auto():
         return func
 
     trans = BlueprintTransformer(get_object=get_object)
-    trans.visit(Auto(name="f", dynamic=True))
+    trans._resolve_object(Auto(name="f", dynamic=True))
     assert captured.get("dynamic") is True
 
 
@@ -6870,7 +6877,7 @@ def test_bp_enter_auto_dynamic_from_transformer():
 
     trans = BlueprintTransformer(get_object=get_object)
     trans.dynamic = True
-    trans.visit(Auto(name="f"))
+    trans._resolve_object(Auto(name="f"))
     assert captured.get("dynamic") is True
 
 
@@ -6879,7 +6886,7 @@ def test_bp_enter_auto_options_merge():
     trans = _bp_make_trans({"f": func})
     trans.options = AutoOptions(signature_name="full")
 
-    result = trans.visit(Auto(name="f"))
+    result = trans._resolve_object(Auto(name="f"))
     assert isinstance(result, DocFunction)
     assert result.signature_name == "full"
 
@@ -6892,8 +6899,8 @@ def test_bp_enter_auto_member_options():
 
     member_opts = AutoOptions(signature_name="short")
     trans = _bp_make_trans({"MyClass": cls, "MyClass:m": method})
-    result = trans.visit(
-        Auto(name="MyClass", member_options=member_opts, children=ChoicesChildren.embedded)
+    result = trans._resolve_object(
+        Auto(name="MyClass", member_options=member_opts, children=ChildrenStyle.embedded)
     )
     assert isinstance(result, DocClass)
     assert len(result.members) == 1
@@ -6909,7 +6916,7 @@ def test_bp_enter_auto_module_members_skipped():
     mod.set_member("f", func)
 
     trans = _bp_make_trans({"pkg": mod, "pkg:f": func, "pkg:sub": submod})
-    result = trans.visit(Auto(name="pkg"))
+    result = trans._resolve_object(Auto(name="pkg"))
     assert isinstance(result, DocModule)
     member_names = [m.name if hasattr(m, "name") else str(m) for m in result.members]
     assert not any("sub" in n for n in member_names)
@@ -7144,17 +7151,18 @@ def test_fetch_members_include_imports():
     assert "ext_f" in result
 
 
-def test_bp_layout_with_sections():
+def test_bp_sections_resolved():
     func = gdc.Function("f")
     trans = _bp_make_trans({"pkg:f": func})
+    trans.crnt_package = "pkg"
 
-    layout_el = Layout(package="pkg", sections=[Section(title="API", contents=[Auto(name="f")])])
-    result = trans.visit(layout_el)
-    assert isinstance(result, Layout)
-    assert len(result.sections) == 1
+    sections = [SpecSection(title="API", contents=[Auto(name="f")])]
+    result = trans.resolve_sections(sections)
+    assert isinstance(result, list)
+    assert len(result) == 1
 
 
-def test_bp_layout_auto_generate(capsys):
+def test_bp_auto_generate_sections(capsys):
     mod = gdc.Module("pkg")
     func = gdc.Function("f")
     func.docstring = gdc.Docstring("A func.", parent=func)
@@ -7163,23 +7171,24 @@ def test_bp_layout_auto_generate(capsys):
     func.labels.add("exported")
 
     trans = _bp_make_trans({"pkg": mod, "pkg:f": func})
-    layout_el = Layout(package="pkg", sections=[])
-    result = trans.visit(layout_el)
+    sections = _autogenerate_sections(trans, "pkg")
 
     captured = capsys.readouterr()
     assert "Autogenerating contents" in captured.out
-    assert isinstance(result, Layout)
+    assert isinstance(sections, list)
+    assert len(sections) == 1
 
 
 def test_bp_exit_section_wraps_non_page():
     func = gdc.Function("f")
     trans = _bp_make_trans({"pkg:f": func})
+    trans.crnt_package = "pkg"
 
-    layout_el = Layout(package="pkg", sections=[Section(title="API", contents=[Auto(name="f")])])
-    result = trans.visit(layout_el)
-    section = result.sections[0]
-    for content in section.contents:
-        assert isinstance(content, Page)
+    sections = [SpecSection(title="API", contents=[Auto(name="f")])]
+    result = trans.resolve_sections(sections)
+    section = result[0]
+    for item in section.contents:
+        assert isinstance(item, Page)
 
 
 def test_page_stripper_strips_prefix():
@@ -7211,14 +7220,14 @@ def test_page_stripper_nested_pages():
 def test_strip_package_name_basic():
     doc = DocFunction(name="f", obj=gdc.Function("f"))
     page = Page(path="pkg.mod.func", contents=[doc])
-    result = strip_package_name(page, "pkg")
+    result = remove_package_prefix(page, "pkg")
     assert result.path == "mod.func"
 
 
 def test_strip_package_name_no_match():
     doc = DocFunction(name="f", obj=gdc.Function("f"))
     page = Page(path="other.func", contents=[doc])
-    result = strip_package_name(page, "pkg")
+    result = remove_package_prefix(page, "pkg")
     assert result.path == "other.func"
 
 
@@ -7229,7 +7238,7 @@ def test_blueprint_entry_basic():
         return func
 
     trans = BlueprintTransformer(get_object=get_object)
-    result = trans.visit(Auto(name="myfunc"))
+    result = trans._resolve_object(Auto(name="myfunc"))
     assert isinstance(result, DocFunction)
 
 
@@ -7243,7 +7252,7 @@ def test_blueprint_entry_with_package():
 
     trans = BlueprintTransformer(get_object=get_object)
     trans.crnt_package = "mypkg"
-    result = trans.visit(Auto(name="f"))
+    result = trans._resolve_object(Auto(name="f"))
     assert isinstance(result, DocFunction)
 
 
@@ -7257,7 +7266,7 @@ def test_blueprint_entry_with_dynamic():
 
     trans = BlueprintTransformer(get_object=get_object)
     trans.dynamic = True
-    trans.visit(Auto(name="f"))
+    trans._resolve_object(Auto(name="f"))
     assert captured.get("dynamic") is True
 
 
@@ -21381,7 +21390,7 @@ def test_detect_dynamic_mode_with_cyclic_error():
 
         with (
             patch("griffe.load", return_value=mock_pkg),
-            patch("great_docs._renderer.introspection.get_object", side_effect=fake_get_object),
+            patch("great_docs._renderer.introspect.get_object", side_effect=fake_get_object),
         ):
             result = docs._detect_dynamic_mode("mypkg")
 
@@ -23999,7 +24008,7 @@ def test_build_prepare_and_render_flow():
 
         mock_builder = MagicMock()
         mock_builder_class = MagicMock()
-        mock_builder_class.from_quarto_config.return_value = mock_builder
+        mock_builder_class.return_value = mock_builder
 
         with (
             patch("great_docs.core._ensure_quarto_installed"),
@@ -24014,7 +24023,7 @@ def test_build_prepare_and_render_flow():
             patch.object(docs, "_copy_assets", return_value=False),
             patch.object(docs, "_get_quarto_env", return_value={}),
             patch(
-                "great_docs._renderer.introspection.Builder",
+                "great_docs._renderer.api_reference.APIReference",
                 mock_builder_class,
             ),
             patch("subprocess.Popen") as mock_popen,
@@ -24042,7 +24051,7 @@ def test_build_prepare_and_render_flow():
 
             docs.build(watch=False, refresh=True)
 
-            mock_builder_class.from_quarto_config.assert_called_once()
+            mock_builder_class.assert_called_once()
             mock_builder.build.assert_called_once()
 
 
@@ -24103,7 +24112,7 @@ def test_build_dynamic_fallback_to_static():
         mock_builder = MagicMock()
         mock_builder.build.side_effect = build_side_effect
         mock_builder_class = MagicMock()
-        mock_builder_class.from_quarto_config.return_value = mock_builder
+        mock_builder_class.return_value = mock_builder
 
         with (
             patch("great_docs.core._ensure_quarto_installed"),
@@ -24118,7 +24127,7 @@ def test_build_dynamic_fallback_to_static():
             patch.object(docs, "_copy_assets", return_value=False),
             patch.object(docs, "_get_quarto_env", return_value={}),
             patch(
-                "great_docs._renderer.introspection.Builder",
+                "great_docs._renderer.api_reference.APIReference",
                 mock_builder_class,
             ),
             patch("subprocess.Popen") as mock_popen,
@@ -24158,7 +24167,7 @@ def test_build_static_mode_failure_exits():
         mock_builder = MagicMock()
         mock_builder.build.side_effect = RuntimeError("Build always fails")
         mock_builder_class = MagicMock()
-        mock_builder_class.from_quarto_config.return_value = mock_builder
+        mock_builder_class.return_value = mock_builder
 
         with (
             patch("great_docs.core._ensure_quarto_installed"),
@@ -24173,7 +24182,7 @@ def test_build_static_mode_failure_exits():
             patch.object(docs, "_copy_assets", return_value=False),
             patch.object(docs, "_get_quarto_env", return_value={}),
             patch(
-                "great_docs._renderer.introspection.Builder",
+                "great_docs._renderer.api_reference.APIReference",
                 mock_builder_class,
             ),
         ):
@@ -24203,7 +24212,7 @@ def test_build_non_dynamic_failure_exits():
         mock_builder = MagicMock()
         mock_builder.build.side_effect = RuntimeError("Build failed")
         mock_builder_class = MagicMock()
-        mock_builder_class.from_quarto_config.return_value = mock_builder
+        mock_builder_class.return_value = mock_builder
 
         with (
             patch("great_docs.core._ensure_quarto_installed"),
@@ -24218,7 +24227,7 @@ def test_build_non_dynamic_failure_exits():
             patch.object(docs, "_copy_assets", return_value=False),
             patch.object(docs, "_get_quarto_env", return_value={}),
             patch(
-                "great_docs._renderer.introspection.Builder",
+                "great_docs._renderer.api_reference.APIReference",
                 mock_builder_class,
             ),
         ):
@@ -28354,13 +28363,13 @@ def test_get_object_deprecated_object_name_warns():
 
 def test_get_object_with_shared_loader():
     """get_object reuses a loader if provided."""
-    from great_docs._renderer.introspection import (
+    from great_docs._renderer._griffe import (
         GriffeLoader,
         LinesCollection,
         ModulesCollection,
         Parser,
-        get_object,
     )
+    from great_docs._renderer.introspect import get_object
 
     loader = GriffeLoader(
         docstring_parser=Parser("numpy"),
@@ -28532,7 +28541,7 @@ def test_replace_docstring_alias():
 
 def test_canonical_path_module():
     """_canonical_path for a module returns module name."""
-    from great_docs._renderer.introspection import _canonical_path
+    from great_docs._renderer.introspect import _canonical_path
 
     result = _canonical_path(json, "")
 
@@ -28541,7 +28550,7 @@ def test_canonical_path_module():
 
 def test_canonical_path_module_with_qualname():
     """_canonical_path for a module with qualname appends suffix."""
-    from great_docs._renderer.introspection import _canonical_path
+    from great_docs._renderer.introspect import _canonical_path
 
     result = _canonical_path(json, "dumps")
 
@@ -28550,7 +28559,7 @@ def test_canonical_path_module_with_qualname():
 
 def test_canonical_path_function():
     """_canonical_path for a function returns module:qualname."""
-    from great_docs._renderer.introspection import _canonical_path
+    from great_docs._renderer.introspect import _canonical_path
 
     result = _canonical_path(json.dumps, "")
     assert result == "json:dumps"
@@ -28558,7 +28567,7 @@ def test_canonical_path_function():
 
 def test_canonical_path_function_with_qualname():
     """_canonical_path for a function with extra qualname appends it."""
-    from great_docs._renderer.introspection import _canonical_path
+    from great_docs._renderer.introspect import _canonical_path
 
     result = _canonical_path(json.dumps, "extra")
     assert result == "json:dumps.extra"
@@ -28566,7 +28575,7 @@ def test_canonical_path_function_with_qualname():
 
 def test_canonical_path_class():
     """_canonical_path for a class returns module:qualname."""
-    from great_docs._renderer.introspection import _canonical_path
+    from great_docs._renderer.introspect import _canonical_path
 
     result = _canonical_path(json.JSONEncoder, "")
     assert result == "json.encoder:JSONEncoder"
@@ -28574,7 +28583,7 @@ def test_canonical_path_class():
 
 def test_canonical_path_plain_object():
     """_canonical_path for a plain object (not module/class/function) returns None."""
-    from great_docs._renderer.introspection import _canonical_path
+    from great_docs._renderer.introspect import _canonical_path
 
     result = _canonical_path(42, "")
     assert result is None
@@ -28582,7 +28591,7 @@ def test_canonical_path_plain_object():
 
 def test_canonical_path_no_module_attr():
     """_canonical_path returns None when __module__ is missing."""
-    from great_docs._renderer.introspection import _canonical_path
+    from great_docs._renderer.introspect import _canonical_path
 
     class NoModule:
         pass
@@ -28595,7 +28604,7 @@ def test_canonical_path_no_module_attr():
 
 def test_canonical_path_class_no_module():
     """_canonical_path returns None when class has no __module__."""
-    from great_docs._renderer.introspection import _canonical_path
+    from great_docs._renderer.introspect import _canonical_path
 
     cls = type("DynClass", (), {})
     cls.__module__ = None
@@ -28781,13 +28790,13 @@ def test_dynamic_alias_nonexistent_attr_raises():
 
 def test_dynamic_alias_with_loader():
     """dynamic_alias accepts a shared loader."""
-    from great_docs._renderer.introspection import (
+    from great_docs._renderer._griffe import (
         GriffeLoader,
         LinesCollection,
         ModulesCollection,
         Parser,
-        dynamic_alias,
     )
+    from great_docs._renderer.introspect import dynamic_alias
 
     loader = GriffeLoader(
         docstring_parser=Parser("numpy"),
@@ -28869,105 +28878,108 @@ def test_get_object_dynamic_string_target():
     assert obj.name == "dumps"
 
 
-def test_builder_init_basic():
-    """Builder can be instantiated with minimal args."""
-
-    builder = Builder(package="json")
-    assert builder.package == "json"
-    assert builder.dir == "reference"
-    assert builder.title == "Function reference"
-    assert builder.version is None
+def _make_api_ref(**block):
+    """An APIReference built from an `api-reference` block, defaulting package to json."""
+    block.setdefault("package", "json")
+    return APIReference({"api-reference": block})
 
 
-def test_builder_init_with_options():
-    """Builder accepts custom options."""
+def test_api_reference_init_basic():
+    """APIReference can be instantiated with minimal args."""
 
-    builder = Builder(
-        package="json",
+    ref = _make_api_ref()
+    assert ref.package == "json"
+    assert ref.settings.dir == "reference"
+    assert ref.title == "Function reference"
+    assert ref.settings.version is None
+
+
+def test_api_reference_init_with_options():
+    """APIReference routes build keys into Settings."""
+
+    ref = _make_api_ref(
         dir="api",
         title="API Reference",
-        version="1.0.0",
         out_index="api-index.qmd",
         rewrite_all_pages=True,
         parser="google",
     )
-    assert builder.dir == "api"
-    assert builder.title == "API Reference"
-    assert builder.out_index == "api-index.qmd"
-    assert builder.rewrite_all_pages is True
-    assert builder.parser == "google"
+    assert ref.settings.dir == "api"
+    assert ref.title == "API Reference"
+    assert ref.settings.out_index == "api-index.qmd"
+    assert ref.settings.rewrite_all_pages is True
+    assert ref.settings.parser == "google"
 
 
-def test_builder_init_sidebar_string():
-    """Builder converts sidebar string to dict."""
+def test_api_reference_init_sidebar_string():
+    """APIReference converts sidebar string to dict."""
 
-    builder = Builder(package="json", sidebar="my-sidebar.yml")
-    assert builder.sidebar == {"file": "my-sidebar.yml"}
-
-
-def test_builder_init_sidebar_dict_no_file():
-    """Builder adds default file to sidebar dict if missing."""
-
-    builder = Builder(package="json", sidebar={"id": "api"})
-    assert builder.sidebar["file"] == "_api-reference-sidebar.yml"
-    assert builder.sidebar["id"] == "api"
+    ref = _make_api_ref(sidebar="my-sidebar.yml")
+    assert ref.settings.sidebar == {"file": "my-sidebar.yml"}
 
 
-def test_builder_init_sidebar_dict_with_file():
-    """Builder preserves sidebar dict with existing file."""
+def test_api_reference_init_sidebar_dict_no_file():
+    """APIReference adds default file to sidebar dict if missing."""
 
-    builder = Builder(package="json", sidebar={"file": "custom.yml"})
-    assert builder.sidebar["file"] == "custom.yml"
-
-
-def test_builder_init_no_sidebar():
-    """Builder handles sidebar=None."""
-
-    builder = Builder(package="json")
-    assert builder.sidebar is None
+    ref = _make_api_ref(sidebar={"id": "api"})
+    assert ref.settings.sidebar["file"] == "_api-reference-sidebar.yml"
+    assert ref.settings.sidebar["id"] == "api"
 
 
-def test_builder_init_source_dir():
-    """Builder converts source_dir to absolute path."""
+def test_api_reference_init_sidebar_dict_with_file():
+    """APIReference preserves sidebar dict with existing file."""
 
-    builder = Builder(package="json", source_dir="src")
-    assert builder.source_dir is not None
-    assert Path(builder.source_dir).is_absolute()
-
-
-def test_builder_init_css():
-    """Builder accepts css parameter."""
-
-    builder = Builder(package="json", css="custom.css")
-    assert builder.css == "custom.css"
+    ref = _make_api_ref(sidebar={"file": "custom.yml"})
+    assert ref.settings.sidebar["file"] == "custom.yml"
 
 
-def test_builder_init_dynamic():
-    """Builder accepts dynamic parameter."""
+def test_api_reference_init_no_sidebar():
+    """APIReference handles sidebar=None."""
 
-    builder = Builder(package="json", dynamic=True)
-    assert builder.dynamic is True
-
-    builder2 = Builder(package="json", dynamic=False)
-    assert builder2.dynamic is False
+    ref = _make_api_ref()
+    assert ref.settings.sidebar is None
 
 
-def test_builder_init_desc():
-    """Builder accepts desc parameter."""
+def test_api_reference_init_source_dir():
+    """APIReference stores source_dir on settings."""
 
-    builder = Builder(package="json", desc="A description")
-    assert builder.desc == "A description"
+    ref = _make_api_ref(source_dir="src")
+    assert ref.settings.source_dir == "src"
 
 
-def test_builder_load_layout_error():
-    """Builder.load_layout raises ValueError for invalid sections."""
+def test_api_reference_init_css():
+    """APIReference accepts css setting."""
+
+    ref = _make_api_ref(css="custom.css")
+    assert ref.settings.css == "custom.css"
+
+
+def test_api_reference_init_dynamic():
+    """APIReference accepts dynamic setting."""
+
+    ref = _make_api_ref(dynamic=True)
+    assert ref.settings.dynamic is True
+
+    ref2 = _make_api_ref(dynamic=False)
+    assert ref2.settings.dynamic is False
+
+
+def test_api_reference_init_desc():
+    """APIReference accepts desc."""
+
+    ref = _make_api_ref(desc="A description")
+    assert ref.desc == "A description"
+
+
+def test_api_reference_invalid_sections_error():
+    """APIReference raises for invalid sections."""
 
     with pytest.raises((ValueError, TypeError)):
-        Builder(package="json", sections=123)
+        _make_api_ref(sections=123)
 
 
-def test_builder_build_basic():
-    """Builder.build creates index, pages, and inventory."""
+def test_api_reference_build_basic():
+    """APIReference.build creates index, pages, and inventory."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg = Path(tmp_dir) / "introtest_build"
@@ -28981,12 +28993,18 @@ def test_builder_build_basic():
         old_cwd = os.getcwd()
         os.chdir(tmp_dir)
         try:
-            builder = Builder(
-                package="introtest_build",
-                sections=[{"title": "Functions", "desc": "", "contents": [{"name": "greet"}]}],
-                dir="reference",
+            ref = APIReference(
+                {
+                    "api-reference": {
+                        "package": "introtest_build",
+                        "sections": [
+                            {"title": "Functions", "desc": "", "contents": [{"name": "greet"}]}
+                        ],
+                        "dir": "reference",
+                    }
+                }
             )
-            builder.build()
+            ref.build()
 
             # Check index was created
             assert (Path(tmp_dir) / "reference" / "index.qmd").exists()
@@ -29002,8 +29020,8 @@ def test_builder_build_basic():
             sys.modules.pop("introtest_build", None)
 
 
-def test_builder_build_with_sidebar():
-    """Builder.build writes sidebar yaml when configured."""
+def test_api_reference_build_with_sidebar():
+    """APIReference.build writes sidebar yaml when configured."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg = Path(tmp_dir) / "introtest_sidebar"
@@ -29018,12 +29036,18 @@ def test_builder_build_with_sidebar():
         os.chdir(tmp_dir)
         try:
             sidebar_file = str(Path(tmp_dir) / "sidebar.yml")
-            builder = Builder(
-                package="introtest_sidebar",
-                sections=[{"title": "Functions", "desc": "", "contents": [{"name": "func"}]}],
-                sidebar=sidebar_file,
+            ref = APIReference(
+                {
+                    "api-reference": {
+                        "package": "introtest_sidebar",
+                        "sections": [
+                            {"title": "Functions", "desc": "", "contents": [{"name": "func"}]}
+                        ],
+                        "sidebar": sidebar_file,
+                    }
+                }
             )
-            builder.build()
+            ref.build()
 
             assert Path(sidebar_file).exists()
         finally:
@@ -29032,8 +29056,8 @@ def test_builder_build_with_sidebar():
             sys.modules.pop("introtest_sidebar", None)
 
 
-def test_builder_build_with_source_dir():
-    """Builder.build adds source_dir to sys.path."""
+def test_api_reference_build_with_source_dir():
+    """APIReference.build adds source_dir to sys.path."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         src = Path(tmp_dir) / "src"
@@ -29048,12 +29072,18 @@ def test_builder_build_with_source_dir():
         old_cwd = os.getcwd()
         os.chdir(tmp_dir)
         try:
-            builder = Builder(
-                package="introtest_srcdir",
-                sections=[{"title": "Functions", "desc": "", "contents": [{"name": "func"}]}],
-                source_dir=str(src),
+            ref = APIReference(
+                {
+                    "api-reference": {
+                        "package": "introtest_srcdir",
+                        "sections": [
+                            {"title": "Functions", "desc": "", "contents": [{"name": "func"}]}
+                        ],
+                        "source_dir": str(src),
+                    }
+                }
             )
-            builder.build()
+            ref.build()
 
             assert (Path(tmp_dir) / "reference" / "func.qmd").exists()
         finally:
@@ -29063,8 +29093,8 @@ def test_builder_build_with_source_dir():
             sys.modules.pop("introtest_srcdir", None)
 
 
-def test_builder_build_with_filter():
-    """Builder.build with filter only writes matching pages."""
+def test_api_reference_build_with_filter():
+    """APIReference.build with filter only writes matching pages."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg = Path(tmp_dir) / "introtest_filter"
@@ -29078,17 +29108,21 @@ def test_builder_build_with_filter():
         old_cwd = os.getcwd()
         os.chdir(tmp_dir)
         try:
-            builder = Builder(
-                package="introtest_filter",
-                sections=[
-                    {
-                        "title": "Funcs",
-                        "desc": "",
-                        "contents": [{"name": "alpha"}, {"name": "beta"}],
+            ref = APIReference(
+                {
+                    "api-reference": {
+                        "package": "introtest_filter",
+                        "sections": [
+                            {
+                                "title": "Funcs",
+                                "desc": "",
+                                "contents": [{"name": "alpha"}, {"name": "beta"}],
+                            }
+                        ],
                     }
-                ],
+                }
             )
-            builder.build(filter="alpha")
+            ref.build(filter="alpha")
 
             # alpha should be written, beta should not
             assert (Path(tmp_dir) / "reference" / "alpha.qmd").exists()
@@ -29099,8 +29133,8 @@ def test_builder_build_with_filter():
             sys.modules.pop("introtest_filter", None)
 
 
-def test_builder_write_doc_pages_skip_unchanged():
-    """Builder.write_doc_pages skips pages with unchanged content."""
+def test_api_reference_write_doc_pages_skip_unchanged():
+    """APIReference.build skips pages with unchanged content."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg = Path(tmp_dir) / "introtest_unchanged"
@@ -29114,13 +29148,19 @@ def test_builder_write_doc_pages_skip_unchanged():
         old_cwd = os.getcwd()
         os.chdir(tmp_dir)
         try:
-            builder = Builder(
-                package="introtest_unchanged",
-                sections=[{"title": "Funcs", "desc": "", "contents": [{"name": "func"}]}],
-                rewrite_all_pages=False,
+            ref = APIReference(
+                {
+                    "api-reference": {
+                        "package": "introtest_unchanged",
+                        "sections": [
+                            {"title": "Funcs", "desc": "", "contents": [{"name": "func"}]}
+                        ],
+                        "rewrite_all_pages": False,
+                    }
+                }
             )
             # First build writes everything
-            builder.build()
+            ref.build()
             page_path = Path(tmp_dir) / "reference" / "func.qmd"
             assert page_path.exists()
             mtime1 = page_path.stat().st_mtime
@@ -29128,7 +29168,7 @@ def test_builder_write_doc_pages_skip_unchanged():
             # Second build should skip (content unchanged)
 
             time.sleep(0.01)
-            builder.build()
+            ref.build()
             mtime2 = page_path.stat().st_mtime
 
             # File should not have been rewritten
@@ -29139,27 +29179,22 @@ def test_builder_write_doc_pages_skip_unchanged():
             sys.modules.pop("introtest_unchanged", None)
 
 
-def test_builder_create_inventory():
-    """Builder.create_inventory creates an inventory object."""
+def test_api_reference_inventory_default_version():
+    """APIReference.build writes an inventory using the default version."""
 
-    builder = Builder(package="json")
-    builder.items = []
-    inv = builder.create_inventory(builder.items)
+    inv = create_inventory("json", "0.0.9999", [])
     assert inv is not None
 
 
-def test_builder_create_inventory_with_version():
-    """Builder.create_inventory uses version when available."""
+def test_api_reference_inventory_with_version():
+    """create_inventory uses an explicit version when provided."""
 
-    builder = Builder(package="json")
-    builder.version = "2.0.0"
-    builder.items = []
-    inv = builder.create_inventory(builder.items)
+    inv = create_inventory("json", "2.0.0", [])
     assert inv is not None
 
 
-def test_builder_generate_sidebar_basic():
-    """Builder._generate_sidebar creates sidebar structure from a blueprint layout."""
+def test_api_reference_generate_sidebar_basic():
+    """write._generate_sidebar creates sidebar structure from resolved sections."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg = Path(tmp_dir) / "introtest_sb"
@@ -29173,13 +29208,24 @@ def test_builder_generate_sidebar_basic():
         old_cwd = os.getcwd()
         os.chdir(tmp_dir)
         try:
-            builder = Builder(
-                package="introtest_sb",
-                sections=[{"title": "Functions", "desc": "", "contents": [{"name": "func"}]}],
+            ref = APIReference(
+                {
+                    "api-reference": {
+                        "package": "introtest_sb",
+                        "sections": [
+                            {"title": "Functions", "desc": "", "contents": [{"name": "func"}]}
+                        ],
+                    }
+                }
             )
-            bp = _blueprint(builder.layout, dynamic=builder.dynamic, parser=builder.parser)
+            resolved = blueprint_func(ref.sections, package=ref.package, settings=ref.settings)
 
-            sidebar = builder._generate_sidebar(bp)
+            sidebar = write._generate_sidebar(
+                resolved,
+                dir=ref.settings.dir,
+                out_page_suffix=ref.settings.out_page_suffix,
+                sidebar=ref.settings.sidebar,
+            )
             assert "website" in sidebar
             assert "sidebar" in sidebar["website"]
         finally:
@@ -29188,80 +29234,96 @@ def test_builder_generate_sidebar_basic():
             sys.modules.pop("introtest_sb", None)
 
 
-def test_builder_generate_sidebar_with_sidebar_config():
-    """Builder._generate_sidebar uses sidebar config overrides."""
+def test_api_reference_generate_sidebar_with_sidebar_config():
+    """write._generate_sidebar uses sidebar config overrides."""
 
-    builder = Builder(
-        package="json",
-        sidebar={"id": "api-sidebar", "file": "sidebar.yml"},
+    ref = _make_api_ref(sidebar={"id": "api-sidebar", "file": "sidebar.yml"})
+    sidebar = write._generate_sidebar(
+        ref.sections,
+        dir=ref.settings.dir,
+        out_page_suffix=ref.settings.out_page_suffix,
+        sidebar=ref.settings.sidebar,
     )
-    sidebar = builder._generate_sidebar(builder.layout)
     entries = sidebar["website"]["sidebar"]
     # First entry should have the custom id
     assert entries[0]["id"] == "api-sidebar"
 
 
-def test_builder_generate_sidebar_custom_contents():
-    """Builder._generate_sidebar respects custom sidebar contents with sentinel."""
+def test_api_reference_generate_sidebar_custom_contents():
+    """write._generate_sidebar respects custom sidebar contents with sentinel."""
 
-    builder = Builder(
-        package="json",
+    ref = _make_api_ref(
         sidebar={
             "id": "custom",
             "file": "sidebar.yml",
             "contents": ["intro.qmd", "{{ contents }}", "outro.qmd"],
-        },
+        }
     )
-    sidebar = builder._generate_sidebar(builder.layout)
+    sidebar = write._generate_sidebar(
+        ref.sections,
+        dir=ref.settings.dir,
+        out_page_suffix=ref.settings.out_page_suffix,
+        sidebar=ref.settings.sidebar,
+    )
     entries = sidebar["website"]["sidebar"]
     # Should contain intro.qmd and outro.qmd with contents spliced in
     assert "intro.qmd" in entries[0]["contents"]
     assert "outro.qmd" in entries[0]["contents"]
 
 
-def test_builder_generate_sidebar_no_sentinel():
-    """Builder._generate_sidebar extends contents when no sentinel."""
+def test_api_reference_generate_sidebar_no_sentinel():
+    """write._generate_sidebar extends contents when no sentinel."""
 
-    builder = Builder(
-        package="json",
+    ref = _make_api_ref(
         sidebar={
             "id": "custom",
             "file": "sidebar.yml",
             "contents": ["intro.qmd"],
-        },
+        }
     )
-    sidebar = builder._generate_sidebar(builder.layout)
+    sidebar = write._generate_sidebar(
+        ref.sections,
+        dir=ref.settings.dir,
+        out_page_suffix=ref.settings.out_page_suffix,
+        sidebar=ref.settings.sidebar,
+    )
     entries = sidebar["website"]["sidebar"]
     # Contents should have been extended
     assert "intro.qmd" in entries[0]["contents"]
 
 
-def test_builder_generate_sidebar_invalid_contents_type():
-    """Builder._generate_sidebar raises TypeError for non-list contents."""
+def test_api_reference_generate_sidebar_invalid_contents_type():
+    """write._generate_sidebar raises TypeError for non-list contents."""
 
-    builder = Builder(
-        package="json",
+    ref = _make_api_ref(
         sidebar={
             "id": "custom",
             "file": "sidebar.yml",
             "contents": "not_a_list",
-        },
+        }
     )
     with pytest.raises(TypeError, match="must be a list"):
-        builder._generate_sidebar(builder.layout)
+        write._generate_sidebar(
+            ref.sections,
+            dir=ref.settings.dir,
+            out_page_suffix=ref.settings.out_page_suffix,
+            sidebar=ref.settings.sidebar,
+        )
 
 
-def test_builder_page_to_links():
-    """Builder._page_to_links converts a Page to link paths."""
+def test_api_reference_page_to_links():
+    """write._page_to_links converts a Page to link paths."""
 
-    builder = Builder(package="json", dir="api")
-    page = layout.Page(path="my_func", contents=[])
-    links = builder._page_to_links(page)
+    ref = _make_api_ref(dir="api")
+    page = content.Page(path="my_func", contents=[])
+    links = write._page_to_links(
+        page, dir=ref.settings.dir, out_page_suffix=ref.settings.out_page_suffix
+    )
     assert links == ["api/my_func.qmd"]
 
 
-def test_builder_from_quarto_config_dict():
-    """Builder.from_quarto_config creates builder from dict config."""
+def test_api_reference_from_config_dict():
+    """APIReference is created from a dict config."""
 
     cfg = {
         "api-reference": {
@@ -29269,12 +29331,12 @@ def test_builder_from_quarto_config_dict():
             "sections": [],
         }
     }
-    builder = Builder.from_quarto_config(cfg)
-    assert builder.package == "json"
+    ref = APIReference(cfg)
+    assert ref.package == "json"
 
 
-def test_builder_from_quarto_config_yaml_file():
-    """Builder.from_quarto_config creates builder from YAML file."""
+def test_api_reference_from_yaml_file():
+    """APIReference is created from a YAML file path."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         cfg_file = Path(tmp_dir) / "quarto.yml"
@@ -29282,19 +29344,19 @@ def test_builder_from_quarto_config_yaml_file():
             "api-reference:\n  package: json\n  sections: []\n",
             encoding="utf-8",
         )
-        builder = Builder.from_quarto_config(str(cfg_file))
-        assert builder.package == "json"
+        ref = APIReference(str(cfg_file))
+        assert ref.package == "json"
 
 
-def test_builder_from_quarto_config_no_section_raises():
-    """Builder.from_quarto_config raises KeyError when no section found."""
+def test_api_reference_no_section_raises():
+    """APIReference raises KeyError when no section found."""
 
     with pytest.raises(KeyError, match="No .api-reference"):
-        Builder.from_quarto_config({"other": {}})
+        APIReference({"other": {}})
 
 
-def test_builder_from_quarto_config_with_style():
-    """Builder.from_quarto_config ignores style key in config."""
+def test_api_reference_ignores_style_key():
+    """APIReference ignores the compatibility-only style key."""
 
     cfg = {
         "api-reference": {
@@ -29303,12 +29365,12 @@ def test_builder_from_quarto_config_with_style():
             "style": "pkgdown",
         }
     }
-    builder = Builder.from_quarto_config(cfg)
-    assert builder.package == "json"
+    ref = APIReference(cfg)
+    assert ref.package == "json"
 
 
-def test_builder_from_quarto_config_interlinks_fast():
-    """Builder.from_quarto_config reads interlinks.fast setting."""
+def test_api_reference_drops_interlinks_fast():
+    """APIReference does not read the dropped interlinks.fast setting."""
 
     cfg = {
         "api-reference": {
@@ -29319,8 +29381,9 @@ def test_builder_from_quarto_config_interlinks_fast():
             "fast": True,
         },
     }
-    builder = Builder.from_quarto_config(cfg)
-    assert builder._fast_inventory is True
+    ref = APIReference(cfg)
+    assert ref.package == "json"
+    assert not hasattr(ref.settings, "fast_inventory")
 
 
 def test_cli_ordered_group_list_commands():
@@ -30738,10 +30801,10 @@ def _build_class_with_members():
     cls_obj.set_member("method", func_obj)
     cls_obj.set_member("Inner", inner_obj)
 
-    doc_attr = layout.DocAttribute(name="my_attr", obj=attr_obj)
-    doc_func = layout.DocFunction(name="method", obj=func_obj)
-    doc_inner = layout.DocClass(name="Inner", obj=inner_obj, members=[])
-    doc_cls = layout.DocClass(name="MyClass", obj=cls_obj, members=[doc_attr, doc_func, doc_inner])
+    doc_attr = content.DocAttribute(name="my_attr", obj=attr_obj)
+    doc_func = content.DocFunction(name="method", obj=func_obj)
+    doc_inner = content.DocClass(name="Inner", obj=inner_obj, members=[])
+    doc_cls = content.DocClass(name="MyClass", obj=cls_obj, members=[doc_attr, doc_func, doc_inner])
     return cls_obj, doc_cls
 
 
@@ -30755,15 +30818,15 @@ def _build_class_with_member_pages():
     cls_obj.set_member("method", func_obj)
     cls_obj.set_member("Inner", inner_obj)
 
-    doc_attr = layout.DocAttribute(name="my_attr", obj=attr_obj)
-    doc_func = layout.DocFunction(name="method", obj=func_obj)
-    doc_inner = layout.DocClass(name="Inner", obj=inner_obj, members=[])
+    doc_attr = content.DocAttribute(name="my_attr", obj=attr_obj)
+    doc_func = content.DocFunction(name="method", obj=func_obj)
+    doc_inner = content.DocClass(name="Inner", obj=inner_obj, members=[])
 
-    page_attr = layout.MemberPage(path="my_attr", contents=[doc_attr])
-    page_func = layout.MemberPage(path="method", contents=[doc_func])
-    page_inner = layout.MemberPage(path="Inner", contents=[doc_inner])
+    page_attr = content.MemberPage(path="my_attr", contents=[doc_attr])
+    page_func = content.MemberPage(path="method", contents=[doc_func])
+    page_inner = content.MemberPage(path="Inner", contents=[doc_inner])
 
-    doc_cls = layout.DocClass(
+    doc_cls = content.DocClass(
         name="MyClass", obj=cls_obj, members=[page_attr, page_func, page_inner]
     )
     return cls_obj, doc_cls
@@ -30834,7 +30897,7 @@ def test_mixin_render_body_no_members():
     """render_body returns just docstring when no members."""
 
     cls_obj = dc.Class(name="Empty", lineno=1)
-    doc_cls = layout.DocClass(name="Empty", obj=cls_obj, members=[])
+    doc_cls = content.DocClass(name="Empty", obj=cls_obj, members=[])
     render = RenderDocClass(doc_cls, level=1)
 
     body = render.render_body()
@@ -30848,7 +30911,7 @@ def test_mixin_render_body_invalid_member_type_raises():
 
     cls_obj = dc.Class(name="Bad", lineno=1)
     # Use a plain string as a member — not Doc or MemberPage
-    doc_cls = layout.DocClass(name="Bad", obj=cls_obj, members=["not_a_doc"])
+    doc_cls = content.DocClass(name="Bad", obj=cls_obj, members=["not_a_doc"])
     render = RenderDocClass(doc_cls, level=1)
 
     with pytest.raises(ValueError, match="Cannot render members of type"):
@@ -31238,8 +31301,8 @@ def test_mixin_render_members_group_empty_returns_none():
     cls_obj = dc.Class(name="FuncOnly", lineno=1)
     func_obj = dc.Function(name="method", lineno=2)
     cls_obj.set_member("method", func_obj)
-    doc_func = layout.DocFunction(name="method", obj=func_obj)
-    doc_cls = layout.DocClass(name="FuncOnly", obj=cls_obj, members=[doc_func])
+    doc_func = content.DocFunction(name="method", obj=func_obj)
+    doc_cls = content.DocClass(name="FuncOnly", obj=cls_obj, members=[doc_func])
 
     render = RenderDocClass(doc_cls, level=1)
 
@@ -31295,9 +31358,9 @@ def test_mixin_render_member_pages_group_empty_returns_none():
     func_obj = dc.Function(name="method", lineno=2)
     cls_obj.set_member("method", func_obj)
 
-    doc_func = layout.DocFunction(name="method", obj=func_obj)
-    page_func = layout.MemberPage(path="method", contents=[doc_func])
-    doc_cls = layout.DocClass(name="FuncOnly", obj=cls_obj, members=[page_func])
+    doc_func = content.DocFunction(name="method", obj=func_obj)
+    page_func = content.MemberPage(path="method", contents=[doc_func])
+    doc_cls = content.DocClass(name="FuncOnly", obj=cls_obj, members=[page_func])
 
     render = RenderDocClass(doc_cls, level=1)
 
@@ -31385,8 +31448,8 @@ def test_mixin_render_functions_module_uses_functions_slug():
     func_obj = dc.Function(name="func", lineno=1)
     mod_obj.set_member("func", func_obj)
 
-    doc_func = layout.DocFunction(name="func", obj=func_obj)
-    doc_mod = layout.DocModule(name="mymod", obj=mod_obj, members=[doc_func])
+    doc_func = content.DocFunction(name="func", obj=func_obj)
+    doc_mod = content.DocModule(name="mymod", obj=mod_obj, members=[doc_func])
 
     render = RenderDocModule(doc_mod, level=1)
 
@@ -31406,10 +31469,10 @@ def test_mixin_render_members_module_uses_functions_slug():
     mod_obj.set_member("Cls", cls_obj)
     mod_obj.set_member("val", attr_obj)
 
-    doc_func = layout.DocFunction(name="func", obj=func_obj)
-    doc_cls = layout.DocClass(name="Cls", obj=cls_obj, members=[])
-    doc_attr = layout.DocAttribute(name="val", obj=attr_obj)
-    doc_mod = layout.DocModule(name="mymod", obj=mod_obj, members=[doc_attr, doc_cls, doc_func])
+    doc_func = content.DocFunction(name="func", obj=func_obj)
+    doc_cls = content.DocClass(name="Cls", obj=cls_obj, members=[])
+    doc_attr = content.DocAttribute(name="val", obj=attr_obj)
+    doc_mod = content.DocModule(name="mymod", obj=mod_obj, members=[doc_attr, doc_cls, doc_func])
 
     render = RenderDocModule(doc_mod, level=1)
 
@@ -33111,9 +33174,9 @@ def test_docclass_attributes_excludes_dataclass_params():
     )
     cls_obj.set_member("__init__", init_fn)
 
-    doc_attr_x = layout.DocAttribute(name="x", obj=attr_x)
-    doc_attr_y = layout.DocAttribute(name="y", obj=attr_y)
-    doc_cls = layout.DocClass(name="DC", obj=cls_obj, members=[doc_attr_x, doc_attr_y])
+    doc_attr_x = content.DocAttribute(name="x", obj=attr_x)
+    doc_attr_y = content.DocAttribute(name="y", obj=attr_y)
+    doc_cls = content.DocClass(name="DC", obj=cls_obj, members=[doc_attr_x, doc_attr_y])
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -33147,8 +33210,8 @@ def test_docclass_parameter_attributes_with_dataclass():
     )
     cls_obj.set_member("__init__", init_fn)
 
-    doc_attr_a = layout.DocAttribute(name="a", obj=attr_a)
-    doc_cls = layout.DocClass(name="DC2", obj=cls_obj, members=[doc_attr_a])
+    doc_attr_a = content.DocAttribute(name="a", obj=attr_a)
+    doc_cls = content.DocClass(name="DC2", obj=cls_obj, members=[doc_attr_a])
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -33181,8 +33244,8 @@ def test_docclass_init_parameters_with_dataclass():
     )
     cls_obj.set_member("__init__", init_fn)
 
-    doc_attr_a = layout.DocAttribute(name="a", obj=attr_a)
-    doc_cls = layout.DocClass(name="DC3", obj=cls_obj, members=[doc_attr_a])
+    doc_attr_a = content.DocAttribute(name="a", obj=attr_a)
+    doc_cls = content.DocClass(name="DC3", obj=cls_obj, members=[doc_attr_a])
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -33200,7 +33263,7 @@ def test_docmodule_render_signature_no_signature_name():
     """DocModule.render_signature() returns None when signature_name is falsy."""
 
     mod_obj = dc.Module(name="my_module")
-    doc_mod = layout.DocModule(name="my_module", obj=mod_obj)
+    doc_mod = content.DocModule(name="my_module", obj=mod_obj)
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -33215,7 +33278,7 @@ def test_docmodule_render_signature_with_name():
     """DocModule.render_signature() returns Div when signature_name is set."""
 
     mod_obj = dc.Module(name="my_module")
-    doc_mod = layout.DocModule(name="my_module", obj=mod_obj)
+    doc_mod = content.DocModule(name="my_module", obj=mod_obj)
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -33232,7 +33295,7 @@ def test_docmodule_post_init_narrows_types():
     """DocModule.__post_init__() narrows self.doc and self.obj types."""
 
     mod_obj = dc.Module(name="test_mod")
-    doc_mod = layout.DocModule(name="test_mod", obj=mod_obj)
+    doc_mod = content.DocModule(name="test_mod", obj=mod_obj)
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -33257,7 +33320,7 @@ def test_renderbase_title_property():
     """RenderBase.title calls render_title()."""
 
     mod_obj = dc.Module(name="tmod")
-    doc_mod = layout.DocModule(name="tmod", obj=mod_obj)
+    doc_mod = content.DocModule(name="tmod", obj=mod_obj)
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -33275,7 +33338,7 @@ def test_renderbase_summary_name_property():
 
     # Create a mock that won't trigger __post_init__ logic
     rb = object.__new__(RenderBase)
-    rb.layout_obj = MagicMock()
+    rb.node = MagicMock()
     rb.level = 1
     assert rb.summary_name == ""
 
@@ -33314,7 +33377,7 @@ def test_docattribute_render_signature_type_kind():
     # Set the kind to TYPE_ALIAS so kind.value is "type alias" which contains "type"
     attr_obj.kind = gf.Kind.TYPE_ALIAS
 
-    doc_attr = layout.DocAttribute(name="MyType", obj=attr_obj)
+    doc_attr = content.DocAttribute(name="MyType", obj=attr_obj)
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -33333,7 +33396,7 @@ def test_mixin_page_render_title():
 
     # Create instance bypassing __init__
     obj = object.__new__(RenderPageMixin)
-    obj.layout_obj = MagicMock()
+    obj.node = MagicMock()
     obj.level = 1
 
     # render_metadata returns None by default (no override)
@@ -33355,7 +33418,7 @@ def test_renderbase_summary_property():
     """RenderBase.summary calls render_summary()."""
 
     rb = object.__new__(RenderBase)
-    rb.layout_obj = MagicMock()
+    rb.node = MagicMock()
     rb.level = 1
     # Access summary cached_property which calls render_summary()
     result = rb.summary
@@ -33384,11 +33447,11 @@ def test_docclass_attribute_member_pages_dataclass():
     )
     cls_obj.set_member("__init__", init_fn)
 
-    doc_attr_x = layout.DocAttribute(name="x", obj=attr_x)
-    doc_attr_y = layout.DocAttribute(name="y", obj=attr_y)
-    page_x = layout.MemberPage(path="x", contents=[doc_attr_x])
-    page_y = layout.MemberPage(path="y", contents=[doc_attr_y])
-    doc_cls = layout.DocClass(name="DC4", obj=cls_obj, members=[page_x, page_y])
+    doc_attr_x = content.DocAttribute(name="x", obj=attr_x)
+    doc_attr_y = content.DocAttribute(name="y", obj=attr_y)
+    page_x = content.MemberPage(path="x", contents=[doc_attr_x])
+    page_y = content.MemberPage(path="y", contents=[doc_attr_y])
+    doc_cls = content.DocClass(name="DC4", obj=cls_obj, members=[page_x, page_y])
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -33403,7 +33466,7 @@ def test_docclass_parameter_attributes_non_dataclass():
     """DocClass.parameter_attributes returns empty for non-dataclass."""
 
     cls_obj = dc.Class(name="RegularClass", lineno=1)
-    doc_cls = layout.DocClass(name="RegularClass", obj=cls_obj, members=[])
+    doc_cls = content.DocClass(name="RegularClass", obj=cls_obj, members=[])
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -33417,7 +33480,7 @@ def test_docclass_init_parameters_non_dataclass():
     """DocClass.init_parameters returns empty for non-dataclass."""
 
     cls_obj = dc.Class(name="RegularClass2", lineno=1)
-    doc_cls = layout.DocClass(name="RegularClass2", obj=cls_obj, members=[])
+    doc_cls = content.DocClass(name="RegularClass2", obj=cls_obj, members=[])
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -34088,10 +34151,10 @@ def test_create_inventory_basic():
 
 
 def test_create_inventory_with_layout_item():
-    """create_inventory handles layout.Item objects."""
+    """create_inventory handles InventoryItem objects."""
 
     obj = gf.Function(name="my_func", lineno=1)
-    item = layout.Item(
+    item = InventoryItem(
         name="myproj.my_func",
         obj=obj,
         uri="my_func.html",
@@ -34267,9 +34330,9 @@ def test_exclude_classes_updates_globals():
 def test_render_reference_section_title():
     """RenderReferenceSection.render_title() returns a Header."""
 
-    section = layout.Section(title="Functions", contents=[layout.Auto(name="x")])
+    section = content.Section(title="Functions", contents=[spec.SpecObject(name="x")])
 
-    rs = RenderReferenceSection(layout_obj=section, level=1)
+    rs = RenderReferenceSection(node=section, level=1)
     title = rs.render_title()
 
     assert title is not None
@@ -34279,9 +34342,9 @@ def test_render_reference_section_title():
 def test_render_reference_section_subtitle():
     """RenderReferenceSection.render_title() handles subtitles."""
 
-    section = layout.Section(subtitle="Helper Functions", contents=[layout.Auto(name="x")])
+    section = content.Section(subtitle="Helper Functions", contents=[spec.SpecObject(name="x")])
 
-    rs = RenderReferenceSection(layout_obj=section, level=1)
+    rs = RenderReferenceSection(node=section, level=1)
     title = rs.render_title()
 
     assert title is not None
@@ -34291,9 +34354,9 @@ def test_render_reference_section_subtitle():
 def test_render_reference_section_no_title():
     """RenderReferenceSection.render_title() returns None when no title/subtitle."""
 
-    section = layout.Section(contents=[layout.Auto(name="x")])
+    section = content.Section(contents=[spec.SpecObject(name="x")])
 
-    rs = RenderReferenceSection(layout_obj=section, level=1)
+    rs = RenderReferenceSection(node=section, level=1)
     title = rs.render_title()
 
     assert title is None
@@ -34302,9 +34365,11 @@ def test_render_reference_section_no_title():
 def test_render_reference_section_description():
     """RenderReferenceSection.render_description() returns a Div."""
 
-    section = layout.Section(title="Test", desc="A description", contents=[layout.Auto(name="x")])
+    section = content.Section(
+        title="Test", desc="A description", contents=[spec.SpecObject(name="x")]
+    )
 
-    rs = RenderReferenceSection(layout_obj=section, level=1)
+    rs = RenderReferenceSection(node=section, level=1)
     desc = rs.render_description()
 
     assert "A description" in str(desc)
@@ -34313,28 +34378,33 @@ def test_render_reference_section_description():
 def test_render_reference_section_body_empty():
     """RenderReferenceSection.render_body() returns None for empty section."""
 
-    section = layout.Section(title="Empty", contents=[])
+    section = content.Section(title="Empty", contents=[])
 
-    rs = RenderReferenceSection(layout_obj=section, level=1)
+    rs = RenderReferenceSection(node=section, level=1)
     body = rs.render_body()
 
     assert body is None
 
 
+def _make_render_ref(*, title="API Reference", desc=None, package="mypkg", options=None):
+    """An APIReference content stand-in for RenderReferencePage tests."""
+    ref = APIReference({"api-reference": {"package": package}})
+    ref.title = title
+    ref.desc = desc
+    ref.options = options
+    return ref
+
+
 def test_render_reference_page_post_init():
-    """RenderReferencePage.__post_init__ sets layout, sections, package, options."""
+    """RenderReferencePage.__init__ sets api_ref, sections, package, options."""
 
-    lyt = layout.Layout(
-        title="API Ref",
-        description="My API",
-        sections=[layout.Section(title="Funcs", contents=[layout.Auto(name="x")])],
-        package="mypkg",
-    )
+    ref = _make_render_ref(title="API Ref", desc="My API", package="mypkg")
+    sections = [content.Section(title="Funcs", contents=[spec.SpecObject(name="x")])]
 
-    rp = RenderReferencePage(layout_obj=lyt, level=1)
+    rp = RenderReferencePage(ref, sections, level=1)
 
-    assert rp.layout is lyt
-    assert rp.sections == lyt.sections
+    assert rp.api_ref is ref
+    assert rp.sections == sections
     assert rp.package == "mypkg"
     assert rp.options is None
 
@@ -34342,13 +34412,10 @@ def test_render_reference_page_post_init():
 def test_render_reference_page_description():
     """RenderReferencePage.render_description() returns a Div when description exists."""
 
-    lyt = layout.Layout(
-        title="API Ref",
-        description="My description",
-        sections=[layout.Section(title="S", contents=[layout.Auto(name="x")])],
-    )
+    ref = _make_render_ref(title="API Ref", desc="My description")
+    sections = [content.Section(title="S", contents=[spec.SpecObject(name="x")])]
 
-    rp = RenderReferencePage(layout_obj=lyt, level=1)
+    rp = RenderReferencePage(ref, sections, level=1)
     desc = rp.render_description()
 
     assert desc is not None
@@ -34358,12 +34425,10 @@ def test_render_reference_page_description():
 def test_render_reference_page_no_description():
     """RenderReferencePage.render_description() returns None when no description."""
 
-    lyt = layout.Layout(
-        title="API Ref",
-        sections=[layout.Section(title="S", contents=[layout.Auto(name="x")])],
-    )
+    ref = _make_render_ref(title="API Ref")
+    sections = [content.Section(title="S", contents=[spec.SpecObject(name="x")])]
 
-    rp = RenderReferencePage(layout_obj=lyt, level=1)
+    rp = RenderReferencePage(ref, sections, level=1)
     desc = rp.render_description()
 
     assert desc is None
@@ -34372,12 +34437,10 @@ def test_render_reference_page_no_description():
 def test_render_reference_page_metadata():
     """RenderReferencePage.render_metadata() returns Meta with title."""
 
-    lyt = layout.Layout(
-        title="API Reference",
-        sections=[layout.Section(title="S", contents=[layout.Auto(name="x")])],
-    )
+    ref = _make_render_ref(title="API Reference")
+    sections = [content.Section(title="S", contents=[spec.SpecObject(name="x")])]
 
-    rp = RenderReferencePage(layout_obj=lyt, level=1)
+    rp = RenderReferencePage(ref, sections, level=1)
     meta = rp.render_metadata()
 
     assert "API Reference" in str(meta)
@@ -34388,9 +34451,9 @@ def test_render_api_page_post_init():
 
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
-    page = layout.Page(path="reference/my_func", contents=[doc_obj])
+    page = content.Page(path="reference/my_func", contents=[doc_obj])
 
-    ap = RenderAPIPage(layout_obj=page, level=1)
+    ap = RenderAPIPage(node=page, level=1)
 
     assert ap.page is page
     assert ap.path == "reference/my_func.qmd"
@@ -34401,9 +34464,9 @@ def test_render_api_page_has_one_object():
 
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
-    page = layout.Page(path="reference/my_func", contents=[doc_obj])
+    page = content.Page(path="reference/my_func", contents=[doc_obj])
 
-    ap = RenderAPIPage(layout_obj=page, level=1)
+    ap = RenderAPIPage(node=page, level=1)
 
     assert ap._has_one_object is True
 
@@ -34413,9 +34476,9 @@ def test_render_api_page_metadata():
 
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
-    page = layout.Page(path="reference/my_func", contents=[doc_obj])
+    page = content.Page(path="reference/my_func", contents=[doc_obj])
 
-    ap = RenderAPIPage(layout_obj=page, level=1)
+    ap = RenderAPIPage(node=page, level=1)
     meta = ap.render_metadata()
     meta_str = str(meta)
 
@@ -34427,9 +34490,9 @@ def test_render_api_page_render_body():
 
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
-    page = layout.Page(path="reference/my_func", contents=[doc_obj])
+    page = content.Page(path="reference/my_func", contents=[doc_obj])
 
-    ap = RenderAPIPage(layout_obj=page, level=1)
+    ap = RenderAPIPage(node=page, level=1)
     body = ap.render_body()
 
     assert body is not None
@@ -34440,14 +34503,14 @@ def test_render_api_page_summary_with_summary_details():
 
     func_obj = gf.Function(name="my_func", lineno=1)
     doc_obj = griffe_to_doc(func_obj)
-    summary = layout.SummaryDetails(name="my_func", desc="A function")
-    page = layout.Page(
+    summary = content.SummaryItem(name="my_func", desc="A function")
+    page = content.Page(
         path="reference/my_func",
         contents=[doc_obj],
         summary=summary,
     )
 
-    ap = RenderAPIPage(layout_obj=page, level=1)
+    ap = RenderAPIPage(node=page, level=1)
     result = ap.render_summary()
 
     assert len(result) == 1
@@ -34459,13 +34522,13 @@ def test_render_api_page_summary_multi_no_flatten_raises():
 
     f1 = griffe_to_doc(gf.Function(name="func1", lineno=1))
     f2 = griffe_to_doc(gf.Function(name="func2", lineno=2))
-    page = layout.Page(
+    page = content.Page(
         path="reference/funcs",
         contents=[f1, f2],
         flatten=False,
     )
 
-    ap = RenderAPIPage(layout_obj=page, level=1)
+    ap = RenderAPIPage(node=page, level=1)
     with pytest.raises(ValueError, match="Cannot summarize page"):
         ap.render_summary()
 
@@ -34718,14 +34781,14 @@ def test_render_reference_page_render_body():
     """RenderReferencePage.render_body() renders sections."""
 
     func_obj = gf.Function(name="my_func", lineno=1)
-    doc_func = layout.DocFunction(name="my_func", obj=func_obj, anchor="my_func")
+    doc_func = content.DocFunction(name="my_func", obj=func_obj, anchor="my_func")
 
-    section = layout.Section(title="Functions", contents=[doc_func])
-    lyt = layout.Layout(title="API", sections=[section])
+    section = content.Section(title="Functions", contents=[doc_func])
+    ref = _make_render_ref(title="API")
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        rp = RenderReferencePage(layout_obj=lyt, level=1)
+        rp = RenderReferencePage(ref, [section], level=1)
         body = rp.render_body()
 
     assert body is not None
@@ -34739,13 +34802,13 @@ def test_render_reference_section_body_with_contents():
     """RenderReferenceSection.render_body() renders Doc objects."""
 
     func_obj = gf.Function(name="some_func", lineno=1)
-    doc_func = layout.DocFunction(name="some_func", obj=func_obj, anchor="some_func")
+    doc_func = content.DocFunction(name="some_func", obj=func_obj, anchor="some_func")
 
-    section = layout.Section(title="Functions", contents=[doc_func])
+    section = content.Section(title="Functions", contents=[doc_func])
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        rs = RenderReferenceSection(layout_obj=section, level=1)
+        rs = RenderReferenceSection(node=section, level=1)
         body = rs.render_body()
 
     assert body is not None
@@ -34758,9 +34821,9 @@ def test_render_reference_section_body_with_contents():
 def test_render_reference_section_post_init():
     """RenderReferenceSection.__post_init__() sets section."""
 
-    section = layout.Section(title="Test", contents=[layout.Auto(name="x")])
+    section = content.Section(title="Test", contents=[spec.SpecObject(name="x")])
 
-    rs = RenderReferenceSection(layout_obj=section, level=1)
+    rs = RenderReferenceSection(node=section, level=1)
 
     assert rs.section is section
 
@@ -34769,14 +34832,14 @@ def test_render_reference_section_title_and_subtitle():
     """RenderReferenceSection.render_title() for title vs subtitle."""
 
     # Title case
-    sec_t = layout.Section(title="Methods", contents=[layout.Auto(name="x")])
-    rs_t = RenderReferenceSection(layout_obj=sec_t, level=1)
+    sec_t = content.Section(title="Methods", contents=[spec.SpecObject(name="x")])
+    rs_t = RenderReferenceSection(node=sec_t, level=1)
 
     assert "Methods" in str(rs_t.render_title())
 
     # Subtitle case
-    sec_s = layout.Section(subtitle="Helpers", contents=[layout.Auto(name="x")])
-    rs_s = RenderReferenceSection(layout_obj=sec_s, level=1)
+    sec_s = content.Section(subtitle="Helpers", contents=[spec.SpecObject(name="x")])
+    rs_s = RenderReferenceSection(node=sec_s, level=1)
 
     assert "Helpers" in str(rs_s.render_title())
 
@@ -34786,13 +34849,13 @@ def test_render_api_page_full_lifecycle():
 
     func_obj = gf.Function(name="my_func", lineno=1)
     func_obj.endlineno = 10
-    doc_func = layout.DocFunction(name="my_func", obj=func_obj, anchor="my_func")
+    doc_func = content.DocFunction(name="my_func", obj=func_obj, anchor="my_func")
 
-    page = layout.Page(path="reference/my_func", contents=[doc_func])
+    page = content.Page(path="reference/my_func", contents=[doc_func])
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        ap = RenderAPIPage(layout_obj=page, level=1)
+        ap = RenderAPIPage(node=page, level=1)
 
         # Test __post_init__
         assert ap.page is page
@@ -34822,17 +34885,17 @@ def test_render_api_page_with_summary_details():
     """RenderAPIPage.render_summary() with explicit summary."""
 
     func_obj = gf.Function(name="fn", lineno=1)
-    doc_func = layout.DocFunction(name="fn", obj=func_obj, anchor="fn")
+    doc_func = content.DocFunction(name="fn", obj=func_obj, anchor="fn")
 
-    page = layout.Page(
+    page = content.Page(
         path="reference/fn",
         contents=[doc_func],
-        summary=layout.SummaryDetails(name="fn()", desc="Do something"),
+        summary=content.SummaryItem(name="fn()", desc="Do something"),
     )
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        ap = RenderAPIPage(layout_obj=page, level=1)
+        ap = RenderAPIPage(node=page, level=1)
         summary = ap.render_summary()
     assert len(summary) == 1
     assert "fn()" in str(summary[0][0])
@@ -34843,8 +34906,8 @@ def _make_function_page(name="my_func"):
     """Build a single-function Page for RenderAPIPage duplication tests."""
     obj = gf.Function(name=name, lineno=1)
     obj.endlineno = 10
-    doc = layout.DocFunction(name=name, obj=obj, anchor=name)
-    return layout.Page(path=f"reference/{name}", contents=[doc])
+    doc = content.DocFunction(name=name, obj=obj, anchor=name)
+    return content.Page(path=f"reference/{name}", contents=[doc])
 
 
 def _make_class_page_with_members(name="MyClass"):
@@ -34859,10 +34922,10 @@ def _make_class_page_with_members(name="MyClass"):
     func_obj = dc.Function(name="method", lineno=3)
     cls_obj.set_member("my_attr", attr_obj)
     cls_obj.set_member("method", func_obj)
-    doc_attr = layout.DocAttribute(name="my_attr", obj=attr_obj)
-    doc_func = layout.DocFunction(name="method", obj=func_obj)
-    doc_cls = layout.DocClass(name=name, obj=cls_obj, members=[doc_attr, doc_func])
-    return layout.Page(path=f"reference/{name}", contents=[doc_cls])
+    doc_attr = content.DocAttribute(name="my_attr", obj=attr_obj)
+    doc_func = content.DocFunction(name="method", obj=func_obj)
+    doc_cls = content.DocClass(name=name, obj=cls_obj, members=[doc_attr, doc_func])
+    return content.Page(path=f"reference/{name}", contents=[doc_cls])
 
 
 def test_render_api_page_suppresses_inner_title_at_level_1():
@@ -34871,7 +34934,7 @@ def test_render_api_page_suppresses_inner_title_at_level_1():
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        ap = RenderAPIPage(layout_obj=page, level=1)
+        ap = RenderAPIPage(node=page, level=1)
         inner = ap.render_objs[0]
 
     assert inner.show_title is False
@@ -34889,7 +34952,7 @@ def test_render_api_page_single_object_renders_title_once():
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        rendered = str(RenderAPIPage(layout_obj=page, level=1))
+        rendered = str(RenderAPIPage(node=page, level=1))
 
     assert 'title: "[my_func()]' in rendered
     assert "\n# [my_func()]" not in rendered
@@ -34903,7 +34966,7 @@ def test_render_api_page_class_with_members_renders_title_once():
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        rendered = str(RenderAPIPage(layout_obj=page, level=1))
+        rendered = str(RenderAPIPage(node=page, level=1))
 
     assert 'title: "[MyClass]' in rendered
     assert "\n# [MyClass]" not in rendered
@@ -34917,7 +34980,7 @@ def test_render_api_page_renders_body_header_at_level_2():
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        rendered = str(RenderAPIPage(layout_obj=page, level=2))
+        rendered = str(RenderAPIPage(node=page, level=2))
 
     assert 'title: "[my_func()]' in rendered
     assert "\n## [my_func()]" in rendered
@@ -34933,9 +34996,9 @@ def test_render_api_page_multi_object_renders_all_inner_headers():
     f1.endlineno = 5
     f2 = gf.Function(name="func2", lineno=10)
     f2.endlineno = 15
-    doc_f1 = layout.DocFunction(name="func1", obj=f1, anchor="func1")
-    doc_f2 = layout.DocFunction(name="func2", obj=f2, anchor="func2")
-    page = layout.Page(
+    doc_f1 = content.DocFunction(name="func1", obj=f1, anchor="func1")
+    doc_f2 = content.DocFunction(name="func2", obj=f2, anchor="func2")
+    page = content.Page(
         path="reference/funcs",
         contents=[doc_f1, doc_f2],
         flatten=True,
@@ -34943,7 +35006,7 @@ def test_render_api_page_multi_object_renders_all_inner_headers():
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
-        rendered = str(RenderAPIPage(layout_obj=page, level=1))
+        rendered = str(RenderAPIPage(node=page, level=1))
 
     assert "\n## [func1()]" in rendered
     assert "\n## [func2()]" in rendered
@@ -34953,7 +35016,7 @@ def test_renderdoc_display_name_relative_level_gt1():
     """RenderDoc.display_name uses 'name' format when level > 1."""
 
     func_obj = gf.Function(name="my_func", lineno=1)
-    doc_func = layout.DocFunction(name="my_func", obj=func_obj)
+    doc_func = content.DocFunction(name="my_func", obj=func_obj)
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -34967,7 +35030,7 @@ def test_renderdoc_render_annotation_non_attribute_raises():
     """RenderDoc.render_annotation() raises TypeError for non-attribute."""
 
     func_obj = gf.Function(name="fn", lineno=1)
-    doc_func = layout.DocFunction(name="fn", obj=func_obj)
+    doc_func = content.DocFunction(name="fn", obj=func_obj)
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -34981,7 +35044,7 @@ def test_renderdoc_render_annotation_attribute():
 
     attr_obj = gf.Attribute(name="x", lineno=1)
     attr_obj.annotation = gf.ExprName("int")
-    doc_attr = layout.DocAttribute(name="x", obj=attr_obj)
+    doc_attr = content.DocAttribute(name="x", obj=attr_obj)
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -34996,7 +35059,7 @@ def test_renderdoc_render_annotation_none():
 
     attr_obj = gf.Attribute(name="y", lineno=1)
     attr_obj.annotation = None
-    doc_attr = layout.DocAttribute(name="y", obj=attr_obj)
+    doc_attr = content.DocAttribute(name="y", obj=attr_obj)
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -35014,7 +35077,7 @@ def test_renderdoc_docstring_section_deprecated():
         parent=func_obj,
         parser="numpy",
     )
-    doc_func = layout.DocFunction(name="old_fn", obj=func_obj)
+    doc_func = content.DocFunction(name="old_fn", obj=func_obj)
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -35033,7 +35096,7 @@ def test_renderdoc_docstring_section_examples():
         parent=func_obj,
         parser="numpy",
     )
-    doc_func = layout.DocFunction(name="ex_fn", obj=func_obj)
+    doc_func = content.DocFunction(name="ex_fn", obj=func_obj)
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -35052,7 +35115,7 @@ def test_renderdoc_docstring_section_text_in_div():
         parent=func_obj,
         parser="numpy",
     )
-    doc_func = layout.DocFunction(name="txt_fn", obj=func_obj)
+    doc_func = content.DocFunction(name="txt_fn", obj=func_obj)
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -35068,7 +35131,7 @@ def test_renderdoc_source_link_with_github_url():
     func_obj = gf.Function(name="linked_fn", lineno=5)
     func_obj.endlineno = 15
     mod.set_member("linked_fn", func_obj)
-    doc_func = layout.DocFunction(name="linked_fn", obj=func_obj)
+    doc_func = content.DocFunction(name="linked_fn", obj=func_obj)
 
     # Patch package_info directly so we don't depend on os.environ ordering
     with patch(
@@ -35095,7 +35158,7 @@ def test_renderdoc_see_also_section():
         parent=func_obj,
         parser="numpy",
     )
-    doc_func = layout.DocFunction(name="sa_fn", obj=func_obj)
+    doc_func = content.DocFunction(name="sa_fn", obj=func_obj)
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GITHUB_REPO_URL", None)
@@ -35547,9 +35610,9 @@ def test_type_sections_empty_lists():
 def test_type_sections_items_combines_all():
     """TypeSections.items returns protocols + typevars + typealiases combined."""
 
-    p_item = layout.Item(name="P", obj=MagicMock(), uri="ref/P.html#P", dispname="P")
-    tv_item = layout.Item(name="TV", obj=MagicMock(), uri="ref/TV.html#TV", dispname="TV")
-    ta_item = layout.Item(name="TA", obj=MagicMock(), uri="ref/TA.html#TA", dispname="TA")
+    p_item = InventoryItem(name="P", obj=MagicMock(), uri="ref/P.html#P", dispname="P")
+    tv_item = InventoryItem(name="TV", obj=MagicMock(), uri="ref/TV.html#TV", dispname="TV")
+    ta_item = InventoryItem(name="TA", obj=MagicMock(), uri="ref/TA.html#TA", dispname="TA")
 
     mock_render = MagicMock()
     mock_render_cls = MagicMock(return_value=mock_render)
@@ -35576,7 +35639,7 @@ def test_type_sections_items_combines_all():
 def test_type_sections_post_init_protocols_no_summary():
     """TypeSections.__post_init__ sets show_members_summary=False on protocols."""
 
-    p_item = layout.Item(name="Proto", obj=MagicMock())
+    p_item = InventoryItem(name="Proto", obj=MagicMock())
 
     mock_render = MagicMock()
     mock_render_cls = MagicMock(return_value=mock_render)
@@ -35599,7 +35662,7 @@ def test_type_sections_post_init_protocols_no_summary():
 def test_type_sections_post_init_typevars_no_sig_name():
     """TypeSections.__post_init__ sets show_signature_name=False on typevars."""
 
-    tv_item = layout.Item(name="T", obj=MagicMock())
+    tv_item = InventoryItem(name="T", obj=MagicMock())
 
     mock_render = MagicMock()
     mock_render_cls = MagicMock(return_value=mock_render)
@@ -35622,7 +35685,7 @@ def test_type_sections_post_init_typevars_no_sig_name():
 def test_type_sections_post_init_typealiases_settings():
     """TypeSections.__post_init__ sets show_signature_name=False and show_signature_annotation=False on typealiases."""
 
-    ta_item = layout.Item(name="MyAlias", obj=MagicMock())
+    ta_item = InventoryItem(name="MyAlias", obj=MagicMock())
 
     mock_render = MagicMock()
     mock_render_cls = MagicMock(return_value=mock_render)
@@ -35646,7 +35709,7 @@ def test_type_sections_post_init_typealiases_settings():
 def test_type_sections_render_body_protocols_section():
     """TypeSections.render_body includes 'Protocols' header when protocols exist."""
 
-    p_item = layout.Item(name="P", obj=MagicMock())
+    p_item = InventoryItem(name="P", obj=MagicMock())
 
     mock_render = MagicMock()
     mock_render.__str__ = MagicMock(return_value="<protocol-rendered>")
@@ -35674,7 +35737,7 @@ def test_type_sections_render_body_protocols_section():
 def test_type_sections_render_body_typevars_section():
     """TypeSections.render_body includes 'Type Variables' header when typevars exist."""
 
-    tv_item = layout.Item(name="T", obj=MagicMock())
+    tv_item = InventoryItem(name="T", obj=MagicMock())
 
     mock_render = MagicMock()
     mock_render.__str__ = MagicMock(return_value="<typevar-rendered>")
@@ -35700,7 +35763,7 @@ def test_type_sections_render_body_typevars_section():
 def test_type_sections_render_body_typealiases_section():
     """TypeSections.render_body includes 'Type Aliases' header when typealiases exist."""
 
-    ta_item = layout.Item(name="A", obj=MagicMock())
+    ta_item = InventoryItem(name="A", obj=MagicMock())
 
     mock_render = MagicMock()
     mock_render.__str__ = MagicMock(return_value="<alias-rendered>")
@@ -35726,9 +35789,9 @@ def test_type_sections_render_body_typealiases_section():
 def test_type_sections_render_body_all_sections():
     """TypeSections.render_body includes all three section headers when all types present."""
 
-    p_item = layout.Item(name="P", obj=MagicMock())
-    tv_item = layout.Item(name="T", obj=MagicMock())
-    ta_item = layout.Item(name="A", obj=MagicMock())
+    p_item = InventoryItem(name="P", obj=MagicMock())
+    tv_item = InventoryItem(name="T", obj=MagicMock())
+    ta_item = InventoryItem(name="A", obj=MagicMock())
 
     mock_render = MagicMock()
     mock_render.__str__ = MagicMock(return_value="<rendered>")
@@ -35757,9 +35820,9 @@ def test_type_information_post_init():
 
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
-    mock_builder.dir = "reference"
+    mock_builder.settings.dir = "reference"
 
-    ti = TypeInformation(module_path="mypkg.types", builder=mock_builder)
+    ti = TypeInformation(module_path="mypkg.types", api_ref=mock_builder)
 
     assert ti.package == "mypkg"
     assert ti.dir == "reference"
@@ -35770,9 +35833,9 @@ def test_type_information_base_uri_strips_package():
 
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
-    mock_builder.dir = "reference"
+    mock_builder.settings.dir = "reference"
 
-    ti = TypeInformation(module_path="mypkg.sub.types", builder=mock_builder)
+    ti = TypeInformation(module_path="mypkg.sub.types", api_ref=mock_builder)
     assert ti.base_uri == "reference/sub.types"
 
 
@@ -35781,9 +35844,9 @@ def test_type_information_base_uri_no_package_prefix():
 
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
-    mock_builder.dir = "reference"
+    mock_builder.settings.dir = "reference"
 
-    ti = TypeInformation(module_path="otherpkg.types", builder=mock_builder)
+    ti = TypeInformation(module_path="otherpkg.types", api_ref=mock_builder)
     assert ti.base_uri == "reference/otherpkg.types"
 
 
@@ -35792,7 +35855,7 @@ def test_type_information_sections_calls_get_object():
 
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
-    mock_builder.dir = "reference"
+    mock_builder.settings.dir = "reference"
 
     # Create mock members with canonical_path
     mock_proto = MagicMock()
@@ -35827,7 +35890,7 @@ def test_type_information_sections_calls_get_object():
             "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
-        ti = TypeInformation(module_path="mypkg.types", builder=mock_builder)
+        ti = TypeInformation(module_path="mypkg.types", api_ref=mock_builder)
         sections = ti.sections
 
     assert len(sections.protocols_items) == 1
@@ -35843,7 +35906,7 @@ def test_type_information_sections_item_uris():
 
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
-    mock_builder.dir = "reference"
+    mock_builder.settings.dir = "reference"
 
     mock_attr = MagicMock()
     mock_attr.canonical_path = "mypkg.sub.MyAlias"
@@ -35864,7 +35927,7 @@ def test_type_information_sections_item_uris():
             "great_docs._renderer.typing_information.get_render_type", return_value=mock_render_cls
         ),
     ):
-        ti = TypeInformation(module_path="mypkg.sub", builder=mock_builder)
+        ti = TypeInformation(module_path="mypkg.sub", api_ref=mock_builder)
         sections = ti.sections
 
     item = sections.typealiases_items[0]
@@ -35877,13 +35940,13 @@ def test_type_information_content_has_meta_and_sections():
 
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
-    mock_builder.dir = "reference"
+    mock_builder.settings.dir = "reference"
 
     mock_module = MagicMock()
     mock_module.members = {}
 
     with patch("great_docs._renderer.typing_information.get_object", return_value=mock_module):
-        ti = TypeInformation(module_path="mypkg.types", builder=mock_builder)
+        ti = TypeInformation(module_path="mypkg.types", api_ref=mock_builder)
         content = ti.content
 
     content_str = str(content)
@@ -35895,13 +35958,13 @@ def test_type_information_str_delegates_to_content():
 
     mock_builder = MagicMock()
     mock_builder.package = "mypkg"
-    mock_builder.dir = "reference"
+    mock_builder.settings.dir = "reference"
 
     mock_module = MagicMock()
     mock_module.members = {}
 
     with patch("great_docs._renderer.typing_information.get_object", return_value=mock_module):
-        ti = TypeInformation(module_path="mypkg.types", builder=mock_builder)
+        ti = TypeInformation(module_path="mypkg.types", api_ref=mock_builder)
         result = str(ti)
 
     assert "Typing Information" in result
@@ -35913,14 +35976,14 @@ def test_type_information_write_creates_file():
     with tempfile.TemporaryDirectory() as tmp_dir:
         mock_builder = MagicMock()
         mock_builder.package = "mypkg"
-        mock_builder.dir = str(Path(tmp_dir) / "reference")
+        mock_builder.settings.dir = str(Path(tmp_dir) / "reference")
         mock_builder.items = []
 
         mock_module = MagicMock()
         mock_module.members = {}
 
         with patch("great_docs._renderer.typing_information.get_object", return_value=mock_module):
-            ti = TypeInformation(module_path="mypkg.types", builder=mock_builder)
+            ti = TypeInformation(module_path="mypkg.types", api_ref=mock_builder)
 
             # Ensure the output directory exists
             Path(ti.base_uri).parent.mkdir(parents=True, exist_ok=True)
@@ -35940,7 +36003,7 @@ def test_type_information_write_extends_builder_items():
 
         mock_builder = MagicMock()
         mock_builder.package = "mypkg"
-        mock_builder.dir = ref_dir
+        mock_builder.settings.dir = ref_dir
         mock_builder.items = []
 
         mock_member = MagicMock()
@@ -35963,7 +36026,7 @@ def test_type_information_write_extends_builder_items():
                 return_value=mock_render_cls,
             ),
         ):
-            ti = TypeInformation(module_path="mypkg.types", builder=mock_builder)
+            ti = TypeInformation(module_path="mypkg.types", api_ref=mock_builder)
 
             Path(ref_dir).mkdir(parents=True, exist_ok=True)
             ti.write()
@@ -37810,10 +37873,10 @@ class TestProcessSectionsBatch9:
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
         (tmp / "great-docs.yml").write_text(gd_yml)
-        for rel_path, content in section_files.items():
+        for rel_path, file_content in section_files.items():
             p = tmp / rel_path
             p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(content)
+            p.write_text(file_content)
         docs = GreatDocs(project_path=tmp_dir)
         docs.project_path.mkdir(parents=True, exist_ok=True)
         with open(docs.project_path / "_quarto.yml", "w") as f:
