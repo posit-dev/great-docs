@@ -92,6 +92,23 @@ class SpecOptions(Walkable):
         object.__setattr__(new, "_fields_specified", tuple(specified))
         return new
 
+    def with_defaults(self, base: SpecOptions | None) -> Self:
+        """
+        Default this element's unspecified fields to `base`'s values
+
+        A field the caller set explicitly — even to its default value —
+        keeps this element's value; every other field takes the value
+        `base` was explicitly given.
+        """
+        if base is None:
+            return self
+        inherited = {
+            name: getattr(base, name)
+            for name in base._fields_specified
+            if name not in self._fields_specified
+        }
+        return self.replace(**inherited)
+
 
 @dataclass(init=False)
 class SpecObject(SpecOptions):

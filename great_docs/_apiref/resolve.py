@@ -13,7 +13,7 @@ from yaml12 import format_yaml
 from ._walkable import MISSING, MissingType, Walkable
 from .content import Doc, Link, MemberPage, Page, Section, Text
 from .introspect import resolve_alias
-from .spec import ChildrenStyle, SpecObject, SpecSection, SpecText
+from .spec import ChildrenStyle, SpecObject, SpecOptions, SpecSection, SpecText
 
 # Dunder members inherited from `object`/`type` (or PyO3 metaclasses) that carry docstrings but are
 # never useful API documentation. Filtered out unconditionally so they do not pollute reference
@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from .api_reference import Settings
-    from .spec import SpecEntry, SpecOptions
+    from .spec import SpecEntry
 
 _log = logging.getLogger(__name__)
 
@@ -85,6 +85,16 @@ def _is_external_alias(obj: gf.Alias | gf.Object, mod: gf.Module) -> bool:
             return True
 
     return False
+
+
+def _is_documented_dunder(name: str, obj: gf.Object | gf.Alias) -> bool:
+    """
+    Whether `name` is a dunder member that is part of the documented API
+
+    Dunders with docstrings (e.g. `__enter__`, `__getitem__`) are documented
+    even when private members are excluded.
+    """
+    return name.startswith("__") and name.endswith("__") and obj.docstring is not None
 
 
 def _sections_from_package(mod: gf.Module) -> list[SpecSection]:
@@ -139,14 +149,8 @@ def _to_simple_dict(el: object) -> object:
     return el
 
 
-def _non_default_entries(el: SpecOptions) -> dict[str, Any]:
-    """Fields of a `SpecOptions` element that were explicitly set by the caller"""
-    fields = el._fields_specified  # pyright: ignore[reportPrivateUsage]
-    return {k: getattr(el, k) for k in fields}
-
-
 def _join_path(pkg: str | None, name: str) -> str:
-    """The griffe lookup path for `name` under `pkg`
+    """Build the griffe lookup path for `name` under `pkg`
 
     A lookup path carries at most one `:` (separating the module from the
     object within it), so once either part already has one, the remaining
@@ -277,10 +281,7 @@ class _Resolver:
         path = _join_path(self.current_package, el.name)
 
         # Merge inherited section-level options under the entry's own settings.
-        if self.options is not None:
-            _option_dict = _non_default_entries(self.options)
-            _el_dict = _non_default_entries(el)
-            el = el.__class__(**{**_option_dict, **_el_dict})
+        el = el.with_defaults(self.options)
 
         _log.info(f"Getting object for {path}")
 
@@ -288,22 +289,39 @@ class _Resolver:
 
         # The subject object being documented (the class/module/function itself).
         obj = self.get_object_or_raise(path, dynamic=dynamic)
-        raw_members = self._fetch_members(el, obj)
+        children = self._resolve_members(el, obj, path=path, dynamic=dynamic)
 
-        _defaults: dict[str, Any] = {"dynamic": dynamic, "package": path}
-        if el.member_options is not None:
-            member_options: dict[str, Any] = {
-                **_defaults,
-                **_non_default_entries(el.member_options),
-            }
-        else:
-            member_options = _defaults
+        return Doc.from_griffe(
+            el.name,
+            obj,
+            children,
+            flat=el.children == ChildrenStyle.flat,
+            signature_name=el.signature_name,
+        )
+
+    def _resolve_members(
+        self,
+        el: SpecObject,
+        obj: gf.Object | gf.Alias,
+        *,
+        path: str,
+        dynamic: bool | str,
+    ) -> list[object]:
+        """Resolve the members of `obj`, each wrapped per the entry's children style"""
+        # Member precedence: the member's own name, then `member_options`,
+        # then the parent-derived defaults.
+        member_defaults = SpecOptions(dynamic=dynamic, package=path)
 
         children: list[object] = []
-        for entry in raw_members:
+        for entry in self._fetch_members(el, obj):
             relative_path = self._clean_member_path(entry)
 
-            member_doc = self._resolve_object(SpecObject(name=relative_path, **member_options))
+            member_spec = (
+                SpecObject(name=relative_path)
+                .with_defaults(el.member_options)
+                .with_defaults(member_defaults)
+            )
+            member_doc = self._resolve_object(member_spec)
             # A doc resolved from griffe always carries its object.
             member_obj = member_doc.obj
 
@@ -321,14 +339,7 @@ class _Resolver:
 
             children.append(res)
 
-        is_flat = el.children == ChildrenStyle.flat
-        return Doc.from_griffe(
-            el.name,
-            obj,
-            children,
-            flat=is_flat,
-            signature_name=el.signature_name,
-        )
+        return children
 
     def _fetch_members(self, el: SpecObject, obj: gf.Object | gf.Alias) -> list[str]:
         """Fetch the member paths to document for a given `SpecObject` element and its resolved object"""
@@ -339,6 +350,7 @@ class _Resolver:
             dict(obj.all_members) if el.include_inherited else dict(obj.members)
         )
 
+        # Phase 1 — name/provenance filters: safe on unresolved alias nodes.
         # Always filter built-in noise dunders inherited from `object`/`type`
         # (e.g. `__doc__`, `__module__`). These show up on every PyO3 /
         # C-extension class because their docstrings are inherited from str.
@@ -348,14 +360,10 @@ class _Resolver:
             candidates = {k: v for k, v in candidates.items() if v.is_exported}
 
         if not el.include_private:
-            # Filter out private members (names starting with _), but keep
-            # dunder methods that have docstrings — those are intentionally
-            # documented (e.g. __enter__, __exit__, __getitem__).
             candidates = {
                 k: v
                 for k, v in candidates.items()
-                if not k.startswith("_")
-                or (k.startswith("__") and k.endswith("__") and v.docstring is not None)
+                if not k.startswith("_") or _is_documented_dunder(k, v)
             }
 
         if not el.include_imports and obj.is_module:
@@ -364,9 +372,13 @@ class _Resolver:
         if not el.include_inherited and obj.is_class:
             candidates = {k: v for k, v in candidates.items() if (v.parent is obj or not v.is_alias)}
 
+        # Load every remaining alias target now: the phase-2 filters read
+        # `.docstring` / `.is_attribute` / `.is_class` / `.is_function`,
+        # which are only trustworthy once the target's module is loaded.
         for member in candidates.values():
             _ = resolve_alias(member, self.get_object)
 
+        # Phase 2 — content filters: require resolved targets.
         if not el.include_empty:
             candidates = {k: v for k, v in candidates.items() if v.docstring is not None}
 

@@ -128,7 +128,6 @@ from great_docs._apiref.resolve import (
     _autogenerate_sections,
     _sections_from_package,
     _is_external_alias,
-    _non_default_entries,
     _to_simple_dict,
 )
 from great_docs._apiref.collect import (
@@ -6367,22 +6366,25 @@ def test_to_simple_dict_summary_details():
     assert result == {"name": "n", "desc": "d"}
 
 
-def test_non_default_entries_no_fields():
-    spec_obj = SpecObject()
-    result = _non_default_entries(spec_obj)
-    assert result == {}
+def test_spec_options_with_defaults_none_base():
+    opts = SpecOptions(include_private=True)
+    assert opts.with_defaults(None) is opts
 
 
-def test_non_default_entries_options_specified():
-    opts = SpecOptions(signature_name="full", include_private=True)
-    result = _non_default_entries(opts)
-    assert result == {"signature_name": "full", "include_private": True}
+def test_spec_options_with_defaults_inherits_unspecified():
+    el = SpecObject(name="x", include_private=True)
+    base = SpecOptions(include_private=False, include_empty=True)
+    merged = el.with_defaults(base)
+    assert merged.include_private is True  # el's explicit value wins
+    assert merged.include_empty is True  # inherited from base
+    assert merged.name == "x"
 
 
-def test_non_default_entries_options_empty():
-    opts = SpecOptions()
-    result = _non_default_entries(opts)
-    assert result == {}
+def test_spec_options_with_defaults_specified_default_beats_base():
+    # Explicitly setting a field to its default value still beats the base.
+    el = SpecObject(name="x", include_private=False)
+    base = SpecOptions(include_private=True)
+    assert el.with_defaults(base).include_private is False
 
 
 def test_resolve_alias_non_alias_passthrough():
