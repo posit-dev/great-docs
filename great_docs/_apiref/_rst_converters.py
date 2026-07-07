@@ -36,6 +36,30 @@ def sanitize(
     return res
 
 
+def _dedent_lines(lines: list[str]) -> list[str]:
+    """Remove the smallest indent of the non-blank lines from every line"""
+    min_indent = min((len(ln) - len(ln.lstrip()) for ln in lines if ln.strip()), default=0)
+    return [ln[min_indent:] for ln in lines]
+
+
+def _md_pipe_table(header: list[str], rows: list[list[str]]) -> str:
+    """Build a Markdown pipe table with the given header and body rows"""
+    lines = [
+        "| " + " | ".join(header) + " |",
+        "| " + " | ".join(["---"] * len(header)) + " |",
+        *("| " + " | ".join(row) + " |" for row in rows),
+    ]
+    return "\n".join(lines)
+
+
+def _doc_section(title: str, slug: str, hashes: str, body: str | None = None) -> str:
+    """Build a QMD `.doc-section` heading, optionally followed by its body"""
+    heading = f"{hashes} {title} {{.doc-section .doc-section-{slug}}}"
+    if body is None:
+        return heading
+    return f"{heading}\n\n{body}"
+
+
 # RST text transforms --------------------------------------------------------
 # These were previously applied as QMD-level patches in core.py (Steps 1.5-1.8).
 # Now they are applied at render time so the QMD is correct from the start.
@@ -77,23 +101,12 @@ def _replace_rst_code_block(m: re.Match) -> str:
         directive_name = stripped_prefix[2:].strip()
         if directive_name == "math":
             # ``.. math::`` → display math ``$$…$$``
-            lines = indented_block.splitlines()
-            if lines:
-                min_indent = min(len(line) - len(line.lstrip()) for line in lines if line.strip())
-                dedented = "\n".join(line[min_indent:] for line in lines)
-            else:  # pragma: no cover
-                dedented = indented_block
+            dedented = "\n".join(_dedent_lines(indented_block.splitlines()))
             return f"\n$$\n{dedented.strip()}\n$$\n"
         if directive_name in _RST_DIRECTIVES:
             return m.group(0)  # leave untouched
 
-    # Dedent the code block
-    lines = indented_block.splitlines()
-    if lines:
-        min_indent = min(len(line) - len(line.lstrip()) for line in lines if line.strip())
-        dedented = "\n".join(line[min_indent:] for line in lines)
-    else:  # pragma: no cover
-        dedented = indented_block
+    dedented = "\n".join(_dedent_lines(indented_block.splitlines()))
 
     prefix = prefix_text.rstrip()
     if prefix:
@@ -226,6 +239,19 @@ def _convert_rst_citations(text: str) -> str:
 
 # RST table converters -------------------------------------------------------
 
+# An RST simple-table separator row, e.g. ``=====  =======``
+_RST_SIMPLE_TABLE_SEP = re.compile(r"^=+(\s+=+)+\s*$")
+
+# An RST grid-table border row, e.g. ``+-----+=====+``
+_RST_GRID_TABLE_BORDER = re.compile(r"^\+[-=]+(\+[-=]+)+\+\s*$")
+
+
+def _pad_rows(rows: list[list[str]], n: int) -> None:
+    """Pad rows in place with empty cells up to `n` columns"""
+    for row in rows:
+        while len(row) < n:  # pragma: no cover
+            row.append("")
+
 
 def _convert_rst_simple_tables(text: str) -> str:
     """Convert RST simple tables (`=====` delimited) to Markdown pipe tables"""
@@ -236,7 +262,7 @@ def _convert_rst_simple_tables(text: str) -> str:
     while i < len(lines):
         line = lines[i]
 
-        if re.match(r"^=+(\s+=+)+\s*$", line):
+        if _RST_SIMPLE_TABLE_SEP.match(line):
             table_lines = [line]
             sep_count = 1
             second_col_match = re.search(r"\s+(=+)", line)
@@ -244,23 +270,24 @@ def _convert_rst_simple_tables(text: str) -> str:
             j = i + 1
             while j < len(lines):
                 cur = lines[j]
-                is_sep = bool(re.match(r"^=+(\s+=+)+\s*$", cur))
+                is_sep = bool(_RST_SIMPLE_TABLE_SEP.match(cur))
                 table_lines.append(cur)
                 if is_sep:
                     sep_count += 1
                     if sep_count >= 3:
                         j += 1
                         break
+                    # The table continues past this separator only when the
+                    # next line is a data row with a populated second column.
                     peek = j + 1
-                    if (
+                    continues_table = (
                         peek < len(lines)
                         and lines[peek].strip()
-                        and not re.match(r"^=+(\s+=+)+\s*$", lines[peek])
+                        and not _RST_SIMPLE_TABLE_SEP.match(lines[peek])
                         and len(lines[peek]) > second_col_start
                         and lines[peek][second_col_start] != " "
-                    ):
-                        pass
-                    else:
+                    )
+                    if not continues_table:
                         j += 1
                         break
                 j += 1
@@ -289,11 +316,11 @@ def _convert_rst_grid_tables(text: str) -> str:
     while i < len(lines):
         line = lines[i]
 
-        if re.match(r"^\+[-=]+(\+[-=]+)+\+\s*$", line):
+        if _RST_GRID_TABLE_BORDER.match(line):
             table_lines = [line]
             j = i + 1
             while j < len(lines):
-                if re.match(r"^\+[-=]+(\+[-=]+)+\+\s*$", lines[j]):
+                if _RST_GRID_TABLE_BORDER.match(lines[j]):
                     table_lines.append(lines[j])
                     if j + 1 >= len(lines) or not re.match(r"^\|", lines[j + 1]):
                         j += 1
@@ -322,7 +349,7 @@ def _convert_rst_grid_tables(text: str) -> str:
 def _rst_simple_table_to_md(table_lines: list[str]) -> str | None:
     """Convert an RST simple table (list of raw lines) to a Markdown pipe table"""
     separators = [
-        (idx, line) for idx, line in enumerate(table_lines) if re.match(r"^=+(\s+=+)+\s*$", line)
+        (idx, line) for idx, line in enumerate(table_lines) if _RST_SIMPLE_TABLE_SEP.match(line)
     ]
     if len(separators) < 2:
         return None
@@ -354,7 +381,7 @@ def _rst_simple_table_to_md(table_lines: list[str]) -> str | None:
     if len(separators) == 2:
         for idx in range(first_sep_idx + 1, last_sep_idx):
             line = table_lines[idx]
-            if not re.match(r"^=+(\s+=+)+\s*$", line):
+            if not _RST_SIMPLE_TABLE_SEP.match(line):
                 data_rows.append(_extract_cells(line))
         if data_rows:
             header_rows = [data_rows[0]]
@@ -363,28 +390,20 @@ def _rst_simple_table_to_md(table_lines: list[str]) -> str | None:
         second_sep_idx = separators[1][0]
         for idx in range(first_sep_idx + 1, second_sep_idx):
             line = table_lines[idx]
-            if not re.match(r"^=+(\s+=+)+\s*$", line):
+            if not _RST_SIMPLE_TABLE_SEP.match(line):
                 header_rows.append(_extract_cells(line))
         for idx in range(second_sep_idx + 1, last_sep_idx):
             line = table_lines[idx]
-            if not re.match(r"^=+(\s+=+)+\s*$", line):
+            if not _RST_SIMPLE_TABLE_SEP.match(line):
                 data_rows.append(_extract_cells(line))
 
     if not header_rows:
         return None
 
     num_cols = len(col_spans)
-    md_lines = []
     header = header_rows[-1]
-    while len(header) < num_cols:  # pragma: no cover
-        header.append("")
-    md_lines.append("| " + " | ".join(header) + " |")
-    md_lines.append("| " + " | ".join("---" for _ in range(num_cols)) + " |")
-    for row in data_rows:
-        while len(row) < num_cols:  # pragma: no cover
-            row.append("")
-        md_lines.append("| " + " | ".join(row) + " |")
-    return "\n".join(md_lines)
+    _pad_rows([header, *data_rows], num_cols)
+    return _md_pipe_table(header, data_rows)
 
 
 def _rst_grid_table_to_md(table_lines: list[str]) -> str | None:
@@ -432,17 +451,9 @@ def _rst_grid_table_to_md(table_lines: list[str]) -> str | None:
         body_rows = all_rows[1:]
 
     num_cols = len(col_spans)
-    md_lines = []
     header = header_rows[-1] if header_rows else [""] * num_cols
-    while len(header) < num_cols:  # pragma: no cover
-        header.append("")
-    md_lines.append("| " + " | ".join(header) + " |")
-    md_lines.append("| " + " | ".join("---" for _ in range(num_cols)) + " |")
-    for row in body_rows:
-        while len(row) < num_cols:  # pragma: no cover
-            row.append("")
-        md_lines.append("| " + " | ".join(row) + " |")
-    return "\n".join(md_lines)
+    _pad_rows([header, *body_rows], num_cols)
+    return _md_pipe_table(header, body_rows)
 
 
 # Sphinx role conversion ------------------------------------------------------
@@ -535,17 +546,7 @@ def _convert_rst_directives(text: str) -> str:
     def _replace_block(m: re.Match) -> str:
         name = m.group("name")
         inline = m.group("inline") or ""
-        raw_body = m.group("body")
-        # Dedent the indented body
-        lines = raw_body.splitlines()
-        if lines:
-            min_indent = min(
-                (len(ln) - len(ln.lstrip()) for ln in lines if ln.strip()),
-                default=0,
-            )
-            body = "\n".join(ln[min_indent:] for ln in lines)
-        else:  # pragma: no cover
-            body = ""
+        body = "\n".join(_dedent_lines(m.group("body").splitlines()))
         return _rst_directive_to_callout(name, body, inline)
 
     text = re.sub(
@@ -609,7 +610,7 @@ def _convert_bold_section_headers(text: str, heading_level: int) -> str:
     def _replace(m: re.Match) -> str:
         name = m.group("name")
         slug = _BOLD_SECTION_NAMES.get(name, name.lower().replace(" ", "-"))
-        return f"{hashes} {name} {{.doc-section .doc-section-{slug}}}"
+        return _doc_section(name, slug, hashes)
 
     return re.sub(
         rf"\*\*(?P<name>{_BOLD_SECTION_PAT})\*\*::",
@@ -621,15 +622,18 @@ def _convert_bold_section_headers(text: str, heading_level: int) -> str:
 # Sphinx field-list conversion ------------------------------------------------
 
 
+# Field names of the Sphinx docstring style (a subset)
+_SPHINX_FIELD_NAMES = r"param|type|returns?|rtype|raises?"
+
 _SPHINX_FIELD_RE = re.compile(
-    r":(?P<directive>param|type|returns?|rtype|raises?)"
+    rf":(?P<directive>{_SPHINX_FIELD_NAMES})"
     r"(?:\s+(?P<name>[^:]*?))?"
-    r":\s*(?P<body>(?:(?!:(?:param|type|returns?|rtype|raises?)\b).)*)",
+    rf":\s*(?P<body>(?:(?!:(?:{_SPHINX_FIELD_NAMES})\b).)*)",
     re.DOTALL,
 )
 
 # Match a block of text that contains at least one Sphinx field marker
-_SPHINX_FIELD_BLOCK_RE = re.compile(r"(?:^|\n)(?=:(?:param|type|returns?|rtype|raises?)\b)")
+_SPHINX_FIELD_BLOCK_RE = re.compile(rf"(?:^|\n)(?=:(?:{_SPHINX_FIELD_NAMES})\b)")
 
 
 def _convert_sphinx_fields(text: str, heading_level: int) -> str:
@@ -640,7 +644,7 @@ def _convert_sphinx_fields(text: str, heading_level: int) -> str:
         return text
 
     # Split text into "before fields" and "fields portion"
-    first_field = re.search(r"(?:^|\n)\s*:(?:param|type|returns?|rtype|raises?)\b", text)
+    first_field = re.search(rf"(?:^|\n)\s*:(?:{_SPHINX_FIELD_NAMES})\b", text)
     if first_field is None:  # pragma: no cover
         return text
 
@@ -683,39 +687,43 @@ def _convert_sphinx_fields(text: str, heading_level: int) -> str:
 
     # Parameters table
     if params:
-        header = "| Name | Type | Description | Default |"
-        sep = "| --- | --- | --- | --- |"
-        rows = []
-        for pname, pinfo in params.items():
-            ptype = sanitize(pinfo["type"], escape_quotes=True) if pinfo["type"] else ""
-            pdesc = sanitize(pinfo["desc"], allow_markdown=True) if pinfo["desc"] else ""
-            rows.append(f"| {pname} | {ptype} | {pdesc} | - |")
-        table = "\n".join([header, sep, *rows])
-        parts.append(f"{hashes} Parameters {{.doc-section .doc-section-parameters}}\n\n{table}")
+        rows = [
+            [
+                pname,
+                sanitize(pinfo["type"], escape_quotes=True) if pinfo["type"] else "",
+                sanitize(pinfo["desc"], allow_markdown=True) if pinfo["desc"] else "",
+                "-",
+            ]
+            for pname, pinfo in params.items()
+        ]
+        table = _md_pipe_table(["Name", "Type", "Description", "Default"], rows)
+        parts.append(_doc_section("Parameters", "parameters", hashes, table))
 
     # Returns table
     if returns:
-        header = "| Name | Type | Description |"
-        sep = "| --- | --- | --- |"
-        rows = []
-        for rinfo in returns:
-            rtype = sanitize(rinfo["type"], escape_quotes=True) if rinfo["type"] else ""
-            rdesc = sanitize(rinfo["desc"], allow_markdown=True) if rinfo["desc"] else ""
-            rows.append(f"|  | {rtype} | {rdesc} |")
-        table = "\n".join([header, sep, *rows])
-        parts.append(f"{hashes} Returns {{.doc-section .doc-section-returns}}\n\n{table}")
+        rows = [
+            [
+                "",
+                sanitize(rinfo["type"], escape_quotes=True) if rinfo["type"] else "",
+                sanitize(rinfo["desc"], allow_markdown=True) if rinfo["desc"] else "",
+            ]
+            for rinfo in returns
+        ]
+        table = _md_pipe_table(["Name", "Type", "Description"], rows)
+        parts.append(_doc_section("Returns", "returns", hashes, table))
 
     # Raises table
     if raises:
-        header = "| Name | Type | Description |"
-        sep = "| --- | --- | --- |"
-        rows = []
-        for exc, desc in raises:
-            exc_s = sanitize(exc, escape_quotes=True) if exc else ""
-            desc_s = sanitize(desc, allow_markdown=True) if desc else ""
-            rows.append(f"|  | {exc_s} | {desc_s} |")
-        table = "\n".join([header, sep, *rows])
-        parts.append(f"{hashes} Raises {{.doc-section .doc-section-raises}}\n\n{table}")
+        rows = [
+            [
+                "",
+                sanitize(exc, escape_quotes=True) if exc else "",
+                sanitize(desc, allow_markdown=True) if desc else "",
+            ]
+            for exc, desc in raises
+        ]
+        table = _md_pipe_table(["Name", "Type", "Description"], rows)
+        parts.append(_doc_section("Raises", "raises", hashes, table))
 
     return "\n\n".join(parts)
 
@@ -794,6 +802,40 @@ def _parse_google_raises(body: str) -> list[tuple[str, str]]:
     return entries
 
 
+def _google_section_block(section: str, body: str, hashes: str) -> str:
+    """Render one Google-style section as a QMD section heading with a table or prose
+
+    A table section (`Args:`, `Raises:`) whose body yields no entries falls
+    back to the body as-is.
+    """
+    if section in _GOOGLE_PARAM_SECTIONS:
+        entries = _parse_google_entries(body)
+        if not entries:
+            return body
+        rows = [
+            [pname, "", sanitize(pdesc, allow_markdown=True), "-"] for pname, pdesc in entries
+        ]
+        table = _md_pipe_table(["Name", "Type", "Description", "Default"], rows)
+        return _doc_section("Parameters", "parameters", hashes, table)
+
+    if section in _GOOGLE_RETURN_SECTIONS:
+        return _doc_section("Returns", "returns", hashes, body)
+
+    if section in _GOOGLE_RAISE_SECTIONS:
+        entries = _parse_google_raises(body)
+        if not entries:
+            return body
+        rows = [["", exc, sanitize(desc, allow_markdown=True)] for exc, desc in entries]
+        table = _md_pipe_table(["Name", "Type", "Description"], rows)
+        return _doc_section("Raises", "raises", hashes, table)
+
+    if section in _GOOGLE_PROSE_SECTIONS:
+        slug = _GOOGLE_PROSE_SECTIONS[section]
+        return _doc_section(section, slug, hashes, body)
+
+    return body  # pragma: no cover
+
+
 def _convert_google_sections(text: str, heading_level: int) -> str:
     """Parse Google-style docstring sections (`Args:`, `Returns:`, etc.) and generate proper QMD
     section headings with tables or prose blocks
@@ -835,70 +877,10 @@ def _convert_google_sections(text: str, heading_level: int) -> str:
                 body_lines.append("")
             else:
                 break
-        body = "\n".join(body_lines)
-        # Dedent
-        if body_lines:
-            non_empty = [ln for ln in body_lines if ln.strip()]
-            if non_empty:
-                min_indent = min(len(ln) - len(ln.lstrip()) for ln in non_empty)
-                body = "\n".join(
-                    ln[min_indent:] if len(ln) > min_indent else ln for ln in body_lines
-                )
+        body = "\n".join(_dedent_lines(body_lines))
 
         full_body = (inline + "\n" + body).strip() if inline else body.strip()
-
-        slug = None
-
-        # --- Parameters sections ---
-        if section in _GOOGLE_PARAM_SECTIONS:
-            entries = _parse_google_entries(full_body)
-            if entries:
-                header_row = "| Name | Type | Description | Default |"
-                sep_row = "| --- | --- | --- | --- |"
-                rows = []
-                for pname, pdesc in entries:
-                    pdesc_s = sanitize(pdesc, allow_markdown=True)
-                    rows.append(f"| {pname} |  | {pdesc_s} | - |")
-                table = "\n".join([header_row, sep_row, *rows])
-                result_parts.append(
-                    f"{hashes} Parameters {{.doc-section .doc-section-parameters}}\n\n{table}"
-                )
-            else:
-                result_parts.append(full_body)
-
-        # --- Returns sections ---
-        elif section in _GOOGLE_RETURN_SECTIONS:
-            slug = "returns"
-            result_parts.append(
-                f"{hashes} Returns {{.doc-section .doc-section-{slug}}}\n\n{full_body}"
-            )
-
-        # --- Raises sections ---
-        elif section in _GOOGLE_RAISE_SECTIONS:
-            entries = _parse_google_raises(full_body)
-            if entries:
-                header_row = "| Name | Type | Description |"
-                sep_row = "| --- | --- | --- |"
-                rows = []
-                for exc, desc in entries:
-                    desc_s = sanitize(desc, allow_markdown=True)
-                    rows.append(f"|  | {exc} | {desc_s} |")
-                table = "\n".join([header_row, sep_row, *rows])
-                result_parts.append(
-                    f"{hashes} Raises {{.doc-section .doc-section-raises}}\n\n{table}"
-                )
-            else:
-                result_parts.append(full_body)
-
-        # --- Prose sections (Note, Examples, etc.) ---
-        elif section in _GOOGLE_PROSE_SECTIONS:
-            slug = _GOOGLE_PROSE_SECTIONS[section]
-            result_parts.append(
-                f"{hashes} {section} {{.doc-section .doc-section-{slug}}}\n\n{full_body}"
-            )
-
-        else:  # pragma: no cover
-            result_parts.append(full_body)
+        result_parts.append(_google_section_block(section, full_body, hashes))
 
     return "\n\n".join(result_parts)
 
