@@ -8,7 +8,7 @@ from typing import Type
 
 import griffe as gf
 
-from ._walkable import _Walkable as NodeBase
+from ._walkable import MISSING, Walkable
 
 
 def transform(el: object) -> object:
@@ -209,14 +209,12 @@ def fields(el: object) -> list[str] | list[int] | None:
         return [opt for opt in options if hasattr(el, opt)]
 
     # node dataclass models
-    if isinstance(el, NodeBase):
-        from ._walkable import MISSING
-
+    if isinstance(el, Walkable):
         field_defaults = {f.name: f.default for f in _dc_mod.fields(el)}
         return [
             k
             for k, v in el._iter_fields()
-            if field_defaults.get(k) is not v and not isinstance(v, MISSING)
+            if field_defaults.get(k) is not v and v is not MISSING
         ]
 
     if isinstance(el, dict):

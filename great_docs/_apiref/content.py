@@ -12,14 +12,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from ._walkable import _Walkable  # pyright: ignore[reportPrivateUsage]
+from ._walkable import Walkable
 
 if TYPE_CHECKING:
     import griffe as gf
 
 
 @dataclass
-class Doc(_Walkable):
+class Doc(Walkable):
     """A resolved Python object ready to be rendered as documentation"""
 
     obj: gf.Object | gf.Alias
@@ -99,7 +99,7 @@ class DocModule(Doc):
 
 
 @dataclass
-class SummaryItem(_Walkable):
+class SummaryItem(Walkable):
     """Name and description line for a summary table entry"""
 
     name: str = ""
@@ -107,7 +107,7 @@ class SummaryItem(_Walkable):
 
 
 @dataclass
-class Page(_Walkable):
+class Page(Walkable):
     """A single rendered page in the API reference"""
 
     kind: str = "page"
@@ -135,7 +135,7 @@ class MemberPage(Page):
 
 
 @dataclass
-class Section(_Walkable):
+class Section(Walkable):
     """A section of content on the reference index page"""
 
     kind: str = "section"
@@ -148,7 +148,7 @@ class Section(_Walkable):
 
 
 @dataclass
-class Text(_Walkable):
+class Text(Walkable):
     """A block of free-form Markdown text embedded in a reference section"""
 
     kind: str = "text"
@@ -156,7 +156,7 @@ class Text(_Walkable):
 
 
 @dataclass
-class Link(_Walkable):
+class Link(Walkable):
     """A cross-reference link to a documented object"""
 
     obj: gf.Object | gf.Alias

@@ -158,7 +158,6 @@ from great_docs._apiref.inventory import (
     convert_inventory,
     create_inventory,
 )
-from great_docs._apiref._walkable import MISSING, _Walkable
 from great_docs._apiref.content import (
     Doc,
     DocAttribute,

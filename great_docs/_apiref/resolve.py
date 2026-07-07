@@ -10,7 +10,7 @@ import griffe as gf
 from yaml12 import format_yaml
 
 from ._visitor import ObjectNotFoundError
-from ._walkable import MISSING, _Walkable  # pyright: ignore[reportPrivateUsage]
+from ._walkable import MISSING, Walkable
 from .content import Doc, Link, MemberPage, Page, Section, Text
 from .introspect import get_parser_defaults
 from .spec import ChildrenStyle, SpecObject, SpecSection, SpecText
@@ -121,7 +121,7 @@ def _sections_from_package(mod: gf.Module) -> list[SpecSection]:
 
 def _to_simple_dict(el: object) -> object:
     """Recursively convert a spec node tree to a plain-dict representation, suitable for YAML"""
-    if isinstance(el, _Walkable):
+    if isinstance(el, Walkable):
         return {
             k: _to_simple_dict(v)
             for k, v in el._iter_fields()  # pyright: ignore[reportPrivateUsage]
@@ -219,7 +219,7 @@ class _Resolver:
         old_package = self.crnt_package
         old_options = self.options
 
-        if not isinstance(el.package, MISSING):
+        if el.package is not MISSING:
             self.crnt_package = el.package
         if el.options is not None:
             self.options = el.options
@@ -261,7 +261,7 @@ class _Resolver:
         old_package = self.crnt_package
         # A member `SpecObject` carries its parent's path as `package`; adopt it
         # so the member's full path is computed relative to the parent.
-        if not isinstance(el.package, MISSING):
+        if el.package is not MISSING:
             self.crnt_package = el.package
 
         try:

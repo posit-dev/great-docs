@@ -4,17 +4,18 @@ import copy
 from collections.abc import Generator
 from dataclasses import dataclass
 from dataclasses import fields as dc_fields
+from typing import Self
 
 
 @dataclass
-class _Walkable:
+class Walkable:
     """
     Base of every value in the API-reference model
 
     Membership marks a value as a node of the reference tree.
     """
 
-    def copy(self) -> _Walkable:
+    def copy(self) -> Self:
         """Return a shallow copy of this node"""
         return copy.copy(self)
 
@@ -24,6 +25,16 @@ class _Walkable:
             yield f.name, getattr(self, f.name)
 
 
-@dataclass
-class MISSING(_Walkable):
-    """Sentinel for an unset optional value where `None` carries its own meaning"""
+@dataclass(eq=False)
+class MissingType(Walkable):
+    """Sentinel type for an unset optional value where `None` carries its own meaning
+
+    Checks compare against the `MISSING` singleton with `is`. Identity
+    hashing (`Walkable`'s dataclass `eq` sets `__hash__` to `None`) is what
+    lets `MISSING` stand as a plain dataclass field default.
+    """
+
+    __hash__ = object.__hash__
+
+
+MISSING = MissingType()

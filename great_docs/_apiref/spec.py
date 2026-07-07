@@ -13,7 +13,7 @@ from dataclasses import fields as dc_fields
 from enum import Enum
 from typing import Any, cast
 
-from ._walkable import MISSING, _Walkable  # pyright: ignore[reportPrivateUsage]
+from ._walkable import MISSING, MissingType, Walkable
 
 
 class ChildrenStyle(Enum):
@@ -26,7 +26,7 @@ class ChildrenStyle(Enum):
 
 
 @dataclass
-class SpecOptions(_Walkable):
+class SpecOptions(Walkable):
     """Documentation options that apply to a `SpecObject` element and, optionally, its members"""
 
     signature_name: str = "relative"
@@ -44,7 +44,7 @@ class SpecOptions(_Walkable):
     exclude: list[str] | None = None
     dynamic: bool | str | None = None
     children: ChildrenStyle = ChildrenStyle.embedded
-    package: str | MISSING | None = field(default_factory=MISSING)
+    package: str | MissingType | None = MISSING
     member_order: str = "alphabetical"
     member_options: SpecOptions | None = None
 
@@ -77,7 +77,7 @@ class SpecObject(SpecOptions):
 
 
 @dataclass
-class SpecText(_Walkable):
+class SpecText(Walkable):
     """A block of free-form Markdown text embedded in a reference section"""
 
     kind: str = "text"
@@ -85,14 +85,14 @@ class SpecText(_Walkable):
 
 
 @dataclass
-class SpecSection(_Walkable):
+class SpecSection(Walkable):
     """A section of the reference index page, as written in the config"""
 
     kind: str = "section"
     title: str | None = None
     subtitle: str | None = None
     desc: str | None = None
-    package: str | MISSING | None = field(default_factory=MISSING)
+    package: str | MissingType | None = MISSING
     # `SpecEntry` is defined below (it unions this class), so the factory
     # string is required — the name is not yet bound here.
     contents: list[SpecEntry] = field(default_factory=list["SpecEntry"])
@@ -108,7 +108,7 @@ class SpecSection(_Walkable):
         raw_contents = cast("list[Any]", self.contents)
         self.contents = cast(
             "list[SpecEntry]",
-            [c if isinstance(c, _Walkable) else _coerce_spec_object(c) for c in raw_contents],
+            [c if isinstance(c, Walkable) else _coerce_spec_object(c) for c in raw_contents],
         )
 
 

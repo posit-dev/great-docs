@@ -6,11 +6,11 @@ from typing import Any
 
 import griffe as gf
 
-from ._walkable import _Walkable  # pyright: ignore[reportPrivateUsage]
+from ._walkable import Walkable
 
 
 @dataclass
-class InventoryItem(_Walkable):
+class InventoryItem(Walkable):
     """A documented object with a URI pointing to its rendered location"""
 
     obj: gf.Object | gf.Alias

@@ -5,7 +5,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, cast
 
-from ._walkable import _Walkable as NodeBase  # pyright: ignore[reportPrivateUsage]
+from ._walkable import Walkable
 
 # Node -------------------------------------------------------------------------
 
@@ -53,13 +53,13 @@ class NodeVisitor:
             ctx_node.reset(token)
 
     def enter(self, el: object) -> object:
-        if isinstance(el, NodeBase):
+        if isinstance(el, Walkable):
             return self._enter_dataclass(el)
         if isinstance(el, (list, tuple)):
             return self._enter_sequence(cast("list[Any] | tuple[Any, ...]", el))
         return el
 
-    def _enter_dataclass(self, el: NodeBase) -> object:
+    def _enter_dataclass(self, el: Walkable) -> object:
         for f in dataclasses.fields(el):
             if f.name.startswith("_"):
                 continue
@@ -78,7 +78,7 @@ class NodeVisitor:
 class NodeTransformer(NodeVisitor):
     """A node tree rebuilt with only the changed nodes replaced"""
 
-    def _enter_dataclass(self, el: NodeBase) -> NodeBase:
+    def _enter_dataclass(self, el: Walkable) -> Walkable:
         new_kwargs: dict[str, object] = {}
         changed = False
         for f in dataclasses.fields(el):

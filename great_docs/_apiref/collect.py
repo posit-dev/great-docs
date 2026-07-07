@@ -94,7 +94,6 @@ class _PackagePrefixRemover(NodeTransformer):
         if parts[0] == self.package and len(parts) > 1:
             new_path = ".".join(parts[1:])
             new_el = el.copy()
-            assert isinstance(new_el, Page)
             new_el.path = new_path
             return new_el
         return el
