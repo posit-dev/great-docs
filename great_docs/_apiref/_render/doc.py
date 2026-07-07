@@ -23,8 +23,8 @@ from .._format import (
     render_formatted_expr,
     repr_obj,
 )
+from .._globals import package_info
 from .._rst_converters import _convert_rst_text  # pyright: ignore[reportPrivateUsage]
-from .._type_checks import package_info
 from ..pandoc.blocks import (
     Block,
     BlockContent,

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import inspect
 from types import ModuleType
-from typing import cast
+from typing import Callable, cast
 
 import griffe as gf
 
@@ -102,27 +102,35 @@ def get_object(
     return f_data
 
 
-def _resolve_target(obj: gf.Alias) -> gf.Object:
-    """Resolve the alias chain to the concrete `Object` at its end.
+def resolve_alias(
+    obj: gf.Alias | gf.Object,
+    get_object: Callable[..., gf.Object] | None = None,
+) -> gf.Object:
+    """Resolve the alias chain to the concrete `Object` at its end
 
-    Follows `Alias.target` links until a non-alias node is reached.
+    Follows `Alias.target` links until a non-alias node is reached. An
+    unresolved link is re-loaded through `get_object` when one is provided;
+    otherwise the `AliasResolutionError` propagates.
 
     Raises
     ------
     ValueError
         When the chain appears to be infinitely recursive (> 100 hops).
     """
-    target = obj.target
-
     count = 0
-    while isinstance(target, gf.Alias):
+    while isinstance(obj, gf.Alias):
         count += 1
         if count > 100:
             raise ValueError("Attempted to resolve target, but may be infinitely recursing?")
 
-        target = target.target
+        try:
+            obj = obj.target
+        except gf.AliasResolutionError as e:
+            if get_object is None:
+                raise
+            obj = get_object(e.alias.target_path)
 
-    return target
+    return obj
 
 
 def replace_docstring(obj: gf.Object | gf.Alias, f: object = None) -> None:
@@ -142,7 +150,7 @@ def replace_docstring(obj: gf.Object | gf.Alias, f: object = None) -> None:
     import importlib
 
     if isinstance(obj, gf.Alias):
-        obj = _resolve_target(obj)
+        obj = resolve_alias(obj)
 
     if isinstance(obj, gf.Class):
         for child_obj in obj.members.values():
@@ -277,11 +285,11 @@ def dynamic_alias(
         splits = object_path.split(".")
 
         canonical_path = None
-        crnt_part: object = mod
+        current_part: object = mod
         for ii, attr_name in enumerate(splits):
             try:
                 _qualname = ".".join(splits[ii:])
-                new_canonical_path = _canonical_path(crnt_part, _qualname)
+                new_canonical_path = _canonical_path(current_part, _qualname)
             except AttributeError:
                 new_canonical_path = None
 
@@ -289,7 +297,7 @@ def dynamic_alias(
                 canonical_path = new_canonical_path
 
             try:
-                crnt_part = getattr(crnt_part, attr_name)
+                current_part = getattr(current_part, attr_name)
             except AttributeError:
                 if canonical_path:
                     obj = get_object(canonical_path, loader=loader)
@@ -300,7 +308,7 @@ def dynamic_alias(
 
         try:
             _qualname = ""
-            new_canonical_path = _canonical_path(crnt_part, _qualname)
+            new_canonical_path = _canonical_path(current_part, _qualname)
         except AttributeError:
             new_canonical_path = None
 
@@ -310,7 +318,7 @@ def dynamic_alias(
         if canonical_path is None:
             raise ValueError(f"Cannot find canonical path for `{path}`")
 
-        attr = crnt_part
+        attr = current_part
 
     if target:
         obj = get_object(target, loader=loader)
@@ -346,24 +354,24 @@ def dynamic_alias(
         return gf.Alias(attr_name, obj)
 
 
-def _canonical_path(crnt_part: object, qualname: str) -> str | None:
-    """Canonical import path for `crnt_part`, extended by `qualname`.
+def _canonical_path(current_part: object, qualname: str) -> str | None:
+    """Build the canonical import path for `current_part`, extended by `qualname`.
 
     Returns `None` when no canonical path can be determined (e.g. for
     plain data objects that carry no `__module__` or `__qualname__`).
     """
     suffix = (":" + qualname) if qualname else ""
-    if isinstance(crnt_part, ModuleType):
-        return crnt_part.__name__ + suffix
+    if isinstance(current_part, ModuleType):
+        return current_part.__name__ + suffix
 
-    if inspect.isclass(crnt_part) or inspect.isfunction(crnt_part):
-        _mod = getattr(crnt_part, "__module__", None)
+    if inspect.isclass(current_part) or inspect.isfunction(current_part):
+        _mod = getattr(current_part, "__module__", None)
 
         if _mod is None:
             return None
 
         qual_parts = [] if not qualname else qualname.split(".")
-        return _mod + ":" + ".".join([crnt_part.__qualname__, *qual_parts])
+        return _mod + ":" + ".".join([current_part.__qualname__, *qual_parts])
 
     # PyO3 / C-extension callables (e.g. `builtin_function_or_method`,
     # `method-wrapper`) don't satisfy `inspect.isfunction` but they do carry
@@ -371,9 +379,9 @@ def _canonical_path(crnt_part: object, qualname: str) -> str | None:
     # so `dynamic_alias` can resolve them to their canonical home rather than
     # building a self-referential alias on the re-exporting facade module
     # (which produces `CyclicAliasError` downstream).
-    _mod = getattr(crnt_part, "__module__", None)
-    _qn = getattr(crnt_part, "__qualname__", None)
-    if _mod and _qn and callable(crnt_part):
+    _mod = getattr(current_part, "__module__", None)
+    _qn = getattr(current_part, "__qualname__", None)
+    if _mod and _qn and callable(current_part):
         qual_parts = [] if not qualname else qualname.split(".")
         return _mod + ":" + ".".join([_qn, *qual_parts])
 

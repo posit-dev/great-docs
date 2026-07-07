@@ -54,7 +54,7 @@ class TypeSections(Block):
             [make_render(item) for item in self.typealiases_items],
         )
 
-        # Turn off unnessary information
+        # Turn off unnecessary information
         for r in self.protocols_renders:
             r.show_members_summary = False
 

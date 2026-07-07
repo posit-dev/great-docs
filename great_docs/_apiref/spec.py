@@ -8,6 +8,7 @@ strings and dicts that name an object to document.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from dataclasses import fields as dc_fields
 from enum import Enum
@@ -60,10 +61,10 @@ class SpecOptions(Walkable):
                 continue
             if f.name in kwargs:
                 object.__setattr__(self, f.name, kwargs[f.name])
-            elif f.default is not field().default:
+            elif f.default is not dataclasses.MISSING:
                 object.__setattr__(self, f.name, f.default)
-            elif f.default_factory is not field().default_factory:
-                object.__setattr__(self, f.name, f.default_factory())  # type: ignore[misc]
+            elif f.default_factory is not dataclasses.MISSING:
+                object.__setattr__(self, f.name, f.default_factory())
             # else: field has no default — it must be in kwargs or will error
         object.__setattr__(self, "_fields_specified", tuple(kwargs.keys()))
 

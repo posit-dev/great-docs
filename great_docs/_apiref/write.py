@@ -144,15 +144,15 @@ def _generate_sidebar(
     """
     contents: list[Any] = [f"{dir}/index{out_page_suffix}"]
     in_subsection = False
-    crnt_entry: dict[str, Any] = {}
+    current_entry: dict[str, Any] = {}
 
     for section in sections:
         if section.title:
-            if crnt_entry:
-                contents.append(crnt_entry)
+            if current_entry:
+                contents.append(current_entry)
 
             in_subsection = False
-            crnt_entry = {"section": section.title, "contents": []}
+            current_entry = {"section": section.title, "contents": []}
         elif section.subtitle:
             in_subsection = True
 
@@ -163,12 +163,12 @@ def _generate_sidebar(
 
         if in_subsection:
             sub_entry: dict[str, Any] = {"section": section.subtitle, "contents": links}
-            crnt_entry["contents"].append(sub_entry)
+            current_entry["contents"].append(sub_entry)
         else:
-            crnt_entry["contents"].extend(links)
+            current_entry["contents"].extend(links)
 
-    if crnt_entry:
-        contents.append(crnt_entry)
+    if current_entry:
+        contents.append(current_entry)
 
     if sidebar is None:
         sidebar_cfg: dict[str, Any] = {}

@@ -7,12 +7,13 @@ from __future__ import annotations
 import logging
 import sys
 from dataclasses import dataclass, field
+from dataclasses import fields as dc_fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from yaml12 import read_yaml
 
-from .inventory import convert_inventory, create_inventory
+from .inventory import create_inventory, write_inventory
 from .resolve import resolve
 from .spec import SpecOptions, SpecSection
 from .write import (
@@ -31,28 +32,6 @@ _log = logging.getLogger(__name__)
 # consumed; dropped before parsing so they neither reach `Settings` nor error.
 _REMOVED_KEYS = {"style", "renderer", "render_interlinks"}
 
-# Parity quirks preserved deliberately (do NOT "fix" here):
-#   • `version` is omitted: the old Builder accepted a `version` param but its
-#     __init__ forced `self.version = None`, so objects.json was always built
-#     with "0.0.9999". That behavior is kept; config `version` is not wired in.
-#   • `interlinks.fast` / `_fast_inventory` is NOT read (confirmed dead — set,
-#     never used). Dropped, per spec.
-_SETTINGS_KEYS = {
-    "parser",
-    "dynamic",
-    "source_dir",
-    "dir",
-    "out_index",
-    "out_inventory",
-    "out_page_suffix",
-    "sidebar",
-    "css",
-    "header_level",
-    "rewrite_all_pages",
-    "typing_module_paths",
-}
-
-
 @dataclass
 class Settings:
     """How an API reference is generated and written — the non-content keys of the `api-reference:` block"""
@@ -70,6 +49,14 @@ class Settings:
     rewrite_all_pages: bool = False
     typing_module_paths: list[str] = field(default_factory=list[str])
     version: str | None = None
+
+
+# Parity quirk preserved deliberately (do NOT "fix" here): `version` is not
+# read from the config block. The old Builder accepted a `version` param but
+# its __init__ forced `self.version = None`, so objects.json was always built
+# with "0.0.9999". (`interlinks.fast` / `_fast_inventory` was confirmed dead
+# and dropped, per spec.)
+_SETTINGS_KEYS = {f.name for f in dc_fields(Settings)} - {"version"}
 
 
 class APIReference:
@@ -96,7 +83,8 @@ class APIReference:
         if isinstance(sidebar, str):
             settings_kwargs["sidebar"] = {"file": sidebar}
         elif isinstance(sidebar, dict) and "file" not in sidebar:
-            sidebar["file"] = "_api-reference-sidebar.yml"
+            # Copy so the caller's config dict is not mutated.
+            settings_kwargs["sidebar"] = {**sidebar, "file": "_api-reference-sidebar.yml"}
         self.settings = Settings(**settings_kwargs)
 
         self.package = block["package"]
@@ -159,7 +147,7 @@ class APIReference:
 
         _log.info("Creating inventory file")
         version = "0.0.9999" if s.version is None else s.version
-        convert_inventory(create_inventory(self.package, version, self.items), s.out_inventory)
+        write_inventory(create_inventory(self.package, version, self.items), s.out_inventory)
 
         if s.sidebar:
             _log.info(f"Writing sidebar yaml to {s.sidebar['file']}")

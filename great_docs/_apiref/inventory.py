@@ -19,7 +19,7 @@ class InventoryItem(Walkable):
     dispname: str | None = None
 
 
-def convert_inventory(inv: dict[str, Any], out_name: str) -> None:
+def write_inventory(inv: dict[str, Any], out_name: str) -> None:
     """Write an inventory to a JSON file
 
     Parameters
@@ -31,6 +31,11 @@ def convert_inventory(inv: dict[str, Any], out_name: str) -> None:
     """
     with open(out_name, "w") as f:
         json.dump(inv, f)
+
+
+# Backwards-compatible alias; the old name said "convert" but the function
+# has always written a file.
+convert_inventory = write_inventory
 
 
 def create_inventory(

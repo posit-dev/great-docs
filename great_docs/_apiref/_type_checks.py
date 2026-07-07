@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import os
-from dataclasses import field
-from functools import lru_cache
 from typing import TYPE_CHECKING, cast
 
 import griffe as gf
@@ -10,11 +7,9 @@ import griffe as gf
 from . import content
 
 if TYPE_CHECKING:
-    from typing import Literal, TypeGuard, TypeVar
+    from typing import TypeGuard
 
     from .typing import DocMemberType, DocType  # noqa: TCH001
-
-    T = TypeVar("T")
 
 
 def is_typealias(obj: gf.Object | gf.Alias) -> bool:
@@ -101,13 +96,6 @@ def griffe_to_doc(obj: gf.Object | gf.Alias, *, deep: bool = True) -> DocType:
     return content.Doc.from_griffe(obj.name, obj, members=members)  # pyright: ignore[reportUnknownMemberType]
 
 
-def no_init(default: T) -> T:
-    """
-    Set the default value of a dataclass field that will not be `__init__`ed
-    """
-    return field(init=False, default=default)
-
-
 def is_field_init_false(el: gf.Parameter) -> bool:
     """
     Whether `el` is a `field(init=False, ...)` expression
@@ -122,20 +110,3 @@ def is_field_init_false(el: gf.Parameter) -> bool:
     # field has only keyword arguments
     exprs = cast("list[gf.ExprKeyword]", el.default.arguments)
     return any(expr.value == "False" for expr in exprs if expr.name == "init")
-
-
-@lru_cache(4)
-def package_info(
-    key: Literal["GITHUB_REPO_URL", "GIT_REF", "PACKAGE_ROOT", "SOURCE_PATH"],
-) -> str | None:
-    """
-    Look up a piece of package metadata by `key`
-
-    This information has been put into the environment GreatDocs.__init___
-
-    Returns
-    -------
-    str | None
-        A information or None.
-    """
-    return os.environ.get(key, None)

@@ -109,7 +109,7 @@ from great_docs._apiref._rst_converters import (
     _smart_dedent,
 )
 from great_docs._apiref._tools import render_code_variable, render_type_object
-from great_docs._apiref._visitor import ctx_node, Node, ObjectNotFoundError
+from great_docs._apiref._visitor import ctx_node, Node
 from great_docs._apiref._type_checks import (
     griffe_to_doc,
     is_field_init_false,
@@ -118,17 +118,16 @@ from great_docs._apiref._type_checks import (
     is_typealias,
     is_typevar,
     isDoc,
-    no_init,
 )
 from great_docs._apiref.resolve import (
     resolve as _blueprint,
     resolve as blueprint_func,
-    _Resolver as BlueprintTransformer,
+    ObjectNotFoundError,
+    _Resolver,
     _autogenerate_sections,
     _sections_from_package as _auto_package,
     _is_external_alias,
     _non_default_entries,
-    _resolve_alias,
     _to_simple_dict,
 )
 from great_docs._apiref.collect import (
@@ -145,7 +144,7 @@ from great_docs._apiref.introspect import (
     get_parser_defaults,
     replace_docstring,
     _is_valueless,
-    _resolve_target,
+    resolve_alias,
 )
 from great_docs._apiref import write
 from great_docs._apiref.write import _insert_contents, merge_frontmatter as _merge_frontmatter
@@ -6309,7 +6308,7 @@ class TestGdgSite144DocstringTables:
 
 
 def _bp_make_trans(objects=None):
-    """Helper: create a BlueprintTransformer backed by a dict of objects."""
+    """Helper: create a _Resolver backed by a dict of objects."""
     objects = objects or {}
 
     def get_object(path, **kwargs):
@@ -6317,7 +6316,7 @@ def _bp_make_trans(objects=None):
             return objects[path]
         raise KeyError(path)
 
-    return BlueprintTransformer(get_object=get_object)
+    return _Resolver(get_object=get_object)
 
 
 def test_to_simple_dict_base_dataclass():
@@ -6387,7 +6386,7 @@ def test_non_default_entries_auto_options_empty():
 
 def test_resolve_alias_non_alias_passthrough():
     func = gf.Function("myfunc")
-    result = _resolve_alias(func, lambda p: None)
+    result = resolve_alias(func, lambda p: None)
     assert result is func
 
 
@@ -6396,7 +6395,7 @@ def test_resolve_alias_resolves_target():
     func = gf.Function("f")
     mod.set_member("f", func)
     alias = gf.Alias("f_alias", target=func, parent=mod)
-    result = _resolve_alias(alias, lambda p: None)
+    result = resolve_alias(alias, lambda p: None)
     assert result is func
 
 
@@ -6414,7 +6413,7 @@ def test_resolve_alias_error_fallback():
 
     type(mock_alias).target = PropertyMock(side_effect=AliasResolutionError(inner_alias))
 
-    result = _resolve_alias(mock_alias, get_object)
+    result = resolve_alias(mock_alias, get_object)
     assert result is sentinel
 
 
@@ -6657,38 +6656,38 @@ def test_find_page_node_no_page():
 
 
 def test_bp_clean_member_path_with_colon():
-    result = BlueprintTransformer._clean_member_path("pkg.mod:MyClass.method")
+    result = _Resolver._clean_member_path("pkg.mod:MyClass.method")
     assert result == "pkg.mod.MyClass.method"
 
 
 def test_bp_clean_member_path_no_colon():
-    result = BlueprintTransformer._clean_member_path("simple")
+    result = _Resolver._clean_member_path("simple")
     assert result == "simple"
 
 
-def test_bp_get_object_fixed_success():
+def test_bp_get_object_or_raise_success():
     obj = gf.Function("myfunc")
 
     def get_object(path, **kwargs):
         return obj
 
-    trans = BlueprintTransformer(get_object=get_object)
-    result = trans.get_object_fixed("pkg.myfunc")
+    trans = _Resolver(get_object=get_object)
+    result = trans.get_object_or_raise("pkg.myfunc")
     assert result is obj
 
 
-def test_bp_get_object_fixed_key_error():
+def test_bp_get_object_or_raise_key_error():
     def get_object(path, **kwargs):
         raise KeyError("pkg.missing")
 
-    trans = BlueprintTransformer(get_object=get_object)
+    trans = _Resolver(get_object=get_object)
     with pytest.raises(ObjectNotFoundError, match="Cannot find an object named"):
-        trans.get_object_fixed("pkg.missing")
+        trans.get_object_or_raise("pkg.missing")
 
 
 def test_bp_visit_sets_package():
     trans = _bp_make_trans()
-    assert trans.crnt_package is None
+    assert trans.current_package is None
 
     func = gf.Function("myfunc")
     trans2 = _bp_make_trans({"myfunc": func})
@@ -6699,10 +6698,10 @@ def test_bp_visit_sets_package():
 def test_bp_visit_restores_package():
     func = gf.Function("f")
     trans = _bp_make_trans({"pkg:f": func})
-    trans.crnt_package = "pkg"
+    trans.current_package = "pkg"
 
     trans._resolve_object(Auto(name="f"))
-    assert trans.crnt_package == "pkg"
+    assert trans.current_package == "pkg"
 
 
 def test_bp_visit_sets_options():
@@ -6741,7 +6740,7 @@ def test_bp_enter_auto_basic_attribute():
 def test_bp_enter_auto_with_package():
     func = gf.Function("f")
     trans = _bp_make_trans({"pkg:f": func})
-    trans.crnt_package = "pkg"
+    trans.current_package = "pkg"
     result = trans._resolve_object(Auto(name="f"))
     assert isinstance(result, DocFunction)
     assert result.obj is func
@@ -6750,7 +6749,7 @@ def test_bp_enter_auto_with_package():
 def test_bp_enter_auto_colon_in_pkg():
     func = gf.Function("method")
     trans = _bp_make_trans({"pkg.mod:Class.method": func})
-    trans.crnt_package = "pkg.mod:Class"
+    trans.current_package = "pkg.mod:Class"
     result = trans._resolve_object(Auto(name="method"))
     assert isinstance(result, DocFunction)
 
@@ -6758,7 +6757,7 @@ def test_bp_enter_auto_colon_in_pkg():
 def test_bp_enter_auto_colon_in_name():
     func = gf.Function("method")
     trans = _bp_make_trans({"pkg.mod:method": func})
-    trans.crnt_package = "pkg"
+    trans.current_package = "pkg"
     result = trans._resolve_object(Auto(name="mod:method"))
     assert isinstance(result, DocFunction)
 
@@ -6836,7 +6835,7 @@ def test_bp_enter_auto_dynamic_from_auto():
         captured.update(kwargs)
         return func
 
-    trans = BlueprintTransformer(get_object=get_object)
+    trans = _Resolver(get_object=get_object)
     trans._resolve_object(Auto(name="f", dynamic=True))
     assert captured.get("dynamic") is True
 
@@ -6849,7 +6848,7 @@ def test_bp_enter_auto_dynamic_from_transformer():
         captured.update(kwargs)
         return func
 
-    trans = BlueprintTransformer(get_object=get_object)
+    trans = _Resolver(get_object=get_object)
     trans.dynamic = True
     trans._resolve_object(Auto(name="f"))
     assert captured.get("dynamic") is True
@@ -7128,7 +7127,7 @@ def test_fetch_members_include_imports():
 def test_bp_sections_resolved():
     func = gf.Function("f")
     trans = _bp_make_trans({"pkg:f": func})
-    trans.crnt_package = "pkg"
+    trans.current_package = "pkg"
 
     sections = [SpecSection(title="API", contents=[Auto(name="f")])]
     result = trans.resolve_sections(sections)
@@ -7156,7 +7155,7 @@ def test_bp_auto_generate_sections(capsys):
 def test_bp_exit_section_wraps_non_page():
     func = gf.Function("f")
     trans = _bp_make_trans({"pkg:f": func})
-    trans.crnt_package = "pkg"
+    trans.current_package = "pkg"
 
     sections = [SpecSection(title="API", contents=[Auto(name="f")])]
     result = trans.resolve_sections(sections)
@@ -7211,7 +7210,7 @@ def test_blueprint_entry_basic():
     def get_object(path, **kwargs):
         return func
 
-    trans = BlueprintTransformer(get_object=get_object)
+    trans = _Resolver(get_object=get_object)
     result = trans._resolve_object(Auto(name="myfunc"))
     assert isinstance(result, DocFunction)
 
@@ -7224,8 +7223,8 @@ def test_blueprint_entry_with_package():
             return func
         raise KeyError(path)
 
-    trans = BlueprintTransformer(get_object=get_object)
-    trans.crnt_package = "mypkg"
+    trans = _Resolver(get_object=get_object)
+    trans.current_package = "mypkg"
     result = trans._resolve_object(Auto(name="f"))
     assert isinstance(result, DocFunction)
 
@@ -7238,7 +7237,7 @@ def test_blueprint_entry_with_dynamic():
         captured.update(kwargs)
         return func
 
-    trans = BlueprintTransformer(get_object=get_object)
+    trans = _Resolver(get_object=get_object)
     trans.dynamic = True
     trans._resolve_object(Auto(name="f"))
     assert captured.get("dynamic") is True
@@ -14941,9 +14940,9 @@ def test_build_github_source_url_absolute_path():
 def _render_doc_source_relative_path(obj):
     """Invoke the renderer's `_source_relative_path` with a stand-in griffe object."""
     import great_docs._apiref._render.doc as docmod
-    from great_docs._apiref import _type_checks
+    from great_docs._apiref import _globals
 
-    _type_checks.package_info.cache_clear()
+    _globals.package_info.cache_clear()
     cls = vars(docmod)["__RenderDoc"]
     fake_self = types.SimpleNamespace(obj=obj)
     return cls.__dict__["_source_relative_path"](fake_self)
@@ -28377,27 +28376,27 @@ def test_get_object_nested_path():
             sys.modules.pop("introtest_nested", None)
 
 
-def test_resolve_target_direct():
-    """_resolve_target returns the target when it's not an Alias."""
+def test_resolve_alias_direct():
+    """resolve_alias returns the target when it's not an Alias."""
 
     mod = gf.Module(name="testmod")
     func = gf.Function(name="my_func", lineno=1)
     mod.set_member("my_func", func)
     alias = gf.Alias("my_alias", func, parent=mod)
-    result = _resolve_target(alias)
+    result = resolve_alias(alias)
 
     assert result is func
 
 
-def test_resolve_target_chained():
-    """_resolve_target follows chained aliases."""
+def test_resolve_alias_chained():
+    """resolve_alias follows chained aliases."""
 
     mod = gf.Module(name="testmod")
     func = gf.Function(name="my_func", lineno=1)
     mod.set_member("my_func", func)
     alias1 = gf.Alias("alias1", func, parent=mod)
     alias2 = gf.Alias("alias2", alias1, parent=mod)
-    result = _resolve_target(alias2)
+    result = resolve_alias(alias2)
 
     assert result is func
 
@@ -33686,16 +33685,6 @@ def test_griffe_to_doc():
     result = griffe_to_doc(func, deep=False)
     assert isinstance(result, DocFunction)
     assert result.name == "my_func"
-
-
-def test_no_init():
-    """no_init returns a dataclass field with init=False."""
-    from dataclasses import fields, Field
-
-    result = no_init(42)
-    assert isinstance(result, Field)
-    assert result.default == 42
-    assert result.init is False
 
 
 def test_is_field_init_false_true():

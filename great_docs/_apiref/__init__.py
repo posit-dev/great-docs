@@ -19,7 +19,7 @@ from ._render.reference_section import RenderReferenceSection
 from .api_reference import APIReference
 from .collect import build_manifest, remove_package_prefix
 from .introspect import get_object
-from .inventory import convert_inventory, create_inventory
+from .inventory import convert_inventory, create_inventory, write_inventory
 from .resolve import resolve
 from .spec import SpecObject
 
@@ -45,6 +45,7 @@ __all__ = (
     "remove_package_prefix",
     "build_manifest",
     "create_inventory",
+    "write_inventory",
     "convert_inventory",
     "SpecObject",
 )

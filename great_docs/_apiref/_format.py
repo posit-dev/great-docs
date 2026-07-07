@@ -31,7 +31,7 @@ STR_RE = re.compile(
     # or that is not a double quote or backslash
     r'"(?:\\.|[^"\\])*"'  # double-quoted
     r"|"  # or
-    r"'(?:\\.|[^'\\])*'"  # single-queoted
+    r"'(?:\\.|[^'\\])*'"  # single-quoted
     ")",
     flags=re.UNICODE,
 )
@@ -276,7 +276,8 @@ def render_formatted_expr(el: gf.Expr) -> str:
     return pretty_code(el_str)
 
 
-def _tmp_stdin_filename() -> str:
+@lru_cache(1)
+def _stdin_filename() -> str:
     """
     Create a temp filename for ruff to use when formatting code snippets
 
@@ -289,9 +290,6 @@ def _tmp_stdin_filename() -> str:
     with tempfile.NamedTemporaryFile(suffix=".py", dir=Path.cwd()) as f:
         filename = Path(f.name).name
     return filename
-
-
-_STDIN_FILENAME = _tmp_stdin_filename()
 
 
 @lru_cache(maxsize=2048)
@@ -309,7 +307,7 @@ def format_str(source: str) -> str:
             "ruff",
             "format",
             "--stdin-filename",
-            _STDIN_FILENAME,
+            _stdin_filename(),
             "-",
         ],
         input=source,

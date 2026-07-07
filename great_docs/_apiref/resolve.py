@@ -9,10 +9,9 @@ from typing import TYPE_CHECKING, Any, Callable, cast
 import griffe as gf
 from yaml12 import format_yaml
 
-from ._visitor import ObjectNotFoundError
 from ._walkable import MISSING, Walkable
 from .content import Doc, Link, MemberPage, Page, Section, Text
-from .introspect import get_parser_defaults
+from .introspect import get_parser_defaults, resolve_alias
 from .spec import ChildrenStyle, SpecObject, SpecSection, SpecText
 
 # Dunder members inherited from `object`/`type` (or PyO3 metaclasses) that carry docstrings but are
@@ -50,7 +49,11 @@ if TYPE_CHECKING:
 _log = logging.getLogger(__name__)
 
 # Type alias for the griffe object loader callable used throughout this module.
-_GetObject = Callable[..., gf.Object]
+_GetObject = Callable[..., gf.Object | gf.Alias]
+
+
+class ObjectNotFoundError(Exception):
+    """Raised when an object path cannot be resolved to a griffe object"""
 
 
 def _is_external_alias(obj: gf.Alias | gf.Object, mod: gf.Module) -> bool:
@@ -60,20 +63,20 @@ def _is_external_alias(obj: gf.Alias | gf.Object, mod: gf.Module) -> bool:
     if not isinstance(obj, gf.Alias):
         return False
 
-    crnt_target: gf.Alias | gf.Object = obj
+    current_target: gf.Alias | gf.Object = obj
 
-    while crnt_target.is_alias:
-        assert isinstance(crnt_target, gf.Alias)
-        if not crnt_target.target_path.startswith(package_name):
+    while current_target.is_alias:
+        assert isinstance(current_target, gf.Alias)
+        if not current_target.target_path.startswith(package_name):
             return True
 
         try:
-            new_target = crnt_target.modules_collection[crnt_target.target_path]
+            new_target = current_target.modules_collection[current_target.target_path]
 
-            if new_target is crnt_target:
+            if new_target is current_target:
                 raise ValueError(f"Cyclic Alias: {new_target}")
 
-            crnt_target = new_target
+            current_target = new_target
 
         except KeyError:
             return True
@@ -139,26 +142,18 @@ def _non_default_entries(el: SpecOptions) -> dict[str, Any]:
     return {k: getattr(el, k) for k in fields}
 
 
-def _resolve_alias(obj: gf.Alias | gf.Object, get_object: _GetObject) -> gf.Object:
-    """The concrete griffe `Object` reached by following an alias chain"""
-    if not isinstance(obj, gf.Alias):
-        return obj
+def _join_path(pkg: str | None, name: str) -> str:
+    """The griffe lookup path for `name` under `pkg`
 
-    max_tries = 100
-
-    new_obj: gf.Alias | gf.Object = obj
-    for _ in range(max_tries):
-        if not new_obj.is_alias:
-            break
-
-        assert isinstance(new_obj, gf.Alias)
-        try:
-            new_obj = new_obj.target
-        except gf.AliasResolutionError as e:
-            new_obj = get_object(e.alias.target_path)
-
-    assert isinstance(new_obj, gf.Object)
-    return new_obj
+    A lookup path carries at most one `:` (separating the module from the
+    object within it), so once either part already has one, the remaining
+    components join with `.`.
+    """
+    if pkg is None:
+        return name
+    if ":" in pkg or ":" in name:
+        return f"{pkg}.{name}"
+    return f"{pkg}:{name}"
 
 
 class _Resolver:
@@ -189,12 +184,12 @@ class _Resolver:
         else:
             self.get_object = get_object
 
-        self.crnt_package: str | None = None
+        self.current_package: str | None = None
         self.options: SpecOptions | None = None
         self.dynamic: bool = False
 
-    def get_object_fixed(self, path: str, **kwargs: object) -> gf.Object:
-        """The griffe `Object` at `path`, re-raised as `ObjectNotFoundError` if absent"""
+    def get_object_or_raise(self, path: str, **kwargs: object) -> gf.Object | gf.Alias:
+        """The griffe object at `path`, re-raised as `ObjectNotFoundError` if absent"""
         try:
             return self.get_object(path, **kwargs)
         except KeyError as e:
@@ -216,18 +211,18 @@ class _Resolver:
 
     def _resolve_section(self, el: SpecSection) -> Section:
         """A top-level `spec` section rebuilt with each entry wrapped in a `Page`"""
-        old_package = self.crnt_package
+        old_package = self.current_package
         old_options = self.options
 
         if el.package is not MISSING:
-            self.crnt_package = el.package
+            self.current_package = el.package
         if el.options is not None:
             self.options = el.options
 
         try:
             contents: list[Any] = [self._resolve_entry(entry) for entry in el.contents]
         finally:
-            self.crnt_package = old_package
+            self.current_package = old_package
             self.options = old_options
 
         return Section(
@@ -258,26 +253,20 @@ class _Resolver:
 
     def _resolve_object(self, el: SpecObject) -> Doc:
         """Locate a `SpecObject` in griffe and rebuild it as a concrete `Doc`"""
-        old_package = self.crnt_package
+        old_package = self.current_package
         # A member `SpecObject` carries its parent's path as `package`; adopt it
         # so the member's full path is computed relative to the parent.
         if el.package is not MISSING:
-            self.crnt_package = el.package
+            self.current_package = el.package
 
         try:
             return self._resolve_documented_object(el)
         finally:
-            self.crnt_package = old_package
+            self.current_package = old_package
 
     def _resolve_documented_object(self, el: SpecObject) -> Doc:
         """Locate the subject object in griffe and rebuild it with its resolved members"""
-        pkg = self.crnt_package
-        if pkg is None:
-            path = el.name
-        elif ":" in pkg or ":" in el.name:
-            path = f"{pkg}.{el.name}"
-        else:
-            path = f"{pkg}:{el.name}"
+        path = _join_path(self.current_package, el.name)
 
         # Merge inherited section-level options under the entry's own settings.
         if self.options is not None:
@@ -290,7 +279,7 @@ class _Resolver:
         dynamic = el.dynamic if el.dynamic is not None else self.dynamic
 
         # The subject object being documented (the class/module/function itself).
-        obj = self.get_object_fixed(path, dynamic=dynamic)
+        obj = self.get_object_or_raise(path, dynamic=dynamic)
         raw_members = self._fetch_members(el, obj)
 
         _defaults: dict[str, Any] = {"dynamic": dynamic, "package": path}
@@ -368,7 +357,7 @@ class _Resolver:
             options = {k: v for k, v in options.items() if (v.parent is obj or not v.is_alias)}
 
         for member in options.values():
-            _ = _resolve_alias(member, self.get_object)
+            _ = resolve_alias(member, self.get_object)
 
         if not el.include_empty:
             options = {k: v for k, v in options.items() if v.docstring is not None}
@@ -410,7 +399,7 @@ def resolve(
     r = _Resolver(parser=parser)
 
     if package is not None:
-        r.crnt_package = package
+        r.current_package = package
 
     if dynamic is not None:
         r.dynamic = dynamic
@@ -427,12 +416,12 @@ def _autogenerate_sections(r: _Resolver, package: str | None) -> list[SpecSectio
 
     assert isinstance(package, str)
 
-    mod = r.get_object_fixed(package)
+    mod = r.get_object_or_raise(package)
     assert isinstance(mod, gf.Module)
     sections = _sections_from_package(mod)
 
     if not sections:
-        raise ValueError()
+        raise ValueError(f"No API sections could be generated for package: {package}")
 
     recreate_config = {
         "title": "API Reference",

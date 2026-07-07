@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import dataclasses as _dc_mod
+import re
 import warnings
 from dataclasses import dataclass
+from dataclasses import fields as dc_fields
 from enum import Enum
 from typing import Type
 
@@ -53,28 +54,26 @@ class _DocstringSectionPatched(gf.DocstringSection):
     @staticmethod
     def split_sections(text: str) -> list[tuple[str, str]]:
         """Split text into (title, body) tuples for all numpydoc style sections"""
-        import re
-
         comp = re.compile(r"^([\S \t]+)\n-+$\n?", re.MULTILINE)
 
-        crnt_match = comp.search(text)
-        crnt_pos = 0
+        current_match = comp.search(text)
+        current_pos = 0
 
         results = []
-        while crnt_match is not None:
-            if crnt_pos == 0 and crnt_match.start() > 0:
-                results.append(("", text[: crnt_match.start()]))
+        while current_match is not None:
+            if current_pos == 0 and current_match.start() > 0:
+                results.append(("", text[: current_match.start()]))
 
-            next_pos = crnt_pos + crnt_match.end()
+            next_pos = current_pos + current_match.end()
             substr = text[next_pos:]
             next_match = comp.search(substr)
 
-            title = crnt_match.groups()[0]
+            title = current_match.groups()[0]
             body = substr if next_match is None else substr[: next_match.start()]
 
             results.append((title, body))
 
-            crnt_match, crnt_pos = next_match, next_pos
+            current_match, current_pos = next_match, next_pos
 
         return results
 
@@ -103,7 +102,7 @@ class _DocstringSectionPatched(gf.DocstringSection):
 
     @classmethod
     def transform_all(cls, el: list[gf.DocstringSection]) -> list[gf.DocstringSection]:
-        return sum(map(cls.transform, el), [])
+        return [section for item in el for section in cls.transform(item)]
 
 
 class DocstringSectionSeeAlso(_DocstringSectionPatched):
@@ -155,9 +154,7 @@ def fields(el: object) -> list[str] | list[int] | None:
 
     # dataclass types (ExampleCode, ExampleText)
     if isinstance(el, (ExampleCode, ExampleText)):
-        from dataclasses import fields as _fields
-
-        return [field.name for field in _fields(el)]
+        return [field.name for field in dc_fields(el)]
 
     # griffe types (most specific first)
     if isinstance(el, gf.Function):
@@ -186,7 +183,7 @@ def fields(el: object) -> list[str] | list[int] | None:
         return ["kind", "title", "value"]
 
     # Alias (must come before Object since Alias also has Object-like behavior)
-    if isinstance(el, gf.ObjectAliasMixin) and isinstance(el, gf.Alias):
+    if isinstance(el, gf.Alias):
         try:
             return fields(el.target)
         except gf.AliasResolutionError:
@@ -210,7 +207,7 @@ def fields(el: object) -> list[str] | list[int] | None:
 
     # node dataclass models
     if isinstance(el, Walkable):
-        field_defaults = {f.name: f.default for f in _dc_mod.fields(el)}
+        field_defaults = {f.name: f.default for f in dc_fields(el)}
         return [
             k
             for k, v in el._iter_fields()
@@ -246,9 +243,9 @@ class Formatter:
 
         call = transform(call)
 
-        crnt_fields = fields(call)
+        current_fields = fields(call)
 
-        if crnt_fields is None:
+        if current_fields is None:
             str_repr = repr(call)
             if len(str_repr) > self.string_max_length:
                 return str_repr[: self.string_max_length] + self.string_truncate_mark
@@ -261,7 +258,7 @@ class Formatter:
             return call_str + self.string_truncate_mark
 
         fields_str = []
-        for name in crnt_fields:
+        for name in current_fields:
             val = self.get_field(call, name)
 
             if self.compact:

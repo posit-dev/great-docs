@@ -24,24 +24,11 @@ class Node:
 ctx_node: ContextVar[Node] = ContextVar("node")
 
 
-# Exceptions -------------------------------------------------------------------
-
-
-class ObjectNotFoundError(Exception):
-    """Raised when an object path cannot be resolved to a griffe object"""
-
-
 # Visitor base classes ---------------------------------------------------------
 
 
 class NodeVisitor:
     """A read-only traversal of a node tree"""
-
-    LOG = False
-
-    def _log(self, step: str, el: object) -> None:
-        if self.LOG:
-            print(f"{step}: {type(el)} {el}")
 
     def visit(self, el: object) -> object:
         old_node = ctx_node.get(None) or Node()

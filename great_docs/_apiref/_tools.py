@@ -46,9 +46,9 @@ def _render(obj: gf.Object) -> str:
     Render a `gf.Object` to qmd
     """
 
-    def toDocObject(obj: gf.Object) -> "DocType":
+    def to_doc(obj: gf.Object) -> "DocType":
         members = [
-            toDocObject(m)
+            to_doc(m)
             for m in obj.members.values()
             # imported variables are of type gf.Alias and we are
             # not interested in dealing with them.
@@ -56,7 +56,7 @@ def _render(obj: gf.Object) -> str:
         ]
         return Doc.from_griffe(obj.name, obj, members=members)  # pyright: ignore[reportUnknownMemberType]
 
-    match node := toDocObject(obj):
+    match node := to_doc(obj):
         case DocAttribute():
             _Render = RenderDocAttribute
         case DocClass():

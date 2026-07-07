@@ -25,19 +25,19 @@ class _ManifestBuilder(NodeVisitor):
 
     def find_page_node(self) -> Page:
         """Find the nearest `Page` enclosing the current node"""
-        crnt_node = ctx_node.get()
+        current_node = ctx_node.get()
 
         while True:
-            if crnt_node.value is None:
-                raise ValueError(f"No page detected above current element: {crnt_node.value}")
+            if current_node.value is None:
+                raise ValueError(f"No page detected above current element: {current_node.value}")
 
-            if isinstance(crnt_node.value, Page):
-                return crnt_node.value
+            if isinstance(current_node.value, Page):
+                return current_node.value
 
-            if crnt_node.parent is None:
+            if current_node.parent is None:
                 raise ValueError("Reached root without finding a Page ancestor")
 
-            crnt_node = crnt_node.parent
+            current_node = current_node.parent
 
     def exit(self, el: object) -> object:
         if isinstance(el, Doc):
