@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, cast
 
 import griffe as gf
 
-from great_docs._renderer._render._label import get_label
+from great_docs._apiref._render._label import get_label
 
 from .. import _ast as qast
 from .. import content
@@ -115,7 +115,7 @@ class __RenderDoc(RenderBase):
     """
     Name of the page where this object's rendered content
     will be written. It should be the name of the object
-    as listed in the great_docs._renderer yaml section. e.g
+    as listed in the great_docs._apiref yaml section. e.g
 
     Given
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from great_docs._renderer import spec
-from great_docs._renderer.api_reference import APIReference, Settings
+from great_docs._apiref import spec
+from great_docs._apiref.api_reference import APIReference, Settings
 
 
 def test_flat_config_routes_into_nested_settings():
