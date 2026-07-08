@@ -718,6 +718,50 @@ def test_examples_section_renders(pkg_name: str):
     assert found_examples > 0, f"No Examples sections found in {pkg_name}"
 
 
+@pytest.mark.dedicated
+@requires_bs4
+def test_examples_prose_converts_rst():
+    """Prose interleaved in an Examples section gets the same RST conversion as the body.
+
+    `gdtest_examples_rst_repro` places identical inline RST markup (a `:math:`
+    role) both in the description body and in the prose between the doctest
+    blocks of a numpy Examples section. The body is converted by
+    `convert_docstring_text`; the interleaved Examples prose must be too. If
+    the `ExampleText` branch routes through doctest fencing only, the role is
+    left as a raw `:math:` marker instead of a MathJax span.
+
+    `:math:` is used as the probe deliberately: unlike `:func:`, Quarto's own
+    interlinks filter does not rescue it, so a leaked role is observable in the
+    final HTML and attributable to great-docs.
+    """
+    pkg = "gdtest_examples_rst_repro"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    page = _ref_dir(pkg) / "compute.html"
+    if not page.exists():
+        pytest.skip("compute.html not found")
+
+    soup = _load_html(page)
+
+    # Guard: the body proves the markup is convertible on this page.
+    body = soup.select_one("div.doc-text")
+    assert body is not None, "compute.html has no doc-text body"
+    assert ":math:" not in body.get_text(), "body left the :math: role unconverted"
+    assert body.select_one("span.math") is not None, "body did not render math"
+
+    # Regression: the Examples-section prose must be converted the same way.
+    examples = soup.select_one("section.doc-examples")
+    assert examples is not None, "compute.html has no Examples section"
+    assert ":math:" not in examples.get_text(), (
+        "Examples-section prose left the :math: role as raw text — interleaved "
+        "ExampleText is not going through convert_docstring_text"
+    )
+    assert examples.select_one("span.math") is not None, (
+        "Examples-section prose did not render math"
+    )
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # R3: Special Features — overloads, callouts, constants, dunders, enums
 # ═══════════════════════════════════════════════════════════════════════════════
