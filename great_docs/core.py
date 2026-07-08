@@ -1063,6 +1063,27 @@ class GreatDocs:
         """
         return package_name.replace("-", "_")
 
+    def _resolve_importable_name(self, package_name: str) -> str:
+        """
+        Resolve the importable module name for a project.
+
+        Prefers the module name from `_detect_module_name` (an explicit `module:` in great-docs.yml,
+        build-backend hints, or auto-discovery), falling back to the normalized PyPI project name
+        when detection returns `None`.
+
+        Parameters
+        ----------
+        package_name
+            The PyPI project name to fall back to.
+
+        Returns
+        -------
+        str
+            The importable module name.
+        """
+        module_name = self._detect_module_name()
+        return module_name if module_name else self._normalize_package_name(package_name)
+
     def _detect_module_name(self) -> str | None:
         """
         Detect the actual importable module name for the package.
@@ -14761,8 +14782,7 @@ body-classes: "gd-homepage"
 
         # The Click CLI is imported from the package's module, which can differ
         # from the PyPI project name.
-        module_name = self._detect_module_name()
-        importable_name = module_name if module_name else self._normalize_package_name(package_name)
+        importable_name = self._resolve_importable_name(package_name)
         cli_info = self._discover_click_cli(importable_name, display_name=package_name)
         if not cli_info:
             return ""  # pragma: no cover
@@ -15449,10 +15469,7 @@ body-classes: "gd-homepage"
                 # which reuses pkg_name) load the importable module, which can
                 # differ from the PyPI project name. Honor an explicit
                 # ``module:`` and build-backend hints via _detect_module_name.
-                module_name = self._detect_module_name()
-                pkg_name = (
-                    module_name if module_name else self._normalize_package_name(package_name)
-                )
+                pkg_name = self._resolve_importable_name(package_name)
                 with _quiet_prints():
                     self._generate_source_links_json(pkg_name)
                 log.step_done(f"Source links generated for {pkg_name}")
@@ -15486,7 +15503,9 @@ body-classes: "gd-homepage"
             step += 1
             log.step_start(step, "Generate CLI reference")
             metadata = self._get_package_metadata()
-            if metadata.get("cli_enabled", False):
+            if metadata.get("cli_enabled", False) and not pkg_name:
+                log.step_skip(step, "no package detected")
+            elif metadata.get("cli_enabled", False):
                 try:
                     with _quiet_prints():
                         cli_info = self._discover_click_cli(pkg_name, display_name=package_name)
@@ -16537,10 +16556,7 @@ body-classes: "gd-homepage"
             # differ from the PyPI project name).
             package_name = self._detect_package_name()
             if package_name:
-                module_name = self._detect_module_name()
-                importable_name = (
-                    module_name if module_name else self._normalize_package_name(package_name)
-                )
+                importable_name = self._resolve_importable_name(package_name)
                 # Dotted module names (e.g. namespace packages "firebird.base")
                 # map to nested directories.
                 package_dir = self.project_root.joinpath(*importable_name.split("."))
@@ -16893,10 +16909,7 @@ body-classes: "gd-homepage"
             # PyPI project name. Skip when no package is detectable.
             package_name = self._detect_package_name()
             if package_name:
-                module_name = self._detect_module_name()
-                importable_name = (
-                    module_name if module_name else self._normalize_package_name(package_name)
-                )
+                importable_name = self._resolve_importable_name(package_name)
                 # Dotted module names (e.g. namespace packages "firebird.base")
                 # map to nested directories.
                 package_dir = self.project_root.joinpath(*importable_name.split("."))
