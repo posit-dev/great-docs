@@ -8333,6 +8333,148 @@ def test_detect_module_name_returns_none():
         assert docs._detect_module_name() is None
 
 
+@patch.object(GreatDocs, "_generate_skill_md")
+@patch.object(GreatDocs, "_generate_llms_full_txt")
+@patch.object(GreatDocs, "_generate_llms_txt")
+@patch.object(GreatDocs, "_prepare_build_directory")
+@patch.object(GreatDocs, "_generate_source_links_json")
+def test_build_source_links_use_module_name(
+    mock_src, mock_prep, mock_llms, mock_llms_full, mock_skill
+):
+    """Regression: build() generates source links for the importable module name,
+    not the PyPI project name, when the two diverge."""
+
+    class _StopBuild(Exception):
+        pass
+
+    mock_src.side_effect = _StopBuild
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+        (root / "pyproject.toml").write_text('[project]\nname = "my-dist"\n')
+        (root / "great-docs.yml").write_text("module: actual_module\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+
+        with pytest.raises(_StopBuild):
+            docs.build(refresh=False)
+
+        mock_src.assert_called_once_with("actual_module")
+
+
+@patch("great_docs._api_diff.snapshot_from_griffe")
+def test_auto_save_snapshot_uses_module_name(mock_snapshot):
+    """Regression: _auto_save_snapshot loads griffe by the importable module name,
+    not the PyPI project name, when the two diverge."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+        (root / "pyproject.toml").write_text('[project]\nname = "my-dist"\n')
+        (root / "great-docs.yml").write_text("module: actual_module\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._auto_save_snapshot()
+
+        assert mock_snapshot.call_args[0][0] == "actual_module"
+
+
+@patch.object(GreatDocs, "_discover_click_cli")
+def test_cli_help_for_llms_uses_module_name(mock_discover):
+    """Regression: llms-full CLI help discovers the Click CLI by importable module
+    name, not the PyPI project name, when the two diverge."""
+    mock_discover.return_value = {"help_text": "usage", "commands": []}
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+        (root / "pyproject.toml").write_text('[project]\nname = "my-dist"\n')
+        (root / "great-docs.yml").write_text("module: actual_module\ncli:\n  enabled: true\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs._get_cli_help_text_for_llms()
+
+        mock_discover.assert_called_once_with("actual_module", display_name="my-dist")
+
+
+@patch("great_docs._harper.run_harper")
+def test_proofread_docstrings_use_module_name(mock_run_harper):
+    """Regression: proofread(include_docstrings=True) scans the importable module
+    directory, not a directory named after the PyPI project."""
+    mock_run_harper.return_value = []
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+        (root / "pyproject.toml").write_text('[project]\nname = "my-dist"\n')
+        (root / "great-docs.yml").write_text("module: actual_module\n")
+        pkg_dir = root / "actual_module"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text('"""Module docstring."""\n')
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs.proofread(include_docs=False, include_docstrings=True)
+
+        assert result["files_checked"] == 1
+        mock_run_harper.assert_called_once()
+        scanned = mock_run_harper.call_args[0][0]
+        assert any(p.name == "__init__.py" for p in scanned)
+
+
+@patch("great_docs._harper.run_harper")
+def test_proofread_docstrings_dotted_module_name(mock_run_harper):
+    """Regression: proofread(include_docstrings=True) scans the nested directory
+    of a dotted module name (namespace package)."""
+    mock_run_harper.return_value = []
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+        (root / "pyproject.toml").write_text('[project]\nname = "my-dist"\n')
+        (root / "great-docs.yml").write_text("module: firebird.base\n")
+        pkg_dir = root / "firebird" / "base"
+        pkg_dir.mkdir(parents=True)
+        (pkg_dir / "__init__.py").write_text('"""Module docstring."""\n')
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs.proofread(include_docs=False, include_docstrings=True)
+
+        assert result["files_checked"] == 1
+        mock_run_harper.assert_called_once()
+        scanned = mock_run_harper.call_args[0][0]
+        assert any(p.name == "__init__.py" for p in scanned)
+
+
+def test_proofread_docstrings_no_package_no_crash():
+    """Regression: proofread(include_docstrings=True) skips the docstring scan
+    instead of crashing when no package is detectable."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs.proofread(include_docs=False, include_docstrings=True)
+
+        assert result["files_checked"] == 0
+
+
+def test_cli_help_for_llms_display_name_is_project_name():
+    """Regression: with no [project.scripts], the llms-full CLI heading uses the
+    project (distribution) name even though the CLI is imported from a module
+    with a different name."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+        (root / "pyproject.toml").write_text('[project]\nname = "my-dist"\n')
+        (root / "great-docs.yml").write_text("module: actual_module\ncli:\n  enabled: true\n")
+        pkg_dir = root / "actual_module"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text('"""actual_module."""\n')
+        (pkg_dir / "cli.py").write_text(
+            'import click\n\n\n@click.group()\ndef main():\n    """Main CLI."""\n'
+        )
+
+        sys.path.insert(0, tmp_dir)
+        try:
+            docs = GreatDocs(project_path=tmp_dir)
+            text = docs._get_cli_help_text_for_llms()
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("actual_module", None)
+            sys.modules.pop("actual_module.cli", None)
+
+        assert "## CLI: my-dist" in text
+
+
 def test_is_compiled_extension_cargo():
     """_is_compiled_extension returns True when Cargo.toml exists."""
     with tempfile.TemporaryDirectory() as tmp_dir:

@@ -114,6 +114,58 @@ Check https://example.com/page
             assert results["total"] == 1
             assert "https://example.com/docs" in results["skipped"]
 
+    def test_scans_source_with_diverging_module_name(self):
+        """Regression: include_source scans the importable module directory even
+        when the PyPI project name differs from it."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+
+            # Package dir name differs from the PyPI project name.
+            pkg_dir = root / "actual_module"
+            pkg_dir.mkdir()
+            init_py = pkg_dir / "__init__.py"
+            init_py.write_text('"""Package with URL: https://example.com/docs"""')
+
+            pyproject = root / "pyproject.toml"
+            pyproject.write_text('[project]\nname = "my-dist"\n')
+            (root / "great-docs.yml").write_text("module: actual_module\n")
+
+            docs = GreatDocs(project_path=tmp_dir)
+            results = docs.check_links(
+                include_source=True,
+                include_docs=False,
+                ignore_patterns=["example.com"],
+            )
+
+            assert results["total"] == 1
+            assert "https://example.com/docs" in results["skipped"]
+
+    def test_scans_source_with_dotted_module_name(self):
+        """Regression: include_source scans the nested directory of a dotted
+        module name (namespace package)."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+
+            # Namespace-style module "firebird.base" -> firebird/base/.
+            pkg_dir = root / "firebird" / "base"
+            pkg_dir.mkdir(parents=True)
+            init_py = pkg_dir / "__init__.py"
+            init_py.write_text('"""Package with URL: https://example.com/docs"""')
+
+            pyproject = root / "pyproject.toml"
+            pyproject.write_text('[project]\nname = "my-dist"\n')
+            (root / "great-docs.yml").write_text("module: firebird.base\n")
+
+            docs = GreatDocs(project_path=tmp_dir)
+            results = docs.check_links(
+                include_source=True,
+                include_docs=False,
+                ignore_patterns=["example.com"],
+            )
+
+            assert results["total"] == 1
+            assert "https://example.com/docs" in results["skipped"]
+
     def test_extracts_multiple_urls_from_same_file(self):
         """Test extraction of multiple URLs from a single file."""
         with tempfile.TemporaryDirectory() as tmp_dir:
