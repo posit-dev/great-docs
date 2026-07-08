@@ -387,8 +387,7 @@ class TestRunLint:
     def test_successful_lint_run(self, mock_gd_cls, mock_griffe_load, tmp_path):
         mock_gd = MagicMock()
         mock_gd._detect_package_name.return_value = "mypkg"
-        mock_gd._detect_module_name.return_value = None
-        mock_gd._normalize_package_name.return_value = "mypkg"
+        mock_gd._resolve_importable_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a", "func_b"]
         mock_gd._config.get.return_value = "numpy"
         mock_gd_cls.return_value = mock_gd
@@ -418,8 +417,7 @@ class TestRunLint:
         dash-normalized PyPI project name, when the two diverge."""
         mock_gd = MagicMock()
         mock_gd._detect_package_name.return_value = "my-dist"
-        mock_gd._detect_module_name.return_value = "actual_module"
-        mock_gd._normalize_package_name.return_value = "my_dist"
+        mock_gd._resolve_importable_name.return_value = "actual_module"
         mock_gd._get_package_exports.return_value = ["func_a"]
         mock_gd._config.get.return_value = "numpy"
         mock_gd_cls.return_value = mock_gd
@@ -431,7 +429,10 @@ class TestRunLint:
 
         result = run_lint(tmp_path)
 
-        mock_griffe_load.assert_called_once_with("actual_module")
+        mock_gd._resolve_importable_name.assert_called_once_with("my-dist")
+        mock_griffe_load.assert_called_once_with(
+            "actual_module", search_paths=mock_gd._griffe_search_paths.return_value
+        )
         assert result.package_name == "actual_module"
 
     @patch("griffe.load")
