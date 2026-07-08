@@ -8333,13 +8333,14 @@ def test_detect_module_name_returns_none():
         assert docs._detect_module_name() is None
 
 
+@patch("great_docs.core._ensure_quarto_installed")
 @patch.object(GreatDocs, "_generate_skill_md")
 @patch.object(GreatDocs, "_generate_llms_full_txt")
 @patch.object(GreatDocs, "_generate_llms_txt")
 @patch.object(GreatDocs, "_prepare_build_directory")
 @patch.object(GreatDocs, "_generate_source_links_json")
 def test_build_source_links_use_module_name(
-    mock_src, mock_prep, mock_llms, mock_llms_full, mock_skill
+    mock_src, mock_prep, mock_llms, mock_llms_full, mock_skill, mock_quarto
 ):
     """Regression: build() generates source links for the importable module name,
     not the PyPI project name, when the two diverge."""
