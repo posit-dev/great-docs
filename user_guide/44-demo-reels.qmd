@@ -1,0 +1,1287 @@
+---
+title: "Demo Reels"
+guide-section: "Site Content"
+bread-crumbs: false
+tags: [Content, Video, Multimedia, AI]
+versions: ">=0.14"
+upcoming: "0.15.0"
+status: experimental
+---
+
+# Demo Reels
+
+Great Docs includes **Showreel**, a way to script narrated demo videos and embed them straight into
+your documentation. You write a small YAML file describing a sequence of scenes, and Showreel
+synthesizes the voiceover, composes a timeline, and renders it as a crisp in-page player. The same
+reel also exports to MP4, WebM, or an animated GIF.
+
+Where [Terminal Recordings](../user-guide/terminal-recordings.qmd) document the terminal, Showreel
+documents everything else: title cards, code walkthroughs, live web apps, and executed notebooks,
+all stitched together with a generated narration track and word-synced captions. Nothing leaves your
+machine, and the web player works offline with no external hosting.
+
+Here is a reel embedded in a page. It opens with a title card, walks through a code example with a
+"magic-move" transition, shows the same table before and after `data_color` so the color washes into
+the column, and closes on a call to action:
+
+{{< showreel file="assets/showreel-demo" >}}
+
+Five scenes make up this opener: a title, a magic-move code block, the plain and colored table
+images, and an outro card. It builds offline with the silent voice. Here is the full spec:
+
+::: {.details summary="View the reel spec" icon="code"}
+```yaml
+# A small narrated demo reel used by the Demo Reels user-guide page.
+# Builds fully offline (silent voice, no capture) so it renders anywhere.
+# Set voice.engine to piper for a real voiceover locally.
+showreel:
+  title: "data_color()"
+  description: "A short tour of Great Tables' data_color() method."
+  theme: auto
+  brand:
+    accent: "#2563eb"
+
+voice:
+  engine: silent
+
+# The opener showcases the full transport (scrubber, ticks, speed, captions).
+player:
+  controls: full
+
+defaults:
+  transition: crossfade
+  captions: true
+  lead_in: 0.5
+  motion: { type: pan-zoom, zoom: 1.06, from: center, to: top-left }
+
+scenes:
+  - id: intro
+    type: title
+    title: "data_color()"
+    subtitle: "Color scales for any column"
+    say: "Great Tables turns a column of numbers into a color gradient."
+    motion: { type: none }
+
+  - id: code
+    type: code
+    language: python
+    say: "One method call does it, and you can pick any palette."
+    steps:
+      - code: |
+          from great_tables import GT
+          GT(data)
+        typing: true
+      - code: |
+          from great_tables import GT
+
+          (
+            GT(data)
+            .data_color(
+              columns="population",
+              palette="viridis"
+            )
+          )
+        focus: [5, 6, 7, 8]
+
+  # Before/after: the same table portion, plain then color-scaled. Both images
+  # are identical in size and framing (fit: contain, motion: none), so the
+  # crossfade reads as the color washing into the Population column.
+  - id: table-plain
+    type: image
+    src: reel-datacolor-before.png
+    fit: contain
+    motion: { type: none }
+    say: "Here's a column of plain numbers."
+
+  - id: table-color
+    type: image
+    src: reel-datacolor-after.png
+    fit: contain
+    motion: { type: none }
+    say: "data_color turns it into a gradient you can read at a glance."
+
+  - id: outro
+    type: card
+    title: "Try it"
+    body: "pip install great-tables"
+    cta: "posit-dev.github.io/great-tables"
+    say: "Install it today and start coloring."
+```
+:::
+
+The player above renders from a single spec file. Press the play button (or {{< keys "Space" >}}) to
+watch, use the scrubber to jump around, and toggle captions with the CC button. Everything you see,
+including the caption timing and the code transition, is driven by one deterministic clock, so the
+exported video looks identical to this player.
+
+## Quick Start
+
+The fastest way to understand Showreel is to make a reel. These four steps take you from an empty
+file to an embedded, narrated player. The rest of this page then fills in each piece in depth.
+
+### 1. Scaffold a reel
+
+Create a starter spec next to your other assets. Reels live in `.showreel.yml` files anywhere in
+your project:
+
+```bash
+great-docs showreel new reels/getting-started
+```
+
+This writes `reels/getting-started.showreel.yml` with a title, an image scene, and an outro card to
+edit.
+
+### 2. Write the scenes
+
+Open the file and describe your scenes. Each scene pairs one visual with one line of narration. The
+narration length sets the scene duration when you leave `duration` at its default:
+
+```{.yaml filename="reels/getting-started.showreel.yml"}
+showreel:
+  title: "Getting started"
+  theme: auto
+
+voice:
+  engine: piper            # local voice; falls back to silent if not installed
+
+scenes:
+  - id: intro
+    type: title
+    title: "My Package"
+    subtitle: "Do more with less code"
+    say: "Here is a two minute tour of what you can build."
+    motion: { type: none }
+
+  - id: demo
+    type: code
+    language: python
+    say: "It takes a single import and one function call."
+    steps:
+      - code: "import mypkg"
+        typing: true
+      - code: |
+          import mypkg
+          mypkg.run(config="fast")
+        focus: [2]
+```
+
+### 3. Preview it
+
+Build the reel and open the player in your browser:
+
+```bash
+great-docs showreel preview reels/getting-started
+```
+
+The command builds the reel, starts a small local server, and opens the player. Edit the YAML,
+rebuild, and refresh to iterate.
+
+### 4. Embed or export
+
+Reference the reel from any `.qmd` page with the shortcode, using the path without the extension:
+
+```markdown
+{{</* showreel file="reels/getting-started" */>}}
+```
+
+To produce a downloadable video instead, export it:
+
+```bash
+great-docs showreel export reels/getting-started --format mp4
+```
+
+With the basics in place, the rest of this page covers each scene type, the voice and caption
+options, motion and overlays, embedding, exporting, and the Studio editor.
+
+## Scenes
+
+Scenes are the building blocks of a reel. Each one holds a single visual and a single line of
+narration, and the build lays them end to end into one timeline. You mix and match the types freely,
+so a single reel can open on a title card, walk through some code, show a screenshot, and close on a
+call to action. The reel below moves through several types in a row.
+
+{{< showreel file="assets/reel-scenes" >}}
+
+Four scene types in sequence, a title, an image, a code block, and a card, narrated with Piper. Here
+is the full spec:
+
+::: {.details summary="View the reel spec" icon="code"}
+```yaml
+showreel:
+  title: "Scene types"
+  theme: auto
+  brand: { accent: "#2563eb", logo: logo.svg }
+voice: { engine: piper, name: en_US-amy-medium }
+defaults:
+  lead_in: 0.5
+  transition: crossfade
+  captions: true
+  motion: { type: pan-zoom, zoom: 1.06 }
+scenes:
+  - id: intro
+    type: title
+    title: "Scene types"
+    subtitle: "One reel, many kinds of scene"
+    say: "A reel is a sequence of scenes. Here are a few of the kinds."
+    motion: { type: none }
+  - id: img
+    type: image
+    src: city-florence.jpg
+    say: "An image scene, with a gentle pan and zoom."
+  - id: code
+    type: code
+    language: python
+    say: "A code scene, highlighted at build time."
+    steps:
+      - code: |
+          from great_tables import GT
+          GT(data)
+  - id: card
+    type: card
+    title: "And more"
+    body: "web pages, notebooks, and cards"
+    say: "Plus live web pages, notebooks, and title cards."
+```
+:::
+
+A reel is an ordered list of scenes under the `scenes:` key. Every scene has an `id`, a `type`, and
+usually a `say` line for narration. Showreel supports six scene types:
+
+| Type       | Visual                                   | Notes                                       |
+| ---------- | ---------------------------------------- | ------------------------------------------- |
+| `title`    | A large title and subtitle               | Good for openers and section dividers       |
+| `card`     | A title, body line, and call to action   | Good for outros and takeaways               |
+| `image`    | A full-bleed image                       | A pan and zoom brings it to life          |
+| `figure`   | A visual with a chunk of text below it   | Pairs a result with a short explanation   |
+| `code`     | Syntax-highlighted code                  | Magic-move between steps, optional typing   |
+| `web`      | A live web page captured in Chrome       | Runs an interaction script, then captures   |
+| `notebook` | An executed marimo notebook              | Runs the notebook and captures the output   |
+
+Every reel is some combination of these six types. The rest of this section takes each one in turn,
+starting with the two that need no assets at all.
+
+### Title and card scenes
+
+Title and card scenes are the punctuation of a reel: the opener that names the topic, the dividers
+between chapters, and the outro that tells the viewer what to do next. They render entirely from
+text, so they need no assets and build instantly. A title scene takes `title` and `subtitle`; a card
+scene adds `body` and `cta` fields:
+
+```{.yaml}
+- id: outro
+  type: card
+  title: "Get started"
+  body: "pip install my-package"
+  cta: "my-docs-site.example"
+  say: "Install it today."
+```
+
+Because they are pure text, these scenes cost nothing to render and stay crisp at any resolution.
+They are the safest place to start when you are blocking out a reel and still deciding what the
+content scenes will hold.
+
+### Image scenes
+
+An image scene is the simplest way to put something real on screen: a screenshot, a diagram, a
+photograph, or a rendered result. Great Docs copies the file into the reel bundle at build time, so
+the finished player stays self-contained.
+
+{{< showreel file="assets/reel-image" >}}
+
+A single image scene with a slow pan and zoom. Here is the full spec:
+
+::: {.details summary="View the reel spec" icon="code"}
+```yaml
+showreel:
+  title: "Image scene"
+  theme: auto
+voice: { engine: piper, name: en_US-amy-medium }
+# The play button sits on the presentation; click the image to play/pause.
+player: { play_button: overlay }
+defaults: { lead_in: 0.5 }
+scenes:
+  - id: img
+    type: image
+    src: city-toronto-nighttime.png
+    say: "An image fills the frame, with a slow pan and zoom to bring it to life."
+    motion: { type: pan-zoom, zoom: 1.12, from: bottom-right, to: top-left }
+```
+:::
+
+An image scene shows a picture and, by default, applies a gentle pan and zoom. Point `src`
+at a file relative to the spec; Showreel copies it into the built bundle:
+
+```{.yaml}
+- id: screenshot
+  type: image
+  src: assets/dashboard.png
+  say: "This is the dashboard you will build."
+  motion: { type: pan-zoom, zoom: 1.08, from: center, to: top-right }
+```
+
+By default an image fills the frame (`fit: cover`), which suits full-bleed photos. For a table,
+chart, or diagram that must be seen whole, set `fit: contain` so the image is shown complete on the
+stage background rather than cropped. This is how the opening reel shows its table: two image scenes
+of the same table portion, one plain and one with `data_color` applied, each with `fit: contain` and
+`motion: { type: none }`. Because the two images share the same size and framing, the crossfade
+between them reads as the color washing into the column:
+
+```{.yaml}
+- id: table-plain
+  type: image
+  src: assets/table-before.png
+  fit: contain
+  motion: { type: none }
+  say: "Here's a column of plain numbers."
+- id: table-color
+  type: image
+  src: assets/table-after.png
+  fit: contain
+  motion: { type: none }
+  say: "data_color turns it into a gradient you can read at a glance."
+```
+
+:::{.callout-tip}
+To capture a Great Tables table as an image for a reel, use its `gtsave()` method:
+`GT(df).data_color(columns="population", palette="viridis").gtsave("assets/table-after.png")`. Render
+the plain and colored versions the same way so the frames line up.
+:::
+
+Reach for an image scene whenever the thing you want to show is already a picture, or can be saved as
+one. They build instantly, need no browser, and pair well with the motion effects covered later on
+this page.
+
+### Figure scenes
+
+Documentation often pairs a result with a sentence about it. A figure scene does exactly that: it
+stacks a visual over a chunk of prose, so the reader sees the output and reads the point at the same
+time. It is the on-screen counterpart to narration, and it needs no voice.
+
+{{< showreel file="assets/reel-figure" >}}
+
+Two figures, each a Great Tables result with a short explanation beneath it, in the style of the
+package's own README. Here is the full spec:
+
+::: {.details summary="View the reel spec" icon="code"}
+```yaml
+# Demonstrates the `figure` scene: a visual stacked over a chunk of prose, the
+# way the Great Tables README pairs a result with a short explanation. No voice;
+# the reader reads the text on screen.
+showreel:
+  title: "Figure scenes"
+  theme: auto
+  brand: { accent: "#2563eb" }
+
+voice:
+  engine: silent
+
+defaults:
+  transition: crossfade
+
+scenes:
+  - id: labels
+    type: figure
+    src: reel-figure-table.png
+    text: "It's okay to have repeating column labels. Functions like `cols_label()` and `cols_label_with()` make it so easy too."
+
+  - id: color
+    type: figure
+    src: reel-figure-table2.png
+    text: "Add a color scale to any column with a single `data_color()` call, using any palette you like."
+```
+:::
+
+Point `src` at the visual and put the explanation in `text`. The text accepts inline Markdown, so
+`` `code` `` renders in your brand accent, and `**bold**` and `*italic*` work as you would expect:
+
+```{.yaml}
+- id: labels
+  type: figure
+  src: assets/table.png
+  text: "It's okay to have repeating column labels. `cols_label()` makes it easy."
+```
+
+With no `say` line the scene is silent and paced to give the reader time to read; add a `say` line to
+narrate it as well. The visual is shown whole by default (`fit: contain`); set `fit: cover` to fill
+the frame with a photo. Figure scenes are ideal for turning a static README or slide deck into a reel
+without recording a voiceover.
+
+### Code scenes
+
+Code is the heart of most library demos, and a code scene makes it move. Instead of a static block,
+you show the reader how a snippet grows, one line at a time, with the change spotlighted as it lands.
+
+{{< showreel file="assets/reel-code" >}}
+
+This reel magic-moves through a Great Tables snippet, spotlighting the three `tab_spanner` calls as
+they are added, then crossfades to the table it renders. It has no voiceover: the code and its output
+carry the scene. Here is the full spec:
+
+::: {.details summary="View the reel spec" icon="code"}
+```yaml
+# Shown in the Code scenes section of the Demo Reels guide. A magic-move through
+# a Great Tables snippet, then a crossfade to the table it renders. No voice: the
+# code and its output carry the scene.
+showreel:
+  title: "Code to output"
+  theme: auto
+  brand: { accent: "#2563eb" }
+
+voice:
+  engine: silent
+
+defaults:
+  transition: crossfade
+  captions: false
+
+scenes:
+  - id: code
+    type: code
+    language: python
+    duration: 8.0
+    steps:
+      - code: |
+          from great_tables import GT, md
+          from great_tables.data import towny
+
+          cols = ["name", "latitude", "longitude", "population_2016",
+                  "density_2016", "population_2021", "density_2021"]
+          top5 = towny.nlargest(5, "population_2021")[cols]
+
+          GT(top5)
+        typing: true
+        note: "Start with the five most populous cities."
+      - code: |
+          from great_tables import GT, md
+          from great_tables.data import towny
+
+          cols = ["name", "latitude", "longitude", "population_2016",
+                  "density_2016", "population_2021", "density_2021"]
+          top5 = towny.nlargest(5, "population_2021")[cols]
+
+          (
+              GT(top5)
+              .tab_spanner("Population", ["population_2016", "population_2021"])
+              .tab_spanner("Density", ["density_2016", "density_2021"])
+              .tab_spanner(md("*Location*"), ["latitude", "longitude"], id="loc")
+          )
+        focus: [10, 11, 12]
+        note: "Three `tab_spanner()` calls group the columns under shared headers."
+
+  - id: output
+    type: image
+    src: reel-code-output.png
+    fit: contain
+    duration: 6.5
+    motion: { type: none }
+    # Region callouts point at parts of the rendered table; the note dodges into
+    # the clear space beside each region. Rects are relative to the image.
+    annotate:
+      - rect: [0.44, 0.04, 0.26, 0.20]
+        note: "`tab_spanner()` groups two columns under one header."
+        at: 0.6
+        duration: 2.6
+      - rect: [0.20, 0.04, 0.24, 0.20]
+        note: "`md(\"*Location*\")` even italicizes the label."
+        at: 3.4
+        duration: 2.6
+```
+:::
+
+Code scenes are highlighted at build time with Pygments, so the player stays lightweight and works
+offline. Provide a single `code` block, or a list of `steps` that the player "magic-moves" between.
+Set `typing: true` to reveal a step as if it were being typed, and `focus` to spotlight the changed
+lines:
+
+```{.yaml}
+- id: build-up
+  type: code
+  language: python
+  say: "Start simple, then add the color scale."
+  steps:
+    - code: "GT(data)"
+      typing: true
+    - code: |
+        (GT(data)
+           .data_color(columns="pop", palette="viridis"))
+      focus: [2]
+```
+
+Keep each step to a small, runnable change so the magic-move stays legible; a step that rewrites half
+the block reads as a jump cut rather than a build. The narration paces the steps, so you rarely need
+to set a duration by hand.
+
+Give a step an on-screen `note` to explain it without a voiceover. The note appears in a soft,
+blurred box that automatically dodges the code: it docks on the side away from the focused lines, and
+the code shrinks and shifts to make room. The text accepts inline Markdown, so `` `code` `` picks up
+your brand accent:
+
+```{.yaml}
+steps:
+  - code: "GT(data)"
+    note: "Start with the raw table."
+  - code: |
+      (GT(data)
+         .data_color(columns="pop", palette="viridis"))
+    focus: [2]
+    note: "One `data_color()` call adds the color scale."
+```
+
+Placement is automatic; set `note_side: top` or `note_side: bottom` to override it. Notes are the
+on-screen alternative to narration, so a scene that uses them usually sets `captions: false` (or omits
+`say`). The reel above uses a note on each step.
+
+### Web scenes
+
+A web scene records a real page doing real things. It drives an actual browser through a script you
+write, captures a frame at each step, and plays those frames back in sequence, so the reader watches
+your interface respond rather than a mockup.
+
+{{< showreel file="assets/reel-web" >}}
+
+One web scene, captured live in Chrome as a synthetic cursor drives it through the page. Here is the full spec:
+
+::: {.details summary="View the reel spec" icon="code"}
+```yaml
+showreel:
+  title: "Web capture"
+  theme: dark
+voice: { engine: piper, name: en_US-amy-medium }
+defaults: { lead_in: 0.5 }
+scenes:
+  - id: app
+    type: web
+    url: reel-explorer.html
+    viewport: { width: 1280, height: 760, scale: 1 }
+    cursor: synthetic
+    say: "A live web page, captured in a real browser as the cursor drives it through each step."
+    steps:
+      - wait_for: "#go"
+      - capture: { label: "start" }
+      - click: "#go"
+      - capture: { label: "recolored" }
+      - select: { selector: "#palette", value: "magma" }
+      - capture: { label: "magma" }
+```
+:::
+
+A web scene drives a real page in headless Chrome and captures keyframes as it goes. List the
+interaction as `steps`; each `capture` step records a frame. Set `cursor: synthetic` to overlay an
+animated pointer that moves to the elements you click:
+
+```{.yaml}
+- id: live-app
+  type: web
+  url: "http://localhost:8000/explorer"
+  viewport: { width: 1440, height: 900, scale: 2 }
+  cursor: synthetic
+  say: "Swap the palette and the whole table recolors."
+  steps:
+    - wait_for: "#table"
+    - capture: { label: "The explorer" }
+    - select: { selector: "#palette", value: "magma" }
+    - wait_for: ".recolored"
+    - capture: { label: "Magma palette" }
+```
+
+The available step actions are `wait_for` (a CSS selector), `wait` (seconds), `click`, `fill`
+(`{selector, text}`), `select` (`{selector, value}`), `scroll`, `eval` (a JavaScript expression),
+and `capture` (`{label}`).
+
+:::{.callout-note}
+Web and notebook scenes capture at build time and require Chrome (via the `nokap` capture library).
+If Chrome is not available, the scene renders as a labeled placeholder and the rest of the reel
+still builds.
+:::
+
+Web scenes take the most effort to author, since you script the interaction, but they are also the
+most convincing kind of demo. Author them last, once the surrounding narration is settled, so you
+only capture the page once.
+
+### Notebook scenes
+
+A notebook scene runs a computation and shows its output, which is ideal for data work where the
+result is the whole point. Showreel executes a marimo notebook at build time and captures what it
+renders.
+
+{{< showreel file="assets/reel-notebook" >}}
+
+One notebook scene: a marimo notebook executed and captured to frames. Here is the full spec:
+
+::: {.details summary="View the reel spec" icon="code"}
+```yaml
+showreel:
+  title: "Notebook"
+  theme: auto
+voice: { engine: piper, name: en_US-amy-medium }
+defaults: { lead_in: 0.5 }
+scenes:
+  - id: nb
+    type: notebook
+    notebook: reel-notebook.py
+    runtime: marimo
+    viewport: { width: 1100, height: 720 }
+    capture: { mode: full, settle_ms: 1500 }
+    say: "A marimo notebook, executed at build time and captured as the scene."
+```
+:::
+
+A notebook scene executes a [marimo](https://marimo.io) notebook and captures the rendered result.
+Point `notebook` at the `.py` file:
+
+```{.yaml}
+- id: analysis
+  type: notebook
+  notebook: notebooks/analysis.py
+  runtime: marimo
+  say: "The notebook runs top to bottom, and we capture the output."
+```
+
+A notebook scene lets a reel prove that the code actually runs. The output you see was produced by
+the notebook during the build, not pasted in by hand, so it can never fall out of step with the code.
+
+## The Spec File
+
+So far you have met the scene types one at a time. A spec file gathers them into a single document,
+along with the settings that apply to the whole reel. One file is the entire source of a reel, which
+makes it easy to read, to diff in version control, and to hand to an assistant. A complete spec has a
+top-level block for reel-wide settings, then the `scenes` list. This example shows the common options
+in one place:
+
+```{.yaml filename="reels/tour.showreel.yml"}
+showreel:
+  title: "Product tour"
+  aspect: "16:9"            # 16:9 | 9:16 | 1:1 | 4:3
+  theme: auto              # auto | light | dark
+  brand:
+    accent: "#2563eb"
+    logo: assets/logo.svg
+
+voice:
+  engine: piper
+  name: "en_US-amy-medium"
+
+music:
+  file: assets/ambient.mp3
+  gain_db: -22
+  fade_in: 0.5
+
+sfx:
+  enabled: true
+  transition: whoosh
+  cursor_click: click
+
+defaults:
+  transition: crossfade
+  captions: true
+  motion: { type: pan-zoom, zoom: 1.06 }
+
+scenes:
+  - id: intro
+    type: title
+    title: "Product tour"
+    say: "Let me show you around."
+```
+
+Settings under `defaults` apply to every scene unless a scene overrides them. Keeping the reel-wide
+choices in `showreel`, `voice`, `music`, and `defaults` means each scene only has to state what makes
+it different, which is what keeps a long reel readable.
+
+## Narration and Voice
+
+Narration is what turns a slideshow into a demo. You write each line as plain text, and Showreel
+speaks it, so there is no recording booth, no microphone, and no re-takes when the script changes.
+
+{{< showreel file="assets/reel-voice" >}}
+
+Two narrated scenes; every line of the voiceover is synthesized locally. Here is the full spec:
+
+::: {.details summary="View the reel spec" icon="code"}
+```yaml
+showreel:
+  title: "Narration"
+  theme: auto
+  brand: { accent: "#2563eb" }
+voice: { engine: piper, name: en_US-amy-medium }
+defaults: { transition: crossfade, captions: true , lead_in: 0.5 }
+scenes:
+  - id: t
+    type: title
+    title: "A generated voiceover"
+    subtitle: "no recording booth required"
+    say: "Every scene's narration is synthesized with a local voice, so the whole reel speaks for itself."
+    motion: { type: none }
+  - id: c
+    type: card
+    title: "Just write the lines"
+    body: "the build produces the audio"
+    say: "You write the lines; the build turns them into speech and times the scenes to match."
+```
+:::
+
+Each scene's `say` value becomes a line of narration. Showreel synthesizes it with a pluggable
+text-to-speech engine and derives the scene's duration from the spoken length, so you write in
+sentences rather than timestamps.
+
+The available engines are:
+
+| Engine   | Description                                                        |
+| -------- | ------------------------------------------------------------------ |
+| `piper`  | Local, offline, and free. The default. Requires the `piper` binary |
+| `silent` | No audio; estimates timing from word count. The automatic fallback |
+
+Set the engine and voice globally under `voice`, and override per scene when you want a different
+speaker:
+
+```{.yaml}
+voice:
+  engine: piper
+  name: "en_US-amy-medium"
+
+scenes:
+  - id: q
+    type: card
+    say: "Any questions?"
+    voice: { name: "en_US-ryan-high" }
+```
+
+:::{.callout-tip}
+You do not need a voice engine installed to build a reel. With no `piper` binary present, Showreel
+uses the `silent` engine: the player still shows scenes, timing, and captions, just without audio.
+Run `great-docs showreel voices` to see which engines are available.
+:::
+
+To narrate reels with a local voice, install Piper and download a voice into a
+`.piper-voices/` directory at your project root. The build finds it automatically:
+
+```bash
+pip install piper-tts
+python -m piper.download_voices en_US-amy-medium --data-dir .piper-voices
+```
+
+(Alternatively, set `SHOWREEL_PIPER_DATA_DIR` to any directory of voices.) If no voice
+is available at build time, reels fall back to silent audio and still render.
+
+Because the audio is generated from your text, editing a line is as cheap as editing a sentence. You
+rewrite the `say` value, rebuild, and the voiceover and the scene timing update together.
+
+### Pacing with a lead-in
+
+A reel that starts talking the instant it appears can feel abrupt. Give each scene a short beat of
+dead air before the narration begins with `lead_in` (seconds), the way Keynote lets a build start
+after a delay. The visual and its motion appear right away; the voice and captions hold until the
+lead-in elapses. Set it per scene, or once in `defaults` to pace the whole reel:
+
+```{.yaml}
+defaults:
+  lead_in: 0.5             # a half-second beat before each scene speaks
+
+scenes:
+  - id: intro
+    type: title
+    title: "data_color()"
+    say: "Great Tables turns a column of numbers into a color gradient."
+  - id: hero
+    type: image
+    src: skyline.png
+    lead_in: 1.2           # let the establishing shot breathe before speaking
+    say: "Here is the result."
+```
+
+Values around `0.4` to `0.6` read as a natural presenter's pause. On an auto-duration scene the
+lead-in is added on top so the full line still plays; on a scene with an explicit `duration` it lives
+inside that time. The lead-in carries through to exported video, so the web player and the MP4 stay
+in sync. Leave it unset (the default is `0`) to keep the immediate start.
+
+A lead-in is a small touch, but it is the difference between a reel that feels rushed and one that
+feels composed. Set it once in `defaults` and every scene inherits the same measured opening.
+
+## Captions
+
+Captions make a reel work with the sound off, which is how most people first meet a video, in a quiet
+office or a muted browser tab. Showreel builds them from the same narration text, so they are always
+in sync and never drift.
+
+{{< showreel file="assets/reel-captions" >}}
+
+A single narrated scene, used here to show the word-synced captions. Here is the full spec:
+
+::: {.details summary="View the reel spec" icon="code"}
+```yaml
+showreel:
+  title: "Karaoke captions"
+  theme: auto
+  brand: { accent: "#2563eb" }
+voice: { engine: piper, name: en_US-amy-medium }
+defaults: { transition: crossfade, captions: true , lead_in: 0.5 }
+scenes:
+  - id: t
+    type: title
+    title: "Word-synced captions"
+    subtitle: "each word lights up as it is spoken"
+    say: "Captions are word synced. Watch each word brighten exactly as the narration reaches it."
+    motion: { type: none }
+```
+:::
+
+Captions are on by default and are word-synced. Each word brightens as the narration reaches it, and
+the word currently being spoken takes the brand accent color. Because captions are driven by the
+clock, they read the same in the web player and the exported video.
+
+Turn captions off for a specific scene with `captions: false`, or hide them in the player with the
+CC button.
+
+Leave captions on by default. They cost you nothing to produce, they make the reel accessible to
+screen readers and to viewers who cannot use audio, and they keep your message legible in a silent
+tab.
+
+## Motion and Transitions
+
+Stillness reads as a slide; movement reads as video. Motion adds a slow drift or push to otherwise
+static scenes, and transitions decide how one scene hands off to the next. Together they give a reel
+the gentle momentum that keeps a viewer watching.
+
+{{< showreel file="assets/reel-motion" >}}
+
+Three image scenes, each carrying a different camera move. Here is the full spec:
+
+::: {.details summary="View the reel spec" icon="code"}
+```yaml
+showreel:
+  title: "Motion"
+  theme: auto
+voice: { engine: piper, name: en_US-amy-medium }
+# A silent auto-loop: it plays when scrolled into view and pauses when it leaves.
+player: { autoplay: true, loop: true }
+defaults: { transition: crossfade, captions: true , lead_in: 0.5 }
+scenes:
+  - id: a
+    type: image
+    src: city-zurich.jpg
+    say: "A pan and zoom drifts across the frame."
+    motion: { type: pan-zoom, zoom: 1.1, from: top-left, to: bottom-right }
+  - id: b
+    type: image
+    src: city-singapore.jpg
+    say: "Zoom pushes straight in."
+    motion: { type: scale, zoom: 1.16 }
+  - id: c
+    type: image
+    src: city-chicago-panoramic-skyline.png
+    say: "And a hard cut lands on the final shot."
+    transition: cut
+    motion: { type: move, zoom: 1.12, from: left, to: right }
+```
+:::
+
+Motion keeps static scenes alive. Set a scene's `motion` to one of `pan-zoom`, `scale`, `move`, or
+`none`, following Keynote's Action-effect names (`scale` and `move`), with `pan-zoom` for the
+combined drift and zoom. The `from` and `to` anchors accept `center`, the four corners, and the four
+edges:
+
+```{.yaml}
+motion: { type: pan-zoom, zoom: 1.08, from: bottom-left, to: top-right }
+```
+
+Transitions control how one scene gives way to the next. Set `transition` to `crossfade` (a smooth
+dissolve) or `cut` (an instant change). The crossfade duration is configurable with
+`transition_duration`.
+
+Used lightly, motion and crossfades give a reel a calm, produced feel. Used heavily, they distract,
+so pick one gentle move per scene and let the content carry the rest.
+
+## Overlays and Cursor
+
+When a scene is busy, overlays and a cursor tell the viewer exactly where to look. You can dim
+everything but one region, label a detail, or glide a pointer to the element you are describing, so
+the words and the picture point at the same thing.
+
+{{< showreel file="assets/reel-overlays" >}}
+
+One image scene annotated with overlays and a synthetic cursor. Here is the full spec:
+
+::: {.details summary="View the reel spec" icon="code"}
+```yaml
+showreel:
+  title: "Overlays and cursor"
+  theme: auto
+  brand: { accent: "#2563eb" }
+voice: { engine: piper, name: en_US-amy-medium }
+defaults: { lead_in: 0.5 }
+scenes:
+  - id: shot
+    type: image
+    src: great-docs-site.png
+    duration: 7.0
+    motion: { type: none }
+    say: "Spotlight a region, glide a cursor in, and drop a callout to guide the eye."
+    cursor:
+      - { at: 0.3, x: 0.22, y: 0.5 }
+      - { at: 2.4, x: 0.5, y: 0.42, click: true }
+    overlays:
+      - { at: 0.6, duration: 5.5, type: spotlight, rect: [0.05, 0.28, 0.24, 0.5] }
+      - { at: 2.6, duration: 3.5, type: callout, rect: [0.05, 0.28, 0.24, 0.12], text: "the hero", color: "#8be9fd" }
+```
+:::
+
+Overlays draw the viewer's eye to part of a scene. Add an `overlays` list, positioning each with a
+normalized rectangle (`rect: [x, y, width, height]`, all from 0 to 1) and a time window relative to
+the scene start:
+
+```{.yaml}
+overlays:
+  - { at: 1.0, duration: 3.0, type: spotlight, rect: [0.1, 0.3, 0.5, 0.2] }
+  - { at: 2.0, duration: 2.5, type: callout, rect: [0.1, 0.3, 0.4, 0.2], text: "the title" }
+```
+
+The overlay types are `spotlight` (dims everything else), `box` (an outlined rectangle), `callout`
+(a box with a labeled pill), and `label` (a floating pill).
+
+For web scenes, `cursor: synthetic` generates a pointer path automatically from your click steps. On
+any scene you can define the path by hand with a list of waypoints:
+
+```{.yaml}
+cursor:
+  - { at: 0.2, x: 0.15, y: 0.7 }
+  - { at: 1.6, x: 0.55, y: 0.5, click: true }
+```
+
+The pointer eases between waypoints, and a ripple animates wherever `click: true` is set.
+
+Reach for these when a word in the narration points at something on screen. A spotlight or a moving
+cursor closes the gap between what you say and what the viewer sees, without you having to describe a
+location in words.
+
+### Region callouts on an output
+
+To explain a rendered result, like a specific column or spanner of a Great Tables output, add an
+`annotate` list to the scene. Each entry marks a rectangle of the visual and shows a note that
+auto-dodges into the clear space beside it, so the note never covers the data it describes. The rect
+is relative to the image, so it lands on the right part of a table regardless of letterboxing, and
+the note text takes inline Markdown:
+
+```{.yaml}
+- id: result
+  type: image
+  src: assets/table.png
+  fit: contain
+  annotate:
+    - rect: [0.44, 0.04, 0.26, 0.20]     # the Population spanner
+      note: "`tab_spanner()` groups two columns under one header."
+      at: 0.6
+      duration: 2.6
+    - rect: [0.20, 0.04, 0.24, 0.20]     # the Location spanner
+      note: "`md(\"*Location*\")` even italicizes the label."
+      at: 3.4
+```
+
+Give each callout an `at` and `duration` to reveal them in sequence, one part of the output at a
+time. Placement is automatic; `side: top | bottom | left | right` overrides it. The opening Code
+scene's output table above uses two of these callouts.
+
+## Music and Sound Effects
+
+Sound sets the mood. A quiet music bed under the narration and a soft cue at each transition make a
+reel feel finished. You supply one audio file for the bed, and the transition and click effects are
+synthesized at build time, so there are no effect files to hunt down or license.
+
+{{< showreel file="assets/reel-music" >}}
+
+Two scenes over a looping music bed, with a synthesized transition whoosh. Here is the full spec:
+
+::: {.details summary="View the reel spec" icon="code"}
+```yaml
+showreel:
+  title: "Music and sound"
+  theme: auto
+  brand: { accent: "#2563eb" }
+voice: { engine: piper, name: en_US-amy-medium }
+music: { file: reel-ambient.mp3, gain_db: -20, fade_in: 0.6, fade_out: 1.2 }
+sfx: { enabled: true, transition: whoosh, gain_db: -8 }
+defaults: { transition: crossfade, captions: true , lead_in: 0.5 }
+scenes:
+  - id: t
+    type: title
+    title: "Music and sound"
+    subtitle: "an ambient bed, ducked under narration"
+    say: "A music bed plays underneath, and automatically ducks while the narration speaks."
+    motion: { type: none }
+  - id: c
+    type: card
+    title: "Whoosh"
+    body: "synthesized transition sounds"
+    say: "And each transition gets a synthesized whoosh."
+```
+:::
+
+A background music bed plays under the whole reel. Point `music.file` at an audio file and set
+`gain_db` to taste. In the exported video, the music is automatically ducked (lowered) while
+narration plays:
+
+```{.yaml}
+music:
+  file: assets/ambient.mp3
+  gain_db: -22
+  fade_in: 0.5
+  fade_out: 1.5
+```
+
+Sound effects are synthesized at build time, so there are no audio files to manage. Enable them
+under `sfx`, choosing a `transition` sound played at each scene change and a `cursor_click` sound
+played at cursor clicks:
+
+```{.yaml}
+sfx:
+  enabled: true
+  transition: whoosh
+  cursor_click: click
+  gain_db: -8
+```
+
+The built-in sounds are `whoosh`, `swoosh`, `click`, `tick`, `pop`, and `ding`. For a one-off cue,
+add an `sfx` list to a scene:
+
+```{.yaml}
+- id: reveal
+  type: card
+  title: "Done"
+  sfx:
+    - { at: 0.4, sound: ding }
+```
+
+Keep music low and effects subtle. In the exported video the bed ducks automatically under the
+narration, and on the web the effects fire once per cue, so sound supports the voiceover rather than
+competing with it.
+
+## Branding
+
+A reel embedded in your docs should look like it belongs there. Branding ties a reel to your project
+with a single accent color and a logo, applied everywhere automatically, so a demo never looks like a
+generic stock template.
+
+{{< showreel file="assets/reel-branding" >}}
+
+Two scenes carrying a brand logo sting and accent color. Here is the full spec:
+
+::: {.details summary="View the reel spec" icon="code"}
+```yaml
+showreel:
+  title: "Branding"
+  theme: auto
+  brand: { accent: "#2563eb", logo: logo.svg }
+voice: { engine: piper, name: en_US-amy-medium }
+defaults: { transition: crossfade, captions: true , lead_in: 0.5 }
+scenes:
+  - id: t
+    type: title
+    title: "Great Tables"
+    subtitle: "Your logo, your colors"
+    say: "Set a brand logo and accent color, and every title card is on brand."
+    motion: { type: none }
+  - id: c
+    type: card
+    title: "On brand"
+    body: "logo stings and accent color"
+    say: "The logo animates in, and the accent colors the captions and controls."
+```
+:::
+
+Set `brand.accent` to color captions, callouts, and controls with your brand color. Set `brand.logo`
+to a logo file, and it animates onto every title and card scene with a subtle fade and scale. The
+logo also appears on the social poster.
+
+Set your brand once at the top of the spec, and every title card, caption, control, and poster picks
+it up. Nothing else in the reel needs to know your colors.
+
+## The Player
+
+The player is what your readers actually touch, so it is built to be small, dependency-free, and
+predictable. It loads fast and behaves the same on every page and in every browser. A reel is a
+presentation, not a movie, so the player defaults to **minimal** chrome: a small play button and a
+thin progress line, nothing more.
+
+Whatever the chrome, the player renders captions as real text for accessibility, and a playing reel
+pauses when it scrolls off-screen even if you started it by hand. Because this one player is also the
+renderer behind the video export and the poster, everything you see here is exactly what an exported
+file will show. There is no separate video pipeline to drift out of sync.
+
+## Player Settings
+
+You tune the player with a reel-wide `player` block. The defaults suit a lightweight, presentational
+reel, so you only set what you want to change:
+
+```{.yaml}
+player:
+  controls: minimal      # minimal (default) | full | none
+  play_button: below     # below (default) | overlay
+  loop: false            # restart at the end
+  autoplay: false        # play when scrolled into view (muted); pause when it leaves
+```
+
+The four settings are:
+
+| Setting        | Values                    | Default   | What it controls                                  |
+| -------------- | ------------------------- | --------- | ------------------------------------------------- |
+| `controls`     | `minimal`, `full`, `none` | `minimal` | How much transport chrome the player shows        |
+| `play_button`  | `below`, `overlay`        | `below`   | Where the play button sits                        |
+| `loop`         | `true`, `false`           | `false`   | Whether the reel restarts at the end              |
+| `autoplay`     | `true`, `false`           | `false`   | Whether it plays on scroll-in and pauses off-screen |
+
+**`controls`** sets the chrome level. `minimal` is the slim default (play button plus a thin progress
+line). `full` adds the complete transport: a scrubber with a marker at each scene, elapsed time, a
+0.5x to 2x speed control, and a captions toggle, along with keyboard control ({{< keys "Space" >}} to
+play, {{< keys shortcut="ArrowLeft" >}} / {{< keys shortcut="ArrowRight" >}} to seek, {{< keys "C" >}}
+for captions). `none` hides the bar entirely for a chrome-free presentation.
+
+**`play_button`** decides where the play affordance lives: `below` in the control bar, or `overlay`
+as a large button on the presentation itself, where clicking anywhere on the frame plays or pauses.
+
+**`loop`** restarts the reel automatically at the end, for a presentation that runs continuously.
+
+**`autoplay`** starts the reel when it scrolls into view and pauses it when it scrolls away, so it is
+never running off-screen. Autoplay reels play **muted**, because browsers block autoplaying sound and
+a looping presentation reads best silently, so keep a narrated reel click-to-play. Autoplay also
+respects a reader's reduced-motion preference, showing a play button instead of starting on its own.
+
+A few common combinations:
+
+```{.yaml}
+# The full transport, for a reel meant to be scrubbed and studied.
+player: { controls: full }
+
+# A silent, looping presentation that plays as it scrolls into view.
+player: { autoplay: true, loop: true }
+
+# A big play button on the frame instead of a control bar.
+player: { play_button: overlay, controls: minimal }
+```
+
+The reel at the top of this page uses `controls: full`; the image and motion reels above use the
+overlay button and the silent auto-loop, respectively.
+
+## Embedding in Pages
+
+Embedding is the whole point: a reel lives inside your documentation, not on a separate video host
+that can rate-limit, rebrand, or disappear. One shortcode drops a self-contained player into any
+page.
+
+Embed a reel with the shortcode, giving the path to the spec without its extension:
+
+```markdown
+{{</* showreel file="reels/getting-started" */>}}
+```
+
+During the build, Great Docs discovers every `{{< showreel >}}` shortcode, builds the referenced
+reel, and injects a self-contained player. The manifest, images, audio, and player code are all
+inlined, so the page makes no runtime network requests and works from a local file.
+
+The `file` option is the path relative to your project root, without the `.showreel.yml` suffix. All
+other behavior comes from the reel's own spec.
+
+Because everything is inlined at build time, the page carries no external dependencies. It works
+offline, over `file://`, and behind a firewall, with nothing to break or expire after you publish.
+
+## Exporting Video
+
+Sometimes you need a file rather than an embed, for a release announcement, a social post, or a
+conference slide. Export produces one from the reel you already have, and because it renders the very
+same player, the download matches the page.
+
+The web player is the reference renderer, and the video export captures that same player frame by
+frame in headless Chrome, then muxes it with the narration, music, and sound effects using ffmpeg.
+The video is therefore identical to the in-page player.
+
+Export to MP4, WebM, or an animated GIF:
+
+```bash
+great-docs showreel export reels/tour --format mp4
+great-docs showreel export reels/tour --format webm --height 1080
+great-docs showreel export reels/tour --format gif
+```
+
+Capture a still image for social cards and link previews:
+
+```bash
+great-docs showreel poster reels/tour --at 3.5
+```
+
+:::{.callout-note}
+Video export requires both `ffmpeg` (on your PATH) and Chrome (via `nokap`). The web player and the
+`{{< showreel >}}` embed need neither.
+:::
+
+Author and preview your reel as an embed, then export only when you need a shareable file. The spec
+never changes; only the output format does, so one source can produce a page, a video, and a poster.
+
+## The Studio Editor
+
+Editing YAML by hand is fine for small changes, but a visual editor is faster for arranging a reel
+and seeing the result. The Studio editor gives you a live preview while you add, reorder, and tune
+scenes. It shows your scenes on the left, a live preview in the center, and a properties panel on the
+right. Launch it for any reel:
+
+```bash
+great-docs showreel edit reels/tour
+```
+
+From the editor you can add, delete, reorder (by dragging), and edit scenes, then save back to the
+spec or rebuild the preview. Reordering updates the preview instantly without a full rebuild.
+
+The Studio is also designed to be driven by an AI assistant. It exposes a small command interface
+that an agent can call to read the current scenes and apply edits, and it hot-reloads whenever the
+spec file changes on disk. A **Copilot** toggle in the toolbar gates agent edits: turn it off during
+a hands-on session and the assistant stands down, so you can work without the reel changing under
+you. Every agent action is written to the activity log at the bottom of the window, so you always
+see what changed.
+
+The Studio is optional. You can author an entire reel in a text editor, but when you want to see
+changes as you make them, or hand the reins to an assistant, it is there.
+
+## CLI Reference
+
+Every Showreel task has a command, and they all live under a single group. This table is the quick
+reference for the commands used throughout this page:
+
+| Command   | Description                                                    |
+| --------- | -------------------------------------------------------------- |
+| `new`     | Scaffold a starter `NAME.showreel.yml` spec                    |
+| `build`   | Build a reel into player assets                                |
+| `preview` | Build a reel and serve the player locally                      |
+| `export`  | Build and render a video (`--format mp4`, `webm`, or `gif`)    |
+| `poster`  | Build and capture a social poster image                        |
+| `edit`    | Open the Studio editor                                         |
+| `voices`  | List the available voice engines                               |
+
+Run any command with `--help` for its full set of options. Day to day you will lean on `build` and
+`preview` while iterating, and reach for `export` and `poster` only when you need files to share.
+
+## How It Works
+
+Showreel follows a "render once, output everywhere" design. The build turns your spec into a
+manifest plus a set of captured or generated assets. A single clock-driven web player reads that
+manifest and is the one and only renderer:
+
+- The `{{< showreel >}}` shortcode embeds that player, with the manifest and assets inlined.
+- The video export drives that same player in headless Chrome, one frame at a time, and hands the
+  frames to ffmpeg.
+- The poster captures a single frame from that same player.
+
+Because there is one renderer rather than several, the in-page reel, the downloaded video, and the
+social poster always match.
+
+## Best Practices
+
+- Keep narration to one or two sentences per scene, and let `duration: auto` pace the scene.
+- Add a small `lead_in` (about half a second) so the reel opens on a beat rather than mid-sentence.
+- Use real, runnable code in `code` scenes; readers will copy it.
+- Reach for overlays and a synthetic cursor to direct attention, but use them sparingly.
+- Build offline first (title, card, code, image scenes) and add `web` or `notebook` capture once the
+  script is settled.
+- Set `brand.accent` and `brand.logo` so reels match the rest of your site.
+
+## Next Steps
+
+To document a terminal session instead of a demo, see
+[Terminal Recordings](../user-guide/terminal-recordings.qmd). To embed a plain video file, see
+[Videos](../user-guide/videos.qmd). To make an interactive table part of a scene, see
+[Table Previews](../user-guide/table-previews.qmd).
