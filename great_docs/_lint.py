@@ -133,7 +133,7 @@ def run_lint(
         )
         return result
 
-    importable_name = docs._normalize_package_name(package_name)
+    importable_name = docs._resolve_importable_name(package_name)
     result.package_name = importable_name
 
     # Load package via griffe for introspection
@@ -153,7 +153,7 @@ def run_lint(
         return result
 
     try:
-        pkg = griffe.load(importable_name)
+        pkg = griffe.load(importable_name, search_paths=docs._griffe_search_paths())
     except Exception as e:
         if quiet:
             sys.stdout = _saved_stdout

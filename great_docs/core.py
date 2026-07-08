@@ -1063,6 +1063,27 @@ class GreatDocs:
         """
         return package_name.replace("-", "_")
 
+    def _resolve_importable_name(self, package_name: str) -> str:
+        """
+        Resolve the importable module name for a project.
+
+        Prefers the module name from `_detect_module_name` (an explicit `module:` in great-docs.yml,
+        build-backend hints, or auto-discovery), falling back to the normalized PyPI project name
+        when detection returns `None`.
+
+        Parameters
+        ----------
+        package_name
+            The PyPI project name to fall back to.
+
+        Returns
+        -------
+        str
+            The importable module name.
+        """
+        module_name = self._detect_module_name()
+        return module_name if module_name else self._normalize_package_name(package_name)
+
     def _detect_module_name(self) -> str | None:
         """
         Detect the actual importable module name for the package.
@@ -3691,7 +3712,9 @@ class GreatDocs:
     # CLI Documentation Methods
     # =========================================================================
 
-    def _discover_click_cli(self, package_name: str) -> dict | None:
+    def _discover_click_cli(
+        self, package_name: str, display_name: str | None = None
+    ) -> dict | None:
         """
         Discover Click CLI commands and groups from a package.
 
@@ -3701,7 +3724,11 @@ class GreatDocs:
         Parameters
         ----------
         package_name
-            The name of the package to search for CLI.
+            The importable module name to search for the CLI.
+        display_name
+            The name shown for the CLI entry point when `[project.scripts]` is
+            absent (typically the PyPI project name). Falls back to
+            `package_name` when not provided.
 
         Returns
         -------
@@ -3803,13 +3830,15 @@ class GreatDocs:
 
         print(f"Found Click CLI: {cli_name} in {cli_module_path}")
 
-        # Get the entry point name from pyproject.toml
+        # Get the entry point name from pyproject.toml. When [project.scripts]
+        # is absent, fall back to the display name (the project name) rather
+        # than the importable module name, which may differ.
         entry_point_name = self._get_cli_entry_point_name(package_name)
-        display_name = entry_point_name or package_name.replace("_", "-")
+        resolved_name = entry_point_name or (display_name or package_name).replace("_", "-")
 
         # Extract CLI structure
-        cli_info = self._extract_click_command(cli_obj, display_name)
-        cli_info["entry_point_name"] = display_name
+        cli_info = self._extract_click_command(cli_obj, resolved_name)
+        cli_info["entry_point_name"] = resolved_name
         return cli_info
 
     def _find_click_cli_obj(self, package_name: str) -> object | None:
@@ -4674,9 +4703,7 @@ class GreatDocs:
 
         # Configured commands first (in section order); unmentioned ones keep their code order.
         base = len(rank)
-        ordered = sorted(
-            enumerate(strings), key=lambda iv: (rank.get(iv[1], base + iv[0]),)
-        )
+        ordered = sorted(enumerate(strings), key=lambda iv: (rank.get(iv[1], base + iv[0]),))
         return [path for _, path in ordered] + groups
 
     @staticmethod
@@ -12984,6 +13011,10 @@ body-classes: "gd-homepage"
         if not package_name:
             return
 
+        # griffe loads by importable module name, which can differ from the
+        # PyPI project name.
+        importable_name = self._resolve_importable_name(package_name)
+
         # Determine version label
         version = "dev"
         try:
@@ -12999,14 +13030,14 @@ body-classes: "gd-homepage"
         except Exception:
             pass
 
-        snap = snapshot_from_griffe(package_name, version=version)
+        snap = snapshot_from_griffe(importable_name, version=version)
 
         # Include CLI snapshot when CLI documentation is enabled
         if self._config.cli_enabled:
             try:
                 from great_docs._api_diff import snapshot_cli_from_click
 
-                cli_obj = self._find_click_cli_obj(package_name)
+                cli_obj = self._find_click_cli_obj(importable_name)
                 if cli_obj is not None:
                     snap.cli_commands = snapshot_cli_from_click(cli_obj)
             except Exception:
@@ -14746,7 +14777,10 @@ body-classes: "gd-homepage"
         if not package_name:
             return ""  # pragma: no cover
 
-        cli_info = self._discover_click_cli(package_name)
+        # The Click CLI is imported from the package's module, which can differ
+        # from the PyPI project name.
+        importable_name = self._resolve_importable_name(package_name)
+        cli_info = self._discover_click_cli(importable_name, display_name=package_name)
         if not cli_info:
             return ""  # pragma: no cover
 
@@ -15426,12 +15460,18 @@ body-classes: "gd-homepage"
             # ── Step 5: Generate source links ──────────────────────────
             step += 1
             log.step_start(step, "Generate source links")
-            pkg_name = self._detect_package_name()
-            if pkg_name:
+            package_name = self._detect_package_name()
+            if package_name:
+                # Source-link generation (and the CLI reference in Step 7,
+                # which reuses pkg_name) load the importable module, which can
+                # differ from the PyPI project name. Honor an explicit
+                # ``module:`` and build-backend hints via _detect_module_name.
+                pkg_name = self._resolve_importable_name(package_name)
                 with _quiet_prints():
                     self._generate_source_links_json(pkg_name)
                 log.step_done(f"Source links generated for {pkg_name}")
             else:
+                pkg_name = None
                 log.step_skip(step, "no package detected")
 
             # ── Step 6: Generate changelog ─────────────────────────────
@@ -15460,10 +15500,12 @@ body-classes: "gd-homepage"
             step += 1
             log.step_start(step, "Generate CLI reference")
             metadata = self._get_package_metadata()
-            if metadata.get("cli_enabled", False):
+            if metadata.get("cli_enabled", False) and not pkg_name:
+                log.step_skip(step, "no package detected")
+            elif metadata.get("cli_enabled", False):
                 try:
                     with _quiet_prints():
-                        cli_info = self._discover_click_cli(pkg_name)
+                        cli_info = self._discover_click_cli(pkg_name, display_name=package_name)
                     if cli_info:
                         with _quiet_prints():
                             cli_files = self._generate_cli_reference_pages(cli_info)
@@ -16507,10 +16549,14 @@ body-classes: "gd-homepage"
         files_to_scan: list[Path] = []
 
         if include_source:
-            # Find package directory
+            # Find package directory (the importable module name, which can
+            # differ from the PyPI project name).
             package_name = self._detect_package_name()
             if package_name:
-                package_dir = self.project_root / package_name.replace("-", "_")
+                importable_name = self._resolve_importable_name(package_name)
+                # Dotted module names (e.g. namespace packages "firebird.base")
+                # map to nested directories.
+                package_dir = self.project_root.joinpath(*importable_name.split("."))
                 if package_dir.exists():
                     files_to_scan.extend(package_dir.rglob("*.py"))
 
@@ -16856,9 +16902,16 @@ body-classes: "gd-homepage"
         # Add Python files if checking docstrings
         py_files: list[Path] = []
         if include_docstrings:
-            package_dir = self.project_root / self._detect_package_name()  # pragma: no cover
-            if package_dir.exists():  # pragma: no cover
-                py_files.extend(package_dir.rglob("*.py"))  # pragma: no cover
+            # Scan the importable module directory, which can differ from the
+            # PyPI project name. Skip when no package is detectable.
+            package_name = self._detect_package_name()
+            if package_name:
+                importable_name = self._resolve_importable_name(package_name)
+                # Dotted module names (e.g. namespace packages "firebird.base")
+                # map to nested directories.
+                package_dir = self.project_root.joinpath(*importable_name.split("."))
+                if package_dir.exists():
+                    py_files.extend(package_dir.rglob("*.py"))
 
         # Build custom dictionary file if needed
         dict_path = None

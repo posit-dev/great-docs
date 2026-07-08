@@ -361,6 +361,7 @@ class TestRunLint:
     def test_griffe_import_error(self, mock_gd_cls, tmp_path):
         mock_gd = MagicMock()
         mock_gd._detect_package_name.return_value = "mypkg"
+        mock_gd._detect_module_name.return_value = None
         mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd_cls.return_value = mock_gd
 
@@ -386,7 +387,7 @@ class TestRunLint:
     def test_successful_lint_run(self, mock_gd_cls, mock_griffe_load, tmp_path):
         mock_gd = MagicMock()
         mock_gd._detect_package_name.return_value = "mypkg"
-        mock_gd._normalize_package_name.return_value = "mypkg"
+        mock_gd._resolve_importable_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a", "func_b"]
         mock_gd._config.get.return_value = "numpy"
         mock_gd_cls.return_value = mock_gd
@@ -409,9 +410,37 @@ class TestRunLint:
 
     @patch("griffe.load")
     @patch("great_docs.core.GreatDocs")
+    def test_resolves_module_name_when_project_name_differs(
+        self, mock_gd_cls, mock_griffe_load, tmp_path
+    ):
+        """Regression: run_lint loads griffe by the importable module name, not the
+        dash-normalized PyPI project name, when the two diverge."""
+        mock_gd = MagicMock()
+        mock_gd._detect_package_name.return_value = "my-dist"
+        mock_gd._resolve_importable_name.return_value = "actual_module"
+        mock_gd._get_package_exports.return_value = ["func_a"]
+        mock_gd._config.get.return_value = "numpy"
+        mock_gd_cls.return_value = mock_gd
+
+        func_a = _make_griffe_obj(docstring="Documented.\n\nParameters\n----------\nx : int\n")
+        mock_pkg = MagicMock()
+        mock_pkg.members = {"func_a": func_a}
+        mock_griffe_load.return_value = mock_pkg
+
+        result = run_lint(tmp_path)
+
+        mock_gd._resolve_importable_name.assert_called_once_with("my-dist")
+        mock_griffe_load.assert_called_once_with(
+            "actual_module", search_paths=mock_gd._griffe_search_paths.return_value
+        )
+        assert result.package_name == "actual_module"
+
+    @patch("griffe.load")
+    @patch("great_docs.core.GreatDocs")
     def test_selective_checks(self, mock_gd_cls, mock_griffe_load, tmp_path):
         mock_gd = MagicMock()
         mock_gd._detect_package_name.return_value = "mypkg"
+        mock_gd._detect_module_name.return_value = None
         mock_gd._normalize_package_name.return_value = "mypkg"
         mock_gd._get_package_exports.return_value = ["func_a"]
         mock_gd._config.get.return_value = "numpy"
