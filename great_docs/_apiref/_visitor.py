@@ -1,0 +1,80 @@
+from __future__ import annotations
+
+import dataclasses
+from contextvars import ContextVar
+from dataclasses import dataclass
+from typing import Any, cast
+
+from ._walkable import Walkable
+
+# Node -------------------------------------------------------------------------
+
+
+@dataclass
+class Node:
+    """A position in the node tree during a traversal"""
+
+    level: int = -1
+    value: Any = None
+    parent: Node | None = None
+
+
+# Visitor context --------------------------------------------------------------
+
+ctx_node: ContextVar[Node] = ContextVar("node")
+
+
+# Visitor base classes ---------------------------------------------------------
+
+
+class NodeVisitor:
+    """A read-only traversal of a node tree"""
+
+    def visit(self, el: object) -> object:
+        old_node = ctx_node.get(None) or Node()
+        new_node = Node(level=old_node.level + 1, value=el, parent=old_node)
+        token = ctx_node.set(new_node)
+        try:
+            return self.exit(self.enter(el))
+        finally:
+            ctx_node.reset(token)
+
+    def enter(self, el: object) -> object:
+        if isinstance(el, Walkable):
+            return self._enter_dataclass(el)
+        if isinstance(el, (list, tuple)):
+            return self._enter_sequence(cast("list[Any] | tuple[Any, ...]", el))
+        return el
+
+    def _enter_dataclass(self, el: Walkable) -> object:
+        for f in dataclasses.fields(el):
+            if f.name.startswith("_"):
+                continue
+            _ = self.visit(getattr(el, f.name))
+        return el
+
+    def _enter_sequence(self, el: list[Any] | tuple[Any, ...]) -> object:
+        for child in el:
+            _ = self.visit(child)
+        return el
+
+    def exit(self, el: object) -> object:
+        return el
+
+
+class NodeTransformer(NodeVisitor):
+    """A node tree rebuilt with only the changed nodes replaced"""
+
+    def _enter_dataclass(self, el: Walkable) -> Walkable:
+        changes: dict[str, object] = {}
+        for f in dataclasses.fields(el):
+            if f.name.startswith("_"):
+                continue
+            value = getattr(el, f.name)
+            result = self.visit(value)
+            if result is not value:
+                changes[f.name] = result
+        return el.replace(**changes) if changes else el
+
+    def _enter_sequence(self, el: list[Any] | tuple[Any, ...]) -> list[Any] | tuple[Any, ...]:
+        return el.__class__([self.visit(child) for child in el])

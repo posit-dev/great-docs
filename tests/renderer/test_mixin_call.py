@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import griffe as gf
 
-from great_docs._renderer._tools import render_code_variable
+from great_docs._apiref._tools import render_code_variable
 
 
 def test_merges_unnamed_returns_with_same_annotation():
@@ -151,7 +151,7 @@ def test_normal_items_and_directive_parts():
 
 
 def test_exclude_single_parameter_as_string():
-    """When EXCLUDE_PARAMETERS value is a string, it's coerced to a tuple."""
+    """When EXCLUSIONS.parameters value is a string, it's coerced to a tuple."""
     code = '''
     def func(a, b, c):
         """
@@ -168,15 +168,15 @@ def test_exclude_single_parameter_as_string():
         """
         pass
     '''
-    from great_docs._renderer import _globals
+    from great_docs._apiref import _globals
 
-    original = _globals.EXCLUDE_PARAMETERS.copy()
+    original = _globals.EXCLUSIONS.parameters.copy()
     try:
-        _globals.EXCLUDE_PARAMETERS["package.func"] = "b"
+        _globals.EXCLUSIONS.parameters["package.func"] = "b"
         qmd = render_code_variable(code, "func")
     finally:
-        _globals.EXCLUDE_PARAMETERS.clear()
-        _globals.EXCLUDE_PARAMETERS.update(original)
+        _globals.EXCLUSIONS.parameters.clear()
+        _globals.EXCLUSIONS.parameters.update(original)
 
     # "b" should be excluded from the signature
     assert "func(a" in qmd
@@ -184,7 +184,7 @@ def test_exclude_single_parameter_as_string():
 
 
 def test_exclude_multiple_parameters_as_tuple():
-    """When EXCLUDE_PARAMETERS value is a tuple, parameters are excluded."""
+    """When EXCLUSIONS.parameters value is a tuple, parameters are excluded."""
     code = '''
     def func(a, b, c):
         """
@@ -201,15 +201,15 @@ def test_exclude_multiple_parameters_as_tuple():
         """
         pass
     '''
-    from great_docs._renderer import _globals
+    from great_docs._apiref import _globals
 
-    original = _globals.EXCLUDE_PARAMETERS.copy()
+    original = _globals.EXCLUSIONS.parameters.copy()
     try:
-        _globals.EXCLUDE_PARAMETERS["package.func"] = ("a", "c")
+        _globals.EXCLUSIONS.parameters["package.func"] = ("a", "c")
         qmd = render_code_variable(code, "func")
     finally:
-        _globals.EXCLUDE_PARAMETERS.clear()
-        _globals.EXCLUDE_PARAMETERS.update(original)
+        _globals.EXCLUSIONS.parameters.clear()
+        _globals.EXCLUSIONS.parameters.update(original)
 
     # Only b should remain in the signature
     assert "func(b)" in qmd
@@ -611,7 +611,7 @@ def test_parameter_default_only():
 
 def test_annotation_in_signature():
     """When show_signature_annotation=True, annotations appear in the signature."""
-    from great_docs._renderer import RenderDocFunction, layout
+    from great_docs._apiref import RenderDocFunction, content
 
     code = '''
     def func(x: int, y: str = "hello"):
@@ -632,7 +632,7 @@ def test_annotation_in_signature():
     ) as m:
         obj = m["func"]
 
-    doc = layout.Doc.from_griffe(obj.name, obj)
+    doc = content.Doc.from_griffe(obj.name, obj)
     rd = RenderDocFunction(doc, show_signature_annotation=True)
     qmd = str(rd)
 

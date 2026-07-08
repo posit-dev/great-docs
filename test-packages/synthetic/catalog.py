@@ -176,6 +176,7 @@ ALL_PACKAGES: list[str] = [
     "gdtest_google_rich",  # 41
     "gdtest_sphinx_rich",  # 42
     "gdtest_docstring_examples",  # 43
+    "gdtest_examples_rst_repro",  # RST markup inside a numpy Examples section
     "gdtest_docstring_notes",  # 44
     "gdtest_docstring_warnings",  # 45
     "gdtest_docstring_references",  # 46

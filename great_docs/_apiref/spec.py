@@ -1,0 +1,164 @@
+"""
+Our representation of the parts in the api-reference in the config file
+
+i.e The specification of what is to be documented.
+Every class here is a `spec`-level node from the `api-reference:` config:
+strings and dicts that name an object to document.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+from dataclasses import dataclass, field
+from dataclasses import fields as dc_fields
+from enum import Enum
+from typing import Any, Self, cast
+
+from ._walkable import MISSING, MissingType, Walkable
+
+
+class ChildrenStyle(Enum):
+    """Rendering style for child members of a class or module"""
+
+    embedded = "embedded"
+    flat = "flat"
+    separate = "separate"
+    linked = "linked"
+
+
+@dataclass(init=False)
+class SpecOptions(Walkable):
+    """Documentation options that apply to a `SpecObject` element and, optionally, its members"""
+
+    signature_name: str = "relative"
+    members: list[str] | None = None
+    include_private: bool = False
+    include_imports: bool = False
+    include_empty: bool = False
+    include_inherited: bool = False
+
+    include_attributes: bool = True
+    include_classes: bool = True
+    include_functions: bool = True
+
+    include: str | None = None
+    exclude: list[str] | None = None
+    dynamic: bool | str | None = None
+    children: ChildrenStyle = ChildrenStyle.embedded
+    package: str | MissingType | None = MISSING
+    member_order: str = "alphabetical"
+    member_options: SpecOptions | None = None
+
+    # Names of fields the caller explicitly supplied — empty when every value
+    # comes from a default.  Used by option-merging logic to distinguish
+    # "caller set this to False" from "this is the default False".
+    _fields_specified: tuple[str, ...] = field(default=(), init=False, repr=False, compare=False)
+
+    def __init__(self, **kwargs: object) -> None:
+        # Custom __init__ to record which fields the caller supplied explicitly.
+        # Subclasses must be decorated with `@dataclass(init=False)`; a plain
+        # `@dataclass` regenerates `__init__` and leaves `_fields_specified`
+        # permanently empty.
+        field_names = {f.name for f in dc_fields(self.__class__) if not f.name.startswith("_")}
+        if unknown := kwargs.keys() - field_names:
+            names = ", ".join(sorted(unknown))
+            raise TypeError(
+                f"{self.__class__.__name__}() got unexpected keyword argument(s): {names}"
+            )
+        for f in dc_fields(self.__class__):
+            if f.name.startswith("_"):
+                continue
+            if f.name in kwargs:
+                object.__setattr__(self, f.name, kwargs[f.name])
+            elif f.default is not dataclasses.MISSING:
+                object.__setattr__(self, f.name, f.default)
+            elif f.default_factory is not dataclasses.MISSING:
+                object.__setattr__(self, f.name, f.default_factory())
+            # else: field has no default — it must be in kwargs or will error
+        object.__setattr__(self, "_fields_specified", tuple(kwargs.keys()))
+
+    def replace(self, **changes: object) -> Self:
+        """Return a copy with the given fields replaced
+
+        A replaced field counts as caller-specified from then on; the
+        untouched fields keep their original specified/default standing.
+        (`dataclasses.replace` would instead re-run `__init__` with every
+        field and mark them all as specified.)
+        """
+        new = self.copy()
+        for name, value in changes.items():
+            object.__setattr__(new, name, value)
+        specified = dict.fromkeys((*self._fields_specified, *changes))
+        object.__setattr__(new, "_fields_specified", tuple(specified))
+        return new
+
+    def with_defaults(self, base: SpecOptions | None) -> Self:
+        """
+        Default this element's unspecified fields to `base`'s values
+
+        A field the caller set explicitly — even to its default value —
+        keeps this element's value; every other field takes the value
+        `base` was explicitly given.
+        """
+        if base is None:
+            return self
+        inherited = {
+            name: getattr(base, name)
+            for name in base._fields_specified
+            if name not in self._fields_specified
+        }
+        return self.replace(**inherited)
+
+
+@dataclass(init=False)
+class SpecObject(SpecOptions):
+    """A Python object to be located and documented, specified by name"""
+
+    kind: str = "object"
+    name: str = ""
+
+
+@dataclass
+class SpecText(Walkable):
+    """A block of free-form Markdown text embedded in a reference section"""
+
+    kind: str = "text"
+    contents: str = ""
+
+
+@dataclass
+class SpecSection(Walkable):
+    """A section of the reference index page, as written in the config"""
+
+    kind: str = "section"
+    title: str | None = None
+    subtitle: str | None = None
+    desc: str | None = None
+    package: str | MissingType | None = MISSING
+    # `SpecEntry` is defined below (it unions this class), so the factory
+    # string is required — the name is not yet bound here.
+    contents: list[SpecEntry] = field(default_factory=list["SpecEntry"])
+    options: SpecOptions | None = None
+
+    def __post_init__(self) -> None:
+        if self.title is None and self.subtitle is None and not self.contents:
+            raise ValueError("Section must specify a title, subtitle, or contents field")
+        elif self.title is not None and self.subtitle is not None:
+            raise ValueError("Section cannot specify both title and subtitle fields.")
+        # Raw YAML entries (strings/dicts) become `SpecObject`; already-built
+        # nodes pass through unchanged.
+        raw_contents = cast("list[Any]", self.contents)
+        self.contents = cast(
+            "list[SpecEntry]",
+            [c if isinstance(c, Walkable) else _coerce_spec_object(c) for c in raw_contents],
+        )
+
+
+SpecEntry = SpecSection | SpecObject | SpecText
+
+
+def _coerce_spec_object(value: str | dict[str, Any]) -> SpecObject:
+    """Coerce a YAML string or dict entry into a `SpecObject`"""
+    if isinstance(value, dict):
+        return SpecObject(**value)
+    return SpecObject(name=value)
