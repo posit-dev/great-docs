@@ -1,4 +1,4 @@
-from great_docs._renderer._tools import render_code_variable
+from great_docs._apiref._tools import render_code_variable
 
 
 def test_dataclass_with_keyword_only_signature():

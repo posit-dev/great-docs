@@ -17,7 +17,7 @@ import types
 
 import pytest
 
-from great_docs._renderer.introspection import (
+from great_docs._apiref.introspect import (
     _canonical_path,
     dynamic_alias,
 )
@@ -81,16 +81,16 @@ def test_dynamic_alias_does_not_self_reference_pyo3_function(monkeypatch, tmp_pa
     assert canonical == "builtins:abs"
 
 
-def test_convert_rst_text_tolerates_non_string():
+def testconvert_rst_text_tolerates_non_string():
     """Issue 5: a list-valued docstring section value must not crash rendering."""
-    from great_docs._renderer._rst_converters import _convert_rst_text
+    from great_docs._apiref._rst_converters import convert_rst_text
 
     # A plain list (as produced by some docstring section kinds) should be
     # coerced to a string instead of raising AttributeError.
-    out = _convert_rst_text(["a", "b"])
+    out = convert_rst_text(["a", "b"])
     assert isinstance(out, str)
     # And a normal string still passes through transformations.
-    assert _convert_rst_text("hello") == "hello"
+    assert convert_rst_text("hello") == "hello"
 
 
 def test_lineno_none_does_not_crash_method_sort():
@@ -105,8 +105,8 @@ def test_lineno_none_does_not_crash_method_sort():
     "value",
     [None, 42, ["a"], {"k": "v"}, ("t",)],
 )
-def test_convert_rst_text_handles_various_non_strings(value):
-    from great_docs._renderer._rst_converters import _convert_rst_text
+def testconvert_rst_text_handles_various_non_strings(value):
+    from great_docs._apiref._rst_converters import convert_rst_text
 
-    out = _convert_rst_text(value)
+    out = convert_rst_text(value)
     assert isinstance(out, str)

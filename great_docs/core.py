@@ -6659,7 +6659,7 @@ class GreatDocs:
             try:
                 from functools import partial
 
-                from great_docs._renderer.introspection import get_object as qd_get_object
+                from great_docs._apiref.introspect import get_object as qd_get_object
 
                 gd_get_object = partial(qd_get_object, dynamic=True, parser="numpy")
             except ImportError:  # pragma: no cover
@@ -6936,7 +6936,7 @@ class GreatDocs:
         try:
             import griffe
 
-            from great_docs._renderer.introspection import get_object as qd_get_object
+            from great_docs._apiref.introspect import get_object as qd_get_object
         except ImportError:  # pragma: no cover
             # If renderer isn't available, default to True (will fail at build time anyway)
             return True  # pragma: no cover
@@ -7422,23 +7422,12 @@ class GreatDocs:
             try:
                 from functools import partial
 
-                from great_docs._renderer.introspection import (
-                    GriffeLoader,
-                    LinesCollection,
-                    ModulesCollection,
-                    Parser,
-                    get_parser_defaults,
-                )
-                from great_docs._renderer.introspection import (
+                from great_docs._apiref.introspect import (
                     get_object as qd_get_object,
                 )
+                from great_docs._apiref.introspect import make_loader
 
-                _shared_loader = GriffeLoader(
-                    docstring_parser=Parser("numpy"),
-                    docstring_options=get_parser_defaults("numpy"),
-                    modules_collection=ModulesCollection(),
-                    lines_collection=LinesCollection(),
-                )
+                _shared_loader = make_loader("numpy")
                 gd_get_object = partial(
                     qd_get_object, dynamic=True, parser="numpy", loader=_shared_loader
                 )
@@ -7664,7 +7653,7 @@ class GreatDocs:
                                     except Exception:  # pragma: no cover
                                         # Dynamic mode failed; try static (no dynamic=True)
                                         try:
-                                            from great_docs._renderer.introspection import (
+                                            from great_docs._apiref.introspect import (
                                                 get_object as qd_get,
                                             )
 
@@ -7731,7 +7720,7 @@ class GreatDocs:
                                                         except Exception:  # pragma: no cover
                                                             # Dynamic failed; try static
                                                             try:
-                                                                from great_docs._renderer.introspection import (
+                                                                from great_docs._apiref.introspect import (
                                                                     get_object as qd_get,
                                                                 )
 
@@ -15636,11 +15625,10 @@ body-classes: "gd-homepage"
 
                 quarto_yml = self.project_path / "_quarto.yml"
                 try:
-                    from great_docs._renderer.introspection import Builder
+                    from great_docs._apiref.api_reference import APIReference
 
                     with _quiet_prints():
-                        builder = Builder.from_quarto_config(str(quarto_yml))
-                        builder.build()
+                        APIReference(str(quarto_yml)).build()
                     log.step_done("API reference generated")
                 except SystemExit:
                     # Missing config items or other fatal errors — don't mask them
@@ -15661,8 +15649,7 @@ body-classes: "gd-homepage"
                                 write_yaml(qconfig, f)
                         try:
                             with _quiet_prints():
-                                builder = Builder.from_quarto_config(str(quarto_yml))
-                                builder.build()
+                                APIReference(str(quarto_yml)).build()
                             log.step_done("API reference generated (static analysis)")
                         except Exception as e2:
                             log.step_fail(f"API reference build failed: {e2}")
