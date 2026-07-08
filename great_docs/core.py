@@ -4703,9 +4703,7 @@ class GreatDocs:
 
         # Configured commands first (in section order); unmentioned ones keep their code order.
         base = len(rank)
-        ordered = sorted(
-            enumerate(strings), key=lambda iv: (rank.get(iv[1], base + iv[0]),)
-        )
+        ordered = sorted(enumerate(strings), key=lambda iv: (rank.get(iv[1], base + iv[0]),))
         return [path for _, path in ordered] + groups
 
     @staticmethod
@@ -13015,8 +13013,7 @@ body-classes: "gd-homepage"
 
         # griffe loads by importable module name, which can differ from the
         # PyPI project name.
-        module_name = self._detect_module_name()
-        importable_name = module_name if module_name else self._normalize_package_name(package_name)
+        importable_name = self._resolve_importable_name(package_name)
 
         # Determine version label
         version = "dev"
