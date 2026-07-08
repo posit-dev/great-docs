@@ -133,7 +133,8 @@ def run_lint(
         )
         return result
 
-    importable_name = docs._normalize_package_name(package_name)
+    module_name = docs._detect_module_name()
+    importable_name = module_name if module_name else docs._normalize_package_name(package_name)
     result.package_name = importable_name
 
     # Load package via griffe for introspection
