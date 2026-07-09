@@ -274,11 +274,16 @@ reference:
 Items appear in the order listed within each section. This explicit configuration gives you complete
 control over how your API documentation is organized.
 
-One thing to watch out for: the names in `contents` must match your package's actual public API exactly. A misspelled name, a name that was renamed or removed, or a name that appears in the `exclude` list will silently produce a missing or empty reference page. If a page doesn't render as expected after a build, check that the name in your `reference` config matches what your package exports.
+One thing to watch out for: the names in `contents` must match your package's actual public API
+exactly. A misspelled name, a name that was renamed or removed, or a name that appears in the
+`exclude` list will silently produce a missing or empty reference page. If a page doesn't render as
+expected after a build, check that the name in your `reference` config matches what your package
+exports.
 
 ### Custom Title and Description
 
-You can customize the heading and introductory text of the API reference page using the `title` and `desc` keys:
+You can customize the heading and introductory text of the API reference page using the `title` and
+`desc` keys:
 
 ```{.yaml filename="great-docs.yml"}
 reference:
@@ -288,9 +293,12 @@ reference:
     classes and functions available in the package.
 ```
 
-When set, the `title` replaces the default "Reference" heading on the API index page and in the navigation bar. The `desc` text appears as a paragraph immediately below the heading, providing context before the section listings.
+When set, the `title` replaces the default "Reference" heading on the API index page and in the
+navigation bar. The `desc` text appears as a paragraph immediately below the heading, providing
+context before the section listings.
 
-Without explicit `sections`, sections are auto-generated from your package's public API. You can also combine `title`/`desc` with explicit section ordering using a `sections` key:
+Without explicit `sections`, sections are auto-generated from your package's public API. You can
+also combine `title`/`desc` with explicit section ordering using a `sections` key:
 
 ```{.yaml filename="great-docs.yml"}
 reference:
@@ -309,11 +317,14 @@ reference:
         - parse_input
 ```
 
-If neither `title` nor `desc` is set, the page heading defaults to "Reference" with no introductory text.
+If neither `title` nor `desc` is set, the page heading defaults to "Reference" with no introductory
+text.
 
 ### Controlling Method Documentation
 
-By default, class methods are documented inline on the class page. To exclude methods from documentation (for example, if you want to document them separately elsewhere), use `members: false`:
+By default, class methods are documented inline on the class page. To exclude methods from
+documentation (for example, if you want to document them separately elsewhere), use
+`members: false`:
 
 ```{.yaml filename="great-docs.yml"}
 reference:
@@ -331,15 +342,21 @@ reference:
       - MyClass.method2
 ```
 
-When `members: false` is set, only the class itself is documented. You can then place individual methods wherever you want in your reference structure.
+When `members: false` is set, only the class itself is documented. You can then place individual
+methods wherever you want in your reference structure.
 
 ### Documenting Inherited Methods
 
-By default, only methods defined directly on a class are documented. Inherited methods are excluded unless you opt in. This keeps reference pages focused and avoids duplicating parent class methods on every child page (especially important in deep class hierarchies where it would add significant clutter).
+By default, only methods defined directly on a class are documented. Inherited methods are excluded
+unless you opt in. This keeps reference pages focused and avoids duplicating parent class methods on
+every child page (especially important in deep class hierarchies where it would add significant
+clutter).
 
-If your class hierarchy uses inheritance and you want child classes to show inherited methods, there are two approaches.
+If your class hierarchy uses inheritance and you want child classes to show inherited methods, there
+are two approaches.
 
-**Explicit member list.** List the methods you want documented (including inherited ones) in the `members` key:
+**Explicit member list.** List the methods you want documented (including inherited ones) in the
+`members` key:
 
 ```{.yaml filename="great-docs.yml"}
 reference:
@@ -355,7 +372,8 @@ reference:
 
 This gives you full control over which inherited methods appear and in what order.
 
-**Auto-include inherited methods.** Use `include_inherited: true` to automatically document all inherited methods without listing them explicitly:
+**Auto-include inherited methods.** Use `include_inherited: true` to automatically document all
+inherited methods without listing them explicitly:
 
 ```{.yaml filename="great-docs.yml"}
 reference:
@@ -366,10 +384,12 @@ reference:
         include_inherited: true  # includes area(), perimeter(), describe() from Shape
 ```
 
-With this flag, the child class page will show its own methods plus all public methods inherited from parent classes.
+With this flag, the child class page will show its own methods plus all public methods inherited
+from parent classes.
 
 ::: {.callout-tip}
-You can combine both approaches. Use `include_inherited: true` for convenience, or provide an explicit `members` list when you want to cherry-pick specific inherited methods or control ordering.
+You can combine both approaches. Use `include_inherited: true` for convenience, or provide an
+explicit `members` list when you want to cherry-pick specific inherited methods or control ordering.
 :::
 
 ### Excluding Items with `exclude`
@@ -382,11 +402,13 @@ exclude:
   - deprecated_function
 ```
 
-Items in the exclude list won't appear when running `great-docs init` or `great-docs scan`, and won't be documented even if discovered.
+Items in the exclude list won't appear when running `great-docs init` or `great-docs scan`, and
+won't be documented even if discovered.
 
 ## Source Code Links
 
-Great Docs automatically adds "source" links to each documented item, pointing to the exact line numbers on GitHub.
+Great Docs automatically adds "source" links to each documented item, pointing to the exact line
+numbers on GitHub.
 
 ### How It Works
 
@@ -394,7 +416,8 @@ Great Docs automatically adds "source" links to each documented item, pointing t
 2. For each documented item, it finds the source file and line numbers
 3. Links are generated pointing to `github.com/owner/repo/blob/branch/file#L1-L10`
 
-Source links let readers jump straight from the documentation to the implementation, which is especially valuable during code reviews and debugging.
+Source links let readers jump straight from the documentation to the implementation, which is
+especially valuable during code reviews and debugging.
 
 ### Configuration
 
@@ -409,9 +432,13 @@ source:
 
 ## Submodule Introspection
 
-When your package exports submodules (e.g., `dateutil.parser`, `dateutil.tz`), Great Docs automatically drills into each module to discover its public classes, functions, and constants. This means you can list a module name in your `reference` config and Great Docs will expand it into all of its individual members.
+When your package exports submodules (e.g., `dateutil.parser`, `dateutil.tz`), Great Docs
+automatically drills into each module to discover its public classes, functions, and constants. This
+means you can list a module name in your `reference` config and Great Docs will expand it into all
+of its individual members.
 
-For example, if your package exports a `parser` submodule containing a `parse()` function, a `parser` class, and a `ParserError` exception, writing:
+For example, if your package exports a `parser` submodule containing a `parse()` function, a
+`parser` class, and a `ParserError` exception, writing:
 
 ```{.yaml filename="great-docs.yml"}
 reference:
@@ -421,25 +448,37 @@ reference:
       - parser
 ```
 
-will automatically expand to document `parser.parse`, `parser.parser`, `parser.ParserError`, and all other public members of the `parser` module. Each member is classified into the correct object type and receives appropriate visual treatment.
+will automatically expand to document `parser.parse`, `parser.parser`, `parser.ParserError`, and all
+other public members of the `parser` module. Each member is classified into the correct object type
+and receives appropriate visual treatment.
 
-This is particularly useful for packages like `dateutil` that organize their API into topical submodules rather than exporting everything from the top-level `__init__.py`.
+This is particularly useful for packages like `dateutil` that organize their API into topical
+submodules rather than exporting everything from the top-level `__init__.py`.
 
 ## Cross-Referencing
 
-Great Docs includes a linking system (GDLS) that automatically creates clickable navigation between your API reference pages. It supports `%seealso` directives in docstrings, inline interlinks using Markdown syntax, and automatic code-to-link conversion for inline code that matches documented symbols.
+Great Docs includes a linking system (GDLS) that automatically creates clickable navigation between
+your API reference pages. It supports `%seealso` directives in docstrings, inline interlinks using
+Markdown syntax, and automatic code-to-link conversion for inline code that matches documented
+symbols.
 
 See [Cross-Referencing](cross-referencing.qmd) for the full guide to all linking features.
 
 ## Sphinx & RST Cleanup
 
-Docstrings sometimes contain Sphinx cross-reference roles (like `` :py:exc:`ValueError` ``) or RST directives (like `.. versionadded:: 2.0`). These constructs are designed for Sphinx but appear as literal text in non-Sphinx renderers.
+Docstrings sometimes contain Sphinx cross-reference roles (like `` :py:exc:`ValueError` ``) or RST
+directives (like `.. versionadded:: 2.0`). These constructs are designed for Sphinx but appear as
+literal text in non-Sphinx renderers.
 
 Great Docs automatically translates these into clean, styled HTML during the post-render step.
 
 ### Sphinx Cross-Reference Roles
 
-Sphinx roles like `:py:class:`, `:func:`, and `:exc:` are converted into plain inline code formatting. For example, `` :py:exc:`ValueError` `` becomes `ValueError`, and `` :py:class:`datetime.datetime` `` becomes `datetime.datetime`. Function and method roles automatically receive trailing `()` to indicate they are callable, so `` :func:`my_function` `` renders as `my_function()` and `` :meth:`MyClass.run` `` renders as `MyClass.run()`.
+Sphinx roles like `:py:class:`, `:func:`, and `:exc:` are converted into plain inline code
+formatting. For example, `` :py:exc:`ValueError` `` becomes `ValueError`, and
+`` :py:class:`datetime.datetime` `` becomes `datetime.datetime`. Function and method roles
+automatically receive trailing `()` to indicate they are callable, so `` :func:`my_function` ``
+renders as `my_function()` and `` :meth:`MyClass.run` `` renders as `MyClass.run()`.
 
 ### RST Admonition & Version Directives
 
@@ -458,11 +497,14 @@ RST directives are converted into styled callout boxes with appropriate icons an
 
 Optional description text after the version number is preserved in the callout body.
 
-This cleanup happens automatically during every build, so you don't need to strip Sphinx syntax from your docstrings. If your package also publishes Sphinx-based docs, the same docstrings work in both systems without modification.
+This cleanup happens automatically during every build, so you don't need to strip Sphinx syntax from
+your docstrings. If your package also publishes Sphinx-based docs, the same docstrings work in both
+systems without modification.
 
 ## Visual Enhancements
 
-Great Docs applies consistent styling to your API documentation, making it easier to scan and understand at a glance.
+Great Docs applies consistent styling to your API documentation, making it easier to scan and
+understand at a glance.
 
 ### Type Labels {#type-labels}
 
@@ -479,21 +521,35 @@ Each documented item displays a colored badge indicating its object type:
 | **type alias** | Green | Type alias definitions |
 | **other** | Gray | Uncategorized exports |
 
-Great Docs uses a metadata file (`_object_types.json`) generated during the build to determine the correct badge for each item. This ensures accurate classification even for edge cases like constants that start with an uppercase letter or functions named after classes.
+Great Docs uses a metadata file (`_object_types.json`) generated during the build to determine the
+correct badge for each item. This ensures accurate classification even for edge cases like constants
+that start with an uppercase letter or functions named after classes.
 
 ### Code Styling
 
-The documentation applies careful typography to code elements throughout. Function signatures use monospace fonts for clarity, and type annotations are formatted to be easily readable. Parameter lists have improved spacing that makes long signatures scannable. Code blocks benefit from enhanced syntax highlighting that matches the overall site theme. Together, these refinements make technical content more approachable.
+The documentation applies careful typography to code elements throughout. Function signatures use
+monospace fonts for clarity, and type annotations are formatted to be easily readable. Parameter
+lists have improved spacing that makes long signatures scannable. Code blocks benefit from enhanced
+syntax highlighting that matches the overall site theme. Together, these refinements make technical
+content more approachable.
 
 ### Responsive Design
 
-API documentation needs to work on devices of all sizes, from large desktop monitors to phones. Great Docs optimizes the layout for each screen size with mobile-friendly navigation that adapts to touch interactions. The sidebar becomes collapsible on smaller screens, and typography scales appropriately to remain readable. Whether you're at your desk or reviewing docs on your phone during a commute, the experience remains consistent.
+API documentation needs to work on devices of all sizes, from large desktop monitors to phones.
+Great Docs optimizes the layout for each screen size with mobile-friendly navigation that adapts to
+touch interactions. The sidebar becomes collapsible on smaller screens, and typography scales
+appropriately to remain readable. Whether you're at your desk or reviewing docs on your phone during
+a commute, the experience remains consistent.
 
 ## Sidebar Filter
 
-For packages with many exports, navigating the sidebar can become cumbersome. Great Docs addresses this with a built-in search filter that appears automatically when your API has 20 or more items.
+For packages with many exports, navigating the sidebar can become cumbersome. Great Docs addresses
+this with a built-in search filter that appears automatically when your API has 20 or more items.
 
-The filter provides instant results as you type, narrowing down the sidebar to show only matching items. A count indicator shows how many items match your search out of the total. The section structure is preserved during filtering, so you maintain context about where items live in your API hierarchy.
+The filter provides instant results as you type, narrowing down the sidebar to show only matching
+items. A count indicator shows how many items match your search out of the total. The section
+structure is preserved during filtering, so you maintain context about where items live in your API
+hierarchy.
 
 You can customize when the filter appears in your `great-docs.yml`:
 
@@ -521,11 +577,14 @@ For faster builds when only documentation content changed (not API):
 great-docs build --no-refresh
 ```
 
-Either way, the rendered output reflects the current state of your package. You never need to manually edit generated reference pages.
+Either way, the rendered output reflects the current state of your package. You never need to
+manually edit generated reference pages.
 
 ## Migrating from quartodoc
 
-If you have an existing site built with [quartodoc](https://machow.github.io/quartodoc/), switching to Great Docs is straightforward. The two tools share similar ideas (sections, contents lists, Quarto rendering) but differ in where configuration lives and how much you need to specify by hand.
+If you have an existing site built with [quartodoc](https://machow.github.io/quartodoc/), switching
+to Great Docs is straightforward. The two tools share similar ideas (sections, contents lists,
+Quarto rendering) but differ in where configuration lives and how much you need to specify by hand.
 
 ### Key Differences
 
@@ -600,39 +659,25 @@ If you have an existing site built with [quartodoc](https://machow.github.io/qua
    rather than scattered alongside `_quarto.yml`. See [User Guides](user-guides.qmd) for naming
    conventions and sidebar ordering.
 
-4. **Remove quartodoc artifacts.** Delete the `reference/` directory, the `quartodoc:` block from
-   `_quarto.yml`, and the `metadata-files` / `css` entries that pointed to quartodoc's generated
-   sidebar and styles. Great Docs manages `_quarto.yml` itself, so you should not maintain one by
-   hand.
+4. **Clean up quartodoc artifacts.** Great Docs generates its own `_quarto.yml` inside the
+   ephemeral `great-docs/` build directory on every build, so you don't need to edit or keep your
+   old `_quarto.yml`. The main thing to do is delete the `reference/` directory that quartodoc
+   generated (but check it first for any hand-written `.qmd` content you want to migrate into
+   your `user_guide/` directory or `great-docs.yml` reference config).
 
 5. **Build and preview.** Run `great-docs build` followed by `great-docs preview`. Your reference
    pages should render with the same content, now with Great Docs' enhanced styling and features.
 
-### What You Get for Free
-
-After migrating, you gain several capabilities without additional configuration:
-
-- **Automatic API discovery**: new exports appear in the docs without editing config files
-- **Smart method splitting**: large classes are automatically split into per-method pages
-- **Type badges**: colored labels indicating whether an item is a class, function, constant, etc.
-- **Sidebar filter**: instant search over the reference sidebar for large APIs
-- **Source links**: clickable links to the exact source lines on GitHub
-- **Sphinx/RST cleanup**: Sphinx cross-reference roles and RST directives render as styled callouts
-- **Cross-referencing**: automatic linking between API pages and from prose to API symbols
-
-### Keeping a Custom Layout
-
-If you had a carefully curated section structure in quartodoc, you can preserve it exactly by using
-the `reference` config. Great Docs won't override your explicit layout as it only auto-generates
-sections when no `reference` config is present. Your existing organizational choices (domain-based
-grouping, custom ordering, hand-picked method pages) carry over unchanged.
-
 ## Next Steps
 
-Great Docs handles the tedious parts of API documentation (discovery, classification, layout, linking) so you can focus on writing clear docstrings. Whether your package exports a handful of functions or hundreds of classes, the reference section stays organized and up to date.
+Great Docs handles the tedious parts of API documentation (discovery, classification, layout,
+linking) so you can focus on writing clear docstrings. Whether your package exports a handful of
+functions or hundreds of classes, the reference section stays organized and up to date.
 
-- [Writing Docstrings](writing-docstrings.qmd) covers docstring format, sections, executable examples, and `%nodoc`
-- [Cross-Referencing](cross-referencing.qmd) covers the full linking system (GDLS) for connecting API pages
+- [Writing Docstrings](writing-docstrings.qmd) covers docstring format, sections, executable
+examples, and `%nodoc`
+- [Cross-Referencing](cross-referencing.qmd) covers the full linking system (GDLS) for connecting
+API pages
 - [CLI Documentation](cli-documentation.qmd) covers Click CLI documentation
 - [User Guides](user-guides.qmd) explains how to add narrative documentation
 - [Configuration](configuration.qmd) covers all `great-docs.yml` options
