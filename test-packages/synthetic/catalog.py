@@ -398,6 +398,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_bibliography",  # 197
     # 198: Project-level bibliography with a custom (numeric) CSL style
     "gdtest_bibliography_csl",  # 198
+    # 199: Project-level custom CSS forwarded into _quarto.yml
+    "gdtest_custom_css",  # 199
 ]
 
 
@@ -604,6 +606,7 @@ DIMENSIONS: dict[str, dict[str, str]] = {
     "Q5": {"axis": "theme", "label": "TOC depth 3"},
     "Q6": {"axis": "theme", "label": "Custom TOC title"},
     "Q7": {"axis": "theme", "label": "Site combo"},
+    "Q8": {"axis": "theme", "label": "site.css: custom stylesheet"},
     # Skill axes
     "S1": {"axis": "skill", "label": "Auto-generated skill"},
     "S2": {"axis": "skill", "label": "Curated skill"},
@@ -2233,6 +2236,13 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "bracketed numbers ([1], [2]) and the reference list is numbered, instead "
         "of the default Chicago author-date style. Confirms CSL selection works "
         "end to end (issue #214's optional CSL support)."
+    ),
+    "gdtest_custom_css": (
+        "A package whose great-docs.yml sets a single project-level "
+        "`site.css: [docs/custom.css]` key. Great Docs should copy "
+        "the stylesheet into the build directory and write it into _quarto.yml's "
+        "format.html.css. If the wiring is missing, the marker rule in custom.css "
+        "never reaches the rendered site."
     ),
 }
 

@@ -1352,6 +1352,25 @@ class Config:
         return None
 
     @property
+    def css(self) -> list[str]:
+        """Get the normalized list of custom CSS file paths.
+
+        Accepts a single path string or a list of paths under `site.css` in
+        `great-docs.yml`. Paths are relative to the project root.
+
+        Returns
+        -------
+        list[str]
+            List of `.css` file paths, or an empty list if none.
+        """
+        raw = self.site.get("css")
+        if isinstance(raw, str):
+            return [raw]
+        if isinstance(raw, list):
+            return [s for s in raw if isinstance(s, str)]
+        return []
+
+    @property
     def nav_icons(self) -> dict[str, dict[str, str]] | None:
         """Get the normalized navigation icons configuration.
 
