@@ -215,6 +215,6 @@ hub-state: ## Show GDG build state summary
 
 .PHONY: hub-deploy
 hub-deploy: ## Trigger GDG hub deployment to GitHub Pages (requires gh CLI)
-	@gh workflow run deploy.yml --repo rich-iannone/gdg \
+	@gh workflow run deploy.yml --repo posit-dev/gdg \
 	  -f great_docs_ref=$$(git rev-parse --abbrev-ref HEAD) && \
-	 echo "Deployment triggered. Watch at: https://github.com/rich-iannone/gdg/actions"
+	 echo "Deployment triggered. Watch at: https://github.com/posit-dev/gdg/actions"
