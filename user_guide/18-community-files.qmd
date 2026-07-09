@@ -250,6 +250,50 @@ won't appear in the sidebar. You can add community files at any time and they'll
 detected on the next build. This means you can introduce community files gradually as your project
 matures.
 
+## Package Info
+
+In addition to community files, Great Docs automatically generates a **Package Info** page that
+displays your package's declared dependencies. This page surfaces important metadata about what your
+package requires to run and what optional components are available.
+
+### What It Shows
+
+The Package Info page includes:
+
+- runtime Dependencies: packages required to use your library (from `dependencies` in
+`pyproject.toml`)
+- optional Dependencies: extra packages grouped by feature (from `optional-dependencies`)
+- version Constraints: specifier ranges for each package (e.g., `>=1.24`, `>=2.0,<3.0`)
+- environment Markers: platform or Python version constraints (e.g., `python_version<'3.12'`)
+- last Published: the latest release date of each dependency on PyPI
+- PyPI Link: direct links to the PyPI page for each package
+
+Dependencies are presented in tables with one group per optional dependency set (e.g., `dev`,
+`docs`, `test`).
+
+### Configuration
+
+The Package Info page is enabled by default. To disable it, add to `great-docs.yml`:
+
+```{.yaml filename="great-docs.yml"}
+package_info_page: false
+```
+
+### Accessing the Page
+
+The Package Info page is accessible via a "Package Info" link in the **Meta** section of the
+homepage sidebar (next to "Requires", "Provides-Extra", and "Site Tags"). The page is located at
+`package-info.html` and is also included in your site's navigation and search index.
+
+### When To Use It
+
+This feature is useful for:
+
+- users evaluating your package's compatibility with their environment
+- CI/CD pipelines checking dependency requirements
+- developers understanding what optional features are available
+- dependency scanners and compliance tools
+
 ## Next Steps
 
 Community files give your project a professional, welcoming presence without any configuration.
