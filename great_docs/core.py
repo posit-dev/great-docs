@@ -1454,6 +1454,49 @@ class GreatDocs:
                     metadata["description"] = project.get("description", "")
                     metadata["optional_dependencies"] = project.get("optional-dependencies", {})
 
+                    # Parse declared runtime dependencies (PEP 508 specifiers)
+                    raw_deps = project.get("dependencies", [])
+                    parsed_deps = []
+                    if raw_deps:
+                        from packaging.requirements import Requirement
+
+                        for dep_str in raw_deps:
+                            try:
+                                req = Requirement(dep_str)
+                                entry = {"name": req.name, "specifier": str(req.specifier)}
+                                if req.marker:
+                                    entry["marker"] = str(req.marker)
+                                if req.extras:
+                                    entry["extras"] = sorted(req.extras)
+                                parsed_deps.append(entry)
+                            except Exception:
+                                parsed_deps.append({"name": dep_str, "specifier": ""})
+                    metadata["dependencies"] = parsed_deps
+
+                    # Parse full optional dependency contents (not just group names)
+                    opt_deps_full: dict[str, list[dict]] = {}
+                    for group, specs in metadata["optional_dependencies"].items():
+                        group_deps = []
+                        if isinstance(specs, list):
+                            from packaging.requirements import Requirement
+
+                            for dep_str in specs:
+                                try:
+                                    req = Requirement(dep_str)
+                                    entry = {
+                                        "name": req.name,
+                                        "specifier": str(req.specifier),
+                                    }
+                                    if req.marker:
+                                        entry["marker"] = str(req.marker)
+                                    if req.extras:
+                                        entry["extras"] = sorted(req.extras)
+                                    group_deps.append(entry)
+                                except Exception:
+                                    group_deps.append({"name": dep_str, "specifier": ""})
+                        opt_deps_full[group] = group_deps
+                    metadata["optional_dependencies_full"] = opt_deps_full
+
             except Exception:
                 pass
 
@@ -10499,6 +10542,12 @@ title: "Security Policy"
             tags_label = get_translation("site_tags", lang)
             meta_items.append(f"[{tags_label}](tags/index.html)")
 
+        # Package Info page link
+        pkg_info_qmd = self.project_path / "package-info.qmd"
+        if pkg_info_qmd.exists():
+            _pkg_info_label = get_translation("package_info", lang)
+            meta_items.append(f"[{_pkg_info_label}](package-info.html)")
+
         if meta_items:
             margin_sections.append(f"\n#### {get_translation('meta', lang)}\n")
             margin_sections.append("<br>\n".join(meta_items))
@@ -10840,6 +10889,9 @@ title: "Authors and Citation"
             print(f"Created {citation_qmd}")
             citation_link = "citation.qmd"
 
+        # Always create package-info.qmd if enabled and package has dependencies
+        self._generate_package_info_page()
+
         # Now check if we should create index.qmd
         index_qmd = self.project_path / "index.qmd"
 
@@ -10972,6 +11024,229 @@ body-classes: "gd-homepage"
             f.write(qmd_content)
 
         print(f"Created {index_qmd}")
+
+    @staticmethod
+    def _fetch_pypi_dates(package_names: set[str]) -> dict[str, str]:
+        """
+        Fetch the latest release date for each package from PyPI.
+
+        Uses the PyPI JSON API (`https://pypi.org/pypi/{name}/json`) to look up the most recent
+        upload timestamp. Requests are made with a short timeout and failures are silently skipped
+        (the date simply shows "—").
+
+        Parameters
+        ----------
+        package_names
+            Set of PyPI package names to look up.
+
+        Returns
+        -------
+        dict[str, str]
+            Mapping of package name to a formatted date string (`YYYY-MM-DD`).
+        """
+        import concurrent.futures
+
+        import requests
+
+        dates: dict[str, str] = {}
+        if not package_names:
+            return dates
+
+        def _fetch_one(name: str) -> tuple[str, str]:
+            try:
+                resp = requests.get(
+                    f"https://pypi.org/pypi/{name}/json",
+                    timeout=5,
+                    headers={"Accept": "application/json"},
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    # The "info" dict has the latest version; look up its upload time
+                    latest_version = data.get("info", {}).get("version", "")
+                    releases = data.get("releases", {})
+                    if latest_version and latest_version in releases:
+                        files = releases[latest_version]
+                        if files:
+                            upload_time = files[0].get("upload_time_iso_8601", "")
+                            if upload_time:
+                                return name, upload_time[:10]  # YYYY-MM-DD
+            except Exception:
+                pass
+            return name, ""
+
+        # Fetch in parallel with a bounded thread pool
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+            futures = {pool.submit(_fetch_one, n): n for n in package_names}
+            for future in concurrent.futures.as_completed(futures):
+                pkg_name, date_str = future.result()
+                if date_str:
+                    dates[pkg_name] = date_str
+
+        return dates
+
+    def _generate_package_info_page(self) -> str | None:
+        """
+        Generate package-info.qmd with dependency details.
+
+        Creates a page listing runtime dependencies, optional dependency groups (with full package
+        lists), and a summary. The page is linked from the homepage Meta section.
+
+        Returns
+        -------
+        str | None
+            The relative path `"package-info.qmd"` when the page is created, or `None` when
+            generation is skipped (disabled or no deps found).
+        """
+        if not self._config.package_info_page:
+            return None
+
+        from ._icons import get_icon_svg
+        from ._translations import get_translation
+
+        metadata = self._get_package_metadata()
+        lang = self._config.language
+
+        runtime_deps: list[dict] = metadata.get("dependencies", [])
+        opt_deps_full: dict[str, list[dict]] = metadata.get("optional_dependencies_full", {})
+        requires_python: str = metadata.get("requires_python", "")
+
+        # Skip if there's nothing to show
+        if not runtime_deps and not opt_deps_full and not requires_python:
+            return None
+
+        # Translated labels
+        _title = get_translation("package_info", lang)
+        _runtime = get_translation("runtime_dependencies", lang)
+        _optional = get_translation("optional_dependencies", lang)
+        _summary = get_translation("dependency_summary", lang)
+        _pkg_col = get_translation("dep_package", lang)
+        _ver_col = get_translation("dep_version_constraint", lang)
+        _marker_col = get_translation("dep_environment_marker", lang)
+
+        # Build a small inline SVG link icon for PyPI column
+        _link_svg = get_icon_svg("external-link", size=14, css_class="")
+
+        # Fetch latest release dates from PyPI for all unique dep names
+        all_dep_names = {d["name"] for d in runtime_deps}
+        for deps in opt_deps_full.values():
+            all_dep_names |= {d["name"] for d in deps}
+        pypi_dates = self._fetch_pypi_dates(all_dep_names)
+
+        sections: list[str] = []
+
+        # ── Runtime Dependencies ──────────────────────────────────────
+        if runtime_deps:
+            has_markers = any(d.get("marker") for d in runtime_deps)
+            header_cols = f"| {_pkg_col} | {_ver_col} | Last Published | PyPI |"
+            separator = "|----|----|----|----|"
+            if has_markers:
+                header_cols = f"| {_pkg_col} | {_ver_col} | {_marker_col} | Last Published | PyPI |"
+                separator = "|----|----|----|----|----|"
+
+            rows: list[str] = []
+            for dep in runtime_deps:
+                name = dep["name"]
+                spec = f"`{dep['specifier']}`" if dep["specifier"] else "—"
+                date_str = pypi_dates.get(name, "—")
+                pypi_cell = f"[{_link_svg}](https://pypi.org/project/{name}/){{.gd-pypi-link}}"
+                if has_markers:
+                    marker = f"`{dep['marker']}`" if dep.get("marker") else ""
+                    rows.append(
+                        f"| `{name}`{{.gd-no-link}} | {spec} | {marker}"
+                        f" | {date_str} | {pypi_cell} |"
+                    )
+                else:
+                    rows.append(f"| `{name}`{{.gd-no-link}} | {spec} | {date_str} | {pypi_cell} |")
+
+            sections.append(f"## {_runtime}\n")
+            sections.append(header_cols)
+            sections.append(separator)
+            sections.extend(rows)
+            sections.append("")
+
+        # ── Optional Dependencies ─────────────────────────────────────
+        if opt_deps_full:
+            sections.append(f"## {_optional}\n")
+
+            for group_name, group_deps in sorted(opt_deps_full.items()):
+                sections.append(f"### `{group_name}`\n")
+
+                if group_deps:
+                    has_markers = any(d.get("marker") for d in group_deps)
+                    header_cols = f"| {_pkg_col} | {_ver_col} | Last Published | PyPI |"
+                    separator = "|----|----|----|----|"
+                    if has_markers:
+                        header_cols = (
+                            f"| {_pkg_col} | {_ver_col} | {_marker_col} | Last Published | PyPI |"
+                        )
+                        separator = "|----|----|----|----|----|"
+
+                    sections.append(header_cols)
+                    sections.append(separator)
+
+                    for dep in group_deps:
+                        name = dep["name"]
+                        spec = f"`{dep['specifier']}`" if dep["specifier"] else "—"
+                        date_str = pypi_dates.get(name, "—")
+                        pypi_cell = (
+                            f"[{_link_svg}](https://pypi.org/project/{name}/){{.gd-pypi-link}}"
+                        )
+                        if has_markers:
+                            marker = f"`{dep['marker']}`" if dep.get("marker") else ""
+                            sections.append(
+                                f"| `{name}`{{.gd-no-link}} | {spec} | {marker}"
+                                f" | {date_str} | {pypi_cell} |"
+                            )
+                        else:
+                            sections.append(
+                                f"| `{name}`{{.gd-no-link}} | {spec} | {date_str} | {pypi_cell} |"
+                            )
+                    sections.append("")
+                else:
+                    sections.append("*No dependencies declared.*\n")
+
+        # ── Summary ───────────────────────────────────────────────────
+        sections.append(f"## {_summary}\n")
+
+        n_runtime = len(runtime_deps)
+        n_opt_groups = len(opt_deps_full)
+        all_opt_names = {dep["name"] for deps in opt_deps_full.values() for dep in deps}
+        n_opt_unique = len(all_opt_names)
+        all_names = {dep["name"] for dep in runtime_deps} | all_opt_names
+        n_total = len(all_names)
+
+        summary_items: list[str] = []
+        if requires_python:
+            _requires_label = get_translation("requires_python", lang)
+            summary_items.append(f"- **{_requires_label}:** Python `{requires_python}`")
+        summary_items.append(f"- **{_runtime}:** {n_runtime}")
+        if n_opt_groups:
+            summary_items.append(
+                f"- **{_optional}:** {n_opt_groups} groups ({n_opt_unique} unique packages)"
+            )
+        summary_items.append(f"- **Total unique dependencies:** {n_total}")
+
+        sections.extend(summary_items)
+        sections.append("")
+
+        body = "\n".join(sections)
+
+        qmd_content = f"""---
+title: "{_title}"
+toc: true
+sidebar: false
+body-classes: "gd-package-info-page"
+anchor-sections: true
+---
+
+{body}
+"""
+
+        pkg_info_qmd = self.project_path / "package-info.qmd"
+        with open(pkg_info_qmd, "w", encoding="utf-8") as f:
+            f.write(qmd_content)
+        print(f"Created {pkg_info_qmd}")
+        return "package-info.qmd"
 
     def _add_api_reference_config(self) -> None:
         """
