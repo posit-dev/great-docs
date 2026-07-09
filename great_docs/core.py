@@ -14543,6 +14543,19 @@ body-classes: "gd-homepage"
                 lines.append(f"Sitemap: {base_url}sitemap.xml")
                 lines.append("")
 
+        # Add llms.txt references for AI agent discoverability
+        base_url = self._get_canonical_base_url()
+        if base_url:
+            llms_path = site_dir / "llms.txt"
+            llms_full_path = site_dir / "llms-full.txt"
+            if llms_path.exists() or llms_full_path.exists():
+                lines.append("# AI agent context files")
+                if llms_path.exists():
+                    lines.append(f"Llms-txt: {base_url}llms.txt")
+                if llms_full_path.exists():
+                    lines.append(f"Llms-txt: {base_url}llms-full.txt")
+                lines.append("")
+
         # Write robots.txt
         robots_path = site_dir / "robots.txt"
         robots_path.write_text("\n".join(lines), encoding="utf-8")
