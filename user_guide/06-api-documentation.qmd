@@ -523,6 +523,110 @@ great-docs build --no-refresh
 
 Either way, the rendered output reflects the current state of your package. You never need to manually edit generated reference pages.
 
+## Migrating from quartodoc
+
+If you have an existing site built with [quartodoc](https://machow.github.io/quartodoc/), switching to Great Docs is straightforward. The two tools share similar ideas (sections, contents lists, Quarto rendering) but differ in where configuration lives and how much you need to specify by hand.
+
+### Key Differences
+
+| | **quartodoc** | **Great Docs** |
+| --- | --- | --- |
+| Config file | `_quarto.yml` (under a `quartodoc:` key) | `great-docs.yml` |
+| API discovery | Manual: you list every object | Automatic: discovers your public API from source |
+| Build command | `quartodoc build` then `quarto render` | `great-docs build` (handles both steps) |
+| Preview command | `quarto preview` | `great-docs preview` |
+| Generated output | `reference/` directory with `.qmd` files and `_sidebar.yml` | `great-docs/` directory (ephemeral, gitignored) |
+| Sidebar | You include a generated `_sidebar.yml` via `metadata-files` | Managed automatically |
+
+### Step-by-Step Migration
+
+1. **Install Great Docs** and run `great-docs init` in your project root. This auto-discovers your
+   package and creates `great-docs.yml`.
+
+2. **Translate your reference layout.** The `sections` structure maps almost directly. A quartodoc
+   config like this:
+
+   ```{.yaml filename="_quarto.yml (quartodoc)"}
+   quartodoc:
+     package: my_package
+     sections:
+       - title: Core
+         desc: Primary interface
+         contents:
+           - MyClass
+           - helper_function
+       - title: Utilities
+         desc: Utility helpers
+         contents:
+           - format_output
+   ```
+
+   becomes this in Great Docs:
+
+   ```{.yaml filename="great-docs.yml"}
+   reference:
+     sections:
+       - title: Core
+         desc: Primary interface
+         contents:
+           - MyClass
+           - helper_function
+       - title: Utilities
+         desc: Utility helpers
+         contents:
+           - format_output
+   ```
+
+   The section structure (`title`, `desc`, `contents`) is the same and you just move it from
+   `quartodoc.sections` in `_quarto.yml` to `reference.sections` in `great-docs.yml`.
+
+   One syntax difference: quartodoc uses `members: []` (an empty list) to suppress inline method
+   documentation on a class, while Great Docs uses `members: false`. So a quartodoc entry like:
+
+   ```yaml
+   - name: MyClass
+     members: []
+   ```
+
+   becomes:
+
+   ```yaml
+   - name: MyClass
+     members: false
+   ```
+
+3. **Move your user guide pages.** If you have narrative `.qmd` files (tutorials, guides, etc.),
+   move them into a top-level `user_guide/` directory. Great Docs expects user guide content there
+   rather than scattered alongside `_quarto.yml`. See [User Guides](user-guides.qmd) for naming
+   conventions and sidebar ordering.
+
+4. **Remove quartodoc artifacts.** Delete the `reference/` directory, the `quartodoc:` block from
+   `_quarto.yml`, and the `metadata-files` / `css` entries that pointed to quartodoc's generated
+   sidebar and styles. Great Docs manages `_quarto.yml` itself, so you should not maintain one by
+   hand.
+
+5. **Build and preview.** Run `great-docs build` followed by `great-docs preview`. Your reference
+   pages should render with the same content, now with Great Docs' enhanced styling and features.
+
+### What You Get for Free
+
+After migrating, you gain several capabilities without additional configuration:
+
+- **Automatic API discovery**: new exports appear in the docs without editing config files
+- **Smart method splitting**: large classes are automatically split into per-method pages
+- **Type badges**: colored labels indicating whether an item is a class, function, constant, etc.
+- **Sidebar filter**: instant search over the reference sidebar for large APIs
+- **Source links**: clickable links to the exact source lines on GitHub
+- **Sphinx/RST cleanup**: Sphinx cross-reference roles and RST directives render as styled callouts
+- **Cross-referencing**: automatic linking between API pages and from prose to API symbols
+
+### Keeping a Custom Layout
+
+If you had a carefully curated section structure in quartodoc, you can preserve it exactly by using
+the `reference` config. Great Docs won't override your explicit layout as it only auto-generates
+sections when no `reference` config is present. Your existing organizational choices (domain-based
+grouping, custom ordering, hand-picked method pages) carry over unchanged.
+
 ## Next Steps
 
 Great Docs handles the tedious parts of API documentation (discovery, classification, layout, linking) so you can focus on writing clear docstrings. Whether your package exports a handful of functions or hundreds of classes, the reference section stays organized and up to date.
