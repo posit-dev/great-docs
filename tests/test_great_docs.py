@@ -15188,9 +15188,7 @@ def test_render_source_relative_path_source_path_override(monkeypatch):
     monkeypatch.setenv("SOURCE_PATH", "packages/raghilda/src")
     monkeypatch.setenv("PACKAGE_ROOT", "/some/root")
 
-    assert (
-        _render_doc_source_relative_path(obj) == "packages/raghilda/src/embedding.py"
-    )
+    assert _render_doc_source_relative_path(obj) == "packages/raghilda/src/embedding.py"
 
 
 def test_render_source_relative_path_falls_back_to_griffe(monkeypatch):
@@ -43254,3 +43252,280 @@ def test_create_api_sections_from_config_inline_methods_custom_threshold():
             assert "MediumClass" in classes_section["contents"]
         finally:
             sys.path.remove(tmp_dir)
+
+
+# ── Package Info Page ──────────────────────────────────────────────────────
+
+
+def test_generate_package_info_page_basic():
+    """_generate_package_info_page creates package-info.qmd with runtime deps."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            textwrap.dedent("""\
+                [project]
+                name = "mypkg"
+                requires-python = ">=3.11"
+                dependencies = [
+                    "numpy>=1.24",
+                    "pandas>=2.0,<3.0",
+                ]
+            """),
+            encoding="utf-8",
+        )
+        gd_dir = Path(tmp_dir) / "great-docs"
+        gd_dir.mkdir()
+        docs = GreatDocs(project_path=tmp_dir)
+        with patch.object(
+            GreatDocs,
+            "_fetch_pypi_dates",
+            return_value={"numpy": "2026-05-01", "pandas": "2026-06-15"},
+        ):
+            result = docs._generate_package_info_page()
+
+        assert result == "package-info.qmd"
+
+        pkg_info = gd_dir / "package-info.qmd"
+        assert pkg_info.exists()
+
+        content = pkg_info.read_text(encoding="utf-8")
+        assert "Package Info" in content
+        assert "`numpy`{.gd-no-link}" in content
+        assert "`>=1.24`" in content
+        assert "`pandas`{.gd-no-link}" in content
+        assert "pypi.org/project/numpy" in content
+        assert "pypi.org/project/pandas" in content
+        assert "Runtime Dependencies" in content
+        assert "Summary" in content
+        assert ">=3.11" in content
+        assert "Total unique dependencies" in content
+        # Icon should be an SVG, not a Quarto shortcode
+        assert "iconify" not in content
+        assert "<svg" in content
+        # Last Published dates
+        assert "Last Published" in content
+        assert "2026-05-01" in content
+        assert "2026-06-15" in content
+
+
+def test_generate_package_info_page_with_optional_deps():
+    """_generate_package_info_page shows optional dependency groups with contents."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            textwrap.dedent("""\
+                [project]
+                name = "mypkg"
+                dependencies = ["click>=8.0"]
+
+                [project.optional-dependencies]
+                dev = ["pytest>=7.0", "coverage"]
+                docs = ["quartodoc>=0.9"]
+            """),
+            encoding="utf-8",
+        )
+        gd_dir = Path(tmp_dir) / "great-docs"
+        gd_dir.mkdir()
+        docs = GreatDocs(project_path=tmp_dir)
+        with patch.object(GreatDocs, "_fetch_pypi_dates", return_value={}):
+            result = docs._generate_package_info_page()
+
+        assert result == "package-info.qmd"
+
+        content = (gd_dir / "package-info.qmd").read_text(encoding="utf-8")
+        assert "Optional Dependencies" in content
+        assert "### `dev`" in content
+        assert "### `docs`" in content
+        assert "`pytest`{.gd-no-link}" in content or "`pytest`" in content
+        assert "`coverage`{.gd-no-link}" in content or "`coverage`" in content
+        assert "`quartodoc`{.gd-no-link}" in content or "`quartodoc`" in content
+        # Summary counts
+        assert "3 groups" in content or "2 groups" in content
+
+
+def test_generate_package_info_page_with_markers():
+    """_generate_package_info_page shows environment markers when present."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            textwrap.dedent("""\
+                [project]
+                name = "mypkg"
+                dependencies = [
+                    "typing_extensions>=4.0; python_version<'3.12'",
+                    "numpy>=1.24",
+                ]
+            """),
+            encoding="utf-8",
+        )
+        gd_dir = Path(tmp_dir) / "great-docs"
+        gd_dir.mkdir()
+        docs = GreatDocs(project_path=tmp_dir)
+        with patch.object(GreatDocs, "_fetch_pypi_dates", return_value={}):
+            docs._generate_package_info_page()
+
+        content = (gd_dir / "package-info.qmd").read_text(encoding="utf-8")
+        assert "Environment Marker" in content
+        assert "python_version" in content
+        assert "`typing-extensions`" in content or "`typing_extensions`" in content
+
+
+def test_generate_package_info_page_disabled():
+    """_generate_package_info_page returns None when disabled in config."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\ndependencies = ["numpy"]\n',
+            encoding="utf-8",
+        )
+        gd_dir = Path(tmp_dir) / "great-docs"
+        gd_dir.mkdir()
+        # Write config to disable the page
+        config_path = Path(tmp_dir) / "great-docs.yml"
+        config_path.write_text("package_info_page: false\n", encoding="utf-8")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._generate_package_info_page()
+
+        assert result is None
+        assert not (gd_dir / "package-info.qmd").exists()
+
+
+def test_generate_package_info_page_no_deps():
+    """_generate_package_info_page returns None when no deps exist."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+        gd_dir = Path(tmp_dir) / "great-docs"
+        gd_dir.mkdir()
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._generate_package_info_page()
+
+        assert result is None
+
+
+def test_get_package_metadata_parses_dependencies():
+    """_get_package_metadata extracts parsed dependencies from pyproject.toml."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            textwrap.dedent("""\
+                [project]
+                name = "mypkg"
+                dependencies = [
+                    "numpy>=1.24",
+                    "click>=8.0,<9.0",
+                    "typing_extensions>=4.0; python_version<'3.12'",
+                ]
+
+                [project.optional-dependencies]
+                dev = ["pytest>=7.0"]
+            """),
+            encoding="utf-8",
+        )
+        gd_dir = Path(tmp_dir) / "great-docs"
+        gd_dir.mkdir()
+
+        docs = GreatDocs(project_path=tmp_dir)
+        metadata = docs._get_package_metadata()
+
+        # Runtime deps
+        deps = metadata["dependencies"]
+        assert len(deps) == 3
+        assert deps[0]["name"] == "numpy"
+        assert ">=1.24" in deps[0]["specifier"]
+        assert deps[1]["name"] == "click"
+        assert deps[2]["name"] == "typing-extensions" or deps[2]["name"] == "typing_extensions"
+        assert "marker" in deps[2]
+
+        # Optional deps full
+        opt_full = metadata["optional_dependencies_full"]
+        assert "dev" in opt_full
+        assert len(opt_full["dev"]) == 1
+        assert opt_full["dev"][0]["name"] == "pytest"
+
+
+def test_build_metadata_margin_includes_package_info_link():
+    """_build_metadata_margin includes Package Info link when page exists."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "pkg"\nrequires-python = ">=3.11"\n',
+            encoding="utf-8",
+        )
+        gd_dir = Path(tmp_dir) / "great-docs"
+        gd_dir.mkdir()
+
+        # Create package-info.qmd to simulate it having been generated
+        (gd_dir / "package-info.qmd").write_text(
+            "---\ntitle: Package Info\n---\n", encoding="utf-8"
+        )
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._build_metadata_margin()
+
+        assert "Package Info" in result
+        assert "package-info.html" in result
+
+
+def test_generate_package_info_page_pypi_date_fallback():
+    """_generate_package_info_page shows dash when PyPI date fetch fails."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\ndependencies = ["numpy"]\n',
+            encoding="utf-8",
+        )
+        gd_dir = Path(tmp_dir) / "great-docs"
+        gd_dir.mkdir()
+
+        docs = GreatDocs(project_path=tmp_dir)
+        # Simulate network failure — empty dict returned
+        with patch.object(GreatDocs, "_fetch_pypi_dates", return_value={}):
+            docs._generate_package_info_page()
+
+        content = (gd_dir / "package-info.qmd").read_text(encoding="utf-8")
+        # Date column header present, value is dash
+        assert "Last Published" in content
+
+
+def test_fetch_pypi_dates_success():
+    """_fetch_pypi_dates returns dates for successful API responses."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "info": {"version": "1.26.0"},
+        "releases": {"1.26.0": [{"upload_time_iso_8601": "2026-06-15T12:00:00Z"}]},
+    }
+    with patch("requests.get", return_value=mock_response):
+        result = GreatDocs._fetch_pypi_dates({"numpy"})
+
+    assert result == {"numpy": "2026-06-15"}
+
+
+def test_fetch_pypi_dates_failure():
+    """_fetch_pypi_dates returns empty dict on network failure."""
+    with patch("requests.get", side_effect=Exception("timeout")):
+        result = GreatDocs._fetch_pypi_dates({"nonexistent-pkg"})
+
+    assert result == {}
+
+
+def test_fetch_pypi_dates_empty():
+    """_fetch_pypi_dates returns empty dict for empty input."""
+    result = GreatDocs._fetch_pypi_dates(set())
+    assert result == {}
+
+
+def test_build_metadata_margin_no_package_info_link_when_missing():
+    """_build_metadata_margin omits Package Info link when page doesn't exist."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "pkg"\n', encoding="utf-8")
+        gd_dir = Path(tmp_dir) / "great-docs"
+        gd_dir.mkdir()
+
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._build_metadata_margin()
+
+        assert "package-info.html" not in result
