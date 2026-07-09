@@ -211,6 +211,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # True (default): enable keyboard shortcuts and help overlay
     # False: disable keyboard navigation
     "keyboard_nav": True,
+    # Package info page (auto-generated page with dependency details)
+    # True (default): generate package-info.qmd and link from homepage Meta
+    # False: disable package info page generation
+    "package_info_page": True,
     # Back-to-top floating button
     # True (default): show back-to-top button on all pages
     # False: disable back-to-top button
@@ -771,6 +775,11 @@ class Config:
     def keyboard_nav(self) -> bool:
         """Check if keyboard navigation shortcuts are enabled."""
         return self.get("keyboard_nav", True)
+
+    @property
+    def package_info_page(self) -> bool:
+        """Check if package info page generation is enabled."""
+        return self.get("package_info_page", True)
 
     @property
     def back_to_top(self) -> bool:
