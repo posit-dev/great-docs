@@ -279,6 +279,15 @@ class GreatDocs:
             else:
                 print(f"Warning: CSL file not found: {csl_path}")
 
+        # Copy custom CSS files (site.css) into the build directory
+        # where _quarto.yml will refer to them by basename
+        for css_path in self._config.css:
+            css_src = self.project_root / css_path
+            if css_src.is_file():
+                shutil.copy2(css_src, self.project_path / css_src.name)
+            else:
+                print(f"Warning: CSS file not found: {css_path}")
+
         # Copy qrenderer assets
         renderer_src = self.assets_path / "_renderer.py"
         if renderer_src.exists():
@@ -11558,6 +11567,11 @@ body-classes: "gd-homepage"
             if isinstance(config["format"]["html"]["theme"], str):
                 config["format"]["html"]["theme"] = [config["format"]["html"]["theme"]]
             config["format"]["html"]["theme"].append("great-docs.scss")
+
+        # Add the custom CSS from site.css
+        css_files = self._config.css
+        if css_files:
+            config["format"]["html"]["css"] = [Path(c).name for c in css_files]
 
         if "shift-heading-level-by" not in config["format"]["html"]:
             config["format"]["html"]["shift-heading-level-by"] = -1

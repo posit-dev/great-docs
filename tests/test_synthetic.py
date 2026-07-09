@@ -979,6 +979,43 @@ def test_L3_bibliography_wired_into_quarto_config(pkg_name: str, tmp_path: Path)
 
 
 @pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
+def test_L3_custom_css_wired_into_quarto_config(pkg_name: str, tmp_path: Path):
+    """Project-level site.css is copied into the build dir and wired into _quarto.yml."""
+    pkg_dir, spec = _make_package(pkg_name, tmp_path)
+    expected = spec.get("expected", {})
+    if not expected.get("has_custom_css"):
+        pytest.skip("No 'has_custom_css' in spec expected outcomes")
+
+    from yaml12 import read_yaml
+
+    docs = GreatDocs(project_path=str(pkg_dir))
+
+    # The generated great-docs.yml already carries the site.css key, so the
+    # build directory prep alone should copy the file and wire the config.
+    docs._prepare_build_directory()
+
+    css_file = expected["custom_css_file"]
+
+    # The .css file is copied into the build directory by basename.
+    assert (docs.project_path / css_file).exists(), (
+        f"{css_file!r} should be copied into the build dir {docs.project_path}"
+    )
+
+    # _quarto.yml references the CSS by basename.
+    quarto_yml = docs.project_path / "_quarto.yml"
+
+    assert quarto_yml.exists(), "_quarto.yml was not created"
+
+    with open(quarto_yml, encoding="utf-8") as f:
+        config = read_yaml(f)
+
+    assert css_file in (config.get("format", {}).get("html", {}).get("css") or []), (
+        f"Expected {css_file!r} in _quarto.yml format.html.css, "
+        f"got {config.get('format', {}).get('html', {}).get('css')!r}"
+    )
+
+
+@pytest.mark.parametrize("pkg_name", _AVAILABLE_PACKAGES)
 def test_L3_blended_homepage_index_content(pkg_name: str, tmp_path: Path):
     """In blended mode, index.qmd contains first UG page content + metadata sidebar."""
     pkg_dir, spec = _make_package(pkg_name, tmp_path)
