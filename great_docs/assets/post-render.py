@@ -4735,6 +4735,44 @@ print("##GD:PASS:Markdown pages generated", flush=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# INJECT MARKDOWN ALTERNATE LINKS
+# ══════════════════════════════════════════════════════════════════════════════
+# Add <link rel="alternate" type="text/markdown"> to HTML pages that have a
+# corresponding .md companion, so AI agents can discover the Markdown variant.
+
+if _gd_options.get("markdown_pages", True):
+    print("\nInjecting Markdown alternate links...")
+    _md_alt_count = 0
+    for html_file in glob.glob("_site/**/*.html", recursive=True):
+        md_companion = html_file.rsplit(".", 1)[0] + ".md"
+        if not os.path.isfile(md_companion):
+            continue
+        try:
+            with open(html_file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Skip if already has a markdown alternate link
+            if 'rel="alternate" type="text/markdown"' in content:
+                continue
+
+            # Build the href (just the filename — same directory)
+            md_basename = os.path.basename(md_companion)
+            alt_tag = f'<link rel="alternate" type="text/markdown" href="{md_basename}">'
+            modified = content.replace("</head>", f"  {alt_tag}\n</head>", 1)
+
+            if modified != content:
+                with open(html_file, "w", encoding="utf-8") as f:
+                    f.write(modified)
+                _md_alt_count += 1
+        except Exception as e:
+            print(f"  Error injecting md alternate for {html_file}: {e}")
+
+    if _md_alt_count > 0:
+        print(f"   Injected alternate links in {_md_alt_count} page(s)")
+print("##GD:PASS:Markdown alternate links injected", flush=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # STRIP COLGROUP TAGS FROM TABLES
 # ══════════════════════════════════════════════════════════════════════════════
 # Remove <colgroup> tags so browsers determine column widths based on content.
