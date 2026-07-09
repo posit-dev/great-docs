@@ -157,6 +157,8 @@ _great_docs_build/
 # Build artifacts that may land at repo root (e.g. from direct Builder calls)
 /objects.json
 /reference/
+*.onnx
+.piper-voices/en_US-amy-medium.onnx.json
 
 # Integration test packages (external repos for testing)
 test-packages/*/
