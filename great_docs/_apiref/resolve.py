@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any, Callable, cast
 import griffe as gf
 from yaml12 import format_yaml
 
+from great_docs.hooks._object_resolved import emit_object_resolved
+
 from ._walkable import MISSING, MissingType, Walkable
 from .content import Doc, Link, MemberPage, Page, Section, Text
 from .introspect import resolve_alias
@@ -241,7 +243,11 @@ class _Resolver:
     def _resolve_section(self, el: SpecSection) -> Section:
         """Rebuild a top-level `spec` section with each entry wrapped in a `Page`"""
         with self._scoped(package=el.package, options=el.options):
-            contents: list[Any] = [self._resolve_entry(entry) for entry in el.contents]
+            contents: list[Any] = [
+                resolved
+                for entry in el.contents
+                if (resolved := self._resolve_entry(entry)) is not None
+            ]
 
         return Section(
             kind=el.kind,
@@ -251,15 +257,17 @@ class _Resolver:
             contents=contents,
         )
 
-    def _resolve_entry(self, el: SpecEntry) -> Page | Text:
+    def _resolve_entry(self, el: SpecEntry) -> Page | Text | None:
         """
         Rebuild a single section entry as its resolved `content` counterpart
 
         A documented object becomes its own single-object `Page`; a free-text
-        block stays inline as a `Text`.
+        block stays inline as a `Text`. A skipped object yields `None`.
         """
         if isinstance(el, SpecObject):
             doc = self._resolve_object(el)
+            if doc is None:
+                return None
             return Page(contents=cast("list[Any]", [doc]), path=doc.name)
         if isinstance(el, SpecText):
             return self._resolve_text(el)
@@ -269,14 +277,14 @@ class _Resolver:
         """Rebuild a `spec` free-text block as a `content.Text`"""
         return Text(kind=el.kind, contents=el.contents)
 
-    def _resolve_object(self, el: SpecObject) -> Doc:
-        """Locate a `SpecObject` in griffe and rebuild it as a concrete `Doc`"""
+    def _resolve_object(self, el: SpecObject) -> Doc | None:
+        """Resolve a `SpecObject` to a concrete `Doc`, or skip it"""
         # A member `SpecObject` carries its parent's path as `package`; adopt it
         # so the member's full path is computed relative to the parent.
         with self._scoped(package=el.package):
             return self._resolve_documented_object(el)
 
-    def _resolve_documented_object(self, el: SpecObject) -> Doc:
+    def _resolve_documented_object(self, el: SpecObject) -> Doc | None:
         """Locate the subject object in griffe and rebuild it with its resolved members"""
         path = _join_path(self.current_package, el.name)
 
@@ -289,6 +297,9 @@ class _Resolver:
 
         # The subject object being documented (the class/module/function itself).
         obj = self.get_object_or_raise(path, dynamic=dynamic)
+        obj = emit_object_resolved(obj)
+        if obj is None:
+            return None
         children = self._resolve_members(el, obj, path=path, dynamic=dynamic)
 
         return Doc.from_griffe(
@@ -322,6 +333,8 @@ class _Resolver:
                 .with_defaults(member_defaults)
             )
             member_doc = self._resolve_object(member_spec)
+            if member_doc is None:
+                continue
             # A doc resolved from griffe always carries its object.
             member_obj = member_doc.obj
 
