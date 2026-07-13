@@ -8775,6 +8775,12 @@ class GreatDocs:
         import contextlib
         import io
         import sys
+        from types import ModuleType
+
+        added_paths: list[str] = []
+        cached_modules: dict[str, ModuleType] = {}
+        modules_evicted = False
+        importable_name = self._normalize_package_name(package_name)
 
         try:
             # Suppress diagnostic prints from the resolution/filtering pipeline — this is a
@@ -8788,18 +8794,19 @@ class GreatDocs:
             # a src-layout dev checkout) can still be found, then restore it.
             added_paths = [str(p) for p in self._griffe_search_paths() if str(p) not in sys.path]
             sys.path[:0] = added_paths
-            importable_name = self._normalize_package_name(package_name)
             # Drop any cached import of the package (and its submodules) so dynamic
             # resolution reflects what's on disk *now* — not a stale module object
             # left in `sys.modules` by an earlier call in this process (e.g. a
-            # different git-tag checkout during a versioned-snapshot loop). Deliberately
-            # NOT restored in `finally`: the point is a clean slate for the *next* call.
-            for key in [
+            # different git-tag checkout during a versioned-snapshot loop).
+            module_keys = [
                 k
                 for k in sys.modules
                 if k == importable_name or k.startswith(f"{importable_name}.")
-            ]:
+            ]
+            cached_modules = {key: sys.modules[key] for key in module_keys}
+            for key in module_keys:
                 del sys.modules[key]
+            modules_evicted = True
             with (
                 contextlib.redirect_stdout(io.StringIO()),
                 contextlib.redirect_stderr(io.StringIO()),
@@ -8808,6 +8815,7 @@ class GreatDocs:
                 if not sections:
                     return []
                 from great_docs._apiref.api_reference import APIReference
+                from great_docs._apiref.resolve import ObjectNotFoundError
 
                 # In `dynamic` mode, resolving `documented_symbols` below performs a real
                 # import of the target package (executing its top-level code). The
@@ -8825,9 +8833,20 @@ class GreatDocs:
                         }
                     }
                 )
-                return ref.documented_symbols
+                try:
+                    return ref.documented_symbols
+                except (ObjectNotFoundError, ImportError, AttributeError):
+                    return []
         finally:
             self._suppress_artifact_writes = False
+            if modules_evicted:
+                for key in [
+                    k
+                    for k in sys.modules
+                    if k == importable_name or k.startswith(f"{importable_name}.")
+                ]:
+                    del sys.modules[key]
+                sys.modules.update(cached_modules)
             for p in added_paths:
                 if p in sys.path:
                     sys.path.remove(p)
