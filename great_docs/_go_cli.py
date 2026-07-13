@@ -323,6 +323,7 @@ def _extract_cobra_commands(
     binary_path: Path,
     name: str,
     parent_args: list[str] | None = None,
+    display_path: str | None = None,
 ) -> dict | None:
     """Recursively extract the command tree from a Cobra CLI binary.
 
@@ -347,6 +348,7 @@ def _extract_cobra_commands(
         Parsed command structure, or ``None`` on timeout/error.
     """
     args_list = parent_args or []
+    node_display = display_path or name
     cmd_args = [str(binary_path)] + args_list + ["--help"]
 
     try:
@@ -361,7 +363,7 @@ def _extract_cobra_commands(
     except (subprocess.TimeoutExpired, OSError):
         return None
 
-    return _parse_cobra_help(help_text, name, binary_path, args_list)
+    return _parse_cobra_help(help_text, name, binary_path, args_list, node_display)
 
 
 def _parse_cobra_help(
@@ -369,10 +371,11 @@ def _parse_cobra_help(
     name: str,
     binary_path: Path,
     parent_args: list[str],
+    display_path: str | None = None,
 ) -> dict:
-    """Parse the output of ``<binary> [subcommand...] --help``.
+    """Parse the output of `<binary> [subcommand...] --help`.
 
-    Cobra's help format is::
+    Cobra's help format is:
 
         <description paragraph(s)>
 
@@ -388,8 +391,8 @@ def _parse_cobra_help(
 
         Use "<binary> [command] --help" for more information.
 
-    When command groups are defined the section shows group labels before
-    the commands indented by an extra two spaces.
+    When command groups are defined the section shows group labels before the commands indented by
+    an extra two spaces.
     """
     lines = help_text.splitlines()
 
@@ -405,7 +408,7 @@ def _parse_cobra_help(
 
     # Parse sections
     subcommand_names: list[tuple[str, str]] = []
-    flags: list[str] = []
+    flags: list[dict] = []
     current_section = ""
 
     for line in lines:
@@ -428,31 +431,52 @@ def _parse_cobra_help(
 
         elif current_section in ("Flags", "Global Flags", "Persistent Flags"):
             if stripped.startswith("-"):
-                flags.append(stripped)
+                parsed = _parse_cobra_flag(stripped)
+                if parsed:
+                    flags.append(parsed)
+
+    # full_path for this node — use the explicitly passed display_path when
+    # available so that subcommand pages show "hello greet" not "greet greet".
+    node_full_path = display_path or name
 
     # Recursively introspect subcommands
     commands: list[dict] = []
     for cmd_name, cmd_short in subcommand_names:
         sub_args = parent_args + [cmd_name]
-        sub_info = _extract_cobra_commands(binary_path, cmd_name, sub_args)
+        sub_display = f"{node_full_path} {cmd_name}"
+        sub_info = _extract_cobra_commands(binary_path, cmd_name, sub_args, sub_display)
         commands.append(
             sub_info
             if sub_info is not None
             else {
                 "name": cmd_name,
+                "full_path": sub_display,
                 "help": cmd_short,
                 "short_help": cmd_short,
                 "help_text": "",
+                "description": cmd_short,
+                "examples": "",
                 "commands": [],
                 "options": [],
+                "arguments": [],
+                "is_group": False,
+                "deprecated": False,
+                "hidden": False,
             }
         )
 
     return {
         "name": name,
+        "full_path": node_full_path,
         "help": description,
         "short_help": description[:80] if description else "",
         "help_text": help_text,
+        "description": description,
+        "examples": "",
         "commands": commands,
         "options": flags,
+        "arguments": [],
+        "is_group": bool(subcommand_names),
+        "deprecated": False,
+        "hidden": False,
     }
