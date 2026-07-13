@@ -112,3 +112,17 @@ def test_importing_great_docs_registers_builtin_handlers():
         """
     )
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_resolve_drops_section_left_empty_by_nodoc(tmp_path, monkeypatch):
+    pkg = tmp_path / "gdempty"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("from gdempty.mod import Hidden\n__all__ = ['Hidden']\n")
+    (pkg / "mod.py").write_text('class Hidden:\n    """Internal.\n\n    %nodoc\n    """\n')
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    from great_docs._apiref import spec
+    from great_docs._apiref.resolve import resolve
+
+    sections = [spec.SpecSection(title="Only", contents=["Hidden"])]
+    assert resolve(sections, package="gdempty") == []

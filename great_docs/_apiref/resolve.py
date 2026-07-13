@@ -211,8 +211,14 @@ class _Resolver:
         return new
 
     def resolve_sections(self, sections: list[SpecSection]) -> list[Section]:
-        """Resolve the `spec` sections into `content.Section`s"""
-        return [self._resolve_section(s) for s in sections]
+        """Resolve the `spec` sections into `content.Section`s, dropping any left empty
+
+        A section whose entries all resolve away (e.g. every entry is `%nodoc`)
+        carries no documentation and is omitted, matching the pre-existing
+        config-level behavior.
+        """
+        resolved = [self._resolve_section(s) for s in sections]
+        return [section for section in resolved if section.contents]
 
     @contextmanager
     def _scoped(
