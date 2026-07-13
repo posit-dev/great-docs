@@ -219,6 +219,105 @@ _COMMAND_LINE_RE = re.compile(r"^\s{1,8}(\S+)\s{2,}(.*)$")
 # Built-in cobra meta-commands that are not worth documenting
 _COBRA_BUILTIN_COMMANDS = frozenset({"completion", "help"})
 
+# Go type tokens that appear between the flag name and its description.
+# cobra prints e.g. "--flag string   description" or "--flag int   description".
+_GO_FLAG_TYPES = frozenset(
+    {
+        "string",
+        "int",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "float32",
+        "float64",
+        "bool",
+        "duration",
+        "count",
+        "stringArray",
+        "stringSlice",
+        "intSlice",
+    }
+)
+
+# Pattern: optional short flag, long flag, optional type token, description.
+# Examples:
+#   -h, --help              help for root
+#   -n, --name string       name to greet (default "World")
+#   --config string         config file (default: hello.toml)
+#       --verbose           enable verbose output
+_FLAG_RE = re.compile(
+    r"^\s*"
+    r"(?:(-\w),\s*)?"  # optional short flag
+    r"(--[\w-]+)"  # long flag (required)
+    r"(?:\s+(\S+))?"  # optional type token
+    r"\s{2,}"  # separator (≥2 spaces)
+    r"(.*)"  # description
+)
+_DEFAULT_PARENS_RE = re.compile(r"\(default[:\s]+[\"']?([^\"')]+)[\"']?\)\s*$")
+
+
+def _parse_cobra_flag(raw: str) -> dict | None:
+    """Parse a single cobra flag line into a dict compatible with Click's option format.
+
+    Parameters
+    ----------
+    raw
+        A single flag line from `--help` output, e.g.
+        "`-n, --name string   name to greet (default \"World\")`"
+
+    Returns
+    -------
+    dict | None
+        Option dict with keys `names`, `name_display`, `type`, `help`, `default`, `is_flag`,
+        `required`, `hidden`; or `None` if the line could not be parsed.
+    """
+    m = _FLAG_RE.match(raw)
+    if not m:
+        return None
+
+    short, long_name, maybe_type, description = m.group(1), m.group(2), m.group(3), m.group(4)
+
+    # Determine whether maybe_type is actually a type token or part of the description
+    if maybe_type and maybe_type.lower() in _GO_FLAG_TYPES:
+        flag_type: str | None = maybe_type
+    else:
+        # Not a type token — treat it as part of the description
+        flag_type = None
+        if maybe_type:
+            description = f"{maybe_type}  {description}".strip()
+
+    is_flag = flag_type is None or flag_type == "bool"
+
+    # Extract default value from description
+    default: str | None = None
+    dm = _DEFAULT_PARENS_RE.search(description)
+    if dm:
+        default = dm.group(1).strip()
+        description = description[: dm.start()].strip()
+
+    # Build names list and display string
+    names = [long_name]
+    if short:
+        names.insert(0, short)
+    name_display = ", ".join(names)
+
+    return {
+        "names": names,
+        "name_display": name_display,
+        "type": flag_type,
+        "help": description.strip(),
+        "default": default,
+        "is_flag": is_flag,
+        "required": False,
+        "hidden": False,
+    }
+
 
 def _extract_cobra_commands(
     binary_path: Path,
