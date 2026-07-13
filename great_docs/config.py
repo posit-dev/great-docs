@@ -642,6 +642,15 @@ class Config:
         return []
 
     @property
+    def go_cli_enabled(self) -> bool:
+        """Check if Go CLI documentation is enabled.
+
+        When `True`, great-docs will detect the Go CLI project at the package root, compile it, and
+        extract the command tree via `--help` to generate a CLI reference section.
+        """
+        return self.get("go_cli.enabled", False)
+
+    @property
     def mcp_enabled(self) -> bool:
         """Check if MCP server documentation is enabled."""
         return self.get("mcp.enabled", False)
