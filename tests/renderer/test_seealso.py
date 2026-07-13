@@ -38,6 +38,21 @@ def test_seealso_only_injects_section():
     assert section.value.contents == "foo : does foo\nbar"
 
 
+def test_bare_seealso_does_not_consume_following_content():
+    obj = _obj(
+        """
+        Summary.
+
+        %seealso
+        Important prose.
+        """
+    )
+    add_seealso(obj)
+
+    assert "%seealso" not in obj.docstring.value
+    assert "Important prose." in obj.docstring.value
+
+
 def test_seealso_merges_into_native_and_dedups():
     obj = _obj(
         """
