@@ -207,7 +207,8 @@ class _Resolver:
         return new
 
     def resolve_sections(self, sections: list[SpecSection]) -> list[Section]:
-        """Resolve the `spec` sections into `content.Section`s, dropping any left empty
+        """
+        Resolve the `spec` sections into `content.Section`s, dropping any left empty
 
         A section whose entries all resolve away (e.g. every entry is `%nodoc`)
         carries no documentation and is omitted, matching the pre-existing

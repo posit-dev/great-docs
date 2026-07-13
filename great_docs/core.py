@@ -8777,27 +8777,30 @@ class GreatDocs:
         import io
         import sys
 
-        # Suppress diagnostic prints from the resolution/filtering pipeline — this is a
-        # programmatic query method and its callers own their own output streams.
-        # `_suppress_artifact_writes` additionally prevents the pipeline from writing
-        # `_object_types.json` (and its sidecar) into the project root.
-        self._suppress_artifact_writes = True
-        # `APIReference` loads the package through a plain griffe loader (sys.path-based),
-        # unlike `_create_api_sections_with_config`'s own loader, which is handed explicit
-        # search paths. Temporarily extend sys.path so a package that isn't installed (e.g.
-        # a src-layout dev checkout) can still be found, then restore it.
-        added_paths = [str(p) for p in self._griffe_search_paths() if str(p) not in sys.path]
-        sys.path[:0] = added_paths
-        importable_name = self._normalize_package_name(package_name)
-        # Drop any cached import of the package (and its submodules) so dynamic
-        # resolution reflects what's on disk *now* — not a stale module object
-        # left in `sys.modules` by an earlier call in this process (e.g. a
-        # different git-tag checkout during a versioned-snapshot loop).
-        for key in [
-            k for k in sys.modules if k == importable_name or k.startswith(f"{importable_name}.")
-        ]:
-            del sys.modules[key]
         try:
+            # Suppress diagnostic prints from the resolution/filtering pipeline — this is a
+            # programmatic query method and its callers own their own output streams.
+            # `_suppress_artifact_writes` additionally prevents the pipeline from writing
+            # `_object_types.json` (and its sidecar) into the project root.
+            self._suppress_artifact_writes = True
+            # `APIReference` loads the package through a plain griffe loader (sys.path-based),
+            # unlike `_create_api_sections_with_config`'s own loader, which is handed explicit
+            # search paths. Temporarily extend sys.path so a package that isn't installed (e.g.
+            # a src-layout dev checkout) can still be found, then restore it.
+            added_paths = [str(p) for p in self._griffe_search_paths() if str(p) not in sys.path]
+            sys.path[:0] = added_paths
+            importable_name = self._normalize_package_name(package_name)
+            # Drop any cached import of the package (and its submodules) so dynamic
+            # resolution reflects what's on disk *now* — not a stale module object
+            # left in `sys.modules` by an earlier call in this process (e.g. a
+            # different git-tag checkout during a versioned-snapshot loop). Deliberately
+            # NOT restored in `finally`: the point is a clean slate for the *next* call.
+            for key in [
+                k
+                for k in sys.modules
+                if k == importable_name or k.startswith(f"{importable_name}.")
+            ]:
+                del sys.modules[key]
             with (
                 contextlib.redirect_stdout(io.StringIO()),
                 contextlib.redirect_stderr(io.StringIO()),
@@ -8807,6 +8810,12 @@ class GreatDocs:
                     return []
                 from great_docs._apiref.api_reference import APIReference
 
+                # In `dynamic` mode, resolving `documented_symbols` below performs a real
+                # import of the target package (executing its top-level code). The
+                # `sys.modules` eviction above only refreshes the target package's own
+                # modules, not third-party packages it imports — so a same-process loop
+                # over different checkouts can still see third-party global-state
+                # carryover (e.g. module-level caches or singletons).
                 ref = APIReference(
                     {
                         "api-reference": {
