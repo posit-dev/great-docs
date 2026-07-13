@@ -1,8 +1,7 @@
 """Go CLI project detection and introspection.
 
-Handles detection of Go-based CLI projects (cobra/urfave) and extraction of
-their command structure via the ``--help`` interface.  Entirely decoupled from
-the Python-package detection code in ``core.py``.
+Handles detection of Go-based CLI projects (cobra/urfave) and extraction of their command structure
+via the `--help` interface. Entirely decoupled from the Python-package detection code in `core.py`.
 """
 
 from __future__ import annotations
@@ -28,9 +27,9 @@ class GoCliProject:
 def detect_go_cli_project(project_root: Path) -> GoCliProject | None:
     """Detect whether *project_root* is a documentable Go CLI project.
 
-    A project is considered documentable when it has a ``go.mod`` at the root
-    and at least one *main* package (i.e. a ``main.go`` entry-point).  The
-    check is purely file-system based and never invokes the compiler.
+    A project is considered documentable when it has a `go.mod` at the root and at least one *main*
+    package (i.e. a `main.go` entry-point). The check is purely file-system based and never invokes
+    the compiler.
 
     Parameters
     ----------
@@ -40,8 +39,7 @@ def detect_go_cli_project(project_root: Path) -> GoCliProject | None:
     Returns
     -------
     GoCliProject | None
-        Detected project info, or ``None`` if the directory is not a Go CLI
-        project.
+        Detected project info, or `None` if the directory is not a Go CLI project.
     """
     go_mod = project_root / "go.mod"
     if not go_mod.exists():
@@ -70,7 +68,7 @@ def detect_go_cli_project(project_root: Path) -> GoCliProject | None:
 
 
 def _parse_go_module_path(go_mod: Path) -> str | None:
-    """Return the module path declared in *go_mod*, e.g. ``"github.com/user/repo"``."""
+    """Return the module path declared in *go_mod*, e.g. `"github.com/user/repo"`."""
     try:
         for line in go_mod.read_text(encoding="utf-8").splitlines():
             m = re.match(r"^module\s+(\S+)", line)
@@ -89,9 +87,9 @@ def _find_go_main_package(
 
     Search order (standard Go project layouts):
 
-    1. ``cmd/<name>/main.go``  – multi-binary layout (most common for CLIs)
-    2. ``cmd/main.go``         – single binary under ``cmd/``
-    3. ``main.go``             – flat layout
+    1. `cmd/<name>/main.go`: multi-binary layout (most common for CLIs)
+    2. `cmd/main.go`: single binary under `cmd/`
+    3. `main.go`: flat layout
 
     Parameters
     ----------
@@ -103,9 +101,8 @@ def _find_go_main_package(
     Returns
     -------
     tuple[str, str]
-        ``(relative_import_path, binary_name)``, e.g.
-        ``("./cmd/velocirepo", "velocirepo")``.  Returns ``("", "")`` when no
-        main package is found.
+        `(relative_import_path, binary_name)`, e.g. `("./cmd/velocirepo", "velocirepo")`. Returns
+        `("", "")` when no main package is found.
     """
     default_binary = module_path.rsplit("/", 1)[-1]
 
@@ -127,7 +124,7 @@ def _find_go_main_package(
 
 
 def _uses_cobra(go_mod: Path) -> bool:
-    """Return ``True`` when ``go.mod`` lists ``github.com/spf13/cobra``."""
+    """Return `True` when `go.mod` lists `github.com/spf13/cobra`."""
     try:
         return "github.com/spf13/cobra" in go_mod.read_text(encoding="utf-8")
     except OSError:
@@ -145,20 +142,20 @@ def build_go_binary(
 ) -> Path | None:
     """Compile the Go CLI to a binary.
 
-    Requires ``go`` to be on ``PATH``.
+    Requires `go` to be on `PATH`.
 
     Parameters
     ----------
     go_project
         The detected Go CLI project.
     output_dir
-        Directory for the output binary.  Defaults to a fresh ``tempfile``
-        directory so the project tree is never modified.
+        Directory for the output binary. Defaults to a fresh `tempfile` directory so the project
+        tree is never modified.
 
     Returns
     -------
     Path | None
-        Path to the compiled binary, or ``None`` if the build failed.
+        Path to the compiled binary, or `None` if the build failed.
     """
     if output_dir is None:
         output_dir = Path(tempfile.mkdtemp(prefix="great-docs-go-"))
@@ -189,9 +186,8 @@ def build_go_binary(
 def introspect_cobra_cli(go_project: GoCliProject) -> dict | None:
     """Build and run a Cobra CLI to extract its command structure.
 
-    The returned dict mirrors the shape that ``_discover_click_cli`` produces
-    in ``core.py``, making it straightforward to reuse the existing
-    page-generation helpers.
+    The returned dict mirrors the shape that `_discover_click_cli` produces in `core.py`, making it
+    straightforward to reuse the existing page-generation helpers.
 
     Parameters
     ----------
@@ -201,7 +197,7 @@ def introspect_cobra_cli(go_project: GoCliProject) -> dict | None:
     Returns
     -------
     dict | None
-        CLI structure, or ``None`` if the binary could not be built or run.
+        CLI structure, or `None` if the binary could not be built or run.
     """
     binary_path = build_go_binary(go_project)
     if not binary_path:
