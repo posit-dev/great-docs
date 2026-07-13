@@ -144,6 +144,7 @@ SPEC = {
     # ── great-docs config ─────────────────────────────────────────────────────
     # Providing config here means `great-docs init` is skipped; only `build` runs.
     "config": {
+        "project_type": "go",
         "go_cli": {
             "enabled": True,
         },
