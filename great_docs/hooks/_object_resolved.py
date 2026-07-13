@@ -2,8 +2,8 @@
 The `object_resolved` event — emitted per object once its reference resolves to a griffe object
 
 A registered handler receives the resolved object and returns it (optionally
-annotated or replaced), or `None` to skip it, before `resolve` builds its `Doc`.
-great-docs registers its own built-in handlers here.
+annotated or replaced), or `None` to skip it, before the API-reference resolver
+builds its `Doc`. great-docs registers its own built-in handlers here.
 """
 
 from __future__ import annotations

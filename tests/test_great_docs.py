@@ -122,7 +122,6 @@ from great_docs._apiref._type_checks import (
     is_doc_function,
 )
 from great_docs._apiref.resolve import (
-    resolve,
     ObjectNotFoundError,
     _Resolver,
     _sections_from_package,
@@ -28551,7 +28550,7 @@ def test_api_reference_generate_sidebar_basic():
                     }
                 }
             )
-            resolved = resolve(ref.sections, package=ref.package, settings=ref.settings)
+            resolved = ref.resolved
 
             sidebar = write._generate_sidebar(
                 resolved,

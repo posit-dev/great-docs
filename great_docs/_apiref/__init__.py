@@ -20,7 +20,6 @@ from .api_reference import APIReference
 from .collect import build_manifest, remove_package_prefix
 from .introspect import get_object
 from .inventory import create_inventory, write_inventory
-from .resolve import resolve
 from .spec import SpecObject
 
 __all__ = (
@@ -40,7 +39,6 @@ __all__ = (
     "exclude_parameters",
     "get_object",
     "APIReference",
-    "resolve",
     "remove_package_prefix",
     "build_manifest",
     "create_inventory",

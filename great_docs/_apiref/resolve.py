@@ -386,7 +386,9 @@ class _Resolver:
             candidates = {k: v for k, v in candidates.items() if not v.is_alias}
 
         if not el.include_inherited and obj.is_class:
-            candidates = {k: v for k, v in candidates.items() if (v.parent is obj or not v.is_alias)}
+            candidates = {
+                k: v for k, v in candidates.items() if (v.parent is obj or not v.is_alias)
+            }
 
         # Load every remaining alias target now: the phase-2 filters read
         # `.docstring` / `.is_attribute` / `.is_class` / `.is_function`,
@@ -419,21 +421,6 @@ class _Resolver:
             return list(candidates)
         else:
             raise ValueError(f"Unsupported value of member_order: {el.member_order}")
-
-
-def resolve(
-    sections: list[SpecSection],
-    *,
-    package: str | None = None,
-    settings: Settings | None = None,
-) -> list[Section]:
-    """Resolve the `spec` tree into sections ready for rendering"""
-    r = _Resolver(settings)
-    if package is not None:
-        r.current_package = package
-    if not sections:
-        sections = _autogenerate_sections(r, package)
-    return r.resolve_sections(sections)
 
 
 def _autogenerate_sections(r: _Resolver, package: str | None) -> list[SpecSection]:

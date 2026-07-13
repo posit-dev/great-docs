@@ -8756,12 +8756,11 @@ class GreatDocs:
 
         Each stem names one published reference page: a top-level class or
         function, a submodule-qualified class (`scores.CosineScore`), or a
-        method (`scores.CosineScore.fit`). The set is exactly what `resolve`
-        documents for the rendered reference — top-level objects and their
-        documented members, `%nodoc` excluded — whether from an explicit
-        `reference:` config or auto-discovery, so a versioned snapshot and the
-        live build describe the same API surface. Empty when the package
-        documents nothing.
+        method (`scores.CosineScore.fit`). The set matches the rendered
+        reference — top-level objects and their documented members, `%nodoc`
+        excluded — whether from an explicit `reference:` config or
+        auto-discovery, so a versioned snapshot and the live build describe the
+        same API surface. Empty when the package documents nothing.
 
         Parameters
         ----------

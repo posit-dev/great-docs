@@ -3,8 +3,8 @@ Resolved (output) shapes of the API-reference tree
 
 Every class here is the fully-built, resolved counterpart of a `spec`
 input node: a `Section` here holds rendered `Page`/`Doc` objects rather than
-raw YAML, and so on down the tree. Produced by `resolve` from the input
-family defined in `spec.py`; consumed by `collect` and `write`.
+raw YAML, and so on down the tree. Produced by the API-reference resolver from
+the input family defined in `spec.py`; consumed by `collect` and `write`.
 """
 
 from __future__ import annotations
