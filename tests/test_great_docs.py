@@ -29,7 +29,7 @@ from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
 from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
 
 from great_docs import Config, create_default_config, GreatDocs, load_config
-from great_docs._directives import DocDirectives, extract_directives
+from great_docs._directives import extract_directives
 from great_docs._apiref import _globals
 from great_docs._apiref import content
 from great_docs._apiref import spec
@@ -11805,105 +11805,6 @@ def test_process_user_guide_with_sections():
         assert len(section_items) >= 1
 
 
-def test_apply_nodoc_filter_removes_items():
-    """_apply_nodoc_filter removes items with %nodoc directive."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "great_docs"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [
-            {"title": "Functions", "contents": ["func_a", "func_b"]},
-        ]
-
-        # Patch _extract_all_directives to return nodoc for func_b
-
-        mock_directives = MagicMock()
-        mock_directives.nodoc = True
-
-        with patch.object(
-            docs, "_extract_all_directives", return_value={"func_b": mock_directives}
-        ):
-            result = docs._apply_nodoc_filter("great_docs", sections)
-
-        assert result is not None
-        assert len(result) == 1
-        assert result[0]["contents"] == ["func_a"]
-
-
-def test_apply_nodoc_filter_no_directives_empty():
-    """_apply_nodoc_filter returns sections unchanged when no directives."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [{"title": "Funcs", "contents": ["f1", "f2"]}]
-
-        with patch.object(docs, "_extract_all_directives", return_value={}):
-            result = docs._apply_nodoc_filter("pkg", sections)
-
-        assert result == sections
-
-
-def test_apply_nodoc_filter_removes_companion_section():
-    """_apply_nodoc_filter removes companion 'ClassName Methods' section."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [
-            {"title": "Classes", "contents": ["MyClass"]},
-            {"title": "MyClass Methods", "contents": ["MyClass.foo", "MyClass.bar"]},
-        ]
-
-        mock_dir = MagicMock()
-        mock_dir.nodoc = True
-        with patch.object(docs, "_extract_all_directives", return_value={"MyClass": mock_dir}):
-            result = docs._apply_nodoc_filter("pkg", sections)
-
-        # Both the class entry and the companion method section should be gone
-        assert result is None
-
-
-def test_apply_nodoc_filter_all_excluded_no_remaining():
-    """_apply_nodoc_filter returns None when all items excluded."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [{"title": "Funcs", "contents": ["only_func"]}]
-
-        mock_dir = MagicMock()
-        mock_dir.nodoc = True
-        with patch.object(docs, "_extract_all_directives", return_value={"only_func": mock_dir}):
-            result = docs._apply_nodoc_filter("pkg", sections)
-
-        assert result is None
-
-
-def test_apply_nodoc_filter_dict_items():
-    """_apply_nodoc_filter handles dict items (name/members format)."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [
-            {
-                "title": "Classes",
-                "contents": [
-                    {"name": "Good", "members": []},
-                    {"name": "Bad", "members": []},
-                ],
-            }
-        ]
-
-        mock_dir = MagicMock()
-        mock_dir.nodoc = True
-        with patch.object(docs, "_extract_all_directives", return_value={"Bad": mock_dir}):
-            result = docs._apply_nodoc_filter("pkg", sections)
-
-        assert len(result) == 1
-        assert len(result[0]["contents"]) == 1
-        assert result[0]["contents"][0]["name"] == "Good"
-
-
 def test_generate_user_guide_sidebar_explicit():
     """_generate_user_guide_sidebar_explicit builds sidebar from config."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -16454,8 +16355,7 @@ def test_create_api_sections_with_config_uses_explicit():
         with patch.object(
             docs, "_create_api_sections_from_config", return_value=fake_config_sections
         ):
-            with patch.object(docs, "_apply_nodoc_filter", side_effect=lambda pkg, s: s):
-                result = docs._create_api_sections_with_config("mypkg")
+            result = docs._create_api_sections_with_config("mypkg")
 
         assert result == fake_config_sections
 
@@ -16469,8 +16369,7 @@ def test_create_api_sections_with_config_falls_back():
         fake_auto_sections = [{"title": "Auto", "contents": ["B"]}]
         with patch.object(docs, "_create_api_sections_from_config", return_value=None):
             with patch.object(docs, "_create_api_sections", return_value=fake_auto_sections):
-                with patch.object(docs, "_apply_nodoc_filter", side_effect=lambda pkg, s: s):
-                    result = docs._create_api_sections_with_config("mypkg")
+                result = docs._create_api_sections_with_config("mypkg")
 
         assert result == fake_auto_sections
 
@@ -17232,86 +17131,6 @@ def test_build_sections_from_reference_config_dict_no_name():
         assert result is not None
         assert len(result[0]["contents"]) == 1
         assert result[0]["contents"][0] == "Valid"
-
-
-def test_apply_nodoc_filter_no_directives():
-    """Test _apply_nodoc_filter passes through when no directives found."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [{"title": "API", "contents": ["A", "B"]}]
-        with patch.object(docs, "_extract_all_directives", return_value={}):
-            result = docs._apply_nodoc_filter("mypkg", sections)
-        assert result == sections
-
-
-def test_apply_nodoc_filter_removes_nodoc_items():
-    """Test _apply_nodoc_filter removes items marked with %nodoc."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [
-            {"title": "Core", "contents": ["Widget", "Internal", "helper"]},
-        ]
-        # Mock directive map with Internal marked as %nodoc
-        mock_directives = MagicMock()
-        mock_directives.nodoc = True
-        normal_directives = MagicMock()
-        normal_directives.nodoc = False
-        directive_map = {"Internal": mock_directives, "Widget": normal_directives}
-
-        with patch.object(docs, "_extract_all_directives", return_value=directive_map):
-            result = docs._apply_nodoc_filter("mypkg", sections)
-
-        assert result is not None
-        assert len(result) == 1
-        assert "Widget" in result[0]["contents"]
-        assert "Internal" not in result[0]["contents"]
-        assert "helper" in result[0]["contents"]
-
-
-def test_apply_nodoc_filter_removes_companion_method_section():
-    """Test _apply_nodoc_filter removes companion method sections for %nodoc classes."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [
-            {"title": "Classes", "contents": ["MyClass", "OtherClass"]},
-            {"title": "MyClass Methods", "contents": ["MyClass.foo", "MyClass.bar"]},
-        ]
-        mock_nodoc = MagicMock()
-        mock_nodoc.nodoc = True
-        directive_map = {"MyClass": mock_nodoc}
-
-        with patch.object(docs, "_extract_all_directives", return_value=directive_map):
-            result = docs._apply_nodoc_filter("mypkg", sections)
-
-        assert result is not None
-        # MyClass Methods section should be removed
-        titles = [s["title"] for s in result]
-        assert "MyClass Methods" not in titles
-        # OtherClass should remain
-        assert "OtherClass" in result[0]["contents"]
-
-
-def test_apply_nodoc_filter_all_excluded():
-    """Test _apply_nodoc_filter returns None when all items are excluded."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [{"title": "API", "contents": ["A"]}]
-        mock_nodoc = MagicMock()
-        mock_nodoc.nodoc = True
-        directive_map = {"A": mock_nodoc}
-
-        with patch.object(docs, "_extract_all_directives", return_value=directive_map):
-            result = docs._apply_nodoc_filter("mypkg", sections)
-
-        assert result is None
 
 
 def test_extract_authors_from_pyproject_basic():
@@ -24879,66 +24698,6 @@ def test_discover_package_exports_auto_include_no_overlap():
             sys.path.remove(tmp_dir)
 
 
-def test_extract_all_directives_basic():
-    """Test _extract_all_directives finds directives in docstrings."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "dirpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "class MyClass:\n"
-            '    """A class.\n\n'
-            "    @seealso OtherClass\n"
-            '    """\n'
-            "    def method(self):\n"
-            '        """A method.\n\n'
-            "        @seealso another_func\n"
-            '        """\n'
-            "        pass\n",
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._extract_all_directives("dirpkg")
-
-            # Should find directives in MyClass and MyClass.method
-            assert isinstance(result, dict)
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_extract_all_directives_empty_package():
-    """Test _extract_all_directives returns empty dict for package without directives."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "nodirpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            'def func():\n    """A simple function."""\n    pass\n',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._extract_all_directives("nodirpkg")
-
-            assert isinstance(result, dict)
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_extract_all_directives_package_not_found():
-    """Test _extract_all_directives returns empty dict when package can't load."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._extract_all_directives("nonexistent_xyz999")
-        assert result == {}
-
-
 def test_find_package_init_with_pyproject_setuptools():
     """Test _find_package_init finds init via pyproject.toml setuptools packages."""
 
@@ -26785,40 +26544,6 @@ def test_detect_dynamic_mode_with_simple_package():
         finally:
             sys.path.remove(tmp_dir)
             sys.modules.pop("simpledynpkg", None)
-
-
-def test_extract_all_directives_with_class_methods():
-    """Test _extract_all_directives processes class methods."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "dirmethpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "class MyClass:\n"
-            '    """A class.\n\n'
-            "    @seealso Related\n"
-            '    """\n'
-            "    def method(self):\n"
-            '        """A method.\n\n'
-            "        @seealso other_func\n"
-            '        """\n'
-            "        pass\n"
-            "    def _private(self):\n"
-            '        """Private, should be skipped."""\n'
-            "        pass\n",
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._extract_all_directives("dirmethpkg")
-
-            # Should find directives but skip private methods
-            assert isinstance(result, dict)
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("dirmethpkg", None)
 
 
 def test_create_blended_index_creates_index():
@@ -36766,62 +36491,6 @@ class TestUpdateConfigWithUserGuide:
             ]
             assert len(ug_sidebars) == 1
             assert "Old" not in str(ug_sidebars[0])
-
-
-class TestApplyNodocFilter:
-    """Tests for _apply_nodoc_filter."""
-
-    def test_filters_nodoc_items(self):
-        """Removes items marked with %nodoc."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            sections = [
-                {"title": "Classes", "contents": ["MyClass", "InternalClass"]},
-            ]
-
-            with patch.object(
-                docs,
-                "_extract_all_directives",
-                return_value={
-                    "InternalClass": DocDirectives(nodoc=True),
-                },
-            ):
-                result = docs._apply_nodoc_filter("mypkg", sections)
-            assert result is not None
-            assert "InternalClass" not in result[0]["contents"]
-            assert "MyClass" in result[0]["contents"]
-
-    def test_filters_companion_method_section(self):
-        """Removes companion 'ClassName Methods' section when class is %nodoc."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            sections = [
-                {"title": "Classes", "contents": [{"name": "MyClass", "members": []}]},
-                {"title": "MyClass Methods", "contents": ["MyClass.method_a"]},
-            ]
-
-            with patch.object(
-                docs,
-                "_extract_all_directives",
-                return_value={
-                    "MyClass": DocDirectives(nodoc=True),
-                },
-            ):
-                result = docs._apply_nodoc_filter("mypkg", sections)
-            assert result is None  # Both sections filtered out
-
-    def test_returns_sections_when_no_directives(self):
-        """Returns sections unchanged when no directives found."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            sections = [{"title": "Classes", "contents": ["MyClass"]}]
-            with patch.object(docs, "_extract_all_directives", return_value={}):
-                result = docs._apply_nodoc_filter("mypkg", sections)
-            assert result == sections
 
 
 class TestGetSourceLocation:
