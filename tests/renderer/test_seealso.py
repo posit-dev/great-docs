@@ -38,6 +38,23 @@ def test_seealso_only_injects_section():
     assert section.value.contents == "foo : does foo\nbar"
 
 
+def test_multiple_seealso_directives_are_combined():
+    obj = _obj(
+        """
+        Summary.
+
+        %seealso foo : does foo
+        %seealso bar, baz : does baz
+        """
+    )
+    add_seealso(obj)
+
+    assert "%seealso" not in obj.docstring.value
+    section = _see_also(obj)
+    assert section is not None
+    assert section.value.contents == "foo : does foo\nbar\nbaz : does baz"
+
+
 def test_bare_seealso_does_not_consume_following_content():
     obj = _obj(
         """
@@ -51,6 +68,22 @@ def test_bare_seealso_does_not_consume_following_content():
 
     assert "%seealso" not in obj.docstring.value
     assert "Important prose." in obj.docstring.value
+
+
+def test_seealso_deduplicates_repeated_new_entries():
+    obj = _obj(
+        """
+        Summary.
+
+        %seealso foo : first, foo : second
+        %seealso bar, bar
+        """
+    )
+    add_seealso(obj)
+
+    section = _see_also(obj)
+    assert section is not None
+    assert section.value.contents == "foo : first\nbar"
 
 
 def test_seealso_merges_into_native_and_dedups():

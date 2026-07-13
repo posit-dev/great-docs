@@ -4,6 +4,8 @@ import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from ._utils import parse_seealso
+
 
 @dataclass
 class LintIssue:
@@ -280,8 +282,6 @@ def _check_cross_references(
     result: LintResult,
 ) -> None:
     """Check %seealso directives for broken cross-references."""
-    from ._directives import extract_directives
-
     # Build a set of all known public names (fully unqualified)
     known_names = set(exports)
 
@@ -307,8 +307,7 @@ def _check_cross_references(
         if not docstring:
             continue
 
-        directives = extract_directives(docstring)
-        for ref_name, _ in directives.seealso:
+        for ref_name, _ in parse_seealso(docstring):
             if ref_name not in known_names:
                 result.issues.append(
                     LintIssue(
@@ -328,8 +327,7 @@ def _check_cross_references(
                     member_doc = _get_docstring(member)
                     if not member_doc:  # pragma: no cover
                         continue
-                    member_directives = extract_directives(member_doc)
-                    for ref_name, _ in member_directives.seealso:
+                    for ref_name, _ in parse_seealso(member_doc):
                         if ref_name not in known_names:  # pragma: no cover
                             result.issues.append(
                                 LintIssue(
@@ -450,7 +448,6 @@ def _check_directive_consistency(
     result: LintResult,
 ) -> None:
     """Check for malformed or unknown directives in docstrings."""
-    from ._directives import extract_directives
 
     def _check_one(symbol: str, docstring: str) -> None:
         # Find all %-prefixed tokens in the docstring
@@ -466,19 +463,6 @@ def _check_directive_consistency(
                             f"Unknown directive '%{match.group(1)}'. "
                             f"Known directives: {', '.join(sorted('%' + d for d in _KNOWN_DIRECTIVES))}."
                         ),
-                    )
-                )
-
-        # Validate that %seealso entries are non-empty
-        directives = extract_directives(docstring)
-        for ref_name, _ in directives.seealso:
-            if not ref_name.strip():  # pragma: no cover
-                result.issues.append(
-                    LintIssue(
-                        check="empty-seealso",
-                        severity="warning",
-                        symbol=symbol,
-                        message="%%seealso contains an empty reference.",
                     )
                 )
 

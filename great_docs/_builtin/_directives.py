@@ -11,10 +11,10 @@ import re
 
 import griffe as gf
 
+from great_docs._utils import parse_seealso
 from great_docs.hooks import on_object_resolved
 
 _NODOC_RE = re.compile(r"^\s*%nodoc(?:\s+(true|yes|1))?\s*$", re.MULTILINE | re.IGNORECASE)
-_SEEALSO_RE = re.compile(r"^\s*%seealso\s+(.+?)\s*$", re.MULTILINE)
 _SEEALSO_LINE_RE = re.compile(
     r"^[^\S\r\n]*%seealso(?:[^\S\r\n]+[^\r\n]*)?[^\S\r\n]*\r?$\n?",
     re.MULTILINE,
@@ -74,7 +74,7 @@ def add_seealso(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias:
     docstring.value = cleaned
     docstring.__dict__.pop("parsed", None)
 
-    entries = _parse_seealso(value)
+    entries = parse_seealso(value)
     if not entries:
         return obj
 
@@ -97,27 +97,6 @@ def add_seealso(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias:
         sections.append(gf.DocstringSectionAdmonition(kind="see-also", text=body, title="See Also"))
 
     return obj
-
-
-def _parse_seealso(text: str) -> list[tuple[str, str]]:
-    """
-    Parse a `%seealso` directive into `(name, description)` pairs
-
-    The directive is a comma-separated list of entries, each an optionally
-    `name : description` pair. Undescribed entries get an empty description.
-    Returns an empty list when no `%seealso` directive is present.
-    """
-    match = _SEEALSO_RE.search(text)
-    if not match:
-        return []
-
-    entries: list[tuple[str, str]] = []
-    for entry in match.group(1).split(","):
-        name, _, desc = entry.partition(":")
-        name = name.strip()
-        if name:
-            entries.append((name, desc.strip()))
-    return entries
 
 
 def _strip_seealso(text: str) -> str:

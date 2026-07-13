@@ -243,6 +243,33 @@ class TestCheckCrossReferences:
         assert result.issues[0].severity == "error"
         assert "nonexistent_func" in result.issues[0].message
 
+    def test_broken_reference_in_second_seealso(self):
+        pkg = _make_pkg(
+            {
+                "func_a": _make_griffe_obj(
+                    docstring="Docs.\n\n%seealso func_b\n%seealso nonexistent_func"
+                ),
+                "func_b": _make_griffe_obj(docstring="Docs."),
+            }
+        )
+        result = LintResult()
+        _check_cross_references(pkg, "mypkg", ["func_a", "func_b"], result)
+
+        assert len(result.issues) == 1
+        assert result.issues[0].check == "broken-xref"
+        assert "nonexistent_func" in result.issues[0].message
+
+    def test_bare_seealso_does_not_lint_following_content(self):
+        pkg = _make_pkg(
+            {
+                "func_a": _make_griffe_obj(docstring="Docs.\n\n%seealso\nnonexistent prose"),
+            }
+        )
+        result = LintResult()
+        _check_cross_references(pkg, "mypkg", ["func_a"], result)
+
+        assert len(result.issues) == 0
+
     def test_seealso_to_class_method(self):
         method = _make_griffe_obj(kind="function", docstring="Method.")
         cls = _make_griffe_obj(
@@ -915,20 +942,6 @@ class TestCheckDirectiveConsistencyEdgeCases:
         _check_directive_consistency(pkg, "mypkg", ["func_a"], result)
 
         assert len(result.issues) == 0
-
-    def test_empty_seealso_reference(self):
-        """Empty references inside %seealso should trigger empty-seealso warning."""
-        # This docstring has a trailing comma which produces an empty ref
-        doc = "Short.\n\n%seealso func_a, , func_b\n"
-        pkg = _make_pkg({"func_x": _make_griffe_obj(docstring=doc)})
-        result = LintResult()
-        _check_directive_consistency(pkg, "mypkg", ["func_x"], result)
-
-        # The extract_directives parser strips empty entries, but let's verify
-        # the branch is exercised if any empty name survives
-        # Note: the actual _directives.extract_directives filters empties via `if name:`
-        # so this won't produce an issue — but we still exercise the code path
-        assert all(i.check != "empty-seealso" for i in result.issues)
 
 
 # ---------------------------------------------------------------------------
