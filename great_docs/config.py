@@ -51,6 +51,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "module": None,
         "name": None,
     },
+    # Go CLI documentation configuration
+    # Builds the Go binary and extracts the command tree via --help to generate
+    # a CLI reference section.  Works with any Go CLI (Cobra, urfave/cli, etc.)
+    # as long as the binary supports --help on subcommands.
+    "go_cli": {
+        "enabled": False,
+    },
     # MCP server documentation configuration
     # Auto-generates reference pages from MCP server tool/resource/prompt definitions.
     # None/False: disabled (default)
