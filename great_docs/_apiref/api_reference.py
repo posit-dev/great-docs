@@ -8,13 +8,15 @@ import logging
 import sys
 from dataclasses import dataclass, field
 from dataclasses import fields as dc_fields
+from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from yaml12 import read_yaml
 
+from .content import Link, Page
 from .inventory import create_inventory, write_inventory
-from .resolve import resolve
+from .resolve import _autogenerate_sections, _Resolver
 from .spec import SpecOptions, SpecSection
 from .write import (
     write_index,
@@ -24,6 +26,7 @@ from .write import (
 )
 
 if TYPE_CHECKING:
+    from .content import Section
     from .inventory import InventoryItem
 
 _log = logging.getLogger(__name__)
@@ -104,6 +107,9 @@ class APIReference:
         ]
         self.items = []
 
+        self._resolver = _Resolver(self.settings)
+        self._resolver.current_package = self.package
+
     @staticmethod
     def _select_block(config: dict[str, Any] | str | Path) -> dict[str, Any]:
         """Select the `api-reference:` (or legacy `quartodoc:`) mapping from a config dict, file path, or full _quarto.yml"""
@@ -117,6 +123,35 @@ class APIReference:
             raise KeyError("No `api-reference:` section found in your _quarto.yml.")
         return dict(cast("dict[str, Any]", block))
 
+    @cached_property
+    def resolved(self) -> list[Section]:
+        """The resolved section tree, computed once per instance"""
+        secs = self.sections or _autogenerate_sections(self._resolver, self.package)
+        return self._resolver.resolve_sections(secs)
+
+    @cached_property
+    def documented_symbols(self) -> list[str]:
+        """
+        Dotted stems of every documented object, `%nodoc` excluded
+
+        One stem per documented target, first-occurrence order, deduped: a
+        top-level object (its page stem) and each documented member
+        (`stem.member`), recursively.
+        """
+        stems: list[str] = []
+
+        def visit(node: object, stem: str) -> None:
+            stems.append(stem)
+            for member in _member_children(node):
+                visit(member, f"{stem}.{_member_name(member)}")
+
+        for section in self.resolved:
+            for entry in section.contents:
+                if isinstance(entry, Page):
+                    for doc in entry.contents:
+                        visit(doc, entry.path)
+        return list(dict.fromkeys(stems))
+
     def build(self, page_filter: str = "*") -> None:
         """Write reference pages, index, inventory, and (optionally) sidebar to disk"""
         s = self.settings
@@ -127,7 +162,7 @@ class APIReference:
         from .collect import build_manifest
 
         _log.info("Resolving sections.")
-        resolved = resolve(self.sections, package=self.package, settings=s)
+        resolved = self.resolved
 
         _log.info("Collecting pages and inventory items.")
         manifest = build_manifest(resolved, dir=s.dir)
@@ -156,3 +191,19 @@ class APIReference:
         if s.sidebar:
             _log.info(f"Writing sidebar yaml to {s.sidebar['file']}")
             write_sidebar(self, resolved, dir=s.dir, out_page_suffix=s.out_page_suffix)
+
+
+def _member_name(node: object) -> str:
+    """The relative name of a resolved member node (Doc, MemberPage, or Link)"""
+    if isinstance(node, Page):  # MemberPage (children: separate)
+        return node.contents[0].name
+    if isinstance(node, Link):  # children: linked
+        return node.name.rsplit(".", 1)[-1]
+    return node.name  # Doc
+
+
+def _member_children(node: object) -> list[object]:
+    """The nested member nodes of a resolved member node, if any"""
+    if isinstance(node, Page):
+        return list(getattr(node.contents[0], "members", []))
+    return list(getattr(node, "members", []))

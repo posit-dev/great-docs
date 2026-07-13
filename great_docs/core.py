@@ -8857,10 +8857,12 @@ class GreatDocs:
 
         Each stem names one published reference page: a top-level class or
         function, a submodule-qualified class (`scores.CosineScore`), or a
-        method (`scores.CosineScore.fit`). The set is the same one the rendered
-        reference documents — the explicit `reference:` config when present,
-        otherwise auto-discovery — so a versioned snapshot and the live build
-        describe the same API surface. Empty when the package documents nothing.
+        method (`scores.CosineScore.fit`). The set is exactly what `resolve`
+        documents for the rendered reference — top-level objects and their
+        documented members, `%nodoc` excluded — whether from an explicit
+        `reference:` config or auto-discovery, so a versioned snapshot and the
+        live build describe the same API surface. Empty when the package
+        documents nothing.
 
         Parameters
         ----------
@@ -8874,43 +8876,54 @@ class GreatDocs:
         """
         import contextlib
         import io
+        import sys
 
         # Suppress diagnostic prints from the resolution/filtering pipeline — this is a
         # programmatic query method and its callers own their own output streams.
         # `_suppress_artifact_writes` additionally prevents the pipeline from writing
         # `_object_types.json` (and its sidecar) into the project root.
         self._suppress_artifact_writes = True
+        # `APIReference` loads the package through a plain griffe loader (sys.path-based),
+        # unlike `_create_api_sections_with_config`'s own loader, which is handed explicit
+        # search paths. Temporarily extend sys.path so a package that isn't installed (e.g.
+        # a src-layout dev checkout) can still be found, then restore it.
+        added_paths = [str(p) for p in self._griffe_search_paths() if str(p) not in sys.path]
+        sys.path[:0] = added_paths
+        importable_name = self._normalize_package_name(package_name)
+        # Drop any cached import of the package (and its submodules) so dynamic
+        # resolution reflects what's on disk *now* — not a stale module object
+        # left in `sys.modules` by an earlier call in this process (e.g. a
+        # different git-tag checkout during a versioned-snapshot loop).
+        for key in [
+            k for k in sys.modules if k == importable_name or k.startswith(f"{importable_name}.")
+        ]:
+            del sys.modules[key]
         try:
             with (
                 contextlib.redirect_stdout(io.StringIO()),
                 contextlib.redirect_stderr(io.StringIO()),
             ):
                 sections = self._create_api_sections_with_config(package_name)
+                if not sections:
+                    return []
+                from great_docs._apiref.api_reference import APIReference
+
+                ref = APIReference(
+                    {
+                        "api-reference": {
+                            "package": importable_name,
+                            "sections": sections,
+                            "parser": self._config.parser or "numpy",
+                            "dynamic": self._config.dynamic,
+                        }
+                    }
+                )
+                return ref.documented_symbols
         finally:
             self._suppress_artifact_writes = False
-        if not sections:
-            return []
-
-        names: list[str] = []
-        for section in sections:
-            for item in section.get("contents", []):
-                if isinstance(item, str):
-                    names.append(item)
-                elif isinstance(item, dict):
-                    name = item.get("name", "")
-                    if not name:
-                        continue
-                    names.append(name)
-                    for member in item.get("members", []) or []:
-                        names.append(f"{name}.{member}")
-
-        seen: set[str] = set()
-        unique: list[str] = []
-        for name in names:
-            if name not in seen:
-                seen.add(name)
-                unique.append(name)
-        return unique
+            for p in added_paths:
+                if p in sys.path:
+                    sys.path.remove(p)
 
     def _create_api_sections_with_config(self, package_name: str) -> list | None:
         """

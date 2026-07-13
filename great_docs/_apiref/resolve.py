@@ -175,23 +175,19 @@ class _Resolver:
     by the objects nested under it.
     """
 
-    def __init__(
-        self,
-        get_object: _GetObject | None = None,
-        parser: str = "numpy",
-    ) -> None:
-        if get_object is None:
-            from .introspect import get_object as _get_object
-            from .introspect import make_loader
+    def __init__(self, settings: Settings | None = None) -> None:
+        from .introspect import get_object as _get_object
+        from .introspect import make_loader
 
-            loader = make_loader(parser)
-            self.get_object: _GetObject = cast("_GetObject", partial(_get_object, loader=loader))
-        else:
-            self.get_object = get_object
+        parser = settings.parser if settings is not None else "numpy"
+        loader = make_loader(parser)
+        self.get_object: _GetObject = cast("_GetObject", partial(_get_object, loader=loader))
 
         self.current_package: str | None = None
         self.options: SpecOptions | None = None
-        self.dynamic: bool = False
+        self.dynamic: bool = (
+            settings.dynamic if (settings is not None and settings.dynamic is not None) else False
+        )
 
     def get_object_or_raise(self, path: str, **kwargs: object) -> gf.Object | gf.Alias:
         """Get the griffe object at `path`, raising `ObjectNotFoundError` if absent"""
@@ -431,21 +427,11 @@ def resolve(
     settings: Settings | None = None,
 ) -> list[Section]:
     """Resolve the `spec` tree into sections ready for rendering"""
-
-    parser = settings.parser if settings is not None else "numpy"
-    dynamic = settings.dynamic if settings is not None else None
-
-    r = _Resolver(parser=parser)
-
+    r = _Resolver(settings)
     if package is not None:
         r.current_package = package
-
-    if dynamic is not None:
-        r.dynamic = dynamic
-
     if not sections:
         sections = _autogenerate_sections(r, package)
-
     return r.resolve_sections(sections)
 
 
