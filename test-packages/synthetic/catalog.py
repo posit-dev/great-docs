@@ -400,6 +400,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_bibliography_csl",  # 198
     # 199: Project-level custom CSS forwarded into _quarto.yml
     "gdtest_custom_css",  # 199
+    # 200: Minimal Go CLI project — go.mod + cobra-style --help, no Python module
+    "gdtest_go_cli",  # 200
 ]
 
 
@@ -631,6 +633,8 @@ DIMENSIONS: dict[str, dict[str, str]] = {
     "T4": {"axis": "tags", "label": "Tags in a custom section with a nested dir"},
     # Page status axes
     "T2": {"axis": "status", "label": "Page status badges in sidebar + pages"},
+    # Go CLI axes
+    "Z1": {"axis": "go_cli", "label": "Go CLI (cobra-style --help)"},
 }
 
 
@@ -2243,6 +2247,17 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "the stylesheet into the build directory and write it into _quarto.yml's "
         "format.html.css. If the wiring is missing, the marker rule in custom.css "
         "never reaches the rendered site."
+    ),
+    "gdtest_go_cli": (
+        "A pure Go CLI project (no Python module). The project has a go.mod and a "
+        "stdlib-only CLI under cmd/hello/ that emits cobra-style --help output. "
+        "Great Docs compiles the binary with 'go build', recurses through "
+        "'hello --help', 'hello greet --help', and 'hello version --help', and "
+        "generates a CLI reference section in the site. On the CLI reference "
+        "index you should see 'greet' and 'version' listed (with 'completion' "
+        "and 'help' excluded). Each subcommand should have its own page with "
+        "flags documented. The landing page comes from README.md. There is no "
+        "API Reference section — the site is driven entirely by the Go CLI."
     ),
 }
 
