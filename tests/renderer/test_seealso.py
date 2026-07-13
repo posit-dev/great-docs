@@ -100,3 +100,19 @@ def test_nodoc_is_registered_before_seealso():
 
     order = _object_resolved._OBJECT_RESOLVED_HOOKS
     assert order.index(exclude_nodoc) < order.index(add_seealso)
+
+
+def test_nodoc_and_seealso_object_is_dropped():
+    from great_docs.hooks._object_resolved import emit_object_resolved
+
+    obj = _obj(
+        """
+        Internal.
+
+        %nodoc
+        %seealso foo
+        """
+    )
+    # exclude_nodoc is registered before add_seealso, so the object is skipped
+    # before the seealso hook runs.
+    assert emit_object_resolved(obj) is None

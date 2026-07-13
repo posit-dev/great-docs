@@ -85,7 +85,7 @@ def add_seealso(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias:
             existing.value.contents = "\n".join([existing.value.contents, *added])
     else:
         body = "\n".join(added)
-        sections.append(gf.DocstringSectionAdmonition(kind="see also", text=body, title="See Also"))
+        sections.append(gf.DocstringSectionAdmonition(kind="see-also", text=body, title="See Also"))
 
     return obj
 
@@ -112,7 +112,8 @@ def _existing_names(contents: str) -> set[str]:
     """Collect the leading qualified names already present in a See Also body"""
     names: set[str] = set()
     for line in contents.splitlines():
-        for part in line.split(","):
+        name_part = line.split(":", 1)[0]
+        for part in name_part.split(","):
             if match := re.match(r"\s*([\w.]+)", part):
                 names.add(match.group(1))
     return names

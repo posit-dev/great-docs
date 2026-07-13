@@ -1922,15 +1922,6 @@ def translate_renderer_headings(html_content):
         html_content,
     )
 
-    # ── Translate <div class="see-also"> headings ───────────────────────
-    # q renders See Also sections as:
-    #   <div class="see-also" ...><h3/h4 ...>See Also</h3/h4>
-    html_content = re.sub(
-        r'(<div\s[^>]*class="see-also"[^>]*>\s*<(?:h[1-6])[^>]*>)See Also(</(?:h[1-6])>)',
-        lambda m: f"{m.group(1)}{_t('see_also', 'See Also')}{m.group(2)}",
-        html_content,
-    )
-
     # ── Translate Quarto callout titles ────────────────────────────────
     # Quarto renders callouts with titles like:
     #   <div class="callout ... callout-titled" title="Added in version 2.0">
