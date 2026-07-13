@@ -326,7 +326,7 @@ def _extract_cobra_commands(
 ) -> dict | None:
     """Recursively extract the command tree from a Cobra CLI binary.
 
-    Calls ``binary [subcommand...] --help`` and parses the output.
+    Calls `binary [subcommand...] --help` and parses the output.
 
     Parameters
     ----------
