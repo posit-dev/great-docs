@@ -236,7 +236,11 @@ def _extract_cobra_commands(
     name
         Display name for this command node.
     parent_args
-        Command path tokens used to reach this subcommand.
+        Invocation tokens appended after the binary name to reach this subcommand (e.g.
+        `["greet"]` -> `binary greet --help`).
+    display_path
+        Full display path for this node, e.g. `"hello greet"`. When `None` the node is the root
+        command and `name` is used.
 
     Returns
     -------
