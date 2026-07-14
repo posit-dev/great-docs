@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import sys
 import textwrap
 from pathlib import Path
+from types import ModuleType
+
+import pytest
 
 from great_docs.core import GreatDocs
 
@@ -196,3 +200,64 @@ def test_deduplication_preserves_first_occurrence_order(tmp_path: Path):
     assert names == ["TopClass", "sub.Widget", "sub.Widget.fit"]
     # No duplicates.
     assert len(names) == len(set(names))
+
+
+def test_search_path_failure_preserves_original_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_pkg(tmp_path)
+    gd = GreatDocs(project_path=str(tmp_path))
+
+    def fail_search_paths() -> list[str]:
+        raise RuntimeError("search path failure")
+
+    monkeypatch.setattr(gd, "_griffe_search_paths", fail_search_paths)
+
+    with pytest.raises(RuntimeError, match="search path failure"):
+        gd.documented_symbol_names("mypkg")
+
+    assert gd._suppress_artifact_writes is False
+
+
+def test_restores_cached_package_modules(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _write_pkg(tmp_path)
+    gd = GreatDocs(project_path=str(tmp_path))
+    cached_package = ModuleType("mypkg")
+    cached_submodule = ModuleType("mypkg.cached")
+    for key in [key for key in sys.modules if key == "mypkg" or key.startswith("mypkg.")]:
+        monkeypatch.delitem(sys.modules, key)
+    monkeypatch.setitem(sys.modules, "mypkg", cached_package)
+    monkeypatch.setitem(sys.modules, "mypkg.cached", cached_submodule)
+
+    assert gd.documented_symbol_names("mypkg") == [
+        "TopClass",
+        "sub.Widget",
+        "sub.Widget.fit",
+    ]
+    assert sys.modules["mypkg"] is cached_package
+    assert sys.modules["mypkg.cached"] is cached_submodule
+    assert "mypkg.core" not in sys.modules
+    assert "mypkg.sub" not in sys.modules
+
+
+def test_missing_configured_symbol_returns_empty(tmp_path: Path) -> None:
+    _write_pkg(tmp_path)
+    (tmp_path / "great-docs.yml").write_text(
+        "reference:\n  - title: API\n    contents:\n      - MissingObject\n"
+    )
+
+    gd = GreatDocs(project_path=str(tmp_path))
+
+    assert gd.documented_symbol_names("mypkg") == []
+
+
+def test_dynamic_import_failure_returns_empty(tmp_path: Path) -> None:
+    _write_pkg(tmp_path)
+    (tmp_path / "mypkg" / "__init__.py").write_text("raise ImportError('broken package')\n")
+    (tmp_path / "great-docs.yml").write_text(
+        "dynamic: true\nreference:\n  - title: API\n    contents:\n      - TopClass\n"
+    )
+
+    gd = GreatDocs(project_path=str(tmp_path))
+
+    assert gd.documented_symbol_names("mypkg") == []
