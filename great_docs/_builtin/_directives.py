@@ -22,7 +22,7 @@ _SEEALSO_LINE_RE = re.compile(
 _SEEALSO_TITLE = "see also"
 
 
-@on_object_resolved
+@on_object_resolved(priority=-100)
 def exclude_nodoc(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias | None:
     """
     Skip an object whose docstring carries the `%nodoc` directive
@@ -43,7 +43,7 @@ def exclude_nodoc(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias | None:
     return obj
 
 
-@on_object_resolved
+@on_object_resolved(priority=100)
 def add_seealso(obj: gf.Object | gf.Alias) -> gf.Object | gf.Alias:
     """
     Merge an object's `%seealso` entries into its See Also section

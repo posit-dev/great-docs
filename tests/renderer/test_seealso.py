@@ -138,15 +138,16 @@ def test_object_without_docstring_passes_through():
 def test_add_seealso_registers_on_import():
     from great_docs.hooks import _object_resolved
 
-    assert add_seealso in _object_resolved._OBJECT_RESOLVED_HOOKS
+    assert add_seealso in _object_resolved.REGISTRY
 
 
-def test_nodoc_is_registered_before_seealso():
-    # nodoc must short-circuit before seealso runs.
+def test_nodoc_runs_before_seealso():
+    # nodoc must short-circuit before seealso runs — enforced by priority,
+    # not import order. Assert run order, not the priority numbers.
     from great_docs._builtin._directives import exclude_nodoc
     from great_docs.hooks import _object_resolved
 
-    order = _object_resolved._OBJECT_RESOLVED_HOOKS
+    order = list(_object_resolved.REGISTRY)
     assert order.index(exclude_nodoc) < order.index(add_seealso)
 
 
