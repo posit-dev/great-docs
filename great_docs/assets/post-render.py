@@ -1129,44 +1129,6 @@ def format_signature_multiline(html_content):
     return signature_pattern.sub(reformat_signature, html_content)
 
 
-def strip_directives_from_html(html_content):
-    """
-    Remove Great Docs %seealso directive lines from rendered HTML.
-
-    %seealso directives are used for organizing documentation but they should not
-    appear in the final rendered output. This function removes them after rendering.
-    """
-    # Match directives wrapped in <p> tags
-    # e.g., <p>%seealso func_a, func_b</p>
-    p_directive_pattern = re.compile(
-        r"<p>\s*%seealso(?:\s+[^<]*)?\s*</p>\s*\n?",
-        re.IGNORECASE,
-    )
-
-    # Match standalone directive lines (plain text)
-    # e.g., %seealso func_a
-    standalone_directive_pattern = re.compile(
-        r"^\s*%seealso(?:\s+.*)?\s*$\n?",
-        re.MULTILINE | re.IGNORECASE,
-    )
-
-    # Match directives that might be inline within text
-    inline_directive_pattern = re.compile(
-        r"%seealso(?:\s+[^\n<]*)?",
-        re.IGNORECASE,
-    )
-
-    # Apply patterns in order of specificity
-    cleaned = p_directive_pattern.sub("", html_content)
-    cleaned = standalone_directive_pattern.sub("", cleaned)
-    cleaned = inline_directive_pattern.sub("", cleaned)
-
-    # Clean up any resulting empty paragraphs
-    cleaned = re.sub(r"<p>\s*</p>\s*\n?", "", cleaned)
-
-    return cleaned
-
-
 def strip_colgroup_tags(html_content):
     """
     Remove `<colgroup>` tags from tables, preserving those inside GT tables.
@@ -1960,15 +1922,6 @@ def translate_renderer_headings(html_content):
         html_content,
     )
 
-    # ── Translate <div class="see-also"> headings ───────────────────────
-    # q renders See Also sections as:
-    #   <div class="see-also" ...><h3/h4 ...>See Also</h3/h4>
-    html_content = re.sub(
-        r'(<div\s[^>]*class="see-also"[^>]*>\s*<(?:h[1-6])[^>]*>)See Also(</(?:h[1-6])>)',
-        lambda m: f"{m.group(1)}{_t('see_also', 'See Also')}{m.group(2)}",
-        html_content,
-    )
-
     # ── Translate Quarto callout titles ────────────────────────────────
     # Quarto renders callouts with titles like:
     #   <div class="callout ... callout-titled" title="Added in version 2.0">
@@ -2308,195 +2261,6 @@ def translate_rst_references(html_content):
     return html_content
 
 
-def extract_seealso_from_html(html_content):
-    """
-    Extract %seealso values from HTML content before stripping.
-
-    Returns a list of `(name, description)` tuples. The description is an empty string when no
-    `: description` suffix was provided.
-    """
-    # Match %seealso in <p> tags (most common after markdown rendering)
-    # This handles both standalone %seealso and when it follows other directives
-    p_pattern = re.compile(
-        r"<p>[^<]*%seealso\s+([^<%]+?)(?:%|</p>)",
-        re.IGNORECASE,
-    )
-
-    # Match standalone %seealso lines (not in HTML tags)
-    standalone_pattern = re.compile(
-        r"%seealso\s+([^\n%<]+)",
-        re.IGNORECASE,
-    )
-
-    # Try <p> pattern first
-    match = p_pattern.search(html_content)
-    if not match:
-        match = standalone_pattern.search(html_content)
-
-    if match:
-        # Parse comma-separated list, each entry may have ": description"
-        items_str = match.group(1).strip()
-        items = []
-        for entry in items_str.split(","):
-            entry = entry.strip()
-            if not entry:
-                continue
-            # Split on first " : " or ": " to separate name from description
-            parts = re.split(r"\s*:\s*", entry, maxsplit=1)
-            name = parts[0].strip()
-            desc = parts[1].strip() if len(parts) > 1 else ""
-            if name:
-                items.append((name, desc))
-        return items
-
-    return []
-
-
-def extract_seealso_from_doc_section(html_content):
-    """
-    Extract See Also items from rendered doc-section `<section>` blocks.
-
-    NumPy-style and Google-style docstrings produce sections like:
-
-        <section id="see-also" class="level1 doc-section doc-section-see-also">
-        <h1 ...>See Also</h1>
-        <p>transform : Transform data before analysis.</p>
-        </section>
-
-    Returns a list of `(name, description)` tuples.
-    """
-    # Match <section id="see-also" ...> ... </section> blocks
-    section_pat = re.compile(
-        r'<section[^>]*\bid=["\']see-also["\'][^>]*>'
-        r"(.*?)"
-        r"</section>",
-        re.DOTALL,
-    )
-    items = []
-    for m in section_pat.finditer(html_content):
-        body = m.group(1)
-        # Remove the heading tags
-        body = re.sub(r"<h[1-6][^>]*>.*?</h[1-6]>", "", body, flags=re.DOTALL)
-
-        # Q renderer: names live in href attributes like href="`~Name`"
-        # Also look for description text in <dd> or after the link
-        interlink_names = re.findall(r'href="`~([\w.]+)`"', body)
-        if interlink_names:
-            # Try to extract descriptions from definition list structure
-            # Pattern: <dt>...<a href="`~Name`">...</a>...</dt><dd>description</dd>
-            dt_dd_pairs = re.findall(
-                r'<dt[^>]*>.*?href="`~([\w.]+)`".*?</dt>\s*<dd[^>]*>(.*?)</dd>',
-                body,
-                re.DOTALL,
-            )
-            if dt_dd_pairs:
-                for name, desc_html in dt_dd_pairs:
-                    desc = re.sub(r"<[^>]+>", "", desc_html).strip()
-                    items.append((name, desc))
-            else:
-                items.extend((name, "") for name in interlink_names)
-            continue
-
-        # Classic renderer: names appear as plain text
-        plain = re.sub(r"<[^>]+>", "", body).strip()
-        if not plain:
-            continue
-        # Parse entries: each may be "name : description" or "name: description"
-        # or multiple comma-separated or newline-separated entries
-        for line in plain.split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-            # Handle comma-separated items on a single line
-            parts = line.split(",")
-            for part in parts:
-                part = part.strip()
-                if not part:
-                    continue
-                # Extract the name and description
-                # e.g., "transform : Transform data before analysis."
-                # e.g., "``validate``: Validate a schema before processing."
-                # Strip backticks first
-                part = part.replace("``", "").replace("`", "")
-                name_match = re.match(r"^([\w.]+)(?:\s*:\s*(.*))?$", part)
-                if name_match:
-                    name = name_match.group(1)
-                    desc = (name_match.group(2) or "").strip()
-                    items.append((name, desc))
-    return items
-
-
-def remove_seealso_doc_section(html_content):
-    """
-    Remove `<section id="see-also" ...>` blocks from the HTML.
-
-    Also removes the corresponding TOC entry.
-    """
-    # Remove the section block
-    html_content = re.sub(
-        r'<section[^>]*\bid=["\']see-also["\'][^>]*>'
-        r".*?"
-        r"</section>",
-        "",
-        html_content,
-        flags=re.DOTALL,
-    )
-    # Remove the TOC entry for See Also
-    html_content = re.sub(
-        r'\s*<li><a[^>]*href=["\']#see-also["\'][^>]*>See Also</a></li>',
-        "",
-        html_content,
-    )
-    return html_content
-
-
-def generate_seealso_html(seealso_items):
-    """
-    Generate HTML for a "See Also" section with links to other reference pages.
-
-    Each item is a `(name, description)` tuple. When description is non-empty, it is rendered after
-    the link.
-    """
-    if not seealso_items:
-        return ""
-
-    links = []
-    for item in seealso_items:
-        if isinstance(item, tuple):
-            name, desc = item
-        else:
-            name, desc = item, ""
-        # Generate link to the reference page
-        # Item could be "Graph.add_edge" or just "add_edge"
-        html_filename = f"{name}.html"
-        # Append () for callable objects (functions, methods)
-        display = name
-        sa_result = _resolve_interlink_name(name)
-        if sa_result and sa_result[2] in _CALLABLE_ROLES:
-            display += "()"
-        link = f'<a href="{html_filename}" class="gdls-link gdls-code">{display}</a>'
-        if desc:
-            link = f"{link}: {desc}"
-        links.append(link)
-
-    # Use a list layout when any item has a description, otherwise comma-separated
-    has_descriptions = any((item[1] if isinstance(item, tuple) else "") for item in seealso_items)
-    if has_descriptions:
-        items_html = "\n".join(f'<li style="margin-bottom: 0.25rem;">{link}</li>' for link in links)
-        body = f'<ul style="list-style: none; padding-left: 0; margin: 0;">{items_html}</ul>'
-    else:
-        body = f'<p style="margin: 0;">{", ".join(links)}</p>'
-
-    _see_also_label = _t("see_also", "See Also")
-
-    return f"""
-<div class="see-also" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #dee2e6;">
-<h3 style="font-size: 0.9rem; font-weight: 600; color: #6c757d; margin-bottom: 0.5rem;">{_see_also_label}</h3>
-{body}
-</div>
-"""
-
-
 def fix_dataclass_attributes(content_str):
     """Rebuild the Attributes table for dataclass pages using *_dataclass_attrs.json* metadata.
 
@@ -2572,12 +2336,6 @@ for html_file in html_files:
 
     with open(html_file, "r", encoding="utf-8") as file:
         content = file.read()
-
-    # Extract %seealso before stripping directives
-    seealso_items = extract_seealso_from_html(content)
-
-    # Strip %directive lines from rendered HTML (safety net for docstring directives)
-    content = strip_directives_from_html(content)
 
     # Translate Sphinx field lists (:param, :type, :returns, :rtype, :raises)
     content = translate_sphinx_fields(content)
@@ -2821,29 +2579,13 @@ for html_file in html_files:
                     )
                 break
 
-    # Merge See Also items from %seealso directives and doc-section blocks
     content_str = "".join(content)
-    doc_section_seealso = extract_seealso_from_doc_section(content_str)
-    if doc_section_seealso:
-        content_str = remove_seealso_doc_section(content_str)
-        # Merge with %seealso items (deduplicate by name, preserving order)
-        seen = {name for name, _ in seealso_items}
-        for name, desc in doc_section_seealso:
-            if name not in seen:
-                seealso_items.append((name, desc))
-                seen.add(name)
 
     # Resolve interlinks (`~Name` references) throughout the page
     content_str = resolve_interlinks(content_str)
 
     # Auto-convert inline code matching API names into clickable links
     content_str = autolink_code_references(content_str)
-
-    # Inject unified "See Also" section at the bottom
-    if seealso_items:
-        seealso_html = generate_seealso_html(seealso_items)
-        # Insert before </main>
-        content_str = content_str.replace("</main>", f"{seealso_html}</main>")
 
     # Place a horizontal rule at the end of each reference page
     main_end_pattern = r"</main>"

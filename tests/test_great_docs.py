@@ -29,7 +29,6 @@ from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
 from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
 
 from great_docs import Config, create_default_config, GreatDocs, load_config
-from great_docs._directives import extract_directives
 from great_docs._apiref import _globals
 from great_docs._apiref import content
 from great_docs._apiref import spec
@@ -32776,31 +32775,6 @@ def test_renderbase_summary_name_property():
     rb.node = MagicMock()
     rb.level = 1
     assert rb.summary_name == ""
-
-
-def test_extract_directives_nodoc():
-    """extract_directives() sets nodoc=True when %nodoc is in docstring."""
-
-    docstring = """
-    Short description.
-
-    %nodoc
-
-    Parameters
-    ----------
-    x : int
-    """
-    result = extract_directives(docstring)
-    assert result.nodoc is True
-
-
-def test_extract_directives_seealso_empty_entry():
-    """extract_directives() skips empty entries in seealso list."""
-
-    docstring = "%seealso func_a,,func_b"
-    result = extract_directives(docstring)
-
-    assert result.seealso == [("func_a", ""), ("func_b", "")]
 
 
 def test_docattribute_render_signature_type_kind():
