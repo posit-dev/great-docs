@@ -10786,6 +10786,11 @@ title: "Authors and Citation"
         for warning in warnings:
             print(warning)
 
+        # Title for the generated homepage. Empty by default so "Home" doesn't
+        # appear on an auto-generated landing page; a user-authored source file
+        # may override it via its frontmatter title.
+        homepage_title = ""
+
         if source_file is None:
             print("No index source file found (index.qmd, index.md, README.md, or README.rst)")
             print("Generating landing page from package metadata...")
@@ -10809,8 +10814,12 @@ title: "Authors and Citation"
             # wrapper template below supplies its own frontmatter, so embedding
             # the source's frontmatter mid-document would render it as a
             # horizontal rule plus visible raw YAML text (e.g. index.qmd files,
-            # which universally start with a `---` block).
-            _, readme_content = self._split_frontmatter(readme_content)
+            # which universally start with a `---` block). The source title is
+            # carried over into the wrapper so an authored title survives.
+            source_fm, readme_content = self._split_frontmatter(readme_content)
+            source_title = source_fm.get("title", "")
+            if isinstance(source_title, str) and source_title:
+                homepage_title = source_title
 
             # Copy images referenced in the source file to the build directory
             self._copy_readme_images(source_file)
@@ -10859,7 +10868,6 @@ section.level2:first-of-type > h2:first-child,
 """
 
         # Create a qmd file with the README content
-        # Use empty title so "Home" doesn't appear on landing page
         # Add margin content in a special div that Quarto will place in the margin
         # Prepend hero section (raw HTML block) when enabled
         hero_block = ""
@@ -10869,9 +10877,13 @@ section.level2:first-of-type > h2:first-child,
 
 """
 
+        # Render the title line YAML-safe (quotes/colons in an authored title
+        # are escaped). Empty title renders as `title: ""`.
+        title_line = format_yaml({"title": homepage_title}).rstrip()
+
         if margin_content:
             qmd_content = f"""---
-title: ""
+{title_line}
 toc: false
 body-classes: "gd-homepage"
 ---
@@ -10884,7 +10896,7 @@ body-classes: "gd-homepage"
 """
         else:
             qmd_content = f"""---  # pragma: no cover
-title: ""
+{title_line}
 toc: false
 body-classes: "gd-homepage"
 ---
