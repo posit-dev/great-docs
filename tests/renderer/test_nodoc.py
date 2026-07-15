@@ -27,7 +27,7 @@ def test_exclude_nodoc_registers_on_import():
     # exclude_nodoc registered via this module's top-level import (the decorator).
     from great_docs.hooks import _object_resolved
 
-    assert exclude_nodoc in _object_resolved._OBJECT_RESOLVED_HOOKS
+    assert exclude_nodoc in _object_resolved.REGISTRY
 
 
 import textwrap
@@ -110,7 +110,7 @@ def test_importing_great_docs_registers_builtin_handlers():
         import great_docs  # noqa: F401
         from great_docs.hooks import _object_resolved
 
-        modules = {h.__module__ for h in _object_resolved._OBJECT_RESOLVED_HOOKS}
+        modules = {h.__module__ for h in _object_resolved.REGISTRY}
         assert "great_docs._builtin._directives" in modules, modules
         """
     )
