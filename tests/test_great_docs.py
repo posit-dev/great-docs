@@ -4156,6 +4156,96 @@ def test_readme_rst_not_used_when_readme_md_exists():
         assert "RST readme" not in content
 
 
+def _homepage_frontmatter(content: str) -> dict:
+    """Parse the leading YAML frontmatter block from generated homepage content."""
+    assert content.startswith("---")
+    _, fm_text, _ = content.split("---", 2)
+    return parse_yaml(fm_text) or {}
+
+
+def test_index_qmd_frontmatter_title_preserved():
+    """Authored frontmatter title on the index source survives into index.qmd."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        (project_path / "pyproject.toml").write_text(
+            '[project]\nname = "test"\nversion = "1.0"\n'
+        )
+        (project_path / "great-docs.yml").write_text("")
+
+        (project_path / "index.qmd").write_text(
+            '---\ntitle: "My Package"\n---\n\n## Getting Started\n\nHello.\n'
+        )
+
+        pkg_dir = project_path / "test"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._create_index_from_readme(force_rebuild=True)
+
+        content = (docs.project_path / "index.qmd").read_text()
+        fm = _homepage_frontmatter(content)
+
+        assert fm["title"] == "My Package"
+        assert fm["toc"] is False
+        assert fm["body-classes"] == "gd-homepage"
+
+
+def test_index_qmd_frontmatter_title_empty_without_source_title():
+    """A source file with no title yields an empty homepage title."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        (project_path / "pyproject.toml").write_text(
+            '[project]\nname = "test"\nversion = "1.0"\n'
+        )
+        (project_path / "great-docs.yml").write_text("")
+
+        (project_path / "README.md").write_text("## Getting Started\n\nHello.\n")
+
+        pkg_dir = project_path / "test"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._create_index_from_readme(force_rebuild=True)
+
+        content = (docs.project_path / "index.qmd").read_text()
+        fm = _homepage_frontmatter(content)
+
+        assert fm["title"] == ""
+
+
+def test_index_qmd_frontmatter_title_yaml_safe():
+    """A title with YAML-special characters round-trips through the frontmatter."""
+    tricky_title = 'A: B "quoted"'
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        (project_path / "pyproject.toml").write_text(
+            '[project]\nname = "test"\nversion = "1.0"\n'
+        )
+        (project_path / "great-docs.yml").write_text("")
+
+        source_fm = format_yaml({"title": tricky_title}).rstrip()
+        (project_path / "index.qmd").write_text(
+            f"---\n{source_fm}\n---\n\n## Getting Started\n\nHello.\n"
+        )
+
+        pkg_dir = project_path / "test"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._create_index_from_readme(force_rebuild=True)
+
+        content = (docs.project_path / "index.qmd").read_text()
+        fm = _homepage_frontmatter(content)
+
+        assert fm["title"] == tricky_title
+
+
 def test_convert_rst_to_markdown_real_pandoc():
     """Test RST to Markdown conversion via pandoc."""
 
