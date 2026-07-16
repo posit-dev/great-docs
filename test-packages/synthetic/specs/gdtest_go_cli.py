@@ -148,6 +148,9 @@ SPEC = {
         "go_cli": {
             "enabled": True,
         },
+        "mcp": {
+            "enabled": False,
+        },
     },
     # ── Expected outcomes ─────────────────────────────────────────────────────
     "expected": {
