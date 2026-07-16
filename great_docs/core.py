@@ -15781,8 +15781,7 @@ anchor-sections: true
                                     self._update_sidebar_with_cli(cli_files)
                                 n_pages = self._count_cli_sidebar_items(cli_files)
                                 log.step_done(
-                                    f"{n_pages} Go CLI reference page(s) "
-                                    f"({go_project.binary_name})"
+                                    f"{n_pages} Go CLI reference page(s) ({go_project.binary_name})"
                                 )
                             else:
                                 log.step_done("No Go CLI pages generated")  # pragma: no cover
