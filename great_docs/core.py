@@ -11923,6 +11923,12 @@ anchor-sections: true
                 config["website"]["title"] = display_name
             else:
                 package_name = self._detect_package_name()
+                if not package_name and self._config.go_cli_enabled:
+                    # For Go CLI-only projects there is no Python package name; fall
+                    # back to the Go binary name so the navbar shows a home link.
+                    go_project = self._detect_go_cli_project()
+                    if go_project:
+                        package_name = go_project.binary_name
                 if package_name:
                     config["website"]["title"] = package_name
 
