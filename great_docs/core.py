@@ -12572,8 +12572,11 @@ anchor-sections: true
                     config["format"]["html"]["include-after-body"]
                 ]
 
-            # Build the sections list for the data attribute
-            ref_sections = ["api"]
+            # Build the sections list for the data attribute.
+            # Only include "api" if a Python API reference was actually generated.
+            ref_sections = []
+            if self._has_api_reference:
+                ref_sections.append("api")
             if cli_enabled or go_cli_enabled:
                 ref_sections.append("cli")
             if mcp_enabled:
@@ -12594,12 +12597,18 @@ anchor-sections: true
                     "</script>"
                 )
             }
-            has_ref_sections = any(
-                "data-gd-ref-sections" in str(item)
-                for item in config["format"]["html"]["include-in-header"]
-            )
-            if not has_ref_sections:
-                config["format"]["html"]["include-in-header"].append(ref_sections_script)
+            # Always replace the ref-sections script so a later call to
+            # _update_quarto_config (at Step 13) can correct stale values
+            # written during prepare() when _has_api_reference was still True.
+            headers = config["format"]["html"]["include-in-header"]
+            replaced = False
+            for i, item in enumerate(headers):
+                if "data-gd-ref-sections" in str(item):
+                    headers[i] = ref_sections_script
+                    replaced = True
+                    break
+            if not replaced:
+                headers.append(ref_sections_script)
 
             ref_switcher_script_entry = {"text": '<script src="reference-switcher.js"></script>'}
             has_ref_switcher = any(
