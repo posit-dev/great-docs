@@ -11,6 +11,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # Display name for the site (used in navbar/title)
     # If not provided, uses the package name as-is
     "display_name": None,
+    # Project type — describes the primary ecosystem(s) the project belongs to.
+    # Controls which ecosystem-specific links and features are active by default.
+    #   "python"          — Python package (default); enables PyPI link
+    #   "go"              — Go CLI/library; disables PyPI link by default
+    #   ["python", "go"]  — mixed project (e.g., Python package that ships a Go sidecar)
+    "project_type": "python",
     # Docstring parser format
     "parser": "numpy",  # "numpy" (default), "google", or "sphinx"
     # Dynamic introspection mode for API reference generation
@@ -50,6 +56,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "enabled": False,
         "module": None,
         "name": None,
+    },
+    # Go CLI documentation configuration
+    # Builds the Go binary and extracts the command tree via --help to generate
+    # a CLI reference section.  Works with any Go CLI (Cobra, urfave/cli, etc.)
+    # as long as the binary supports --help on subcommands.
+    "go_cli": {
+        "enabled": False,
     },
     # MCP server documentation configuration
     # Auto-generates reference pages from MCP server tool/resource/prompt definitions.
@@ -440,12 +453,14 @@ class Config:
             The loaded configuration merged with defaults.
         """
         config = DEFAULT_CONFIG.copy()
+        self._user_config: dict[str, Any] = {}
 
         if self.config_path.exists():
             try:
                 with open(self.config_path, "r", encoding="utf-8") as f:
                     user_config = read_yaml(f) or {}
 
+                self._user_config = user_config
                 # Deep merge user config with defaults
                 config = self._merge_config(config, user_config)
             except ValueError as e:
@@ -524,17 +539,45 @@ class Config:
         return self.get("no_auto_exclude", False)
 
     @property
+    def project_type(self) -> list[str]:
+        """Get the project type(s).
+
+        Describes the primary ecosystem(s) the project belongs to.
+
+        Returns
+        -------
+        list[str]
+            Always a list, e.g. `["python"]`, `["go"]`, or `["python", "go"]` for mixed projects.
+        """
+        val = self.get("project_type", "python")
+        if isinstance(val, list):
+            return [str(t).lower() for t in val]
+        return [str(val).lower()]
+
+    @property
+    def is_python_project(self) -> bool:
+        """Return `True` when the project includes a Python component."""
+        return "python" in self.project_type
+
+    @property
     def pypi(self) -> bool | str:
         """Get the PyPI link configuration.
 
         Returns
         -------
         bool | str
-            - True: auto-detect package name and link to pypi.org (default)
+            - True: auto-detect package name and link to pypi.org (default for Python projects)
             - False: disable the PyPI link entirely
             - str: custom package index URL
         """
-        return self.get("pypi", True)
+        # If the user has explicitly set pypi in great-docs.yml, honour it regardless of
+        # project_type
+        if "pypi" in self._user_config:
+            return self._user_config["pypi"]
+        # Non-Python projects default to no PyPI link
+        if not self.is_python_project:
+            return False
+        return True
 
     @property
     def repo(self) -> str | None:
@@ -633,6 +676,15 @@ class Config:
         if isinstance(val, list):
             return val
         return []
+
+    @property
+    def go_cli_enabled(self) -> bool:
+        """Check if Go CLI documentation is enabled.
+
+        When `True`, great-docs will detect the Go CLI project at the package root, compile it, and
+        extract the command tree via `--help` to generate a CLI reference section.
+        """
+        return self.get("go_cli.enabled", False)
 
     @property
     def mcp_enabled(self) -> bool:

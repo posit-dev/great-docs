@@ -1265,11 +1265,12 @@ class GreatDocs:
 
     def _find_package_root(self) -> Path:
         """
-        Find the actual package root directory (where pyproject.toml or setup.py exists).
+        Find the actual package root directory.
 
-        When the docs directory is the current directory, project_root might point to
-        the docs dir rather than the package root. This method searches upward to find
-        the actual package root.
+        Searches upward from `project_root` for the first directory that contains a recognized
+        project manifest: `pyproject.toml`, `setup.py`, or `go.mod`. This allows great-docs to be
+        invoked from within a subdirectory (e.g. the `great-docs/` build output directory) and still
+        resolve the true project root, for both Python and Go projects.
 
         Returns
         -------
@@ -1280,7 +1281,11 @@ class GreatDocs:
 
         # Search upward from current directory
         for _ in range(5):  # Limit search to 5 levels up
-            if (current / "pyproject.toml").exists() or (current / "setup.py").exists():
+            if (
+                (current / "pyproject.toml").exists()
+                or (current / "setup.py").exists()
+                or (current / "go.mod").exists()
+            ):
                 return current
             parent = current.parent
             if parent == current:  # pragma: no cover — reached filesystem root
@@ -1289,6 +1294,23 @@ class GreatDocs:
 
         # Fallback to project_root if we can't find it
         return self.project_root
+
+    def _detect_go_cli_project(self):
+        """Detect whether the project is a Go CLI project.
+
+        Delegates to `great_docs._go_cli.detect_go_cli_project` with the resolved project root. The
+        check is purely file-system based (reads `go.mod` and looks for `main.go` entry-points) and
+        never invokes the Go compiler.
+
+        Returns
+        -------
+        GoCliProject | None
+            A `~great_docs._go_cli.GoCliProject` instance when the project root contains a `go.mod`
+            and at least one main package, or `None` otherwise.
+        """
+        from great_docs._go_cli import detect_go_cli_project
+
+        return detect_go_cli_project(self._find_package_root())
 
     def _griffe_search_paths(self) -> list[str | Path]:
         """Return search paths for griffe so it can find src/python/lib layouts.
@@ -1586,6 +1608,9 @@ class GreatDocs:
         metadata["cli_enabled"] = self._config.cli_enabled
         metadata["cli_module"] = self._config.cli_module
         metadata["cli_name"] = self._config.cli_name
+
+        # Go CLI documentation configuration
+        metadata["go_cli_enabled"] = self._config.go_cli_enabled
 
         # MCP documentation configuration
         metadata["mcp_enabled"] = self._config.mcp_enabled
@@ -4847,6 +4872,22 @@ class GreatDocs:
                 break
 
         self._write_quarto_yml(quarto_yml, config)
+
+        # Ensure there's a "Reference" navbar entry so users can reach the CLI
+        # reference pages.  If a Python API reference already added the entry,
+        # that link (reference/index.qmd) takes precedence; otherwise we add one
+        # pointing directly to the CLI index.
+        navbar = config.get("website", {}).get("navbar", {})
+        left = navbar.get("left", [])
+        has_ref = any(
+            isinstance(item, dict) and item.get("text") in ("Reference", "CLI Reference")
+            for item in left
+        )
+        if not has_ref:
+            left.append({"text": "Reference", "href": "reference/cli/index.qmd"})
+            navbar["left"] = left
+            config["website"]["navbar"] = navbar
+            self._write_quarto_yml(quarto_yml, config)
 
         print(
             f"Updated sidebar with {self._count_cli_sidebar_items(cli_files)} CLI reference page(s)"
@@ -11882,6 +11923,12 @@ anchor-sections: true
                 config["website"]["title"] = display_name
             else:
                 package_name = self._detect_package_name()
+                if not package_name and self._config.go_cli_enabled:
+                    # For Go CLI-only projects there is no Python package name; fall
+                    # back to the Go binary name so the navbar shows a home link.
+                    go_project = self._detect_go_cli_project()
+                    if go_project:
+                        package_name = go_project.binary_name
                 if package_name:
                     config["website"]["title"] = package_name
 
@@ -12397,8 +12444,9 @@ anchor-sections: true
                     page_status_entry
                 )  # pragma: no cover
 
-        # Add reference switcher script (if CLI or MCP is enabled)
+        # Add reference switcher script (if CLI, Go CLI, or MCP is enabled)
         cli_enabled = metadata.get("cli_enabled", False)
+        go_cli_enabled = metadata.get("go_cli_enabled", False)
         # Use the runtime flag if MCP discovery has already run; otherwise fall
         # back to the config value (optimistic, will be patched later if needed)
         mcp_enabled = (
@@ -12406,7 +12454,7 @@ anchor-sections: true
             if self._mcp_pages_generated is not None
             else metadata.get("mcp_enabled", False)
         )
-        if cli_enabled or mcp_enabled:
+        if cli_enabled or go_cli_enabled or mcp_enabled:
             if "include-after-body" not in config["format"]["html"]:
                 config["format"]["html"]["include-after-body"] = []  # pragma: no cover
             elif isinstance(config["format"]["html"]["include-after-body"], str):
@@ -12414,9 +12462,12 @@ anchor-sections: true
                     config["format"]["html"]["include-after-body"]
                 ]
 
-            # Build the sections list for the data attribute
-            ref_sections = ["api"]
-            if cli_enabled:
+            # Build the sections list for the data attribute.
+            # Only include "api" if a Python API reference was actually generated.
+            ref_sections = []
+            if self._has_api_reference:
+                ref_sections.append("api")
+            if cli_enabled or go_cli_enabled:
                 ref_sections.append("cli")
             if mcp_enabled:
                 ref_sections.append("mcp")
@@ -12436,12 +12487,18 @@ anchor-sections: true
                     "</script>"
                 )
             }
-            has_ref_sections = any(
-                "data-gd-ref-sections" in str(item)
-                for item in config["format"]["html"]["include-in-header"]
-            )
-            if not has_ref_sections:
-                config["format"]["html"]["include-in-header"].append(ref_sections_script)
+            # Always replace the ref-sections script so a later call to
+            # _update_quarto_config (at Step 13) can correct stale values
+            # written during prepare() when _has_api_reference was still True.
+            headers = config["format"]["html"]["include-in-header"]
+            replaced = False
+            for i, item in enumerate(headers):
+                if "data-gd-ref-sections" in str(item):
+                    headers[i] = ref_sections_script
+                    replaced = True
+                    break
+            if not replaced:
+                headers.append(ref_sections_script)
 
             ref_switcher_script_entry = {"text": '<script src="reference-switcher.js"></script>'}
             has_ref_switcher = any(
@@ -15709,6 +15766,40 @@ anchor-sections: true
                     log.step_done("CLI generation had issues")
             else:
                 log.step_skip(step, "CLI not enabled")
+
+            # ── Step 7a: Generate Go CLI reference ─────────────────────
+            step += 1
+            log.step_start(step, "Generate Go CLI reference")
+            if self._config.go_cli_enabled:
+                try:
+                    from great_docs._go_cli import introspect_cobra_cli
+
+                    with _quiet_prints():
+                        go_project = self._detect_go_cli_project()
+                    if go_project:
+                        with _quiet_prints():
+                            cli_info = introspect_cobra_cli(go_project)
+                        if cli_info:
+                            with _quiet_prints():
+                                cli_files = self._generate_cli_reference_pages(cli_info)
+                            if cli_files:
+                                with _quiet_prints():
+                                    self._update_sidebar_with_cli(cli_files)
+                                n_pages = self._count_cli_sidebar_items(cli_files)
+                                log.step_done(
+                                    f"{n_pages} Go CLI reference page(s) ({go_project.binary_name})"
+                                )
+                            else:
+                                log.step_done("No Go CLI pages generated")  # pragma: no cover
+                        else:
+                            log.step_skip(step, "Go CLI introspection failed (is 'go' on PATH?)")
+                    else:
+                        log.step_skip(step, "no Go CLI project detected")
+                except Exception as e:
+                    log.warn(f"Error generating Go CLI docs: {e}")
+                    log.step_done("Go CLI generation had issues")
+            else:
+                log.step_skip(step, "Go CLI not enabled")
 
             # ── Step 7b: Generate MCP server reference ─────────────────
             step += 1

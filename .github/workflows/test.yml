@@ -26,6 +26,12 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+          cache: false
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
