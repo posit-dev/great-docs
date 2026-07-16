@@ -214,7 +214,7 @@ def introspect_cobra_cli(go_project: GoCliProject) -> dict | None:
 # ---------------------------------------------------------------------------
 
 _SECTION_HEADER_RE = re.compile(r"^[A-Z][A-Za-z ]+:$")
-_COMMAND_LINE_RE = re.compile(r"^\s{1,8}(\S+)\s{2,}(.*)$")
+_COMMAND_LINE_RE = re.compile(r"^\s{1,8}(\S+)\s+(.*)$")
 
 # Built-in cobra meta-commands that are not worth documenting
 _COBRA_BUILTIN_COMMANDS = frozenset({"completion", "help"})
@@ -406,6 +406,11 @@ def _parse_cobra_help(
             desc_lines.append(stripped)
     description = " ".join(desc_lines)
 
+    # Sections that contain flag definitions (not subcommand listings)
+    _FLAG_SECTIONS = frozenset({"Flags", "Global Flags", "Persistent Flags"})
+    # Sections that never contain subcommand entries
+    _NON_COMMAND_SECTIONS = frozenset({"Usage", "Examples", "Aliases"})
+
     # Parse sections
     subcommand_names: list[tuple[str, str]] = []
     flags: list[dict] = []
@@ -421,7 +426,15 @@ def _parse_cobra_help(
         if not stripped:
             continue
 
-        if current_section == "Available Commands":
+        # Collect commands from any section that is not a flags or meta section.
+        # This handles both the standard "Available Commands:" and custom group
+        # sections that Cobra emits when AddGroup() is used (e.g. "Fetching:",
+        # "Querying:", "Additional Commands:", etc.).
+        if (
+            current_section not in _FLAG_SECTIONS
+            and current_section not in _NON_COMMAND_SECTIONS
+            and current_section
+        ):
             m = _COMMAND_LINE_RE.match(line)
             if m:
                 cmd_name = m.group(1)
@@ -429,7 +442,7 @@ def _parse_cobra_help(
                 if cmd_name not in _COBRA_BUILTIN_COMMANDS:
                     subcommand_names.append((cmd_name, cmd_desc))
 
-        elif current_section in ("Flags", "Global Flags", "Persistent Flags"):
+        elif current_section in _FLAG_SECTIONS:
             if stripped.startswith("-"):
                 parsed = _parse_cobra_flag(stripped)
                 if parsed:
