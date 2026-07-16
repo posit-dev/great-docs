@@ -143,7 +143,6 @@ otherwise be silently ignored.
 | Finding | Severity | Description |
 |---------|----------|-------------|
 | `unknown-directive` | Warning | A `%`-prefixed directive is not recognized |
-| `empty-seealso` | Warning | A `%seealso` entry has an empty reference |
 
 Great Docs recognizes these directives:
 

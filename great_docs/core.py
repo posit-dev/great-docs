@@ -8305,107 +8305,6 @@ class GreatDocs:
 
         return sections if sections else None
 
-    def _extract_all_directives(self, package_name: str) -> dict:
-        """
-        Extract Great Docs directives from all docstrings in the package.
-
-        Scans all exported classes, methods, and functions for @seealso
-        and @nodoc directives.
-
-        Parameters
-        ----------
-        package_name
-            The name of the package to scan.
-
-        Returns
-        -------
-        dict
-            Mapping of object names to their DocDirectives.
-            Keys are either simple names (e.g., "MyClass") or qualified names
-            (e.g., "MyClass.my_method").
-        """
-        from ._directives import extract_directives
-
-        try:
-            import griffe
-
-            normalized_name = package_name.replace("-", "_")
-
-            try:
-                pkg = self._get_griffe_package(normalized_name)
-            except Exception as e:
-                print(
-                    f"Warning: Could not load package with griffe ({type(e).__name__})",
-                    file=sys.stderr,
-                )
-                return {}
-
-            directive_map = {}
-
-            # Use list() to materialize the iterator and catch any alias resolution errors
-            try:
-                members_list = list(pkg.members.items())
-            except (griffe.CyclicAliasError, griffe.AliasResolutionError):  # pragma: no cover
-                # Some members have unresolvable aliases so try to iterate more carefully
-                members_list = []
-                for name in list(pkg.members.keys()):
-                    try:
-                        members_list.append((name, pkg.members[name]))
-                    except Exception:
-                        # Skip members that can't be accessed
-                        continue
-            except Exception:  # pragma: no cover
-                # Fall back to empty if we can't enumerate members at all
-                return {}
-
-            for name, obj in members_list:
-                # Skip private members
-                if name.startswith("_"):
-                    continue
-
-                # Skip aliases that can't be resolved (e.g., re-exports from external packages)
-                try:
-                    # Access kind to trigger alias resolution
-                    _ = obj.kind
-                except Exception:  # pragma: no cover
-                    # Silently skip unresolvable aliases since they're usually re-exports
-                    # from external packages that wouldn't be documented anyway
-                    continue
-
-                # Extract directives from the object's docstring
-                try:
-                    if obj.docstring:
-                        directives = extract_directives(obj.docstring.value)
-                        if directives:
-                            directive_map[name] = directives  # pragma: no cover
-                except Exception:  # pragma: no cover
-                    continue
-
-                # For classes, also process methods
-                try:
-                    if obj.kind.value == "class":
-                        for method_name, method in obj.members.items():
-                            if method_name.startswith("_"):
-                                continue
-                            try:
-                                if method.docstring:
-                                    method_directives = extract_directives(method.docstring.value)
-                                    if method_directives:
-                                        directive_map[f"{name}.{method_name}"] = (
-                                            method_directives  # pragma: no cover
-                                        )
-                            except Exception:  # pragma: no cover
-                                continue
-                except Exception:  # pragma: no cover
-                    # Skip if we can't introspect the class
-                    pass
-
-            return directive_map
-
-        except ImportError:  # pragma: no cover
-            print("Warning: griffe not available for directive extraction")  # pragma: no cover
-            return {}  # pragma: no cover
-
     def _build_sections_from_reference_config(
         self, reference_config: list[dict]
     ) -> list[dict] | None:
@@ -8898,10 +8797,11 @@ class GreatDocs:
 
         Each stem names one published reference page: a top-level class or
         function, a submodule-qualified class (`scores.CosineScore`), or a
-        method (`scores.CosineScore.fit`). The set is the same one the rendered
-        reference documents — the explicit `reference:` config when present,
-        otherwise auto-discovery — so a versioned snapshot and the live build
-        describe the same API surface. Empty when the package documents nothing.
+        method (`scores.CosineScore.fit`). The set matches the rendered
+        reference — top-level objects and their documented members, `%nodoc`
+        excluded — whether from an explicit `reference:` config or
+        auto-discovery, so a versioned snapshot and the live build describe the
+        same API surface. Empty when the package documents nothing.
 
         Parameters
         ----------
@@ -8915,43 +8815,82 @@ class GreatDocs:
         """
         import contextlib
         import io
+        import sys
+        from types import ModuleType
 
-        # Suppress diagnostic prints from the resolution/filtering pipeline — this is a
-        # programmatic query method and its callers own their own output streams.
-        # `_suppress_artifact_writes` additionally prevents the pipeline from writing
-        # `_object_types.json` (and its sidecar) into the project root.
-        self._suppress_artifact_writes = True
+        added_paths: list[str] = []
+        cached_modules: dict[str, ModuleType] = {}
+        modules_evicted = False
+        importable_name = self._normalize_package_name(package_name)
+
         try:
+            # Suppress diagnostic prints from the resolution/filtering pipeline — this is a
+            # programmatic query method and its callers own their own output streams.
+            # `_suppress_artifact_writes` additionally prevents the pipeline from writing
+            # `_object_types.json` (and its sidecar) into the project root.
+            self._suppress_artifact_writes = True
+            # `APIReference` loads the package through a plain griffe loader (sys.path-based),
+            # unlike `_create_api_sections_with_config`'s own loader, which is handed explicit
+            # search paths. Temporarily extend sys.path so a package that isn't installed (e.g.
+            # a src-layout dev checkout) can still be found, then restore it.
+            added_paths = [str(p) for p in self._griffe_search_paths() if str(p) not in sys.path]
+            sys.path[:0] = added_paths
+            # Drop any cached import of the package (and its submodules) so dynamic
+            # resolution reflects what's on disk *now* — not a stale module object
+            # left in `sys.modules` by an earlier call in this process (e.g. a
+            # different git-tag checkout during a versioned-snapshot loop).
+            module_keys = [
+                k
+                for k in sys.modules
+                if k == importable_name or k.startswith(f"{importable_name}.")
+            ]
+            cached_modules = {key: sys.modules[key] for key in module_keys}
+            for key in module_keys:
+                del sys.modules[key]
+            modules_evicted = True
             with (
                 contextlib.redirect_stdout(io.StringIO()),
                 contextlib.redirect_stderr(io.StringIO()),
             ):
                 sections = self._create_api_sections_with_config(package_name)
+                if not sections:
+                    return []
+                from great_docs._apiref.api_reference import APIReference
+                from great_docs._apiref.resolve import ObjectNotFoundError
+
+                # In `dynamic` mode, resolving `documented_symbols` below performs a real
+                # import of the target package (executing its top-level code). The
+                # `sys.modules` eviction above only refreshes the target package's own
+                # modules, not third-party packages it imports — so a same-process loop
+                # over different checkouts can still see third-party global-state
+                # carryover (e.g. module-level caches or singletons).
+                ref = APIReference(
+                    {
+                        "api-reference": {
+                            "package": importable_name,
+                            "sections": sections,
+                            "parser": self._config.parser or "numpy",
+                            "dynamic": self._config.dynamic,
+                        }
+                    }
+                )
+                try:
+                    return ref.documented_symbols
+                except (ObjectNotFoundError, ImportError, AttributeError):
+                    return []
         finally:
             self._suppress_artifact_writes = False
-        if not sections:
-            return []
-
-        names: list[str] = []
-        for section in sections:
-            for item in section.get("contents", []):
-                if isinstance(item, str):
-                    names.append(item)
-                elif isinstance(item, dict):
-                    name = item.get("name", "")
-                    if not name:
-                        continue
-                    names.append(name)
-                    for member in item.get("members", []) or []:
-                        names.append(f"{name}.{member}")
-
-        seen: set[str] = set()
-        unique: list[str] = []
-        for name in names:
-            if name not in seen:
-                seen.add(name)
-                unique.append(name)
-        return unique
+            if modules_evicted:
+                for key in [
+                    k
+                    for k in sys.modules
+                    if k == importable_name or k.startswith(f"{importable_name}.")
+                ]:
+                    del sys.modules[key]
+                sys.modules.update(cached_modules)
+            for p in added_paths:
+                if p in sys.path:
+                    sys.path.remove(p)
 
     def _create_api_sections_with_config(self, package_name: str) -> list | None:
         """
@@ -8959,7 +8898,6 @@ class GreatDocs:
 
         First checks for explicit `reference` configuration in great-docs.yml.
         If not found, falls back to auto-generating sections from discovered exports.
-        After obtaining sections, filters out any items marked with `%nodoc`.
 
         Parameters
         ----------
@@ -8979,73 +8917,7 @@ class GreatDocs:
             # Fall back to auto-generated sections from discovered exports
             sections = self._create_api_sections(package_name)
 
-        # Apply %nodoc filtering to remove excluded items
-        if sections:
-            sections = self._apply_nodoc_filter(package_name, sections)
-
         return sections
-
-    def _apply_nodoc_filter(self, package_name: str, sections: list[dict]) -> list[dict] | None:
-        """
-        Filter out items marked with `%nodoc` from API reference sections.
-
-        Extracts directives from all docstrings in the package and removes
-        any items (and their companion method sections) whose docstrings
-        contain the `%nodoc` directive.
-
-        Parameters
-        ----------
-        package_name
-            The name of the package to scan for directives.
-        sections
-            The API reference sections to filter.
-
-        Returns
-        -------
-        list[dict] | None
-            Filtered sections with `%nodoc` items removed, or None if all
-            items were excluded.
-        """
-        directive_map = self._extract_all_directives(package_name)
-        if not directive_map:
-            return sections
-
-        # Collect names of items marked with %nodoc
-        nodoc_names: set[str] = set()
-        for name, directives in directive_map.items():
-            if directives.nodoc:
-                nodoc_names.add(name)
-
-        if not nodoc_names:
-            return sections  # pragma: no cover
-
-        print(
-            f"Excluding {len(nodoc_names)} item(s) marked with %nodoc: {', '.join(sorted(nodoc_names))}"
-        )
-
-        def _item_name(item: str | dict) -> str:
-            """Extract the bare object name from a section content item."""
-            if isinstance(item, dict):
-                return item.get("name", "")
-            return item
-
-        filtered_sections = []
-        for section in sections:
-            contents = section.get("contents", [])
-            filtered_contents = [item for item in contents if _item_name(item) not in nodoc_names]
-
-            # Also drop companion method sections whose parent class is %nodoc
-            title = section.get("title", "")
-            # Companion sections have titles like "ClassName Methods"
-            if title.endswith(" Methods"):
-                class_name = title[: -len(" Methods")]
-                if class_name in nodoc_names:
-                    continue
-
-            if filtered_contents:
-                filtered_sections.append({**section, "contents": filtered_contents})
-
-        return filtered_sections if filtered_sections else None
 
     def _extract_authors_from_pyproject(self) -> list[dict[str, str]]:
         """
@@ -10955,6 +10827,11 @@ title: "Authors and Citation"
         for warning in warnings:
             print(warning)
 
+        # Title for the generated homepage. Empty by default so "Home" doesn't
+        # appear on an auto-generated landing page; a user-authored source file
+        # may override it via its frontmatter title.
+        homepage_title = ""
+
         if source_file is None:
             print("No index source file found (index.qmd, index.md, README.md, or README.rst)")
             print("Generating landing page from package metadata...")
@@ -10978,8 +10855,12 @@ title: "Authors and Citation"
             # wrapper template below supplies its own frontmatter, so embedding
             # the source's frontmatter mid-document would render it as a
             # horizontal rule plus visible raw YAML text (e.g. index.qmd files,
-            # which universally start with a `---` block).
-            _, readme_content = self._split_frontmatter(readme_content)
+            # which universally start with a `---` block). The source title is
+            # carried over into the wrapper so an authored title survives.
+            source_fm, readme_content = self._split_frontmatter(readme_content)
+            source_title = source_fm.get("title", "")
+            if isinstance(source_title, str) and source_title:
+                homepage_title = source_title
 
             # Copy images referenced in the source file to the build directory
             self._copy_readme_images(source_file)
@@ -11028,7 +10909,6 @@ section.level2:first-of-type > h2:first-child,
 """
 
         # Create a qmd file with the README content
-        # Use empty title so "Home" doesn't appear on landing page
         # Add margin content in a special div that Quarto will place in the margin
         # Prepend hero section (raw HTML block) when enabled
         hero_block = ""
@@ -11038,9 +10918,13 @@ section.level2:first-of-type > h2:first-child,
 
 """
 
+        # Render the title line YAML-safe (quotes/colons in an authored title
+        # are escaped). Empty title renders as `title: ""`.
+        title_line = format_yaml({"title": homepage_title}).rstrip()
+
         if margin_content:
             qmd_content = f"""---
-title: ""
+{title_line}
 toc: false
 body-classes: "gd-homepage"
 ---
@@ -11053,7 +10937,7 @@ body-classes: "gd-homepage"
 """
         else:
             qmd_content = f"""---  # pragma: no cover
-title: ""
+{title_line}
 toc: false
 body-classes: "gd-homepage"
 ---

@@ -2353,7 +2353,6 @@ def lint(project_path: str | None, checks: tuple[str, ...], json_output: bool) -
       • broken-xref          '%seealso' references to unknown symbols
       • style-mismatch       Docstrings not matching configured style (numpy/google/sphinx)
       • unknown-directive    Unrecognized '%directive' names
-      • empty-seealso        '%seealso' entries with empty references
       • stale-badge          Version badges far behind latest release
       • stale-callout        Version callouts that are very old
       • stale-upcoming       'upcoming:' frontmatter for already-released versions

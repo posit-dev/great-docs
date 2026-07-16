@@ -29,7 +29,6 @@ from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
 from yaml12 import format_yaml as _format_yaml, parse_yaml as _parse_yaml
 
 from great_docs import Config, create_default_config, GreatDocs, load_config
-from great_docs._directives import DocDirectives, extract_directives
 from great_docs._apiref import _globals
 from great_docs._apiref import content
 from great_docs._apiref import spec
@@ -122,10 +121,8 @@ from great_docs._apiref._type_checks import (
     is_doc_function,
 )
 from great_docs._apiref.resolve import (
-    resolve,
     ObjectNotFoundError,
     _Resolver,
-    _autogenerate_sections,
     _sections_from_package,
     _is_external_alias,
     _to_simple_dict,
@@ -4159,6 +4156,96 @@ def test_readme_rst_not_used_when_readme_md_exists():
         assert "RST readme" not in content
 
 
+def _homepage_frontmatter(content: str) -> dict:
+    """Parse the leading YAML frontmatter block from generated homepage content."""
+    assert content.startswith("---")
+    _, fm_text, _ = content.split("---", 2)
+    return parse_yaml(fm_text) or {}
+
+
+def test_index_qmd_frontmatter_title_preserved():
+    """Authored frontmatter title on the index source survives into index.qmd."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        (project_path / "pyproject.toml").write_text(
+            '[project]\nname = "test"\nversion = "1.0"\n'
+        )
+        (project_path / "great-docs.yml").write_text("")
+
+        (project_path / "index.qmd").write_text(
+            '---\ntitle: "My Package"\n---\n\n## Getting Started\n\nHello.\n'
+        )
+
+        pkg_dir = project_path / "test"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._create_index_from_readme(force_rebuild=True)
+
+        content = (docs.project_path / "index.qmd").read_text()
+        fm = _homepage_frontmatter(content)
+
+        assert fm["title"] == "My Package"
+        assert fm["toc"] is False
+        assert fm["body-classes"] == "gd-homepage"
+
+
+def test_index_qmd_frontmatter_title_empty_without_source_title():
+    """A source file with no title yields an empty homepage title."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        (project_path / "pyproject.toml").write_text(
+            '[project]\nname = "test"\nversion = "1.0"\n'
+        )
+        (project_path / "great-docs.yml").write_text("")
+
+        (project_path / "README.md").write_text("## Getting Started\n\nHello.\n")
+
+        pkg_dir = project_path / "test"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._create_index_from_readme(force_rebuild=True)
+
+        content = (docs.project_path / "index.qmd").read_text()
+        fm = _homepage_frontmatter(content)
+
+        assert fm["title"] == ""
+
+
+def test_index_qmd_frontmatter_title_yaml_safe():
+    """A title with YAML-special characters round-trips through the frontmatter."""
+    tricky_title = 'A: B "quoted"'
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        (project_path / "pyproject.toml").write_text(
+            '[project]\nname = "test"\nversion = "1.0"\n'
+        )
+        (project_path / "great-docs.yml").write_text("")
+
+        source_fm = format_yaml({"title": tricky_title}).rstrip()
+        (project_path / "index.qmd").write_text(
+            f"---\n{source_fm}\n---\n\n## Getting Started\n\nHello.\n"
+        )
+
+        pkg_dir = project_path / "test"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs._create_index_from_readme(force_rebuild=True)
+
+        content = (docs.project_path / "index.qmd").read_text()
+        fm = _homepage_frontmatter(content)
+
+        assert fm["title"] == tricky_title
+
+
 def test_convert_rst_to_markdown_real_pandoc():
     """Test RST to Markdown conversion via pandoc."""
 
@@ -6307,18 +6394,6 @@ class TestGdgSite144DocstringTables:
         assert "42.5" in html
 
 
-def _make_resolver(objects=None):
-    """Helper: create a _Resolver backed by a dict of objects."""
-    objects = objects or {}
-
-    def get_object(path, **kwargs):
-        if path in objects:
-            return objects[path]
-        raise KeyError(path)
-
-    return _Resolver(get_object=get_object)
-
-
 def test_to_simple_dict_base_dataclass():
     page = Page(path="foo")
     result = _to_simple_dict(page)
@@ -6668,218 +6743,17 @@ def test_resolver_clean_member_path_no_colon():
     assert result == "simple"
 
 
-def test_resolver_get_object_or_raise_success():
-    obj = gf.Function("myfunc")
+def test_resolver_get_object_or_raise_missing(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(tmp_path))
+    (tmp_path / "gdmiss").mkdir()
+    (tmp_path / "gdmiss" / "__init__.py").write_text("__all__ = []\n")
+    from great_docs._apiref.api_reference import Settings
+    from great_docs._apiref.resolve import ObjectNotFoundError, _Resolver
 
-    def get_object(path, **kwargs):
-        return obj
-
-    resolver = _Resolver(get_object=get_object)
-    result = resolver.get_object_or_raise("pkg.myfunc")
-    assert result is obj
-
-
-def test_resolver_get_object_or_raise_key_error():
-    def get_object(path, **kwargs):
-        raise KeyError("pkg.missing")
-
-    resolver = _Resolver(get_object=get_object)
+    resolver = _Resolver(Settings(parser="numpy"))
+    resolver.current_package = "gdmiss"
     with pytest.raises(ObjectNotFoundError, match="Cannot find an object named"):
-        resolver.get_object_or_raise("pkg.missing")
-
-
-def test_resolver_sets_package():
-    resolver = _make_resolver()
-    assert resolver.current_package is None
-
-    func = gf.Function("myfunc")
-    resolver2 = _make_resolver({"myfunc": func})
-    result = resolver2._resolve_object(SpecObject(name="myfunc"))
-    assert isinstance(result, DocFunction)
-
-
-def test_resolver_restores_package():
-    func = gf.Function("f")
-    resolver = _make_resolver({"pkg:f": func})
-    resolver.current_package = "pkg"
-
-    resolver._resolve_object(SpecObject(name="f"))
-    assert resolver.current_package == "pkg"
-
-
-def test_resolver_sets_options():
-    func = gf.Function("f")
-    resolver = _make_resolver({"f": func})
-
-    opts = SpecOptions(include_private=True)
-    SpecSection(title="Test", options=opts, contents=[SpecObject(name="f")])
-    assert resolver.options is None
-
-
-def test_resolve_object_basic_function():
-    func = gf.Function("myfunc")
-    resolver = _make_resolver({"myfunc": func})
-    result = resolver._resolve_object(SpecObject(name="myfunc"))
-    assert isinstance(result, DocFunction)
-    assert result.obj is func
-
-
-def test_resolve_object_basic_class():
-    cls = gf.Class("MyClass")
-    resolver = _make_resolver({"MyClass": cls})
-    result = resolver._resolve_object(SpecObject(name="MyClass"))
-    assert isinstance(result, DocClass)
-    assert result.obj is cls
-
-
-def test_resolve_object_basic_attribute():
-    attr = gf.Attribute("myattr")
-    resolver = _make_resolver({"myattr": attr})
-    result = resolver._resolve_object(SpecObject(name="myattr"))
-    assert isinstance(result, DocAttribute)
-    assert result.obj is attr
-
-
-def test_resolve_object_with_package():
-    func = gf.Function("f")
-    resolver = _make_resolver({"pkg:f": func})
-    resolver.current_package = "pkg"
-    result = resolver._resolve_object(SpecObject(name="f"))
-    assert isinstance(result, DocFunction)
-    assert result.obj is func
-
-
-def test_resolve_object_colon_in_pkg():
-    func = gf.Function("method")
-    resolver = _make_resolver({"pkg.mod:Class.method": func})
-    resolver.current_package = "pkg.mod:Class"
-    result = resolver._resolve_object(SpecObject(name="method"))
-    assert isinstance(result, DocFunction)
-
-
-def test_resolve_object_colon_in_name():
-    func = gf.Function("method")
-    resolver = _make_resolver({"pkg.mod:method": func})
-    resolver.current_package = "pkg"
-    result = resolver._resolve_object(SpecObject(name="mod:method"))
-    assert isinstance(result, DocFunction)
-
-
-def test_resolve_object_children_separate():
-    cls = gf.Class("MyClass")
-    method = gf.Function("my_method")
-    method.docstring = gf.Docstring("A method.", parent=method)
-    cls.set_member("my_method", method)
-
-    resolver = _make_resolver({"MyClass": cls, "MyClass:my_method": method})
-    result = resolver._resolve_object(SpecObject(name="MyClass", children=ChildrenStyle.separate))
-    assert isinstance(result, DocClass)
-    assert len(result.members) == 1
-    assert isinstance(result.members[0], MemberPage)
-
-
-def test_resolve_object_children_embedded():
-    cls = gf.Class("MyClass")
-    method = gf.Function("my_method")
-    method.docstring = gf.Docstring("A method.", parent=method)
-    cls.set_member("my_method", method)
-
-    resolver = _make_resolver({"MyClass": cls, "MyClass:my_method": method})
-    result = resolver._resolve_object(SpecObject(name="MyClass", children=ChildrenStyle.embedded))
-    assert isinstance(result, DocClass)
-    assert len(result.members) == 1
-    assert isinstance(result.members[0], DocFunction)
-
-
-def test_resolve_object_children_flat():
-    cls = gf.Class("MyClass")
-    method = gf.Function("my_method")
-    method.docstring = gf.Docstring("A method.", parent=method)
-    cls.set_member("my_method", method)
-
-    resolver = _make_resolver({"MyClass": cls, "MyClass:my_method": method})
-    result = resolver._resolve_object(SpecObject(name="MyClass", children=ChildrenStyle.flat))
-    assert isinstance(result, DocClass)
-    assert result.flat is True
-    assert len(result.members) == 1
-
-
-def test_resolve_object_children_linked():
-    cls = gf.Class("MyClass")
-    method = gf.Function("my_method")
-    method.docstring = gf.Docstring("A method.", parent=method)
-    cls.set_member("my_method", method)
-
-    resolver = _make_resolver({"MyClass": cls, "MyClass:my_method": method})
-    result = resolver._resolve_object(SpecObject(name="MyClass", children=ChildrenStyle.linked))
-    assert isinstance(result, DocClass)
-    assert len(result.members) == 1
-    assert isinstance(result.members[0], Link)
-
-
-def test_resolve_object_unsupported_children():
-    cls = gf.Class("MyClass")
-    method = gf.Function("my_method")
-    method.docstring = gf.Docstring("A method.", parent=method)
-    cls.set_member("my_method", method)
-
-    resolver = _make_resolver({"MyClass": cls, "MyClass:my_method": method})
-    spec_obj = SpecObject(name="MyClass")
-    spec_obj.children = "bad_value"
-    with pytest.raises(ValueError, match="Unsupported value of children"):
-        resolver._resolve_object(spec_obj)
-
-
-def test_resolve_object_dynamic_from_entry():
-    func = gf.Function("f")
-    captured = {}
-
-    def get_object(path, **kwargs):
-        captured.update(kwargs)
-        return func
-
-    resolver = _Resolver(get_object=get_object)
-    resolver._resolve_object(SpecObject(name="f", dynamic=True))
-    assert captured.get("dynamic") is True
-
-
-def test_resolve_object_dynamic_from_resolver():
-    func = gf.Function("f")
-    captured = {}
-
-    def get_object(path, **kwargs):
-        captured.update(kwargs)
-        return func
-
-    resolver = _Resolver(get_object=get_object)
-    resolver.dynamic = True
-    resolver._resolve_object(SpecObject(name="f"))
-    assert captured.get("dynamic") is True
-
-
-def test_resolve_object_options_merge():
-    func = gf.Function("f")
-    resolver = _make_resolver({"f": func})
-    resolver.options = SpecOptions(signature_name="full")
-
-    result = resolver._resolve_object(SpecObject(name="f"))
-    assert isinstance(result, DocFunction)
-    assert result.signature_name == "full"
-
-
-def test_resolve_object_member_options():
-    cls = gf.Class("MyClass")
-    method = gf.Function("m")
-    method.docstring = gf.Docstring("A method.", parent=method)
-    cls.set_member("m", method)
-
-    member_opts = SpecOptions(signature_name="short")
-    resolver = _make_resolver({"MyClass": cls, "MyClass:m": method})
-    result = resolver._resolve_object(
-        SpecObject(name="MyClass", member_options=member_opts, children=ChildrenStyle.embedded)
-    )
-    assert isinstance(result, DocClass)
-    assert len(result.members) == 1
+        resolver.get_object_or_raise("gdmiss:does_not_exist")
 
 
 def test_spec_object_records_specified_fields():
@@ -6890,28 +6764,6 @@ def test_spec_object_records_specified_fields():
 def test_spec_object_rejects_unknown_fields():
     with pytest.raises(TypeError, match="bogus"):
         SpecObject(name="f", bogus=True)
-
-
-def test_resolver_options_preserve_entry_name():
-    func = gf.Function("f")
-    func.docstring = gf.Docstring("A func.", parent=func)
-
-    resolver = _make_resolver({"f": func})
-    resolver.options = SpecOptions(include_private=True)
-
-    result = resolver._resolve_object(SpecObject(name="f"))
-    assert result.name == "f"
-
-
-def test_resolver_entry_options_win_over_section_options():
-    func = gf.Function("f")
-    func.docstring = gf.Docstring("A func.", parent=func)
-
-    resolver = _make_resolver({"f": func})
-    resolver.options = SpecOptions(signature_name="doc")
-
-    result = resolver._resolve_object(SpecObject(name="f", signature_name="full"))
-    assert result.signature_name == "full"
 
 
 def test_spec_options_replace_preserves_specified_fields():
@@ -6939,291 +6791,6 @@ def test_node_transformer_preserves_specified_fields():
     assert obj.name == "g"
     assert "name" in obj._fields_specified
     assert "include_private" not in obj._fields_specified
-
-
-def test_resolve_object_module_members_skipped():
-    mod = gf.Module("pkg")
-    submod = gf.Module("sub")
-    submod.docstring = gf.Docstring("Submodule.", parent=submod)
-    mod.set_member("sub", submod)
-    func = gf.Function("f")
-    func.docstring = gf.Docstring("A func.", parent=func)
-    mod.set_member("f", func)
-
-    resolver = _make_resolver({"pkg": mod, "pkg:f": func, "pkg:sub": submod})
-    result = resolver._resolve_object(SpecObject(name="pkg"))
-    assert isinstance(result, DocModule)
-    member_names = [m.name if hasattr(m, "name") else str(m) for m in result.members]
-    assert not any("sub" in n for n in member_names)
-
-
-def test_fetch_members_explicit():
-    resolver = _make_resolver()
-    spec_obj = SpecObject(name="X", members=["a", "b"])
-    obj = gf.Class("X")
-    assert resolver._fetch_members(spec_obj, obj) == ["a", "b"]
-
-
-def test_fetch_members_filter_private():
-    cls = gf.Class("X")
-    pub = gf.Function("pub")
-    pub.docstring = gf.Docstring("doc", parent=pub)
-    cls.set_member("pub", pub)
-    priv = gf.Function("_priv")
-    priv.docstring = gf.Docstring("doc", parent=priv)
-    cls.set_member("_priv", priv)
-
-    resolver = _make_resolver()
-    result = resolver._fetch_members(SpecObject(name="X", include_private=False), cls)
-    assert "pub" in result
-    assert "_priv" not in result
-
-
-def test_fetch_members_include_private():
-    cls = gf.Class("X")
-    priv = gf.Function("_priv")
-    priv.docstring = gf.Docstring("doc", parent=priv)
-    cls.set_member("_priv", priv)
-
-    resolver = _make_resolver()
-    result = resolver._fetch_members(SpecObject(name="X", include_private=True), cls)
-    assert "_priv" in result
-
-
-def test_fetch_members_dunder_with_docstring_kept():
-    cls = gf.Class("X")
-    enter = gf.Function("__enter__")
-    enter.docstring = gf.Docstring("Enter.", parent=enter)
-    cls.set_member("__enter__", enter)
-
-    resolver = _make_resolver()
-    result = resolver._fetch_members(SpecObject(name="X", include_private=False), cls)
-    assert "__enter__" in result
-
-
-def test_fetch_members_dunder_without_docstring_filtered():
-    cls = gf.Class("X")
-    init = gf.Function("__init__")
-    cls.set_member("__init__", init)
-
-    resolver = _make_resolver()
-    result = resolver._fetch_members(SpecObject(name="X", include_private=False), cls)
-    assert "__init__" not in result
-
-
-def test_fetch_members_filter_empty():
-    cls = gf.Class("X")
-    nodoc = gf.Function("nodoc")
-    cls.set_member("nodoc", nodoc)
-    withdoc = gf.Function("withdoc")
-    withdoc.docstring = gf.Docstring("Has doc.", parent=withdoc)
-    cls.set_member("withdoc", withdoc)
-
-    resolver = _make_resolver()
-    result = resolver._fetch_members(SpecObject(name="X", include_empty=False), cls)
-    assert "withdoc" in result
-    assert "nodoc" not in result
-
-
-def test_fetch_members_include_empty():
-    cls = gf.Class("X")
-    nodoc = gf.Function("nodoc")
-    cls.set_member("nodoc", nodoc)
-
-    resolver = _make_resolver()
-    result = resolver._fetch_members(SpecObject(name="X", include_empty=True), cls)
-    assert "nodoc" in result
-
-
-def test_fetch_members_filter_attributes():
-    cls = gf.Class("X")
-    attr = gf.Attribute("myattr")
-    attr.docstring = gf.Docstring("doc", parent=attr)
-    cls.set_member("myattr", attr)
-    func = gf.Function("myfunc")
-    func.docstring = gf.Docstring("doc", parent=func)
-    cls.set_member("myfunc", func)
-
-    resolver = _make_resolver()
-    result = resolver._fetch_members(SpecObject(name="X", include_attributes=False), cls)
-    assert "myfunc" in result
-    assert "myattr" not in result
-
-
-def test_fetch_members_filter_classes():
-    mod = gf.Module("pkg")
-    inner_cls = gf.Class("Inner")
-    inner_cls.docstring = gf.Docstring("doc", parent=inner_cls)
-    mod.set_member("Inner", inner_cls)
-    func = gf.Function("f")
-    func.docstring = gf.Docstring("doc", parent=func)
-    mod.set_member("f", func)
-
-    resolver = _make_resolver()
-    result = resolver._fetch_members(SpecObject(name="pkg", include_classes=False), mod)
-    assert "f" in result
-    assert "Inner" not in result
-
-
-def test_fetch_members_filter_functions():
-    mod = gf.Module("pkg")
-    func = gf.Function("f")
-    func.docstring = gf.Docstring("doc", parent=func)
-    mod.set_member("f", func)
-    cls = gf.Class("C")
-    cls.docstring = gf.Docstring("doc", parent=cls)
-    mod.set_member("C", cls)
-
-    resolver = _make_resolver()
-    result = resolver._fetch_members(SpecObject(name="pkg", include_functions=False), mod)
-    assert "C" in result
-    assert "f" not in result
-
-
-def test_fetch_members_exclude():
-    cls = gf.Class("X")
-    f1 = gf.Function("f1")
-    f1.docstring = gf.Docstring("doc", parent=f1)
-    cls.set_member("f1", f1)
-    f2 = gf.Function("f2")
-    f2.docstring = gf.Docstring("doc", parent=f2)
-    cls.set_member("f2", f2)
-
-    resolver = _make_resolver()
-    result = resolver._fetch_members(SpecObject(name="X", exclude=["f1"]), cls)
-    assert "f2" in result
-    assert "f1" not in result
-
-
-def test_fetch_members_include_raises():
-    resolver = _make_resolver()
-    with pytest.raises(NotImplementedError, match="include argument"):
-        resolver._fetch_members(SpecObject(name="X", include="pattern"), gf.Class("X"))
-
-
-def test_fetch_members_order_alphabetical():
-    cls = gf.Class("X")
-    for name in ["zebra", "apple", "mango"]:
-        f = gf.Function(name)
-        f.docstring = gf.Docstring("doc", parent=f)
-        cls.set_member(name, f)
-
-    resolver = _make_resolver()
-    result = resolver._fetch_members(SpecObject(name="X", member_order="alphabetical"), cls)
-    assert result == sorted(result)
-
-
-def test_fetch_members_order_source():
-    cls = gf.Class("X")
-    for name in ["zebra", "apple", "mango"]:
-        f = gf.Function(name)
-        f.docstring = gf.Docstring("doc", parent=f)
-        cls.set_member(name, f)
-
-    resolver = _make_resolver()
-    result = resolver._fetch_members(SpecObject(name="X", member_order="source"), cls)
-    assert result == ["zebra", "apple", "mango"]
-
-
-def test_fetch_members_order_invalid():
-    resolver = _make_resolver()
-    with pytest.raises(ValueError, match="Unsupported value of member_order"):
-        resolver._fetch_members(SpecObject(name="X", member_order="random"), gf.Class("X"))
-
-
-def test_fetch_members_module_exports_filter():
-    mod = gf.Module("pkg")
-    f1 = gf.Function("exported_f")
-    f1.docstring = gf.Docstring("doc", parent=f1)
-    f1.labels.add("exported")
-    mod.set_member("exported_f", f1)
-    f2 = gf.Function("internal_f")
-    f2.docstring = gf.Docstring("doc", parent=f2)
-    mod.set_member("internal_f", f2)
-    mod.exports = {"exported_f"}
-
-    resolver = _make_resolver()
-    result = resolver._fetch_members(SpecObject(name="pkg"), mod)
-    assert "exported_f" in result
-    assert "internal_f" not in result
-
-
-def test_fetch_members_filter_imports():
-    mod = gf.Module("pkg")
-    func = gf.Function("local_f")
-    func.docstring = gf.Docstring("doc", parent=func)
-    mod.set_member("local_f", func)
-
-    other_mod = gf.Module("other")
-    ext_f = gf.Function("ext_f")
-    ext_f.docstring = gf.Docstring("doc", parent=ext_f)
-    other_mod.set_member("ext_f", ext_f)
-    alias = gf.Alias("ext_f", target=ext_f, parent=mod)
-    mod.set_member("ext_f", alias)
-
-    resolver = _make_resolver()
-    result = resolver._fetch_members(SpecObject(name="pkg", include_imports=False), mod)
-    assert "local_f" in result
-    assert "ext_f" not in result
-
-
-def test_fetch_members_include_imports():
-    mod = gf.Module("pkg")
-    func = gf.Function("local_f")
-    func.docstring = gf.Docstring("doc", parent=func)
-    mod.set_member("local_f", func)
-
-    other_mod = gf.Module("other")
-    ext_f = gf.Function("ext_f")
-    ext_f.docstring = gf.Docstring("doc", parent=ext_f)
-    other_mod.set_member("ext_f", ext_f)
-    alias = gf.Alias("ext_f", target=ext_f, parent=mod)
-    mod.set_member("ext_f", alias)
-
-    resolver = _make_resolver()
-    result = resolver._fetch_members(SpecObject(name="pkg", include_imports=True), mod)
-    assert "local_f" in result
-    assert "ext_f" in result
-
-
-def test_resolver_sections_resolved():
-    func = gf.Function("f")
-    resolver = _make_resolver({"pkg:f": func})
-    resolver.current_package = "pkg"
-
-    sections = [SpecSection(title="API", contents=[SpecObject(name="f")])]
-    result = resolver.resolve_sections(sections)
-    assert isinstance(result, list)
-    assert len(result) == 1
-
-
-def test_resolver_autogenerate_sections(capsys):
-    mod = gf.Module("pkg")
-    func = gf.Function("f")
-    func.docstring = gf.Docstring("A func.", parent=func)
-    mod.set_member("f", func)
-    mod.exports = {"f"}
-    func.labels.add("exported")
-
-    resolver = _make_resolver({"pkg": mod, "pkg:f": func})
-    sections = _autogenerate_sections(resolver, "pkg")
-
-    captured = capsys.readouterr()
-    assert "Autogenerating contents" in captured.out
-    assert isinstance(sections, list)
-    assert len(sections) == 1
-
-
-def test_resolver_exit_section_wraps_non_page():
-    func = gf.Function("f")
-    resolver = _make_resolver({"pkg:f": func})
-    resolver.current_package = "pkg"
-
-    sections = [SpecSection(title="API", contents=[SpecObject(name="f")])]
-    result = resolver.resolve_sections(sections)
-    section = result[0]
-    for item in section.contents:
-        assert isinstance(item, Page)
 
 
 def test_package_prefix_remover_strips_prefix():
@@ -7264,45 +6831,6 @@ def test_strip_package_name_no_match():
     page = Page(path="other.func", contents=[doc])
     result = remove_package_prefix(page, "pkg")
     assert result.path == "other.func"
-
-
-def test_resolver_basic():
-    func = gf.Function("myfunc")
-
-    def get_object(path, **kwargs):
-        return func
-
-    resolver = _Resolver(get_object=get_object)
-    result = resolver._resolve_object(SpecObject(name="myfunc"))
-    assert isinstance(result, DocFunction)
-
-
-def test_resolver_with_package():
-    func = gf.Function("f")
-
-    def get_object(path, **kwargs):
-        if path == "mypkg:f":
-            return func
-        raise KeyError(path)
-
-    resolver = _Resolver(get_object=get_object)
-    resolver.current_package = "mypkg"
-    result = resolver._resolve_object(SpecObject(name="f"))
-    assert isinstance(result, DocFunction)
-
-
-def test_resolver_with_dynamic():
-    func = gf.Function("f")
-    captured = {}
-
-    def get_object(path, **kwargs):
-        captured.update(kwargs)
-        return func
-
-    resolver = _Resolver(get_object=get_object)
-    resolver.dynamic = True
-    resolver._resolve_object(SpecObject(name="f"))
-    assert captured.get("dynamic") is True
 
 
 # ============================================================================
@@ -12365,105 +11893,6 @@ def test_process_user_guide_with_sections():
         assert len(section_items) >= 1
 
 
-def test_apply_nodoc_filter_removes_items():
-    """_apply_nodoc_filter removes items with %nodoc directive."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "great_docs"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [
-            {"title": "Functions", "contents": ["func_a", "func_b"]},
-        ]
-
-        # Patch _extract_all_directives to return nodoc for func_b
-
-        mock_directives = MagicMock()
-        mock_directives.nodoc = True
-
-        with patch.object(
-            docs, "_extract_all_directives", return_value={"func_b": mock_directives}
-        ):
-            result = docs._apply_nodoc_filter("great_docs", sections)
-
-        assert result is not None
-        assert len(result) == 1
-        assert result[0]["contents"] == ["func_a"]
-
-
-def test_apply_nodoc_filter_no_directives_empty():
-    """_apply_nodoc_filter returns sections unchanged when no directives."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [{"title": "Funcs", "contents": ["f1", "f2"]}]
-
-        with patch.object(docs, "_extract_all_directives", return_value={}):
-            result = docs._apply_nodoc_filter("pkg", sections)
-
-        assert result == sections
-
-
-def test_apply_nodoc_filter_removes_companion_section():
-    """_apply_nodoc_filter removes companion 'ClassName Methods' section."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [
-            {"title": "Classes", "contents": ["MyClass"]},
-            {"title": "MyClass Methods", "contents": ["MyClass.foo", "MyClass.bar"]},
-        ]
-
-        mock_dir = MagicMock()
-        mock_dir.nodoc = True
-        with patch.object(docs, "_extract_all_directives", return_value={"MyClass": mock_dir}):
-            result = docs._apply_nodoc_filter("pkg", sections)
-
-        # Both the class entry and the companion method section should be gone
-        assert result is None
-
-
-def test_apply_nodoc_filter_all_excluded_no_remaining():
-    """_apply_nodoc_filter returns None when all items excluded."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [{"title": "Funcs", "contents": ["only_func"]}]
-
-        mock_dir = MagicMock()
-        mock_dir.nodoc = True
-        with patch.object(docs, "_extract_all_directives", return_value={"only_func": mock_dir}):
-            result = docs._apply_nodoc_filter("pkg", sections)
-
-        assert result is None
-
-
-def test_apply_nodoc_filter_dict_items():
-    """_apply_nodoc_filter handles dict items (name/members format)."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [
-            {
-                "title": "Classes",
-                "contents": [
-                    {"name": "Good", "members": []},
-                    {"name": "Bad", "members": []},
-                ],
-            }
-        ]
-
-        mock_dir = MagicMock()
-        mock_dir.nodoc = True
-        with patch.object(docs, "_extract_all_directives", return_value={"Bad": mock_dir}):
-            result = docs._apply_nodoc_filter("pkg", sections)
-
-        assert len(result) == 1
-        assert len(result[0]["contents"]) == 1
-        assert result[0]["contents"][0]["name"] == "Good"
-
-
 def test_generate_user_guide_sidebar_explicit():
     """_generate_user_guide_sidebar_explicit builds sidebar from config."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -17014,8 +16443,7 @@ def test_create_api_sections_with_config_uses_explicit():
         with patch.object(
             docs, "_create_api_sections_from_config", return_value=fake_config_sections
         ):
-            with patch.object(docs, "_apply_nodoc_filter", side_effect=lambda pkg, s: s):
-                result = docs._create_api_sections_with_config("mypkg")
+            result = docs._create_api_sections_with_config("mypkg")
 
         assert result == fake_config_sections
 
@@ -17029,8 +16457,7 @@ def test_create_api_sections_with_config_falls_back():
         fake_auto_sections = [{"title": "Auto", "contents": ["B"]}]
         with patch.object(docs, "_create_api_sections_from_config", return_value=None):
             with patch.object(docs, "_create_api_sections", return_value=fake_auto_sections):
-                with patch.object(docs, "_apply_nodoc_filter", side_effect=lambda pkg, s: s):
-                    result = docs._create_api_sections_with_config("mypkg")
+                result = docs._create_api_sections_with_config("mypkg")
 
         assert result == fake_auto_sections
 
@@ -17792,86 +17219,6 @@ def test_build_sections_from_reference_config_dict_no_name():
         assert result is not None
         assert len(result[0]["contents"]) == 1
         assert result[0]["contents"][0] == "Valid"
-
-
-def test_apply_nodoc_filter_no_directives():
-    """Test _apply_nodoc_filter passes through when no directives found."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [{"title": "API", "contents": ["A", "B"]}]
-        with patch.object(docs, "_extract_all_directives", return_value={}):
-            result = docs._apply_nodoc_filter("mypkg", sections)
-        assert result == sections
-
-
-def test_apply_nodoc_filter_removes_nodoc_items():
-    """Test _apply_nodoc_filter removes items marked with %nodoc."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [
-            {"title": "Core", "contents": ["Widget", "Internal", "helper"]},
-        ]
-        # Mock directive map with Internal marked as %nodoc
-        mock_directives = MagicMock()
-        mock_directives.nodoc = True
-        normal_directives = MagicMock()
-        normal_directives.nodoc = False
-        directive_map = {"Internal": mock_directives, "Widget": normal_directives}
-
-        with patch.object(docs, "_extract_all_directives", return_value=directive_map):
-            result = docs._apply_nodoc_filter("mypkg", sections)
-
-        assert result is not None
-        assert len(result) == 1
-        assert "Widget" in result[0]["contents"]
-        assert "Internal" not in result[0]["contents"]
-        assert "helper" in result[0]["contents"]
-
-
-def test_apply_nodoc_filter_removes_companion_method_section():
-    """Test _apply_nodoc_filter removes companion method sections for %nodoc classes."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [
-            {"title": "Classes", "contents": ["MyClass", "OtherClass"]},
-            {"title": "MyClass Methods", "contents": ["MyClass.foo", "MyClass.bar"]},
-        ]
-        mock_nodoc = MagicMock()
-        mock_nodoc.nodoc = True
-        directive_map = {"MyClass": mock_nodoc}
-
-        with patch.object(docs, "_extract_all_directives", return_value=directive_map):
-            result = docs._apply_nodoc_filter("mypkg", sections)
-
-        assert result is not None
-        # MyClass Methods section should be removed
-        titles = [s["title"] for s in result]
-        assert "MyClass Methods" not in titles
-        # OtherClass should remain
-        assert "OtherClass" in result[0]["contents"]
-
-
-def test_apply_nodoc_filter_all_excluded():
-    """Test _apply_nodoc_filter returns None when all items are excluded."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        sections = [{"title": "API", "contents": ["A"]}]
-        mock_nodoc = MagicMock()
-        mock_nodoc.nodoc = True
-        directive_map = {"A": mock_nodoc}
-
-        with patch.object(docs, "_extract_all_directives", return_value=directive_map):
-            result = docs._apply_nodoc_filter("mypkg", sections)
-
-        assert result is None
 
 
 def test_extract_authors_from_pyproject_basic():
@@ -25439,66 +24786,6 @@ def test_discover_package_exports_auto_include_no_overlap():
             sys.path.remove(tmp_dir)
 
 
-def test_extract_all_directives_basic():
-    """Test _extract_all_directives finds directives in docstrings."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "dirpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "class MyClass:\n"
-            '    """A class.\n\n'
-            "    @seealso OtherClass\n"
-            '    """\n'
-            "    def method(self):\n"
-            '        """A method.\n\n'
-            "        @seealso another_func\n"
-            '        """\n'
-            "        pass\n",
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._extract_all_directives("dirpkg")
-
-            # Should find directives in MyClass and MyClass.method
-            assert isinstance(result, dict)
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_extract_all_directives_empty_package():
-    """Test _extract_all_directives returns empty dict for package without directives."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "nodirpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            'def func():\n    """A simple function."""\n    pass\n',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._extract_all_directives("nodirpkg")
-
-            assert isinstance(result, dict)
-        finally:
-            sys.path.remove(tmp_dir)
-
-
-def test_extract_all_directives_package_not_found():
-    """Test _extract_all_directives returns empty dict when package can't load."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._extract_all_directives("nonexistent_xyz999")
-        assert result == {}
-
-
 def test_find_package_init_with_pyproject_setuptools():
     """Test _find_package_init finds init via pyproject.toml setuptools packages."""
 
@@ -27345,40 +26632,6 @@ def test_detect_dynamic_mode_with_simple_package():
         finally:
             sys.path.remove(tmp_dir)
             sys.modules.pop("simpledynpkg", None)
-
-
-def test_extract_all_directives_with_class_methods():
-    """Test _extract_all_directives processes class methods."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "dirmethpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "class MyClass:\n"
-            '    """A class.\n\n'
-            "    @seealso Related\n"
-            '    """\n'
-            "    def method(self):\n"
-            '        """A method.\n\n'
-            "        @seealso other_func\n"
-            '        """\n'
-            "        pass\n"
-            "    def _private(self):\n"
-            '        """Private, should be skipped."""\n'
-            "        pass\n",
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._extract_all_directives("dirmethpkg")
-
-            # Should find directives but skip private methods
-            assert isinstance(result, dict)
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("dirmethpkg", None)
 
 
 def test_create_blended_index_creates_index():
@@ -29386,7 +28639,7 @@ def test_api_reference_generate_sidebar_basic():
                     }
                 }
             )
-            resolved = resolve(ref.sections, package=ref.package, settings=ref.settings)
+            resolved = ref.resolved
 
             sidebar = write._generate_sidebar(
                 resolved,
@@ -33614,31 +32867,6 @@ def test_renderbase_summary_name_property():
     assert rb.summary_name == ""
 
 
-def test_extract_directives_nodoc():
-    """extract_directives() sets nodoc=True when %nodoc is in docstring."""
-
-    docstring = """
-    Short description.
-
-    %nodoc
-
-    Parameters
-    ----------
-    x : int
-    """
-    result = extract_directives(docstring)
-    assert result.nodoc is True
-
-
-def test_extract_directives_seealso_empty_entry():
-    """extract_directives() skips empty entries in seealso list."""
-
-    docstring = "%seealso func_a,,func_b"
-    result = extract_directives(docstring)
-
-    assert result.seealso == [("func_a", ""), ("func_b", "")]
-
-
 def test_docattribute_render_signature_type_kind():
     """DocAttribute.render_signature() clears name/annotation for TypeAlias kind."""
 
@@ -37326,62 +36554,6 @@ class TestUpdateConfigWithUserGuide:
             ]
             assert len(ug_sidebars) == 1
             assert "Old" not in str(ug_sidebars[0])
-
-
-class TestApplyNodocFilter:
-    """Tests for _apply_nodoc_filter."""
-
-    def test_filters_nodoc_items(self):
-        """Removes items marked with %nodoc."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            sections = [
-                {"title": "Classes", "contents": ["MyClass", "InternalClass"]},
-            ]
-
-            with patch.object(
-                docs,
-                "_extract_all_directives",
-                return_value={
-                    "InternalClass": DocDirectives(nodoc=True),
-                },
-            ):
-                result = docs._apply_nodoc_filter("mypkg", sections)
-            assert result is not None
-            assert "InternalClass" not in result[0]["contents"]
-            assert "MyClass" in result[0]["contents"]
-
-    def test_filters_companion_method_section(self):
-        """Removes companion 'ClassName Methods' section when class is %nodoc."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            sections = [
-                {"title": "Classes", "contents": [{"name": "MyClass", "members": []}]},
-                {"title": "MyClass Methods", "contents": ["MyClass.method_a"]},
-            ]
-
-            with patch.object(
-                docs,
-                "_extract_all_directives",
-                return_value={
-                    "MyClass": DocDirectives(nodoc=True),
-                },
-            ):
-                result = docs._apply_nodoc_filter("mypkg", sections)
-            assert result is None  # Both sections filtered out
-
-    def test_returns_sections_when_no_directives(self):
-        """Returns sections unchanged when no directives found."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            sections = [{"title": "Classes", "contents": ["MyClass"]}]
-            with patch.object(docs, "_extract_all_directives", return_value={}):
-                result = docs._apply_nodoc_filter("mypkg", sections)
-            assert result == sections
 
 
 class TestGetSourceLocation:
