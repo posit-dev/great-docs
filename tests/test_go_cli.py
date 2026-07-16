@@ -293,7 +293,7 @@ class TestParseCobraFlag:
         assert opt["is_flag"] is True
 
     def test_string_type_with_default(self):
-        opt = _parse_cobra_flag('--config string   config file (default: hello.toml)')
+        opt = _parse_cobra_flag("--config string   config file (default: hello.toml)")
         assert opt is not None
         assert opt["type"] == "string"
         assert opt["default"] == "hello.toml"
