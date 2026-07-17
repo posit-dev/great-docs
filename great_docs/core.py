@@ -11189,6 +11189,14 @@ anchor-sections: true
             self._has_api_reference = False
             return
 
+        # Python API reference only applies to projects with a Python component.
+        # Non-Python projects (e.g. project_type: go) have no importable package
+        # to introspect — skip rather than prompting for a package name.
+        if not self._config.is_python_project:
+            print("API reference skipped (non-Python project)")
+            self._has_api_reference = False
+            return
+
         quarto_yml = self.project_path / "_quarto.yml"
 
         with open(quarto_yml, "r") as f:

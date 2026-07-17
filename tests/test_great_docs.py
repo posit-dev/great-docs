@@ -16343,6 +16343,36 @@ def test_add_api_reference_config_disabled():
         assert docs._has_api_reference is False
 
 
+def test_add_api_reference_config_non_python_project():
+    """Test _add_api_reference_config skips for non-Python projects.
+
+    A Go project has no importable Python package, so the step should skip
+    (setting _has_api_reference = False) rather than prompting for a package name.
+    """
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        # Go project marker; no pyproject.toml / __init__.py anywhere.
+        (Path(tmp_dir) / "go.mod").write_text("module example.com/tool\n", encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text("project_type: go\n", encoding="utf-8")
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(quarto_yml, "w") as f:
+            write_yaml({"project": {"type": "website"}}, f)
+
+        # Must not call input() — patch it to fail loudly if the skip is missed.
+        with patch("builtins.input", side_effect=AssertionError("should not prompt")):
+            docs._add_api_reference_config()
+
+        assert docs._has_api_reference is False
+
+
 def test_add_api_reference_config_no_exports():
     """Test _add_api_reference_config skips when no exports found."""
 
