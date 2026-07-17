@@ -22,6 +22,7 @@ from great_docs._go_cli import (
     _parse_cobra_flag,
     _parse_cobra_help,
     _parse_go_module_path,
+    _short_help,
     _uses_cobra,
     build_go_binary,
     detect_go_cli_project,
@@ -342,6 +343,40 @@ SAMPLE_COBRA_HELP = textwrap.dedent("""\
 
     Use "hello [command] --help" for more information about a command.
 """)
+
+
+class TestShortHelp:
+    def test_empty(self):
+        assert _short_help("") == ""
+        assert _short_help("   ") == ""
+
+    def test_short_description_unchanged(self):
+        assert _short_help("Fetch from all configured sources") == (
+            "Fetch from all configured sources"
+        )
+
+    def test_first_sentence_preferred(self):
+        desc = "Fetch metrics. Also does other things across many sources and registries."
+        assert _short_help(desc) == "Fetch metrics"
+
+    def test_long_first_sentence_truncated_on_word_boundary(self):
+        # A single long sentence with no ". " break: must truncate, never mid-word.
+        desc = (
+            "velocirepo tracks your open-source project's pulse across package registries, "
+            "GitHub, and the web collecting daily metrics from many different services "
+            "including PyPI, CRAN, Homebrew, Plausible, OpenVSX, and YouTube every day"
+        )
+        result = _short_help(desc)
+        assert result.endswith("...")
+        assert len(result) <= 153  # limit (150) + "..."
+        # No mid-word cut: the trimmed body is a prefix ending at a full word.
+        body = result.removesuffix("...")
+        assert desc.startswith(body)
+        assert desc[len(body)] == " "
+
+    def test_no_ellipsis_when_within_limit(self):
+        desc = "A single sentence that stays under the character limit for summaries"
+        assert not _short_help(desc).endswith("...")
 
 
 class TestParseCobraHelp:

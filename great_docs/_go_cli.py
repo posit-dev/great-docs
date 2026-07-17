@@ -319,6 +319,45 @@ def _parse_cobra_flag(raw: str) -> dict | None:
     }
 
 
+def _short_help(description: str, limit: int = 150) -> str:
+    """Condense a full command description into a one-line summary.
+
+    Cobra's root/group `--help` prints the command's full (Long) description, which can span
+    several sentences. The CLI reference *index* page shows only a one-line summary per command, so
+    this trims the description to the first sentence when that is short enough, otherwise truncates
+    on a word boundary and appends an ellipsis. Mirrors the Click path's
+    ``get_short_help_str(limit=...)`` behaviour so both ecosystems read consistently.
+
+    Parameters
+    ----------
+    description
+        The full (already whitespace-collapsed) command description.
+    limit
+        Maximum length of the returned summary, excluding the ellipsis.
+
+    Returns
+    -------
+    str
+        A one-line summary, never cut mid-word.
+    """
+    description = description.strip()
+    if not description:
+        return ""
+
+    # Prefer the first sentence when it comfortably fits.
+    first_sentence = description.split(". ", 1)[0].rstrip(".")
+    if len(first_sentence) <= limit:
+        return first_sentence
+
+    if len(description) <= limit:
+        return description
+
+    # Truncate on a word boundary and mark the elision. Uses "..." (three dots)
+    # to match Click's get_short_help_str placeholder for consistency.
+    truncated = description[:limit].rsplit(" ", 1)[0].rstrip()
+    return f"{truncated}..."
+
+
 def _extract_cobra_commands(
     binary_path: Path,
     name: str,
@@ -482,7 +521,7 @@ def _parse_cobra_help(
         "name": name,
         "full_path": node_full_path,
         "help": description,
-        "short_help": description[:80] if description else "",
+        "short_help": _short_help(description),
         "help_text": help_text,
         "description": description,
         "examples": "",
