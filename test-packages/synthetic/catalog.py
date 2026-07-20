@@ -402,6 +402,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_custom_css",  # 199
     # 200: Minimal Go CLI project — go.mod + cobra-style --help, no Python module
     "gdtest_go_cli",  # 200
+    # 201: Dark-mode image assets in user guide non-images/ subdirectories
+    "gdtest_ug_dark_assets",  # 201
 ]
 
 
@@ -2258,6 +2260,14 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "and 'help' excluded). Each subcommand should have its own page with "
         "flags documented. The landing page comes from README.md. There is no "
         "API Reference section — the site is driven entirely by the Go CLI."
+    ),
+    # ── 201: Dark-mode image assets in user guide subdirectories ─────
+    "gdtest_ug_dark_assets": (
+        "User guide with dark-mode image assets in non-images/ subdirectories "
+        "(assets/orientation/, assets/charts/, assets/diagrams/). Tests that "
+        "dark-mode siblings — both naming-convention (.light./.dark.) and "
+        "explicit dark= attribute — are copied to _site. Regression test for "
+        "GitHub issue #268."
     ),
 }
 
