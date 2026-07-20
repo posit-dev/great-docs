@@ -1139,6 +1139,42 @@ def test_L3_blended_homepage_sidebar_first_entry(pkg_name: str, tmp_path: Path):
     )
 
 
+def test_L3_code_include_expansion(tmp_path: Path):
+    """gdtest_code_include: include shortcodes for code files are expanded in user guide."""
+    pkg_dir, spec = _make_package("gdtest_code_include", tmp_path)
+    docs = GreatDocs(project_path=str(pkg_dir))
+    docs._prepare_build_directory()
+
+    ug_info = docs._discover_user_guide()
+    assert ug_info is not None
+
+    docs._copy_user_guide_to_docs(ug_info)
+
+    built = docs.project_path / "user-guide" / "includes.qmd"
+    assert built.exists(), "includes.qmd not found in build dir"
+
+    content = built.read_text(encoding="utf-8")
+
+    # Basic include should have expanded to a python code block
+    assert "```python" in content
+    assert "Widget" in content
+
+    # YAML include should have expanded to a yaml code block
+    assert "```yaml" in content
+    assert "my-app" in content
+
+    # Language override should use "r" instead of "python"
+    assert "```r" in content
+
+    # Code-file includes should be fully expanded (no shortcodes remain
+    # for .py/.yaml files — only .qmd/.md includes pass through to Quarto)
+    assert "{{< include" not in content or all(
+        ".qmd" in line or ".md" in line
+        for line in content.splitlines()
+        if "{{< include" in line
+    )
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Generator Sanity
 # ═══════════════════════════════════════════════════════════════════════════════
