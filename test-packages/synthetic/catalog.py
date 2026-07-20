@@ -404,6 +404,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_go_cli",  # 200
     # 201: Dark-mode image assets in user guide non-images/ subdirectories
     "gdtest_ug_dark_assets",  # 201
+    # 202: Code-include shortcode in user guide pages
+    "gdtest_code_include",  # 202
 ]
 
 
@@ -2268,6 +2270,14 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "dark-mode siblings — both naming-convention (.light./.dark.) and "
         "explicit dark= attribute — are copied to _site. Regression test for "
         "GitHub issue #268."
+    ),
+    "gdtest_code_include": (
+        "User guide page exercising the {{< code-include >}} shortcode. "
+        "Includes a Python example file with auto language detection, a YAML "
+        "config file, a line-range selection (lines='1-3'), and a language "
+        "override (lang='text'). The module exports Widget (class) and "
+        "run_widget (function). Key test: code-include shortcode renders "
+        "embedded source files correctly in user guide pages."
     ),
 }
 
