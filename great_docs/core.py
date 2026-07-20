@@ -11703,6 +11703,26 @@ anchor-sections: true
             if "assets/**" not in config["project"]["resources"]:
                 config["project"]["resources"].append("assets/**")
 
+        # Add custom section asset directories to resources
+        sections_config = self._config.sections
+        if sections_config and isinstance(sections_config, list):
+            for section_cfg in sections_config:
+                if not isinstance(section_cfg, dict):
+                    continue
+                src_dir = section_cfg.get("dir")
+                if not src_dir:
+                    continue
+                slug = src_dir.replace("_", "-").replace(" ", "-").lower()
+                section_build_dir = self.project_path / slug
+                if section_build_dir.exists() and section_build_dir.is_dir():
+                    for item in section_build_dir.iterdir():
+                        if item.is_dir() and not any(
+                            f.suffix == ".qmd" for f in item.rglob("*")
+                        ):
+                            res_glob = f"{slug}/{item.name}/**"
+                            if res_glob not in config["project"]["resources"]:
+                                config["project"]["resources"].append(res_glob)
+
         # Add skill.md and .well-known to resources (so Quarto copies them to _site)
         # Also exclude them from rendering so Quarto doesn't convert them to HTML
         if self._config.skill_enabled:
