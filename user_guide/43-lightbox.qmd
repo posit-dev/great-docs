@@ -92,6 +92,33 @@ With that markup, a dark-mode reader sees `city-toronto.dark.png` while a light-
 The naming convention only triggers on the `.light` opt-in. A plain `skyline.png` will not silently look for `skyline.dark.png`, because that guessed file usually does not exist and would produce a broken image in the enlarged view.
 :::
 
+### How Dark-Mode Assets Are Copied
+
+Great Docs automatically copies dark-mode image siblings to the built site, regardless of where the
+images live. You can place images in any asset subdirectory within your user guide (`images/`,
+`assets/`, `figures/`, or any other name) and both the light and dark variants will be included in
+the final `_site/` output.
+
+For example, a user guide structured like this:
+
+```
+user_guide/
+├── getting-started.qmd
+└── assets/
+    └── orientation/
+        ├── sweep-generator.light.png
+        └── sweep-generator.dark.png
+```
+
+will have both `sweep-generator.light.png` and `sweep-generator.dark.png` available at
+`user-guide/assets/orientation/` in the built site. The same applies to images referenced via the
+`dark="..."` attribute. The target file is copied as long as it lives in an asset directory within
+the user guide.
+
+Custom sections configured via `sections:` in `great_docs.yaml` follow the same rules: any asset
+subdirectory (a directory without `.qmd` files) is automatically registered for copying to the final
+site.
+
 ## Galleries
 
 Give several images the same `group` value to bind them into a gallery. Opening any one of them lets the reader page through the whole set with arrows, a filmstrip, keyboard keys, and touch swipes.
