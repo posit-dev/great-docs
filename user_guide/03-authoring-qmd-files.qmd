@@ -570,8 +570,8 @@ greet("World")
 ````
 
 **Rich HTML outputs.** When the output is a rich HTML object (such as a GT table or a styled
-DataFrame), the frame is automatically removed to avoid a double-border — these objects already
-carry their own visual structure. With `output-title`, the title appears as a floating label above
+DataFrame), the frame is automatically removed to avoid a double-border (these objects already
+carry their own visual structure). With `output-title`, the title appears as a floating label above
 the output; with `output-frame`, the container is effectively invisible since the object supplies
 its own styling.
 
@@ -619,7 +619,7 @@ chat.chat("I need your help.", header=False)
 
 The reader sees only the clean code above `# ---`, while the code below `# ---` runs and produces
 the output. Other hash-pipe options (`output-title`, `output-frame`, `warning`, etc.) compose
-naturally — see [Output Titles and Frames] above for examples.
+naturally (see [Output Titles and Frames] above for examples).
 
 **Edge cases:**
 
@@ -983,6 +983,119 @@ Includes are useful for:
 
 Includes promote the "write once, use everywhere" principle. When a paragraph or setup block appears
 in multiple pages, extracting it into an include file means you only need to update it in one place.
+
+### Code Includes
+
+When the `include` shortcode references a code file (anything other than `.qmd` or `.md`), Great
+Docs automatically wraps the file contents in a syntax-highlighted code block:
+
+````markdown
+{{{< include src/mypackage/examples/demo.py >}}}
+````
+
+The language is auto-detected from the file extension. A `.py` file becomes a `python` code block,
+a `.js` file becomes `javascript`, and so on. This is the same `include` shortcode used for content
+includes above. Great Docs handles code files automatically while passing `.qmd` and `.md` includes
+through to Quarto as usual.
+
+Code includes are ideal for keeping documentation in sync with real code. Instead of copying code
+snippets into your pages (where they can drift out of date), reference the source files directly.
+
+#### Including existing source files
+
+If your library already has runnable examples, tests, or configuration files that you want to
+showcase in the documentation, point `include` at them directly:
+
+````markdown
+{{{< include src/mypackage/examples/usage.py >}}}
+{{{< include tests/test_core.py lines="12-30" >}}}
+{{{< include pyproject.toml >}}}
+````
+
+Because paths are resolved relative to the project root, any file in your repository is reachable.
+This is the primary use case: your code examples are real, tested code that stays in sync
+automatically. When the source file changes, the documentation updates on the next build with no
+manual copying required.
+
+#### Writing new snippets for the docs
+
+When you need purpose-written examples that don't belong in your library's source tree, place them
+in an underscore-prefixed subdirectory of your user guide directory (for example,
+`user_guide/_includes/` or `user_guide/_snippets/`):
+
+```text
+user_guide/
+├── _includes/
+│   ├── quickstart.py
+│   ├── config-example.yaml
+│   └── shortcode-demo.qmd
+├── 01-introduction.qmd
+└── 02-tutorial.qmd
+```
+
+Then reference them with a path relative to the user guide directory:
+
+````markdown
+{{{< include _includes/quickstart.py >}}}
+{{{< include _includes/shortcode-demo.qmd lang="markdown" >}}}
+````
+
+This keeps documentation-only snippets close to the pages that use them, separate from the real
+source code. You can include `.qmd` files as code too, just add the `lang` or `lines` keyword to
+tell Great Docs to wrap the contents in a fenced code block instead of passing it through to Quarto
+for rendering.
+
+::: {.callout-important}
+## Use underscore-prefixed directories for snippet files
+
+Directories inside `user_guide/` that contain `.qmd` files are normally treated as content
+subdirectories. Their `.qmd` files are discovered as user guide pages. A leading underscore
+(e.g., `_includes/`, `_snippets/`) tells Great Docs to treat the directory as an **asset
+directory** instead: the files are copied to the build output but are not discovered as standalone
+pages.
+
+This means you can safely store `.qmd` snippets in `_includes/` without them appearing as pages in
+your site navigation. Without the underscore prefix, any `.qmd` files in the directory would either
+be picked up as user guide pages or prevent the directory from being copied as an asset directory.
+
+For non-`.qmd` snippet files (`.py`, `.js`, `.yaml`, etc.), the underscore prefix is not strictly
+required but using it consistently keeps all your snippet files in one predictable place.
+:::
+
+#### Options
+
+**Line ranges**: include only specific lines with the `lines` keyword:
+
+````markdown
+{{{< include src/mypackage/core.py lines="10-25" >}}}
+````
+
+Line numbers are 1-based and inclusive. This is useful for highlighting a specific function or block
+without showing the entire file.
+
+**Language override**: override the auto-detected language with the `lang` keyword:
+
+````markdown
+{{{< include config/settings.conf lang="toml" >}}}
+````
+
+**Combining options**: both keywords can be used together:
+
+````markdown
+{{{< include src/mypackage/core.py lines="5-15" lang="python" >}}}
+````
+
+#### Path resolution
+
+File paths are resolved relative to the directory containing the `.qmd` file first, then relative to
+the project root. This two-step lookup means you can use whichever style is most natural:
+
+- `_includes/example.py`: relative to the user guide directory (documentation-only snippets)
+- `src/mypackage/utils.py`: relative to the project root (existing source files)
+- `tests/test_core.py`: any file in the project tree
+
+If the referenced file is not found, a warning comment is inserted in the output so you can catch
+broken references during review.
 
 ## Math Equations
 
