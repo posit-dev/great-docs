@@ -5921,9 +5921,10 @@ class GreatDocs:
                     continue
 
                 href = f"user-guide/{filename}"
+                text = custom_text or title_lookup.get(filename)
 
-                if custom_text:
-                    sidebar_section_contents.append({"text": custom_text, "href": href})
+                if text:
+                    sidebar_section_contents.append({"text": text, "href": href})
                 else:
                     sidebar_section_contents.append(href)
 
@@ -5992,8 +5993,7 @@ class GreatDocs:
                     href = get_clean_href(file_info)
                     assigned_files.add(file_info["path"])
 
-                    # Use custom text for index.qmd if it has a title
-                    if file_info["path"].name == "index.qmd":
+                    if file_info.get("title"):
                         section_contents.append(
                             {
                                 "text": file_info["title"],
@@ -6014,7 +6014,11 @@ class GreatDocs:
             unsectioned = []
             for file_info in files_info:
                 if file_info["path"] not in assigned_files:
-                    unsectioned.append(get_clean_href(file_info))
+                    href = get_clean_href(file_info)
+                    if file_info.get("title"):
+                        unsectioned.append({"text": file_info["title"], "href": href})
+                    else:
+                        unsectioned.append(href)
 
             if unsectioned:
                 contents.extend(unsectioned)
@@ -6040,12 +6044,10 @@ class GreatDocs:
                 root_files.sort(key=lambda fi: (fi["path"].name != "index.qmd", fi["path"].name))
                 for file_info in root_files:
                     href = get_clean_href(file_info)
-                    if file_info["path"].name == "index.qmd":
-                        contents.append(
-                            {"text": file_info["title"], "href": href}
-                        )  # pragma: no cover
+                    if file_info.get("title"):
+                        contents.append({"text": file_info["title"], "href": href})
                     else:
-                        contents.append(href)
+                        contents.append(href)  # pragma: no cover
 
                 # Then add subdirectory groups, sorted by directory name
                 for subdir in sorted(subdirs):
@@ -6059,13 +6061,21 @@ class GreatDocs:
                         if file_info["path"].name == "index.qmd":
                             section_title = file_info["title"]
                         else:
-                            section_contents.append(get_clean_href(file_info))
+                            href = get_clean_href(file_info)
+                            if file_info.get("title"):
+                                section_contents.append({"text": file_info["title"], "href": href})
+                            else:
+                                section_contents.append(href)
 
                     contents.append({"section": section_title, "contents": section_contents})
             else:
                 # All files at the root level — list in order
                 for file_info in files_info:
-                    contents.append(get_clean_href(file_info))
+                    href = get_clean_href(file_info)
+                    if file_info.get("title"):
+                        contents.append({"text": file_info["title"], "href": href})
+                    else:
+                        contents.append(href)
 
         return {
             "id": "user-guide",
@@ -13548,14 +13558,14 @@ anchor-sections: true
             for item in section.get("contents", []):
                 # Handle both string and dict formats
                 if isinstance(item, str):
-                    section_entry["contents"].append(f"reference/{item}.qmd")
+                    item_name = item
                 elif isinstance(item, dict):
-                    # Extract the name from dict format (e.g., {'name': 'Graph', 'members': []})
                     item_name = item.get("name", str(item))
-                    section_entry["contents"].append(f"reference/{item_name}.qmd")
                 else:
-                    # Fallback for unexpected types
-                    section_entry["contents"].append(f"reference/{item}.qmd")  # pragma: no cover
+                    item_name = str(item)  # pragma: no cover
+                section_entry["contents"].append(
+                    {"text": item_name, "href": f"reference/{item_name}.qmd"}
+                )
 
             sidebar_contents.append(section_entry)
 
