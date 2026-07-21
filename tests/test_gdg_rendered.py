@@ -6462,9 +6462,7 @@ def test_DED_index_frontmatter_cell_options_preserved():
     # options must likewise stay intact.
     qmd = _generated_index_qmd(pkg).read_text(encoding="utf-8")
     assert "#| code-fold: true" in qmd, "cell option `#| code-fold: true` was lost"
-    assert "# Greet the reader from inside a fenced code cell" in qmd, (
-        "code-cell comment was lost"
-    )
+    assert "# Greet the reader from inside a fenced code cell" in qmd, "code-cell comment was lost"
     assert "## Greet the reader from inside a fenced code cell" not in qmd, (
         "heading bump mangled a `#` comment inside a fenced code block"
     )

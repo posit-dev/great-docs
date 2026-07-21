@@ -75,6 +75,6 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["read_data", "write_data"],
         "num_exports": 2,
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "sechdg", "sbsec", "hdg"],
+    },
 }

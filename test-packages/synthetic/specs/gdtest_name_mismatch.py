@@ -109,6 +109,6 @@ SPEC = {
         "section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
         "name_module_mismatch": True,
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "hdg"],
+    },
 }

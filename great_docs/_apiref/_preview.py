@@ -75,9 +75,7 @@ def fields(el: object) -> list[str] | list[int] | None:
     if isinstance(el, Walkable):
         field_defaults = {f.name: f.default for f in dc_fields(el)}
         return [
-            k
-            for k, v in el._iter_fields()
-            if field_defaults.get(k) is not v and v is not MISSING
+            k for k, v in el._iter_fields() if field_defaults.get(k) is not v and v is not MISSING
         ]
 
     if isinstance(el, dict):

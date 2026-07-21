@@ -224,6 +224,6 @@ SPEC = {
         "detected_parser": "numpy",
         "export_names": ["DataHolder", "mega_function", "other_func"],
         "num_exports": 3,
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "sechdg", "sbsec", "hdg"],
+    },
 }

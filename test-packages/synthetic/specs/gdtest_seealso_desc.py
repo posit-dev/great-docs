@@ -130,6 +130,6 @@ SPEC = {
             "save": {"load": "Read data from a file", "transform": "Transform data before saving"},
             "transform": {"validate": "Check data integrity first"},
         },
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "hdg"],
+    },
 }

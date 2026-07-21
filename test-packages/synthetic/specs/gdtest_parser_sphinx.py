@@ -102,6 +102,6 @@ SPEC = {
         "detected_parser": "sphinx",
         "export_names": ["Timer", "create_timer", "format_duration"],
         "num_exports": 3,
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "sechdg", "sbsec", "hdg"],
+    },
 }

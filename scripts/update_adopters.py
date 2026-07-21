@@ -32,9 +32,7 @@ SEARCH_URL = "https://github.com/search?q=filename%3Agreat-docs.yml&type=code"
 def _gh(*args: str) -> str:
     """Run a ``gh`` command and return its stdout, exiting on failure."""
     try:
-        result = subprocess.run(
-            ["gh", *args], capture_output=True, text=True, check=True
-        )
+        result = subprocess.run(["gh", *args], capture_output=True, text=True, check=True)
     except FileNotFoundError:
         sys.exit("error: the GitHub CLI ('gh') is not installed or not on PATH.")
     except subprocess.CalledProcessError as exc:

@@ -2455,12 +2455,8 @@ def _write_griffe_pkg(root: Path) -> None:
         "from mypkg import sub\nfrom mypkg.core import TopClass\n__all__ = ['TopClass', 'sub']\n"
     )
     (pkg / "core.py").write_text("class TopClass:\n    def go(self): ...\n")
-    (sub / "__init__.py").write_text(
-        "from mypkg.sub.things import Widget\n__all__ = ['Widget']\n"
-    )
-    (sub / "things.py").write_text(
-        "class Widget:\n    def fit(self, x: int) -> None: ...\n"
-    )
+    (sub / "__init__.py").write_text("from mypkg.sub.things import Widget\n__all__ = ['Widget']\n")
+    (sub / "things.py").write_text("class Widget:\n    def fit(self, x: int) -> None: ...\n")
 
 
 class TestDeepSnapshot:
@@ -2542,6 +2538,9 @@ class TestSnapshotAtTagDeep:
         s2 = snapshot_at_tag(tmp_path, "v0.2.0", "mypkg", documented_names=documented)
         assert set(s1.symbols) == {"sub.Widget", "sub.Widget.fit"}
         assert set(s2.symbols) == {
-            "sub.Widget", "sub.Widget.fit", "sub.Widget.transform", "sub.Gadget",
+            "sub.Widget",
+            "sub.Widget.fit",
+            "sub.Widget.transform",
+            "sub.Gadget",
         }
         assert set(s1.symbols) != set(s2.symbols)

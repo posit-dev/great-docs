@@ -181,6 +181,6 @@ SPEC = {
                 "autolinked_code": ["Engine", "Connection", "execute()"],
             },
         },
-        "coverage_exclude": ['nodoc', 'bigcl', 'supp', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "supp", "hdg"],
+    },
 }

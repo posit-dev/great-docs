@@ -115,6 +115,6 @@ SPEC = {
         "nodoc_items": ["reset", "debug_info"],
         "documented_items": ["Calculator", "compute"],
         "has_user_guide": False,
-        "coverage_exclude": ['bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
-},
+        "coverage_exclude": ["bigcl", "ug", "supp", "sechdg", "sbsec", "hdg"],
+    },
 }

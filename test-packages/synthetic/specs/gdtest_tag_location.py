@@ -210,6 +210,6 @@ SPEC = {
             "05-tips.qmd",
             "06-faq.qmd",
         ],
-        "coverage_exclude": ['nodoc', 'bigcl', 'supp', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "supp", "hdg"],
+    },
 }

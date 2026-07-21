@@ -138,6 +138,6 @@ SPEC = {
         "bibliography_file": "references.bib",
         "csl_file": "numeric.csl",
         "citation_keys": ["knuth1984", "lamport1994"],
-        "coverage_exclude": ['nodoc', 'bigcl', 'supp', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "supp", "hdg"],
+    },
 }

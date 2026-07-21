@@ -157,6 +157,6 @@ SPEC = {
                 "a base store",  # [custom](`~pkg.Name`) → custom text
             ],
         },
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "hdg"],
+    },
 }

@@ -247,9 +247,7 @@ def _promote_callable_attribute(obj: gf.Attribute, f: object, doc: str) -> None:
         }
         for pname, param in sig.parameters.items():
             kind = _kind_map.get(param.kind, gf.ParameterKind.positional_or_keyword)
-            default = (
-                str(param.default) if param.default is not inspect.Parameter.empty else None
-            )
+            default = str(param.default) if param.default is not inspect.Parameter.empty else None
             params.append(gf.Parameter(name=pname, kind=kind, default=default))
         func_obj.parameters = gf.Parameters(*params)
     except (ValueError, TypeError):

@@ -109,6 +109,6 @@ SPEC = {
         "export_names": ["MyClass", "real_func"],
         "auto_excluded": ["main", "cli", "config", "utils", "logger"],
         "has_user_guide": False,
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "sechdg", "sbsec"],
+    },
 }

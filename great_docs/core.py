@@ -139,7 +139,6 @@ class GreatDocs:
         # Per-build caches (reset on each build, shared across steps)
         self._griffe_pkg_cache: dict | None = None  # {normalized_name: griffe Package}
         self._cached_exports: list | None = None
-        self._cached_categories: dict | None = None
         self._cached_package_name: str | None = None
 
         # Set environment variables needed by the qrenderer
@@ -1277,6 +1276,9 @@ class GreatDocs:
         Path
             The package root directory
         """
+        if hasattr(self, "_package_root_cache"):
+            return self._package_root_cache
+
         current = self.project_root
 
         # Search upward from current directory
@@ -1286,6 +1288,7 @@ class GreatDocs:
                 or (current / "setup.py").exists()
                 or (current / "go.mod").exists()
             ):
+                self._package_root_cache = current
                 return current
             parent = current.parent
             if parent == current:  # pragma: no cover — reached filesystem root
@@ -1293,6 +1296,7 @@ class GreatDocs:
             current = parent
 
         # Fallback to project_root if we can't find it
+        self._package_root_cache = self.project_root
         return self.project_root
 
     def _detect_go_cli_project(self):
@@ -1414,6 +1418,10 @@ class GreatDocs:
         dict
             Dictionary containing package metadata and great-docs configuration.
         """
+        cache = getattr(self, "_package_metadata_cache", None)
+        if cache is not None:
+            return cache
+
         metadata = {}
         package_root = self._find_package_root()
         pyproject_path = package_root / "pyproject.toml"
@@ -1636,6 +1644,8 @@ class GreatDocs:
         metadata["logo_show_title"] = self._config.logo_show_title
         metadata["favicon"] = self._config.favicon
 
+        if pyproject_path.exists():
+            self._package_metadata_cache = metadata
         return metadata
 
     def _update_navbar_github_link(
@@ -6546,20 +6556,77 @@ class GreatDocs:
 
         # Pre-warm the griffe cache so _get_source_location doesn't reload per-item
         try:
-            self._get_griffe_package(normalized_name)
+            pkg = self._get_griffe_package(normalized_name)
         except Exception:
-            pass  # _get_source_location will handle failures gracefully
+            pkg = None
 
-        # Categorize ALL exports in a single batch call (instead of per-export)
-        categories = self._categorize_api_objects(package_name, exports)
-        all_classes = set(categories.get("all_classes", []))
-        class_method_names = categories.get("class_method_names", {})
+        # Derive class membership directly from the griffe tree — avoids the
+        # expensive _categorize_api_objects() path which calls get_object() per
+        # method (dynamic imports, ~100-200ms each).
+        _INIT_DUNDERS = {"__init__", "__new__", "__init_subclass__"}
+        class_method_names: dict[str, list[str]] = {}
+        if pkg is not None:
+            for item_name in exports:
+                if item_name not in pkg.members:
+                    continue
+                obj = pkg.members[item_name]
+                try:
+                    if obj.kind.value != "class":
+                        continue
+                except Exception:
+                    continue
+                methods = []
+                try:
+                    for member_name, member in obj.members.items():
+                        if member_name.startswith("__") and member_name.endswith("__"):
+                            if member_name in _INIT_DUNDERS:
+                                continue
+                        elif member_name.startswith("_"):
+                            continue
+                        try:
+                            if member.kind.value in ("function", "method", "attribute"):
+                                methods.append(member_name)
+                        except Exception:
+                            continue
+                except Exception:
+                    continue
+                if methods:
+                    class_method_names[item_name] = methods
+                    print(f"{item_name}: class with {len(methods)} public methods")
+
+        # Hoist invariants for _build_github_source_url out of the loop
+        package_root = self._find_package_root()
+        metadata = self._get_package_metadata()
+        source_path = metadata.get("source_link_path")
+
+        def _make_github_url(source_loc: dict) -> str | None:
+            filepath = source_loc.get("file", "")
+            if source_path:
+                relative_path = f"{source_path}/{Path(filepath).name}"
+            else:
+                try:
+                    filepath_obj = Path(filepath)
+                    if filepath_obj.is_absolute():
+                        relative_path = str(filepath_obj.relative_to(package_root))
+                    else:
+                        relative_path = filepath
+                except ValueError:
+                    relative_path = filepath
+
+            start_line = source_loc.get("start_line", 1)
+            end_line = source_loc.get("end_line", start_line)
+            url = f"{base_url}/blob/{branch}/{relative_path}"
+            if start_line == end_line:
+                url += f"#L{start_line}"
+            else:
+                url += f"#L{start_line}-L{end_line}"
+            return url
 
         # Generate source links for each export (uses cached griffe pkg internally)
         for item_name in exports:
             source_loc = self._get_source_location(normalized_name, item_name)
             if source_loc:
-                github_url = self._build_github_source_url(source_loc, branch)
+                github_url = _make_github_url(source_loc)
                 if github_url:
                     source_links[item_name] = {
                         "url": github_url,
@@ -6569,13 +6636,12 @@ class GreatDocs:
                     }
 
             # Also get source links for methods of classes
-            if item_name in all_classes:
-                method_names = class_method_names.get(item_name, [])
-                for method_name in method_names:
+            if item_name in class_method_names:
+                for method_name in class_method_names[item_name]:
                     full_name = f"{item_name}.{method_name}"
                     method_loc = self._get_source_location(normalized_name, full_name)
                     if method_loc:
-                        method_url = self._build_github_source_url(method_loc, branch)
+                        method_url = _make_github_url(method_loc)
                         if method_url:
                             source_links[full_name] = {
                                 "url": method_url,
@@ -6982,111 +7048,61 @@ class GreatDocs:
                         f"{', '.join(sorted(user_excluded_found))}"
                     )
 
-            # Super-safe filtering: try each object with the renderer's get_object
-            # If it fails for ANY reason, exclude it; this catches:
-            # - Cyclic aliases
-            # - Unresolvable aliases
-            # - Rust/PyO3 objects (KeyError)
-            # - Submodules (which would cause recursive documentation issues)
-            # - Any other edge case that would crash the API reference build
+            # Validate exports using the already-loaded griffe tree.
+            # This catches cyclic/unresolvable aliases, submodules, Rust/PyO3
+            # objects, and external re-exports without the cost of per-item
+            # dynamic imports (which dominated build time for large packages).
             safe_exports = []
-            failed_exports = {}  # name -> error type for reporting
-
-            # Try to use the renderer's `get_object()` for validation
-            # Note: we intentionally do NOT share a loader here because the
-            # re-export detection (canonical_path check) gives false positives
-            # when the loader has extra modules pre-loaded (e.g., type aliases
-            # like `HandlerFunc = Callable[..., None]` get traced back to typing).
-            gd_get_object = None
-            try:
-                from functools import partial
-
-                from great_docs._apiref.introspect import get_object as qd_get_object
-
-                gd_get_object = partial(qd_get_object, dynamic=True, parser="numpy")
-            except ImportError:  # pragma: no cover
-                pass
-
-            # Try to import the actual package to detect modules
-            actual_package = None
-            try:
-                import importlib
-
-                actual_package = importlib.import_module(normalized_name)
-            except ImportError:  # pragma: no cover
-                pass
+            failed_exports = {}
 
             for name in filtered:
-                # Check if this is a submodule; these are allowed through but will
-                # be introspected by _categorize_api_objects to discover their
-                # public classes and functions
-                is_submodule = False
+                if name not in pkg.members:
+                    failed_exports[name] = "not found"
+                    continue
 
-                # Check via runtime import first
-                if actual_package is not None:
-                    runtime_obj = getattr(actual_package, name, None)
-                    if runtime_obj is not None:
-                        import types
+                obj = pkg.members[name]
 
-                        if isinstance(runtime_obj, types.ModuleType):
-                            is_submodule = True
+                try:
+                    kind_val = obj.kind.value
+                except griffe.CyclicAliasError:
+                    failed_exports[name] = "cyclic alias"
+                    continue
+                except griffe.AliasResolutionError:
+                    failed_exports[name] = "unresolvable alias"
+                    continue
+                except KeyError:
+                    failed_exports[name] = "not found (likely Rust/PyO3)"
+                    continue
+                except Exception as e:
+                    failed_exports[name] = f"{type(e).__name__}"
+                    continue
 
-                # Fallback: check via griffe static analysis
-                # (handles packages where __all__ lists submodules that aren't
-                # auto-imported at runtime, e.g., lazy imports)
-                if not is_submodule and name in pkg.members:
-                    try:
-                        if pkg.members[name].kind.value == "module":
-                            is_submodule = True
-                    except Exception:  # pragma: no cover
-                        pass
-
-                if is_submodule:
-                    # Submodules are passed through to categorization which will
-                    # drill into them to discover classes/functions
+                if kind_val == "module":
                     safe_exports.append(name)
                     continue
 
-                if gd_get_object is not None:
-                    try:
-                        # Try to load the object exactly as the renderer would
-                        qd_obj = gd_get_object(f"{normalized_name}:{name}")
-                        # Try to access members to trigger any lazy resolution errors
-                        _ = qd_obj.members
-                        _ = qd_obj.kind
+                try:
+                    _ = obj.members
+                except griffe.CyclicAliasError:
+                    failed_exports[name] = "cyclic alias"
+                    continue
+                except griffe.AliasResolutionError:
+                    failed_exports[name] = "unresolvable alias"
+                    continue
+                except Exception as e:
+                    failed_exports[name] = f"{type(e).__name__}"
+                    continue
 
-                        # Exclude stdlib / third-party re-exports: if the object
-                        # is an alias whose canonical path lives outside this
-                        # package, it is a re-export and should not be documented.
-                        if (
-                            hasattr(qd_obj, "is_alias")
-                            and qd_obj.is_alias
-                            and hasattr(qd_obj, "canonical_path")
-                        ):
-                            canon = qd_obj.canonical_path
-                            if not canon.startswith(normalized_name + "."):
-                                failed_exports[name] = "external re-export"
-                                continue
-
-                        safe_exports.append(name)
-                    except griffe.CyclicAliasError:  # pragma: no cover
-                        failed_exports[name] = "cyclic alias"
-                    except griffe.AliasResolutionError:  # pragma: no cover
-                        failed_exports[name] = "unresolvable alias"
-                    except KeyError:  # pragma: no cover
-                        failed_exports[name] = "not found (likely Rust/PyO3)"
-                    except Exception as e:  # pragma: no cover
-                        # Catch-all for any other error that would crash the build
-                        failed_exports[name] = f"{type(e).__name__}"
-                else:
-                    # Fallback: use basic griffe check if renderer not available
+                if hasattr(obj, "is_alias") and obj.is_alias:
                     try:
-                        obj = pkg.members[name]
-                        _ = obj.kind
-                        _ = obj.members
-                        safe_exports.append(name)
-                    except Exception as e:  # pragma: no cover
-                        failed_exports[name] = f"{type(e).__name__}"
+                        canon = obj.canonical_path
+                        if not canon.startswith(normalized_name + "."):
+                            failed_exports[name] = "external re-export"
+                            continue
+                    except Exception:
+                        pass
+
+                safe_exports.append(name)
 
             # Report excluded items grouped by error type
             if failed_exports:
@@ -7349,10 +7365,17 @@ class GreatDocs:
         list | None
             List of exported/public names, or None if discovery failed.
         """
+        normalized = package_name.replace("-", "_")
+        if self._cached_package_name == normalized and self._cached_exports is not None:
+            return self._cached_exports
+
         exports = self._discover_package_exports(package_name)
         if exports is None:
             print("Falling back to __all__ discovery", file=sys.stderr)
-            return self._parse_package_exports(package_name)
+            exports = self._parse_package_exports(package_name)
+
+        self._cached_package_name = normalized
+        self._cached_exports = exports
         return exports
 
     # ── Exception base classes (used for sub-classification) ─────────────

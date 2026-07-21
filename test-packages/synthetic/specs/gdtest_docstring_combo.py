@@ -219,6 +219,6 @@ SPEC = {
         "num_exports": 2,
         "section_titles": ["Functions"],
         "has_user_guide": False,
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "hdg"],
+    },
 }

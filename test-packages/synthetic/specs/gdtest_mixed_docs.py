@@ -138,6 +138,6 @@ SPEC = {
         "nodoc_items": ["transform"],
         "section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
-        "coverage_exclude": ['bigcl', 'ug', 'supp'],
-},
+        "coverage_exclude": ["bigcl", "ug", "supp"],
+    },
 }

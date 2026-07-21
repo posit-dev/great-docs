@@ -93,7 +93,7 @@ SPEC = {
                 w.configure(color=color, size=size)
                 return w.run()
         ''',
-        "gdtest_code_include/examples/demo.py": '''\
+        "gdtest_code_include/examples/demo.py": """\
             from gdtest_code_include import Widget
 
             # Create and configure a widget
@@ -103,16 +103,16 @@ SPEC = {
             # Run the widget
             result = widget.run()
             print(f"Result: {result}")
-        ''',
-        "gdtest_code_include/examples/config.yaml": '''\
+        """,
+        "gdtest_code_include/examples/config.yaml": """\
             app:
               name: my-app
               version: "1.0"
               settings:
                 debug: true
                 log_level: info
-        ''',
-        "user_guide/01-includes.qmd": '''\
+        """,
+        "user_guide/01-includes.qmd": """\
             ---
             title: Code Includes
             guide-section: Tutorials
@@ -151,7 +151,7 @@ SPEC = {
             we display a Python file with R syntax highlighting instead.
 
             {{< include gdtest_code_include/examples/demo.py lang="r" >}}
-        ''',
+        """,
         "README.md": """\
             # gdtest-code-include
 

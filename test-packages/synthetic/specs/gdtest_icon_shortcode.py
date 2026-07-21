@@ -229,6 +229,6 @@ SPEC = {
                 "Icon Gallery",
             ],
         },
-        "coverage_exclude": ['nodoc', 'bigcl', 'supp', 'sechdg', 'sbsec', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "supp", "sechdg", "sbsec", "hdg"],
+    },
 }

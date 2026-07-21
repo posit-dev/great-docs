@@ -455,6 +455,6 @@ SPEC = {
         "has_contributing_page": True,
         "has_code_of_conduct_page": True,
         "has_assets": True,
-        "coverage_exclude": ['nodoc', 'sechdg', 'sbsec', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "sechdg", "sbsec", "hdg"],
+    },
 }

@@ -208,6 +208,6 @@ SPEC = {
         "export_names": ["configure", "build", "deploy"],
         "num_exports": 3,
         "files_exist": _expected_files,
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "sechdg", "sbsec", "hdg"],
+    },
 }

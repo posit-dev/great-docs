@@ -93,6 +93,6 @@ SPEC = {
         "nodoc_items": ["async_save"],
         "section_titles": ["Async Functions"],
         "has_user_guide": False,
-        "coverage_exclude": ['bigcl', 'ug', 'supp', 'hdg'],
-},
+        "coverage_exclude": ["bigcl", "ug", "supp", "hdg"],
+    },
 }

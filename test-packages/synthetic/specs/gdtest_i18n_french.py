@@ -355,6 +355,6 @@ SPEC = {
         "bibliography_file": "references.bib",
         "references_heading_i18n": "Les références",
         "references_page": "user-guide/demarrage-rapide.html",
-        "coverage_exclude": ['nodoc', 'bigcl', 'supp', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "supp", "hdg"],
+    },
 }

@@ -575,7 +575,10 @@ def _symbol_info_for_dotted(pkg, dotted: str) -> SymbolInfo | None:
 
 
 def snapshot_from_griffe(
-    package_name: str, version: str, documented_names: list[str] | None = None, search_paths: list[str] | None = None
+    package_name: str,
+    version: str,
+    documented_names: list[str] | None = None,
+    search_paths: list[str] | None = None,
 ) -> ApiSnapshot:
     """
     Build an API snapshot of a package's public API.
