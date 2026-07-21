@@ -105,6 +105,19 @@ def _insert_contents(
     return False
 
 
+def _page_sidebar_text(page: Page) -> str:
+    """Label text for a sidebar entry pointing to `page`."""
+    if page.summary is not None:
+        return page.summary.name
+    if len(page.contents) == 1:
+        doc = page.contents[0]
+        name = doc.name
+        if doc.kind == "function":
+            name += "()"
+        return name
+    return Path(page.path).name
+
+
 def _generate_sidebar(
     sections: list[Section],
     *,
