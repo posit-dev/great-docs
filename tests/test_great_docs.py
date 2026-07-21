@@ -2906,6 +2906,400 @@ def test_user_guide_discovers_mixed_extensions_and_nested_files():
         assert (docs_ug / "section1" / "topic1" / "deep-notes.md").exists()
 
 
+def test_expand_code_includes_basic():
+    """Test that code-include shortcodes are expanded into fenced code blocks."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        # Create a code file to include
+        examples = project_path / "examples"
+        examples.mkdir()
+        (examples / "demo.py").write_text('print("hello")\nx = 42\n')
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = 'Some text\n\n{{< include examples/demo.py >}}\n\nMore text'
+        result = docs._expand_code_includes(content, project_path)
+
+        assert '```python\nprint("hello")\nx = 42\n```' in result
+        assert "Some text" in result
+        assert "More text" in result
+
+
+def test_expand_code_includes_lang_override():
+    """Test that the lang keyword overrides auto-detected language."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        (project_path / "script.py").write_text("x = 1\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = '{{< include script.py lang="text" >}}'
+        result = docs._expand_code_includes(content, project_path)
+        assert result.startswith("```text\n")
+
+
+def test_expand_code_includes_lines():
+    """Test that the lines keyword selects a range of lines."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        (project_path / "code.py").write_text("line1\nline2\nline3\nline4\nline5\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = '{{< include code.py lines="2-4" >}}'
+        result = docs._expand_code_includes(content, project_path)
+        assert "line2\nline3\nline4" in result
+        assert "line1" not in result
+        assert "line5" not in result
+
+
+def test_expand_code_includes_single_line():
+    """Test selecting a single line."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        (project_path / "code.py").write_text("line1\nline2\nline3\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = '{{< include code.py lines="2" >}}'
+        result = docs._expand_code_includes(content, project_path)
+        assert "line2" in result
+        assert "line1" not in result
+        assert "line3" not in result
+
+
+def test_expand_code_includes_relative_to_source_dir():
+    """Test that paths resolve relative to the source file's directory first."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        user_guide = project_path / "user_guide"
+        user_guide.mkdir()
+        snippets = user_guide / "snippets"
+        snippets.mkdir()
+        (snippets / "example.py").write_text("local_code = True\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = '{{< include snippets/example.py >}}'
+        result = docs._expand_code_includes(content, user_guide)
+        assert "local_code = True" in result
+
+
+def test_expand_code_includes_fallback_to_project_root():
+    """Test that paths fall back to project root if not found in source dir."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        # File at project root level
+        src = project_path / "src"
+        src.mkdir()
+        (src / "app.js").write_text('console.log("hello");\n')
+
+        # Source dir is user_guide (doesn't contain src/app.js)
+        user_guide = project_path / "user_guide"
+        user_guide.mkdir()
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = '{{< include src/app.js >}}'
+        result = docs._expand_code_includes(content, user_guide)
+        assert "```javascript" in result
+        assert 'console.log("hello")' in result
+
+
+def test_expand_code_includes_missing_file():
+    """Test that a missing file produces an HTML comment error."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = '{{< include does/not/exist.py >}}'
+        result = docs._expand_code_includes(content, project_path)
+        assert "<!-- include error:" in result
+        assert "file not found" in result
+
+
+def test_expand_code_includes_no_shortcodes():
+    """Test that content without code-include shortcodes passes through unchanged."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = "# Hello\n\nSome regular content.\n\n{{< icon heart >}}\n"
+        result = docs._expand_code_includes(content, project_path)
+        assert result == content
+
+
+def test_expand_code_includes_passes_through_qmd():
+    """Test that {{< include file.qmd >}} without lang/lines is left for Quarto."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        (project_path / "_shared.qmd").write_text("# Shared content\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = "Before\n\n{{< include _shared.qmd >}}\n\nAfter"
+        result = docs._expand_code_includes(content, project_path)
+        assert result == content
+
+
+def test_expand_code_includes_qmd_with_lang_is_expanded():
+    """Test that {{< include file.qmd lang="markdown" >}} is expanded as code."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        (project_path / "snippet.qmd").write_text("---\ntitle: Example\n---\n\nHello\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = '{{< include snippet.qmd lang="markdown" >}}'
+        result = docs._expand_code_includes(content, project_path)
+        assert "```markdown" in result
+        assert "title: Example" in result
+
+
+def test_expand_code_includes_qmd_with_lines_is_expanded():
+    """Test that {{< include file.qmd lines="1-3" >}} is expanded as code."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        (project_path / "snippet.qmd").write_text("line1\nline2\nline3\nline4\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = '{{< include snippet.qmd lines="2-3" >}}'
+        result = docs._expand_code_includes(content, project_path)
+        assert "line2" in result
+        assert "line1" not in result
+        assert "{{< include" not in result
+
+
+def test_expand_code_includes_multiple():
+    """Test multiple include shortcodes in one file."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        (project_path / "a.py").write_text("alpha\n")
+        (project_path / "b.yaml").write_text("key: value\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = "First:\n\n{{< include a.py >}}\n\nSecond:\n\n{{< include b.yaml >}}\n"
+        result = docs._expand_code_includes(content, project_path)
+        assert "```python\nalpha\n```" in result
+        assert "```yaml\nkey: value\n```" in result
+
+
+def test_expand_code_includes_unknown_extension():
+    """Test that unknown file extensions produce an unfenced code block."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        (project_path / "data.xyz").write_text("some data\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = '{{< include data.xyz >}}'
+        result = docs._expand_code_includes(content, project_path)
+        assert result == "```\nsome data\n```"
+
+
+def test_expand_code_includes_backticks_in_content():
+    """Test that included files containing triple backticks use a longer fence."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        (project_path / "example.txt").write_text("Some text\n```python\nx = 1\n```\nMore text\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = '{{< include example.txt >}}'
+        result = docs._expand_code_includes(content, project_path)
+        # Should use a 4-backtick fence since the content has 3-backtick runs
+        assert result.startswith("````")
+        assert result.endswith("````")
+        assert "```python" in result
+
+
+def test_expand_code_includes_lang_and_lines_combined():
+    """Test combining lang and lines keyword arguments."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        (project_path / "code.py").write_text("# header\nimport os\nprint(os.getcwd())\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        content = '{{< include code.py lines="2-3" lang="text" >}}'
+        result = docs._expand_code_includes(content, project_path)
+        assert result.startswith("```text\n")
+        assert "import os" in result
+        assert "# header" not in result
+
+
+def test_expand_code_includes_in_user_guide_copy():
+    """Test that code-include shortcodes are expanded during user guide copy."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        # Create a code file at project root
+        examples = project_path / "examples"
+        examples.mkdir()
+        (examples / "sample.py").write_text("x = 1\n")
+
+        # Create user guide with code-include
+        user_guide = project_path / "user_guide"
+        user_guide.mkdir()
+        (user_guide / "01-tutorial.qmd").write_text(
+            "---\ntitle: Tutorial\n---\n\n{{< include examples/sample.py >}}\n"
+        )
+
+        docs = GreatDocs(project_path=tmp_dir)
+        user_guide_info = docs._discover_user_guide()
+        assert user_guide_info is not None
+
+        docs._copy_user_guide_to_docs(user_guide_info)
+
+        # Verify the expanded content in the build directory
+        built_file = docs.project_path / "user-guide" / "tutorial.qmd"
+        assert built_file.exists()
+        built_content = built_file.read_text(encoding="utf-8")
+        assert "```python" in built_content
+        assert "x = 1" in built_content
+        assert "{{< include" not in built_content
+
+
+def test_parse_code_include_args():
+    """Test argument parsing for code-include shortcodes."""
+    parse = GreatDocs._parse_code_include_args
+
+    # Basic path
+    path, lang, lines = parse("examples/demo.py")
+    assert path == "examples/demo.py"
+    assert lang == ""
+    assert lines == ""
+
+    # Path with lang
+    path, lang, lines = parse('examples/demo.py lang="python"')
+    assert path == "examples/demo.py"
+    assert lang == "python"
+    assert lines == ""
+
+    # Path with lines
+    path, lang, lines = parse('examples/demo.py lines="5-10"')
+    assert path == "examples/demo.py"
+    assert lines == "5-10"
+
+    # Path with both
+    path, lang, lines = parse('examples/demo.py lines="1-3" lang="text"')
+    assert path == "examples/demo.py"
+    assert lang == "text"
+    assert lines == "1-3"
+
+
+def test_is_asset_dir_no_qmd():
+    """Test that directories without .qmd files are asset directories."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        d = Path(tmp_dir) / "images"
+        d.mkdir()
+        (d / "logo.png").write_bytes(b"PNG")
+        assert GreatDocs._is_asset_dir(d) is True
+
+
+def test_is_asset_dir_with_qmd():
+    """Test that directories with .qmd files are NOT asset directories."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        d = Path(tmp_dir) / "chapter"
+        d.mkdir()
+        (d / "page.qmd").write_text("---\ntitle: Test\n---\n")
+        assert GreatDocs._is_asset_dir(d) is False
+
+
+def test_is_asset_dir_underscore_prefix_with_qmd():
+    """Test that _-prefixed dirs are asset dirs even when they contain .qmd files."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        d = Path(tmp_dir) / "_includes"
+        d.mkdir()
+        (d / "snippet.qmd").write_text("```python\nx = 1\n```\n")
+        assert GreatDocs._is_asset_dir(d) is True
+
+
+def test_underscore_dir_copied_as_assets_with_qmd():
+    """Test that _-prefixed dirs with .qmd files are copied during user guide build."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
+
+        user_guide = project_path / "user_guide"
+        user_guide.mkdir()
+        (user_guide / "01-tutorial.qmd").write_text(
+            "---\ntitle: Tutorial\n---\n\n"
+            '{{< include _includes/example.qmd lang="markdown" >}}\n'
+        )
+
+        includes = user_guide / "_includes"
+        includes.mkdir()
+        (includes / "example.qmd").write_text("```python\nprint('hello')\n```\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        ug_info = docs._discover_user_guide()
+        assert ug_info is not None
+
+        docs._copy_user_guide_to_docs(ug_info)
+
+        # The _includes dir should be copied as an asset directory
+        copied_includes = docs.project_path / "user-guide" / "_includes"
+        assert copied_includes.exists(), "_includes dir was not copied"
+        assert (copied_includes / "example.qmd").exists()
+
+        # The include with lang= should have been expanded in the built file
+        built = docs.project_path / "user-guide" / "tutorial.qmd"
+        built_content = built.read_text(encoding="utf-8")
+        assert "```markdown" in built_content
+        assert "print('hello')" in built_content
+
+
 def test_user_guide_sidebar_uses_clean_urls():
     """Test that the generated sidebar uses clean URLs without numeric prefixes."""
     with tempfile.TemporaryDirectory() as tmp_dir:

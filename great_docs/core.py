@@ -2865,15 +2865,13 @@ class GreatDocs:
             dest_dir = self.project_path / slug
             dest_dir.mkdir(parents=True, exist_ok=True)
 
-            # Copy asset directories (directories without .qmd files)
+            # Copy asset directories (images, data, code snippets, etc.)
             for item in source_path.iterdir():
-                if item.is_dir():
-                    has_qmd = any(f.suffix == ".qmd" for f in item.rglob("*"))
-                    if not has_qmd:
-                        dst_dir = dest_dir / item.name
-                        if dst_dir.exists():
-                            shutil.rmtree(dst_dir)
-                        shutil.copytree(item, dst_dir)
+                if item.is_dir() and self._is_asset_dir(item):
+                    dst_dir = dest_dir / item.name
+                    if dst_dir.exists():
+                        shutil.rmtree(dst_dir)
+                    shutil.copytree(item, dst_dir)
 
             if section_type == "blog":
                 # Blog sections use Quarto's native listing directive
@@ -3005,6 +3003,9 @@ class GreatDocs:
 
             content = src_file.read_text(encoding="utf-8")
 
+            # Expand {{< code-include >}} shortcodes before Quarto sees the file
+            content = self._expand_code_includes(content, src_file.parent)
+
             # Fix links to .qmd files with numeric prefixes
             content = self._fix_numeric_prefix_links(content)
 
@@ -3096,6 +3097,9 @@ class GreatDocs:
             content_dirs.add(src_file.parent)
 
             content = src_file.read_text(encoding="utf-8")
+
+            # Expand {{< code-include >}} shortcodes before Quarto sees the file
+            content = self._expand_code_includes(content, src_file.parent)
 
             # Parse frontmatter for metadata (but don't modify it —
             # Quarto's listing needs the original frontmatter)
@@ -5503,6 +5507,9 @@ class GreatDocs:
             with open(src_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
+            # Expand {{< code-include >}} shortcodes before Quarto sees the file
+            content = self._expand_code_includes(content, src_path.parent)
+
             # In auto-discovery mode, fix links to .qmd files with numeric prefixes
             if not is_explicit:
                 content = self._fix_numeric_prefix_links(content)
@@ -5516,19 +5523,33 @@ class GreatDocs:
 
             copied_files.append(f"user-guide/{dest_rel_path}")
 
-        # Also copy any asset directories (directories without .qmd files)
+        # Also copy any asset directories (images, data, code snippets, etc.)
         for item in source_dir.iterdir():
-            if item.is_dir():
-                # Check if this directory has any .qmd files
-                has_qmd = any(f.suffix == ".qmd" for f in item.rglob("*"))
-                if not has_qmd:
-                    # This is likely an asset directory, copy it
-                    dst_dir = target_dir / item.name
-                    if dst_dir.exists():
-                        shutil.rmtree(dst_dir)  # pragma: no cover
-                    shutil.copytree(item, dst_dir)
+            if item.is_dir() and self._is_asset_dir(item):
+                dst_dir = target_dir / item.name
+                if dst_dir.exists():
+                    shutil.rmtree(dst_dir)  # pragma: no cover
+                shutil.copytree(item, dst_dir)
 
         return copied_files
+
+    @staticmethod
+    def _is_asset_dir(directory: Path) -> bool:
+        """
+        Determine whether *directory* is an asset directory (images, data, snippets, etc.).
+
+        A directory is considered an asset directory when either:
+
+        - It contains no ``.qmd`` files at any depth, **or**
+        - Its name starts with ``_`` (e.g., ``_includes/``, ``_snippets/``).
+
+        The underscore rule lets authors store ``.qmd`` snippets intended for
+        ``code-include`` (or other non-page purposes) alongside images and data
+        files without the directory being mistaken for a content subdirectory.
+        """
+        if directory.name.startswith("_"):
+            return True
+        return not any(f.suffix == ".qmd" for f in directory.rglob("*"))
 
     def _add_frontmatter_option(self, content: str, key: str, value) -> str:
         """
@@ -5577,6 +5598,192 @@ class GreatDocs:
 
         # No frontmatter, create one
         return f"---\n{key}: {yaml_value}\n---\n\n{content}"
+
+    _CODE_INCLUDE_RE = re.compile(
+        r"\{\{<\s*include\s+(.*?)\s*>\}\}",
+    )
+
+    _CONTENT_EXTENSIONS = {".qmd", ".md"}
+
+    _EXT_TO_LANG: dict[str, str] = {
+        ".py": "python",
+        ".r": "r",
+        ".js": "javascript",
+        ".ts": "typescript",
+        ".jsx": "jsx",
+        ".tsx": "tsx",
+        ".rb": "ruby",
+        ".rs": "rust",
+        ".go": "go",
+        ".java": "java",
+        ".cpp": "cpp",
+        ".cc": "cpp",
+        ".cxx": "cpp",
+        ".c": "c",
+        ".h": "c",
+        ".hpp": "cpp",
+        ".cs": "csharp",
+        ".css": "css",
+        ".scss": "scss",
+        ".html": "html",
+        ".sql": "sql",
+        ".sh": "bash",
+        ".bash": "bash",
+        ".zsh": "bash",
+        ".yaml": "yaml",
+        ".yml": "yaml",
+        ".json": "json",
+        ".toml": "toml",
+        ".xml": "xml",
+        ".lua": "lua",
+        ".swift": "swift",
+        ".kt": "kotlin",
+        ".scala": "scala",
+        ".jl": "julia",
+        ".m": "matlab",
+        ".pl": "perl",
+        ".php": "php",
+    }
+
+    def _expand_code_includes(self, content: str, source_dir: Path) -> str:
+        """
+        Replace ``{{< include path >}}`` shortcodes with fenced code blocks.
+
+        Only intercepts includes that target code files (non-``.qmd``/``.md``)
+        or that use the ``lang`` or ``lines`` keywords.  Plain
+        ``{{< include _shared.qmd >}}`` shortcodes are left untouched so
+        Quarto can handle them natively.
+
+        Supports optional keyword arguments:
+
+        - ``lang="python"`` — override the auto-detected language
+        - ``lines="5-10"`` — include only the specified line range (1-based, inclusive)
+
+        File paths are resolved first relative to *source_dir* (the directory
+        containing the source ``.qmd`` file), then relative to the project root.
+
+        Parameters
+        ----------
+        content
+            The ``.qmd`` file content.
+        source_dir
+            Directory of the source file (for relative path resolution).
+
+        Returns
+        -------
+        str
+            Content with code-file ``include`` shortcodes replaced by fenced
+            code blocks.
+        """
+
+        def _replace(m: re.Match) -> str:
+            raw_args = m.group(1)
+
+            file_path_str, lang, lines_spec = self._parse_code_include_args(raw_args)
+
+            if not file_path_str:
+                return m.group(0)
+
+            ext = Path(file_path_str).suffix.lower()
+            is_content_file = ext in self._CONTENT_EXTENSIONS
+
+            if is_content_file and not lang and not lines_spec:
+                return m.group(0)
+
+            resolved = self._resolve_code_include_path(file_path_str, source_dir)
+            if resolved is None:
+                return f"<!-- include error: file not found: {file_path_str} -->"
+
+            try:
+                file_content = resolved.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as e:
+                return f"<!-- include error: {e} -->"
+
+            if lines_spec:
+                file_content = self._select_lines(file_content, lines_spec)
+
+            if not lang:
+                lang = self._EXT_TO_LANG.get(resolved.suffix.lower(), "")
+
+            longest_run = 0
+            current_run = 0
+            for ch in file_content:
+                if ch == "`":
+                    current_run += 1
+                    longest_run = max(longest_run, current_run)
+                else:
+                    current_run = 0
+            fence = "`" * max(3, longest_run + 1)
+            return f"{fence}{lang}\n{file_content.rstrip()}\n{fence}"
+
+        return self._CODE_INCLUDE_RE.sub(_replace, content)
+
+    @staticmethod
+    def _parse_code_include_args(raw: str) -> tuple[str, str, str]:
+        """
+        Parse ``include`` shortcode arguments.
+
+        Returns `(file_path, lang, lines)` where *lang* and *lines* may be empty strings if not
+        specified.
+        """
+        lang = ""
+        lines = ""
+        file_path = ""
+
+        # Extract keyword arguments
+        kw_re = re.compile(r'(\w+)\s*=\s*"([^"]*)"')
+        for kw_match in kw_re.finditer(raw):
+            key, value = kw_match.group(1), kw_match.group(2)
+            if key == "lang":
+                lang = value
+            elif key == "lines":
+                lines = value
+
+        # The file path is whatever remains after stripping keyword args
+        remaining = kw_re.sub("", raw).strip()
+        # Remove surrounding quotes if present
+        if remaining and remaining[0] in ('"', "'") and remaining[-1] == remaining[0]:
+            remaining = remaining[1:-1]
+        file_path = remaining
+
+        return file_path, lang, lines
+
+    def _resolve_code_include_path(self, file_path_str: str, source_dir: Path) -> Path | None:
+        """
+        Resolve a code-include file path.
+
+        Tries *source_dir* first, then the project root.
+        """
+        candidates = [
+            source_dir / file_path_str,
+            self.project_root / file_path_str,
+        ]
+        for candidate in candidates:
+            resolved = candidate.resolve()
+            if resolved.is_file():
+                return resolved
+        return None
+
+    @staticmethod
+    def _select_lines(content: str, lines_spec: str) -> str:
+        """
+        Select a range of lines from *content*.
+
+        *lines_spec* is `"start-end"` (1-based, inclusive) or `"N"` for a single line.
+        """
+        all_lines = content.splitlines(keepends=True)
+
+        if "-" in lines_spec:
+            parts = lines_spec.split("-", 1)
+            start = int(parts[0]) - 1
+            end = int(parts[1])
+        else:
+            start = int(lines_spec) - 1
+            end = start + 1
+
+        start = max(0, start)
+        end = min(len(all_lines), end)
+        return "".join(all_lines[start:end])
 
     # Regex for detecting a top-level `freeze:` key in YAML frontmatter
     _FREEZE_FM_RE = re.compile(r"^freeze:\s+(.+)$", re.MULTILINE)
@@ -11692,7 +11899,7 @@ anchor-sections: true
         ug_dir = self.project_path / "user-guide"
         if ug_dir.exists() and ug_dir.is_dir():
             for item in ug_dir.iterdir():
-                if item.is_dir() and not any(f.suffix == ".qmd" for f in item.rglob("*")):
+                if item.is_dir() and self._is_asset_dir(item):
                     res_glob = f"user-guide/{item.name}/**"
                     if res_glob not in config["project"]["resources"]:
                         config["project"]["resources"].append(res_glob)
@@ -11716,9 +11923,7 @@ anchor-sections: true
                 section_build_dir = self.project_path / slug
                 if section_build_dir.exists() and section_build_dir.is_dir():
                     for item in section_build_dir.iterdir():
-                        if item.is_dir() and not any(
-                            f.suffix == ".qmd" for f in item.rglob("*")
-                        ):
+                        if item.is_dir() and self._is_asset_dir(item):
                             res_glob = f"{slug}/{item.name}/**"
                             if res_glob not in config["project"]["resources"]:
                                 config["project"]["resources"].append(res_glob)
