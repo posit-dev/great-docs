@@ -5886,6 +5886,11 @@ class GreatDocs:
         """
         explicit_config = user_guide_info["explicit_config"]
         source_dir = user_guide_info["source_dir"]
+        title_lookup = {
+            fi["path"].relative_to(source_dir).as_posix(): fi["title"]
+            for fi in user_guide_info.get("files", [])
+            if fi.get("title")
+        }
         contents = []
 
         for section_entry in explicit_config:
