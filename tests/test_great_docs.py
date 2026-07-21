@@ -4029,15 +4029,21 @@ def test_user_guide_explicit_config_sidebar_generation():
             "href": "user-guide/index.qmd",
         }
 
-        # Other items are plain hrefs
-        assert section1["contents"][1] == "user-guide/quickstart.qmd"
-        assert section1["contents"][2] == "user-guide/installation.qmd"
+        # Other items now also have explicit text/href
+        assert section1["contents"][1] == {
+            "text": "Quick Start",
+            "href": "user-guide/quickstart.qmd",
+        }
+        assert section1["contents"][2] == {
+            "text": "Installation",
+            "href": "user-guide/installation.qmd",
+        }
 
         # Check second section
         section2 = sidebar["contents"][1]
 
         assert section2["section"] == "Advanced"
-        assert section2["contents"] == ["user-guide/advanced.qmd"]
+        assert section2["contents"] == [{"text": "Advanced", "href": "user-guide/advanced.qmd"}]
 
 
 def test_user_guide_explicit_config_no_prefix_stripping():
@@ -4083,8 +4089,8 @@ def test_user_guide_explicit_config_no_prefix_stripping():
         sidebar = docs._generate_user_guide_sidebar(user_guide_info)
         section_contents = sidebar["contents"][0]["contents"]
 
-        assert section_contents[0] == "user-guide/01-intro.qmd"
-        assert section_contents[1] == "user-guide/02-setup.qmd"
+        assert section_contents[0] == {"text": "Intro", "href": "user-guide/01-intro.qmd"}
+        assert section_contents[1] == {"text": "Setup", "href": "user-guide/02-setup.qmd"}
 
 
 def test_user_guide_explicit_config_missing_file(capsys):
@@ -12045,7 +12051,7 @@ def test_organize_files_into_sidebar_flat():
 
         assert result["id"] == "user-guide"
         assert len(result["contents"]) == 2
-        assert "user-guide/intro.qmd" in result["contents"]
+        assert {"text": "Intro", "href": "user-guide/intro.qmd"} in result["contents"]
 
 
 def test_organize_files_into_sidebar_with_sections():
@@ -15291,10 +15297,10 @@ def test_update_sidebar_from_sections_basic():
 
         # Then section entries
         assert contents[1]["section"] == "Classes"
-        assert "reference/MyClass.qmd" in contents[1]["contents"]
-        assert "reference/OtherClass.qmd" in contents[1]["contents"]
+        assert {"text": "MyClass", "href": "reference/MyClass.qmd"} in contents[1]["contents"]
+        assert {"text": "OtherClass", "href": "reference/OtherClass.qmd"} in contents[1]["contents"]
         assert contents[2]["section"] == "Functions"
-        assert "reference/my_func.qmd" in contents[2]["contents"]
+        assert {"text": "my_func", "href": "reference/my_func.qmd"} in contents[2]["contents"]
 
 
 def test_update_sidebar_from_sections_dict_items():
@@ -15335,8 +15341,8 @@ def test_update_sidebar_from_sections_dict_items():
         sidebar = result["website"]["sidebar"]
         section = sidebar[0]["contents"][1]  # First section after API link
 
-        assert "reference/BigClass.qmd" in section["contents"]
-        assert "reference/simple_func.qmd" in section["contents"]
+        assert {"text": "BigClass", "href": "reference/BigClass.qmd"} in section["contents"]
+        assert {"text": "simple_func", "href": "reference/simple_func.qmd"} in section["contents"]
 
 
 def test_update_sidebar_no_api_reference():
@@ -29089,8 +29095,8 @@ def test_api_reference_generate_sidebar_untitled_first_section():
         sections, dir="reference", out_page_suffix=".qmd", sidebar=None
     )
     contents = sidebar["website"]["sidebar"][0]["contents"]
-    assert "reference/func.qmd" in contents
-    assert {"section": "Helpers", "contents": ["reference/helper.qmd"]} in contents
+    assert {"text": "func", "href": "reference/func.qmd"} in contents
+    assert {"section": "Helpers", "contents": [{"text": "helper", "href": "reference/helper.qmd"}]} in contents
 
 
 def test_api_reference_generate_sidebar_subtitle_first_section():
@@ -29100,7 +29106,7 @@ def test_api_reference_generate_sidebar_subtitle_first_section():
         sections, dir="reference", out_page_suffix=".qmd", sidebar=None
     )
     contents = sidebar["website"]["sidebar"][0]["contents"]
-    assert {"section": "Internals", "contents": ["reference/func.qmd"]} in contents
+    assert {"section": "Internals", "contents": [{"text": "func", "href": "reference/func.qmd"}]} in contents
 
 
 def test_api_reference_generate_sidebar_with_sidebar_config():
@@ -36249,7 +36255,7 @@ class TestGenerateUserGuideSidebarAuto:
             sidebar = docs._generate_user_guide_sidebar_auto(user_guide_info)
             assert sidebar["id"] == "user-guide"
             assert len(sidebar["contents"]) == 2
-            assert "user-guide/intro.qmd" in sidebar["contents"][0]
+            assert sidebar["contents"][0] == {"text": "Intro", "href": "user-guide/intro.qmd"}
 
     def test_with_sections(self):
         """Generates sectioned sidebar from frontmatter sections."""
@@ -37349,7 +37355,7 @@ class TestUpdateSidebarFromSections:
             contents = sidebar[0]["contents"]
             assert contents[0]["href"] == "reference/index.qmd"
             assert contents[1]["section"] == "Classes"
-            assert "reference/MyClass.qmd" in contents[1]["contents"]
+            assert {"text": "MyClass", "href": "reference/MyClass.qmd"} in contents[1]["contents"]
 
     def test_handles_dict_format_items(self):
         """Processes dict-format items with name key."""
@@ -37364,7 +37370,7 @@ class TestUpdateSidebarFromSections:
             with open(docs.project_path / "_quarto.yml") as f:
                 config = read_yaml(f)
             contents = config["website"]["sidebar"][0]["contents"]
-            assert "reference/Graph.qmd" in contents[1]["contents"]
+            assert {"text": "Graph", "href": "reference/Graph.qmd"} in contents[1]["contents"]
 
     def test_no_api_reference_returns_early(self):
         """Returns early when no api-reference in config."""
@@ -37995,8 +38001,10 @@ class TestGenerateUserGuideSidebarAutoBatch9:
             sidebar = docs._generate_user_guide_sidebar_auto(user_guide_info)
             # First entry is a section, second is the unsectioned file
             assert sidebar["contents"][0]["section"] == "Getting Started"
-            assert isinstance(sidebar["contents"][1], str)
-            assert "appendix.qmd" in sidebar["contents"][1]
+            assert sidebar["contents"][1] == {
+                "text": "Appendix",
+                "href": "user-guide/appendix.qmd",
+            }
 
 
 class TestGetUserGuideTextForLlms:
