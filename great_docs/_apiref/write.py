@@ -156,10 +156,15 @@ def _generate_sidebar(
         else:
             in_subsection = bool(section.subtitle)
 
-        links: list[str] = []
+        links: list[dict[str, str]] = []
         for entry in section.contents:
             if isinstance(entry, Page):
-                links.append(f"{dir}/{entry.path}{out_page_suffix}")
+                links.append(
+                    {
+                        "text": _page_sidebar_text(entry),
+                        "href": f"{dir}/{entry.path}{out_page_suffix}",
+                    }
+                )
 
         # A section that precedes any titled section attaches at the top level.
         dest: list[Any] = contents if current_entry is None else current_entry["contents"]
