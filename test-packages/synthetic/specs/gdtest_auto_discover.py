@@ -89,6 +89,6 @@ SPEC = {
         "export_names": ["Engine", "ignite", "shutdown"],
         "num_exports": 3,
         "has_user_guide": False,
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "sechdg", "sbsec"],
+    },
 }

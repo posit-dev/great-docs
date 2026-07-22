@@ -75,6 +75,6 @@ SPEC = {
     "expected": {
         "export_names": ["compute", "validate"],
         "section_titles": ["Functions"],
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "hdg"],
+    },
 }

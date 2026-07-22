@@ -819,9 +819,7 @@ def _google_section_block(section: str, body: str, hashes: str) -> str:
         entries = _parse_google_entries(body)
         if not entries:
             return body
-        rows = [
-            [pname, "", sanitize(pdesc, allow_markdown=True), "-"] for pname, pdesc in entries
-        ]
+        rows = [[pname, "", sanitize(pdesc, allow_markdown=True), "-"] for pname, pdesc in entries]
         table = _md_pipe_table(["Name", "Type", "Description", "Default"], rows)
         return _doc_section("Parameters", "parameters", hashes, table)
 

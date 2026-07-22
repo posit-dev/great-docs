@@ -137,18 +137,23 @@ def test_apireference_documented_symbols_includes_documented_members(tmp_path, m
     pkg.mkdir()
     (pkg / "__init__.py").write_text("from gddisc.mod import Widget\n__all__ = ['Widget']\n")
     (pkg / "mod.py").write_text(
-        'class Widget:\n'
+        "class Widget:\n"
         '    """A widget."""\n'
-        '    def fit(self):\n'
+        "    def fit(self):\n"
         '        """Fit it."""\n'
-        '    def _priv(self): ...\n'
+        "    def _priv(self): ...\n"
     )
     monkeypatch.syspath_prepend(str(tmp_path))
 
     from great_docs._apiref.api_reference import APIReference
 
     ref = APIReference(
-        {"api-reference": {"package": "gddisc", "sections": [{"title": "API", "contents": ["Widget"]}]}}
+        {
+            "api-reference": {
+                "package": "gddisc",
+                "sections": [{"title": "API", "contents": ["Widget"]}],
+            }
+        }
     )
     # `fit` discovered AND documented -> included; `_priv` private -> excluded.
     assert ref.documented_symbols == ["Widget", "Widget.fit"]

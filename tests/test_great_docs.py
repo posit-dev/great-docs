@@ -2920,7 +2920,7 @@ def test_expand_code_includes_basic():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        content = 'Some text\n\n{{< include examples/demo.py >}}\n\nMore text'
+        content = "Some text\n\n{{< include examples/demo.py >}}\n\nMore text"
         result = docs._expand_code_includes(content, project_path)
 
         assert '```python\nprint("hello")\nx = 42\n```' in result
@@ -2995,7 +2995,7 @@ def test_expand_code_includes_relative_to_source_dir():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        content = '{{< include snippets/example.py >}}'
+        content = "{{< include snippets/example.py >}}"
         result = docs._expand_code_includes(content, user_guide)
         assert "local_code = True" in result
 
@@ -3018,7 +3018,7 @@ def test_expand_code_includes_fallback_to_project_root():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        content = '{{< include src/app.js >}}'
+        content = "{{< include src/app.js >}}"
         result = docs._expand_code_includes(content, user_guide)
         assert "```javascript" in result
         assert 'console.log("hello")' in result
@@ -3033,7 +3033,7 @@ def test_expand_code_includes_missing_file():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        content = '{{< include does/not/exist.py >}}'
+        content = "{{< include does/not/exist.py >}}"
         result = docs._expand_code_includes(content, project_path)
         assert "<!-- include error:" in result
         assert "file not found" in result
@@ -3133,7 +3133,7 @@ def test_expand_code_includes_unknown_extension():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        content = '{{< include data.xyz >}}'
+        content = "{{< include data.xyz >}}"
         result = docs._expand_code_includes(content, project_path)
         assert result == "```\nsome data\n```"
 
@@ -3149,7 +3149,7 @@ def test_expand_code_includes_backticks_in_content():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        content = '{{< include example.txt >}}'
+        content = "{{< include example.txt >}}"
         result = docs._expand_code_includes(content, project_path)
         # Should use a 4-backtick fence since the content has 3-backtick runs
         assert result.startswith("````")
@@ -3274,8 +3274,7 @@ def test_underscore_dir_copied_as_assets_with_qmd():
         user_guide = project_path / "user_guide"
         user_guide.mkdir()
         (user_guide / "01-tutorial.qmd").write_text(
-            "---\ntitle: Tutorial\n---\n\n"
-            '{{< include _includes/example.qmd lang="markdown" >}}\n'
+            '---\ntitle: Tutorial\n---\n\n{{< include _includes/example.qmd lang="markdown" >}}\n'
         )
 
         includes = user_guide / "_includes"
@@ -4029,15 +4028,21 @@ def test_user_guide_explicit_config_sidebar_generation():
             "href": "user-guide/index.qmd",
         }
 
-        # Other items are plain hrefs
-        assert section1["contents"][1] == "user-guide/quickstart.qmd"
-        assert section1["contents"][2] == "user-guide/installation.qmd"
+        # Other items now also have explicit text/href
+        assert section1["contents"][1] == {
+            "text": "Quick Start",
+            "href": "user-guide/quickstart.qmd",
+        }
+        assert section1["contents"][2] == {
+            "text": "Installation",
+            "href": "user-guide/installation.qmd",
+        }
 
         # Check second section
         section2 = sidebar["contents"][1]
 
         assert section2["section"] == "Advanced"
-        assert section2["contents"] == ["user-guide/advanced.qmd"]
+        assert section2["contents"] == [{"text": "Advanced", "href": "user-guide/advanced.qmd"}]
 
 
 def test_user_guide_explicit_config_no_prefix_stripping():
@@ -4083,8 +4088,8 @@ def test_user_guide_explicit_config_no_prefix_stripping():
         sidebar = docs._generate_user_guide_sidebar(user_guide_info)
         section_contents = sidebar["contents"][0]["contents"]
 
-        assert section_contents[0] == "user-guide/01-intro.qmd"
-        assert section_contents[1] == "user-guide/02-setup.qmd"
+        assert section_contents[0] == {"text": "Intro", "href": "user-guide/01-intro.qmd"}
+        assert section_contents[1] == {"text": "Setup", "href": "user-guide/02-setup.qmd"}
 
 
 def test_user_guide_explicit_config_missing_file(capsys):
@@ -4561,9 +4566,7 @@ def test_index_qmd_frontmatter_title_preserved():
     """Authored frontmatter title on the index source survives into index.qmd."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
-        (project_path / "pyproject.toml").write_text(
-            '[project]\nname = "test"\nversion = "1.0"\n'
-        )
+        (project_path / "pyproject.toml").write_text('[project]\nname = "test"\nversion = "1.0"\n')
         (project_path / "great-docs.yml").write_text("")
 
         (project_path / "index.qmd").write_text(
@@ -4590,9 +4593,7 @@ def test_index_qmd_frontmatter_title_empty_without_source_title():
     """A source file with no title yields an empty homepage title."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
-        (project_path / "pyproject.toml").write_text(
-            '[project]\nname = "test"\nversion = "1.0"\n'
-        )
+        (project_path / "pyproject.toml").write_text('[project]\nname = "test"\nversion = "1.0"\n')
         (project_path / "great-docs.yml").write_text("")
 
         (project_path / "README.md").write_text("## Getting Started\n\nHello.\n")
@@ -4616,9 +4617,7 @@ def test_index_qmd_frontmatter_title_yaml_safe():
     tricky_title = 'A: B "quoted"'
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
-        (project_path / "pyproject.toml").write_text(
-            '[project]\nname = "test"\nversion = "1.0"\n'
-        )
+        (project_path / "pyproject.toml").write_text('[project]\nname = "test"\nversion = "1.0"\n')
         (project_path / "great-docs.yml").write_text("")
 
         source_fm = format_yaml({"title": tricky_title}).rstrip()
@@ -12045,7 +12044,7 @@ def test_organize_files_into_sidebar_flat():
 
         assert result["id"] == "user-guide"
         assert len(result["contents"]) == 2
-        assert "user-guide/intro.qmd" in result["contents"]
+        assert {"text": "Intro", "href": "user-guide/intro.qmd"} in result["contents"]
 
 
 def test_organize_files_into_sidebar_with_sections():
@@ -15291,10 +15290,10 @@ def test_update_sidebar_from_sections_basic():
 
         # Then section entries
         assert contents[1]["section"] == "Classes"
-        assert "reference/MyClass.qmd" in contents[1]["contents"]
-        assert "reference/OtherClass.qmd" in contents[1]["contents"]
+        assert {"text": "MyClass", "href": "reference/MyClass.qmd"} in contents[1]["contents"]
+        assert {"text": "OtherClass", "href": "reference/OtherClass.qmd"} in contents[1]["contents"]
         assert contents[2]["section"] == "Functions"
-        assert "reference/my_func.qmd" in contents[2]["contents"]
+        assert {"text": "my_func", "href": "reference/my_func.qmd"} in contents[2]["contents"]
 
 
 def test_update_sidebar_from_sections_dict_items():
@@ -15335,8 +15334,8 @@ def test_update_sidebar_from_sections_dict_items():
         sidebar = result["website"]["sidebar"]
         section = sidebar[0]["contents"][1]  # First section after API link
 
-        assert "reference/BigClass.qmd" in section["contents"]
-        assert "reference/simple_func.qmd" in section["contents"]
+        assert {"text": "BigClass", "href": "reference/BigClass.qmd"} in section["contents"]
+        assert {"text": "simple_func", "href": "reference/simple_func.qmd"} in section["contents"]
 
 
 def test_update_sidebar_no_api_reference():
@@ -21205,18 +21204,20 @@ def test_generate_source_links_json_with_class_methods():
                 "end_line": 10,
             }
 
-        def fake_categorize(pkg_name, exports):
-            if "MyClass" in exports:
-                return {
-                    "all_classes": ["MyClass"],
-                    "class_method_names": {"MyClass": ["do_stuff", "run"]},
-                }
-            return {"all_classes": [], "class_method_names": {}}
+        mock_method_do = MagicMock()
+        mock_method_do.kind.value = "function"
+        mock_method_run = MagicMock()
+        mock_method_run.kind.value = "function"
+        mock_class = MagicMock()
+        mock_class.kind.value = "class"
+        mock_class.members = {"do_stuff": mock_method_do, "run": mock_method_run}
+        mock_pkg = MagicMock()
+        mock_pkg.members = {"MyClass": mock_class}
 
         with (
             patch.object(docs, "_get_package_exports", return_value=["MyClass"]),
             patch.object(docs, "_get_source_location", side_effect=fake_source_location),
-            patch.object(docs, "_categorize_api_objects", side_effect=fake_categorize),
+            patch.object(docs, "_get_griffe_package", return_value=mock_pkg),
             patch.object(docs, "_detect_git_ref", return_value="main"),
         ):
             docs._generate_source_links_json("mypkg")
@@ -29089,8 +29090,11 @@ def test_api_reference_generate_sidebar_untitled_first_section():
         sections, dir="reference", out_page_suffix=".qmd", sidebar=None
     )
     contents = sidebar["website"]["sidebar"][0]["contents"]
-    assert "reference/func.qmd" in contents
-    assert {"section": "Helpers", "contents": ["reference/helper.qmd"]} in contents
+    assert {"text": "func", "href": "reference/func.qmd"} in contents
+    assert {
+        "section": "Helpers",
+        "contents": [{"text": "helper", "href": "reference/helper.qmd"}],
+    } in contents
 
 
 def test_api_reference_generate_sidebar_subtitle_first_section():
@@ -29100,7 +29104,10 @@ def test_api_reference_generate_sidebar_subtitle_first_section():
         sections, dir="reference", out_page_suffix=".qmd", sidebar=None
     )
     contents = sidebar["website"]["sidebar"][0]["contents"]
-    assert {"section": "Internals", "contents": ["reference/func.qmd"]} in contents
+    assert {
+        "section": "Internals",
+        "contents": [{"text": "func", "href": "reference/func.qmd"}],
+    } in contents
 
 
 def test_api_reference_generate_sidebar_with_sidebar_config():
@@ -36249,7 +36256,7 @@ class TestGenerateUserGuideSidebarAuto:
             sidebar = docs._generate_user_guide_sidebar_auto(user_guide_info)
             assert sidebar["id"] == "user-guide"
             assert len(sidebar["contents"]) == 2
-            assert "user-guide/intro.qmd" in sidebar["contents"][0]
+            assert sidebar["contents"][0] == {"text": "Intro", "href": "user-guide/intro.qmd"}
 
     def test_with_sections(self):
         """Generates sectioned sidebar from frontmatter sections."""
@@ -37349,7 +37356,7 @@ class TestUpdateSidebarFromSections:
             contents = sidebar[0]["contents"]
             assert contents[0]["href"] == "reference/index.qmd"
             assert contents[1]["section"] == "Classes"
-            assert "reference/MyClass.qmd" in contents[1]["contents"]
+            assert {"text": "MyClass", "href": "reference/MyClass.qmd"} in contents[1]["contents"]
 
     def test_handles_dict_format_items(self):
         """Processes dict-format items with name key."""
@@ -37364,7 +37371,7 @@ class TestUpdateSidebarFromSections:
             with open(docs.project_path / "_quarto.yml") as f:
                 config = read_yaml(f)
             contents = config["website"]["sidebar"][0]["contents"]
-            assert "reference/Graph.qmd" in contents[1]["contents"]
+            assert {"text": "Graph", "href": "reference/Graph.qmd"} in contents[1]["contents"]
 
     def test_no_api_reference_returns_early(self):
         """Returns early when no api-reference in config."""
@@ -37995,8 +38002,10 @@ class TestGenerateUserGuideSidebarAutoBatch9:
             sidebar = docs._generate_user_guide_sidebar_auto(user_guide_info)
             # First entry is a section, second is the unsectioned file
             assert sidebar["contents"][0]["section"] == "Getting Started"
-            assert isinstance(sidebar["contents"][1], str)
-            assert "appendix.qmd" in sidebar["contents"][1]
+            assert sidebar["contents"][1] == {
+                "text": "Appendix",
+                "href": "user-guide/appendix.qmd",
+            }
 
 
 class TestGetUserGuideTextForLlms:

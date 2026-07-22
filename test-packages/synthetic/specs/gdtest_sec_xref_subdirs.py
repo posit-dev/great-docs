@@ -130,6 +130,6 @@ SPEC = {
         "export_names": ["render", "compose"],
         "num_exports": 2,
         "section_titles": ["Functions"],
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "sechdg", "sbsec", "hdg"],
     },
 }

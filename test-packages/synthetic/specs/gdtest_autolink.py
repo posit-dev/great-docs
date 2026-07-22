@@ -128,6 +128,6 @@ SPEC = {
             "Pipeline": ["Engine", "Config", "run_pipeline"],
             "run_pipeline": ["Pipeline", "Config", "Engine"],
         },
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "hdg"],
+    },
 }

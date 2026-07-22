@@ -427,6 +427,6 @@ SPEC = {
         "skill_has_decision_table": True,
         "has_hero": True,
         "has_github_url": True,
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "hdg"],
+    },
 }

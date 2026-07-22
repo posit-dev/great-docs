@@ -1547,9 +1547,7 @@ def test_api_snapshot_all_tags_differ(tmp_path: Path):
     """api-snapshot --all-tags produces snapshots that differ when the reference config grows."""
     _two_tag_repo(tmp_path)
     runner = CliRunner()
-    result = runner.invoke(
-        cli, ["api-snapshot", "--all-tags", "--project-path", str(tmp_path)]
-    )
+    result = runner.invoke(cli, ["api-snapshot", "--all-tags", "--project-path", str(tmp_path)])
     assert result.exit_code == 0, result.output
     snaps = tmp_path / ".great-docs" / "snapshots"
     s1 = json.loads((snaps / "v0.1.0.json").read_text())["symbols"]

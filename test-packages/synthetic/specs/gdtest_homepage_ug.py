@@ -147,6 +147,6 @@ SPEC = {
         "navbar_absent_texts": ["User Guide"],
         # Sidebar first entry should point to index.qmd
         "sidebar_first_href": "index.qmd",
-        "coverage_exclude": ['nodoc', 'bigcl', 'supp', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "supp", "hdg"],
+    },
 }

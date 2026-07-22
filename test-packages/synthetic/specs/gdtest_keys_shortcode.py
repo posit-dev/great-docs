@@ -276,6 +276,6 @@ SPEC = {
                 "Keys in Context",
             ],
         },
-        "coverage_exclude": ['nodoc', 'bigcl', 'supp', 'sechdg', 'sbsec', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "supp", "sechdg", "sbsec", "hdg"],
+    },
 }

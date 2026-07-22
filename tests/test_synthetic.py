@@ -642,9 +642,7 @@ def test_L3_cli_sidebar_nested_structure(pkg_name: str, tmp_path: Path):
     assert sidebar_items[0].get("href") == "reference/cli/index.qmd"
 
     # Collect group section dicts (the index link dict has 'href', not 'section')
-    section_items = [
-        item for item in sidebar_items if isinstance(item, dict) and "section" in item
-    ]
+    section_items = [item for item in sidebar_items if isinstance(item, dict) and "section" in item]
     assert len(section_items) > 0, (
         f"No section dicts found in sidebar items; "
         f"nested groups should use {{section: ..., contents: [...]}} structure. "
@@ -1169,9 +1167,7 @@ def test_L3_code_include_expansion(tmp_path: Path):
     # Code-file includes should be fully expanded (no shortcodes remain
     # for .py/.yaml files — only .qmd/.md includes pass through to Quarto)
     assert "{{< include" not in content or all(
-        ".qmd" in line or ".md" in line
-        for line in content.splitlines()
-        if "{{< include" in line
+        ".qmd" in line or ".md" in line for line in content.splitlines() if "{{< include" in line
     )
 
 

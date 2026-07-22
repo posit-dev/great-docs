@@ -129,6 +129,6 @@ SPEC = {
         "detected_parser": "google",
         "export_names": ["Color", "Priority", "Status", "get_label"],
         "num_exports": 4,
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "sechdg", "sbsec", "hdg"],
+    },
 }

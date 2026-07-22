@@ -447,9 +447,7 @@ class TestGenerateTagsJson:
             "tags:\n  enabled: true\nsections:\n  - title: Examples\n    dir: docs/examples\n",
         )
         section_dir = gd.project_path / "docs" / "examples"
-        _make_qmd(
-            section_dir / "ex.qmd", "Example", tags=["Demo"], extra="tag-location: bottom"
-        )
+        _make_qmd(section_dir / "ex.qmd", "Example", tags=["Demo"], extra="tag-location: bottom")
 
         tag_index = gd._collect_page_tags()
         gd._generate_tags_json(tag_index)

@@ -68,6 +68,6 @@ SPEC = {
     "expected": {
         "export_names": ["process", "transform"],
         "section_titles": ["Functions"],
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "hdg"],
+    },
 }

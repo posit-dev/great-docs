@@ -35,6 +35,7 @@ _log = logging.getLogger(__name__)
 # consumed; dropped before parsing so they neither reach `Settings` nor error.
 _REMOVED_KEYS = {"style", "renderer", "render_interlinks"}
 
+
 @dataclass
 class Settings:
     """How an API reference is generated and written — the non-content keys of the `api-reference:` block"""

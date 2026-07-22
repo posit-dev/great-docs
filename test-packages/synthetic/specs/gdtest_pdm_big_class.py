@@ -185,6 +185,6 @@ SPEC = {
         "export_names": ["Pipeline"],
         "num_exports": 1,
         "big_classes": ["Pipeline"],
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "sechdg", "sbsec", "hdg"],
+    },
 }

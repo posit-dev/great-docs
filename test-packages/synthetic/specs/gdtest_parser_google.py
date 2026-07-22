@@ -100,6 +100,6 @@ SPEC = {
         "detected_parser": "google",
         "export_names": ["connect", "disconnect", "receive", "send", "status"],
         "num_exports": 5,
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'sechdg', 'sbsec', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "sechdg", "sbsec", "hdg"],
+    },
 }

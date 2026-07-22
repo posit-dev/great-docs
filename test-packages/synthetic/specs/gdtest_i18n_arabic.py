@@ -330,6 +330,6 @@ SPEC = {
             "02-templates.qmd",
             "03-table-explorer.qmd",
         ],
-        "coverage_exclude": ['nodoc', 'bigcl', 'supp', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "supp", "hdg"],
+    },
 }

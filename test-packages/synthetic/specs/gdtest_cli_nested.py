@@ -155,6 +155,6 @@ SPEC = {
         "cli_enabled": True,
         "cli_has_groups": True,
         "cli_group_names": ["task", "config"],
-        "coverage_exclude": ['nodoc', 'bigcl', 'ug', 'supp', 'hdg'],
-},
+        "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "hdg"],
+    },
 }

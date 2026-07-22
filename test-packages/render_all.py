@@ -131,10 +131,7 @@ def _count_dedicated_tests(name: str) -> int:
             return 0
         content = test_file.read_text()
         # Split into function blocks
-        fn_positions = [
-            (m.start(), m.group(1))
-            for m in re.finditer(r"\ndef (test_\w+)", content)
-        ]
+        fn_positions = [(m.start(), m.group(1)) for m in re.finditer(r"\ndef (test_\w+)", content)]
         for idx, (pos, _fn_name) in enumerate(fn_positions):
             # Look for @pytest.mark.dedicated in the decorator block
             decorator_block = content[max(0, pos - 1500) : pos]
@@ -1118,10 +1115,7 @@ def _create_test_coverage_page(name: str) -> str:
         # For DED, show the count badge
         level_display = html.escape(level)
         if level == "DED" and ded_count > 0:
-            level_display = (
-                f'{html.escape(level)}'
-                f' <span class="ded-count">×{ded_count}</span>'
-            )
+            level_display = f'{html.escape(level)} <span class="ded-count">×{ded_count}</span>'
             desc = f"{ded_count} dedicated test{'s' if ded_count != 1 else ''} for this package"
         rows.append(
             f'<tr class="{row_class}">'
