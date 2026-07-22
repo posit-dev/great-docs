@@ -261,12 +261,12 @@ pollute it.
 ## Committing `_freeze/` works too
 
 You can also commit `_freeze/` directly to your repository. Since `actions/checkout` restores it as
-part of the repo, Great Docs picks it up automatically (no `actions/cache` step needed for this!).
-This is the simplest approach and gives maintainers direct control over what's cached.
+part of the repo, Great Docs picks it up automatically (no `actions/cache` step needed). This is the
+simplest approach and gives maintainers direct control over what's cached.
 
-And both approaches work together gracefully: if `_freeze/` is in the repo, CI uses it immediately.
-The `actions/cache` step then layers on top, capturing any new execution results for future runs.
-Either path alone is sufficient but together they provide maximum coverage.
+**Choose one approach, not both.** If you commit `_freeze/` to your repo, do **not** also use the
+`actions/cache` step. The cache can overwrite your freshly committed freeze data with stale entries
+from a previous run, causing pages to re-execute unnecessarily.
 :::
 
 ## Mixing Frozen and Fresh Pages
