@@ -30,6 +30,22 @@ brew install quarto
 # Or download the installer from quarto.org
 ```
 
+::: {.details summary="SVG generation is not working"}
+Please confirm the successful import via
+
+```{.python filename="Python"}
+import cairosvg
+```
+
+If `cairosvg` is installed but the required libraries still cannot be found, add the brew dynamic
+library to your terminal environment by running:
+
+```{.bash filename="Terminal"}
+echo 'export DYLD_FALLBACK_LIBRARY_PATH="/opt/homebrew/lib:$DYLD_FALLBACK_LIBRARY_PATH"' >> ~/.zshrc
+```
+
+:::
+
 ## Linux
 
 ```{.bash filename="Terminal"}
