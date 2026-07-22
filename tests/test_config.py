@@ -609,8 +609,8 @@ class TestIncludeInHeader:
 
 
 class TestFreeze:
-    def test_default_none(self, tmp_project: Path):
-        assert Config(tmp_project).freeze is None
+    def test_default_auto(self, tmp_project: Path):
+        assert Config(tmp_project).freeze == "auto"
 
     def test_auto_string(self, tmp_project: Path):
         cfg = _make_config(tmp_project, "freeze: auto\n")
