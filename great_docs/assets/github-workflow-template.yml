@@ -26,15 +26,6 @@ jobs:
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
-      - name: Restore freeze cache
-        uses: actions/cache@v4
-        with:
-          path: _freeze/
-          key: freeze-${{ hashFiles('**/uv.lock', '**/poetry.lock', '**/requirements*.txt', '**/pyproject.toml') }}-${{ hashFiles('**/*.qmd') }}
-          restore-keys: |
-            freeze-${{ hashFiles('**/uv.lock', '**/poetry.lock', '**/requirements*.txt', '**/pyproject.toml') }}-
-            freeze-
-
       - name: Build docs
         run: {build_command}
 
