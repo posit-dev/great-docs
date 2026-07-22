@@ -257,6 +257,18 @@ This means:
 GitHub Actions caches are branch-scoped, so PR branches benefit from `main`'s cache but never
 pollute it.
 
+::: {.callout-tip}
+## Committing `_freeze/` works too
+
+You can also commit `_freeze/` directly to your repository. Since `actions/checkout` restores it as
+part of the repo, Great Docs picks it up automatically (no `actions/cache` step needed for this!).
+This is the simplest approach and gives maintainers direct control over what's cached.
+
+And both approaches work together gracefully: if `_freeze/` is in the repo, CI uses it immediately.
+The `actions/cache` step then layers on top, capturing any new execution results for future runs.
+Either path alone is sufficient but together they provide maximum coverage.
+:::
+
 ## Mixing Frozen and Fresh Pages
 
 With the default `freeze: auto`, all executable pages are cached. Pages without executable code
