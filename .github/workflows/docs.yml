@@ -28,6 +28,14 @@ jobs:
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
+      - name: Restore freeze cache
+        uses: actions/cache@v4
+        with:
+          path: _freeze/
+          key: freeze-${{ hashFiles('**/*.qmd') }}
+          restore-keys: |
+            freeze-
+
       - name: Build docs
         run: great-docs build
 
