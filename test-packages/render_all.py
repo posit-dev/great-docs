@@ -21,6 +21,7 @@ The script:
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import html
 import http.server
 import json
@@ -31,6 +32,7 @@ import socketserver
 import subprocess
 import sys
 import textwrap
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -497,6 +499,7 @@ def build_all(
     run_id: str | None = None,
     state: dict | None = None,
     skip_ok: bool = False,
+    workers: int = 1,
 ) -> list[dict]:
     """Build all (or selected) synthetic packages.
 
@@ -505,6 +508,9 @@ def build_all(
 
     When *skip_ok* is `True`, packages whose status in *state* is already `"ok"` are skipped. This
     lets an interrupted full build resume quickly.
+
+    When *workers* > 1, packages are built in parallel using a thread pool. Each build runs as an
+    independent subprocess so parallelism is genuine.
     """
     names = packages or ALL_PACKAGES
     results = []
@@ -517,58 +523,95 @@ def build_all(
         else:
             print(f"  SKIP {name} (no spec file)")
 
-    total = len(available)
-    print(f"\n{'=' * 70}")
-    print(f"  Building {total} synthetic package sites")
-    print(f"{'=' * 70}\n")
-
+    # Separate skippable packages from those that need building
+    to_build: list[str] = []
     skipped = 0
-    for i, name in enumerate(available, 1):
-        # Resume support: skip packages already built successfully
+    for name in available:
         if skip_ok and state is not None:
             pkg_state = state.get("packages", {}).get(name, {})
             if pkg_state.get("status") == "ok":
-                print(f"[{i:3d}/{total}] {name} ... SKIP (already ok)")
-                # Advance run_id so this package isn't marked stale
                 if run_id is not None:
                     pkg_state["run_id"] = run_id
                 skipped += 1
                 continue
+        to_build.append(name)
 
-        print(f"[{i:3d}/{total}] {name} ... ", end="", flush=True)
-        t0 = time.monotonic()
-        result = build_package(name)
-        elapsed = time.monotonic() - t0
-        status = result["status"]
-        result["elapsed_s"] = round(elapsed, 1)
+    total = len(available)
+    total_build = len(to_build)
+    workers = min(workers, max(total_build, 1))
+    label = f" ({workers} workers)" if workers > 1 else ""
+    print(f"\n{'=' * 70}")
+    print(f"  Building {total} synthetic package sites{label}")
+    print(f"{'=' * 70}\n")
 
-        if status == "ok":
-            print(f"OK ({elapsed:.1f}s)")
-        else:
-            print(f"FAILED ({status})")
-            if "error" in result:
-                for line in result["error"].strip().splitlines()[:3]:
-                    print(f"         {line}")
+    if skipped:
+        print(f"  ({skipped} packages skipped — already ok)\n")
 
-        # Record into state
-        if state is not None and run_id is not None:
-            record_build(
-                state,
-                name,
-                run_id=run_id,
-                status=status,
-                elapsed=elapsed,
-                error=result.get("error"),
-            )
+    if workers <= 1:
+        # ── Sequential path (original behavior) ────────────────────────
+        for i, name in enumerate(to_build, 1):
+            print(f"[{i:3d}/{total_build}] {name} ... ", end="", flush=True)
+            t0 = time.monotonic()
+            result = build_package(name)
+            elapsed = time.monotonic() - t0
+            status = result["status"]
+            result["elapsed_s"] = round(elapsed, 1)
 
-        results.append(result)
+            if status == "ok":
+                print(f"OK ({elapsed:.1f}s)")
+            else:
+                print(f"FAILED ({status})")
+                if "error" in result:
+                    for line in result["error"].strip().splitlines()[:3]:
+                        print(f"         {line}")
+
+            if state is not None and run_id is not None:
+                record_build(
+                    state, name, run_id=run_id, status=status,
+                    elapsed=elapsed, error=result.get("error"),
+                )
+            results.append(result)
+    else:
+        # ── Parallel path ───────────────────────────────────────────────
+        print_lock = threading.Lock()
+        completed = [0]  # mutable counter
+
+        def _build_one(name: str) -> dict:
+            t0 = time.monotonic()
+            result = build_package(name)
+            elapsed = time.monotonic() - t0
+            result["elapsed_s"] = round(elapsed, 1)
+
+            with print_lock:
+                completed[0] += 1
+                n = completed[0]
+                status = result["status"]
+                if status == "ok":
+                    print(f"[{n:3d}/{total_build}] {name} ... OK ({elapsed:.1f}s)")
+                else:
+                    print(f"[{n:3d}/{total_build}] {name} ... FAILED ({status})")
+                    if "error" in result:
+                        for line in result["error"].strip().splitlines()[:3]:
+                            print(f"         {line}")
+
+            return result
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(_build_one, name): name for name in to_build}
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
+                if state is not None and run_id is not None:
+                    record_build(
+                        state, result["name"], run_id=run_id,
+                        status=result["status"], elapsed=result["elapsed_s"],
+                        error=result.get("error"),
+                    )
+                results.append(result)
 
     logged = [r for r in results if "log" in r]
     if logged:
         print(f"\n  Build logs saved to: {LOGS_DIR}/")
         print(f"  ({len(logged)} log files written)")
-    if skipped:
-        print(f"  ({skipped} packages skipped — already ok)")
 
     return results
 
@@ -2813,6 +2856,7 @@ def main():
               python render_all.py                     # full build + serve
               python render_all.py --build             # full build only
               python render_all.py --build --skip-ok   # resume interrupted build
+              python render_all.py --build --workers 8 # parallel build (8 workers)
               python render_all.py --serve             # serve previously built hub
               python render_all.py --only gdtest_minimal gdtest_github_icon
         """),
@@ -2832,6 +2876,13 @@ def main():
         action="store_true",
         help="Skip packages already built successfully (resume interrupted build)",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Number of parallel build workers (default: 1 = sequential)",
+    )
     args = parser.parse_args()
 
     if args.serve:
@@ -2845,7 +2896,7 @@ def main():
     if args.only:
         # ── Selective rebuild ────────────────────────────────────────────
         start_selective_run(state, rid)
-        fresh_results = build_all(packages=args.only, run_id=rid, state=state)
+        fresh_results = build_all(packages=args.only, run_id=rid, state=state, workers=args.workers)
         save_state(STATE_FILE, state)
 
         # Merge: fresh results + historical results from state
@@ -2873,7 +2924,7 @@ def main():
         if args.skip_ok and state.get("packages"):
             # Resume mode: keep existing state, only rebuild non-ok packages
             start_selective_run(state, rid)
-            results = build_all(run_id=rid, state=state, skip_ok=True)
+            results = build_all(run_id=rid, state=state, skip_ok=True, workers=args.workers)
             save_state(STATE_FILE, state)
 
             # Combine fresh results with historical ok results
@@ -2895,7 +2946,7 @@ def main():
             print(f"  ({skipped_n} skipped, {freshly_built} built)")
         else:
             reset_for_full_rebuild(state, rid)
-            results = build_all(run_id=rid, state=state)
+            results = build_all(run_id=rid, state=state, workers=args.workers)
             save_state(STATE_FILE, state)
 
             assemble_hub(results, state=state)
