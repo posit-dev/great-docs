@@ -965,7 +965,7 @@ class GreatDocs:
                     "generation from SVG. Install it with:\n"
                     "  pip install 'great-docs[svg]'\n"
                     "On Linux you also need: apt install libcairo2-dev\n"
-                    "On macOS: brew install cairo"
+                    "On macOS (see installation notes): brew install cairo"
                 )
                 return result
 
