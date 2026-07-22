@@ -665,17 +665,30 @@ cli.add_command(scan)
 
 
 def _freeze_info(project_root: Path, persist_dir: Path) -> None:
-    """Display freeze status for all pages with freeze frontmatter."""
+    """Display freeze status: project-level setting and all cached pages."""
     import json
     import re as _re
     from datetime import datetime
 
-    # Scan source .qmd files for freeze declarations in frontmatter only
+    from great_docs.config import Config
+
+    cfg = Config(project_root)
+    project_mode = cfg.freeze
+
+    click.echo()
+    if project_mode is not None:
+        label = "auto" if project_mode == "auto" else str(project_mode)
+        click.echo(f"  Project freeze: {label} (all executable pages)")
+    else:
+        click.echo("  Project freeze: disabled")
+    click.echo(f"  Freeze cache:   {persist_dir.relative_to(project_root)}/")
+    click.echo()
+
+    # Scan source .qmd files for per-page freeze declarations
     freeze_re = _re.compile(r"^freeze:\s+(.+)$", re.MULTILINE)
     exec_freeze_re = _re.compile(r"^execute:\s*\n\s+freeze:\s+(.+)$", re.MULTILINE)
 
     def _extract_frontmatter(text: str) -> str:
-        """Return only the YAML frontmatter (between --- delimiters)."""
         if not text.startswith("---"):
             return ""
         end = text.find("\n---", 3)
@@ -683,10 +696,8 @@ def _freeze_info(project_root: Path, persist_dir: Path) -> None:
             return ""
         return text[3:end]
 
-    # Collect all .qmd files from source directories
+    per_page_modes: dict[str, str] = {}
     source_dirs = ["recipes", "user_guide"]
-    frozen_pages: list[dict] = []
-
     for src_dir in source_dirs:
         src_path = project_root / src_dir
         if not src_path.is_dir():
@@ -694,100 +705,56 @@ def _freeze_info(project_root: Path, persist_dir: Path) -> None:
         for qmd_file in sorted(src_path.rglob("*.qmd")):
             content = qmd_file.read_text(encoding="utf-8", errors="replace")
             frontmatter = _extract_frontmatter(content)
-            # Check for freeze in frontmatter only
             match = freeze_re.search(frontmatter) or exec_freeze_re.search(frontmatter)
             if match:
-                mode = match.group(1).strip()
-                rel_path = qmd_file.relative_to(project_root)
-                frozen_pages.append(
-                    {
-                        "source": str(rel_path),
-                        "mode": mode,
-                    }
-                )
+                rel_path = str(qmd_file.relative_to(project_root))
+                per_page_modes[rel_path] = match.group(1).strip()
 
-    if not frozen_pages:
-        click.echo("No pages with freeze frontmatter found.")
+    if per_page_modes:
+        click.echo("  Per-page overrides:")
+        for source, mode in per_page_modes.items():
+            click.echo(f"    {source}  (freeze: {mode})")
+        click.echo()
+
+    # Report all cached entries from _freeze/
+    if not persist_dir.is_dir():
+        click.echo("  No freeze cache found yet (run a build to populate it).")
         return
 
-    # Check cache status for each frozen page
+    cache_entries = sorted(persist_dir.rglob("execute-results/html.json"))
+    if not cache_entries:
+        click.echo("  Freeze cache directory exists but contains no entries.")
+        return
+
+    click.echo(f"  {len(cache_entries)} cached page(s):")
     click.echo()
-    click.echo(f"  Freeze cache: {persist_dir.relative_to(project_root)}/")
+
+    for cache_json in cache_entries:
+        rel = cache_json.relative_to(persist_dir)
+        # execute-results/html.json → parent.parent is the page stem
+        page_stem = str(rel.parent.parent)
+
+        try:
+            data = json.loads(cache_json.read_text(encoding="utf-8"))
+            ts_match = _re.search(
+                r"Executed at: ([\d-]+ [\d:]+)",
+                data.get("result", {}).get("markdown", ""),
+            )
+            if ts_match:
+                timestamp = ts_match.group(1)
+            else:
+                mtime = cache_json.stat().st_mtime
+                timestamp = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+            click.echo(f"  ✓  {page_stem}")
+            click.echo(f"       frozen at {timestamp}")
+        except Exception:
+            click.echo(f"  ?  {page_stem}")
+            click.echo("       cache file exists but could not be parsed")
+
     click.echo()
-
-    has_cache = persist_dir.is_dir()
-
-    for page in frozen_pages:
-        source = page["source"]
-        mode = page["mode"]
-
-        # Determine the cache path — strip numeric prefix and map dirs
-        page_path = Path(source)
-        # Strip numeric prefix from filename
-        cache_name = _re.sub(r"^\d+[-_]", "", page_path.stem)
-        # Map directory (user_guide -> user-guide)
-        cache_dir = str(page_path.parent).replace("_", "-")
-        cache_json = persist_dir / cache_dir / cache_name / "execute-results" / "html.json"
-
-        # Status determination
-        if not has_cache or not cache_json.exists():
-            status = "⚠️  not cached"
-            timestamp = ""
-            detail = "Run: great-docs freeze " + source
-        else:
-            # Read cache to get timestamp
-            try:
-                data = json.loads(cache_json.read_text(encoding="utf-8"))
-                # Try to extract execution timestamp from markdown output
-                ts_match = _re.search(
-                    r"Executed at: ([\d-]+ [\d:]+)",
-                    data.get("result", {}).get("markdown", ""),
-                )
-                if ts_match:
-                    timestamp = ts_match.group(1)
-                else:
-                    # Fall back to file modification time
-                    mtime = cache_json.stat().st_mtime
-                    timestamp = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
-
-                # Check if source has changed (hash mismatch)
-                cached_hash = data.get("hash", "")
-                # We can't easily compute what the build would produce without
-                # running prep, so just report the cache exists
-                status = "✓  cached"
-                detail = f"frozen at {timestamp}"
-            except Exception:
-                status = "?  unreadable"
-                detail = "Cache file exists but could not be parsed"
-
-        click.echo(f"  {status}  {source}")
-        click.echo(f"           mode: {mode} │ {detail}")
-        click.echo()
-
-    # Summary
-    cached = (
-        sum(
-            1
-            for p in frozen_pages
-            if (
-                persist_dir
-                / str(Path(p["source"]).parent).replace("_", "-")
-                / _re.sub(r"^\d+[-_]", "", Path(p["source"]).stem)
-                / "execute-results"
-                / "html.json"
-            ).exists()
-        )
-        if has_cache
-        else 0
-    )
-    total = len(frozen_pages)
-    click.echo(f"  {cached}/{total} page(s) cached")
-    if cached < total:
-        click.echo()
-        click.echo("  ℹ Run 'great-docs freeze <page>' to cache uncached pages.")
-    if cached > 0:
-        click.echo()
-        click.echo("  ℹ To re-freeze a stale page: great-docs freeze <page>")
+    click.echo(f"  {len(cache_entries)} page(s) cached")
+    click.echo()
+    click.echo("  ℹ To re-freeze a stale page: great-docs freeze <page>")
 
 
 @click.command()
