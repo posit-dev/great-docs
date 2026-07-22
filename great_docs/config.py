@@ -242,13 +242,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "include_in_header": [],
     # Freeze configuration for Quarto code execution caching
     # Controls whether computational documents are re-executed during builds.
-    # None/False: disabled (default) — all documents are executed on every build
-    # "auto": re-render only when source changes (execute: freeze: auto)
+    # None/False: disabled — all documents are executed on every build
+    # "auto": re-render only when source changes (execute: freeze: auto) [default]
     # True: never re-render during project render (execute: freeze: true)
     # dict: {"mode": "auto"|true, "pre_render": str|list[str]}
     #   mode: freeze mode ("auto" or true)
     #   pre_render: script(s) to run before Quarto render (e.g., to copy _freeze/ into build dir)
-    "freeze": None,
+    "freeze": "auto",
     # Pre-render scripts (alternative to freeze.pre_render)
     # Scripts run before Quarto's render step (Quarto's native pre-render hook).
     # str: single script path (relative to project root)
