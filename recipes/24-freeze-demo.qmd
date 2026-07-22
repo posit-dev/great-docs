@@ -78,7 +78,7 @@ execute:
 ---
 ```
 
-The `great-docs.yml` for this site has `freeze: auto` set — Great Docs automatically handles restoring `_freeze/` into the build directory before Quarto renders. No extra scripts or configuration needed.
+Great Docs enables `freeze: auto` by default, so the cache restore and persist happens automatically on every build. No extra configuration needed.
 
 ## Reproducing This
 

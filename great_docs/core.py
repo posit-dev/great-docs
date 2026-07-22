@@ -15459,6 +15459,49 @@ anchor-sections: true
 
         print("✅ Great-docs uninstalled successfully!")
 
+    def _persist_freeze_cache(self) -> int | None:
+        """Copy _freeze/ from build directories back to the project root.
+
+        Handles both single-version builds (freeze in project_path/_freeze)
+        and versioned builds (freeze in _great_docs_build/v__*/_freeze).
+
+        Returns the number of cached files, or None if no freeze cache exists.
+        """
+        freeze_sources: list[Path] = []
+
+        # Single-version build
+        single = self.project_path / "_freeze"
+        if single.is_dir():
+            freeze_sources.append(single)
+
+        # Versioned build
+        versioned_root = self.project_root / "_great_docs_build"
+        if versioned_root.is_dir():
+            for ver_dir in versioned_root.iterdir():
+                candidate = ver_dir / "_freeze"
+                if candidate.is_dir():
+                    freeze_sources.append(candidate)
+
+        if not freeze_sources:
+            return None
+
+        freeze_dst = self.project_root / "_freeze"
+        if freeze_dst.exists():
+            shutil.rmtree(freeze_dst)
+        freeze_dst.mkdir()
+
+        for src in freeze_sources:
+            for item in src.iterdir():
+                dest = freeze_dst / item.name
+                if item.is_dir():
+                    if dest.exists():
+                        shutil.rmtree(dest)
+                    shutil.copytree(item, dest)
+                else:
+                    shutil.copy2(item, dest)
+
+        return sum(1 for _ in freeze_dst.rglob("*") if _.is_file())
+
     def _prepare_for_freeze(self) -> None:
         """Run the build preparation steps (1-14 + normalization) without rendering.
 
@@ -16394,6 +16437,11 @@ anchor-sections: true
                 if timing_path:
                     log.detail(f"Wrote {timing_path.name}")
 
+                # ── Persist freeze cache ──────────────────────────
+                n_frozen = self._persist_freeze_cache()
+                if n_frozen is not None:
+                    log.detail(f"Saved freeze cache ({n_frozen} files)")
+
                 # ── Auto-save API snapshot (Strategy C) ────────────
                 try:
                     self._auto_save_snapshot()
@@ -16505,6 +16553,11 @@ anchor-sections: true
                     )  # pragma: no cover
                     if timing_path:  # pragma: no cover
                         log.detail(f"Wrote {timing_path.name}")  # pragma: no cover
+
+                    # ── Persist freeze cache ──────────────────────────
+                    n_frozen = self._persist_freeze_cache()  # pragma: no cover
+                    if n_frozen is not None:  # pragma: no cover
+                        log.detail(f"Saved freeze cache ({n_frozen} files)")  # pragma: no cover
 
                     # ── Auto-save API snapshot (Strategy C) ────────────
                     if self._config.has_versions:  # pragma: no cover
