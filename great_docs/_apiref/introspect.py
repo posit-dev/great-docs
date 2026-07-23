@@ -9,6 +9,7 @@ mode).
 
 from __future__ import annotations
 
+import enum
 import importlib
 import inspect
 from types import ModuleType
@@ -170,6 +171,15 @@ def replace_docstring(obj: gf.Object | gf.Alias, runtime_obj: object = None) -> 
         return
 
     doc: str = runtime_obj.__doc__  # type: ignore[assignment]
+
+    # Enum members inherit __doc__ from the enum class. Skip the
+    # replacement so griffe's statically-parsed per-member docstring
+    # (if any) is preserved; when there is none the member correctly
+    # shows no docstring rather than the class-level one.
+    if isinstance(runtime_obj, enum.Enum):
+        parent_cls = type(runtime_obj)
+        if doc == parent_cls.__doc__:
+            return
 
     # Reclassify callable attributes as functions.
     # When a class uses `method = some_function` pattern, griffe sees it as
