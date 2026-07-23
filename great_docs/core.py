@@ -14056,8 +14056,14 @@ anchor-sections: true
 
         repo_url = urls.get("Repository", "") or urls.get("Source", "")
 
-        # Derive install name from package name (PyPI name uses hyphens)
-        install_name = package_name.replace("_", "-") if package_name else ""
+        # Use the distribution name (from pyproject.toml) for the pip install command.
+        # package_name_for_skill comes from _detect_package_name() which reads project.name, so it
+        # holds the real PyPI distribution name (e.g. "toast-analytics") even when the importable
+        # module name differs (e.g. "toast"). Fall back to normalizing the module name only when no
+        # pyproject.toml / setup.cfg / setup.py is available.
+        install_name = package_name_for_skill or (
+            package_name.replace("_", "-") if package_name else ""
+        )
 
         # Build skill name: lowercase, hyphens only, max 64 chars
         skill_name = install_name.lower()[:64] if install_name else "package"
@@ -14216,9 +14222,9 @@ anchor-sections: true
         (`references/`, `scripts/`, `assets/`), a directory tree is rendered before the SKILL.md and
         each `.md` / `.sh` file is displayed in its own text area with anchor links.
 
-        When *extra_skills* is provided (a list of ``(skill_path, skill_dir)`` tuples for
-        additional skills beyond the primary one), a sticky pill-style switcher bar is rendered
-        at the top of the page so users can toggle between skills without leaving the page.
+        When *extra_skills* is provided (a list of `(skill_path, skill_dir)` tuples for additional
+        skills beyond the primary one), a sticky pill-style switcher bar is rendered at the top of
+        the page so users can toggle between skills without leaving the page.
 
         Parameters
         ----------
@@ -14228,8 +14234,8 @@ anchor-sections: true
             Optional path to the curated skill directory containing SKILL.md and its companion
             subdirectories.
         extra_skills
-            Optional list of additional ``(skill_path, skill_dir)`` tuples. Each entry is rendered
-            as a switchable panel alongside the primary skill.
+            Optional list of additional `(skill_path, skill_dir)` tuples. Each entry is rendered as
+            a switchable panel alongside the primary skill.
         """
         import re
 
