@@ -28376,6 +28376,62 @@ def test_replace_docstring_alias():
     replace_docstring(alias)
 
 
+def test_replace_docstring_enum_preserves_member_docstrings():
+    """replace_docstring does not overwrite per-member enum docstrings with class docstring."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg = Path(tmp_dir) / "introtest_enum_doc"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text(
+            "from enum import Enum\n"
+            "class MyEnum(str, Enum):\n"
+            '    """Class docstring."""\n'
+            '    FOO = "foo"\n'
+            '    """Description for variant FOO."""\n'
+            '    BAR = "bar"\n'
+            '    """Description for variant BAR."""\n',
+            encoding="utf-8",
+        )
+        sys.path.insert(0, tmp_dir)
+        try:
+            obj = get_object("introtest_enum_doc:MyEnum")
+            replace_docstring(obj)
+            assert obj.docstring.value == "Class docstring."
+            foo = obj.members["FOO"]
+            bar = obj.members["BAR"]
+            assert foo.docstring.value == "Description for variant FOO."
+            assert bar.docstring.value == "Description for variant BAR."
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("introtest_enum_doc", None)
+
+
+def test_replace_docstring_enum_no_member_docstrings():
+    """replace_docstring does not inject class docstring into undocumented enum members."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg = Path(tmp_dir) / "introtest_enum_nodoc"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text(
+            "from enum import Enum\n"
+            "class MyEnum(Enum):\n"
+            '    """Class docstring."""\n'
+            "    A = 1\n"
+            "    B = 2\n",
+            encoding="utf-8",
+        )
+        sys.path.insert(0, tmp_dir)
+        try:
+            obj = get_object("introtest_enum_nodoc:MyEnum")
+            replace_docstring(obj)
+            assert obj.docstring.value == "Class docstring."
+            a = obj.members["A"]
+            b = obj.members["B"]
+            assert a.docstring is None
+            assert b.docstring is None
+        finally:
+            sys.path.remove(tmp_dir)
+            sys.modules.pop("introtest_enum_nodoc", None)
+
+
 def test_canonical_path_module():
     """_canonical_path for a module returns module name."""
     from great_docs._apiref.introspect import _canonical_path

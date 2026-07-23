@@ -45,6 +45,10 @@ _BUILTIN_NOISE_DUNDERS = frozenset(
     }
 )
 
+_ENUM_BASES = frozenset(
+    {"Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum", "EnumCheck"}
+)
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -397,7 +401,14 @@ class _Resolver:
             _ = resolve_alias(member, self.get_object)
 
         # Phase 2 — content filters: require resolved targets.
-        if not el.include_empty:
+        # Enum members are always shown — their names and values are
+        # inherently meaningful even without a per-member docstring.
+        is_enum_cls = (
+            obj.is_class
+            and hasattr(obj, "bases")
+            and {str(b).rsplit(".", 1)[-1] for b in obj.bases} & _ENUM_BASES
+        )
+        if not el.include_empty and not is_enum_cls:
             candidates = {k: v for k, v in candidates.items() if v.docstring is not None}
 
         if not el.include_attributes:
