@@ -62,7 +62,7 @@ def html_table(
     # Build table rows
     body_rows: list[str] = []
     for name, desc in rows:
-        name, desc = str(name), str(desc)
+        name, desc = str(name), str(desc) if desc is not None else ""
         # Convert markdown links to HTML
         name = _md_link_to_html(name)
 
