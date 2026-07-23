@@ -39776,6 +39776,48 @@ api-reference:
         assert "# Hyphenated" in content
 
 
+def test_generate_skill_md_install_uses_distribution_name():
+    """Install command uses pyproject.toml distribution name, not the importable module name.
+
+    Example: import name is 'toast', distribution name is 'toast-analytics'. The generated skill
+    must emit 'pip install toast-analytics', not 'pip install toast'.
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            """
+[project]
+name = "toast-analytics"
+description = "Web analytics client"
+"""
+        )
+
+        great_docs_dir = Path(tmp_dir) / "great-docs"
+        great_docs_dir.mkdir()
+        quarto_yml = great_docs_dir / "_quarto.yml"
+
+        # api-reference.package is the *importable* module name
+        quarto_yml.write_text(
+            """
+api-reference:
+  package: toast
+  sections:
+    - title: Core
+      contents:
+        - track
+"""
+        )
+
+        docs._generate_skill_md()
+
+        content = (great_docs_dir / "skill.md").read_text()
+
+        assert "pip install toast-analytics" in content
+        assert "pip install toast\n" not in content
+
+
 def test_generate_skills_page_basic():
     """Test that skills.qmd is generated alongside skill.md."""
     with tempfile.TemporaryDirectory() as tmp_dir:
