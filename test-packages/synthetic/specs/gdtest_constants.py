@@ -30,7 +30,6 @@ SPEC = {
                 "DEFAULT_TIMEOUT",
                 "MAX_RETRIES",
                 "SUPPORTED_FORMATS",
-                "HandlerFunc",
                 "process",
             ]
 
@@ -81,11 +80,9 @@ SPEC = {
             "DEFAULT_TIMEOUT",
             "MAX_RETRIES",
             "SUPPORTED_FORMATS",
-            "HandlerFunc",
             "process",
         ],
-        "nodoc_items": ["HandlerFunc"],
-        "num_exports": 5,
+        "num_exports": 4,
         "has_user_guide": False,
         "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "sechdg", "sbsec", "hdg"],
     },
