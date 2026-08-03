@@ -567,10 +567,11 @@ class __RenderDoc(RenderBase):
     @render_docstring_section.register(gf.DocstringSectionFunctions)
     @render_docstring_section.register(gf.DocstringSectionClasses)
     @render_docstring_section.register(gf.DocstringSectionModules)
+    @render_docstring_section.register(gf.DocstringSectionTypeAliases)
     def _(self, el):
         """
         Suppress collection-style sections (Methods, Functions, Classes, Modules,
-        Attributes) emitted by the numpy parser
+        Type Aliases) emitted by the numpy parser
 
         These sections are hand-written summaries of class/module members (e.g.,
         `Methods\\n-------\\nfoo(x)\\n    Description.`). Great Docs already auto-generates the same

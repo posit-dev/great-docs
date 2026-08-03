@@ -385,6 +385,36 @@ def test_module_level_type_alias_group():
     assert "Contract" in qmd
 
 
+def test_docstring_type_aliases_section_is_suppressed():
+    """
+    A hand-written `Type Aliases` section is a member summary, so it is dropped
+
+    Great Docs generates the alias group from the real members, exactly as it does
+    for `Methods`. Rendering the docstring version would duplicate that group, and
+    the unhandled section previously leaked `DocstringTypeAlias` object reprs.
+    """
+    import textwrap
+
+    from great_docs._apiref._tools import render_code_variable
+
+    source = textwrap.dedent('''
+        class Holder:
+            """A holder.
+
+            Type Aliases
+            ------------
+            Handwritten : int | str
+                A hand-written summary.
+            """
+    ''')
+    qmd = render_code_variable(source, "Holder")
+
+    assert "A holder." in qmd
+    assert "Handwritten" not in qmd
+    assert "A hand-written summary." not in qmd
+    assert "DocstringTypeAlias object at" not in qmd
+
+
 def test_inventory_role_for_type_alias():
     from great_docs._apiref.inventory import InventoryItem, _create_inventory_item
 
