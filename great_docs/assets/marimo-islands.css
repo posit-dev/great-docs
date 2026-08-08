@@ -1,0 +1,254 @@
+/* marimo-islands.css — Styling for embedded Marimo island notebooks. */
+
+/* Island group container */
+.gd-marimo-island-group {
+  margin: 1.5rem 0;
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: var(--bs-body-bg, #fff);
+}
+
+/* Individual island cells */
+.gd-marimo-island-group marimo-island {
+  display: block;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+}
+
+.gd-marimo-island-group marimo-island:last-of-type {
+  border-bottom: none;
+}
+
+/* Cell code styling (our visible code block) */
+.gd-marimo-code {
+  display: block;
+  font-family: var(--bs-font-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  padding: 0.75rem 1rem;
+  margin: 0;
+  background: var(--bs-tertiary-bg, #f8f9fa);
+  border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.gd-marimo-code code {
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  padding: 0;
+}
+
+/* Hide the raw marimo-cell-code (runtime uses it internally) */
+marimo-cell-code {
+  display: none;
+}
+
+/* Cell output area */
+marimo-cell-output {
+  display: block;
+  min-height: 1.5rem;
+}
+
+/* Copy notebook button area */
+.gd-marimo-copy {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: var(--bs-tertiary-bg, #f8f9fa);
+  border-top: 1px solid var(--bs-border-color, #dee2e6);
+}
+
+.gd-marimo-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--bs-body-color, #212529);
+  background: var(--bs-body-bg, #fff);
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.gd-marimo-copy-btn:hover {
+  background: var(--bs-secondary-bg, #e9ecef);
+  border-color: var(--bs-secondary, #6c757d);
+}
+
+.gd-marimo-copy-btn.gd-marimo-copied {
+  color: var(--bs-success, #198754);
+  border-color: var(--bs-success, #198754);
+}
+
+.gd-marimo-copy-hint {
+  font-size: 0.75rem;
+  color: var(--bs-secondary-color, #6c757d);
+}
+
+.gd-marimo-copy-hint code {
+  font-size: 0.75rem;
+  padding: 0.1rem 0.3rem;
+  background: var(--bs-body-bg, #fff);
+  border-radius: 0.2rem;
+}
+
+/* No-code mode: hide source, show outputs only */
+.gd-marimo-nocode .gd-marimo-code {
+  display: none;
+}
+
+.gd-marimo-nocode marimo-cell-code {
+  display: none;
+}
+
+/* Error state */
+.gd-marimo-error {
+  padding: 1rem;
+  color: var(--bs-danger, #dc3545);
+  font-style: italic;
+  border: 1px dashed var(--bs-danger, #dc3545);
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+}
+
+/* Iframe mode */
+.gd-marimo-iframe-wrap {
+  margin: 1.5rem 0;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid var(--bs-border-color, #dee2e6);
+}
+
+.gd-marimo-iframe {
+  display: block;
+  border: none;
+  width: 100%;
+}
+
+/* Dark mode adjustments */
+[data-bs-theme="dark"] .gd-marimo-island-group {
+  border-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] marimo-cell-code {
+  background: var(--bs-tertiary-bg);
+}
+
+[data-bs-theme="dark"] .gd-marimo-copy {
+  background: var(--bs-tertiary-bg);
+}
+
+[data-bs-theme="dark"] .gd-marimo-copy-btn {
+  background: var(--bs-body-bg);
+  border-color: var(--bs-border-color);
+  color: var(--bs-body-color);
+}
+
+/* Loading state ----------------------------------------------------------- */
+/* While the kernel boots and widgets mount, hide the assembling cells so
+   readers don't watch them shuffle and collapse. Space is reserved (cells are
+   only made invisible, not removed) and the loader is centered over it; the
+   whole notebook reveals together once settled. The `gd-marimo-booting` class
+   is added by JS, so with no JS (or a failed boot) the static output still
+   shows. */
+.gd-marimo-island-group.gd-marimo-booting:not(.gd-marimo-ready) {
+  position: relative;
+  min-height: 8rem;
+}
+
+.gd-marimo-island-group.gd-marimo-booting:not(.gd-marimo-ready)
+  marimo-island:not(.gd-marimo-loader) {
+  visibility: hidden;
+}
+
+/* The captured loader island, centered over the reserved space. */
+.gd-marimo-loader {
+  position: absolute !important;
+  inset: 0;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  border-bottom: none !important;
+}
+
+.gd-marimo-island-group.gd-marimo-ready .gd-marimo-loader {
+  display: none !important;
+}
+
+/* No-code mode: hide marimo's per-cell action toolbar (copy/run icons). In an
+   outputs-only presentation the code-oriented controls don't belong. */
+.gd-marimo-nocode marimo-island .absolute.top-0.right-0.z-50 {
+  display: none !important;
+}
+
+/* Trim the leading/trailing block margins inside a cell's rendered output.
+   marimo's prose gives the first heading a large top margin, which as the first
+   element in a cell reads as excess space above the output. */
+.gd-marimo-island-group marimo-island .prose > :first-child,
+.gd-marimo-island-group marimo-island .markdown > :first-child {
+  margin-top: 0 !important;
+}
+
+.gd-marimo-island-group marimo-island .prose > :last-child,
+.gd-marimo-island-group marimo-island .markdown > :last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Collapsible setup block --------------------------------------------------- */
+/* Leading import/utility cells that render no output are collapsed behind a
+   disclosure toggle (added by JS) so boilerplate doesn't clutter the notebook.
+   The toggle mirrors the gray "Copy Notebook" footer. */
+/* Setup cells are tagged `data-gd-setup` at build time and hidden by default.
+   Higher specificity than `.gd-marimo-island-group marimo-island` so they
+   actually stay hidden. */
+.gd-marimo-island-group marimo-island[data-gd-setup] {
+  display: none;
+}
+
+.gd-marimo-island-group.gd-marimo-setup-open marimo-island[data-gd-setup] {
+  display: block;
+}
+
+.gd-marimo-setup-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.4rem 1rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--bs-secondary-color, #6c757d);
+  background: var(--bs-tertiary-bg, #f8f9fa);
+  border: none;
+  border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+  cursor: pointer;
+  text-align: left;
+}
+
+.gd-marimo-setup-toggle:hover {
+  background: var(--bs-secondary-bg, #e9ecef);
+  color: var(--bs-body-color, #212529);
+}
+
+.gd-marimo-setup-chevron {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.gd-marimo-island-group.gd-marimo-setup-open .gd-marimo-setup-chevron {
+  transform: rotate(90deg);
+}
+
+/* Tint the revealed setup cell so it reads as distinct boilerplate. */
+.gd-marimo-island-group.gd-marimo-setup-open marimo-island[data-gd-setup] {
+  background: var(--bs-tertiary-bg, #f8f9fa);
+}

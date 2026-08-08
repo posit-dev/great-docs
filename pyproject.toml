@@ -51,6 +51,12 @@ svg = [
 mcp = [
     "mcp>=1.0.0",
 ]
+marimo = [
+    "marimo>=0.20.0",
+    # marimo's `export html-wasm` (iframe mode) shells out to uv to resolve the
+    # notebook's inline (PEP 723) dependencies.
+    "uv>=0.5.0",
+]
 dev = [
     "pytest>=6.0",
     "pytest-cov>=3.0",

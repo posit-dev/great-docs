@@ -164,6 +164,7 @@ class Config:
         "social_cards",
         "markdown_pages",
         "mcp",
+        "marimo",
     )
 
     def _normalize_shorthands(self, config: dict[str, Any]) -> dict[str, Any]:
@@ -546,6 +547,27 @@ class Config:
     def mcp_categories(self) -> dict:
         """Get manual MCP tool categories."""
         return self["mcp.categories"]
+
+    @property
+    def marimo_enabled(self) -> bool:
+        """Check if marimo islands integration is enabled."""
+        return self["marimo.enabled"]
+
+    @property
+    def marimo_version(self) -> str:
+        """Get the @marimo-team/islands CDN runtime version.
+
+        Defaults to the installed marimo version so the browser runtime matches
+        the version that generated the island markup. An explicit ``version`` in
+        the config overrides this.
+        """
+        version = self["marimo.version"]
+        if version:
+            return str(version)
+
+        from great_docs._marimo import islands_runtime_version
+
+        return islands_runtime_version()
 
     @property
     def skill_enabled(self) -> bool:

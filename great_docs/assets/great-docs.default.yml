@@ -109,6 +109,14 @@ sidebar_filter:
   enabled: true              # Enable/disable filter (default: true)
   min_items: 20              # Minimum items before showing filter (default: 20)
 
+# Marimo Notebooks
+# ----------------
+# Embed interactive WASM notebooks via marimo islands. `marimo: true` is
+# shorthand for `enabled: true`.
+marimo:
+  enabled: false             # Enable marimo island notebooks
+  version: null              # @marimo-team/islands CDN version; defaults to the installed marimo version
+
 # CLI Documentation
 # -----------------
 cli:

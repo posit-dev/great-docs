@@ -410,6 +410,8 @@ ALL_PACKAGES: list[str] = [
     # 203: Mixed root files and subdirectories with numeric prefix interleaving
     "gdtest_ug_mixed_subdir_order",  # 203
     "gdtest_type_aliases",  # 204
+    # 205: Marimo notebook islands showcase
+    "gdtest_marimo",  # 205
 ]
 
 

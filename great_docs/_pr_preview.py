@@ -27,6 +27,10 @@ DEFAULT_WORKFLOW_NAME = "CI Docs"
 DEFAULT_ARTIFACT = "docs-html"
 _TIMEOUT = 15
 _DOWNLOAD_TIMEOUT = 300
+# Per-read timeout for the streamed artifact download (generous: blob storage
+# can be slow) and how many times to retry, resuming from bytes already on disk.
+_READ_TIMEOUT = 120
+_DOWNLOAD_RETRIES = 5
 
 
 class PreviewError(Exception):
@@ -363,39 +367,81 @@ class GitHubClient:
             raise PreviewError(f"'gh run download' failed: {result.stderr.strip()}")
 
     def _requests_download(self, artifact: dict[str, Any], dest: Path) -> None:
+        import time
+
         import requests
 
         url = artifact.get("archive_download_url") or (
             f"{GITHUB_API}/repos/{self.owner}/{self.repo}/actions/artifacts/{artifact['id']}/zip"
         )
-        headers = {"Accept": "application/vnd.github+json"}
+        base_headers = {"Accept": "application/vnd.github+json"}
         if self.token:
-            headers["Authorization"] = f"Bearer {self.token}"
+            base_headers["Authorization"] = f"Bearer {self.token}"
 
         zip_path = dest / "_artifact.zip"
-        try:
-            with requests.get(url, headers=headers, timeout=_TIMEOUT, stream=True) as resp:
-                if resp.status_code == 410:
+        zip_path.unlink(missing_ok=True)
+
+        # Artifacts can be hundreds of MB from slow blob storage. A single stalled
+        # read shouldn't lose the whole transfer, so retry on network errors and
+        # resume from the bytes already on disk via a Range request (the blob
+        # store returns 206 + the remainder; if it ignores Range and returns 200,
+        # we restart the file).
+        last_exc: Exception | None = None
+        for attempt in range(_DOWNLOAD_RETRIES):
+            have = zip_path.stat().st_size if zip_path.exists() else 0
+            headers = dict(base_headers)
+            if have:
+                headers["Range"] = f"bytes={have}-"
+            try:
+                # (connect timeout, per-read timeout) — a generous read timeout
+                # tolerates slow chunks without abandoning the download.
+                with requests.get(
+                    url, headers=headers, timeout=(_TIMEOUT, _READ_TIMEOUT), stream=True
+                ) as resp:
+                    if resp.status_code == 410:
+                        raise PreviewError(
+                            "This artifact has expired and can no longer be downloaded. "
+                            "Re-run the workflow to regenerate it."
+                        )
+                    if resp.status_code == 206:  # resuming
+                        mode, start = "ab", have
+                        total = have + int(resp.headers.get("Content-Length") or 0)
+                    elif resp.status_code == 200:  # Range ignored; start over
+                        mode, start = "wb", 0
+                        total = int(resp.headers.get("Content-Length") or 0)
+                    else:
+                        raise PreviewError(
+                            f"Artifact download failed (HTTP {resp.status_code})."
+                        )
+                    _stream_to_file(resp, zip_path, total, mode=mode, start=start)
+                break  # completed
+            except requests.RequestException as exc:
+                last_exc = exc
+                if attempt == _DOWNLOAD_RETRIES - 1:
                     raise PreviewError(
-                        "This artifact has expired and can no longer be downloaded. "
-                        "Re-run the workflow to regenerate it."
-                    )
-                if resp.status_code != 200:
-                    raise PreviewError(f"Artifact download failed (HTTP {resp.status_code}).")
-                total = int(resp.headers.get("Content-Length") or 0)
-                _stream_to_file(resp, zip_path, total)
-        except requests.RequestException as exc:
-            raise PreviewError(f"Artifact download failed: {exc}") from exc
+                        f"Artifact download failed after {_DOWNLOAD_RETRIES} attempts: {exc}"
+                    ) from exc
+                got = zip_path.stat().st_size if zip_path.exists() else 0
+                print(
+                    f"  … download interrupted ({type(exc).__name__}); "
+                    f"resuming from {got / 1e6:.1f} MB "
+                    f"(attempt {attempt + 2}/{_DOWNLOAD_RETRIES})",
+                    file=sys.stderr,
+                )
+                time.sleep(2 * (attempt + 1))
 
         _safe_extract_zip(zip_path, dest)
         zip_path.unlink(missing_ok=True)
 
 
-def _stream_to_file(resp: Any, zip_path: Path, total: int) -> None:
+def _stream_to_file(
+    resp: Any, zip_path: Path, total: int, mode: str = "wb", start: int = 0
+) -> None:
     """Stream a response body to disk, showing a progress bar on an interactive terminal.
 
     Progress is rendered to stderr only when it's a TTY and the size is known. Otherwise the
-    download runs quietly (e.g. in CI logs or when piped).
+    download runs quietly (e.g. in CI logs or when piped). ``mode`` is the file open mode
+    (``"ab"`` to resume) and ``start`` is the byte count already on disk, used to seed the bar.
     """
     chunk_size = 1 << 16
     show_bar = total > 0 and sys.stderr.isatty()
@@ -404,18 +450,20 @@ def _stream_to_file(resp: Any, zip_path: Path, total: int) -> None:
         import click
 
         with (
-            open(zip_path, "wb") as handle,
+            open(zip_path, mode) as handle,
             click.progressbar(
                 length=total,
                 label="→ Downloading",
                 file=sys.stderr,
             ) as bar,
         ):
+            if start:
+                bar.update(start)
             for chunk in resp.iter_content(chunk_size=chunk_size):
                 handle.write(chunk)
                 bar.update(len(chunk))
     else:
-        with open(zip_path, "wb") as handle:
+        with open(zip_path, mode) as handle:
             for chunk in resp.iter_content(chunk_size=chunk_size):
                 handle.write(chunk)
 
