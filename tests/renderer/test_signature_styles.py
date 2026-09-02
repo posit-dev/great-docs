@@ -184,3 +184,49 @@ def test_spans_style_keeps_the_line_breaks(highlight_style):
 
     assert "<br>" in qmd
     assert "&nbsp;" in qmd
+
+
+def test_spans_style_highlights_a_numeric_default(highlight_style):
+    """A literal default gets the same class the highlighted style gives it"""
+    highlight_style("spans")
+    source = '''
+    def connect(host, port=8080):
+        """Connect to a host."""
+    '''
+
+    qmd = _rendered(source, "connect")
+
+    assert "[8080]{.dv}" in qmd
+
+
+def test_spans_style_keeps_a_same_named_parameter_distinct(highlight_style):
+    """A parameter that shares the callable's own name is not swallowed by it"""
+    highlight_style("spans")
+    source = '''
+    def host(host):
+        """A parameter that shadows the function's own name."""
+    '''
+
+    qmd = _rendered(source, "host")
+
+    assert "[host]{.sig-name}([host]{.doc-parameter-name})" in qmd
+
+
+def test_spans_style_keeps_parameters_distinct_when_a_default_contains_another(
+    highlight_style,
+):
+    """A string default that spells out another parameter is not confused with it"""
+    highlight_style("spans")
+    source = '''
+    def f(x="a=1", a=1):
+        """A string default that looks like the next parameter."""
+    '''
+
+    qmd = _rendered(source, "f")
+
+    # `x`'s own default is highlighted once, not swallowed into `a`'s markup
+    # and not doubly wrapped by re-matching the quotes it already carries.
+    assert '[x]{.doc-parameter-name}=[&quot;a=1&quot;]{.st}' in qmd
+    # `a`'s default is still marked up in its own right, not left plain
+    # because an earlier default happened to contain its literal text.
+    assert "[a]{.doc-parameter-name}=[1]{.dv}" in qmd

@@ -18,7 +18,14 @@ from .._docstring_sections import (
     DCDocstringSectionInitParameters,
     DCDocstringSectionParameterAttributes,
 )
-from .._format import highlight_repr_value, make_call_signature_text, pretty_code, repr_obj
+from .._format import (
+    escape_indents,
+    escape_quotes,
+    highlight_repr_value,
+    make_call_signature_text,
+    pretty_code,
+    repr_obj,
+)
 from .._type_checks import is_enum, is_typeddict
 from .doc import RenderDoc
 
@@ -60,6 +67,45 @@ def _mark_parameter(param: str) -> str:
         default = highlight_repr_value(default)
     marked_name = str(Span(bare_name, Attr(classes=["doc-parameter-name"])))
     return f"{prefix}{marked_name}{rest}{sep}{default}"
+
+
+def _splice_marked_parameters(rest: str, params: list[str]) -> str:
+    """
+    Replace each parameter in already-wrapped signature text with its marked-up form
+
+    `rest` is the `(...)` half of the text `make_call_signature_text`
+    returned for the *plain* `params`, so the line breaks are already
+    settled; this only substitutes each parameter's own text for
+    `_mark_parameter`'s markup, at that parameter's own position.
+
+    A parameter is found by a cursor that only moves forward through
+    `rest`, never by searching the whole string afresh on every
+    parameter. A parameter's rendered text can itself contain another
+    parameter's plain text as a substring, most often through a string
+    default such as `x="a=1"` containing the literal text `a=1`; a fresh
+    whole-string search would find that substring before the second
+    parameter's real occurrence.
+
+    Parameters
+    ----------
+    rest
+        The text after the signature's opening `(`, built from `params`.
+    params
+        The same parameters, each still in its plain, unmarked form.
+
+    Returns
+    -------
+    `rest` with each parameter's own text replaced by its marked-up form.
+    """
+    pieces: list[str] = []
+    cursor = 0
+    for param in params:
+        start = rest.index(param, cursor)
+        pieces.append(rest[cursor:start])
+        pieces.append(_mark_parameter(param))
+        cursor = start + len(param)
+    pieces.append(rest[cursor:])
+    return "".join(pieces)
 
 
 class __RenderDocCallMixin(RenderDoc):
@@ -220,18 +266,18 @@ class __RenderDocCallMixin(RenderDoc):
         """
         text = make_call_signature_text(name, params)
         opening, _, rest = text.partition("(")
+        marked_rest = _splice_marked_parameters(rest, params)
 
-        # Mark up the params half only: a param that happens to share the
-        # callable's own name (`def host(host)`) must not also match inside
-        # `opening`.
-        for param in params:
-            marked_param = _mark_parameter(param)
-            if marked_param != param:
-                rest = rest.replace(param, marked_param, 1)
+        marked = str(Span(opening, Attr(classes=["sig-name"]))) + "(" + marked_rest
 
-        marked = str(Span(opening, Attr(classes=["sig-name"]))) + "(" + rest
+        # Not `pretty_code`: each default was already highlighted in
+        # isolation by `_mark_parameter`, and `highlight_repr_value`'s
+        # string pattern is unanchored, so running it again over the
+        # whole signature would match the quotes already inside that
+        # markup and wrap them a second time.
+        html_content = escape_quotes(escape_indents(marked))
         return Div(
-            Code(pretty_code(marked)).html,
+            Code(html_content).html,
             Attr(classes=["doc-signature", f"doc-{self.obj.kind}"]),
         )
 
