@@ -884,16 +884,24 @@ def highlight_signature_with_pygments(html_content):
                 )
 
         # Special handling: make method/function name stand out on every signature line
-        # Pattern: ClassName.method_name( or function_name(
-        # Replace the name before ( with a function class for better highlighting
+        # Pattern: ClassName.method_name( or function_name( — or, for a TypedDict/Enum
+        # page, just Name with nothing after it, since those never show call brackets.
+        # The trailing group matches either the opening "(" of a call or the end of the
+        # line, so a bare name is still caught without also matching a name that is
+        # followed by anything else (which never happens: this block only ever holds a
+        # signature line, and a signature line's leading name is always either called,
+        # in which case "(" comes right after it, or not, in which case nothing does).
         # Uses re.MULTILINE so ^ matches each line (important for @overload signatures)
         sig_name_pattern = re.compile(
             r'^(<span class="va">)(\w+)(</span>)(<span class="op">\.</span>)?'
-            r'(<span class="va">)?(\w+)?(</span>)?(\()',
+            r'(<span class="va">)?(\w+)?(</span>)?(\(|$)',
             re.MULTILINE,
         )
 
         def enhance_sig_name(m):
+            # The final group is "(" for a call, or "" at the end of a bracket-less
+            # TypedDict/Enum line; either way it belongs straight after the name.
+            trailing = m.group(8)
             # If there's a dot, it's ClassName.method_name
             if m.group(4):  # Has dot
                 class_name = m.group(2)
@@ -901,12 +909,12 @@ def highlight_signature_with_pygments(html_content):
                 return (
                     f'<span class="sig-class">{class_name}</span>'
                     f'<span class="op">.</span>'
-                    f'<span class="sig-name">{method_name}</span>('
+                    f'<span class="sig-name">{method_name}</span>{trailing}'
                 )
             else:
-                # Just function_name(
+                # Just function_name( or, bracket-less, just Name
                 func_name = m.group(2)
-                return f'<span class="sig-name">{func_name}</span>('
+                return f'<span class="sig-name">{func_name}</span>{trailing}'
 
         highlighted = sig_name_pattern.sub(enhance_sig_name, highlighted)
 
