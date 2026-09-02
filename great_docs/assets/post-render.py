@@ -1296,18 +1296,6 @@ for html_file in html_files:
     # Re-highlight the signature with Pygments for better syntax coloring
     content = highlight_signature_with_pygments(content)
 
-    # For non-callable types (e.g., TypedDict, Enum), strip empty () from the signature
-    # TypedDicts are structural type definitions, not constructors
-    # Enums are accessed via members (e.g., Color.RED), not called
-    _NON_CALLABLE_SIGNATURE_TYPES = {"typeddict", "enum"}
-    obj_type_for_sig = object_types.get(item_name_from_file)
-    if obj_type_for_sig and obj_type_for_sig in _NON_CALLABLE_SIGNATURE_TYPES:
-        content = re.sub(
-            r'(<span class="sig-name">[^<]+</span>)\(\)',
-            r"\1",
-            content,
-        )
-
     # Convert back to lines for line-by-line processing
     content = content.splitlines(keepends=True)
 

@@ -44,6 +44,28 @@ def is_protocol(obj: gf.Object | gf.Alias) -> bool:
     )
 
 
+_ENUM_BASES = frozenset({"Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum", "EnumCheck"})
+
+
+def is_typeddict(obj: gf.Object | gf.Alias) -> bool:
+    """
+    Whether `obj` is a class declaring a `TypedDict`
+    """
+    return isinstance(obj, gf.Class) and any(
+        isinstance(base, gf.ExprName) and base.name == "TypedDict" for base in obj.bases
+    )
+
+
+def is_enum(obj: gf.Object | gf.Alias) -> bool:
+    """
+    Whether `obj` is a class deriving from one of the `enum` base classes
+    """
+    return isinstance(obj, gf.Class) and any(
+        isinstance(base, gf.ExprName) and base.name.rsplit(".", 1)[-1] in _ENUM_BASES
+        for base in obj.bases
+    )
+
+
 def is_typevar(obj: gf.Object | gf.Alias) -> bool:
     """
     Whether `obj` is a declaration of a `TypeVar`

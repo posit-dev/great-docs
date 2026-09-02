@@ -17,6 +17,7 @@ from .._docstring_sections import (
     DCDocstringSectionParameterAttributes,
 )
 from .._format import make_call_signature_text, repr_obj
+from .._type_checks import is_enum, is_typeddict
 from .doc import RenderDoc
 
 if TYPE_CHECKING:
@@ -141,7 +142,13 @@ class __RenderDocCallMixin(RenderDoc):
         if overloads:
             return self._render_overload_signatures(name, overloads)
 
-        sig = make_call_signature_text(name, self.render_signature_parameters())
+        # TypedDicts are structural type definitions, not constructors, and enums
+        # are reached through their members rather than called, so neither ever
+        # shows an empty `()`.
+        if is_typeddict(self.obj) or is_enum(self.obj):
+            sig = name
+        else:
+            sig = make_call_signature_text(name, self.render_signature_parameters())
         return Div(
             CodeBlock(sig, Attr(classes=["python"])),
             Attr(classes=["doc-signature", f"doc-{self.obj.kind}"]),
