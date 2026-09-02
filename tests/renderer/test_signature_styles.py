@@ -1,5 +1,7 @@
 """Tests for `render_signature` — covering the non-callable kinds
-(`TypedDict`, `Enum`) that must render without an empty call bracket."""
+(`TypedDict`, `Enum`) that must render without an empty call bracket, both
+base-class spellings each accepts, and the `@dataclass` precedence that
+overrides both."""
 
 from __future__ import annotations
 
@@ -49,6 +51,77 @@ def test_enum_signature_has_no_brackets():
     qmd = _rendered(source, "Colour")
 
     assert "Colour()" not in qmd
+
+
+def test_typeddict_signature_has_no_brackets_with_qualified_base():
+    """A `typing.TypedDict` base, spelled out, is still recognised"""
+    source = '''
+    import typing
+
+    class Point(typing.TypedDict):
+        """A point."""
+
+        x: int
+    '''
+
+    qmd = _rendered(source, "Point")
+
+    assert "Point()" not in qmd
+
+
+def test_enum_signature_has_no_brackets_with_qualified_base():
+    """An `enum.Enum` base, spelled out, is still recognised"""
+    source = '''
+    import enum
+
+    class Colour(enum.Enum):
+        """A colour."""
+
+        RED = 1
+    '''
+
+    qmd = _rendered(source, "Colour")
+
+    assert "Colour()" not in qmd
+
+
+def test_dataclass_typeddict_keeps_its_brackets():
+    """A `@dataclass`-decorated `TypedDict` is a dataclass first"""
+    source = '''
+    from dataclasses import dataclass
+    from typing import TypedDict
+
+    @dataclass
+    class Point(TypedDict):
+        """A point."""
+
+        x: int
+    '''
+
+    qmd = _rendered(source, "Point")
+
+    # The dataclass constructor takes `x`, so the call brackets are not only
+    # present but also carry the parameter — proof this took the ordinary
+    # call-signature path rather than the bracket-less one.
+    assert "Point(x)" in qmd
+
+
+def test_dataclass_enum_keeps_its_brackets():
+    """A `@dataclass`-decorated `Enum` is a dataclass first"""
+    source = '''
+    from dataclasses import dataclass
+    from enum import Enum
+
+    @dataclass
+    class Colour(Enum):
+        """A colour."""
+
+        RED = 1
+    '''
+
+    qmd = _rendered(source, "Colour")
+
+    assert "Colour()" in qmd
 
 
 def test_ordinary_class_keeps_its_brackets():

@@ -47,22 +47,46 @@ def is_protocol(obj: gf.Object | gf.Alias) -> bool:
 _ENUM_BASES = frozenset({"Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum", "EnumCheck"})
 
 
+def _short_base_names(obj: gf.Class) -> set[str]:
+    """
+    The unqualified names of `obj`'s bases
+
+    Reduces both bare (`Enum`) and qualified (`enum.Enum`) spellings to the
+    same short name, matching the string-based comparison
+    `great_docs/core.py` uses to classify the same kinds.
+    """
+    return {str(base).rsplit(".", 1)[-1] for base in obj.bases}
+
+
 def is_typeddict(obj: gf.Object | gf.Alias) -> bool:
     """
     Whether `obj` is a class declaring a `TypedDict`
+
+    A `@dataclass`-decorated class is classified as a dataclass ahead of any
+    base check in `great_docs/core.py`; matching that precedence here keeps
+    a dataclass that also derives from `TypedDict` showing its constructor
+    brackets.
     """
-    return isinstance(obj, gf.Class) and any(
-        isinstance(base, gf.ExprName) and base.name == "TypedDict" for base in obj.bases
+    return (
+        isinstance(obj, gf.Class)
+        and "dataclass" not in obj.labels
+        and "TypedDict" in _short_base_names(obj)
     )
 
 
 def is_enum(obj: gf.Object | gf.Alias) -> bool:
     """
     Whether `obj` is a class deriving from one of the `enum` base classes
+
+    A `@dataclass`-decorated class is classified as a dataclass ahead of any
+    base check in `great_docs/core.py`; matching that precedence here keeps
+    a dataclass that also derives from an `enum` base showing its
+    constructor brackets.
     """
-    return isinstance(obj, gf.Class) and any(
-        isinstance(base, gf.ExprName) and base.name.rsplit(".", 1)[-1] in _ENUM_BASES
-        for base in obj.bases
+    return (
+        isinstance(obj, gf.Class)
+        and "dataclass" not in obj.labels
+        and bool(_short_base_names(obj) & _ENUM_BASES)
     )
 
 
