@@ -847,9 +847,14 @@ def highlight_signature_with_pygments(html_content):
     This extracts the signature code, highlights it with Pygments, then maps the Pygments CSS
     classes to Quarto's highlighting classes for consistency.
     """
-    # Find the main signature code block (id="cb1")
+    # Find the main signature code block: the first code block on the page
+    # (id="cb1") *and* the one the renderer wrapped in a doc-signature div.
+    # The enclosing div is what makes this a signature; without it the first
+    # code block on a page is whatever ordinary block comes first, which on a
+    # page whose signature is inline markup is usually an Examples doctest.
     cb1_pattern = re.compile(
-        r'(<div class="sourceCode" id="cb1">.*?<code class="sourceCode python">)'
+        r'(<div class="doc-signature[^"]*">\s*'
+        r'<div class="sourceCode" id="cb1">.*?<code class="sourceCode python">)'
         r"(.*?)"
         r"(</code>.*?</div>)",
         re.DOTALL,

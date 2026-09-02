@@ -2,7 +2,7 @@
 Tests for the `sig-name`/`sig-class` markup `highlight_signature_with_pygments`
 adds to the rendered `cb1` signature block, both for an ordinary callable
 (name followed by its call brackets) and for a `TypedDict`/`Enum` page (a bare
-name with no brackets at all).
+name with no brackets at all), and for the code blocks it must leave alone.
 """
 
 from __future__ import annotations
@@ -53,14 +53,19 @@ def _load_highlight_signature_with_pygments():
 highlight_signature_with_pygments = _load_highlight_signature_with_pygments()
 
 
-def _cb1(code: str) -> str:
-    """Wrap `code` in the `cb1` sourceCode div the function looks for"""
+def _bare_cb1(code: str) -> str:
+    """Wrap `code` in a first-on-the-page sourceCode div with no signature around it"""
     return (
         '<div class="sourceCode" id="cb1">\n'
         '<pre class="sourceCode python"><code class="sourceCode python">'
         f"{code}"
         "</code></pre>\n</div>"
     )
+
+
+def _cb1(code: str) -> str:
+    """Wrap `code` in the `cb1` signature block the function looks for"""
+    return f'<div class="doc-signature doc-Kind.FUNCTION">\n{_bare_cb1(code)}\n</div>'
 
 
 def _line_with(html_content: str, needle: str) -> str:
@@ -106,3 +111,27 @@ class TestCallableNameMarking:
         assert len(lines) == 2
         for line in lines:
             assert '<span class="sig-name">func</span>(' in line
+
+
+class TestOrdinaryCodeBlocks:
+    """A code block that is not a signature is left exactly as Quarto wrote it"""
+
+    def test_first_code_block_outside_a_signature_is_untouched(self):
+        # On a page written in the `spans` style the signature is inline
+        # markup, so the first code block is an ordinary one, usually an
+        # Examples doctest.
+        page = (
+            '<div class="doc-signature doc-Kind.FUNCTION">\n'
+            "<p><code>connect(host)</code></p>\n"
+            "</div>\n"
+            '<section class="doc-examples">\n'
+            + _bare_cb1('<span class="va">total</span>\n<span class="ex">connect</span>()')
+            + "\n</section>"
+        )
+
+        assert highlight_signature_with_pygments(page) == page
+
+    def test_a_bare_identifier_line_is_not_turned_into_a_name(self):
+        page = _bare_cb1('<span class="va">total</span>')
+
+        assert "sig-name" not in highlight_signature_with_pygments(page)
