@@ -45,7 +45,9 @@ def _mark_parameter(param: str) -> str:
 
     The parameter's own name carries the class its term also carries in the
     `Parameters` section, naming the same thing the same way in both places.
-    A literal default is highlighted the same way `highlight_repr_value`
+    The stylesheet gives that class its weight only inside the docstring
+    sections, so here the class marks the name without yet styling it. A
+    literal default is highlighted the same way `highlight_repr_value`
     highlights it anywhere else; an annotation, when shown, is left as plain
     text. Every piece that came from the source is escaped, because a
     default value is arbitrary text that pandoc would otherwise read as
@@ -248,6 +250,14 @@ class __RenderDocCallMixin(RenderDoc):
     def render_signature(self) -> BlockContent:
         """
         Render the signature of this callable
+
+        The `pygments` style writes a fenced code block, which Quarto
+        highlights and `post-render.py` then re-highlights. The `spans`
+        style writes inline markup instead, which a `code` element can hold
+        but a `pre` block cannot. Both name the same things with the same
+        classes, but the stylesheet's colours for the literal classes are
+        scoped to Quarto's own `sourceCode` wrapper, so today they reach
+        only the code block.
         """
         from .._globals import SIGNATURE_STYLE
 
