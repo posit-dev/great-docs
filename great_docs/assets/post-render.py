@@ -1299,8 +1299,6 @@ for html_file in html_files:
     # Convert back to lines for line-by-line processing
     content = content.splitlines(keepends=True)
 
-    # Fix return value formatting in individual function pages, removing the `:` before the
-    # return value and adjusting the style of the parameter annotation separator
     content_str = "".join(content)
 
     # Inject constant value/annotation into constant reference pages.
@@ -1325,47 +1323,12 @@ for html_file in html_files:
         if bare_name_html in content_str:
             content_str = content_str.replace(bare_name_html, replacement_html, 1)
 
-    return_value_pattern = (
-        r'<span class="parameter-name"></span> <span class="parameter-annotation-sep">:</span>'
-    )
-    return_value_replacement = r'<span class="parameter-name"></span> <span class="parameter-annotation-sep" style="margin-left: -8px;"></span>'
-    content_str = re.sub(return_value_pattern, return_value_replacement, content_str)
-
-    # Remove empty annotation separator + annotation (e.g., Attributes with no type)
-    # Pattern: ` <span class="parameter-annotation-sep">:</span> <span class="parameter-annotation"></span>`
-    # This leaves just the parameter name without a trailing colon and space.
-    content_str = re.sub(
-        r' <span class="parameter-annotation-sep"[^>]*>:</span>\s*<span class="parameter-annotation"></span>',
-        "",
-        content_str,
-    )
-
-    # Normalize single quotes to double quotes in parameter default values
-    content_str = re.sub(
-        r'<span class="parameter-default">&#39;([^&]*)&#39;</span>',
-        r'<span class="parameter-default">&quot;\1&quot;</span>',
-        content_str,
-    )
-    content_str = re.sub(
-        r"""<span class="parameter-default">'([^']*)'</span>""",
-        r'<span class="parameter-default">"\1"</span>',
-        content_str,
-    )
-
     # Fix incomplete Attributes tables for dataclass pages
     content_str = fix_dataclass_attributes(content_str)
 
     # Fix double asterisks in **kwargs and **attributes style parameters
     # Pattern: ****name** -> **name (with proper styling)
     content_str = re.sub(r"\*\*\*\*(\w+)\*\*", r"**<strong>\1</strong>", content_str)
-
-    # Fix leading colon in Raises/Returns sections (e.g., ": ValueError" -> "ValueError")
-    # This handles cases like: <dt><code><span class="parameter-annotation-sep">:</span> <span class="parameter-annotation">ValueError</span></code></dt>
-    content_str = re.sub(
-        r'<dt><code><span class="parameter-annotation-sep">:</span>\s*<span class="parameter-annotation">([^<]+)</span></code></dt>',
-        r'<dt><code><span class="parameter-annotation">\1</span></code></dt>',
-        content_str,
-    )
 
     content = content_str.splitlines(keepends=True)
 
