@@ -1326,10 +1326,6 @@ for html_file in html_files:
     # Fix incomplete Attributes tables for dataclass pages
     content_str = fix_dataclass_attributes(content_str)
 
-    # Fix double asterisks in **kwargs and **attributes style parameters
-    # Pattern: ****name** -> **name (with proper styling)
-    content_str = re.sub(r"\*\*\*\*(\w+)\*\*", r"**<strong>\1</strong>", content_str)
-
     content = content_str.splitlines(keepends=True)
 
     # Add separator lines between class details and individual members,
