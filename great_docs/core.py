@@ -11435,10 +11435,8 @@ anchor-sections: true
             # Always explicitly set parser for clarity
             api_ref_config["parser"] = "numpy"
 
-        api_ref_config["call_signature_highlight_style"] = (
-            self._config.call_signature_highlight_style
-        )
-        api_ref_config["call_signature_wrap_style"] = self._config.call_signature_wrap_style
+        api_ref_config["callable_signatures_style"] = self._config.callable_signatures_style
+        api_ref_config["callable_signatures_wrap"] = self._config.callable_signatures_wrap
 
         # Get jupyter kernel from great-docs.yml config (defaults to python3)
         jupyter_kernel = self._config.jupyter

@@ -4,7 +4,7 @@ Tests for `render_signature`
 Covers the non-callable kinds (`TypedDict`, `Enum`) that must render without
 an empty call bracket, both base-class spellings each accepts, the
 `@dataclass` precedence that overrides both, and the inline markup the
-`spans` style writes.
+`plain` style writes.
 """
 
 from __future__ import annotations
@@ -157,9 +157,9 @@ def test_ordinary_class_keeps_its_brackets():
     assert "Widget()" in qmd
 
 
-def test_spans_style_emits_inline_markup(highlight_style):
-    """The alternative style writes the signature as inline spans"""
-    highlight_style("spans")
+def test_plain_style_emits_inline_markup(highlight_style):
+    """The `plain` style writes the signature as inline markup"""
+    highlight_style("plain")
     source = '''
     def connect(host, port=8080):
         """Connect to a host."""
@@ -176,9 +176,9 @@ def test_spans_style_emits_inline_markup(highlight_style):
     assert "[host]{.doc-parameter-name}" in qmd
 
 
-def test_spans_style_keeps_the_line_breaks(highlight_style):
+def test_plain_style_keeps_the_line_breaks(highlight_style):
     """Indentation survives inside a code element that has no pre"""
-    highlight_style("spans")
+    highlight_style("plain")
     source = '''
     def connect(host, port=8080):
         """Connect to a host."""
@@ -190,9 +190,9 @@ def test_spans_style_keeps_the_line_breaks(highlight_style):
     assert "&nbsp;" in qmd
 
 
-def test_spans_style_highlights_a_numeric_default(highlight_style):
+def test_plain_style_highlights_a_numeric_default(highlight_style):
     """A literal default gets the same class the highlighted style gives it"""
-    highlight_style("spans")
+    highlight_style("plain")
     source = '''
     def connect(host, port=8080):
         """Connect to a host."""
@@ -203,9 +203,9 @@ def test_spans_style_highlights_a_numeric_default(highlight_style):
     assert "[8080]{.dv}" in qmd
 
 
-def test_spans_style_keeps_a_same_named_parameter_distinct(highlight_style):
+def test_plain_style_keeps_a_same_named_parameter_distinct(highlight_style):
     """A parameter that shares the callable's own name is not swallowed by it"""
-    highlight_style("spans")
+    highlight_style("plain")
     source = '''
     def host(host):
         """A parameter that shadows the function's own name."""
@@ -216,11 +216,11 @@ def test_spans_style_keeps_a_same_named_parameter_distinct(highlight_style):
     assert "[host]{.sig-name}([host]{.doc-parameter-name})" in qmd
 
 
-def test_spans_style_keeps_parameters_distinct_when_a_default_contains_another(
+def test_plain_style_keeps_parameters_distinct_when_a_default_contains_another(
     highlight_style,
 ):
     """A string default that spells out another parameter is not confused with it"""
-    highlight_style("spans")
+    highlight_style("plain")
     source = '''
     def f(x="a=1", a=1):
         """A string default that looks like the next parameter."""
@@ -236,9 +236,9 @@ def test_spans_style_keeps_parameters_distinct_when_a_default_contains_another(
     assert "[a]{.doc-parameter-name}=[1]{.dv}" in qmd
 
 
-def test_spans_style_marks_a_typeddict_name(highlight_style):
+def test_plain_style_marks_a_typeddict_name(highlight_style):
     """A kind that is never called still names itself the way a callable does"""
-    highlight_style("spans")
+    highlight_style("plain")
     source = '''
     from typing import TypedDict
 
@@ -253,9 +253,9 @@ def test_spans_style_marks_a_typeddict_name(highlight_style):
     assert "[Point]{.sig-name}" in qmd
 
 
-def test_spans_style_marks_an_enum_name(highlight_style):
+def test_plain_style_marks_an_enum_name(highlight_style):
     """An enum's name is marked the same way a TypedDict's is"""
-    highlight_style("spans")
+    highlight_style("plain")
     source = '''
     from enum import Enum
 
@@ -282,9 +282,9 @@ def convert(value, base):
 '''
 
 
-def test_spans_style_writes_overloads_as_inline_markup(highlight_style):
+def test_plain_style_writes_overloads_as_inline_markup(highlight_style):
     """An overloaded function follows the style the settings ask for"""
-    highlight_style("spans")
+    highlight_style("plain")
 
     qmd = _rendered(_OVERLOADED, "convert")
 
@@ -294,18 +294,18 @@ def test_spans_style_writes_overloads_as_inline_markup(highlight_style):
     assert "[value]{.doc-parameter-name}" in qmd
 
 
-def test_spans_style_keeps_the_overload_return_annotations(highlight_style):
+def test_plain_style_keeps_the_overload_return_annotations(highlight_style):
     """Each variant keeps the return type that distinguishes it"""
-    highlight_style("spans")
+    highlight_style("plain")
 
     qmd = _rendered(_OVERLOADED, "convert")
 
     assert qmd.count(") -&gt; str") == 2
 
 
-def test_pygments_style_writes_overloads_as_a_code_block(highlight_style):
+def test_highlighted_style_writes_overloads_as_a_code_block(highlight_style):
     """The default style is unchanged: one code block, one line per variant"""
-    highlight_style("pygments")
+    highlight_style("highlighted")
 
     qmd = _rendered(_OVERLOADED, "convert")
 
@@ -316,9 +316,9 @@ def test_pygments_style_writes_overloads_as_a_code_block(highlight_style):
     assert qmd.count("\nconvert(") == 2
 
 
-def test_spans_style_escapes_a_default_that_looks_like_html(highlight_style):
+def test_plain_style_escapes_a_default_that_looks_like_html(highlight_style):
     """A string default cannot open an html tag"""
-    highlight_style("spans")
+    highlight_style("plain")
     source = '''
     def h(a="<b>", c=1):
         """Take a default that looks like a tag."""
@@ -331,9 +331,9 @@ def test_spans_style_escapes_a_default_that_looks_like_html(highlight_style):
     assert "[c]{.doc-parameter-name}=[1]{.dv}" in qmd
 
 
-def test_spans_style_escapes_a_default_that_looks_like_a_span(highlight_style):
+def test_plain_style_escapes_a_default_that_looks_like_a_span(highlight_style):
     """A string default cannot become a pandoc span"""
-    highlight_style("spans")
+    highlight_style("plain")
     source = '''
     def h(a="[x]{.y}"):
         """Take a default that looks like a span."""
@@ -345,9 +345,9 @@ def test_spans_style_escapes_a_default_that_looks_like_a_span(highlight_style):
     assert r"\[x\]\{.y\}" in qmd
 
 
-def test_spans_style_escapes_the_variadic_prefixes(highlight_style):
+def test_plain_style_escapes_the_variadic_prefixes(highlight_style):
     """The asterisks of `*args` and `**kwargs` stay asterisks, not emphasis"""
-    highlight_style("spans")
+    highlight_style("plain")
     source = '''
     def g(*args, **kwargs):
         """Take variadic arguments."""

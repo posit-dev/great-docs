@@ -209,35 +209,24 @@ default of `5` splits too aggressively.
 When in doubt, start with the default and adjust once you see how your rendered documentation feels
 to navigate.
 
-## Call Signature Style
+## Callable Signatures
 
-Two settings in `great-docs.yml` control how a callable's signature is written to the page:
-`call_signature_highlight_style` and `call_signature_wrap_style`. Both apply to functions, methods,
-and classes; attributes and type aliases render the same way regardless of either setting.
+The `callable_signatures` block in `great-docs.yml` controls how a callable's signature is
+written to the page. It applies to functions, methods, and classes; attributes and type aliases
+render the same way whatever it says.
 
 ```{.yaml filename="great-docs.yml"}
-# Keep the default (a highlighted code block)
-call_signature_highlight_style: pygments
-
-# Inline markup instead of a code block
-call_signature_highlight_style: spans
-
-# Keep the default (one parameter per line)
-call_signature_wrap_style: per_parameter
-
-# Stay on one line until the signature grows too long
-call_signature_wrap_style: width
+callable_signatures:
+  style: highlighted   # a highlighted code block (default)
+  wrap: per_parameter  # one parameter per line (default)
 ```
 
 | Setting | Value | Behaviour |
 | --- | --- | --- |
-| `call_signature_highlight_style` | `pygments` | The signature is a fenced Python code block, highlighted by Quarto (default) |
-| `call_signature_highlight_style` | `spans` | The signature is inline markup carrying the same highlighting classes |
-| `call_signature_wrap_style` | `per_parameter` | Every parameter takes its own line whenever there is more than one (default) |
-| `call_signature_wrap_style` | `width` | The signature stays on one line until it exceeds 78 characters |
-
-A `code` element can hold links where a `pre` block cannot, so `spans` is the style that allows a
-signature to carry links.
+| `style` | `highlighted` | The signature is a fenced Python code block, highlighted by Quarto (default) |
+| `style` | `plain` | The signature is inline markup carrying the callable's name and its parameters |
+| `wrap` | `per_parameter` | Every parameter takes its own line whenever there is more than one (default) |
+| `wrap` | `width` | The signature stays on one line until it exceeds 78 characters |
 
 ## API Organization
 

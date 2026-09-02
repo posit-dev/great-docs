@@ -39,8 +39,8 @@ EXCLUSIONS = Exclusions()
 class SignatureStyle:
     """How a callable's signature is written to the page"""
 
-    highlight: str = "pygments"
-    """`pygments` for a highlighted code block, `spans` for inline markup"""
+    highlight: str = "highlighted"
+    """`highlighted` for a highlighted code block, `plain` for inline markup"""
 
     wrap: str = "per_parameter"
     """`per_parameter` for one parameter per line, `width` to break only when long"""

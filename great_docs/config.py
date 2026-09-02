@@ -722,14 +722,14 @@ class Config:
         return self["parser"]
 
     @property
-    def call_signature_highlight_style(self) -> str:
-        """Markup used for a callable's signature (pygments or spans)"""
-        return self["call_signature_highlight_style"]
+    def callable_signatures_style(self) -> str:
+        """Markup used for a callable's signature (highlighted or plain)"""
+        return self["callable_signatures.style"]
 
     @property
-    def call_signature_wrap_style(self) -> str:
+    def callable_signatures_wrap(self) -> str:
         """Where a callable's signature breaks across lines (per_parameter or width)"""
-        return self["call_signature_wrap_style"]
+        return self["callable_signatures.wrap"]
 
     @property
     def dynamic(self) -> bool:

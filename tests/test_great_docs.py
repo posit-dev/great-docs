@@ -17147,8 +17147,8 @@ def test_add_api_reference_config_no_exports():
         assert docs._has_api_reference is False
 
 
-def test_add_api_reference_config_carries_the_call_signature_settings():
-    """The call signature settings reach the generated api-reference block.
+def test_add_api_reference_config_carries_the_callable_signature_settings():
+    """The `callable_signatures` block reaches the generated api-reference block.
 
     They are the renderer's only route to those settings: `Settings.make`
     reads them from the block this method writes.
@@ -17162,7 +17162,7 @@ def test_add_api_reference_config_carries_the_call_signature_settings():
 
         gd_yml = Path(tmp_dir) / "great-docs.yml"
         gd_yml.write_text(
-            "call_signature_highlight_style: spans\ncall_signature_wrap_style: width\n",
+            "callable_signatures:\n  style: plain\n  wrap: width\n",
             encoding="utf-8",
         )
         docs._config = Config(Path(tmp_dir))
@@ -17180,11 +17180,11 @@ def test_add_api_reference_config_carries_the_call_signature_settings():
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
 
-        assert result["api-reference"]["call_signature_highlight_style"] == "spans"
-        assert result["api-reference"]["call_signature_wrap_style"] == "width"
+        assert result["api-reference"]["callable_signatures_style"] == "plain"
+        assert result["api-reference"]["callable_signatures_wrap"] == "width"
 
 
-def test_add_api_reference_config_defaults_the_call_signature_settings():
+def test_add_api_reference_config_defaults_the_callable_signature_settings():
     """A project that sets neither key still gets both, at their defaults."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -17206,8 +17206,8 @@ def test_add_api_reference_config_defaults_the_call_signature_settings():
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
 
-        assert result["api-reference"]["call_signature_highlight_style"] == "pygments"
-        assert result["api-reference"]["call_signature_wrap_style"] == "per_parameter"
+        assert result["api-reference"]["callable_signatures_style"] == "highlighted"
+        assert result["api-reference"]["callable_signatures_wrap"] == "per_parameter"
 
 
 def test_add_api_reference_config_already_exists():

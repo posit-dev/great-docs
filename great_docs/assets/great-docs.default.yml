@@ -40,19 +40,18 @@ project_type: python
 # : sphinx - Sphinx/reStructuredText style
 parser: numpy
 
-# Call Signature Highlight Style
-# ------------------------------
-# Markup used to write a callable's signature.
-# : pygments - (default) a highlighted code block
-# : spans - inline markup
-call_signature_highlight_style: pygments
-
-# Call Signature Wrap Style
-# -------------------------
-# Where a callable's signature breaks across lines.
+# Callable Signatures
+# -------------------
+# How the signature of a function, method or class is written.
+# style: the markup carrying it
+# : highlighted - (default) a highlighted code block
+# : plain - inline markup
+# wrap: where it breaks across lines
 # : per_parameter - (default) one parameter per line
 # : width - break only when the signature is long
-call_signature_wrap_style: per_parameter
+callable_signatures:
+  style: highlighted
+  wrap: per_parameter
 
 # Dynamic Introspection
 # ---------------------

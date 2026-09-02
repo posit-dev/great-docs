@@ -251,14 +251,14 @@ class __RenderDocCallMixin(RenderDoc):
         """
         Render the signature of this callable
 
-        The `pygments` style writes a fenced code block, which Quarto
-        highlights and `post-render.py` then re-highlights. The `spans`
+        The `highlighted` style writes a fenced code block, which Quarto
+        highlights and `post-render.py` then re-highlights. The `plain`
         style writes inline markup instead, which a `code` element can hold
         but a `pre` block cannot. The callable's name carries `sig-name` in
-        both, but parameters differ: `spans` uses `doc-parameter-name`,
-        whilst `pygments` uses Pygments' `va` token. The stylesheet's colours
-        for the literal classes are scoped to Quarto's own `sourceCode`
-        wrapper, so today they reach only the code block.
+        both, but parameters differ: `plain` uses `doc-parameter-name`,
+        whilst `highlighted` uses Pygments' `va` token. The stylesheet's
+        colours for the literal classes are scoped to Quarto's own
+        `sourceCode` wrapper, so today they reach only the code block.
         """
         from .._globals import SIGNATURE_STYLE
 
@@ -266,7 +266,7 @@ class __RenderDocCallMixin(RenderDoc):
         attr = Attr(classes=["doc-signature", f"doc-{self.obj.kind}"])
         lines = self._signature_lines(name)
 
-        if SIGNATURE_STYLE.highlight == "spans":
+        if SIGNATURE_STYLE.highlight == "plain":
             marked = "\n".join(_mark_signature_text(text, params) for text, params in lines)
             # Not `pretty_code`: each default was already highlighted in
             # isolation by `_mark_parameter`, and `highlight_repr_value`'s

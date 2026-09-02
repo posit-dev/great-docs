@@ -12,8 +12,8 @@ def test_settings_default_to_todays_rendering():
     """The defaults reproduce what sites already publish"""
     settings = Settings()
 
-    assert settings.call_signature_highlight_style == "pygments"
-    assert settings.call_signature_wrap_style == "per_parameter"
+    assert settings.callable_signatures_style == "highlighted"
+    assert settings.callable_signatures_wrap == "per_parameter"
 
 
 def test_settings_read_the_api_reference_block():
@@ -21,24 +21,24 @@ def test_settings_read_the_api_reference_block():
     settings = Settings.make(
         {
             "package": "pkg",
-            "call_signature_highlight_style": "spans",
-            "call_signature_wrap_style": "width",
+            "callable_signatures_style": "plain",
+            "callable_signatures_wrap": "width",
         }
     )
 
-    assert settings.call_signature_highlight_style == "spans"
-    assert settings.call_signature_wrap_style == "width"
+    assert settings.callable_signatures_style == "plain"
+    assert settings.callable_signatures_wrap == "width"
 
 
 def test_applying_settings_reaches_the_render_side():
     """The renderer reads the style from module state, not from Settings"""
     settings = Settings(
-        call_signature_highlight_style="spans",
-        call_signature_wrap_style="width",
+        callable_signatures_style="plain",
+        callable_signatures_wrap="width",
     )
 
     with signature_settings(settings):
-        assert SIGNATURE_STYLE.highlight == "spans"
+        assert SIGNATURE_STYLE.highlight == "plain"
         assert SIGNATURE_STYLE.wrap == "width"
 
 
@@ -46,8 +46,8 @@ def test_settings_are_put_back_afterwards():
     """One reference's settings do not govern whatever is rendered next"""
     original = SignatureStyle(SIGNATURE_STYLE.highlight, SIGNATURE_STYLE.wrap)
     settings = Settings(
-        call_signature_highlight_style="spans",
-        call_signature_wrap_style="width",
+        callable_signatures_style="plain",
+        callable_signatures_wrap="width",
     )
 
     with signature_settings(settings):
@@ -60,7 +60,7 @@ def test_settings_are_put_back_afterwards():
 def test_settings_are_put_back_after_a_failure():
     """A build that raises still leaves the state as it found it"""
     original = SignatureStyle(SIGNATURE_STYLE.highlight, SIGNATURE_STYLE.wrap)
-    settings = Settings(call_signature_highlight_style="spans")
+    settings = Settings(callable_signatures_style="plain")
 
     with pytest.raises(RuntimeError), signature_settings(settings):
         raise RuntimeError("the build failed")
@@ -151,15 +151,15 @@ def test_a_build_leaves_the_module_state_as_it_found_it(tmp_path, monkeypatch):
             "api-reference": {
                 "package": "tinypkg",
                 "source_dir": "../src",
-                "call_signature_highlight_style": "spans",
-                "call_signature_wrap_style": "width",
+                "callable_signatures_style": "plain",
+                "callable_signatures_wrap": "width",
                 "sections": [{"title": "All", "desc": "", "contents": ["add"]}],
             }
         }
     ).build()
 
     # The settings were live for the build itself: the page carries the
-    # inline markup of the `spans` style on one line, as `width` asks.
+    # inline markup of the `plain` style on one line, as `width` asks.
     page = (site / "reference" / "add.qmd").read_text()
     assert "<code>[add]{.sig-name}([a]{.doc-parameter-name}," in page
     assert SIGNATURE_STYLE.highlight == original.highlight

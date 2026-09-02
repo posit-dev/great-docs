@@ -48,8 +48,8 @@ class Settings:
     """How an API reference is generated and written — the non-content keys of the `api-reference:` block"""
 
     parser: str = "numpy"
-    call_signature_highlight_style: str = "pygments"
-    call_signature_wrap_style: str = "per_parameter"
+    callable_signatures_style: str = "highlighted"
+    callable_signatures_wrap: str = "per_parameter"
     dynamic: bool | None = None
     source_dir: str | None = None
     dir: str = "reference"
@@ -110,8 +110,8 @@ def signature_settings(settings: Settings) -> Iterator[None]:
     from ._globals import SIGNATURE_STYLE
 
     previous = (SIGNATURE_STYLE.highlight, SIGNATURE_STYLE.wrap)
-    SIGNATURE_STYLE.highlight = settings.call_signature_highlight_style
-    SIGNATURE_STYLE.wrap = settings.call_signature_wrap_style
+    SIGNATURE_STYLE.highlight = settings.callable_signatures_style
+    SIGNATURE_STYLE.wrap = settings.callable_signatures_wrap
     try:
         yield
     finally:
