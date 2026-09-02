@@ -16,7 +16,7 @@ from .._docstring_sections import (
     DCDocstringSectionInitParameters,
     DCDocstringSectionParameterAttributes,
 )
-from .._format import formatted_signature, repr_obj
+from .._format import make_call_signature_text, repr_obj
 from .doc import RenderDoc
 
 if TYPE_CHECKING:
@@ -141,7 +141,7 @@ class __RenderDocCallMixin(RenderDoc):
         if overloads:
             return self._render_overload_signatures(name, overloads)
 
-        sig = formatted_signature(name, self.render_signature_parameters())
+        sig = make_call_signature_text(name, self.render_signature_parameters())
         return Div(
             CodeBlock(sig, Attr(classes=["python"])),
             Attr(classes=["doc-signature", f"doc-{self.obj.kind}"]),

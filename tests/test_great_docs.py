@@ -49,8 +49,10 @@ from great_docs._apiref._format import (
     format_see_also,
     format_str,
     format_value,
-    formatted_signature,
+    make_call_signature_text,
     repr_obj,
+    _wrap_per_parameter,
+    _wrap_to_width,
 )
 from great_docs._apiref._globals import EXCLUSIONS
 from great_docs._apiref._preview import Formatter
@@ -33129,13 +33131,41 @@ def test_repr_obj_str_with_single_quotes():
     assert result2 == "plain"
 
 
-def test_formatted_signature_long_params():
-    """formatted_signature wraps lines when params are long."""
+def test_make_call_signature_text_long_params():
+    """make_call_signature_text wraps lines when params are long."""
+    params = [f"parameter_number_{i}=None" for i in range(6)]
 
-    params = [f"param_{i}: str = 'default_value_{i}'" for i in range(10)]
-    result = formatted_signature("my_function", params)
-    assert "my_function(" in result
-    assert "\n" in result  # should have line breaks
+    result = make_call_signature_text("my_function", params)
+
+    assert "\n" in result
+    assert result.startswith("my_function(")
+    assert result.endswith(")")
+
+
+def test_wrap_per_parameter_puts_each_parameter_on_its_own_line():
+    """One parameter per line, however short the signature"""
+    result = _wrap_per_parameter("connect", ["host", "port=8080"])
+
+    assert result == "connect(\n    host,\n    port=8080,\n)"
+
+
+def test_wrap_per_parameter_keeps_a_single_parameter_inline():
+    """A lone parameter has nothing to wrap against"""
+    assert _wrap_per_parameter("connect", ["host"]) == "connect(host)"
+
+
+def test_wrap_to_width_keeps_a_short_signature_on_one_line():
+    """Under the limit, the signature stays as written"""
+    assert _wrap_to_width("connect", ["host", "port=8080"]) == "connect(host, port=8080)"
+
+
+def test_wrap_to_width_breaks_a_long_signature():
+    """Past the limit, each parameter takes its own line"""
+    params = [f"parameter_number_{i}=None" for i in range(6)]
+
+    result = _wrap_to_width("my_function", params)
+
+    assert result.count("\n") == len(params) + 1
 
 
 def test_format_str_with_ruff():

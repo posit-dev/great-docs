@@ -207,20 +207,64 @@ def _(obj: gf.ExprName) -> str:
     return obj.name
 
 
-def formatted_signature(name: str, params: list[str]) -> str:
+def make_call_signature_text(name: str, params: list[str]) -> str:
     """
-    Format a signature of a function/method
+    Build the text of a callable's signature
 
     Parameters
     ----------
-    name :
-        Name of function/method/class(for the __init__ method)
-    params :
-        Parameters to the function. A each parameter is a
-        string. e.g. a, *args, *, /, b=2, c=3, **kwargs
+    name
+        Name of the function, method, or class (for the `__init__` method).
+    params
+        Parameters of the callable, each already rendered as a string,
+        e.g. `a`, `*args`, `*`, `/`, `b=2`, `c=3`, `**kwargs`.
+
+    Returns
+    -------
+    The signature, broken across lines according to the wrap style.
     """
-    # Format to a maximum width of 78 chars
-    # It fails when a parameter declarations is longer than 78
+    return _wrap_to_width(name, params)
+
+
+def _wrap_per_parameter(name: str, params: list[str]) -> str:
+    """
+    Break a signature so that each parameter has a line of its own
+
+    Parameters
+    ----------
+    name
+        Name of the callable.
+    params
+        Parameters of the callable, each already rendered as a string.
+
+    Returns
+    -------
+    The signature on one line when it has fewer than two parameters, and one
+    parameter per line otherwise.
+    """
+    if len(params) < 2:
+        return f"{name}({', '.join(params)})"
+    pad = " " * 4
+    body = f",\n{pad}".join(params)
+    return f"{name}(\n{pad}{body},\n)"
+
+
+def _wrap_to_width(name: str, params: list[str]) -> str:
+    """
+    Break a signature only when it outgrows the line limit
+
+    Parameters
+    ----------
+    name
+        Name of the callable.
+    params
+        Parameters of the callable, each already rendered as a string.
+
+    Returns
+    -------
+    The signature on one line when it fits within 78 characters, and broken
+    across lines otherwise.
+    """
     opening = f"{name}("
     params_string = ", ".join(params)
     closing = ")"
@@ -232,8 +276,7 @@ def formatted_signature(name: str, params: list[str]) -> str:
             params_string = f",{line_pad}".join(params)
         params_string = f"{line_pad}{params_string}"
         closing = f"\n{closing}"
-    sig = f"{opening}{params_string}{closing}"
-    return sig
+    return f"{opening}{params_string}{closing}"
 
 
 def pretty_code(s: str) -> str:
