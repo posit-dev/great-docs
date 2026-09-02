@@ -17147,6 +17147,69 @@ def test_add_api_reference_config_no_exports():
         assert docs._has_api_reference is False
 
 
+def test_add_api_reference_config_carries_the_call_signature_settings():
+    """The call signature settings reach the generated api-reference block.
+
+    They are the renderer's only route to those settings: `Settings.make`
+    reads them from the block this method writes.
+    """
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text(
+            "call_signature_highlight_style: spans\ncall_signature_wrap_style: width\n",
+            encoding="utf-8",
+        )
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(quarto_yml, "w") as f:
+            write_yaml({"project": {"type": "website"}}, f)
+
+        sections = [{"title": "All", "desc": "", "contents": ["Widget"]}]
+        with patch.object(docs, "_create_api_sections_with_config", return_value=sections):
+            docs._add_api_reference_config()
+
+        with open(quarto_yml, "r") as f:
+            result = read_yaml(f)
+
+        assert result["api-reference"]["call_signature_highlight_style"] == "spans"
+        assert result["api-reference"]["call_signature_wrap_style"] == "width"
+
+
+def test_add_api_reference_config_defaults_the_call_signature_settings():
+    """A project that sets neither key still gets both, at their defaults."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(quarto_yml, "w") as f:
+            write_yaml({"project": {"type": "website"}}, f)
+
+        sections = [{"title": "All", "desc": "", "contents": ["Widget"]}]
+        with patch.object(docs, "_create_api_sections_with_config", return_value=sections):
+            docs._add_api_reference_config()
+
+        with open(quarto_yml, "r") as f:
+            result = read_yaml(f)
+
+        assert result["api-reference"]["call_signature_highlight_style"] == "pygments"
+        assert result["api-reference"]["call_signature_wrap_style"] == "per_parameter"
+
+
 def test_add_api_reference_config_already_exists():
     """Test _add_api_reference_config skips when api-reference already present."""
 
