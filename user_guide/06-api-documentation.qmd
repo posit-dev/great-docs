@@ -237,7 +237,7 @@ call_signature_wrap_style: width
 | `call_signature_wrap_style` | `width` | The signature stays on one line until it exceeds 78 characters |
 
 A `code` element can hold links where a `pre` block cannot, so `spans` is the style that allows a
-signature's annotations to link to their types.
+signature to carry links.
 
 ## API Organization
 
