@@ -5,7 +5,7 @@ import pytest
 from great_docs._apiref._format import make_call_signature_text
 from great_docs._apiref._globals import SIGNATURE_STYLE, SignatureStyle
 from great_docs._apiref._tools import _render
-from great_docs._apiref.api_reference import Settings, apply_signature_settings
+from great_docs._apiref.api_reference import Settings, signature_settings
 
 
 def test_settings_default_to_todays_rendering():
@@ -32,19 +32,41 @@ def test_settings_read_the_api_reference_block():
 
 def test_applying_settings_reaches_the_render_side():
     """The renderer reads the style from module state, not from Settings"""
-    original = SignatureStyle(SIGNATURE_STYLE.highlight, SIGNATURE_STYLE.wrap)
-    try:
-        apply_signature_settings(
-            Settings(
-                call_signature_highlight_style="spans",
-                call_signature_wrap_style="width",
-            )
-        )
+    settings = Settings(
+        call_signature_highlight_style="spans",
+        call_signature_wrap_style="width",
+    )
+
+    with signature_settings(settings):
         assert SIGNATURE_STYLE.highlight == "spans"
         assert SIGNATURE_STYLE.wrap == "width"
-    finally:
-        SIGNATURE_STYLE.highlight = original.highlight
-        SIGNATURE_STYLE.wrap = original.wrap
+
+
+def test_settings_are_put_back_afterwards():
+    """One reference's settings do not govern whatever is rendered next"""
+    original = SignatureStyle(SIGNATURE_STYLE.highlight, SIGNATURE_STYLE.wrap)
+    settings = Settings(
+        call_signature_highlight_style="spans",
+        call_signature_wrap_style="width",
+    )
+
+    with signature_settings(settings):
+        pass
+
+    assert SIGNATURE_STYLE.highlight == original.highlight
+    assert SIGNATURE_STYLE.wrap == original.wrap
+
+
+def test_settings_are_put_back_after_a_failure():
+    """A build that raises still leaves the state as it found it"""
+    original = SignatureStyle(SIGNATURE_STYLE.highlight, SIGNATURE_STYLE.wrap)
+    settings = Settings(call_signature_highlight_style="spans")
+
+    with pytest.raises(RuntimeError), signature_settings(settings):
+        raise RuntimeError("the build failed")
+
+    assert SIGNATURE_STYLE.highlight == original.highlight
+    assert SIGNATURE_STYLE.wrap == original.wrap
 
 
 @pytest.fixture
@@ -98,3 +120,47 @@ def test_overload_variants_follow_the_wrap_style(wrap_style):
         qmd = _render(package["convert"])
 
     assert "convert(\n    value" in qmd
+
+
+def test_a_build_leaves_the_module_state_as_it_found_it(tmp_path, monkeypatch):
+    """A build with non-default settings does not govern whatever is built next"""
+    from great_docs._apiref.api_reference import APIReference
+
+    package = tmp_path / "src" / "tinypkg"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text(
+        textwrap.dedent(
+            '''
+            """A tiny package."""
+
+
+            def add(a, b):
+                """Add two numbers."""
+                return a + b
+            '''
+        )
+    )
+    site = tmp_path / "site"
+    site.mkdir()
+    # `APIReference.build` resolves its paths from the working directory.
+    monkeypatch.chdir(site)
+
+    original = SignatureStyle(SIGNATURE_STYLE.highlight, SIGNATURE_STYLE.wrap)
+    APIReference(
+        {
+            "api-reference": {
+                "package": "tinypkg",
+                "source_dir": "../src",
+                "call_signature_highlight_style": "spans",
+                "call_signature_wrap_style": "width",
+                "sections": [{"title": "All", "desc": "", "contents": ["add"]}],
+            }
+        }
+    ).build()
+
+    # The settings were live for the build itself: the page carries the
+    # inline markup of the `spans` style on one line, as `width` asks.
+    page = (site / "reference" / "add.qmd").read_text()
+    assert "<code>[add]{.sig-name}([a]{.doc-parameter-name}," in page
+    assert SIGNATURE_STYLE.highlight == original.highlight
+    assert SIGNATURE_STYLE.wrap == original.wrap

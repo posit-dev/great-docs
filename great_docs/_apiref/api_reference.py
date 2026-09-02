@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from dataclasses import fields as dc_fields
 from functools import cached_property
@@ -26,6 +27,8 @@ from .write import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from .content import Section
     from .inventory import InventoryItem
 
@@ -85,26 +88,34 @@ class Settings:
 _SETTINGS_KEYS = {f.name for f in dc_fields(Settings)} - {"version"}
 
 
-def apply_signature_settings(settings: Settings) -> None:
+@contextmanager
+def signature_settings(settings: Settings) -> Iterator[None]:
     """
     Publish the signature settings where the render classes can read them
 
     `RenderBase` receives a node and display flags only, so settings reach the
-    render classes through module state, as exclusions already do.
+    render classes through module state, as exclusions already do. The state
+    is put back on the way out, because one process can build more than one
+    API reference and the settings of one must not govern the next.
 
     Parameters
     ----------
     settings
         The settings of the API reference being built.
 
-    Returns
-    -------
+    Yields
+    ------
     :
     """
     from ._globals import SIGNATURE_STYLE
 
+    previous = (SIGNATURE_STYLE.highlight, SIGNATURE_STYLE.wrap)
     SIGNATURE_STYLE.highlight = settings.call_signature_highlight_style
     SIGNATURE_STYLE.wrap = settings.call_signature_wrap_style
+    try:
+        yield
+    finally:
+        SIGNATURE_STYLE.highlight, SIGNATURE_STYLE.wrap = previous
 
 
 class APIReference:
@@ -256,8 +267,24 @@ class APIReference:
     def build(self, page_filter: str = "*") -> None:
         """Write reference pages, index, inventory, and (optionally) sidebar to disk"""
         s = self.settings
-        apply_signature_settings(s)
+        with signature_settings(s):
+            self._build(s, page_filter)
 
+    def _build(self, s: Settings, page_filter: str) -> None:
+        """
+        Write the reference, with the signature settings already published
+
+        Parameters
+        ----------
+        s
+            The settings of this API reference.
+        page_filter
+            Glob that selects which pages to write.
+
+        Returns
+        -------
+        :
+        """
         if s.source_dir:
             sys.path.append(str(Path(s.source_dir).absolute()))
 
