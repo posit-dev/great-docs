@@ -179,8 +179,8 @@ def test_exclude_single_parameter_as_string():
         _globals.EXCLUSIONS.parameters.update(original)
 
     # "b" should be excluded from the signature
-    assert "func(a" in qmd
-    assert "func(a, b" not in qmd
+    assert "func(\n    a,\n    c,\n)" in qmd
+    assert "    b,\n" not in qmd
 
 
 def test_exclude_multiple_parameters_as_tuple():

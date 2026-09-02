@@ -962,123 +962,6 @@ def highlight_signature_with_pygments(html_content):
     return cb1_pattern.sub(replace_signature, html_content)
 
 
-def format_signature_multiline(html_content):
-    """
-    Format function/method signatures with multiple arguments onto separate lines.
-
-    If a signature has more than one argument, format it as:
-        FunctionName(
-            arg1=default1,
-            arg2=default2,
-        )
-
-    Signatures that are already multiline are skipped.
-    """
-    # Pattern to match the content inside signature spans
-    # The signature is inside <span id="cbN-1">...(args)</span>
-    # We need to handle HTML tags within the arguments
-
-    def reformat_signature(match):
-        full_match = match.group(0)
-        span_start = match.group(1)
-        anchor = match.group(2) or ""
-        content = match.group(3)
-        span_end = match.group(4)
-
-        # Skip if signature is already multiline; this is detected by checking if content ends with
-        # just "(" or has a newline
-        if content.strip().endswith("(") or "\n" in content:
-            return full_match
-
-        # Find the opening paren position
-        paren_pos = content.find("(")
-        if paren_pos == -1:
-            return full_match
-
-        func_name = content[: paren_pos + 1]  # Include the (
-
-        # Find the closing paren - it's the last ) in the content
-        close_paren_pos = content.rfind(")")
-        if close_paren_pos == -1:
-            return full_match
-
-        args_content = content[paren_pos + 1 : close_paren_pos]
-
-        # Count arguments by looking for commas not inside HTML tags or nested parens
-        # We need to track both HTML tag depth and paren depth
-        arg_count = 1 if args_content.strip() else 0
-        html_depth = 0
-        paren_depth = 0
-        i = 0
-        while i < len(args_content):
-            if args_content[i : i + 1] == "<":
-                html_depth += 1
-            elif args_content[i : i + 1] == ">":
-                html_depth -= 1
-            elif html_depth == 0:
-                if args_content[i] in "([{":
-                    paren_depth += 1
-                elif args_content[i] in ")]}":
-                    paren_depth -= 1
-                elif args_content[i] == "," and paren_depth == 0:
-                    arg_count += 1
-            i += 1
-
-        # Only reformat if more than 1 argument
-        if arg_count <= 1:
-            return full_match
-
-        # Split arguments while preserving HTML
-        args = []
-        current_arg = ""
-        html_depth = 0
-        paren_depth = 0
-        i = 0
-        while i < len(args_content):
-            char = args_content[i]
-            if char == "<":
-                html_depth += 1
-                current_arg += char
-            elif char == ">":
-                html_depth -= 1
-                current_arg += char
-            elif html_depth == 0:
-                if char in "([{":
-                    paren_depth += 1
-                    current_arg += char
-                elif char in ")]}":
-                    paren_depth -= 1
-                    current_arg += char
-                elif char == "," and paren_depth == 0:
-                    args.append(current_arg.strip())
-                    current_arg = ""
-                else:
-                    current_arg += char
-            else:
-                current_arg += char
-            i += 1
-        if current_arg.strip():
-            args.append(current_arg.strip())
-
-        # Build multi-line signature
-        formatted_args = ",\n    ".join(args)
-        new_content = f"{func_name}\n    {formatted_args},\n)"
-
-        return f"{span_start}{anchor}{new_content}{span_end}"
-
-    # Only match the FIRST code block (cb1) which is always the main signature
-    # Other code blocks (cb2, cb3, etc.) are method signatures or examples
-    signature_pattern = re.compile(
-        r'(<span id="cb1-1"[^>]*>)'
-        r"(<a[^>]*></a>)?"
-        r"(.*?\))"
-        r"(</span>)",
-        re.DOTALL,
-    )
-
-    return signature_pattern.sub(reformat_signature, html_content)
-
-
 def strip_colgroup_tags(html_content):
     """
     Remove `<colgroup>` tags from tables, preserving those inside GT tables.
@@ -1412,9 +1295,6 @@ for html_file in html_files:
 
     # Re-highlight the signature with Pygments for better syntax coloring
     content = highlight_signature_with_pygments(content)
-
-    # Format signatures with multiple arguments onto separate lines
-    content = format_signature_multiline(content)
 
     # For non-callable types (e.g., TypedDict, Enum), strip empty () from the signature
     # TypedDicts are structural type definitions, not constructors

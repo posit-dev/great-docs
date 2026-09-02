@@ -166,7 +166,7 @@ class __RenderDocCallMixin(RenderDoc):
                 else:
                     params.append(p.name)
             ret = str(ov.returns) if ov.returns else ""
-            sig = f"{name}({', '.join(params)})"
+            sig = make_call_signature_text(name, params)
             if ret:
                 sig += f" -> {ret}"
             sig_lines.append(sig)

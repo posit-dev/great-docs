@@ -120,7 +120,7 @@ def test_dataclass_with_methods_keeps_constructor_signature():
     qmd = render_code_variable(code, "Widget")
 
     # The usage signature must include the constructor parameters, not a bare `Widget()`.
-    assert "Widget(name, size=1)" in qmd
+    assert "Widget(\n    name,\n    size=1,\n)" in qmd
 
 
 def test_dataclass_without_methods_keeps_constructor_signature():
@@ -141,7 +141,7 @@ def test_dataclass_without_methods_keeps_constructor_signature():
     '''
     qmd = render_code_variable(code, "Widget")
 
-    assert "Widget(name, size=1)" in qmd
+    assert "Widget(\n    name,\n    size=1,\n)" in qmd
 
 
 def test_dataclass_attributes_section_not_duplicated():
