@@ -35,6 +35,20 @@ class Exclusions:
 EXCLUSIONS = Exclusions()
 
 
+@dataclass
+class SignatureStyle:
+    """How a callable's signature is written to the page"""
+
+    highlight: str = "pygments"
+    """`pygments` for a highlighted code block, `spans` for inline markup"""
+
+    wrap: str = "per_parameter"
+    """`per_parameter` for one parameter per line, `width` to break only when long"""
+
+
+SIGNATURE_STYLE = SignatureStyle()
+
+
 @lru_cache(4)
 def package_info(
     key: Literal["GITHUB_REPO_URL", "GIT_REF", "PACKAGE_ROOT", "SOURCE_PATH"],

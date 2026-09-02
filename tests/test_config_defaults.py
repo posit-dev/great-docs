@@ -16,6 +16,8 @@ FROZEN_DEFAULT_CONFIG: dict[str, Any] = {
     "display_name": None,
     "project_type": "python",
     "parser": "numpy",
+    "call_signature_highlight_style": "pygments",
+    "call_signature_wrap_style": "per_parameter",
     "dynamic": True,
     "jupyter": "python3",
     "exclude": [],

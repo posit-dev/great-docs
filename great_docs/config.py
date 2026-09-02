@@ -722,6 +722,16 @@ class Config:
         return self["parser"]
 
     @property
+    def call_signature_highlight_style(self) -> str:
+        """Markup used for a callable's signature (pygments or spans)"""
+        return self["call_signature_highlight_style"]
+
+    @property
+    def call_signature_wrap_style(self) -> str:
+        """Where a callable's signature breaks across lines (per_parameter or width)"""
+        return self["call_signature_wrap_style"]
+
+    @property
     def dynamic(self) -> bool:
         """Get the dynamic introspection mode for API reference generation."""
         return self["dynamic"]

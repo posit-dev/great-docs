@@ -45,6 +45,8 @@ class Settings:
     """How an API reference is generated and written — the non-content keys of the `api-reference:` block"""
 
     parser: str = "numpy"
+    call_signature_highlight_style: str = "pygments"
+    call_signature_wrap_style: str = "per_parameter"
     dynamic: bool | None = None
     source_dir: str | None = None
     dir: str = "reference"
@@ -81,6 +83,28 @@ class Settings:
 # with "0.0.9999". (`interlinks.fast` / `_fast_inventory` was confirmed dead
 # and dropped, per spec.)
 _SETTINGS_KEYS = {f.name for f in dc_fields(Settings)} - {"version"}
+
+
+def apply_signature_settings(settings: Settings) -> None:
+    """
+    Publish the signature settings where the render classes can read them
+
+    `RenderBase` receives a node and display flags only, so settings reach the
+    render classes through module state, as exclusions already do.
+
+    Parameters
+    ----------
+    settings
+        The settings of the API reference being built.
+
+    Returns
+    -------
+    :
+    """
+    from ._globals import SIGNATURE_STYLE
+
+    SIGNATURE_STYLE.highlight = settings.call_signature_highlight_style
+    SIGNATURE_STYLE.wrap = settings.call_signature_wrap_style
 
 
 class APIReference:
@@ -232,6 +256,7 @@ class APIReference:
     def build(self, page_filter: str = "*") -> None:
         """Write reference pages, index, inventory, and (optionally) sidebar to disk"""
         s = self.settings
+        apply_signature_settings(s)
 
         if s.source_dir:
             sys.path.append(str(Path(s.source_dir).absolute()))
