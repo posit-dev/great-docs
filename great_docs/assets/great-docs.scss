@@ -338,6 +338,7 @@ h4 span.doc-object-name {
 .doc-signature > p:first-child {
    @extend .my-3;
    border-radius: 0.25rem;
+   background-color: $signature-background-color;
 }
 
 .doc-signature > p:first-child code {

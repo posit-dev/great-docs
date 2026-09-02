@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
@@ -11,17 +12,54 @@ from great_docs.pandoc.blocks import (
     Div,
 )
 from great_docs.pandoc.components import Attr
+from great_docs.pandoc.inlines import Code, Span
 
 from .._docstring_sections import (
     DCDocstringSectionInitParameters,
     DCDocstringSectionParameterAttributes,
 )
-from .._format import make_call_signature_text, repr_obj
+from .._format import highlight_repr_value, make_call_signature_text, pretty_code, repr_obj
 from .._type_checks import is_enum, is_typeddict
 from .doc import RenderDoc
 
 if TYPE_CHECKING:
     from ..content import DocClass, DocFunction
+
+
+# A parameter's own name, e.g. `host` in `host` or `port` in `port=8080`,
+# with an optional `*`/`**` prefix preserved ahead of it. A bare `/` or `*`
+# separator has no name to match, so it is left for the caller to skip.
+_PARAMETER_NAME_RE = re.compile(r"^(\*{0,2})([A-Za-z_]\w*)")
+
+
+def _mark_parameter(param: str) -> str:
+    """
+    Mark up a rendered parameter for the `spans` signature style
+
+    The parameter's own name picks up the class also used for its term in
+    the `Parameters` section, so the two line up visually. A literal
+    default is highlighted the same way `highlight_repr_value` highlights
+    it anywhere else; an annotation, when shown, is left as plain text.
+
+    Parameters
+    ----------
+    param
+        A single rendered parameter, e.g. `host` or `port=8080`.
+
+    Returns
+    -------
+    The parameter with its name and any default marked up, or unchanged
+    if it is a bare `/` or `*` separator rather than a named parameter.
+    """
+    match = _PARAMETER_NAME_RE.match(param)
+    if not match:
+        return param
+    prefix, bare_name = match.groups()
+    rest, sep, default = param[match.end() :].partition("=")
+    if sep:
+        default = highlight_repr_value(default)
+    marked_name = str(Span(bare_name, Attr(classes=["doc-parameter-name"])))
+    return f"{prefix}{marked_name}{rest}{sep}{default}"
 
 
 class __RenderDocCallMixin(RenderDoc):
@@ -142,15 +180,58 @@ class __RenderDocCallMixin(RenderDoc):
         if overloads:
             return self._render_overload_signatures(name, overloads)
 
+        from .._globals import SIGNATURE_STYLE
+
+        attr = Attr(classes=["doc-signature", f"doc-{self.obj.kind}"])
+
         # TypedDicts are structural type definitions, not constructors, and enums
         # are reached through their members rather than called, so neither ever
         # shows an empty `()`.
         if is_typeddict(self.obj) or is_enum(self.obj):
-            sig = name
-        else:
-            sig = make_call_signature_text(name, self.render_signature_parameters())
+            if SIGNATURE_STYLE.highlight == "spans":
+                return Div(Code(pretty_code(name)).html, attr)
+            return Div(CodeBlock(name, Attr(classes=["python"])), attr)
+
+        params = self.render_signature_parameters()
+        if SIGNATURE_STYLE.highlight == "spans":
+            return self._render_signature_spans(name, params)
+
+        sig = make_call_signature_text(name, params)
+        return Div(CodeBlock(sig, Attr(classes=["python"])), attr)
+
+    def _render_signature_spans(self, name: str, params: list[str]) -> BlockContent:
+        """
+        Render the signature as inline markup rather than a code block
+
+        A `code` element, unlike a `pre` block, can hold links, and the
+        classes match those the highlighted style produces so one
+        stylesheet serves both.
+
+        Parameters
+        ----------
+        name
+            Name of the callable.
+        params
+            Parameters of the callable, each already rendered as a string.
+
+        Returns
+        -------
+        The signature wrapped in a `doc-signature` div.
+        """
+        text = make_call_signature_text(name, params)
+        opening, _, rest = text.partition("(")
+
+        # Mark up the params half only: a param that happens to share the
+        # callable's own name (`def host(host)`) must not also match inside
+        # `opening`.
+        for param in params:
+            marked_param = _mark_parameter(param)
+            if marked_param != param:
+                rest = rest.replace(param, marked_param, 1)
+
+        marked = str(Span(opening, Attr(classes=["sig-name"]))) + "(" + rest
         return Div(
-            CodeBlock(sig, Attr(classes=["python"])),
+            Code(pretty_code(marked)).html,
             Attr(classes=["doc-signature", f"doc-{self.obj.kind}"]),
         )
 

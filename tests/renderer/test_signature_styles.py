@@ -8,7 +8,9 @@ from __future__ import annotations
 import textwrap
 
 import griffe as gf
+import pytest
 
+from great_docs._apiref._globals import SIGNATURE_STYLE
 from great_docs._apiref._tools import _render
 
 
@@ -18,6 +20,18 @@ def _rendered(source: str, name: str) -> str:
         "package", {"__init__.py": textwrap.dedent(source)}
     ) as package:
         return _render(package[name])
+
+
+@pytest.fixture
+def highlight_style():
+    """Set the highlight style for one test and restore it afterwards"""
+    original = SIGNATURE_STYLE.highlight
+
+    def apply(style: str) -> None:
+        SIGNATURE_STYLE.highlight = style
+
+    yield apply
+    SIGNATURE_STYLE.highlight = original
 
 
 def test_typeddict_signature_has_no_brackets():
@@ -137,3 +151,36 @@ def test_ordinary_class_keeps_its_brackets():
     qmd = _rendered(source, "Widget")
 
     assert "Widget()" in qmd
+
+
+def test_spans_style_emits_inline_markup(highlight_style):
+    """The alternative style writes the signature as inline spans"""
+    highlight_style("spans")
+    source = '''
+    def connect(host, port=8080):
+        """Connect to a host."""
+    '''
+
+    qmd = _rendered(source, "connect")
+
+    # At the qmd stage a class still reads as a pandoc span (`[text]{.class}`)
+    # rather than literal HTML; Quarto converts it to `<span class="...">`
+    # only once it renders the page, the same way DocTypeAlias's signature
+    # already does (see tests/renderer/test_type_aliases.py).
+    assert "sourceCode" not in qmd
+    assert "[connect]{.sig-name}" in qmd
+    assert "[host]{.doc-parameter-name}" in qmd
+
+
+def test_spans_style_keeps_the_line_breaks(highlight_style):
+    """Indentation survives inside a code element that has no pre"""
+    highlight_style("spans")
+    source = '''
+    def connect(host, port=8080):
+        """Connect to a host."""
+    '''
+
+    qmd = _rendered(source, "connect")
+
+    assert "<br>" in qmd
+    assert "&nbsp;" in qmd
