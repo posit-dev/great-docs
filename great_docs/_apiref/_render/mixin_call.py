@@ -21,9 +21,9 @@ from .._docstring_sections import (
 from .._format import (
     escape_indents,
     escape_quotes,
+    escape_signature_markup,
     highlight_repr_value,
     make_call_signature_text,
-    pretty_code,
     repr_obj,
 )
 from .._type_checks import is_enum, is_typeddict
@@ -43,10 +43,13 @@ def _mark_parameter(param: str) -> str:
     """
     Mark up a rendered parameter for the `spans` signature style
 
-    The parameter's own name picks up the class also used for its term in
-    the `Parameters` section, so the two line up visually. A literal
-    default is highlighted the same way `highlight_repr_value` highlights
-    it anywhere else; an annotation, when shown, is left as plain text.
+    The parameter's own name carries the class its term also carries in the
+    `Parameters` section, naming the same thing the same way in both places.
+    A literal default is highlighted the same way `highlight_repr_value`
+    highlights it anywhere else; an annotation, when shown, is left as plain
+    text. Every piece that came from the source is escaped, because a
+    default value is arbitrary text that pandoc would otherwise read as
+    markup.
 
     Parameters
     ----------
@@ -55,18 +58,25 @@ def _mark_parameter(param: str) -> str:
 
     Returns
     -------
-    The parameter with its name and any default marked up, or unchanged
-    if it is a bare `/` or `*` separator rather than a named parameter.
+    The parameter with its name and any default marked up, or merely
+    escaped if it is a bare `/` or `*` separator rather than a named
+    parameter.
     """
     match = _PARAMETER_NAME_RE.match(param)
     if not match:
-        return param
+        return escape_signature_markup(param)
     prefix, bare_name = match.groups()
-    rest, sep, default = param[match.end() :].partition("=")
+    annotation, sep, default = param[match.end() :].partition("=")
     if sep:
-        default = highlight_repr_value(default)
-    marked_name = str(Span(bare_name, Attr(classes=["doc-parameter-name"])))
-    return f"{prefix}{marked_name}{rest}{sep}{default}"
+        # Escape first: the highlighting adds markup of its own, which must
+        # survive intact, and escaping leaves a literal's quotes and digits
+        # where the highlighting patterns expect them.
+        default = highlight_repr_value(escape_signature_markup(default))
+    marked_name = str(
+        Span(escape_signature_markup(bare_name), Attr(classes=["doc-parameter-name"]))
+    )
+    prefix = escape_signature_markup(prefix)
+    return f"{prefix}{marked_name}{escape_signature_markup(annotation)}{sep}{default}"
 
 
 def _splice_marked_parameters(rest: str, params: list[str]) -> str:
@@ -76,7 +86,9 @@ def _splice_marked_parameters(rest: str, params: list[str]) -> str:
     `rest` is the `(...)` half of the text `make_call_signature_text`
     returned for the *plain* `params`, so the line breaks are already
     settled; this only substitutes each parameter's own text for
-    `_mark_parameter`'s markup, at that parameter's own position.
+    `_mark_parameter`'s markup, at that parameter's own position. What
+    lies between and after the parameters, such as a return annotation on
+    an `@overload` variant, is escaped rather than marked up.
 
     A parameter is found by a cursor that only moves forward through
     `rest`, never by searching the whole string afresh on every
@@ -101,11 +113,38 @@ def _splice_marked_parameters(rest: str, params: list[str]) -> str:
     cursor = 0
     for param in params:
         start = rest.index(param, cursor)
-        pieces.append(rest[cursor:start])
+        pieces.append(escape_signature_markup(rest[cursor:start]))
         pieces.append(_mark_parameter(param))
         cursor = start + len(param)
-    pieces.append(rest[cursor:])
+    pieces.append(escape_signature_markup(rest[cursor:]))
     return "".join(pieces)
+
+
+def _mark_signature_text(text: str, params: list[str]) -> str:
+    """
+    Mark up one line of signature text for the `spans` signature style
+
+    Parameters
+    ----------
+    text
+        One rendered signature, e.g. `connect(host, port=8080)`, or a bare
+        name for the kinds that are never called.
+    params
+        The parameters `text` was built from, each still in its plain,
+        unmarked form.
+
+    Returns
+    -------
+    The signature with its name and each of its parameters marked up, and
+    everything else escaped.
+    """
+    name, bracket, rest = text.partition("(")
+    marked_name = str(Span(escape_signature_markup(name), Attr(classes=["sig-name"])))
+    if not bracket:
+        return marked_name
+    # `rest` carries the closing bracket, and the return annotation of an
+    # `@overload` variant after it.
+    return f"{marked_name}{bracket}{_splice_marked_parameters(rest, params)}"
 
 
 class __RenderDocCallMixin(RenderDoc):
@@ -210,80 +249,96 @@ class __RenderDocCallMixin(RenderDoc):
         """
         Render the signature of this callable
         """
-        name = self.signature_name if self.show_signature_name else ""
-
-        # Check for @overload variants.
-        # For functions, `.overloads` is a `list[Function]`. For classes it is a
-        # `dict[str, list[Function]]` keyed by member name, which is non-empty
-        # (and thus truthy) for any class that merely defines methods, even when
-        # none of them are actually overloaded. Flatten it so the check reflects
-        # real overloads and dataclass constructor signatures are not lost.
-        overloads_raw = getattr(self.obj, "overloads", []) or []
-        if isinstance(overloads_raw, dict):
-            overloads: list[gf.Function] = [ov for ovs in overloads_raw.values() for ov in ovs]
-        else:
-            overloads = list(overloads_raw)
-        if overloads:
-            return self._render_overload_signatures(name, overloads)
-
         from .._globals import SIGNATURE_STYLE
 
+        name = self.signature_name if self.show_signature_name else ""
         attr = Attr(classes=["doc-signature", f"doc-{self.obj.kind}"])
+        lines = self._signature_lines(name)
+
+        if SIGNATURE_STYLE.highlight == "spans":
+            marked = "\n".join(_mark_signature_text(text, params) for text, params in lines)
+            # Not `pretty_code`: each default was already highlighted in
+            # isolation by `_mark_parameter`, and `highlight_repr_value`'s
+            # string pattern is unanchored, so running it again over the
+            # whole signature would match the quotes already inside that
+            # markup and wrap them a second time.
+            return Div(Code(escape_quotes(escape_indents(marked))).html, attr)
+
+        text = "\n".join(text for text, _ in lines)
+        return Div(CodeBlock(text, Attr(classes=["python"])), attr)
+
+    def _signature_lines(self, name: str) -> list[tuple[str, list[str]]]:
+        """
+        Build the lines of the signature, each with the parameters behind it
+
+        A callable has one line and an overloaded one a line per `@overload`
+        variant. Each line keeps the parameters it was built from, so that a
+        style which marks up parameters individually can find them where
+        they stand.
+
+        Parameters
+        ----------
+        name
+            Name of the callable, or the empty string when the signature
+            does not show one.
+
+        Returns
+        -------
+        One pair per line: the line's text, and the parameters it was
+        built from.
+        """
+        overloads = self._overloads()
+        if overloads:
+            return self._overload_signature_lines(name, overloads)
 
         # TypedDicts are structural type definitions, not constructors, and enums
         # are reached through their members rather than called, so neither ever
         # shows an empty `()`.
         if is_typeddict(self.obj) or is_enum(self.obj):
-            if SIGNATURE_STYLE.highlight == "spans":
-                return Div(Code(pretty_code(name)).html, attr)
-            return Div(CodeBlock(name, Attr(classes=["python"])), attr)
+            return [(name, [])]
 
         params = self.render_signature_parameters()
-        if SIGNATURE_STYLE.highlight == "spans":
-            return self._render_signature_spans(name, params)
+        return [(make_call_signature_text(name, params), params)]
 
-        sig = make_call_signature_text(name, params)
-        return Div(CodeBlock(sig, Attr(classes=["python"])), attr)
-
-    def _render_signature_spans(self, name: str, params: list[str]) -> BlockContent:
+    def _overloads(self) -> list[gf.Function]:
         """
-        Render the signature as inline markup rather than a code block
+        The `@overload` variants of this callable
 
-        A `code` element, unlike a `pre` block, can hold links, and the
-        classes match those the highlighted style produces so one
-        stylesheet serves both.
+        For functions, `.overloads` is a `list[Function]`. For classes it is a
+        `dict[str, list[Function]]` keyed by member name, which is non-empty
+        (and thus truthy) for any class that merely defines methods, even when
+        none of them are actually overloaded. Flattening it makes the result
+        reflect real overloads, so dataclass constructor signatures are not
+        lost.
+
+        Returns
+        -------
+        The overload variants, empty when the callable has none.
+        """
+        overloads = getattr(self.obj, "overloads", []) or []
+        if isinstance(overloads, dict):
+            return [ov for ovs in overloads.values() for ov in ovs]
+        return list(overloads)
+
+    def _overload_signature_lines(
+        self, name: str, overloads: list[gf.Function]
+    ) -> list[tuple[str, list[str]]]:
+        """
+        Build one signature line per `@overload` variant
 
         Parameters
         ----------
         name
             Name of the callable.
-        params
-            Parameters of the callable, each already rendered as a string.
+        overloads
+            The overload variants of the callable.
 
         Returns
         -------
-        The signature wrapped in a `doc-signature` div.
+        One pair per variant: the variant's text, including its return
+        annotation, and the parameters it was built from.
         """
-        text = make_call_signature_text(name, params)
-        opening, _, rest = text.partition("(")
-        marked_rest = _splice_marked_parameters(rest, params)
-
-        marked = str(Span(opening, Attr(classes=["sig-name"]))) + "(" + marked_rest
-
-        # Not `pretty_code`: each default was already highlighted in
-        # isolation by `_mark_parameter`, and `highlight_repr_value`'s
-        # string pattern is unanchored, so running it again over the
-        # whole signature would match the quotes already inside that
-        # markup and wrap them a second time.
-        html_content = escape_quotes(escape_indents(marked))
-        return Div(
-            Code(html_content).html,
-            Attr(classes=["doc-signature", f"doc-{self.obj.kind}"]),
-        )
-
-    def _render_overload_signatures(self, name: str, overloads: list[gf.Function]) -> BlockContent:
-        """Render multiple `@overload` signatures as a single code block"""
-        sig_lines: list[str] = []
+        lines: list[tuple[str, list[str]]] = []
         for ov in overloads:
             if not hasattr(ov, "parameters"):
                 continue
@@ -300,18 +355,14 @@ class __RenderDocCallMixin(RenderDoc):
                 else:
                     params.append(p.name)
             ret = str(ov.returns) if ov.returns else ""
-            sig = make_call_signature_text(name, params)
+            text = make_call_signature_text(name, params)
             if ret:
-                sig += f" -> {ret}"
-            sig_lines.append(sig)
+                text += f" -> {ret}"
+            lines.append((text, params))
 
-        if not sig_lines:
-            sig_lines.append(f"{name}()")
-
-        return Div(
-            CodeBlock("\n".join(sig_lines), Attr(classes=["python"])),
-            Attr(classes=["doc-signature", f"doc-{self.obj.kind}"]),
-        )
+        if not lines:
+            lines.append((f"{name}()", []))
+        return lines
 
     def render_signature_parameters(self) -> list[str]:
         """

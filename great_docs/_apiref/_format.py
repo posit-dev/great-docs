@@ -61,6 +61,13 @@ QUOTES_TRANSLATION = str.maketrans({'"': "&quot;", "'": "&apos;"})
 # Characters that can appear that the start of a markedup string
 MARKDOWN_START_CHARS = {"_", "*"}
 
+# `<`, `>` and `&` open html; the rest open a span, a link, a code span,
+# or emphasis. A signature written as inline markup is read by pandoc, so
+# whatever a parameter's annotation or default happens to contain is read
+# with it.
+SIGNATURE_HTML_TRANSLATION = str.maketrans({"&": "&amp;", "<": "&lt;", ">": "&gt;"})
+SIGNATURE_MARKDOWN_RE = re.compile(r"([\\`*_\[\]{}])")
+
 
 def escape_quotes(s: str) -> str:
     """
@@ -77,6 +84,28 @@ def escape_indents(s: str) -> str:
     to preserve the formatting.
     """
     return s.replace(" " * 4, "&nbsp;" * 4).replace("\n", "<br>")
+
+
+def escape_signature_markup(s: str) -> str:
+    """
+    Escape text a signature carries so that it cannot become markup
+
+    Applies to the text of a signature written as inline markup, where
+    pandoc reads a default value such as `"<b>"` or `"[x]{.y}"` as an html
+    tag or a span rather than as the characters the user typed. Call it on
+    the plain text only, never on markup this renderer has already added.
+
+    Parameters
+    ----------
+    s
+        Plain text from a signature, e.g. a parameter's default value.
+
+    Returns
+    -------
+    :
+        The text with its html and markdown characters neutralised.
+    """
+    return SIGNATURE_MARKDOWN_RE.sub(r"\\\1", s.translate(SIGNATURE_HTML_TRANSLATION))
 
 
 def markdown_escape(s: str) -> str:
