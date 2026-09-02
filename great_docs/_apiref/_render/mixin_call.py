@@ -254,10 +254,11 @@ class __RenderDocCallMixin(RenderDoc):
         The `pygments` style writes a fenced code block, which Quarto
         highlights and `post-render.py` then re-highlights. The `spans`
         style writes inline markup instead, which a `code` element can hold
-        but a `pre` block cannot. Both name the same things with the same
-        classes, but the stylesheet's colours for the literal classes are
-        scoped to Quarto's own `sourceCode` wrapper, so today they reach
-        only the code block.
+        but a `pre` block cannot. The callable's name carries `sig-name` in
+        both, but parameters differ: `spans` uses `doc-parameter-name`,
+        whilst `pygments` uses Pygments' `va` token. The stylesheet's colours
+        for the literal classes are scoped to Quarto's own `sourceCode`
+        wrapper, so today they reach only the code block.
         """
         from .._globals import SIGNATURE_STYLE
 
