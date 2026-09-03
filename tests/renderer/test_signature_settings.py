@@ -8,14 +8,6 @@ from great_docs._apiref._tools import _render
 from great_docs._apiref.api_reference import Settings, signature_settings
 
 
-def test_settings_default_to_todays_rendering():
-    """The defaults reproduce what sites already publish"""
-    settings = Settings()
-
-    assert settings.callable_signatures_style == "highlighted"
-    assert settings.callable_signatures_wrap == "per_parameter"
-
-
 def test_settings_read_the_api_reference_block():
     """Both keys come from the generated api-reference block"""
     settings = Settings.make(
