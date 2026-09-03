@@ -14,12 +14,22 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class CallableSignatures:
+    """How the signature of a function, method or class is written"""
+
+    style: str = "highlighted"
+    """`highlighted` for a highlighted code block, `plain` for inline markup"""
+
+    wrap: str = "per_parameter"
+    """`per_parameter` for one parameter per line, `width` to break only when long"""
+
+
+@dataclass
 class Settings:
     """How an API reference is generated and written — the non-content keys of the `api-reference:` block"""
 
     parser: str = "numpy"
-    callable_signatures_style: str = "highlighted"
-    callable_signatures_wrap: str = "per_parameter"
+    callable_signatures: CallableSignatures = field(default_factory=CallableSignatures)
     dynamic: bool | None = None
     source_dir: str | None = None
     dir: str = "reference"
@@ -41,6 +51,10 @@ class Settings:
             for k in _SETTINGS_KEYS
             if k in block and not (k == "out_index" and block[k] is None)
         }
+        signatures = kwargs.get("callable_signatures")
+        if isinstance(signatures, dict):
+            kwargs["callable_signatures"] = CallableSignatures(**signatures)
+
         sidebar = kwargs.get("sidebar")
         if isinstance(sidebar, str):
             kwargs["sidebar"] = {"file": sidebar}
@@ -59,9 +73,9 @@ _SETTINGS_KEYS = {f.name for f in dc_fields(Settings)} - {"version"}
 
 
 @contextmanager
-def signature_settings(settings: Settings) -> Iterator[None]:
+def active_settings(settings: Settings) -> Iterator[None]:
     """
-    Publish the signature settings where the render classes can read them
+    Make `settings` the ones the render classes read, for one build
 
     `RenderBase` receives a node and display flags only, so settings reach the
     render classes through module state, as exclusions already do. The state
@@ -77,12 +91,11 @@ def signature_settings(settings: Settings) -> Iterator[None]:
     ------
     :
     """
-    from ._globals import SIGNATURE_STYLE
+    from . import _globals
 
-    previous = (SIGNATURE_STYLE.highlight, SIGNATURE_STYLE.wrap)
-    SIGNATURE_STYLE.highlight = settings.callable_signatures_style
-    SIGNATURE_STYLE.wrap = settings.callable_signatures_wrap
+    previous = _globals.SETTINGS
+    _globals.SETTINGS = settings
     try:
         yield
     finally:
-        SIGNATURE_STYLE.highlight, SIGNATURE_STYLE.wrap = previous
+        _globals.SETTINGS = previous

@@ -15,7 +15,7 @@ import textwrap
 import griffe as gf
 import pytest
 
-from great_docs._apiref._globals import SIGNATURE_STYLE
+from great_docs._apiref import _globals
 from great_docs._apiref._tools import _render
 
 
@@ -40,13 +40,13 @@ def _rendered_reexport(source: str, name: str) -> str:
 @pytest.fixture
 def highlight_style():
     """Set the highlight style for one test and restore it afterwards"""
-    original = SIGNATURE_STYLE.highlight
+    original = _globals.SETTINGS.callable_signatures.style
 
     def apply(style: str) -> None:
-        SIGNATURE_STYLE.highlight = style
+        _globals.SETTINGS.callable_signatures.style = style
 
     yield apply
-    SIGNATURE_STYLE.highlight = original
+    _globals.SETTINGS.callable_signatures.style = original
 
 
 def test_typeddict_signature_has_no_brackets():

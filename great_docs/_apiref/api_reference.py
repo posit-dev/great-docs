@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from yaml12 import read_yaml
 
-from ._settings import Settings, signature_settings
+from ._settings import Settings, active_settings
 from .content import Link, Page
 from .inventory import create_inventory, write_inventory
 from .resolve import _autogenerate_sections, _Resolver
@@ -188,7 +188,7 @@ class APIReference:
     def build(self, page_filter: str = "*") -> None:
         """Write reference pages, index, inventory, and (optionally) sidebar to disk"""
         s = self.settings
-        with signature_settings(s):
+        with active_settings(s):
             self._build(s, page_filter)
 
     def _build(self, s: Settings, page_filter: str) -> None:

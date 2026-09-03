@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
+from ._settings import Settings
+
 if TYPE_CHECKING:
     from typing import Literal
 
@@ -35,18 +37,8 @@ class Exclusions:
 EXCLUSIONS = Exclusions()
 
 
-@dataclass
-class SignatureStyle:
-    """How a callable's signature is written to the page"""
-
-    highlight: str = "highlighted"
-    """`highlighted` for a highlighted code block, `plain` for inline markup"""
-
-    wrap: str = "per_parameter"
-    """`per_parameter` for one parameter per line, `width` to break only when long"""
-
-
-SIGNATURE_STYLE = SignatureStyle()
+SETTINGS = Settings()
+"""The settings of the build in progress, for the render classes to read"""
 
 
 @lru_cache(4)

@@ -3,9 +3,30 @@ import textwrap
 import pytest
 
 from great_docs._apiref._format import make_call_signature_text
-from great_docs._apiref._globals import SIGNATURE_STYLE, SignatureStyle
+from great_docs._apiref import _globals
 from great_docs._apiref._tools import _render
-from great_docs._apiref.api_reference import Settings, signature_settings
+from great_docs._apiref._settings import CallableSignatures, Settings, active_settings
+
+
+def test_the_renderer_reads_the_name_the_user_typed():
+    """The settings keep the shape the configuration has"""
+    from great_docs._apiref import _globals
+    from great_docs._apiref._settings import CallableSignatures, active_settings
+
+    before = (
+        _globals.SETTINGS.callable_signatures.style,
+        _globals.SETTINGS.callable_signatures.wrap,
+    )
+    settings = Settings(callable_signatures=CallableSignatures(style="plain", wrap="width"))
+
+    with active_settings(settings):
+        assert _globals.SETTINGS.callable_signatures.style == "plain"
+        assert _globals.SETTINGS.callable_signatures.wrap == "width"
+
+    assert (
+        _globals.SETTINGS.callable_signatures.style,
+        _globals.SETTINGS.callable_signatures.wrap,
+    ) == before
 
 
 def test_settings_read_the_api_reference_block():
@@ -13,64 +34,57 @@ def test_settings_read_the_api_reference_block():
     settings = Settings.make(
         {
             "package": "pkg",
-            "callable_signatures_style": "plain",
-            "callable_signatures_wrap": "width",
+            "callable_signatures": {"style": "plain", "wrap": "width"},
         }
     )
 
-    assert settings.callable_signatures_style == "plain"
-    assert settings.callable_signatures_wrap == "width"
+    assert settings.callable_signatures.style == "plain"
+    assert settings.callable_signatures.wrap == "width"
 
 
 def test_applying_settings_reaches_the_render_side():
     """The renderer reads the style from module state, not from Settings"""
-    settings = Settings(
-        callable_signatures_style="plain",
-        callable_signatures_wrap="width",
-    )
+    settings = Settings(callable_signatures=CallableSignatures(style="plain", wrap="width"))
 
-    with signature_settings(settings):
-        assert SIGNATURE_STYLE.highlight == "plain"
-        assert SIGNATURE_STYLE.wrap == "width"
+    with active_settings(settings):
+        assert _globals.SETTINGS.callable_signatures.style == "plain"
+        assert _globals.SETTINGS.callable_signatures.wrap == "width"
 
 
 def test_settings_are_put_back_afterwards():
     """One reference's settings do not govern whatever is rendered next"""
-    original = SignatureStyle(SIGNATURE_STYLE.highlight, SIGNATURE_STYLE.wrap)
-    settings = Settings(
-        callable_signatures_style="plain",
-        callable_signatures_wrap="width",
-    )
+    original = _globals.SETTINGS.callable_signatures
+    settings = Settings(callable_signatures=CallableSignatures(style="plain", wrap="width"))
 
-    with signature_settings(settings):
+    with active_settings(settings):
         pass
 
-    assert SIGNATURE_STYLE.highlight == original.highlight
-    assert SIGNATURE_STYLE.wrap == original.wrap
+    assert _globals.SETTINGS.callable_signatures.style == original.style
+    assert _globals.SETTINGS.callable_signatures.wrap == original.wrap
 
 
 def test_settings_are_put_back_after_a_failure():
     """A build that raises still leaves the state as it found it"""
-    original = SignatureStyle(SIGNATURE_STYLE.highlight, SIGNATURE_STYLE.wrap)
-    settings = Settings(callable_signatures_style="plain")
+    original = _globals.SETTINGS.callable_signatures
+    settings = Settings(callable_signatures=CallableSignatures(style="plain"))
 
-    with pytest.raises(RuntimeError), signature_settings(settings):
+    with pytest.raises(RuntimeError), active_settings(settings):
         raise RuntimeError("the build failed")
 
-    assert SIGNATURE_STYLE.highlight == original.highlight
-    assert SIGNATURE_STYLE.wrap == original.wrap
+    assert _globals.SETTINGS.callable_signatures.style == original.style
+    assert _globals.SETTINGS.callable_signatures.wrap == original.wrap
 
 
 @pytest.fixture
 def wrap_style():
     """Set the wrap style for one test and restore it afterwards"""
-    original = SIGNATURE_STYLE.wrap
+    original = _globals.SETTINGS.callable_signatures.wrap
 
     def apply(style: str) -> None:
-        SIGNATURE_STYLE.wrap = style
+        _globals.SETTINGS.callable_signatures.wrap = style
 
     yield apply
-    SIGNATURE_STYLE.wrap = original
+    _globals.SETTINGS.callable_signatures.wrap = original
 
 
 def test_builder_follows_the_per_parameter_style(wrap_style):
@@ -144,14 +158,13 @@ def test_a_build_leaves_the_module_state_as_it_found_it(tmp_path, monkeypatch):
     # `APIReference.build` resolves its paths from the working directory.
     monkeypatch.chdir(site)
 
-    original = SignatureStyle(SIGNATURE_STYLE.highlight, SIGNATURE_STYLE.wrap)
+    original = _globals.SETTINGS.callable_signatures
     APIReference(
         {
             "api-reference": {
                 "package": "tinypkg",
                 "source_dir": "../src",
-                "callable_signatures_style": "plain",
-                "callable_signatures_wrap": "width",
+                "callable_signatures": {"style": "plain", "wrap": "width"},
                 "sections": [{"title": "All", "desc": "", "contents": ["add"]}],
             }
         }
@@ -161,5 +174,5 @@ def test_a_build_leaves_the_module_state_as_it_found_it(tmp_path, monkeypatch):
     # inline markup of the `plain` style on one line, as `width` asks.
     page = (site / "reference" / "add.qmd").read_text()
     assert "<code>[add]{.sig-name}([a]{.doc-parameter-name}," in page
-    assert SIGNATURE_STYLE.highlight == original.highlight
-    assert SIGNATURE_STYLE.wrap == original.wrap
+    assert _globals.SETTINGS.callable_signatures.style == original.style
+    assert _globals.SETTINGS.callable_signatures.wrap == original.wrap

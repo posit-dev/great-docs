@@ -17178,8 +17178,10 @@ def test_add_api_reference_config_carries_the_callable_signature_settings():
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
 
-        assert result["api-reference"]["callable_signatures_style"] == "plain"
-        assert result["api-reference"]["callable_signatures_wrap"] == "width"
+        assert result["api-reference"]["callable_signatures"] == {
+            "style": "plain",
+            "wrap": "width",
+        }
 
 
 def test_add_api_reference_config_defaults_the_callable_signature_settings():
@@ -17204,8 +17206,10 @@ def test_add_api_reference_config_defaults_the_callable_signature_settings():
         with open(quarto_yml, "r") as f:
             result = read_yaml(f)
 
-        assert result["api-reference"]["callable_signatures_style"] == "highlighted"
-        assert result["api-reference"]["callable_signatures_wrap"] == "per_parameter"
+        assert result["api-reference"]["callable_signatures"] == {
+            "style": "highlighted",
+            "wrap": "per_parameter",
+        }
 
 
 def test_add_api_reference_config_already_exists():

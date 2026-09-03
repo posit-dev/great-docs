@@ -252,9 +252,11 @@ def make_call_signature_text(name: str, params: list[str]) -> str:
     -------
     The signature, broken across lines according to the wrap style.
     """
-    from ._globals import SIGNATURE_STYLE
+    # Read through the module: `active_settings` rebinds `SETTINGS` for the
+    # duration of a build, so a name bound once would hold the old object.
+    from . import _globals
 
-    if SIGNATURE_STYLE.wrap == "width":
+    if _globals.SETTINGS.callable_signatures.wrap == "width":
         return _wrap_to_width(name, params)
     return _wrap_per_parameter(name, params)
 

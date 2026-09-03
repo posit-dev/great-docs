@@ -1,7 +1,11 @@
 import griffe as gf
 import pytest
 
-from great_docs._builtin.normalization._citations import normalize_citations, _protected_lines, _live_reference_matches
+from great_docs._builtin.normalization._citations import (
+    normalize_citations,
+    _protected_lines,
+    _live_reference_matches,
+)
 
 _PARSERS = ("numpy", "google", "sphinx")
 
@@ -227,12 +231,12 @@ def test_consecutive_indented_citations_stay_separate(parser: str):
 def test_indented_continuation_joins_when_more_indented_than_its_marker(parser: str):
     """Verify a nested continuation joins only its citation"""
     source = (
-        "    .. [1] Hoare, C.A.R. (1961). \"Algorithm 64: Quicksort.\"\n"
-        '       Communications of the ACM, 4(7), 321.\n'
+        '    .. [1] Hoare, C.A.R. (1961). "Algorithm 64: Quicksort."\n'
+        "       Communications of the ACM, 4(7), 321.\n"
     )
     expected = (
         '    1. [Hoare, C.A.R. (1961). "Algorithm 64: Quicksort." '
-        'Communications of the ACM, 4(7), 321.]{#cite-process-1}\n'
+        "Communications of the ACM, 4(7), 321.]{#cite-process-1}\n"
     )
     assert _normalized(source, parser) == expected
 
@@ -315,13 +319,7 @@ def test_block_citation_preserves_nested_indentation(parser: str):
 @pytest.mark.parametrize("parser", _PARSERS)
 def test_block_citation_keeps_backlink_inside_anchor(parser: str):
     """Keep the backlink in the anchored first paragraph"""
-    source = (
-        "See [1]_.\n"
-        "\n"
-        ".. [1] Hoare, C.A.R. (1961).\n"
-        "\n"
-        "       A second paragraph.\n"
-    )
+    source = "See [1]_.\n\n.. [1] Hoare, C.A.R. (1961).\n\n       A second paragraph.\n"
     expected = (
         'See [^1^](#cite-process-1){#ref-process-1-1 .gd-cite-ref role="doc-noteref"}.\n'
         "\n"
@@ -346,13 +344,7 @@ def test_marker_indentation_ends_citation_body(parser: str):
 @pytest.mark.parametrize("parser", _PARSERS)
 def test_following_definition_ends_citation_body(parser: str):
     """Recognise a following definition at any indentation as a new citation"""
-    same_indent = (
-        ".. [1] First source.\n"
-        "\n"
-        "       Its second paragraph.\n"
-        "\n"
-        ".. [2] Second source.\n"
-    )
+    same_indent = ".. [1] First source.\n\n       Its second paragraph.\n\n.. [2] Second source.\n"
     assert _normalized(same_indent, parser) == (
         "1. ::: {#cite-process-1 .gd-cite-body}\n"
         "   First source.\n"
@@ -374,11 +366,7 @@ def test_fenced_code_after_blank_line_ends_citation_body(parser: str):
     """Keep fenced code after a blank line outside the citation"""
     source = ".. [1] Hoare, C.A.R. (1961).\n\n   ```python\n   quicksort(xs)\n   ```\n"
     expected = (
-        "1. [Hoare, C.A.R. (1961).]{#cite-process-1}\n"
-        "\n"
-        "   ```python\n"
-        "   quicksort(xs)\n"
-        "   ```\n"
+        "1. [Hoare, C.A.R. (1961).]{#cite-process-1}\n\n   ```python\n   quicksort(xs)\n   ```\n"
     )
     assert _normalized(source, parser) == expected
 
@@ -409,7 +397,6 @@ def test_indented_block_citation_preserves_outer_indentation(parser: str):
         "       :::\n"
     )
     assert _normalized(source, parser) == expected
-
 
 
 @pytest.mark.parametrize("parser", _PARSERS)
@@ -444,12 +431,10 @@ def test_repeated_references_get_lettered_backlinks(parser: str):
     assert '[^1^](#cite-process-1){#ref-process-1-2 .gd-cite-ref role="doc-noteref"}' in result
     assert "[^]{.gd-linkback-text .gd-linkback-caret}" in result
     assert (
-        '[a](#ref-process-1-1){.gd-linkback-text .gd-linkback-letter '
-        'role="doc-backlink"}'
+        '[a](#ref-process-1-1){.gd-linkback-text .gd-linkback-letter role="doc-backlink"}'
     ) in result
     assert (
-        '[b](#ref-process-1-2){.gd-linkback-text .gd-linkback-letter '
-        'role="doc-backlink"}'
+        '[b](#ref-process-1-2){.gd-linkback-text .gd-linkback-letter role="doc-backlink"}'
     ) in result
     assert "[^](#ref-process-1-1)" not in result
 
@@ -468,13 +453,10 @@ def test_forward_reference_links(parser: str):
 
     References sections usually follow the prose that cites them.
     """
-    source = (
-        "Notes\n-----\nBased on [1]_.\n\n"
-        "References\n----------\n.. [1] Smith, J. (2020)."
-    )
+    source = "Notes\n-----\nBased on [1]_.\n\nReferences\n----------\n.. [1] Smith, J. (2020)."
     result = _normalized(source, parser)
     assert '[^1^](#cite-process-1){#ref-process-1-1 .gd-cite-ref role="doc-noteref"}' in result
-    assert '[^](#ref-process-1-1){.gd-linkback-text' in result
+    assert "[^](#ref-process-1-1){.gd-linkback-text" in result
 
 
 @pytest.mark.parametrize("parser", _PARSERS)
@@ -657,15 +639,7 @@ def test_unpaired_backtick_preserves_reference():
 def test_fenced_definition_remains_literal(parser: str):
     """Preserve a fenced definition while converting a prose definition"""
     source = (
-        "Citation syntax:\n"
-        "\n"
-        "```\n"
-        ".. [1] Author. Title.\n"
-        "```\n"
-        "\n"
-        "See [1]_.\n"
-        "\n"
-        ".. [1] Author. Title."
+        "Citation syntax:\n\n```\n.. [1] Author. Title.\n```\n\nSee [1]_.\n\n.. [1] Author. Title."
     )
     result = _normalized(source, parser)
     assert "```\n.. [1] Author. Title.\n```" in result
@@ -743,7 +717,7 @@ def test_tilde_section_underline_allows_later_conversion(parser: str):
     """Continue citation conversion after a tilde RST section underline"""
     source = "Details\n~~~~~~~\n\nSee [1]_ here.\n\n.. [1] Smith."
     result = _normalized(source, parser)
-    assert '[^1^](#cite-process-1)' in result
+    assert "[^1^](#cite-process-1)" in result
     assert "{#cite-process-1}" in result
 
 
@@ -752,7 +726,7 @@ def test_backtick_section_underline_allows_later_conversion(parser: str):
     """Continue citation conversion after a backtick RST section underline"""
     source = "Details\n```````\n\nSee [1]_ here.\n\n.. [1] Smith."
     result = _normalized(source, parser)
-    assert '[^1^](#cite-process-1)' in result
+    assert "[^1^](#cite-process-1)" in result
     assert "{#cite-process-1}" in result
 
 
@@ -767,5 +741,5 @@ def test_leading_inline_code_span_allows_later_conversion(parser: str):
     """Continue citation conversion after a leading inline code span"""
     source = "```yaml``` is an inline span.\n\nSee [1]_ here.\n\n.. [1] Smith."
     result = _normalized(source, parser)
-    assert '[^1^](#cite-process-1)' in result
+    assert "[^1^](#cite-process-1)" in result
     assert "{#cite-process-1}" in result

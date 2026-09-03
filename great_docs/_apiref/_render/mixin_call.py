@@ -260,13 +260,15 @@ class __RenderDocCallMixin(RenderDoc):
         colours for the literal classes are scoped to Quarto's own
         `sourceCode` wrapper, so today they reach only the code block.
         """
-        from .._globals import SIGNATURE_STYLE
+        # Read through the module: `active_settings` rebinds `SETTINGS` for the
+        # duration of a build, so a name bound once would hold the old object.
+        from .. import _globals
 
         name = self.signature_name if self.show_signature_name else ""
         attr = Attr(classes=["doc-signature", f"doc-{self.obj.kind}"])
         lines = self._signature_lines(name)
 
-        if SIGNATURE_STYLE.highlight == "plain":
+        if _globals.SETTINGS.callable_signatures.style == "plain":
             marked = "\n".join(_mark_signature_text(text, params) for text, params in lines)
             # Not `pretty_code`: each default was already highlighted in
             # isolation by `_mark_parameter`, and `highlight_repr_value`'s
