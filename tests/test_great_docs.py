@@ -49,10 +49,10 @@ from great_docs._apiref._format import (
     format_see_also,
     format_str,
     format_value,
-    make_call_signature_text,
     repr_obj,
 )
 from great_docs._apiref._globals import EXCLUSIONS
+from great_docs._apiref._signature import make_call_signature_text
 from great_docs._apiref._preview import Formatter
 from great_docs._apiref._render import (
     RenderDocAttribute,

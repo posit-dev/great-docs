@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
@@ -8,145 +7,20 @@ import griffe as gf
 
 from great_docs.pandoc.blocks import (
     BlockContent,
-    CodeBlock,
-    Div,
 )
 from great_docs.pandoc.components import Attr
-from great_docs.pandoc.inlines import Code, Span
 
 from .._docstring_sections import (
     DCDocstringSectionInitParameters,
     DCDocstringSectionParameterAttributes,
 )
-from .._format import (
-    escape_indents,
-    escape_quotes,
-    escape_signature_markup,
-    highlight_repr_value,
-    make_call_signature_text,
-    repr_obj,
-)
+from .._format import repr_obj
+from .._signature import make_call_signature_text, render_signature_block
 from .._type_checks import is_enum, is_typeddict
 from .doc import RenderDoc
 
 if TYPE_CHECKING:
     from ..content import DocClass, DocFunction
-
-
-# A parameter's own name, e.g. `host` in `host` or `port` in `port=8080`,
-# with an optional `*`/`**` prefix preserved ahead of it. A bare `/` or `*`
-# separator has no name to match, so it is left for the caller to skip.
-_PARAMETER_NAME_RE = re.compile(r"^(\*{0,2})([A-Za-z_]\w*)")
-
-
-def _mark_parameter(param: str) -> str:
-    """
-    Mark up a rendered parameter for the `spans` signature style
-
-    The parameter's own name carries the class its term also carries in the
-    `Parameters` section, naming the same thing the same way in both places.
-    The stylesheet gives that class its weight only inside the docstring
-    sections, so here the class marks the name without yet styling it. A
-    literal default is highlighted the same way `highlight_repr_value`
-    highlights it anywhere else; an annotation, when shown, is left as plain
-    text. Every piece that came from the source is escaped, because a
-    default value is arbitrary text that pandoc would otherwise read as
-    markup.
-
-    Parameters
-    ----------
-    param
-        A single rendered parameter, e.g. `host` or `port=8080`.
-
-    Returns
-    -------
-    The parameter with its name and any default marked up, or merely
-    escaped if it is a bare `/` or `*` separator rather than a named
-    parameter.
-    """
-    match = _PARAMETER_NAME_RE.match(param)
-    if not match:
-        return escape_signature_markup(param)
-    prefix, bare_name = match.groups()
-    annotation, sep, default = param[match.end() :].partition("=")
-    if sep:
-        # Escape first: the highlighting adds markup of its own, which must
-        # survive intact, and escaping leaves a literal's quotes and digits
-        # where the highlighting patterns expect them.
-        default = highlight_repr_value(escape_signature_markup(default))
-    marked_name = str(
-        Span(escape_signature_markup(bare_name), Attr(classes=["doc-parameter-name"]))
-    )
-    prefix = escape_signature_markup(prefix)
-    return f"{prefix}{marked_name}{escape_signature_markup(annotation)}{sep}{default}"
-
-
-def _splice_marked_parameters(rest: str, params: list[str]) -> str:
-    """
-    Replace each parameter in already-wrapped signature text with its marked-up form
-
-    `rest` is the `(...)` half of the text `make_call_signature_text`
-    returned for the *plain* `params`, so the line breaks are already
-    settled; this only substitutes each parameter's own text for
-    `_mark_parameter`'s markup, at that parameter's own position. What
-    lies between and after the parameters, such as a return annotation on
-    an `@overload` variant, is escaped rather than marked up.
-
-    A parameter is found by a cursor that only moves forward through
-    `rest`, never by searching the whole string afresh on every
-    parameter. A parameter's rendered text can itself contain another
-    parameter's plain text as a substring, most often through a string
-    default such as `x="a=1"` containing the literal text `a=1`; a fresh
-    whole-string search would find that substring before the second
-    parameter's real occurrence.
-
-    Parameters
-    ----------
-    rest
-        The text after the signature's opening `(`, built from `params`.
-    params
-        The same parameters, each still in its plain, unmarked form.
-
-    Returns
-    -------
-    `rest` with each parameter's own text replaced by its marked-up form.
-    """
-    pieces: list[str] = []
-    cursor = 0
-    for param in params:
-        start = rest.index(param, cursor)
-        pieces.append(escape_signature_markup(rest[cursor:start]))
-        pieces.append(_mark_parameter(param))
-        cursor = start + len(param)
-    pieces.append(escape_signature_markup(rest[cursor:]))
-    return "".join(pieces)
-
-
-def _mark_signature_text(text: str, params: list[str]) -> str:
-    """
-    Mark up one line of signature text for the `spans` signature style
-
-    Parameters
-    ----------
-    text
-        One rendered signature, e.g. `connect(host, port=8080)`, or a bare
-        name for the kinds that are never called.
-    params
-        The parameters `text` was built from, each still in its plain,
-        unmarked form.
-
-    Returns
-    -------
-    The signature with its name and each of its parameters marked up, and
-    everything else escaped.
-    """
-    name, bracket, rest = text.partition("(")
-    marked_name = str(Span(escape_signature_markup(name), Attr(classes=["sig-name"])))
-    if not bracket:
-        return marked_name
-    # `rest` carries the closing bracket, and the return annotation of an
-    # `@overload` variant after it.
-    return f"{marked_name}{bracket}{_splice_marked_parameters(rest, params)}"
 
 
 class __RenderDocCallMixin(RenderDoc):
@@ -252,33 +126,17 @@ class __RenderDocCallMixin(RenderDoc):
         Render the signature of this callable
 
         The `highlighted` style writes a fenced code block, which Quarto
-        highlights and `post-render.py` then re-highlights. The `plain`
-        style writes inline markup instead, which a `code` element can hold
-        but a `pre` block cannot. The callable's name carries `sig-name` in
-        both, but parameters differ: `plain` uses `doc-parameter-name`,
-        whilst `highlighted` uses Pygments' `va` token. The stylesheet's
-        colours for the literal classes are scoped to Quarto's own
-        `sourceCode` wrapper, so today they reach only the code block.
+        highlights and `post-render.py` then re-highlights. The `plain` style
+        writes inline markup instead, which a `code` element can hold but a
+        `pre` block cannot. The callable's name carries `sig-name` in both,
+        but parameters differ: `plain` uses `doc-parameter-name`, whilst
+        `highlighted` uses Pygments' `va` token. The stylesheet's colours for
+        the literal classes are scoped to Quarto's own `sourceCode` wrapper,
+        so today they reach only the code block.
         """
-        # Read through the module: `active_settings` rebinds `SETTINGS` for the
-        # duration of a build, so a name bound once would hold the old object.
-        from .. import _globals
-
         name = self.signature_name if self.show_signature_name else ""
         attr = Attr(classes=["doc-signature", f"doc-{self.obj.kind}"])
-        lines = self._signature_lines(name)
-
-        if _globals.SETTINGS.callable_signatures.style == "plain":
-            marked = "\n".join(_mark_signature_text(text, params) for text, params in lines)
-            # Not `pretty_code`: each default was already highlighted in
-            # isolation by `_mark_parameter`, and `highlight_repr_value`'s
-            # string pattern is unanchored, so running it again over the
-            # whole signature would match the quotes already inside that
-            # markup and wrap them a second time.
-            return Div(Code(escape_quotes(escape_indents(marked))).html, attr)
-
-        text = "\n".join(text for text, _ in lines)
-        return Div(CodeBlock(text, Attr(classes=["python"])), attr)
+        return render_signature_block(self._signature_lines(name), attr)
 
     def _signature_lines(self, name: str) -> list[tuple[str, list[str]]]:
         """

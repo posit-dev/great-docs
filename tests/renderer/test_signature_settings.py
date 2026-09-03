@@ -2,7 +2,7 @@ import textwrap
 
 import pytest
 
-from great_docs._apiref._format import make_call_signature_text
+from great_docs._apiref._signature import make_call_signature_text
 from great_docs._apiref import _globals
 from great_docs._apiref._tools import _render
 from great_docs._apiref._settings import CallableSignatures, Settings, active_settings

@@ -61,13 +61,6 @@ QUOTES_TRANSLATION = str.maketrans({'"': "&quot;", "'": "&apos;"})
 # Characters that can appear that the start of a markedup string
 MARKDOWN_START_CHARS = {"_", "*"}
 
-# `<`, `>` and `&` open html; the rest open a span, a link, a code span,
-# or emphasis. A signature written as inline markup is read by pandoc, so
-# whatever a parameter's annotation or default happens to contain is read
-# with it.
-SIGNATURE_HTML_TRANSLATION = str.maketrans({"&": "&amp;", "<": "&lt;", ">": "&gt;"})
-SIGNATURE_MARKDOWN_RE = re.compile(r"([\\`*_\[\]{}])")
-
 
 def escape_quotes(s: str) -> str:
     """
@@ -84,28 +77,6 @@ def escape_indents(s: str) -> str:
     to preserve the formatting.
     """
     return s.replace(" " * 4, "&nbsp;" * 4).replace("\n", "<br>")
-
-
-def escape_signature_markup(s: str) -> str:
-    """
-    Escape text a signature carries so that it cannot become markup
-
-    Applies to the text of a signature written as inline markup, where
-    pandoc reads a default value such as `"<b>"` or `"[x]{.y}"` as an html
-    tag or a span rather than as the characters the user typed. Call it on
-    the plain text only, never on markup this renderer has already added.
-
-    Parameters
-    ----------
-    s
-        Plain text from a signature, e.g. a parameter's default value.
-
-    Returns
-    -------
-    :
-        The text with its html and markdown characters neutralised.
-    """
-    return SIGNATURE_MARKDOWN_RE.sub(r"\\\1", s.translate(SIGNATURE_HTML_TRANSLATION))
 
 
 def markdown_escape(s: str) -> str:
@@ -234,84 +205,6 @@ def _(obj: gf.ExprName) -> str:
     Represent a named expression as its bare name
     """
     return obj.name
-
-
-def make_call_signature_text(name: str, params: list[str]) -> str:
-    """
-    Build the text of a callable's signature
-
-    Parameters
-    ----------
-    name
-        Name of the function, method, or class (for the `__init__` method).
-    params
-        Parameters of the callable, each already rendered as a string,
-        e.g. `a`, `*args`, `*`, `/`, `b=2`, `c=3`, `**kwargs`.
-
-    Returns
-    -------
-    The signature, broken across lines according to the wrap style.
-    """
-    # Read through the module: `active_settings` rebinds `SETTINGS` for the
-    # duration of a build, so a name bound once would hold the old object.
-    from . import _globals
-
-    if _globals.SETTINGS.callable_signatures.wrap == "width":
-        return _wrap_to_width(name, params)
-    return _wrap_per_parameter(name, params)
-
-
-def _wrap_per_parameter(name: str, params: list[str]) -> str:
-    """
-    Break a signature so that each parameter has a line of its own
-
-    Parameters
-    ----------
-    name
-        Name of the callable.
-    params
-        Parameters of the callable, each already rendered as a string.
-
-    Returns
-    -------
-    The signature on one line when it has fewer than two parameters, and one
-    parameter per line otherwise.
-    """
-    if len(params) < 2:
-        return f"{name}({', '.join(params)})"
-    pad = " " * 4
-    body = f",\n{pad}".join(params)
-    return f"{name}(\n{pad}{body},\n)"
-
-
-def _wrap_to_width(name: str, params: list[str]) -> str:
-    """
-    Break a signature only when it outgrows the line limit
-
-    Parameters
-    ----------
-    name
-        Name of the callable.
-    params
-        Parameters of the callable, each already rendered as a string.
-
-    Returns
-    -------
-    The signature on one line when it fits within 78 characters, and broken
-    across lines otherwise.
-    """
-    opening = f"{name}("
-    params_string = ", ".join(params)
-    closing = ")"
-    pad = " " * 4
-    if len(opening) + len(params_string) > 78:
-        line_pad = f"\n{pad}"
-        # One parameter per line
-        if len(params_string) > 74:
-            params_string = f",{line_pad}".join(params)
-        params_string = f"{line_pad}{params_string}"
-        closing = f"\n{closing}"
-    return f"{opening}{params_string}{closing}"
 
 
 def pretty_code(s: str) -> str:

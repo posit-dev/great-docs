@@ -117,7 +117,7 @@ class TestOrdinaryCodeBlocks:
     """A code block that is not a signature is left exactly as Quarto wrote it"""
 
     def test_first_code_block_outside_a_signature_is_untouched(self):
-        # On a page written in the `spans` style the signature is inline
+        # On a page written in the `plain` style the signature is inline
         # markup, so the first code block is an ordinary one, usually an
         # Examples doctest.
         page = (
