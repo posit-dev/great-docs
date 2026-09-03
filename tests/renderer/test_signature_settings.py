@@ -99,6 +99,13 @@ def test_builder_follows_the_width_style(wrap_style):
     assert result == "connect(host, port=8080)"
 
 
+def test_a_lone_parameter_does_not_wrap(wrap_style):
+    """There is nothing to wrap a single parameter against"""
+    wrap_style("per_parameter")
+
+    assert make_call_signature_text("connect", ["host"]) == "connect(host)"
+
+
 def test_overload_variants_follow_the_wrap_style(wrap_style):
     """Each @overload variant wraps like any other signature"""
     import griffe as gf
