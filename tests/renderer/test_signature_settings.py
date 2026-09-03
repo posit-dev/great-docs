@@ -176,3 +176,33 @@ def test_a_build_leaves_the_module_state_as_it_found_it(tmp_path, monkeypatch):
     assert "<code>[add]{.sig-name}([a]{.doc-parameter-name}," in page
     assert _globals.SETTINGS.callable_signatures.style == original.style
     assert _globals.SETTINGS.callable_signatures.wrap == original.wrap
+
+
+def test_a_failed_build_leaves_the_module_state_as_it_found_it(tmp_path, monkeypatch):
+    """A build that raises still puts back the settings it changed"""
+    from great_docs._apiref.api_reference import APIReference
+    from great_docs._apiref.resolve import ObjectNotFoundError
+
+    package = tmp_path / "src" / "tinypkg"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text('"""A tiny package."""\n')
+    site = tmp_path / "site"
+    site.mkdir()
+    # `APIReference.build` resolves its paths from the working directory.
+    monkeypatch.chdir(site)
+
+    original = _globals.SETTINGS.callable_signatures
+
+    with pytest.raises(ObjectNotFoundError):
+        APIReference(
+            {
+                "api-reference": {
+                    "package": "tinypkg",
+                    "source_dir": "../src",
+                    "callable_signatures": {"style": "plain", "wrap": "width"},
+                    "sections": [{"title": "All", "desc": "", "contents": ["absent"]}],
+                }
+            }
+        ).build()
+
+    assert _globals.SETTINGS.callable_signatures is original
