@@ -1,20 +1,18 @@
 """
-The `APIReference` façade and its `Settings`, built from a Quarto config block
+The `APIReference` façade, built from a Quarto config block
 """
 
 from __future__ import annotations
 
 import logging
 import sys
-from contextlib import contextmanager
-from dataclasses import dataclass, field
-from dataclasses import fields as dc_fields
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from yaml12 import read_yaml
 
+from ._settings import Settings, signature_settings
 from .content import Link, Page
 from .inventory import create_inventory, write_inventory
 from .resolve import _autogenerate_sections, _Resolver
@@ -27,8 +25,6 @@ from .write import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
-
     from .content import Section
     from .inventory import InventoryItem
 
@@ -41,81 +37,6 @@ _REMOVED_KEYS = {"style", "renderer", "render_interlinks"}
 # Use the default site depth when a bare API reference config supplies no site
 # settings.
 _DEFAULT_SITE_TOC_DEPTH = 2
-
-
-@dataclass
-class Settings:
-    """How an API reference is generated and written — the non-content keys of the `api-reference:` block"""
-
-    parser: str = "numpy"
-    callable_signatures_style: str = "highlighted"
-    callable_signatures_wrap: str = "per_parameter"
-    dynamic: bool | None = None
-    source_dir: str | None = None
-    dir: str = "reference"
-    out_index: str = "index.qmd"
-    out_inventory: str = "objects.json"
-    out_page_suffix: str = ".qmd"
-    sidebar: dict[str, Any] | None = None
-    css: str | None = None
-    header_level: int = 1
-    rewrite_all_pages: bool = False
-    typing_module_paths: list[str] = field(default_factory=list[str])
-    version: str | None = None
-
-    @classmethod
-    def make(cls, block: dict[str, Any]) -> Settings:
-        """Build settings from the non-content keys of an `api-reference:` block"""
-        kwargs: dict[str, Any] = {
-            k: block[k]
-            for k in _SETTINGS_KEYS
-            if k in block and not (k == "out_index" and block[k] is None)
-        }
-        sidebar = kwargs.get("sidebar")
-        if isinstance(sidebar, str):
-            kwargs["sidebar"] = {"file": sidebar}
-        elif isinstance(sidebar, dict) and "file" not in sidebar:
-            # Copy so the caller's config dict is not mutated.
-            kwargs["sidebar"] = {**sidebar, "file": "_api-reference-sidebar.yml"}
-        return cls(**kwargs)
-
-
-# Parity quirk preserved deliberately (do NOT "fix" here): `version` is not
-# read from the config block. The old Builder accepted a `version` param but
-# its __init__ forced `self.version = None`, so objects.json was always built
-# with "0.0.9999". (`interlinks.fast` / `_fast_inventory` was confirmed dead
-# and dropped, per spec.)
-_SETTINGS_KEYS = {f.name for f in dc_fields(Settings)} - {"version"}
-
-
-@contextmanager
-def signature_settings(settings: Settings) -> Iterator[None]:
-    """
-    Publish the signature settings where the render classes can read them
-
-    `RenderBase` receives a node and display flags only, so settings reach the
-    render classes through module state, as exclusions already do. The state
-    is put back on the way out, because one process can build more than one
-    API reference and the settings of one must not govern the next.
-
-    Parameters
-    ----------
-    settings
-        The settings of the API reference being built.
-
-    Yields
-    ------
-    :
-    """
-    from ._globals import SIGNATURE_STYLE
-
-    previous = (SIGNATURE_STYLE.highlight, SIGNATURE_STYLE.wrap)
-    SIGNATURE_STYLE.highlight = settings.callable_signatures_style
-    SIGNATURE_STYLE.wrap = settings.callable_signatures_wrap
-    try:
-        yield
-    finally:
-        SIGNATURE_STYLE.highlight, SIGNATURE_STYLE.wrap = previous
 
 
 class APIReference:
