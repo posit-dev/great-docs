@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import sys
 import textwrap
 
 import griffe as gf
@@ -93,6 +94,10 @@ def _reexported(source: str, name: str) -> gf.Alias:
     return member
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 12),
+    reason="PEP 695 `type` statement requires Python 3.12+",
+)
 def test_is_typealias_follows_a_reexported_pep695_alias():
     """Preserve a PEP 695 alias's kind under its exported name"""
     assert is_typealias(_reexported("type Contract = int | str\n", "Contract")) is True
