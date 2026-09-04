@@ -1,4 +1,5 @@
 from great_docs._interlinks import resolve_aliases
+from great_docs.config import Config
 
 
 def test_a_uniquely_claimed_alias_is_kept():
@@ -26,3 +27,12 @@ def test_an_alias_that_is_already_a_real_name_is_skipped_quietly():
     res = resolve_aliases([("demo.Thing", "demo.pkg.Thing")], taken={"demo.Thing"})
     assert res.kept == {}
     assert res.dropped == {}
+
+
+def test_a_project_declaring_no_sources_links_only_within_itself(tmp_path):
+    """The lookup is strict, so an option missing from the defaults raises."""
+    (tmp_path / "great-docs.yml").write_text("module: demo\n")
+
+    cfg = Config(tmp_path)
+
+    assert cfg.interlinks_sources == {}

@@ -255,6 +255,41 @@ def my_function(x, y):
 
 :::
 
+## Interlinks
+
+Your prose can link to another project's documentation the same way it links to your own.
+Name each project you want to reach, and the URL its documentation is served from:
+
+```yaml
+interlinks:
+  sources:
+    numpy:
+      url: https://numpy.org/doc/stable/
+      aliases: [np]
+    pandas:
+      url: https://pandas.pydata.org/pandas-docs/stable/
+```
+
+With that in place, `` [](`numpy.ndarray`) `` resolves to numpy's page for `ndarray`, exactly
+as a reference to one of your own objects resolves to yours.
+
+Each source takes three fields:
+
+- `url` is where the documentation is published. It prefixes every link into that project, and
+  is where the inventory is read from unless `inv` says otherwise.
+- `inv` overrides the inventory's location. It accepts a URL or a path on disk, which is
+  useful for a project you build locally alongside this one.
+- `aliases` lists the module names your prose uses for the project. With `aliases: [np]`, a
+  reference to `` [](`np.ndarray`) `` resolves as `numpy.ndarray`.
+
+Inventories are downloaded during the build and cached, so repeated builds do no network work,
+and a build that cannot reach a project falls back to the copy it already has. A project it has
+never reached is reported and skipped, leaving those references unlinked rather than failing
+the build.
+
+Your own site publishes `objects.inv` at its root, so other projects can point a source at
+your documentation in the same way.
+
 ## Dynamic Introspection
 
 Great Docs uses its built-in renderer to generate API reference pages. By default, it uses

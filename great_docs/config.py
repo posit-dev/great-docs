@@ -975,6 +975,11 @@ class Config:
         return self["jupyter"]
 
     @property
+    def interlinks_sources(self) -> dict[str, Any]:
+        """Get the external documentation projects to link to."""
+        return cast("dict[str, Any]", self["interlinks.sources"])
+
+    @property
     def logo(self) -> dict[str, Any] | None:
         """The logo config, or None when no logo is set"""
         if not (self["logo.light"] or self["logo.dark"]):

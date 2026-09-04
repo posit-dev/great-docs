@@ -40,6 +40,22 @@ project_type: python
 # : sphinx - Sphinx/reStructuredText style
 parser: numpy
 
+# Interlinks
+# ----------
+# Other documentation sites to link to. Each entry names a project, the URL
+# its documentation is served from, and optionally where to read its
+# inventory and the module aliases your prose uses for it.
+# : {} - (default) link only within this project
+# : type(dict) - name: {url: ..., inv: ..., aliases: [...]}
+#
+#   interlinks:
+#     sources:
+#       numpy:
+#         url: https://numpy.org/doc/stable/
+#         aliases: [np]
+interlinks:
+  sources: {}
+
 # Callable Signatures
 # -------------------
 # How the signature of a function, method or class is written.
