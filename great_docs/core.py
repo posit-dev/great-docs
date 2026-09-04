@@ -6022,6 +6022,55 @@ class GreatDocs:
         end = min(len(all_lines), end)
         return "".join(all_lines[start:end])
 
+    def _write_interlinks_index(self, log: Any, ref: Any) -> None:
+        """
+        Merge every inventory into the index the interlinks filter reads
+
+        Parameters
+        ----------
+        log :
+            The build log to report through.
+        ref :
+            The built `APIReference`, or `None` when the project has no API
+            reference and only external links can resolve.
+        """
+        from great_docs._interlinks import (
+            build_index,
+            load_source,
+            sources_from_config,
+            write_index,
+        )
+        from great_docs._sphinx_inventory import Inventory, decode
+
+        inventory_path = self.project_path / "objects.inv"
+        if inventory_path.exists():
+            local = decode(inventory_path.read_bytes())
+        else:
+            local = Inventory(project=self._detect_package_name() or "", version="", entries=())
+
+        claims: list[tuple[str, str]] = []
+        if ref is not None:
+            claims = [(alias, item.name) for item in ref.items for alias in item.aliases]
+
+        cache_dir = self.project_root / ".great-docs-cache" / "interlinks"
+        external = []
+        for source in sources_from_config(self._config.interlinks_sources):
+            inv, note = load_source(source, cache_dir)
+            if note:
+                log.detail(note)
+            if inv is not None:
+                external.append((source, inv))
+
+        index = build_index(local, claims, external)
+        write_index(index, self.project_path / "_inv" / "index.lua")
+
+        for alias, targets in sorted(index.dropped.items()):
+            log.detail(
+                f"'{alias}' is ambiguous ({', '.join(targets)}); references to it stay unlinked"
+            )
+
+        log.step_done(f"Indexed {len(index.names)} name(s)")
+
     # Regex for detecting a top-level `freeze:` key in YAML frontmatter
     _FREEZE_FM_RE = re.compile(r"^freeze:\s+(.+)$", re.MULTILINE)
 
@@ -13344,6 +13393,8 @@ anchor-sections: true
             config["filters"].append("details")
         if "gd-lightbox" not in config["filters"]:
             config["filters"].append("gd-lightbox")
+        if "interlinks" not in config["filters"]:
+            config["filters"].append("interlinks")
 
         # Publish the inventory so other projects can link into this site.
         project = config.setdefault("project", {})
@@ -16372,11 +16423,13 @@ anchor-sections: true
                         sys.path.insert(0, p)  # pragma: no cover
 
                 quarto_yml = self.project_path / "_quarto.yml"
+                ref = None
                 try:
                     from great_docs._apiref.api_reference import APIReference
 
+                    ref = APIReference(str(quarto_yml))
                     with _quiet_prints():
-                        APIReference(str(quarto_yml)).build()
+                        ref.build()
                     log.step_done("API reference generated")
                 except SystemExit:
                     # Missing config items or other fatal errors — don't mask them
@@ -16396,8 +16449,9 @@ anchor-sections: true
                             with open(quarto_yml, "w") as f:
                                 write_yaml(qconfig, f)
                         try:
+                            ref = APIReference(str(quarto_yml))
                             with _quiet_prints():
-                                APIReference(str(quarto_yml)).build()
+                                ref.build()
                             log.step_done("API reference generated (static analysis)")
                         except Exception as e2:
                             log.step_fail(f"API reference build failed: {e2}")
@@ -16409,9 +16463,15 @@ anchor-sections: true
                         log.footer()
                         sys.exit(1)
             else:
+                ref = None
                 log.step_skip(step, "API reference disabled")
 
-            # ── Step 15: Prepare freeze cache ──────────────────────────
+            # ── Step 15: Build the interlinks index ────────────────────
+            step += 1
+            log.step_start(step, "Build interlinks index")
+            self._write_interlinks_index(log, ref)
+
+            # ── Step 16: Prepare freeze cache ──────────────────────────
             step += 1
             log.step_start(step, "Prepare freeze cache")
 

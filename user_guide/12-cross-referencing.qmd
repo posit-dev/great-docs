@@ -24,14 +24,53 @@ links to API symbols anywhere in your prose. The third level is code autolinks, 
 turn inline code references like `` `MyClass` `` into clickable links when they match a documented
 symbol.
 
-All three mechanisms resolve against the same `objects.json` inventory that Great Docs generates
-during the build. To preview which symbols are available for linking before you build, run:
+All three mechanisms resolve against the same inventory that Great Docs generates during the
+build, and they resolve while the page is being rendered. To preview which symbols are available
+for linking before you build, run:
 
 ```bash
 great-docs scan
 ```
 
 This is useful for confirming the exact names you can reference in your docstrings.
+
+Your site publishes that inventory as `objects.inv` at its root, the format Sphinx and Quarto
+projects both read, so other projects can link into your documentation the same way you link
+into theirs.
+
+## Linking to Another Project
+
+Configure the projects you want to reach under `interlinks.sources`, naming each one and the URL
+its documentation is served from:
+
+```yaml
+interlinks:
+  sources:
+    numpy:
+      url: https://numpy.org/doc/stable/
+      aliases: [np]
+```
+
+An external reference is then written exactly like an internal one:
+
+```markdown
+See [](`numpy.ndarray`) for the array type, or [](`np.ndarray`) using the alias.
+```
+
+Code autolinks stay inside your own project. A bare `` `array` `` in your prose is left alone
+rather than linked into another project's documentation.
+
+See [Configuration](05-configuration.qmd) for the full set of fields a source accepts.
+
+## When a Short Name Is Ambiguous
+
+You can reference an object by a short name, writing `` [](`Cache`) `` rather than
+`` [](`mypkg.store.Cache`) ``. If two documented objects would answer to the same short name,
+neither claims it: the reference renders unlinked rather than pointing at whichever object came
+first. Qualify the reference to fix it.
+
+The build reports each ambiguous name it drops, and `great-docs lint` reports each reference
+that hits one, so you do not have to find them by reading the built pages.
 
 ## The `%seealso` Directive
 
