@@ -338,6 +338,7 @@ h4 span.doc-object-name {
 .doc-signature > p:first-child {
    @extend .my-3;
    border-radius: 0.25rem;
+   background-color: $signature-background-color;
 }
 
 .doc-signature > p:first-child code {
@@ -1216,10 +1217,6 @@ p,h1,h2,h3,#toc-title,#toc-function-reference,.nav-link,.table {
 
 summary::marker {
   font-size: 1.5em;
-}
-
-.parameter-name {
-    margin-right: -10px;
 }
 
 /* #toc-title -- handled by SCSS rules above */
@@ -3985,30 +3982,6 @@ body.quarto-dark dt code {
 /* Override Quarto syntax highlighting 'code span { color: #003B4F }' for dt spans */
 body.quarto-dark dt code span {
     color: var(--gd-text-primary);
-}
-
-body.quarto-dark .parameter-name {
-    color: #82aaff;
-}
-
-body.quarto-dark .parameter-name strong {
-    color: #82aaff;
-}
-
-body.quarto-dark .parameter-annotation {
-    color: #c792ea;
-}
-
-body.quarto-dark .parameter-annotation-sep {
-    color: var(--gd-text-muted);
-}
-
-body.quarto-dark .parameter-default {
-    color: #c3e88d;
-}
-
-body.quarto-dark .parameter-default-sep {
-    color: var(--gd-text-muted);
 }
 
 /* ==========================================================================

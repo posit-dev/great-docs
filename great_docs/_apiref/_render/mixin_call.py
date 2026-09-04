@@ -7,8 +7,6 @@ import griffe as gf
 
 from great_docs.pandoc.blocks import (
     BlockContent,
-    CodeBlock,
-    Div,
 )
 from great_docs.pandoc.components import Attr
 
@@ -16,7 +14,9 @@ from .._docstring_sections import (
     DCDocstringSectionInitParameters,
     DCDocstringSectionParameterAttributes,
 )
-from .._format import formatted_signature, repr_obj
+from .._format import repr_obj
+from .._signature import make_call_signature_text, render_signature_block
+from .._type_checks import is_enum, is_typeddict
 from .doc import RenderDoc
 
 if TYPE_CHECKING:
@@ -124,32 +124,92 @@ class __RenderDocCallMixin(RenderDoc):
     def render_signature(self) -> BlockContent:
         """
         Render the signature of this callable
+
+        The `highlighted` style writes a fenced code block, which Quarto
+        highlights and `post-render.py` then re-highlights. The `plain` style
+        writes inline markup instead, which a `code` element can hold but a
+        `pre` block cannot. The callable's name carries `sig-name` in both,
+        but parameters differ: `plain` uses `doc-parameter-name`, whilst
+        `highlighted` uses Pygments' `va` token. The stylesheet's colours for
+        the literal classes are scoped to Quarto's own `sourceCode` wrapper,
+        so today they reach only the code block.
         """
         name = self.signature_name if self.show_signature_name else ""
+        attr = Attr(classes=["doc-signature", f"doc-{self.obj.kind}"])
+        return render_signature_block(self._signature_lines(name), attr)
 
-        # Check for @overload variants.
-        # For functions, `.overloads` is a `list[Function]`. For classes it is a
-        # `dict[str, list[Function]]` keyed by member name, which is non-empty
-        # (and thus truthy) for any class that merely defines methods, even when
-        # none of them are actually overloaded. Flatten it so the check reflects
-        # real overloads and dataclass constructor signatures are not lost.
-        overloads_raw = getattr(self.obj, "overloads", []) or []
-        if isinstance(overloads_raw, dict):
-            overloads: list[gf.Function] = [ov for ovs in overloads_raw.values() for ov in ovs]
-        else:
-            overloads = list(overloads_raw)
+    def _signature_lines(self, name: str) -> list[tuple[str, list[str]]]:
+        """
+        Build the lines of the signature, each with the parameters behind it
+
+        A callable has one line and an overloaded one a line per `@overload`
+        variant. Each line keeps the parameters it was built from, so that a
+        style which marks up parameters individually can find them where
+        they stand.
+
+        Parameters
+        ----------
+        name
+            Name of the callable, or the empty string when the signature
+            does not show one.
+
+        Returns
+        -------
+        One pair per line: the line's text, and the parameters it was
+        built from.
+        """
+        overloads = self._overloads()
         if overloads:
-            return self._render_overload_signatures(name, overloads)
+            return self._overload_signature_lines(name, overloads)
 
-        sig = formatted_signature(name, self.render_signature_parameters())
-        return Div(
-            CodeBlock(sig, Attr(classes=["python"])),
-            Attr(classes=["doc-signature", f"doc-{self.obj.kind}"]),
-        )
+        # TypedDicts are structural type definitions, not constructors, and enums
+        # are reached through their members rather than called, so neither ever
+        # shows an empty `()`.
+        if is_typeddict(self.obj) or is_enum(self.obj):
+            return [(name, [])]
 
-    def _render_overload_signatures(self, name: str, overloads: list[gf.Function]) -> BlockContent:
-        """Render multiple `@overload` signatures as a single code block"""
-        sig_lines: list[str] = []
+        params = self.render_signature_parameters()
+        return [(make_call_signature_text(name, params), params)]
+
+    def _overloads(self) -> list[gf.Function]:
+        """
+        The `@overload` variants of this callable
+
+        For functions, `.overloads` is a `list[Function]`. For classes it is a
+        `dict[str, list[Function]]` keyed by member name, which is non-empty
+        (and thus truthy) for any class that merely defines methods, even when
+        none of them are actually overloaded. Flattening it makes the result
+        reflect real overloads, so dataclass constructor signatures are not
+        lost.
+
+        Returns
+        -------
+        The overload variants, empty when the callable has none.
+        """
+        overloads = getattr(self.obj, "overloads", []) or []
+        if isinstance(overloads, dict):
+            return [ov for ovs in overloads.values() for ov in ovs]
+        return list(overloads)
+
+    def _overload_signature_lines(
+        self, name: str, overloads: list[gf.Function]
+    ) -> list[tuple[str, list[str]]]:
+        """
+        Build one signature line per `@overload` variant
+
+        Parameters
+        ----------
+        name
+            Name of the callable.
+        overloads
+            The overload variants of the callable.
+
+        Returns
+        -------
+        One pair per variant: the variant's text, including its return
+        annotation, and the parameters it was built from.
+        """
+        lines: list[tuple[str, list[str]]] = []
         for ov in overloads:
             if not hasattr(ov, "parameters"):
                 continue
@@ -166,18 +226,14 @@ class __RenderDocCallMixin(RenderDoc):
                 else:
                     params.append(p.name)
             ret = str(ov.returns) if ov.returns else ""
-            sig = f"{name}({', '.join(params)})"
+            text = make_call_signature_text(name, params)
             if ret:
-                sig += f" -> {ret}"
-            sig_lines.append(sig)
+                text += f" -> {ret}"
+            lines.append((text, params))
 
-        if not sig_lines:
-            sig_lines.append(f"{name}()")
-
-        return Div(
-            CodeBlock("\n".join(sig_lines), Attr(classes=["python"])),
-            Attr(classes=["doc-signature", f"doc-{self.obj.kind}"]),
-        )
+        if not lines:
+            lines.append((f"{name}()", []))
+        return lines
 
     def render_signature_parameters(self) -> list[str]:
         """

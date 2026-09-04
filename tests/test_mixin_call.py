@@ -34,6 +34,5 @@ class TestMixinCallOverloadNoParams:
 
         ov_bad = MagicMock(spec=[])  # no 'parameters' attr
 
-        result = cls._render_overload_signatures(fake_self, "func", [ov_bad])
-        result_str = str(result)
-        assert "func()" in result_str
+        result = cls._overload_signature_lines(fake_self, "func", [ov_bad])
+        assert result == [("func()", [])]

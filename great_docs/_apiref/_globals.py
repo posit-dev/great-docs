@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
+from ._settings import Settings
+
 if TYPE_CHECKING:
     from typing import Literal
 
@@ -33,6 +35,10 @@ class Exclusions:
 
 
 EXCLUSIONS = Exclusions()
+
+
+SETTINGS = Settings()
+"""The settings of the build in progress, for the render classes to read"""
 
 
 @lru_cache(4)

@@ -40,6 +40,19 @@ project_type: python
 # : sphinx - Sphinx/reStructuredText style
 parser: numpy
 
+# Callable Signatures
+# -------------------
+# How the signature of a function, method or class is written.
+# style: the markup carrying it
+# : highlighted - (default) a highlighted code block
+# : plain - inline markup
+# wrap: where it breaks across lines
+# : per_parameter - (default) one parameter per line
+# : width - break only when the signature is long
+callable_signatures:
+  style: highlighted
+  wrap: per_parameter
+
 # Dynamic Introspection
 # ---------------------
 # How the renderer inspects your package. Auto-detected during initialization

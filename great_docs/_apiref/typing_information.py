@@ -5,6 +5,8 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import griffe as gf
+
 from great_docs.pandoc.blocks import (
     Block,
     BlockContent,
@@ -19,8 +21,6 @@ from ._type_checks import griffe_to_doc, is_protocol, is_typealias, is_typevar
 from .introspect import get_object
 
 if TYPE_CHECKING:
-    import griffe as gf
-
     from .api_reference import APIReference
     from .typing import RenderObjType
 
@@ -117,6 +117,30 @@ class TypeInformation(Block):
             path = path[len(self.package) + 1 :]
         return f"{self.dir}/{path}"
 
+    def _is_own(self, obj: gf.Object | gf.Alias) -> bool:
+        """
+        Whether `obj` belongs to the documented package
+
+        The page documents the package's own protocols, type variables, and
+        type aliases, including the ones the module re-exports from
+        elsewhere in the package. A name imported from outside it, such as
+        `typing.AnyStr`, is documented where it is defined.
+
+        Parameters
+        ----------
+        obj :
+            A member of the typing module.
+
+        Returns
+        -------
+        :
+            `True` when the object is defined in the package.
+        """
+        if not isinstance(obj, gf.Alias):
+            return True
+        target = obj.target_path
+        return target == self.package or target.startswith(f"{self.package}.")
+
     @cached_property
     def sections(self) -> TypeSections:
         def make_item(obj: gf.Object | gf.Alias) -> inventory.InventoryItem:
@@ -130,7 +154,7 @@ class TypeInformation(Block):
                 dispname=obj.canonical_path,
             )
 
-        members = list(get_object(self.module_path).members.values())
+        members = [m for m in get_object(self.module_path).members.values() if self._is_own(m)]
         return TypeSections(
             protocols_items=[make_item(m) for m in members if is_protocol(m)],
             typevars_items=[make_item(m) for m in members if is_typevar(m)],

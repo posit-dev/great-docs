@@ -51,7 +51,7 @@ _ENUM_BASES = frozenset({"Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprE
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from .api_reference import Settings
+    from ._settings import Settings
     from .spec import SpecEntry
 
 _log = logging.getLogger(__name__)

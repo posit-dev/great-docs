@@ -847,9 +847,14 @@ def highlight_signature_with_pygments(html_content):
     This extracts the signature code, highlights it with Pygments, then maps the Pygments CSS
     classes to Quarto's highlighting classes for consistency.
     """
-    # Find the main signature code block (id="cb1")
+    # Find the main signature code block: the first code block on the page
+    # (id="cb1") *and* the one the renderer wrapped in a doc-signature div.
+    # The enclosing div is what makes this a signature; without it the first
+    # code block on a page is whatever ordinary block comes first, which on a
+    # page whose signature is inline markup is usually an Examples doctest.
     cb1_pattern = re.compile(
-        r'(<div class="sourceCode" id="cb1">.*?<code class="sourceCode python">)'
+        r'(<div class="doc-signature[^"]*">\s*'
+        r'<div class="sourceCode" id="cb1">.*?<code class="sourceCode python">)'
         r"(.*?)"
         r"(</code>.*?</div>)",
         re.DOTALL,
@@ -884,16 +889,24 @@ def highlight_signature_with_pygments(html_content):
                 )
 
         # Special handling: make method/function name stand out on every signature line
-        # Pattern: ClassName.method_name( or function_name(
-        # Replace the name before ( with a function class for better highlighting
+        # Pattern: ClassName.method_name( or function_name( — or, for a TypedDict/Enum
+        # page, just Name with nothing after it, since those never show call brackets.
+        # The trailing group matches either the opening "(" of a call or the end of the
+        # line, so a bare name is still caught without also matching a name that is
+        # followed by anything else (which never happens: this block only ever holds a
+        # signature line, and a signature line's leading name is always either called,
+        # in which case "(" comes right after it, or not, in which case nothing does).
         # Uses re.MULTILINE so ^ matches each line (important for @overload signatures)
         sig_name_pattern = re.compile(
             r'^(<span class="va">)(\w+)(</span>)(<span class="op">\.</span>)?'
-            r'(<span class="va">)?(\w+)?(</span>)?(\()',
+            r'(<span class="va">)?(\w+)?(</span>)?(\(|$)',
             re.MULTILINE,
         )
 
         def enhance_sig_name(m):
+            # The final group is "(" for a call, or "" at the end of a bracket-less
+            # TypedDict/Enum line; either way it belongs straight after the name.
+            trailing = m.group(8)
             # If there's a dot, it's ClassName.method_name
             if m.group(4):  # Has dot
                 class_name = m.group(2)
@@ -901,12 +914,12 @@ def highlight_signature_with_pygments(html_content):
                 return (
                     f'<span class="sig-class">{class_name}</span>'
                     f'<span class="op">.</span>'
-                    f'<span class="sig-name">{method_name}</span>('
+                    f'<span class="sig-name">{method_name}</span>{trailing}'
                 )
             else:
-                # Just function_name(
+                # Just function_name( or, bracket-less, just Name
                 func_name = m.group(2)
-                return f'<span class="sig-name">{func_name}</span>('
+                return f'<span class="sig-name">{func_name}</span>{trailing}'
 
         highlighted = sig_name_pattern.sub(enhance_sig_name, highlighted)
 
@@ -960,123 +973,6 @@ def highlight_signature_with_pygments(html_content):
         return f"{prefix}{new_code}{suffix}"
 
     return cb1_pattern.sub(replace_signature, html_content)
-
-
-def format_signature_multiline(html_content):
-    """
-    Format function/method signatures with multiple arguments onto separate lines.
-
-    If a signature has more than one argument, format it as:
-        FunctionName(
-            arg1=default1,
-            arg2=default2,
-        )
-
-    Signatures that are already multiline are skipped.
-    """
-    # Pattern to match the content inside signature spans
-    # The signature is inside <span id="cbN-1">...(args)</span>
-    # We need to handle HTML tags within the arguments
-
-    def reformat_signature(match):
-        full_match = match.group(0)
-        span_start = match.group(1)
-        anchor = match.group(2) or ""
-        content = match.group(3)
-        span_end = match.group(4)
-
-        # Skip if signature is already multiline; this is detected by checking if content ends with
-        # just "(" or has a newline
-        if content.strip().endswith("(") or "\n" in content:
-            return full_match
-
-        # Find the opening paren position
-        paren_pos = content.find("(")
-        if paren_pos == -1:
-            return full_match
-
-        func_name = content[: paren_pos + 1]  # Include the (
-
-        # Find the closing paren - it's the last ) in the content
-        close_paren_pos = content.rfind(")")
-        if close_paren_pos == -1:
-            return full_match
-
-        args_content = content[paren_pos + 1 : close_paren_pos]
-
-        # Count arguments by looking for commas not inside HTML tags or nested parens
-        # We need to track both HTML tag depth and paren depth
-        arg_count = 1 if args_content.strip() else 0
-        html_depth = 0
-        paren_depth = 0
-        i = 0
-        while i < len(args_content):
-            if args_content[i : i + 1] == "<":
-                html_depth += 1
-            elif args_content[i : i + 1] == ">":
-                html_depth -= 1
-            elif html_depth == 0:
-                if args_content[i] in "([{":
-                    paren_depth += 1
-                elif args_content[i] in ")]}":
-                    paren_depth -= 1
-                elif args_content[i] == "," and paren_depth == 0:
-                    arg_count += 1
-            i += 1
-
-        # Only reformat if more than 1 argument
-        if arg_count <= 1:
-            return full_match
-
-        # Split arguments while preserving HTML
-        args = []
-        current_arg = ""
-        html_depth = 0
-        paren_depth = 0
-        i = 0
-        while i < len(args_content):
-            char = args_content[i]
-            if char == "<":
-                html_depth += 1
-                current_arg += char
-            elif char == ">":
-                html_depth -= 1
-                current_arg += char
-            elif html_depth == 0:
-                if char in "([{":
-                    paren_depth += 1
-                    current_arg += char
-                elif char in ")]}":
-                    paren_depth -= 1
-                    current_arg += char
-                elif char == "," and paren_depth == 0:
-                    args.append(current_arg.strip())
-                    current_arg = ""
-                else:
-                    current_arg += char
-            else:
-                current_arg += char
-            i += 1
-        if current_arg.strip():
-            args.append(current_arg.strip())
-
-        # Build multi-line signature
-        formatted_args = ",\n    ".join(args)
-        new_content = f"{func_name}\n    {formatted_args},\n)"
-
-        return f"{span_start}{anchor}{new_content}{span_end}"
-
-    # Only match the FIRST code block (cb1) which is always the main signature
-    # Other code blocks (cb2, cb3, etc.) are method signatures or examples
-    signature_pattern = re.compile(
-        r'(<span id="cb1-1"[^>]*>)'
-        r"(<a[^>]*></a>)?"
-        r"(.*?\))"
-        r"(</span>)",
-        re.DOTALL,
-    )
-
-    return signature_pattern.sub(reformat_signature, html_content)
 
 
 def strip_colgroup_tags(html_content):
@@ -1413,26 +1309,9 @@ for html_file in html_files:
     # Re-highlight the signature with Pygments for better syntax coloring
     content = highlight_signature_with_pygments(content)
 
-    # Format signatures with multiple arguments onto separate lines
-    content = format_signature_multiline(content)
-
-    # For non-callable types (e.g., TypedDict, Enum), strip empty () from the signature
-    # TypedDicts are structural type definitions, not constructors
-    # Enums are accessed via members (e.g., Color.RED), not called
-    _NON_CALLABLE_SIGNATURE_TYPES = {"typeddict", "enum"}
-    obj_type_for_sig = object_types.get(item_name_from_file)
-    if obj_type_for_sig and obj_type_for_sig in _NON_CALLABLE_SIGNATURE_TYPES:
-        content = re.sub(
-            r'(<span class="sig-name">[^<]+</span>)\(\)',
-            r"\1",
-            content,
-        )
-
     # Convert back to lines for line-by-line processing
     content = content.splitlines(keepends=True)
 
-    # Fix return value formatting in individual function pages, removing the `:` before the
-    # return value and adjusting the style of the parameter annotation separator
     content_str = "".join(content)
 
     # Inject constant value/annotation into constant reference pages.
@@ -1457,47 +1336,8 @@ for html_file in html_files:
         if bare_name_html in content_str:
             content_str = content_str.replace(bare_name_html, replacement_html, 1)
 
-    return_value_pattern = (
-        r'<span class="parameter-name"></span> <span class="parameter-annotation-sep">:</span>'
-    )
-    return_value_replacement = r'<span class="parameter-name"></span> <span class="parameter-annotation-sep" style="margin-left: -8px;"></span>'
-    content_str = re.sub(return_value_pattern, return_value_replacement, content_str)
-
-    # Remove empty annotation separator + annotation (e.g., Attributes with no type)
-    # Pattern: ` <span class="parameter-annotation-sep">:</span> <span class="parameter-annotation"></span>`
-    # This leaves just the parameter name without a trailing colon and space.
-    content_str = re.sub(
-        r' <span class="parameter-annotation-sep"[^>]*>:</span>\s*<span class="parameter-annotation"></span>',
-        "",
-        content_str,
-    )
-
-    # Normalize single quotes to double quotes in parameter default values
-    content_str = re.sub(
-        r'<span class="parameter-default">&#39;([^&]*)&#39;</span>',
-        r'<span class="parameter-default">&quot;\1&quot;</span>',
-        content_str,
-    )
-    content_str = re.sub(
-        r"""<span class="parameter-default">'([^']*)'</span>""",
-        r'<span class="parameter-default">"\1"</span>',
-        content_str,
-    )
-
     # Fix incomplete Attributes tables for dataclass pages
     content_str = fix_dataclass_attributes(content_str)
-
-    # Fix double asterisks in **kwargs and **attributes style parameters
-    # Pattern: ****name** -> **name (with proper styling)
-    content_str = re.sub(r"\*\*\*\*(\w+)\*\*", r"**<strong>\1</strong>", content_str)
-
-    # Fix leading colon in Raises/Returns sections (e.g., ": ValueError" -> "ValueError")
-    # This handles cases like: <dt><code><span class="parameter-annotation-sep">:</span> <span class="parameter-annotation">ValueError</span></code></dt>
-    content_str = re.sub(
-        r'<dt><code><span class="parameter-annotation-sep">:</span>\s*<span class="parameter-annotation">([^<]+)</span></code></dt>',
-        r'<dt><code><span class="parameter-annotation">\1</span></code></dt>',
-        content_str,
-    )
 
     content = content_str.splitlines(keepends=True)
 

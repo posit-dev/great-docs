@@ -1,19 +1,18 @@
 """
-The `APIReference` façade and its `Settings`, built from a Quarto config block
+The `APIReference` façade, built from a Quarto config block
 """
 
 from __future__ import annotations
 
 import logging
 import sys
-from dataclasses import dataclass, field
-from dataclasses import fields as dc_fields
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from yaml12 import read_yaml
 
+from ._settings import Settings, active_settings
 from .content import Link, Page
 from .inventory import create_inventory, write_inventory
 from .resolve import _autogenerate_sections, _Resolver
@@ -38,49 +37,6 @@ _REMOVED_KEYS = {"style", "renderer", "render_interlinks"}
 # Use the default site depth when a bare API reference config supplies no site
 # settings.
 _DEFAULT_SITE_TOC_DEPTH = 2
-
-
-@dataclass
-class Settings:
-    """How an API reference is generated and written — the non-content keys of the `api-reference:` block"""
-
-    parser: str = "numpy"
-    dynamic: bool | None = None
-    source_dir: str | None = None
-    dir: str = "reference"
-    out_index: str = "index.qmd"
-    out_inventory: str = "objects.json"
-    out_page_suffix: str = ".qmd"
-    sidebar: dict[str, Any] | None = None
-    css: str | None = None
-    header_level: int = 1
-    rewrite_all_pages: bool = False
-    typing_module_paths: list[str] = field(default_factory=list[str])
-    version: str | None = None
-
-    @classmethod
-    def make(cls, block: dict[str, Any]) -> Settings:
-        """Build settings from the non-content keys of an `api-reference:` block"""
-        kwargs: dict[str, Any] = {
-            k: block[k]
-            for k in _SETTINGS_KEYS
-            if k in block and not (k == "out_index" and block[k] is None)
-        }
-        sidebar = kwargs.get("sidebar")
-        if isinstance(sidebar, str):
-            kwargs["sidebar"] = {"file": sidebar}
-        elif isinstance(sidebar, dict) and "file" not in sidebar:
-            # Copy so the caller's config dict is not mutated.
-            kwargs["sidebar"] = {**sidebar, "file": "_api-reference-sidebar.yml"}
-        return cls(**kwargs)
-
-
-# Parity quirk preserved deliberately (do NOT "fix" here): `version` is not
-# read from the config block. The old Builder accepted a `version` param but
-# its __init__ forced `self.version = None`, so objects.json was always built
-# with "0.0.9999". (`interlinks.fast` / `_fast_inventory` was confirmed dead
-# and dropped, per spec.)
-_SETTINGS_KEYS = {f.name for f in dc_fields(Settings)} - {"version"}
 
 
 class APIReference:
@@ -232,7 +188,24 @@ class APIReference:
     def build(self, page_filter: str = "*") -> None:
         """Write reference pages, index, inventory, and (optionally) sidebar to disk"""
         s = self.settings
+        with active_settings(s):
+            self._build(s, page_filter)
 
+    def _build(self, s: Settings, page_filter: str) -> None:
+        """
+        Write the reference, with the signature settings already published
+
+        Parameters
+        ----------
+        s
+            The settings of this API reference.
+        page_filter
+            Glob that selects which pages to write.
+
+        Returns
+        -------
+        :
+        """
         if s.source_dir:
             sys.path.append(str(Path(s.source_dir).absolute()))
 

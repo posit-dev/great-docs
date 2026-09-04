@@ -209,6 +209,25 @@ default of `5` splits too aggressively.
 When in doubt, start with the default and adjust once you see how your rendered documentation feels
 to navigate.
 
+## Callable Signatures
+
+The `callable_signatures` block in `great-docs.yml` controls how a callable's signature is
+written to the page. It applies to functions, methods, and classes; attributes and type aliases
+render the same way whatever it says.
+
+```{.yaml filename="great-docs.yml"}
+callable_signatures:
+  style: highlighted   # a highlighted code block (default)
+  wrap: per_parameter  # one parameter per line (default)
+```
+
+| Setting | Value | Behaviour |
+| --- | --- | --- |
+| `style` | `highlighted` | The signature is a fenced Python code block, highlighted by Quarto (default) |
+| `style` | `plain` | The signature is inline markup carrying the callable's name and its parameters |
+| `wrap` | `per_parameter` | Every parameter takes its own line whenever there is more than one (default) |
+| `wrap` | `width` | The signature stays on one line until it exceeds 78 characters |
+
 ## API Organization
 
 The auto-generated reference is organized into sections by object type. This works well out of the

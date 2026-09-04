@@ -207,35 +207,6 @@ def _(obj: gf.ExprName) -> str:
     return obj.name
 
 
-def formatted_signature(name: str, params: list[str]) -> str:
-    """
-    Format a signature of a function/method
-
-    Parameters
-    ----------
-    name :
-        Name of function/method/class(for the __init__ method)
-    params :
-        Parameters to the function. A each parameter is a
-        string. e.g. a, *args, *, /, b=2, c=3, **kwargs
-    """
-    # Format to a maximum width of 78 chars
-    # It fails when a parameter declarations is longer than 78
-    opening = f"{name}("
-    params_string = ", ".join(params)
-    closing = ")"
-    pad = " " * 4
-    if len(opening) + len(params_string) > 78:
-        line_pad = f"\n{pad}"
-        # One parameter per line
-        if len(params_string) > 74:
-            params_string = f",{line_pad}".join(params)
-        params_string = f"{line_pad}{params_string}"
-        closing = f"\n{closing}"
-    sig = f"{opening}{params_string}{closing}"
-    return sig
-
-
 def pretty_code(s: str) -> str:
     """
     Make code that pandoc will not syntax-highlight presentable

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import sys
 import textwrap
 
 import griffe as gf
@@ -11,7 +12,7 @@ import pytest
 from great_docs._apiref import content
 from great_docs._apiref._docstring_sections import _DocstringSectionPatched, transform
 from great_docs._apiref._tools import render_code_variable, render_type_object
-from great_docs._apiref._type_checks import is_typealias
+from great_docs._apiref._type_checks import is_typealias, is_typevar
 from great_docs._apiref._visitor import NodeVisitor
 
 
@@ -74,6 +75,67 @@ def test_is_typealias_other_annotation_type_returns_false():
     attr.annotation = gf.ExprSubscript(gf.ExprName("List"), gf.ExprName("int"))
 
     assert is_typealias(attr) is False
+
+
+# ---------------------------------------------------------------------------
+# _type_checks — classification through a re-exported name
+# ---------------------------------------------------------------------------
+
+
+def _reexported(source: str, name: str) -> gf.Alias:
+    """Return the alias created when a package re-exports `name`"""
+    modules = {
+        "__init__.py": f"from ._defs import {name}\n",
+        "_defs.py": textwrap.dedent(source),
+    }
+    with gf.temporary_visited_package("package", modules) as package:
+        member = package[name]
+    assert isinstance(member, gf.Alias)
+    return member
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 12),
+    reason="PEP 695 `type` statement requires Python 3.12+",
+)
+def test_is_typealias_follows_a_reexported_pep695_alias():
+    """Preserve a PEP 695 alias's kind under its exported name"""
+    assert is_typealias(_reexported("type Contract = int | str\n", "Contract")) is True
+
+
+def test_is_typealias_follows_a_reexported_annotated_alias():
+    """Preserve an annotated alias's kind under its exported name"""
+    source = """
+    from typing import TypeAlias
+
+    Contract: TypeAlias = int
+    """
+
+    assert is_typealias(_reexported(source, "Contract")) is True
+
+
+def test_is_typevar_follows_a_reexported_typevar():
+    """Preserve a TypeVar's kind under its exported name"""
+    source = """
+    from typing import TypeVar
+
+    T = TypeVar("T")
+    """
+
+    assert is_typevar(_reexported(source, "T")) is True
+
+
+def test_classification_of_an_unloadable_target_is_false():
+    """Return `False` when an alias target cannot be loaded"""
+    modules = {"__init__.py": "from never_imported_package import Contract\n"}
+    with gf.temporary_visited_package("package", modules) as package:
+        alias = package["Contract"]
+
+    with pytest.raises(gf.AliasResolutionError):
+        _ = alias.final_target
+
+    assert is_typealias(alias) is False
+    assert is_typevar(alias) is False
 
 
 # ---------------------------------------------------------------------------

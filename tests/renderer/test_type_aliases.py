@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import textwrap
 
 import pytest
 
@@ -204,6 +205,79 @@ def test_type_information_preserves_alias_name():
         rendered = str(TypeInformation("package", api_ref))
 
     assert "[Contract[T]]{.doc-parameter-name}" in rendered
+
+
+def test_type_information_lists_reexported_names():
+    """Document definitions re-exported by a typing module"""
+    from unittest.mock import MagicMock, patch
+
+    import griffe as gf
+
+    from great_docs._apiref.typing_information import TypeInformation
+
+    api_ref = MagicMock()
+    api_ref.package = "package"
+    api_ref.settings.dir = "reference"
+
+    defs = '''
+    from typing import Protocol, TypeVar
+
+    type Contract = int | str
+    T = TypeVar("T")
+
+    class Reader(Protocol):
+        """A reader."""
+    '''
+    modules = {
+        "__init__.py": "",
+        "_defs.py": textwrap.dedent(defs),
+        "types.py": "from ._defs import Contract, Reader, T\n",
+    }
+
+    with gf.temporary_visited_package("package", modules) as package:
+        with patch(
+            "great_docs._apiref.typing_information.get_object",
+            return_value=package["types"],
+        ):
+            rendered = str(TypeInformation("package.types", api_ref))
+
+    assert "Protocols" in rendered
+    assert "Reader" in rendered
+    assert "Type Variables" in rendered
+    assert "T" in rendered
+    assert "Type Aliases" in rendered
+    assert "Contract" in rendered
+
+
+def test_type_information_omits_names_imported_from_outside():
+    """Omit names imported from outside the package"""
+    from unittest.mock import MagicMock, patch
+
+    import griffe as gf
+
+    from great_docs._apiref.typing_information import TypeInformation
+
+    api_ref = MagicMock()
+    api_ref.package = "package"
+    api_ref.settings.dir = "reference"
+
+    modules = {
+        "__init__.py": "",
+        "types.py": "from typing import AnyStr\n",
+    }
+
+    with gf.temporary_visited_package("package", modules) as package:
+        # `AnyStr` is a genuine TypeVar, so only its provenance keeps it off
+        # the page; without loading `typing` the alias would go unresolved
+        # and the assertion would hold for the wrong reason.
+        gf.GriffeLoader(modules_collection=package.modules_collection).load("typing")
+        with patch(
+            "great_docs._apiref.typing_information.get_object",
+            return_value=package["types"],
+        ):
+            rendered = str(TypeInformation("package.types", api_ref))
+
+    assert "AnyStr" not in rendered
 
 
 def test_css_class_slug_is_hyphenated():

@@ -14,7 +14,7 @@ def test_dataclass_with_keyword_only_signature():
         z: float
     """
     qmd = render_code_variable(code, "Point")
-    assert "Point(x, *, y, z)" in qmd
+    assert "Point(\n    x,\n    *,\n    y,\n    z,\n)" in qmd
 
 
 def test_position_only_and_keyword_only_signatures():
@@ -23,7 +23,7 @@ def test_position_only_and_keyword_only_signatures():
         pass
     """
     qmd = render_code_variable(code, "func")
-    assert "func(a, b, /, c, d, *, e, f)" in qmd
+    assert "func(\n    a,\n    b,\n    /,\n    c,\n    d,\n    *,\n    e,\n    f,\n)" in qmd
 
 
 def test_variable_positional_parameters():
@@ -43,7 +43,7 @@ def test_variable_positional_parameters():
         '''
     """
     qmd = render_code_variable(code, "func")
-    assert "func(a=1, b=2, *c, z=26)" in qmd
+    assert "func(\n    a=1,\n    b=2,\n    *c,\n    z=26,\n)" in qmd
 
 
 def test_variable_keyword_parameters():
@@ -64,5 +64,5 @@ def test_variable_keyword_parameters():
         pass
     """
     qmd = render_code_variable(code, "func")
-    assert "func(a=1, b=2, **kwargs)" in qmd
+    assert "func(\n    a=1,\n    b=2,\n    **kwargs,\n)" in qmd
     assert "{}" not in qmd

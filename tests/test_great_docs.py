@@ -49,10 +49,10 @@ from great_docs._apiref._format import (
     format_see_also,
     format_str,
     format_value,
-    formatted_signature,
     repr_obj,
 )
 from great_docs._apiref._globals import EXCLUSIONS
+from great_docs._apiref._signature import make_call_signature_text
 from great_docs._apiref._preview import Formatter
 from great_docs._apiref._render import (
     RenderDocAttribute,
@@ -17145,6 +17145,73 @@ def test_add_api_reference_config_no_exports():
         assert docs._has_api_reference is False
 
 
+def test_add_api_reference_config_carries_the_callable_signature_settings():
+    """The `callable_signatures` block reaches the generated api-reference block.
+
+    They are the renderer's only route to those settings: `Settings.make`
+    reads them from the block this method writes.
+    """
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        gd_yml = Path(tmp_dir) / "great-docs.yml"
+        gd_yml.write_text(
+            "callable_signatures:\n  style: plain\n  wrap: width\n",
+            encoding="utf-8",
+        )
+        docs._config = Config(Path(tmp_dir))
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(quarto_yml, "w") as f:
+            write_yaml({"project": {"type": "website"}}, f)
+
+        sections = [{"title": "All", "desc": "", "contents": ["Widget"]}]
+        with patch.object(docs, "_create_api_sections_with_config", return_value=sections):
+            docs._add_api_reference_config()
+
+        with open(quarto_yml, "r") as f:
+            result = read_yaml(f)
+
+        assert result["api-reference"]["callable_signatures"] == {
+            "style": "plain",
+            "wrap": "width",
+        }
+
+
+def test_add_api_reference_config_defaults_the_callable_signature_settings():
+    """A project that sets neither key still gets both, at their defaults."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+
+        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(quarto_yml, "w") as f:
+            write_yaml({"project": {"type": "website"}}, f)
+
+        sections = [{"title": "All", "desc": "", "contents": ["Widget"]}]
+        with patch.object(docs, "_create_api_sections_with_config", return_value=sections):
+            docs._add_api_reference_config()
+
+        with open(quarto_yml, "r") as f:
+            result = read_yaml(f)
+
+        assert result["api-reference"]["callable_signatures"] == {
+            "style": "highlighted",
+            "wrap": "per_parameter",
+        }
+
+
 def test_add_api_reference_config_already_exists():
     """Test _add_api_reference_config skips when api-reference already present."""
 
@@ -33129,13 +33196,15 @@ def test_repr_obj_str_with_single_quotes():
     assert result2 == "plain"
 
 
-def test_formatted_signature_long_params():
-    """formatted_signature wraps lines when params are long."""
+def test_make_call_signature_text_long_params():
+    """make_call_signature_text wraps lines when params are long."""
+    params = [f"parameter_number_{i}=None" for i in range(6)]
 
-    params = [f"param_{i}: str = 'default_value_{i}'" for i in range(10)]
-    result = formatted_signature("my_function", params)
-    assert "my_function(" in result
-    assert "\n" in result  # should have line breaks
+    result = make_call_signature_text("my_function", params)
+
+    assert "\n" in result
+    assert result.startswith("my_function(")
+    assert result.endswith(")")
 
 
 def test_format_str_with_ruff():
