@@ -4,9 +4,12 @@ import requests
 
 from great_docs._interlinks import (
     Source,
+    build_index,
     load_source,
     resolve_aliases,
+    root_modules,
     sources_from_config,
+    write_index,
 )
 from great_docs._sphinx_inventory import Inventory, InventoryEntry, encode
 from great_docs.config import Config
@@ -131,3 +134,82 @@ def test_load_source_reports_a_source_it_cannot_read(tmp_path, monkeypatch):
 
     assert inv is None
     assert "numpy" in note
+
+
+LOCAL = Inventory(
+    "demo",
+    "1.0",
+    (
+        InventoryEntry(
+            "demo.Thing", "py", "class", 1, "reference/Thing.html#demo.Thing", "demo.Thing"
+        ),
+        InventoryEntry("demo.go", "py", "function", 1, "reference/go.html#demo.go", "demo.go"),
+    ),
+)
+
+
+def test_root_modules_are_ordered_by_frequency():
+    inv = Inventory(
+        "x",
+        "1",
+        (
+            InventoryEntry("sklearn.a", "py", "class", 1, "a.html", "sklearn.a"),
+            InventoryEntry("sklearn.b", "py", "class", 1, "b.html", "sklearn.b"),
+            InventoryEntry("other.c", "py", "class", 1, "c.html", "other.c"),
+        ),
+    )
+    assert root_modules(inv) == ("sklearn", "other")
+
+
+def test_local_entries_are_marked_and_keep_their_uri():
+    index = build_index(LOCAL, [], [])
+    assert index.names["demo.Thing"][0].uri == "/reference/Thing.html#demo.Thing"
+    assert index.names["demo.Thing"][0].is_local is True
+
+
+def test_external_uris_are_prefixed_with_the_source_url():
+    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+    index = build_index(LOCAL, [], [(src, DEMO)])
+    assert index.names["numpy.ndarray"][0].uri == "https://numpy.org/doc/stable/ndarray.html"
+    assert index.names["numpy.ndarray"][0].is_local is False
+
+
+def test_a_kept_alias_points_at_the_target_entry():
+    index = build_index(LOCAL, [("Thing", "demo.Thing")], [])
+    assert index.names["Thing"] == index.names["demo.Thing"]
+
+
+def test_an_ambiguous_alias_is_absent_and_reported():
+    index = build_index(LOCAL, [("T", "demo.Thing"), ("T", "demo.go")], [])
+    assert "T" not in index.names
+    assert index.dropped["T"] == ("demo.Thing", "demo.go")
+
+
+def test_an_alias_prefix_maps_to_the_sources_root_modules():
+    src = Source.from_config("numpy", {"url": "https://numpy.org/", "aliases": ["np"]})
+    index = build_index(LOCAL, [], [(src, DEMO)])
+    assert index.prefixes["np"] == ("numpy",)
+
+
+def test_a_local_entry_outranks_an_external_one_for_the_same_name():
+    src = Source.from_config("other", {"url": "https://other.example/"})
+    clash = Inventory(
+        "other",
+        "1",
+        (InventoryEntry("demo.Thing", "py", "class", 1, "t.html", "demo.Thing"),),
+    )
+    index = build_index(LOCAL, [], [(src, clash)])
+    assert index.names["demo.Thing"][0].is_local is True
+
+
+def test_write_index_writes_a_loadable_lua_chunk(tmp_path):
+    index = build_index(LOCAL, [("Thing", "demo.Thing")], [])
+    out = tmp_path / "index.lua"
+
+    write_index(index, out)
+
+    text = out.read_text()
+    assert text.startswith("return {")
+    assert '["demo.Thing"]' in text
+    assert '["Thing"]' in text
+    assert 'uri = "/reference/Thing.html#demo.Thing"' in text

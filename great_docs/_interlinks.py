@@ -5,7 +5,8 @@ Build the index that the interlinks filter resolves links against
 from __future__ import annotations
 
 import time
-from collections.abc import Container, Iterable
+from collections import Counter
+from collections.abc import Container, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
@@ -175,3 +176,167 @@ def load_source(
     cache_dir.mkdir(parents=True, exist_ok=True)
     cached.write_bytes(response.content)
     return decode(response.content), ""
+
+
+@dataclass(frozen=True)
+class IndexEntry:
+    """A resolvable target: where a name is documented"""
+
+    uri: str
+    domain: str
+    role: str
+    source: str = ""
+    is_local: bool = False
+
+
+@dataclass(frozen=True)
+class Index:
+    """Everything the filter needs to resolve a reference"""
+
+    names: dict[str, tuple[IndexEntry, ...]] = field(default_factory=dict)
+    prefixes: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    dropped: dict[str, tuple[str, ...]] = field(default_factory=dict)
+
+
+def root_modules(inv: Inventory) -> tuple[str, ...]:
+    """
+    Find the modules an inventory documents, most frequent first
+
+    An alias is written against a module, not against the name the source is
+    filed under, so a source keyed `scikit-learn` serving `sklearn.*` names
+    still resolves.
+
+    Parameters
+    ----------
+    inv :
+        The inventory to inspect.
+
+    Returns
+    -------
+    :
+        Root module names.
+    """
+    counts = Counter(e.name.split(".")[0] for e in inv.entries)
+    return tuple(name for name, _ in counts.most_common())
+
+
+def build_index(
+    local: Inventory,
+    claims: Iterable[tuple[str, str]],
+    external: Sequence[tuple[Source, Inventory]],
+) -> Index:
+    """
+    Merge every inventory into one lookup table
+
+    Candidates for a name are ordered so that this project wins over another,
+    and a higher priority wins within a project. Short names claimed by exactly
+    one object are added as ordinary entries; ambiguous ones are reported
+    instead.
+
+    Parameters
+    ----------
+    local :
+        This project's inventory.
+    claims :
+        `(alias, target)` pairs from the documented objects.
+    external :
+        Each source and the inventory read for it.
+
+    Returns
+    -------
+    :
+        The index.
+    """
+    found: dict[str, list[tuple[tuple[int, int], IndexEntry]]] = {}
+
+    def add(name: str, rank: int, priority: int, entry: IndexEntry) -> None:
+        found.setdefault(name, []).append(((rank, -priority), entry))
+
+    for e in local.entries:
+        add(
+            e.name,
+            0,
+            e.priority,
+            IndexEntry(uri=f"/{e.uri.lstrip('/')}", domain=e.domain, role=e.role, is_local=True),
+        )
+
+    prefixes: dict[str, tuple[str, ...]] = {}
+    for source, inv in external:
+        base = source.url.rstrip("/")
+        for e in inv.entries:
+            add(
+                e.name,
+                1,
+                e.priority,
+                IndexEntry(
+                    uri=f"{base}/{e.uri.lstrip('/')}",
+                    domain=e.domain,
+                    role=e.role,
+                    source=source.name,
+                ),
+            )
+        roots = root_modules(inv)
+        for alias in source.aliases:
+            prefixes[alias] = roots
+
+    ordered = {
+        name: tuple(entry for _, entry in sorted(items, key=lambda pair: pair[0]))
+        for name, items in found.items()
+    }
+
+    resolution = resolve_aliases(claims, taken=ordered)
+    for alias, target in resolution.kept.items():
+        if target in ordered:
+            ordered[alias] = ordered[target]
+
+    return Index(names=ordered, prefixes=prefixes, dropped=resolution.dropped)
+
+
+def _quote_lua(value: str) -> str:
+    """Quote a string for a Lua source chunk"""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+    return f'"{escaped}"'
+
+
+def write_index(index: Index, path: Path) -> None:
+    """
+    Write the index as a Lua chunk the filter loads
+
+    A chunk is written rather than JSON because Quarto runs one pandoc process
+    per file and each one loads the index; Lua reads its own syntax faster than
+    it decodes JSON.
+
+    Parameters
+    ----------
+    index :
+        The index to write.
+    path :
+        Where to write it.
+    """
+    lines = ["return {", "  prefixes = {"]
+    for alias in sorted(index.prefixes):
+        roots = ", ".join(_quote_lua(r) for r in index.prefixes[alias])
+        lines.append(f"    [{_quote_lua(alias)}] = {{{roots}}},")
+    lines.append("  },")
+    lines.append("  names = {")
+
+    for name in sorted(index.names):
+        parts = []
+        for e in index.names[name]:
+            fields = [
+                f"uri = {_quote_lua(e.uri)}",
+                f"domain = {_quote_lua(e.domain)}",
+                f"role = {_quote_lua(e.role)}",
+            ]
+            if e.source:
+                fields.append(f"source = {_quote_lua(e.source)}")
+            if e.is_local:
+                fields.append('["local"] = true')
+            parts.append("{" + ", ".join(fields) + "}")
+        lines.append(f"    [{_quote_lua(name)}] = {{{', '.join(parts)}}},")
+
+    lines.append("  },")
+    lines.append("}")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
