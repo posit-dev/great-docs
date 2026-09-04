@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import AnyUrl
 
+import great_docs.mcp as mcp_module
 from great_docs._utils import QUARTO_YML_HEADER
 from great_docs.mcp import (
     _build_output_dirs,
@@ -30,7 +31,6 @@ from great_docs.mcp import (
     list_tools,
     read_resource,
 )
-
 
 # ---------------------------------------------------------------------------
 # _get_project_root
@@ -148,11 +148,57 @@ class TestCallTool:
         assert len(result) == 1
         assert "Unknown tool" in result[0].text
 
+    def test_unknown_tool_marks_is_error(self):
+        result = asyncio.run(call_tool("no_such_tool", {}))
+        assert result.is_error is True
+
     def test_exception_in_handler_returns_error_text(self):
         with patch("great_docs.mcp._handle_build", side_effect=RuntimeError("boom")):
             result = asyncio.run(call_tool("gd_build", {}))
         assert "Error" in result[0].text
         assert "boom" in result[0].text
+
+    def test_exception_in_handler_marks_is_error(self):
+        with patch("great_docs.mcp._handle_build", side_effect=RuntimeError("boom")):
+            result = asyncio.run(call_tool("gd_build", {}))
+        assert result.is_error is True
+
+    def test_successful_call_does_not_mark_is_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        result = asyncio.run(call_tool("gd_status", {}))
+        assert getattr(result, "is_error", False) is False
+
+
+@pytest.mark.skipif(
+    mcp_module._MCP_V1, reason="_on_call_tool only exists on the mcp v2 handler path"
+)
+class TestOnCallToolIsError:
+    """CallToolResult.is_error must reflect a failed dispatch (issue: it never did)."""
+
+    def _params(self, name: str, arguments: dict):
+        params = MagicMock()
+        params.name = name
+        params.arguments = arguments
+        return params
+
+    def test_unknown_tool_sets_is_error(self):
+        result = asyncio.run(mcp_module._on_call_tool(None, self._params("bogus_tool_name", {})))
+        assert result.is_error is True
+        assert "Unknown tool" in result.content[0].text
+
+    def test_handler_exception_sets_is_error(self):
+        params = self._params("gd_build", {"project_path": "/does/not/exist"})
+        result = asyncio.run(mcp_module._on_call_tool(None, params))
+        assert result.is_error is True
+
+    def test_successful_call_leaves_is_error_false(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        result = asyncio.run(mcp_module._on_call_tool(None, self._params("gd_status", {})))
+        assert result.is_error is False
 
 
 # ---------------------------------------------------------------------------
