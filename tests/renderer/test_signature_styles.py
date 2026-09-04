@@ -404,6 +404,52 @@ def test_plain_style_escapes_a_default_that_looks_like_a_span(highlight_style):
     assert r"\[x\]\{.y\}" in qmd
 
 
+def test_plain_style_escapes_the_remaining_inline_delimiters(highlight_style):
+    """A default cannot become maths, a subscript, a superscript, or a citation"""
+    highlight_style("plain")
+    source = '''
+    def h(a="$x$", b="~x~", c="^2^", d="@ref"):
+        """Take defaults that open pandoc inlines."""
+    '''
+
+    qmd = _rendered(source, "h")
+
+    assert r"\$x\$" in qmd
+    assert r"\~x\~" in qmd
+    assert r"\^2\^" in qmd
+    assert r"\@ref" in qmd
+
+
+def test_plain_style_escapes_the_smart_typography_runs(highlight_style):
+    """Prevent hyphen and dot runs from becoming typographic characters"""
+    highlight_style("plain")
+    source = '''
+    def h(a="--verbose", b=...):
+        """Take defaults pandoc would tidy into single characters."""
+    '''
+
+    qmd = _rendered(source, "h")
+
+    # Break each run at its second character. Pandoc reads the run as a whole,
+    # while numeric highlighting expects the lone `-` or `.` to remain.
+    assert r"-\-verbose" in qmd
+    assert r".\.\." in qmd
+
+
+def test_plain_style_still_highlights_numeric_defaults(highlight_style):
+    """Preserve numeric highlighting when escaping typographic runs"""
+    highlight_style("plain")
+    source = '''
+    def h(a=3.14, b=-5):
+        """Take numeric defaults."""
+    '''
+
+    qmd = _rendered(source, "h")
+
+    assert "[3.14]{.fl}" in qmd
+    assert "[-5]{.dv}" in qmd
+
+
 def test_plain_style_escapes_the_variadic_prefixes(highlight_style):
     """The asterisks of `*args` and `**kwargs` stay asterisks, not emphasis"""
     highlight_style("plain")

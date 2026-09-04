@@ -17,12 +17,16 @@ if TYPE_CHECKING:
     from great_docs.pandoc.blocks import BlockContent
 
 
-# `<`, `>` and `&` open html; the rest open a span, a link, a code span,
-# or emphasis. A signature written as inline markup is read by pandoc, so
-# whatever a parameter's annotation or default happens to contain is read
-# with it.
+# Pandoc treats `<`, `>` and `&` as HTML, and the other characters as span,
+# link, code-span, emphasis, maths, subscript, superscript, or citation
+# delimiters. It reads a signature written as inline markup together with
+# the annotation or default text it contains.
 SIGNATURE_HTML_TRANSLATION = str.maketrans({"&": "&amp;", "<": "&lt;", ">": "&gt;"})
-SIGNATURE_MARKDOWN_RE = re.compile(r"([\\`*_\[\]{}])")
+SIGNATURE_MARKDOWN_RE = re.compile(r"([\\`*_\[\]{}$~^@])")
+# Pandoc also reads `--` as an en dash and `...` as an ellipsis. Escaping the
+# second character breaks each run while preserving the lone `-` or `.` that
+# numeric highlighting patterns match.
+SIGNATURE_SMART_RE = re.compile(r"(?<=-)-|(?<=\.)\.")
 
 
 def escape_signature_markup(s: str) -> str:
@@ -44,7 +48,8 @@ def escape_signature_markup(s: str) -> str:
     :
         The text with its html and markdown characters neutralised.
     """
-    return SIGNATURE_MARKDOWN_RE.sub(r"\\\1", s.translate(SIGNATURE_HTML_TRANSLATION))
+    escaped = SIGNATURE_MARKDOWN_RE.sub(r"\\\1", s.translate(SIGNATURE_HTML_TRANSLATION))
+    return SIGNATURE_SMART_RE.sub(r"\\\g<0>", escaped)
 
 
 def make_call_signature_text(name: str, params: list[str]) -> str:
