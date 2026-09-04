@@ -17,6 +17,8 @@ class InventoryItem(Walkable):
     name: str = ""
     uri: str | None = None
     dispname: str | None = None
+    aliases: tuple[str, ...] = ()
+    """Short names this object claims, before ambiguity is arbitrated"""
 
 
 def write_inventory(inv: dict[str, Any], out_name: str) -> None:

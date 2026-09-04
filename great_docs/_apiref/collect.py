@@ -50,7 +50,15 @@ class _ManifestBuilder(NodeVisitor):
         name_path = obj.path
         canonical_path = obj.canonical_path
 
-        self.items.append(InventoryItem(name=name_path, obj=obj, uri=uri, dispname=None))
+        self.items.append(
+            InventoryItem(
+                name=name_path,
+                obj=obj,
+                uri=uri,
+                dispname=None,
+                aliases=(el.name, obj.name),
+            )
+        )
 
         if name_path != canonical_path:
             self.items.append(

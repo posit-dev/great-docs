@@ -7183,6 +7183,9 @@ def test_collect_single_doc():
     assert len(items) >= 1
     assert items[0].name == "pkg.myfunc"
     assert items[0].uri == "api/reference.html#pkg.myfunc"
+    # The short names an author may write in prose. The pair repeats because a
+    # top-level export's config name is its own name.
+    assert items[0].aliases == ("myfunc", "myfunc")
 
 
 def test_collect_with_canonical_path_diff():
