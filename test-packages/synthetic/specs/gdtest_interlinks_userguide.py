@@ -15,6 +15,27 @@ Focus: Tests that the GDLS (Great Docs Linking System) resolves interlinks
        relative paths (e.g. ``../reference/Foo.html``).
 """
 
+from great_docs._sphinx_inventory import Inventory, InventoryEntry, encode
+
+# A stand-in for another project's published inventory. Kept local so the build
+# resolves external links without reaching the network.
+_EXTERNAL_INVENTORY = encode(
+    Inventory(
+        project="extdemo",
+        version="1.0",
+        entries=(
+            InventoryEntry(
+                name="extdemo.Widget",
+                domain="py",
+                role="class",
+                priority=1,
+                uri="Widget.html",
+                dispname="extdemo.Widget",
+            ),
+        ),
+    )
+)
+
 SPEC = {
     "name": "gdtest_interlinks_userguide",
     "description": (
@@ -33,6 +54,20 @@ SPEC = {
             "requires": ["setuptools"],
             "build-backend": "setuptools.build_meta",
         },
+    },
+    "config": {
+        "interlinks": {
+            "sources": {
+                "extdemo": {
+                    "url": "https://extdemo.example/docs/",
+                    "inv": "./extdemo.inv",
+                    "aliases": ["ed"],
+                },
+            },
+        },
+    },
+    "binary_files": {
+        "extdemo.inv": _EXTERNAL_INVENTORY,
     },
     "files": {
         "gdtest_interlinks_userguide/__init__.py": '''\
@@ -150,6 +185,17 @@ SPEC = {
             Inline code like `Engine` and `Connection` and `execute()`
             should be automatically linked to reference pages.
         """,
+        "user_guide/03-external.qmd": """\
+            ---
+            title: External Links
+            ---
+
+            # External Links
+
+            Another project's objects are referenced the same way as our own:
+            [](`extdemo.Widget`) names it in full, and [](`ed.Widget`) uses the
+            alias the source declares.
+        """,
         "README.md": """\
             # gdtest-interlinks-userguide
 
@@ -164,7 +210,7 @@ SPEC = {
         "num_exports": 3,
         "section_titles": ["Classes", "Functions"],
         "has_user_guide": True,
-        "user_guide_files": ["01-getting-started.qmd", "02-advanced.qmd"],
+        "user_guide_files": ["01-getting-started.qmd", "02-advanced.qmd", "03-external.qmd"],
         # Interlinks that should be resolved in user-guide pages
         # Each key is a user-guide page filename, value is a list of
         # (display_text, target_page) tuples that should appear as links

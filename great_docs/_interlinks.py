@@ -1,5 +1,5 @@
 """
-Build the index that the interlinks filter resolves links against
+Build the lookup index used to resolve inter-project references
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ _TIMEOUT = 30
 
 @dataclass(frozen=True)
 class AliasResolution:
-    """Which short names resolve, and which are claimed by more than one object"""
+    """Resolved short names and names claimed by multiple objects"""
 
     kept: dict[str, str] = field(default_factory=dict)
     dropped: dict[str, tuple[str, ...]] = field(default_factory=dict)
@@ -66,7 +66,7 @@ def resolve_aliases(
 
 @dataclass(frozen=True)
 class Source:
-    """Another project's documentation, and where to read its inventory"""
+    """An external project's documentation and its inventory location"""
 
     name: str
     url: str
@@ -132,6 +132,7 @@ def load_source(
     cache_dir: Path,
     *,
     max_age: timedelta = timedelta(days=7),
+    root: Path | None = None,
 ) -> tuple[Inventory | None, str]:
     """
     Read a source's inventory, from the cache when it is fresh enough
@@ -148,6 +149,9 @@ def load_source(
         Where downloads are kept between builds.
     max_age :
         How long a cached download is used without refetching.
+    root :
+        Directory a relative `inv` path is read from, which is the project the
+        configuration belongs to rather than wherever the build is running.
 
     Returns
     -------
@@ -157,6 +161,8 @@ def load_source(
     location = source.location
     if "://" not in location:
         path = Path(location)
+        if not path.is_absolute() and root is not None:
+            path = root / path
         if not path.exists():
             return None, f"{source.name}: no inventory at {location}"
         return decode(path.read_bytes()), ""
@@ -180,7 +186,7 @@ def load_source(
 
 @dataclass(frozen=True)
 class IndexEntry:
-    """A resolvable target: where a name is documented"""
+    """A reference target and the page that documents it"""
 
     uri: str
     domain: str
@@ -191,7 +197,7 @@ class IndexEntry:
 
 @dataclass(frozen=True)
 class Index:
-    """Everything the filter needs to resolve a reference"""
+    """The names and targets needed to resolve references"""
 
     names: dict[str, tuple[IndexEntry, ...]] = field(default_factory=dict)
     prefixes: dict[str, tuple[str, ...]] = field(default_factory=dict)

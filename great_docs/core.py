@@ -6055,7 +6055,7 @@ class GreatDocs:
         cache_dir = self.project_root / ".great-docs-cache" / "interlinks"
         external = []
         for source in sources_from_config(self._config.interlinks_sources):
-            inv, note = load_source(source, cache_dir)
+            inv, note = load_source(source, cache_dir, root=self.project_root)
             if note:
                 log.detail(note)
             if inv is not None:

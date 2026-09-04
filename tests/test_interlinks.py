@@ -213,3 +213,14 @@ def test_write_index_writes_a_loadable_lua_chunk(tmp_path):
     assert '["demo.Thing"]' in text
     assert '["Thing"]' in text
     assert 'uri = "/reference/Thing.html#demo.Thing"' in text
+
+
+def test_load_source_reads_a_relative_path_from_the_project_root(tmp_path):
+    """A relative `inv` belongs to the project, not to wherever the build runs."""
+    (tmp_path / "extdemo.inv").write_bytes(encode(DEMO))
+    src = Source.from_config("extdemo", {"url": "https://ext.example/", "inv": "./extdemo.inv"})
+
+    inv, note = load_source(src, tmp_path / "cache", root=tmp_path)
+
+    assert inv is not None
+    assert note == ""

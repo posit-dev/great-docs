@@ -7792,6 +7792,24 @@ def test_DED_interlinks_prose_hrefs_valid():
             )
 
 
+@pytest.mark.dedicated
+def test_DED_interlinks_prose_publishes_its_inventory():
+    """gdtest_interlinks_prose: the site publishes objects.inv for other projects."""
+    from great_docs._sphinx_inventory import decode
+
+    pkg = "gdtest_interlinks_prose"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    inv_path = _site_dir(pkg) / "objects.inv"
+    assert inv_path.exists(), "objects.inv is not published at the site root"
+
+    inv = decode(inv_path.read_bytes())
+    names = {e.name for e in inv.entries}
+    assert f"{pkg}.DuckDBStore" in names, f"documented objects missing from {sorted(names)[:5]}"
+    assert all(e.uri for e in inv.entries), "an entry has no uri to link to"
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # DED: Internationalization (i18n) — French, Japanese, Arabic
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -9778,6 +9796,18 @@ def test_DED_interlinks_userguide_ug_pages_exist():
     ug = _ilu_site() / "user-guide"
     assert (ug / "getting-started.html").exists(), "Getting Started page missing"
     assert (ug / "advanced.html").exists(), "Advanced page missing"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_interlinks_userguide_external_links_resolve():
+    """gdtest_interlinks_userguide: a configured source resolves, alias included."""
+    _ilu_skip()
+    soup = _load_html(_ilu_site() / "user-guide" / "external.html")
+
+    hrefs = [a.get("href", "") for a in soup.find_all("a", class_="gdls-link")]
+    external = [h for h in hrefs if h == "https://extdemo.example/docs/Widget.html"]
+    assert len(external) == 2, f"expected the full name and the alias to resolve, got {hrefs}"
 
 
 @pytest.mark.dedicated

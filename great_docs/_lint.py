@@ -352,11 +352,11 @@ def _check_cross_references(
 
 
 _NOT_AUTHORED = {"node_modules"}
-"""Directories that never hold pages an author wrote"""
+"""Directories that do not contain author-written pages"""
 
 
 _INTERLINK_RE = re.compile(r"\[[^\]]*\]\(`(~?)([\w.]+)`\)")
-"""An explicit reference: [text](`~pkg.Name`)"""
+"""An explicit reference written as `[text](`~pkg.Name`)`"""
 
 
 def _gather_reference_inputs(

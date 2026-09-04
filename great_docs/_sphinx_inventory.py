@@ -49,7 +49,7 @@ class Inventory:
 
 def decode(data: bytes) -> Inventory:
     """
-    Read an inventory from the bytes of an `objects.inv` file
+    Decode the bytes of an `objects.inv` file
 
     The two shorthands the format allows are expanded: a `uri` ending in `$`
     takes an anchor equal to the name, and a `dispname` of `-` equals the name.
@@ -101,7 +101,7 @@ def decode(data: bytes) -> Inventory:
 
 def encode(inv: Inventory) -> bytes:
     """
-    Write an inventory as the bytes of an `objects.inv` file
+    Encode an inventory as an `objects.inv` file
 
     Parameters
     ----------
