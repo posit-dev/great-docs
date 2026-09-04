@@ -3,8 +3,9 @@ Tests for `render_signature`
 
 Covers the non-callable kinds (`TypedDict`, `Enum`) that must render without
 an empty call bracket, both base-class spellings each accepts, the
-`@dataclass` precedence that overrides both, and the inline markup the
-`plain` style writes.
+re-export that documents one under a package's own name, the `@dataclass`
+precedence that overrides both, and the inline markup the `plain` style
+writes.
 """
 
 from __future__ import annotations
@@ -23,6 +24,16 @@ def _rendered(source: str, name: str) -> str:
     with gf.temporary_visited_package(
         "package", {"__init__.py": textwrap.dedent(source)}
     ) as package:
+        return _render(package[name])
+
+
+def _rendered_reexport(source: str, name: str) -> str:
+    """Render an object through the package name that re-exports it"""
+    modules = {
+        "__init__.py": f"from ._defs import {name}\n",
+        "_defs.py": textwrap.dedent(source),
+    }
+    with gf.temporary_visited_package("package", modules) as package:
         return _render(package[name])
 
 
@@ -101,6 +112,54 @@ def test_enum_signature_has_no_brackets_with_qualified_base():
     qmd = _rendered(source, "Colour")
 
     assert "Colour()" not in qmd
+
+
+def test_reexported_typeddict_signature_has_no_brackets():
+    """Render a re-exported TypedDict without call brackets"""
+    source = '''
+    from typing import TypedDict
+
+    class Point(TypedDict):
+        """A point."""
+
+        x: int
+    '''
+
+    qmd = _rendered_reexport(source, "Point")
+
+    assert "Point()" not in qmd
+    assert "Point" in qmd
+
+
+def test_reexported_enum_signature_has_no_brackets():
+    """Render a re-exported enum without call brackets"""
+    source = '''
+    from enum import Enum
+
+    class Colour(Enum):
+        """A colour."""
+
+        RED = 1
+    '''
+
+    qmd = _rendered_reexport(source, "Colour")
+
+    assert "Colour()" not in qmd
+
+
+def test_reexported_class_keeps_its_brackets():
+    """Render call brackets for a re-exported ordinary class"""
+    source = '''
+    class Widget:
+        """A widget."""
+
+        def __init__(self):
+            pass
+    '''
+
+    qmd = _rendered_reexport(source, "Widget")
+
+    assert "Widget()" in qmd
 
 
 def test_dataclass_typeddict_keeps_its_brackets():

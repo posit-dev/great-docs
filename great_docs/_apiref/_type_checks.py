@@ -12,6 +12,51 @@ if TYPE_CHECKING:
     from .typing import DocMemberType, DocType  # noqa: TCH001
 
 
+def _resolved(obj: gf.Object | gf.Alias) -> gf.Object | None:
+    """
+    Resolve `obj` to the object at the end of its alias chain
+
+    Re-exported objects arrive as `Alias` instances, so kind checks inspect
+    the object at the end of the alias chain. Return `None` when that target
+    cannot be loaded, allowing predicates to return `False` instead of
+    raising.
+
+    Parameters
+    ----------
+    obj :
+        The node to resolve.
+
+    Returns
+    -------
+    :
+        The resolved object, or `None` when its target is unreachable.
+    """
+    if isinstance(obj, gf.Alias):
+        try:
+            return obj.final_target
+        except (gf.AliasResolutionError, gf.CyclicAliasError):
+            return None
+    return obj
+
+
+def _as_class(obj: gf.Object | gf.Alias) -> gf.Class | None:
+    """
+    Resolve `obj` to a class, or return `None` for another kind of object
+
+    Parameters
+    ----------
+    obj :
+        The node to resolve.
+
+    Returns
+    -------
+    :
+        The resolved class, or `None`.
+    """
+    target = _resolved(obj)
+    return target if isinstance(target, gf.Class) else None
+
+
 def is_typealias(obj: gf.Object | gf.Alias) -> bool:
     """
     Whether `obj` is a type alias
@@ -19,15 +64,14 @@ def is_typealias(obj: gf.Object | gf.Alias) -> bool:
     Covers both PEP 695 ``type X = ...`` aliases, which griffe models as a
     dedicated `TypeAlias`, and explicit ``X: TypeAlias = ...`` attributes.
     """
-    # `isinstance` avoids resolving aliases, which can raise for unresolved
-    # targets; PEP 695 aliases are a distinct type rather than an Attribute.
-    if isinstance(obj, gf.TypeAlias):
+    target = _resolved(obj)
+    if isinstance(target, gf.TypeAlias):
         return True
-    if not (isinstance(obj, gf.Attribute) and obj.annotation):
+    if not (isinstance(target, gf.Attribute) and target.annotation):
         return False
-    elif isinstance(obj.annotation, gf.ExprName):
-        return obj.annotation.name == "TypeAlias"
-    elif isinstance(obj.annotation, str):
+    elif isinstance(target.annotation, gf.ExprName):
+        return target.annotation.name == "TypeAlias"
+    elif isinstance(target.annotation, str):
         return True
     return False
 
@@ -36,11 +80,12 @@ def is_protocol(obj: gf.Object | gf.Alias) -> bool:
     """
     Whether `obj` is a class defining a typing `Protocol`
     """
+    cls = _as_class(obj)
     return (
-        isinstance(obj, gf.Class)
-        and len(obj.bases) > 0
-        and isinstance(obj.bases[-1], gf.ExprName)
-        and obj.bases[-1].canonical_path == "typing.Protocol"
+        cls is not None
+        and len(cls.bases) > 0
+        and isinstance(cls.bases[-1], gf.ExprName)
+        and cls.bases[-1].canonical_path == "typing.Protocol"
     )
 
 
@@ -67,10 +112,9 @@ def is_typeddict(obj: gf.Object | gf.Alias) -> bool:
     a dataclass that also derives from `TypedDict` showing its constructor
     brackets.
     """
+    cls = _as_class(obj)
     return (
-        isinstance(obj, gf.Class)
-        and "dataclass" not in obj.labels
-        and "TypedDict" in _short_base_names(obj)
+        cls is not None and "dataclass" not in cls.labels and "TypedDict" in _short_base_names(cls)
     )
 
 
@@ -83,10 +127,11 @@ def is_enum(obj: gf.Object | gf.Alias) -> bool:
     a dataclass that also derives from an `enum` base showing its
     constructor brackets.
     """
+    cls = _as_class(obj)
     return (
-        isinstance(obj, gf.Class)
-        and "dataclass" not in obj.labels
-        and bool(_short_base_names(obj) & _ENUM_BASES)
+        cls is not None
+        and "dataclass" not in cls.labels
+        and bool(_short_base_names(cls) & _ENUM_BASES)
     )
 
 
@@ -94,12 +139,12 @@ def is_typevar(obj: gf.Object | gf.Alias) -> bool:
     """
     Whether `obj` is a declaration of a `TypeVar`
     """
+    target = _resolved(obj)
     return (
-        isinstance(obj, gf.Attribute)
-        and hasattr(obj, "value")
-        and isinstance(obj.value, gf.ExprCall)
-        and isinstance(obj.value.function, gf.ExprName)
-        and obj.value.function.name == "TypeVar"
+        isinstance(target, gf.Attribute)
+        and isinstance(target.value, gf.ExprCall)
+        and isinstance(target.value.function, gf.ExprName)
+        and target.value.function.name == "TypeVar"
     )
 
 
