@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -190,6 +191,10 @@ def run_lint(
 
     if "cross-refs" in checks:
         _check_cross_references(pkg, importable_name, exports, result)
+        claims, documented_names, prose = _gather_reference_inputs(
+            pkg, importable_name, exports, project_root, docs.project_path
+        )
+        _check_ambiguous_references(claims, documented_names, prose, result)
 
     if "style" in checks:
         _check_docstring_style(pkg, importable_name, exports, config_style, result)
@@ -344,6 +349,145 @@ def _check_cross_references(
                             )
         except Exception:
             pass
+
+
+_NOT_AUTHORED = {"node_modules"}
+"""Directories that never hold pages an author wrote"""
+
+
+_INTERLINK_RE = re.compile(r"\[[^\]]*\]\(`(~?)([\w.]+)`\)")
+"""An explicit reference: [text](`~pkg.Name`)"""
+
+
+def _gather_reference_inputs(
+    pkg,
+    package_name: str,
+    exports: list[str],
+    project_root: Path,
+    build_dir: Path,
+) -> tuple[list[tuple[str, str]], set[str], dict[str, str]]:
+    """
+    Gather what the ambiguity check reads
+
+    The short names come from the exports and their public members, which is
+    the set the build documents when sections are auto-generated.
+
+    Parameters
+    ----------
+    pkg :
+        The loaded package.
+    package_name :
+        Importable name of the package.
+    exports :
+        Public names the package exports.
+    project_root :
+        Root of the project, whose pages are scanned alongside the docstrings.
+    build_dir :
+        Generated build directory, whose copies of those pages are skipped.
+
+    Returns
+    -------
+    :
+        The `(alias, target)` claims, the documented names, and the prose to
+        scan keyed by the symbol or file it came from.
+    """
+    claims: list[tuple[str, str]] = []
+    documented_names: set[str] = set()
+    prose: dict[str, str] = {}
+
+    for name in exports:
+        if name not in pkg.members:
+            continue
+        obj = pkg.members[name]
+        full = f"{package_name}.{name}"
+        documented_names.add(full)
+        claims.append((name, full))
+
+        docstring = _get_docstring(obj)
+        if docstring:
+            prose[full] = docstring
+
+        try:
+            if obj.kind.value != "class":
+                continue
+            for member_name, member in _iter_public_members(obj):
+                member_full = f"{full}.{member_name}"
+                documented_names.add(member_full)
+                claims.append((f"{name}.{member_name}", member_full))
+                claims.append((member_name, member_full))
+                member_doc = _get_docstring(member)
+                if member_doc:
+                    prose[member_full] = member_doc
+        except AttributeError:
+            continue
+
+    for dirpath, dirnames, filenames in os.walk(project_root):
+        here = Path(dirpath)
+        # Prune rather than filter afterwards. Quarto renders no path beginning
+        # with an underscore, so those pages carry no reference the site can show,
+        # and a nested `great-docs.yml` marks a separate documentation project,
+        # whose pages are checked against its own names rather than ours.
+        dirnames[:] = [
+            d
+            for d in dirnames
+            if not d.startswith((".", "_"))
+            and d not in _NOT_AUTHORED
+            and not (here / d / "great-docs.yml").exists()
+            and not is_in_great_docs_build_dir(
+                (here / d).relative_to(project_root).parts, project_root
+            )
+        ]
+        for filename in sorted(filenames):
+            if not filename.endswith((".qmd", ".md")):
+                continue
+            path = here / filename
+            prose[str(path.relative_to(project_root))] = path.read_text(encoding="utf-8")
+
+    return claims, documented_names, prose
+
+
+def _check_ambiguous_references(
+    claims: list[tuple[str, str]],
+    documented_names: set[str],
+    prose: dict[str, str],
+    result: LintResult,
+) -> None:
+    """
+    Check prose for references to a short name that two objects claim
+
+    Parameters
+    ----------
+    claims :
+        `(alias, target)` pairs for every documented object.
+    documented_names :
+        Full names, which a reference resolves against directly.
+    prose :
+        Text to scan, keyed by the symbol or file it came from.
+    result :
+        Aggregated results to append to.
+    """
+    from ._interlinks import resolve_aliases
+
+    dropped = resolve_aliases(claims, taken=documented_names).dropped
+    if not dropped:
+        return
+
+    for origin, text in prose.items():
+        for _, name in _INTERLINK_RE.findall(text):
+            targets = dropped.get(name)
+            if targets is None:
+                continue
+            result.issues.append(
+                LintIssue(
+                    check="ambiguous-xref",
+                    severity="error",
+                    symbol=origin,
+                    message=(
+                        f"'{name}' is claimed by {' and '.join(targets)}, so the "
+                        "reference stays unlinked. Qualify it."
+                    ),
+                )
+            )
 
 
 _STYLES = ("numpy", "google", "sphinx")
