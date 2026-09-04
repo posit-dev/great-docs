@@ -370,6 +370,16 @@ async def list_tools() -> list[Tool]:
 # ---------------------------------------------------------------------------
 
 
+class _ToolCallContent(list[TextContent]):
+    """list[TextContent] that also carries whether the call ended in error.
+
+    call_tool() is tested directly as a plain list of TextContent, so this
+    stays a list subclass; is_error just rides along for callers that check.
+    """
+
+    is_error: bool = False
+
+
 @_handler("call_tool")
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     """Dispatch tool calls to their implementations."""
@@ -391,9 +401,13 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         elif name == "gd_api_diff":
             return await _handle_api_diff(arguments)
         else:
-            return [TextContent(type="text", text=f"Unknown tool: {name}")]
+            result = _ToolCallContent([TextContent(type="text", text=f"Unknown tool: {name}")])
+            result.is_error = True
+            return result
     except Exception as e:
-        return [TextContent(type="text", text=f"Error: {e}")]
+        result = _ToolCallContent([TextContent(type="text", text=f"Error: {e}")])
+        result.is_error = True
+        return result
 
 
 async def _handle_build(arguments: dict) -> list[TextContent]:
@@ -1322,7 +1336,10 @@ if not _MCP_V1 and _V2_HANDLERS:
             getattr(params, "name", ""),
             getattr(params, "arguments", {}) or {},
         )
-        return CallToolResult(content=list(content or []))  # pragma: no cover
+        return CallToolResult(  # pragma: no cover
+            content=list(content or []),
+            is_error=getattr(content, "is_error", False),
+        )
 
     async def _on_list_prompts(ctx: Any, params: Any = None) -> Any:  # pragma: no cover
         return ListPromptsResult(prompts=await _raw["list_prompts"]())  # pragma: no cover
