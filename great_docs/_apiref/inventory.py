@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import Any
 
 import griffe as gf
 
+from .._sphinx_inventory import Inventory, InventoryEntry, encode
 from ._walkable import Walkable
 
 
@@ -20,7 +20,7 @@ class InventoryItem(Walkable):
 
 
 def write_inventory(inv: dict[str, Any], out_name: str) -> None:
-    """Write an inventory to a JSON file
+    """Write an inventory to an `objects.inv` file
 
     Parameters
     ----------
@@ -29,8 +29,20 @@ def write_inventory(inv: dict[str, Any], out_name: str) -> None:
     out_name :
         Output file name.
     """
-    with open(out_name, "w") as f:
-        json.dump(inv, f)
+    entries = tuple(
+        InventoryEntry(
+            name=item["name"],
+            domain=item["domain"],
+            role=item["role"],
+            priority=int(item["priority"]),
+            uri=item["uri"] or "",
+            dispname=item["name"] if item["dispname"] == "-" else item["dispname"],
+        )
+        for item in inv["items"]
+    )
+    data = encode(Inventory(project=inv["project"], version=inv["version"], entries=entries))
+    with open(out_name, "wb") as f:
+        f.write(data)
 
 
 def create_inventory(

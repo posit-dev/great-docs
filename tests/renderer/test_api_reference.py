@@ -54,7 +54,7 @@ def test_removed_and_dropped_keys_are_ignored():
 
 
 def test_version_is_not_wired_through():
-    # Parity: config `version` never reaches Settings; objects.json stays "0.0.9999".
+    # Parity: config `version` never reaches Settings; objects.inv stays "0.0.9999".
     ref = APIReference({"api-reference": {"package": "pkg", "version": "1.2.3"}})
     assert ref.settings.version is None
 
@@ -88,5 +88,5 @@ def test_toc_depth_reads_source_config():
 def test_settings_defaults():
     s = Settings()
     assert s.dir == "reference"
-    assert s.out_inventory == "objects.json"
+    assert s.out_inventory == "objects.inv"
     assert s.parser == "numpy"

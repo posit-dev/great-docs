@@ -13345,6 +13345,15 @@ anchor-sections: true
         if "gd-lightbox" not in config["filters"]:
             config["filters"].append("gd-lightbox")
 
+        # Publish the inventory so other projects can link into this site.
+        project = config.setdefault("project", {})
+        resources = project.setdefault("resources", [])
+        if isinstance(resources, str):
+            resources = [resources]
+            project["resources"] = resources
+        if "objects.inv" not in resources:
+            resources.append("objects.inv")
+
         # Compose each page's browser title during Quarto rendering.
         self._write_title_partial(config)
 

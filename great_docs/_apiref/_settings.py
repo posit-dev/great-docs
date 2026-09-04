@@ -34,7 +34,7 @@ class Settings:
     source_dir: str | None = None
     dir: str = "reference"
     out_index: str = "index.qmd"
-    out_inventory: str = "objects.json"
+    out_inventory: str = "objects.inv"
     out_page_suffix: str = ".qmd"
     sidebar: dict[str, Any] | None = None
     css: str | None = None
@@ -66,7 +66,7 @@ class Settings:
 
 # Parity quirk preserved deliberately (do NOT "fix" here): `version` is not
 # read from the config block. The old Builder accepted a `version` param but
-# its __init__ forced `self.version = None`, so objects.json was always built
+# its __init__ forced `self.version = None`, so the inventory was always built
 # with "0.0.9999". (`interlinks.fast` / `_fast_inventory` was confirmed dead
 # and dropped, per spec.)
 _SETTINGS_KEYS = {f.name for f in dc_fields(Settings)} - {"version"}

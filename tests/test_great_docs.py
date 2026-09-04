@@ -129,7 +129,6 @@ from great_docs._apiref.introspect import (
 from great_docs._apiref.inventory import (
     InventoryItem,
     create_inventory,
-    write_inventory,
 )
 from great_docs._apiref.resolve import (
     ObjectNotFoundError,
@@ -29372,7 +29371,7 @@ def test_api_reference_build_basic():
             assert (Path(tmp_dir) / "reference" / "greet.qmd").exists()
 
             # Check inventory was created
-            assert (Path(tmp_dir) / "objects.json").exists()
+            assert (Path(tmp_dir) / "objects.inv").exists()
         finally:
             os.chdir(old_cwd)
             sys.path.remove(tmp_dir)
@@ -33426,18 +33425,6 @@ def test_class_label_abc():
     obj = gf.Class(name="Base", lineno=1)
     obj.bases = [ExprName("ABC")]
     assert _class_label(obj) == "abc"
-
-
-def test_write_inventory_dict(tmp_path):
-    """write_inventory writes a dict directly as JSON."""
-
-    inv = {"project": "test", "version": "1.0", "items": []}
-    out = str(tmp_path / "inv.json")
-    write_inventory(inv, out_name=out)
-
-    with open(out) as f:
-        result = json.load(f)
-    assert result == inv
 
 
 def test_create_inventory_basic():
