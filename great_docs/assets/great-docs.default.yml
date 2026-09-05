@@ -42,23 +42,19 @@ parser: numpy
 
 # Interlinks
 # ----------
-# Other documentation sites to link to. Each entry names a project, the URL
-# its documentation is served from, and optionally where to read its
-# inventory and the module aliases your prose uses for it.
-# : {} - (default) link only within this project
-# : type(dict) - name: {url: ..., inv: ..., aliases: [...]}
-#
-#   interlinks:
-#     sources:
-#       numpy:
-#         url: https://numpy.org/doc/stable/
-#         aliases: [np]
+# Other documentation sites your prose can link to. Each entry under `sources`
+# names a project, the URL its documentation is served from, and optionally
+# where to read its inventory and the module aliases your prose uses for it.
+# Example:
+#   sources:
+#     numpy:
+#       url: https://numpy.org/doc/stable/
+#       inv: https://numpy.org/doc/stable/objects.inv
+#       aliases: [np]
 interlinks:
-  sources: {}
-  # Whether a link to a function or method shows a trailing "()", as
-  # `decode()` rather than `decode`. Links to classes never show one.
-  # : true - (default) show the parentheses
-  # : false - link the bare name
+  sources: {} # Projects to link to; none by default
+  # A link to a function or method shows a trailing "()", as `decode()` rather
+  # than `decode`. Links to classes never show one.
   add_function_parentheses: true
 
 # Callable Signatures
