@@ -202,6 +202,8 @@ class Index:
     names: dict[str, tuple[IndexEntry, ...]] = field(default_factory=dict)
     prefixes: dict[str, tuple[str, ...]] = field(default_factory=dict)
     dropped: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    add_function_parentheses: bool = True
+    """Whether a link to a function or method shows a trailing `()`"""
 
 
 def root_modules(inv: Inventory) -> tuple[str, ...]:
@@ -230,6 +232,8 @@ def build_index(
     local: Inventory,
     claims: Iterable[tuple[str, str]],
     external: Sequence[tuple[Source, Inventory]],
+    *,
+    add_function_parentheses: bool = True,
 ) -> Index:
     """
     Merge every inventory into one lookup table
@@ -247,6 +251,8 @@ def build_index(
         `(alias, target)` pairs from the documented objects.
     external :
         Each source and the inventory read for it.
+    add_function_parentheses :
+        Whether a link to a function or method shows a trailing `()`.
 
     Returns
     -------
@@ -295,7 +301,12 @@ def build_index(
         if target in ordered:
             ordered[alias] = ordered[target]
 
-    return Index(names=ordered, prefixes=prefixes, dropped=resolution.dropped)
+    return Index(
+        names=ordered,
+        prefixes=prefixes,
+        dropped=resolution.dropped,
+        add_function_parentheses=add_function_parentheses,
+    )
 
 
 def _quote_lua(value: str) -> str:
@@ -319,7 +330,11 @@ def write_index(index: Index, path: Path) -> None:
     path :
         Where to write it.
     """
-    lines = ["return {", "  prefixes = {"]
+    lines = [
+        "return {",
+        f"  add_function_parentheses = {str(index.add_function_parentheses).lower()},",
+        "  prefixes = {",
+    ]
     for alias in sorted(index.prefixes):
         roots = ", ".join(_quote_lua(r) for r in index.prefixes[alias])
         lines.append(f"    [{_quote_lua(alias)}] = {{{roots}}},")

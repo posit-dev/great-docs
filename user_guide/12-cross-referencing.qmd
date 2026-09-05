@@ -257,7 +257,8 @@ The three cross-referencing levels handle parentheses differently, so it helps t
 **`%seealso`**: Write bare names without parentheses. Great Docs automatically appends `()` to
 functions and methods in the rendered "See Also" section based on each symbol's type. Writing
 `%seealso decode, MyClass` produces `decode()` and `MyClass` in the output, with the parentheses
-added only where appropriate.
+added only where appropriate. Set `interlinks.add_function_parentheses` to `false` if you would
+rather link the bare name.
 
 **Inline interlinks**: The target inside backticks should be the qualified name without parentheses.
 Write `` [](`~mypackage.my_func`) ``, not `` [](`~mypackage.my_func()`) ``.

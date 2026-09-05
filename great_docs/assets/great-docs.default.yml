@@ -55,6 +55,11 @@ parser: numpy
 #         aliases: [np]
 interlinks:
   sources: {}
+  # Whether a link to a function or method shows a trailing "()", as
+  # `decode()` rather than `decode`. Links to classes never show one.
+  # : true - (default) show the parentheses
+  # : false - link the bare name
+  add_function_parentheses: true
 
 # Callable Signatures
 # -------------------

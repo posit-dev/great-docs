@@ -980,6 +980,11 @@ class Config:
         return cast("dict[str, Any]", self["interlinks.sources"])
 
     @property
+    def interlinks_add_function_parentheses(self) -> bool:
+        """Whether function and method links display a trailing `()`."""
+        return bool(self["interlinks.add_function_parentheses"])
+
+    @property
     def logo(self) -> dict[str, Any] | None:
         """The logo config, or None when no logo is set"""
         if not (self["logo.light"] or self["logo.dark"]):

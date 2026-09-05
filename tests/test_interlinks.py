@@ -224,3 +224,18 @@ def test_load_source_reads_a_relative_path_from_the_project_root(tmp_path):
 
     assert inv is not None
     assert note == ""
+
+
+def test_function_parentheses_are_on_by_default():
+    index = build_index(LOCAL, [], [])
+    assert index.add_function_parentheses is True
+
+
+def test_the_index_carries_the_parentheses_choice(tmp_path):
+    """The filter knows only what the index tells it."""
+    index = build_index(LOCAL, [], [], add_function_parentheses=False)
+    out = tmp_path / "index.lua"
+
+    write_index(index, out)
+
+    assert "add_function_parentheses = false," in out.read_text()

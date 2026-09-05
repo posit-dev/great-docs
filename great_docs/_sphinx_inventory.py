@@ -18,7 +18,7 @@ import zlib
 from dataclasses import dataclass
 
 INVENTORY_FILENAME = "objects.inv"
-"""What a project publishes its inventory as, the name every consumer looks for"""
+"""Filename used for the inventory published by every project"""
 
 _VERSION_LINE = b"# Sphinx inventory version 2"
 

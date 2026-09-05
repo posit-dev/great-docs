@@ -195,7 +195,7 @@ end
 --- @return string
 local function link_text(ref, entry)
   local text = ref.shortened and short_name(ref.name) or ref.name
-  if CALLABLE_ROLES[entry.role] then
+  if get_index().add_function_parentheses and CALLABLE_ROLES[entry.role] then
     text = text .. "()"
   end
   return text

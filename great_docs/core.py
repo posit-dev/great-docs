@@ -6061,7 +6061,12 @@ class GreatDocs:
             if inv is not None:
                 external.append((source, inv))
 
-        index = build_index(local, claims, external)
+        index = build_index(
+            local,
+            claims,
+            external,
+            add_function_parentheses=self._config.interlinks_add_function_parentheses,
+        )
         write_index(index, self.project_path / "_inv" / "index.lua")
 
         for alias, targets in sorted(index.dropped.items()):
