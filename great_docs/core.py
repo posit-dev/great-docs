@@ -6040,9 +6040,9 @@ class GreatDocs:
             sources_from_config,
             write_index,
         )
-        from great_docs._sphinx_inventory import Inventory, decode
+        from great_docs._sphinx_inventory import INVENTORY_FILENAME, Inventory, decode
 
-        inventory_path = self.project_path / "objects.inv"
+        inventory_path = self.project_path / INVENTORY_FILENAME
         if inventory_path.exists():
             local = decode(inventory_path.read_bytes())
         else:
@@ -13402,8 +13402,10 @@ anchor-sections: true
         if isinstance(resources, str):
             resources = [resources]
             project["resources"] = resources
-        if "objects.inv" not in resources:
-            resources.append("objects.inv")
+        from great_docs._sphinx_inventory import INVENTORY_FILENAME
+
+        if INVENTORY_FILENAME not in resources:
+            resources.append(INVENTORY_FILENAME)
 
         # Compose each page's browser title during Quarto rendering.
         self._write_title_partial(config)

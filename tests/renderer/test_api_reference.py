@@ -88,5 +88,4 @@ def test_toc_depth_reads_source_config():
 def test_settings_defaults():
     s = Settings()
     assert s.dir == "reference"
-    assert s.out_inventory == "objects.inv"
     assert s.parser == "numpy"

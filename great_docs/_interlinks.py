@@ -14,7 +14,7 @@ from typing import Any
 
 import requests
 
-from ._sphinx_inventory import Inventory, decode
+from ._sphinx_inventory import INVENTORY_FILENAME, Inventory, decode
 
 _TIMEOUT = 30
 """Seconds to wait for an inventory download"""
@@ -103,7 +103,7 @@ class Source:
         """Where the inventory is read from"""
         if self.inv:
             return self.inv
-        return f"{self.url.rstrip('/')}/objects.inv"
+        return f"{self.url.rstrip('/')}/{INVENTORY_FILENAME}"
 
 
 def sources_from_config(sources: dict[str, Any]) -> list[Source]:

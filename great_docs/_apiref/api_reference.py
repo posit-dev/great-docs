@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from yaml12 import read_yaml
 
+from .._sphinx_inventory import INVENTORY_FILENAME
 from ._settings import Settings, active_settings
 from .content import Link, Page
 from .inventory import create_inventory, write_inventory
@@ -237,7 +238,7 @@ class APIReference:
 
         _log.info("Creating inventory file")
         version = "0.0.9999" if s.version is None else s.version
-        write_inventory(create_inventory(self.package, version, self.items), s.out_inventory)
+        write_inventory(create_inventory(self.package, version, self.items), INVENTORY_FILENAME)
 
         if s.sidebar:
             _log.info(f"Writing sidebar yaml to {s.sidebar['file']}")

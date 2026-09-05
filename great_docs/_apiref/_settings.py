@@ -34,7 +34,6 @@ class Settings:
     source_dir: str | None = None
     dir: str = "reference"
     out_index: str = "index.qmd"
-    out_inventory: str = "objects.inv"
     out_page_suffix: str = ".qmd"
     sidebar: dict[str, Any] | None = None
     css: str | None = None
