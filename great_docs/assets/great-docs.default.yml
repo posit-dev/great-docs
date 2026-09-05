@@ -45,7 +45,7 @@ parser: numpy
 # Other documentation sites your prose can link to. Each entry under `sources`
 # names a project, the URL its documentation is served from, and optionally
 # where to read its inventory and the module aliases your prose uses for it.
-# Example:
+# interlinks:
 #   sources:
 #     numpy:
 #       url: https://numpy.org/doc/stable/
