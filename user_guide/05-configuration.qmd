@@ -273,12 +273,11 @@ interlinks:
 With that in place, `` [](`numpy.ndarray`) `` resolves to numpy's page for `ndarray`, exactly
 as a reference to one of your own objects resolves to yours.
 
-Each source takes three fields:
+Each source takes two fields:
 
 - `url` is where the documentation is published. It prefixes every link into that project, and
-  is where the inventory is read from unless `inv` says otherwise.
-- `inv` overrides the inventory's location. It accepts a URL or a path on disk, which is
-  useful for a project you build locally alongside this one.
+  its inventory is read from `<url>/objects.inv`, where every project publishes one. A path on
+  disk works too, for a project you build alongside this one.
 - `aliases` lists the module names your prose uses for the project. With `aliases: [np]`, a
   reference to `` [](`np.ndarray`) `` resolves as `numpy.ndarray`.
 

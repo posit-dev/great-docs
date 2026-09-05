@@ -17,8 +17,7 @@ Focus: Tests that the GDLS (Great Docs Linking System) resolves interlinks
 
 from great_docs._sphinx_inventory import Inventory, InventoryEntry, encode
 
-# A stand-in for another project's published inventory. Kept local so the build
-# resolves external links without reaching the network.
+# A stand-in for another project's published inventory.
 _EXTERNAL_INVENTORY = encode(
     Inventory(
         project="extdemo",
@@ -60,14 +59,15 @@ SPEC = {
             "sources": {
                 "extdemo": {
                     "url": "https://extdemo.example/docs/",
-                    "inv": "./extdemo.inv",
                     "aliases": ["ed"],
                 },
             },
         },
     },
     "binary_files": {
-        "extdemo.inv": _EXTERNAL_INVENTORY,
+        # Seeded into the download cache so the build resolves this source
+        # without reaching the network, exactly as a repeat build does.
+        ".great-docs-cache/interlinks/extdemo.inv": _EXTERNAL_INVENTORY,
     },
     "files": {
         "gdtest_interlinks_userguide/__init__.py": '''\

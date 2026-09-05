@@ -70,7 +70,6 @@ class Source:
 
     name: str
     url: str
-    inv: str = ""
     aliases: tuple[str, ...] = ()
 
     @classmethod
@@ -94,15 +93,12 @@ class Source:
         return cls(
             name=name,
             url=str(value.get("url", "") or ""),
-            inv=str(value.get("inv", "") or ""),
             aliases=tuple(value.get("aliases", []) or []),
         )
 
     @property
     def location(self) -> str:
-        """Where the inventory is read from"""
-        if self.inv:
-            return self.inv
+        """Where the inventory is read from, by the convention every project follows"""
         return f"{self.url.rstrip('/')}/{INVENTORY_FILENAME}"
 
 
@@ -150,7 +146,7 @@ def load_source(
     max_age :
         How long a cached download is used without refetching.
     root :
-        Directory a relative `inv` path is read from, which is the project the
+        Directory a relative `url` is read from, which is the project the
         configuration belongs to rather than wherever the build is running.
 
     Returns

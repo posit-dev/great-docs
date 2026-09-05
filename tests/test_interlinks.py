@@ -58,11 +58,10 @@ DEMO = Inventory(
 )
 
 
-def test_source_location_honours_the_override():
-    src = Source.from_config(
-        "numpy", {"url": "https://numpy.org/", "inv": "/tmp/numpy.inv", "aliases": ["np"]}
-    )
-    assert src.location == "/tmp/numpy.inv"
+def test_a_sources_inventory_sits_beside_its_documentation():
+    """Every project publishes it at the same place, so there is nothing to configure."""
+    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/", "aliases": ["np"]})
+    assert src.location == "https://numpy.org/doc/stable/objects.inv"
     assert src.aliases == ("np",)
 
 
@@ -71,9 +70,10 @@ def test_sources_from_config_skips_an_entry_with_no_url():
 
 
 def test_load_source_reads_a_local_inventory(tmp_path):
-    path = tmp_path / "numpy.inv"
-    path.write_bytes(encode(DEMO))
-    src = Source.from_config("numpy", {"url": "https://numpy.org/", "inv": str(path)})
+    """A url may address a directory on disk, as a sibling project's build does."""
+    (tmp_path / "numpy.inv").write_bytes(encode(DEMO))
+    (tmp_path / "objects.inv").write_bytes(encode(DEMO))
+    src = Source.from_config("numpy", {"url": str(tmp_path)})
 
     inv, note = load_source(src, tmp_path / "cache")
 
@@ -215,10 +215,11 @@ def test_write_index_writes_a_loadable_lua_chunk(tmp_path):
     assert 'uri = "/reference/Thing.html#demo.Thing"' in text
 
 
-def test_load_source_reads_a_relative_path_from_the_project_root(tmp_path):
-    """A relative `inv` belongs to the project, not to wherever the build runs."""
-    (tmp_path / "extdemo.inv").write_bytes(encode(DEMO))
-    src = Source.from_config("extdemo", {"url": "https://ext.example/", "inv": "./extdemo.inv"})
+def test_load_source_reads_a_relative_url_from_the_project_root(tmp_path):
+    """A relative url belongs to the project, not to wherever the build runs."""
+    (tmp_path / "sibling").mkdir()
+    (tmp_path / "sibling" / "objects.inv").write_bytes(encode(DEMO))
+    src = Source.from_config("extdemo", {"url": "./sibling"})
 
     inv, note = load_source(src, tmp_path / "cache", root=tmp_path)
 
