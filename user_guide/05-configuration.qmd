@@ -281,6 +281,19 @@ Each source takes two fields:
 - `aliases` lists the module names your prose uses for the project. With `aliases: [np]`, a
   reference to `` [](`np.ndarray`) `` resolves as `numpy.ndarray`.
 
+Add Python's standard library as a source in the same way:
+
+```yaml
+interlinks:
+  sources:
+    python:
+      url: https://docs.python.org/3/
+```
+
+Do not add `aliases` here. The standard library has no single root. An alias rewrites a prefix
+to a project's root module, which works when a project puts every name under one package, as
+numpy and pandas do.
+
 Inventories are downloaded during the build and cached, so repeated builds do no network work,
 and a build that cannot reach a project falls back to the copy it already has. A project it has
 never reached is reported and skipped, leaving those references unlinked rather than failing
