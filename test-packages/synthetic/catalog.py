@@ -311,8 +311,8 @@ ALL_PACKAGES: list[str] = [
     # 146–147: See Also description variants
     "gdtest_seealso_desc",  # 146
     "gdtest_numpy_seealso_desc",  # 147
-    # 148: Interlinks in prose
-    "gdtest_interlinks_prose",  # 148
+    # 148: Interlinks in docstrings and user-guide pages
+    "gdtest_interlinks",  # 148
     # 149: Autolink inline code
     "gdtest_autolink",  # 149
     # 150–155: Agent Skills (skill.md)
@@ -349,8 +349,6 @@ ALL_PACKAGES: list[str] = [
     "gdtest_scale_min_scale",  # 169
     # 170: Wide homepage content with column-margin sidebar
     "gdtest_homepage_wide",  # 170
-    # 171: Interlinks and autolinking in user-guide pages (non-reference GDLS)
-    "gdtest_interlinks_userguide",  # 171
     # 172: Custom docstring headings with backtick code spans
     "gdtest_code_span_headings",  # 172
     # 173: Blog section with user-provided index.qmd
@@ -1915,10 +1913,12 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "'name : description' entries. Tests that descriptions survive the "
         "post-render merge step and appear in the final rendered output."
     ),
-    "gdtest_interlinks_prose": (
+    "gdtest_interlinks": (
         "Three classes and a function using [](`~pkg.Name`) interlinks syntax "
-        "directly in docstring prose text. Tests that the post-render resolver "
-        "converts these references into proper hyperlinks to reference pages."
+        "in docstrings and in user-guide pages, plus inline-code "
+        "autolinking and a configured external source. Tests that both the "
+        "post-render resolver and the all-pages GDLS pass convert these into "
+        "hyperlinks with correct relative paths back to reference/."
     ),
     "gdtest_autolink": (
         "Three classes and a function using inline code (`Name`, `Name()`, "
@@ -2072,12 +2072,6 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "Tests that wide content on the homepage (code blocks, wide tables) "
         "renders at full width when the column-margin metadata sidebar is "
         "present. Verifies the gd-homepage body class and CSS grid fix."
-    ),
-    "gdtest_interlinks_userguide": (
-        "Three exports (Engine, Connection, execute) with user-guide pages "
-        "using [](`~pkg.Name`) interlinks and inline-code autolinking. "
-        "Tests that the GDLS resolves links on non-reference pages with "
-        "correct relative paths back to reference/."
     ),
     "gdtest_code_span_headings": (
         "Two functions with custom docstring section headings containing "
