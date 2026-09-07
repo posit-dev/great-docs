@@ -83,6 +83,7 @@ class Config:
         """
         self.project_root = project_root
         self.config_path = project_root / "great-docs.yml"
+        self.cache_dir = project_root / ".great-docs-cache"
         self._config = self._load_config()
 
     def _load_config(self) -> dict[str, Any]:

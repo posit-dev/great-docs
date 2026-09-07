@@ -6022,60 +6022,6 @@ class GreatDocs:
         end = min(len(all_lines), end)
         return "".join(all_lines[start:end])
 
-    def _write_interlinks_index(self, log: Any, ref: Any) -> None:
-        """
-        Merge every inventory into the index the interlinks filter reads
-
-        Parameters
-        ----------
-        log :
-            The build log to report through.
-        ref :
-            The built `APIReference`, or `None` when the project has no API
-            reference and only external links can resolve.
-        """
-        from great_docs._interlinks import (
-            build_index,
-            load_source,
-            sources_from_config,
-            write_index,
-        )
-        from great_docs._sphinx_inventory import INVENTORY_FILENAME, Inventory, decode
-
-        inventory_path = self.project_path / INVENTORY_FILENAME
-        if inventory_path.exists():
-            local = decode(inventory_path.read_bytes())
-        else:
-            local = Inventory(project=self._detect_package_name() or "", version="", entries=())
-
-        claims: list[tuple[str, str]] = []
-        if ref is not None:
-            claims = [(alias, item.name) for item in ref.items for alias in item.aliases]
-
-        cache_dir = self.project_root / ".great-docs-cache" / "interlinks"
-        external = []
-        for source in sources_from_config(self._config.interlinks_sources):
-            inv, note = load_source(source, cache_dir, root=self.project_root)
-            if note:
-                log.detail(note)
-            if inv is not None:
-                external.append((source, inv))
-
-        index = build_index(
-            local,
-            claims,
-            external,
-            add_function_parentheses=self._config.interlinks_add_function_parentheses,
-        )
-        write_index(index, self.project_path / "_inv" / "index.lua")
-
-        for alias, targets in sorted(index.dropped.items()):
-            log.detail(
-                f"'{alias}' is ambiguous ({', '.join(targets)}); references to it stay unlinked"
-            )
-
-        log.step_done(f"Indexed {len(index.names)} name(s)")
-
     # Regex for detecting a top-level `freeze:` key in YAML frontmatter
     _FREEZE_FM_RE = re.compile(r"^freeze:\s+(.+)$", re.MULTILINE)
 
@@ -16476,7 +16422,21 @@ anchor-sections: true
             # ── Step 15: Build the interlinks index ────────────────────
             step += 1
             log.step_start(step, "Build interlinks index")
-            self._write_interlinks_index(log, ref)
+            from great_docs._interlinks import build_project_index
+
+            index, interlinks_notes = build_project_index(
+                self.project_path,
+                self._config,
+                self._detect_package_name() or "",
+                ref,
+            )
+            for note in interlinks_notes:
+                log.detail(note)
+            for alias, targets in sorted(index.dropped.items()):
+                log.detail(
+                    f"'{alias}' is ambiguous ({', '.join(targets)}); references to it stay unlinked"
+                )
+            log.step_done(f"Indexed {len(index.names)} name(s)")
 
             # ── Step 16: Prepare freeze cache ──────────────────────────
             step += 1
