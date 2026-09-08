@@ -50,6 +50,22 @@ def test_flattens_config_into_dotted_stems(tmp_path: Path):
     assert names == ["TopClass", "sub.Widget", "sub.Widget.fit"]
 
 
+def test_documented_objects_returns_the_manifest_items(tmp_path: Path):
+    """
+    Read the same objects as `documented_symbol_names`, as items rather than stems
+
+    Each item carries its full name and the short names it claims.
+    """
+    _write_pkg(tmp_path)
+    gd = GreatDocs(project_path=str(tmp_path))
+
+    by_name = {item.name: item for item in gd.documented_objects("mypkg")}
+
+    assert "TopClass" in by_name["mypkg.TopClass"].aliases
+    assert "Widget" in by_name["mypkg.sub.Widget"].aliases
+    assert "fit" in by_name["mypkg.sub.Widget.fit"].aliases
+
+
 def test_does_not_write_build_artifacts(tmp_path: Path):
     """`documented_symbol_names` is a read-only query: it must leave no files behind.
 

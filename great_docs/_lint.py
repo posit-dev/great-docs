@@ -5,10 +5,14 @@ import os
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ._builtin.directives import DIRECTIVES
-from ._builtin.directives._nodoc import exclude_nodoc
+from ._interlinks import AliasClaims
 from ._utils import fenced_lines, is_in_great_docs_build_dir, parse_seealso
+
+if TYPE_CHECKING:
+    from ._apiref.inventory import InventoryItem
 
 
 @dataclass
@@ -192,16 +196,12 @@ def run_lint(
 
     if "cross-refs" in checks:
         _check_cross_references(pkg, importable_name, exports, result)
-        documented_stems = set(docs.documented_symbol_names(package_name))
-        if not documented_stems and exports:
-            # A resolution hiccup returned nothing usable; fall back to the
-            # heuristic membership `_gather_reference_inputs` applies on its
-            # own rather than gating every claim out.
-            documented_stems = None
-        claims, documented_names, prose = _gather_reference_inputs(
-            pkg, importable_name, exports, project_root, docs.project_path, documented_stems
+        documented = docs.documented_objects(package_name)
+        _check_ambiguous_references(
+            AliasClaims.make(documented),
+            _gather_prose(documented, project_root),
+            result,
         )
-        _check_ambiguous_references(claims, documented_names, prose, result)
 
     if "style" in checks:
         _check_docstring_style(pkg, importable_name, exports, config_style, result)
@@ -392,86 +392,31 @@ def _strip_code(text: str) -> str:
     return _CODE_SPAN_RE.sub("", unfenced)
 
 
-def _gather_reference_inputs(
-    pkg,
-    package_name: str,
-    exports: list[str],
-    project_root: Path,
-    build_dir: Path,
-    documented_stems: set[str] | None = None,
-) -> tuple[list[tuple[str, str]], set[str], dict[str, str]]:
+def _gather_prose(items: list[InventoryItem], project_root: Path) -> dict[str, str]:
     """
-    Gather what the ambiguity check reads
+    Gather the text the ambiguity check scans
 
-    The short names come from the exports and their public members, which is
-    the set the build documents when sections are auto-generated.
+    Read the docstring of every object the reference documents, and the pages
+    an author writes under the project root.
 
     Parameters
     ----------
-    pkg :
-        The loaded package.
-    package_name :
-        Importable name of the package.
-    exports :
-        Public names the package exports.
+    items :
+        The objects the reference documents.
     project_root :
         Root of the project, whose pages are scanned alongside the docstrings.
-    build_dir :
-        Generated build directory, whose copies of those pages are skipped.
-    documented_stems :
-        Dotted stems (e.g. `MyClass`, `MyClass.flush`) the renderer's actual
-        member selection documents, such as a `members:` config narrowing a
-        class's rendered members. An export or member outside this set claims
-        no name, on top of the heuristics below. Every export and member
-        claims its name when omitted.
 
     Returns
     -------
     :
-        The `(alias, target)` claims, the documented names, and the prose to
-        scan keyed by the symbol or file it came from.
+        The prose, keyed by the symbol or file it came from.
     """
-    claims: list[tuple[str, str]] = []
-    documented_names: set[str] = set()
     prose: dict[str, str] = {}
 
-    for name in exports:
-        if name not in pkg.members:
-            continue
-        if documented_stems is not None and name not in documented_stems:
-            continue
-        obj = pkg.members[name]
-        if exclude_nodoc(obj) is None:
-            # Excluded objects do not appear in the rendered reference index.
-            continue
-        full = f"{package_name}.{name}"
-        documented_names.add(full)
-        claims.append((name, full))
-
-        docstring = _get_docstring(obj)
+    for item in items:
+        docstring = _get_docstring(item.obj)
         if docstring:
-            prose[full] = docstring
-
-        try:
-            if obj.kind.value != "class":
-                continue
-            for member_name, member in _iter_public_members(obj):
-                if documented_stems is not None and f"{name}.{member_name}" not in documented_stems:
-                    continue
-                member_doc = _get_docstring(member)
-                if member_doc is None:
-                    # Undocumented members are omitted by the renderer's
-                    # default `include_empty=False`, so they claim no name.
-                    continue
-                if exclude_nodoc(member) is None:
-                    continue
-                member_full = f"{full}.{member_name}"
-                documented_names.add(member_full)
-                claims.append((f"{name}.{member_name}", member_full))
-                claims.append((member_name, member_full))
-                prose[member_full] = member_doc
-        except AttributeError:
-            continue
+            prose[item.name] = docstring
 
     for dirpath, dirnames, filenames in os.walk(project_root):
         here = Path(dirpath)
@@ -495,12 +440,11 @@ def _gather_reference_inputs(
             path = here / filename
             prose[str(path.relative_to(project_root))] = path.read_text(encoding="utf-8")
 
-    return claims, documented_names, prose
+    return prose
 
 
 def _check_ambiguous_references(
-    claims: list[tuple[str, str]],
-    documented_names: set[str],
+    claims: AliasClaims,
     prose: dict[str, str],
     result: LintResult,
 ) -> None:
@@ -510,19 +454,16 @@ def _check_ambiguous_references(
     Parameters
     ----------
     claims :
-        `(alias, target)` pairs for every documented object.
-    documented_names :
-        Full names, which a reference resolves against directly.
+        What the build's documented objects claim, and the names they may not
+        shadow.
     prose :
         Text to scan, keyed by the symbol or file it came from.
     result :
         Aggregated results to append to.
     """
-    from ._interlinks import AliasClaims, resolve_aliases
+    from ._interlinks import resolve_aliases
 
-    dropped = resolve_aliases(
-        AliasClaims(claimed=tuple(claims), published=frozenset(documented_names))
-    ).dropped
+    dropped = resolve_aliases(claims).dropped
     if not dropped:
         return
 

@@ -7,13 +7,11 @@ from great_docs._builtin.directives import DIRECTIVES
 from great_docs._lint import (
     LintIssue,
     LintResult,
-    _check_ambiguous_references,
     _check_cross_references,
     _check_directive_consistency,
     _check_docstring_style,
     _check_missing_docstrings,
     _extract_frontmatter_upcoming,
-    _gather_reference_inputs,
     _lost_sections,
     _section_kinds,
     _version_distance,
@@ -351,130 +349,6 @@ class TestCheckCrossReferences:
         _check_cross_references(pkg, "mypkg", ["func_a"], result)
 
         assert len(result.issues) == 0
-
-
-class TestGatherReferenceInputs:
-    def test_undocumented_member_claims_no_name(self, tmp_path):
-        """Leave an undocumented member out of the reference claims."""
-        method = _make_griffe_obj(kind="function", docstring=None)
-        cls = _make_griffe_obj(
-            kind="class",
-            docstring="Documented class.",
-            members={"flush": method},
-        )
-        pkg = _make_pkg({"MyClass": cls})
-
-        claims, documented_names, prose = _gather_reference_inputs(
-            pkg, "mypkg", ["MyClass"], tmp_path, tmp_path
-        )
-
-        assert "mypkg.MyClass.flush" not in documented_names
-        assert ("flush", "mypkg.MyClass.flush") not in claims
-        assert "mypkg.MyClass.flush" not in prose
-
-    def test_documented_member_claims_its_names(self, tmp_path):
-        method = _make_griffe_obj(kind="function", docstring="Flush buffered writes.")
-        cls = _make_griffe_obj(
-            kind="class",
-            docstring="Documented class.",
-            members={"flush": method},
-        )
-        pkg = _make_pkg({"MyClass": cls})
-
-        claims, documented_names, prose = _gather_reference_inputs(
-            pkg, "mypkg", ["MyClass"], tmp_path, tmp_path
-        )
-
-        assert "mypkg.MyClass.flush" in documented_names
-        assert ("flush", "mypkg.MyClass.flush") in claims
-        assert ("MyClass.flush", "mypkg.MyClass.flush") in claims
-        assert prose["mypkg.MyClass.flush"] == "Flush buffered writes."
-
-    def test_undocumented_member_does_not_make_a_real_reference_ambiguous(self, tmp_path):
-        """Do not report ambiguity when only one shared method is documented."""
-        documented = _make_griffe_obj(kind="function", docstring="Flush buffered writes.")
-        undocumented = _make_griffe_obj(kind="function", docstring=None)
-        store_cls = _make_griffe_obj(
-            kind="class", docstring="A store.", members={"flush": documented}
-        )
-        net_cls = _make_griffe_obj(
-            kind="class", docstring="A connection.", members={"flush": undocumented}
-        )
-        pkg = _make_pkg({"StoreCache": store_cls, "NetCache": net_cls})
-
-        claims, documented_names, prose = _gather_reference_inputs(
-            pkg, "mypkg", ["StoreCache", "NetCache"], tmp_path, tmp_path
-        )
-        prose["guide.qmd"] = "See [](`flush`) for details."
-
-        result = LintResult()
-        _check_ambiguous_references(claims, documented_names, prose, result)
-
-        assert result.issues == []
-
-    def test_nodoc_member_does_not_make_a_real_reference_ambiguous(self, tmp_path):
-        """Ignore a member excluded from the rendered reference index."""
-        documented = _make_griffe_obj(kind="function", docstring="Flush buffered writes.")
-        nodoc = _make_griffe_obj(kind="function", docstring="Flush the socket.\n\n%nodoc")
-        store_cls = _make_griffe_obj(
-            kind="class", docstring="A store.", members={"flush": documented}
-        )
-        net_cls = _make_griffe_obj(
-            kind="class", docstring="A connection.", members={"flush": nodoc}
-        )
-        pkg = _make_pkg({"StoreCache": store_cls, "NetCache": net_cls})
-
-        claims, documented_names, prose = _gather_reference_inputs(
-            pkg, "mypkg", ["StoreCache", "NetCache"], tmp_path, tmp_path
-        )
-        prose["guide.qmd"] = "See [](`flush`) for details."
-
-        result = LintResult()
-        _check_ambiguous_references(claims, documented_names, prose, result)
-
-        assert result.issues == []
-
-    def test_a_member_outside_the_configured_selection_claims_no_name(self, tmp_path):
-        """A `members:` config narrowing a class's rendered members must not cause a false ambiguity."""
-        store_flush = _make_griffe_obj(kind="function", docstring="Flush buffered writes.")
-        net_flush = _make_griffe_obj(kind="function", docstring="Flush the socket.")
-        store_cls = _make_griffe_obj(
-            kind="class", docstring="A store.", members={"flush": store_flush}
-        )
-        net_cls = _make_griffe_obj(
-            kind="class", docstring="A connection.", members={"flush": net_flush}
-        )
-        pkg = _make_pkg({"StoreCache": store_cls, "NetCache": net_cls})
-
-        # NetCache is configured with `members: false`, so the renderer never
-        # documents NetCache.flush even though it has a docstring.
-        documented_stems = {"StoreCache", "StoreCache.flush", "NetCache"}
-        claims, documented_names, prose = _gather_reference_inputs(
-            pkg, "mypkg", ["StoreCache", "NetCache"], tmp_path, tmp_path, documented_stems
-        )
-        prose["guide.qmd"] = "See [](`flush`) for details."
-
-        assert "mypkg.NetCache.flush" not in documented_names
-        assert ("flush", "mypkg.NetCache.flush") not in claims
-
-        result = LintResult()
-        _check_ambiguous_references(claims, documented_names, prose, result)
-
-        assert result.issues == []
-
-    def test_nodoc_export_does_not_make_a_real_reference_ambiguous(self, tmp_path):
-        """Ignore a top-level export marked `%nodoc`."""
-        real = _make_griffe_obj(kind="class", docstring="A store.")
-        nodoc = _make_griffe_obj(kind="class", docstring="Legacy alias.\n\n%nodoc")
-        pkg = _make_pkg({"Cache": real, "OldCache": nodoc})
-
-        claims, documented_names, prose = _gather_reference_inputs(
-            pkg, "mypkg", ["Cache", "OldCache"], tmp_path, tmp_path
-        )
-
-        assert ("OldCache", "mypkg.OldCache") not in claims
-        assert "mypkg.OldCache" not in documented_names
-        assert "mypkg.OldCache" not in prose
 
 
 class TestCheckDocstringStyle:
