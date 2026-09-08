@@ -8,7 +8,7 @@ from pathlib import Path
 
 from ._builtin.directives import DIRECTIVES
 from ._builtin.directives._nodoc import exclude_nodoc
-from ._utils import is_in_great_docs_build_dir, parse_seealso
+from ._utils import fenced_lines, is_in_great_docs_build_dir, parse_seealso
 
 
 @dataclass
@@ -359,6 +359,32 @@ _NOT_AUTHORED = {"node_modules"}
 _INTERLINK_RE = re.compile(r"\[[^\]]*\]\(`(~?)([\w.]+)`\)")
 """An explicit reference written as `[text](`~pkg.Name`)`"""
 
+_CODE_SPAN_RE = re.compile(r"(`{2,})(?:(?!\1).)*?\1", re.DOTALL)
+"""A multi-backtick span that Markdown renders as literal text"""
+
+
+def _strip_code(text: str) -> str:
+    """
+    Remove fenced code blocks and multi-backtick code spans from Markdown
+
+    Markdown renders references inside these constructs as example text. A
+    single-backtick span cannot contain the backticks around an interlink
+    target, so multi-backtick spans are sufficient here.
+
+    Parameters
+    ----------
+    text
+        Markdown source to scan.
+
+    Returns
+    -------
+    :
+        The text with fenced and multi-backtick spans removed.
+    """
+    lines, fenced = fenced_lines(text)
+    unfenced = "\n".join(line for line, is_fenced in zip(lines, fenced) if not is_fenced)
+    return _CODE_SPAN_RE.sub("", unfenced)
+
 
 def _gather_reference_inputs(
     pkg,
@@ -482,7 +508,7 @@ def _check_ambiguous_references(
         return
 
     for origin, text in prose.items():
-        for _, name in _INTERLINK_RE.findall(text):
+        for _, name in _INTERLINK_RE.findall(_strip_code(text)):
             targets = dropped.get(name)
             if targets is None:
                 continue
