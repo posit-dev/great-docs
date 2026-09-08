@@ -35,6 +35,22 @@ def test_one_object_claiming_an_alias_twice_is_not_a_collision():
     assert res.dropped == {}
 
 
+def test_class_qualified_aliases_disambiguate_a_shared_method_name():
+    """`StoreCache.flush` and `NetCache.flush` each resolve even though `flush` alone is ambiguous."""
+    claims = [
+        ("flush", "demo.StoreCache.flush"),
+        ("flush", "demo.NetCache.flush"),
+        ("StoreCache.flush", "demo.StoreCache.flush"),
+        ("NetCache.flush", "demo.NetCache.flush"),
+    ]
+    res = resolve_aliases(claims, taken=set())
+    assert res.dropped == {"flush": ("demo.NetCache.flush", "demo.StoreCache.flush")}
+    assert res.kept == {
+        "StoreCache.flush": "demo.StoreCache.flush",
+        "NetCache.flush": "demo.NetCache.flush",
+    }
+
+
 def test_an_alias_that_is_already_a_real_name_is_skipped_quietly():
     """The real name wins, and the reference is not ambiguous."""
     res = resolve_aliases([("demo.Thing", "demo.pkg.Thing")], taken={"demo.Thing"})

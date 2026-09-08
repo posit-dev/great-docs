@@ -7204,6 +7204,37 @@ def test_collect_with_canonical_path_diff():
     assert items[1].dispname == "pkg.submod.func"
 
 
+def test_collect_class_member_gets_a_class_qualified_alias():
+    """A member's bare name collides across classes, so it also claims `Class.member`."""
+    mod = gf.Module("pkg")
+    cls = gf.Class("StoreCache")
+    mod.set_member("StoreCache", cls)
+    meth = gf.Function("flush")
+    cls.set_member("flush", meth)
+
+    doc_meth = DocFunction(name="flush", obj=meth, anchor="pkg.StoreCache.flush")
+    doc_cls = DocClass(name="StoreCache", obj=cls, anchor="pkg.StoreCache", members=[doc_meth])
+    page = Page(path="reference/StoreCache", contents=[doc_cls])
+
+    manifest = build_manifest([page], dir="api")
+    items = {item.name: item for item in manifest.items}
+
+    assert items["pkg.StoreCache.flush"].aliases == ("flush", "flush", "StoreCache.flush")
+
+
+def test_collect_top_level_doc_gets_no_class_qualified_alias():
+    """A module-level function has no enclosing class, so the pair repeats as before."""
+    mod = gf.Module("pkg")
+    func_obj = gf.Function("myfunc")
+    mod.set_member("myfunc", func_obj)
+    doc = DocFunction(name="myfunc", obj=func_obj, anchor="pkg.myfunc")
+    page = Page(path="reference", contents=[doc])
+
+    manifest = build_manifest([page], dir="api")
+
+    assert manifest.items[0].aliases == ("myfunc", "myfunc")
+
+
 def test_collect_nested_section():
     mod = gf.Module("pkg")
     func_obj = gf.Function("myfunc")

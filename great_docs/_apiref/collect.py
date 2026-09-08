@@ -50,13 +50,20 @@ class _ManifestBuilder(NodeVisitor):
         name_path = obj.path
         canonical_path = obj.canonical_path
 
+        # Bare member names often collide across classes (`flush`, `close`), so
+        # claim `Class.member` as a shorter unambiguous form.
+        aliases = (el.name, obj.name)
+        parent = obj.parent
+        if parent is not None and parent.is_class:
+            aliases = (*aliases, f"{parent.name}.{obj.name}")
+
         self.items.append(
             InventoryItem(
                 name=name_path,
                 obj=obj,
                 uri=uri,
                 dispname=None,
-                aliases=(el.name, obj.name),
+                aliases=aliases,
             )
         )
 
