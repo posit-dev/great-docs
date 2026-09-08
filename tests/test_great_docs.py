@@ -33462,17 +33462,23 @@ def test_class_label_abc():
 
 
 def test_create_inventory_basic():
-    """create_inventory returns a properly structured dict."""
+    """create_inventory returns an Inventory carrying the project and version."""
+    obj = MagicMock()
+    obj.kind.value = "function"
+    obj.parent = None
+    item = InventoryItem(obj=obj, name="myproj.func", uri="reference/func.html")
 
-    obj = gf.Function(name="my_func", lineno=1)
-    item = InventoryItem(name="myproj.my_func", obj=obj, uri="my_func.html")
     result = create_inventory("myproj", "1.0", [item])
 
-    assert result["project"] == "myproj"
-    assert result["version"] == "1.0"
-    assert result["count"] == 1
-    assert len(result["items"]) == 1
-    assert result["items"][0]["domain"] == "py"
+    assert result.project == "myproj"
+    assert result.version == "1.0"
+    assert len(result.entries) == 1
+    assert result.entries[0].name == "myproj.func"
+    assert result.entries[0].domain == "py"
+    assert result.entries[0].role == "function"
+    assert result.entries[0].priority == 1
+    assert result.entries[0].uri == "reference/func.html"
+    assert result.entries[0].dispname == "myproj.func"
 
 
 def test_create_inventory_classifies_a_class_method_as_py_method():
@@ -33484,7 +33490,7 @@ def test_create_inventory_classifies_a_class_method_as_py_method():
     item = InventoryItem(name="myproj.MyClass.my_method", obj=method, uri="MyClass.html#my_method")
     result = create_inventory("myproj", "1.0", [item])
 
-    assert result["items"][0]["role"] == "method"
+    assert result.entries[0].role == "method"
 
 
 def test_create_inventory_keeps_a_plain_function_as_py_function():
@@ -33494,7 +33500,7 @@ def test_create_inventory_keeps_a_plain_function_as_py_function():
     item = InventoryItem(name="myproj.my_func", obj=func, uri="my_func.html")
     result = create_inventory("myproj", "1.0", [item])
 
-    assert result["items"][0]["role"] == "function"
+    assert result.entries[0].role == "function"
 
 
 def test_create_inventory_with_layout_item():
@@ -33509,20 +33515,20 @@ def test_create_inventory_with_layout_item():
     )
     result = create_inventory("myproj", "1.0", [item])
 
-    assert result["count"] == 1
-    assert result["items"][0]["name"] == "myproj.my_func"
-    assert result["items"][0]["uri"] == "my_func.html"
-    assert result["items"][0]["dispname"] == "my_func"
+    assert len(result.entries) == 1
+    assert result.entries[0].name == "myproj.my_func"
+    assert result.entries[0].uri == "my_func.html"
+    assert result.entries[0].dispname == "my_func"
 
 
 def test_create_inventory_default_dispname():
-    """create_inventory falls back to "-" when an item has no dispname."""
+    """create_inventory falls back to the object's name when an item has no dispname."""
 
     obj = gf.Function(name="my_func", lineno=1)
     item = InventoryItem(name="myproj.my_func", obj=obj, uri="my_func.html")
     result = create_inventory("myproj", "1.0", [item])
 
-    assert result["items"][0]["dispname"] == "-"
+    assert result.entries[0].dispname == "myproj.my_func"
 
 
 def test_create_inventory_publishes_a_module_level_attribute_as_data():
@@ -33534,7 +33540,7 @@ def test_create_inventory_publishes_a_module_level_attribute_as_data():
 
     result = create_inventory("myproj", "1.0", [item])
 
-    assert result["items"][0]["role"] == "data"
+    assert result.entries[0].role == "data"
 
 
 def test_extend_base_class_copies_methods():

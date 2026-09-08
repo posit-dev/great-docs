@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from ._visitor import NodeTransformer, NodeVisitor, ctx_node
 from .content import Doc, Page, Section
-from .inventory import InventoryItem
+from .inventory import InventoryItem, reference_uri
 
 
 @dataclass
@@ -44,7 +44,7 @@ class _ManifestBuilder(NodeVisitor):
     def _exit_doc(self, el: Doc) -> Doc:
         p_el = self.enclosing_page()
 
-        uri = f"{self.base_dir}/{p_el.path}.html#{el.anchor}"
+        uri = reference_uri(self.base_dir, p_el.path, el.anchor)
 
         obj = el.obj
         name_path = obj.path

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 import griffe as gf
 
@@ -21,38 +20,51 @@ class InventoryItem(Walkable):
     """Short names this object claims, before ambiguity is arbitrated"""
 
 
-def write_inventory(inv: dict[str, Any], out_name: str) -> None:
-    """Write an inventory to an `objects.inv` file
+def reference_uri(dir: str, stem: str, anchor: str | None = None) -> str:
+    """
+    Return a reference page's URI, relative to the site root
+
+    Parameters
+    ----------
+    dir :
+        Directory the reference pages are written to.
+    stem :
+        The page's path without its suffix.
+    anchor :
+        Fragment identifying an object on the page, when it is not the page's
+        own subject.
+
+    Returns
+    -------
+    :
+        The URI a consumer joins to the site URL.
+    """
+    uri = f"{dir}/{stem}.html"
+    return f"{uri}#{anchor}" if anchor else uri
+
+
+def write_inventory(inv: Inventory, out_name: str) -> None:
+    """
+    Write an inventory to an `objects.inv` file
 
     Parameters
     ----------
     inv :
-        Inventory data.
+        The inventory to write.
     out_name :
         Output file name.
     """
-    entries = tuple(
-        InventoryEntry(
-            name=item["name"],
-            domain=item["domain"],
-            role=item["role"],
-            priority=int(item["priority"]),
-            uri=item["uri"] or "",
-            dispname=item["name"] if item["dispname"] == "-" else item["dispname"],
-        )
-        for item in inv["items"]
-    )
-    data = encode(Inventory(project=inv["project"], version=inv["version"], entries=entries))
     with open(out_name, "wb") as f:
-        f.write(data)
+        f.write(encode(inv))
 
 
 def create_inventory(
     project: str,
     version: str,
     items: list[InventoryItem],
-) -> dict[str, Any]:
-    """Build the inventory as a dictionary of project, version, count, and items
+) -> Inventory:
+    """
+    Build the inventory a project publishes
 
     Parameters
     ----------
@@ -62,13 +74,24 @@ def create_inventory(
         Version of the project.
     items :
         Documented objects to include.
+
+    Returns
+    -------
+    :
+        The inventory.
     """
-    return {
-        "project": project,
-        "version": version,
-        "count": len(items),
-        "items": [_create_inventory_item(item) for item in items],
-    }
+    entries = tuple(
+        InventoryEntry(
+            name=item.name,
+            domain="py",
+            role=_inventory_role(item.obj),
+            priority=1,
+            uri=item.uri or "",
+            dispname=item.dispname or item.name,
+        )
+        for item in items
+    )
+    return Inventory(project=project, version=version, entries=entries)
 
 
 def _inventory_role(obj: gf.Object | gf.Alias) -> str:
@@ -92,15 +115,3 @@ def _inventory_role(obj: gf.Object | gf.Alias) -> str:
     """
     parent = obj.parent
     return role_for_kind(obj.kind.value, in_class=parent is not None and parent.is_class)
-
-
-def _create_inventory_item(item: InventoryItem, priority: str = "1") -> dict[str, Any]:
-    """Build a single inventory entry as a dict"""
-    return {
-        "name": item.name,
-        "domain": "py",
-        "role": _inventory_role(item.obj),
-        "priority": priority,
-        "uri": item.uri,
-        "dispname": item.dispname or "-",
-    }

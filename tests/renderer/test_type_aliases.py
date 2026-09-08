@@ -460,22 +460,22 @@ def test_module_level_type_alias_group():
 
 
 def test_inventory_role_for_type_alias():
-    from great_docs._apiref.inventory import InventoryItem, _create_inventory_item
+    from great_docs._apiref.inventory import InventoryItem, create_inventory
 
     obj = _load_member("type Contract = int | str\n", "Contract")
-    entry = _create_inventory_item(InventoryItem(obj=obj, name="package.Contract"))
+    result = create_inventory("package", "1.0", [InventoryItem(obj=obj, name="package.Contract")])
 
-    assert entry["role"] == "type"
+    assert result.entries[0].role == "type"
 
 
 def test_inventory_roles_never_contain_spaces():
-    from great_docs._apiref.inventory import InventoryItem, _create_inventory_item
+    from great_docs._apiref.inventory import InventoryItem, create_inventory
 
     code = "type Contract = int | str\ndef f(): ...\nclass C: ...\nMAX: int = 3\n"
     for name in ("Contract", "f", "C", "MAX"):
         obj = _load_member(code, name)
-        entry = _create_inventory_item(InventoryItem(obj=obj, name=name))
-        assert " " not in entry["role"]
+        result = create_inventory("package", "1.0", [InventoryItem(obj=obj, name=name)])
+        assert " " not in result.entries[0].role
 
 
 def test_api_reference_builds_with_a_type_alias(monkeypatch, tmp_path):
@@ -524,11 +524,11 @@ def test_api_reference_builds_with_a_type_alias(monkeypatch, tmp_path):
 
 
 def test_inventory_roles_unchanged_for_other_kinds():
-    from great_docs._apiref.inventory import InventoryItem, _create_inventory_item
+    from great_docs._apiref.inventory import InventoryItem, create_inventory
 
     code = "def f(): ...\nclass C: ...\nMAX: int = 3\n"
     expected = {"f": "function", "C": "class", "MAX": "data"}
     for name, role in expected.items():
         obj = _load_member(code, name)
-        entry = _create_inventory_item(InventoryItem(obj=obj, name=name))
-        assert entry["role"] == role
+        result = create_inventory("package", "1.0", [InventoryItem(obj=obj, name=name)])
+        assert result.entries[0].role == role
