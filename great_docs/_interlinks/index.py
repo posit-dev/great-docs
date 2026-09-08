@@ -7,6 +7,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Container, Iterable, Sequence
 from dataclasses import dataclass, field
+from urllib.parse import urljoin
 
 from .._sphinx_inventory import Inventory
 from .sources import Source
@@ -84,7 +85,8 @@ def root_modules(inv: Inventory) -> tuple[str, ...]:
 
     An alias is written against a module, not against the name the source is
     filed under, so a source keyed `scikit-learn` serving `sklearn.*` names
-    still resolves.
+    still resolves. An entry outside the Python domain, such as a page in a
+    source's narrative documentation, names no module and is not counted.
 
     Parameters
     ----------
@@ -96,7 +98,7 @@ def root_modules(inv: Inventory) -> tuple[str, ...]:
     :
         Root module names.
     """
-    counts = Counter(e.name.split(".")[0] for e in inv.entries)
+    counts = Counter(e.name.split(".")[0] for e in inv.entries if e.domain == "py")
     return tuple(name for name, _ in counts.most_common())
 
 
@@ -146,14 +148,17 @@ def build_index(
 
     prefixes: dict[str, tuple[str, ...]] = {}
     for source, inv in external:
-        base = (source.site_url or source.url).rstrip("/")
+        # urljoin discards the last path segment of a base without a trailing
+        # slash, and leaves an absolute or root-relative uri to win, which is
+        # what a consumer of that inventory is meant to do with one.
+        base = f"{source.link_prefix}/"
         for e in inv.entries:
             add(
                 e.name,
                 1,
                 e.priority,
                 IndexEntry(
-                    uri=f"{base}/{e.uri.lstrip('/')}",
+                    uri=urljoin(base, e.uri),
                     domain=e.domain,
                     role=e.role,
                     source=source.name,

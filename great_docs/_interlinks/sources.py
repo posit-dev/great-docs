@@ -24,7 +24,11 @@ _TIMEOUT = 30
 
 @dataclass(frozen=True)
 class Source:
-    """An external project's documentation and its inventory location"""
+    """An external project's documentation and its inventory location
+
+    Only a source that can both be read and be linked into is constructed;
+    `sources_from_config` rejects the rest.
+    """
 
     name: str
     url: str
@@ -32,48 +36,42 @@ class Source:
     site_url: str = ""
     """Where the source's pages are actually served, when that differs from `url`"""
 
-    @classmethod
-    def from_config(cls, name: str, value: Any) -> Source:
-        """
-        Build a source from one `interlinks.sources` entry
-
-        Parameters
-        ----------
-        name :
-            The key the entry is filed under.
-        value :
-            The entry's fields.
-
-        Returns
-        -------
-        :
-            The source.
-        """
-        value = value or {}
-        return cls(
-            name=name,
-            url=str(value.get("url", "") or ""),
-            aliases=tuple(value.get("aliases", []) or []),
-            site_url=str(value.get("site_url", "") or ""),
-        )
-
     @property
-    def location(self) -> str:
+    def inventory_location(self) -> str:
         """Where the inventory is read from, by the convention every project follows"""
         return f"{self.url.rstrip('/')}/{INVENTORY_FILENAME}"
 
     @property
-    def is_local_path(self) -> bool:
-        """Whether `url` names a filesystem location rather than a served one"""
-        return "://" not in self.url
+    def link_prefix(self) -> str:
+        """What every URI in this source's inventory is prefixed with"""
+        return (self.site_url or self.url).rstrip("/")
 
 
-def sources_from_config(sources: dict[str, Any]) -> list[Source]:
+def _is_served(url: str) -> bool:
+    """
+    Report whether a url addresses a served location rather than the filesystem
+
+    Parameters
+    ----------
+    url :
+        The configured url.
+
+    Returns
+    -------
+    :
+        Whether the url carries a scheme.
+    """
+    return "://" in url
+
+
+def sources_from_config(sources: dict[str, Any]) -> tuple[list[Source], list[str]]:
     """
     Build the sources declared in the configuration
 
-    An entry with no `url` is skipped; without it no URI in that inventory can
-    be resolved.
+    Reject an entry with no `url`, since no URI in its inventory can be
+    resolved. Reject an entry whose `url` is a filesystem path and which
+    declares no `site_url`, since its inventory can be read during the build
+    but has no published prefix to link into.
 
     Parameters
     ----------
@@ -83,10 +81,32 @@ def sources_from_config(sources: dict[str, Any]) -> list[Source]:
     Returns
     -------
     :
-        One source per usable entry.
+        The usable sources, and a note for each rejected entry.
     """
-    out = [Source.from_config(name, value) for name, value in sources.items()]
-    return [s for s in out if s.url]
+    usable: list[Source] = []
+    notes: list[str] = []
+    for name, value in sources.items():
+        value = value or {}
+        url = str(value.get("url", "") or "")
+        site_url = str(value.get("site_url", "") or "")
+        if not url:
+            notes.append(f"{name}: no url configured; it will not be linked")
+            continue
+        if not _is_served(url) and not site_url:
+            notes.append(
+                f"{name}: url is a filesystem path with no site_url configured; "
+                "it will not be linked"
+            )
+            continue
+        usable.append(
+            Source(
+                name=name,
+                url=url,
+                aliases=tuple(value.get("aliases", []) or []),
+                site_url=site_url,
+            )
+        )
+    return usable, notes
 
 
 class InventoryCache:
@@ -112,7 +132,7 @@ class InventoryCache:
         :
             Path to the cache entry.
         """
-        digest = hashlib.md5(source.location.encode("utf-8")).hexdigest()[:12]
+        digest = hashlib.md5(source.inventory_location.encode("utf-8")).hexdigest()[:12]
         return self.directory / f"{source.name}-{digest}.inv"
 
     def read(self, source: Source) -> Inventory | None:
@@ -229,7 +249,7 @@ def load_source(
     Use an older cache when downloading, decoding, or reading the fresh copy
     fails. Report and skip a source when neither its local inventory nor its
     cache is readable. A download that decodes but cannot be cached is still
-    returned, since caching is an optimization the read must not depend on.
+    returned, since caching is an optimisation the read must not depend on.
 
     Parameters
     ----------
@@ -248,7 +268,7 @@ def load_source(
     :
         The inventory, and a note for the build log.
     """
-    location = source.location
+    location = source.inventory_location
     if "://" not in location:
         return _read_local(source, location, root)
 

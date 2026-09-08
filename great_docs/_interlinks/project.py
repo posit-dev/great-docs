@@ -28,11 +28,7 @@ def build_project_index(
 
     Read the project's `objects.inv` when available, merge it with the
     sources declared in `config.interlinks_sources`, and write the result to
-    `project_path/_inv/index.lua` for the interlinks filter. A source whose
-    `url` is a filesystem path (read during the build, the way a sibling
-    project's local build directory is) is skipped unless it also declares
-    `site_url`; without one, its inventory has no known published prefix to
-    link into.
+    `project_path/_inv/index.lua` for the interlinks filter.
 
     Parameters
     ----------
@@ -64,18 +60,12 @@ def build_project_index(
 
     cache_dir = config.cache_dir / "interlinks"
     external: list[tuple[Source, Inventory]] = []
-    notes: list[str] = []
-    for source in sources_from_config(config.interlinks_sources):
+    configured, notes = sources_from_config(config.interlinks_sources)
+    for source in configured:
         inv, note = load_source(source, cache_dir, root=config.project_root)
         if note:
             notes.append(note)
         if inv is None:
-            continue
-        if source.is_local_path and not source.site_url:
-            notes.append(
-                f"{source.name}: url is a filesystem path with no site_url configured; "
-                "its inventory was read but will not be linked"
-            )
             continue
         external.append((source, inv))
 

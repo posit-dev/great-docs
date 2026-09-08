@@ -1,11 +1,11 @@
 from datetime import timedelta
 
+import pytest
 import requests
 
 from great_docs._interlinks import (
     Source,
     build_index,
-    build_project_index,
     cache_path,
     load_source,
     resolve_aliases,
@@ -76,20 +76,52 @@ DEMO = Inventory(
 
 def test_a_sources_inventory_sits_beside_its_documentation():
     """Every project publishes it at the same place, so there is nothing to configure."""
-    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/", "aliases": ["np"]})
-    assert src.location == "https://numpy.org/doc/stable/objects.inv"
+    src = Source(name="numpy", url="https://numpy.org/doc/stable/", aliases=("np",))
+    assert src.inventory_location == "https://numpy.org/doc/stable/objects.inv"
     assert src.aliases == ("np",)
 
 
-def test_sources_from_config_skips_an_entry_with_no_url():
-    assert sources_from_config({"broken": {"aliases": ["b"]}}) == []
+def test_sources_from_config_rejects_an_entry_with_no_url():
+    sources, notes = sources_from_config({"numpy": {"aliases": ["np"]}})
+
+    assert sources == []
+    assert len(notes) == 1
+    assert "numpy" in notes[0]
+
+
+def test_sources_from_config_rejects_a_filesystem_url_with_no_site_url():
+    """A local build directory has no published prefix to link into."""
+    sources, notes = sources_from_config({"sibling": {"url": "../sibling/great-docs"}})
+
+    assert sources == []
+    assert len(notes) == 1
+    assert "site_url" in notes[0]
+
+
+def test_a_filesystem_url_with_a_site_url_is_usable():
+    sources, notes = sources_from_config(
+        {"sibling": {"url": "../sibling/great-docs", "site_url": "https://sibling.example/"}}
+    )
+
+    assert notes == []
+    assert len(sources) == 1
+    assert sources[0].inventory_location == "../sibling/great-docs/objects.inv"
+    assert sources[0].link_prefix == "https://sibling.example"
+
+
+def test_a_served_url_is_its_own_link_prefix():
+    sources, notes = sources_from_config({"numpy": {"url": "https://numpy.org/doc/stable/"}})
+
+    assert notes == []
+    assert sources[0].link_prefix == "https://numpy.org/doc/stable"
+    assert sources[0].inventory_location == "https://numpy.org/doc/stable/objects.inv"
 
 
 def test_load_source_reads_a_local_inventory(tmp_path):
     """A url may address a directory on disk, as a sibling project's build does."""
     (tmp_path / "numpy.inv").write_bytes(encode(DEMO))
     (tmp_path / "objects.inv").write_bytes(encode(DEMO))
-    src = Source.from_config("numpy", {"url": str(tmp_path)})
+    src = Source(name="numpy", url=str(tmp_path))
 
     inv, note = load_source(src, tmp_path / "cache")
 
@@ -99,7 +131,7 @@ def test_load_source_reads_a_local_inventory(tmp_path):
 
 def test_load_source_reports_a_corrupt_local_inventory(tmp_path):
     (tmp_path / "objects.inv").write_bytes(b"not an inventory")
-    src = Source.from_config("numpy", {"url": str(tmp_path)})
+    src = Source(name="numpy", url=str(tmp_path))
 
     inv, note = load_source(src, tmp_path / "cache")
 
@@ -110,7 +142,7 @@ def test_load_source_reports_a_corrupt_local_inventory(tmp_path):
 def test_load_source_reports_a_local_inventory_path_that_is_a_directory(tmp_path):
     """A directory at the inventory path (IsADirectoryError) is reported, not raised."""
     (tmp_path / "objects.inv").mkdir()
-    src = Source.from_config("numpy", {"url": str(tmp_path)})
+    src = Source(name="numpy", url=str(tmp_path))
 
     inv, note = load_source(src, tmp_path / "cache")
 
@@ -122,7 +154,7 @@ def test_load_source_reports_an_unreadable_cache_without_a_working_network(tmp_p
     """A cache that raises OSError on read is treated as unreadable, not fatal."""
     cache = tmp_path / "cache"
     cache.mkdir()
-    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+    src = Source(name="numpy", url="https://numpy.org/doc/stable/")
     # A directory where the cached inventory file should be: reading it raises
     # IsADirectoryError rather than decoding cleanly or cleanly missing.
     cache_path(src, cache).mkdir()
@@ -143,7 +175,7 @@ def test_load_source_retains_a_download_when_caching_fails(tmp_path, monkeypatch
     cache = tmp_path / "cache"
     # A file occupies the cache directory's path, so mkdir() cannot create it.
     cache.write_bytes(b"not a directory")
-    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+    src = Source(name="numpy", url="https://numpy.org/doc/stable/")
 
     class _Response:
         content = encode(DEMO)
@@ -174,7 +206,7 @@ def test_load_source_downloads_and_caches(tmp_path, monkeypatch):
 
     monkeypatch.setattr(requests, "get", _get)
     cache = tmp_path / "cache"
-    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+    src = Source(name="numpy", url="https://numpy.org/doc/stable/")
 
     first, _ = load_source(src, cache)
     second, _ = load_source(src, cache)
@@ -187,7 +219,7 @@ def test_load_source_downloads_and_caches(tmp_path, monkeypatch):
 def test_load_source_falls_back_to_a_stale_cache(tmp_path, monkeypatch):
     cache = tmp_path / "cache"
     cache.mkdir()
-    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+    src = Source(name="numpy", url="https://numpy.org/doc/stable/")
     cache_path(src, cache).write_bytes(encode(DEMO))
 
     def _get(url, **kwargs):
@@ -205,7 +237,7 @@ def test_load_source_falls_back_to_a_stale_cache_on_a_corrupt_download(tmp_path,
     """Do not overwrite a valid cache with a corrupt successful response."""
     cache = tmp_path / "cache"
     cache.mkdir()
-    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+    src = Source(name="numpy", url="https://numpy.org/doc/stable/")
     good_cache = cache_path(src, cache)
     good_cache.write_bytes(encode(DEMO))
 
@@ -229,7 +261,7 @@ def test_load_source_redownloads_when_the_fresh_cache_is_corrupt(tmp_path, monke
     """Refetch a fresh cache file that cannot be decoded."""
     cache = tmp_path / "cache"
     cache.mkdir()
-    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+    src = Source(name="numpy", url="https://numpy.org/doc/stable/")
     cache_path(src, cache).write_bytes(b"not an inventory")
 
     class _Response:
@@ -251,7 +283,7 @@ def test_load_source_reports_when_the_cache_and_the_download_are_both_unreadable
 ):
     cache = tmp_path / "cache"
     cache.mkdir()
-    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+    src = Source(name="numpy", url="https://numpy.org/doc/stable/")
     cache_path(src, cache).write_bytes(b"not an inventory")
 
     def _get(url, **kwargs):
@@ -275,7 +307,7 @@ def test_load_source_reports_a_corrupt_download_with_no_cache_to_fall_back_on(
             return None
 
     monkeypatch.setattr(requests, "get", lambda url, **kwargs: _Response())
-    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+    src = Source(name="numpy", url="https://numpy.org/doc/stable/")
 
     inv, note = load_source(src, tmp_path / "cache")
 
@@ -286,7 +318,7 @@ def test_load_source_reports_a_corrupt_download_with_no_cache_to_fall_back_on(
 def test_load_source_misses_the_cache_when_the_url_changes(tmp_path, monkeypatch):
     """Use a new cache entry when a source URL changes."""
     cache = tmp_path / "cache"
-    old_src = Source.from_config("numpy", {"url": "https://numpy.org/doc/1.0/"})
+    old_src = Source(name="numpy", url="https://numpy.org/doc/1.0/")
     cache_path(old_src, cache).parent.mkdir(parents=True, exist_ok=True)
     cache_path(old_src, cache).write_bytes(encode(DEMO))
 
@@ -303,7 +335,7 @@ def test_load_source_misses_the_cache_when_the_url_changes(tmp_path, monkeypatch
         return _Response()
 
     monkeypatch.setattr(requests, "get", _get)
-    new_src = Source.from_config("numpy", {"url": "https://numpy.org/doc/2.0/"})
+    new_src = Source(name="numpy", url="https://numpy.org/doc/2.0/")
 
     load_source(new_src, cache)
 
@@ -315,7 +347,7 @@ def test_load_source_reports_a_source_it_cannot_read(tmp_path, monkeypatch):
         raise requests.RequestException("offline")
 
     monkeypatch.setattr(requests, "get", _get)
-    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+    src = Source(name="numpy", url="https://numpy.org/doc/stable/")
 
     inv, note = load_source(src, tmp_path / "cache")
 
@@ -348,6 +380,20 @@ def test_root_modules_are_ordered_by_frequency():
     assert root_modules(inv) == ("sklearn", "other")
 
 
+def test_root_modules_ignore_entries_outside_the_python_domain():
+    inv = Inventory(
+        "numpy",
+        "1",
+        (
+            InventoryEntry("numpy.ndarray", "py", "class", 1, "ndarray.html", "-"),
+            InventoryEntry("user/quickstart", "std", "doc", -1, "user/quickstart.html", "-"),
+            InventoryEntry("user/absolute_beginners", "std", "doc", -1, "user/ab.html", "-"),
+        ),
+    )
+
+    assert root_modules(inv) == ("numpy",)
+
+
 def test_local_entries_are_marked_and_keep_their_uri():
     index = build_index(LOCAL, [], [])
     assert index.names["demo.Thing"][0].uri == "/reference/Thing.html#demo.Thing"
@@ -355,7 +401,7 @@ def test_local_entries_are_marked_and_keep_their_uri():
 
 
 def test_external_uris_are_prefixed_with_the_source_url():
-    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+    src = Source(name="numpy", url="https://numpy.org/doc/stable/")
     index = build_index(LOCAL, [], [(src, DEMO)])
     assert index.names["numpy.ndarray"][0].uri == "https://numpy.org/doc/stable/ndarray.html"
     assert index.names["numpy.ndarray"][0].is_local is False
@@ -363,47 +409,31 @@ def test_external_uris_are_prefixed_with_the_source_url():
 
 def test_site_url_overrides_the_source_url_as_the_link_prefix():
     """A source's `site_url`, not its `url`, is where its pages are published."""
-    src = Source.from_config(
-        "sibling", {"url": "/srv/docs/sibling-build", "site_url": "https://mysite.example/sibling/"}
+    src = Source(
+        name="sibling",
+        url="/srv/docs/sibling-build",
+        site_url="https://mysite.example/sibling/",
     )
     index = build_index(LOCAL, [], [(src, DEMO)])
     assert index.names["numpy.ndarray"][0].uri == "https://mysite.example/sibling/ndarray.html"
 
 
-def test_a_local_path_source_without_site_url_is_not_linked(tmp_path):
-    """A filesystem `url` is where the build reads from, not where pages are served."""
-    sibling_dir = tmp_path / "sibling"
-    sibling_dir.mkdir()
-    (sibling_dir / "objects.inv").write_bytes(encode(DEMO))
+@pytest.mark.parametrize(
+    "uri,expected",
+    [
+        ("ndarray.html", "https://numpy.org/doc/stable/ndarray.html"),
+        ("api/ndarray.html", "https://numpy.org/doc/stable/api/ndarray.html"),
+        ("/ndarray.html", "https://numpy.org/ndarray.html"),
+        ("https://other.example/ndarray.html", "https://other.example/ndarray.html"),
+    ],
+)
+def test_an_external_uri_is_joined_against_its_source(uri, expected):
+    inv = Inventory("numpy", "1", (InventoryEntry("numpy.ndarray", "py", "class", 1, uri, "-"),))
+    sources, _ = sources_from_config({"numpy": {"url": "https://numpy.org/doc/stable/"}})
 
-    project_dir = tmp_path / "myproj"
-    project_dir.mkdir()
-    (project_dir / "great-docs.yml").write_text(
-        "module: myproj\ninterlinks:\n  sources:\n    sibling:\n      url: ../sibling\n"
-    )
+    index = build_index(Inventory("mypkg", "1", ()), [], [(sources[0], inv)])
 
-    index, notes = build_project_index(project_dir, Config(project_dir), "myproj", None)
-
-    assert "numpy.ndarray" not in index.names
-    assert any("sibling" in n and "site_url" in n for n in notes)
-
-
-def test_a_local_path_source_with_site_url_is_linked(tmp_path):
-    """A filesystem `url` paired with `site_url` links to the declared published path."""
-    sibling_dir = tmp_path / "sibling"
-    sibling_dir.mkdir()
-    (sibling_dir / "objects.inv").write_bytes(encode(DEMO))
-
-    project_dir = tmp_path / "myproj"
-    project_dir.mkdir()
-    (project_dir / "great-docs.yml").write_text(
-        "module: myproj\ninterlinks:\n  sources:\n    sibling:\n      url: ../sibling\n"
-        "      site_url: /sibling/\n"
-    )
-
-    index, notes = build_project_index(project_dir, Config(project_dir), "myproj", None)
-
-    assert index.names["numpy.ndarray"][0].uri == "/sibling/ndarray.html"
+    assert index.names["numpy.ndarray"][0].uri == expected
 
 
 def test_a_kept_alias_points_at_the_target_entry():
@@ -418,13 +448,13 @@ def test_an_ambiguous_alias_is_absent_and_reported():
 
 
 def test_an_alias_prefix_maps_to_the_sources_root_modules():
-    src = Source.from_config("numpy", {"url": "https://numpy.org/", "aliases": ["np"]})
+    src = Source(name="numpy", url="https://numpy.org/", aliases=("np",))
     index = build_index(LOCAL, [], [(src, DEMO)])
     assert index.prefixes["np"] == ("numpy",)
 
 
 def test_a_local_entry_outranks_an_external_one_for_the_same_name():
-    src = Source.from_config("other", {"url": "https://other.example/"})
+    src = Source(name="other", url="https://other.example/")
     clash = Inventory(
         "other",
         "1",
@@ -451,7 +481,7 @@ def test_load_source_reads_a_relative_url_from_the_project_root(tmp_path):
     """A relative url belongs to the project, not to wherever the build runs."""
     (tmp_path / "sibling").mkdir()
     (tmp_path / "sibling" / "objects.inv").write_bytes(encode(DEMO))
-    src = Source.from_config("extdemo", {"url": "./sibling"})
+    src = Source(name="extdemo", url="./sibling")
 
     inv, note = load_source(src, tmp_path / "cache", root=tmp_path)
 
