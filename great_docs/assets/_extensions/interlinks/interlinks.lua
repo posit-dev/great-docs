@@ -10,8 +10,6 @@ local pandoc = _G.pandoc --- @diagnostic disable-line:undefined-field
 -- Pandoc percent-encodes the backticks that carry a reference target.
 local HEX_QUOTE = "%%60"
 
-local CALLABLE_ROLES = { ["function"] = true, ["method"] = true }
-
 local index = nil
 
 --- Check whether a file can be read
@@ -42,7 +40,7 @@ local function load_index()
 
   local chunk = loadfile(source)
   if not chunk then
-    return { prefixes = {}, names = {}, role_synonyms = {} }
+    return { prefixes = {}, names = {}, role_synonyms = {}, callable_roles = {} }
   end
 
   -- Rename rather than write in place: a parallel render must never load a
@@ -198,12 +196,17 @@ local function lookup(ref, local_only)
 end
 
 --- Build the text shown for a resolved reference
+---
+--- Which roles name something a reader calls comes from the index, so the
+--- filter holds no vocabulary of its own. An index written without that key
+--- adds no parentheses rather than guessing at the roles.
 --- @param ref table
 --- @param entry table
 --- @return string
 local function link_text(ref, entry)
   local text = ref.shortened and short_name(ref.name) or ref.name
-  if get_index().add_function_parentheses and CALLABLE_ROLES[entry.role] then
+  local callable = get_index().callable_roles
+  if get_index().add_function_parentheses and callable and callable[entry.role] then
     text = text .. "()"
   end
   return text

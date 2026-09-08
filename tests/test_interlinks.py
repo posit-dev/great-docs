@@ -616,6 +616,16 @@ def test_the_index_carries_the_role_synonyms(tmp_path):
     assert '["obj"] = ""' in text
 
 
+def test_the_index_carries_the_callable_roles(tmp_path):
+    """The filter reads which roles show a trailing `()` rather than holding its own."""
+    path = tmp_path / "index.lua"
+    write_index(Index(), path)
+    text = path.read_text(encoding="utf-8")
+
+    assert '["function"] = true' in text
+    assert '["method"] = true' in text
+
+
 def test_write_index_removes_a_stale_compiled_index(tmp_path):
     """A compiled index must never outlive the source it was compiled from."""
     path = tmp_path / "index.lua"

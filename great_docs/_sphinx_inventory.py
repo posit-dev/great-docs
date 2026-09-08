@@ -41,6 +41,14 @@ Abbreviations a reference may be written with, mapped to the role it means
 string and a reader treats it as no role at all.
 """
 
+CALLABLE_ROLES = frozenset({"function", "method"})
+"""
+Roles whose reference is shown with a trailing `()` where a project asks for it
+
+Which roles name something a reader calls is Sphinx vocabulary, so it belongs
+here beside the roles themselves rather than in whatever renders a reference.
+"""
+
 
 def role_for_kind(kind: str, *, in_class: bool) -> str:
     """

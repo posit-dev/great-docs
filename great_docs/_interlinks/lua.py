@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .._sphinx_inventory import ROLE_SYNONYMS
+from .._sphinx_inventory import CALLABLE_ROLES, ROLE_SYNONYMS
 from .index import Index
 
 
@@ -39,6 +39,10 @@ def write_index(index: Index, path: Path) -> None:
     ]
     for abbrev in sorted(ROLE_SYNONYMS):
         lines.append(f"    [{_quote_lua(abbrev)}] = {_quote_lua(ROLE_SYNONYMS[abbrev])},")
+    lines.append("  },")
+    lines.append("  callable_roles = {")
+    for role in sorted(CALLABLE_ROLES):
+        lines.append(f"    [{_quote_lua(role)}] = true,")
     lines.append("  },")
     lines.append("  prefixes = {")
     for alias in sorted(index.prefixes):

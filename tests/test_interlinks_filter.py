@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from great_docs._interlinks import Index, IndexEntry, write_index
+
 _FILTER = (
     Path(__file__).parent.parent
     / "great_docs"
@@ -20,13 +22,24 @@ _FILTER = (
 
 
 def _run_filter(markdown: str, index_lua: str, tmp_path: Path) -> str:
-    """Render Markdown through the real filter and return Pandoc's native AST"""
-    if not shutil.which("pandoc"):
-        pytest.skip("pandoc not available")
-
+    """Render Markdown through the real filter over a hand-written index"""
     project = tmp_path / "proj"
     (project / "_inv").mkdir(parents=True)
     (project / "_inv" / "index.lua").write_text(index_lua, encoding="utf-8")
+    return _render(markdown, project, tmp_path)
+
+
+def _run_filter_over_written_index(markdown: str, index: Index, tmp_path: Path) -> str:
+    """Render Markdown through the real filter over an index `write_index` wrote"""
+    project = tmp_path / "proj"
+    write_index(index, project / "_inv" / "index.lua")
+    return _render(markdown, project, tmp_path)
+
+
+def _render(markdown: str, project: Path, tmp_path: Path) -> str:
+    """Run Pandoc with the filter over `markdown` and return its native AST"""
+    if not shutil.which("pandoc"):
+        pytest.skip("pandoc not available")
 
     # Quarto supplies these values in its Lua runtime; bare Pandoc needs stubs.
     wrapper = tmp_path / "wrapper.lua"
@@ -56,6 +69,7 @@ return dofile({json.dumps(str(_FILTER))})
 _INDEX = """
 return {
   add_function_parentheses = true,
+  callable_roles = { ["function"] = true, ["method"] = true },
   prefixes = {},
   names = {
     ["Thing"] = {{ uri = "/reference/Thing.html", domain = "py", role = "class", ["local"] = true }},
@@ -93,6 +107,7 @@ def test_ordinary_url_with_encoded_backticks_is_left_alone(tmp_path):
 _METHOD_INDEX = """
 return {
   add_function_parentheses = true,
+  callable_roles = { ["function"] = true, ["method"] = true },
   prefixes = {},
   role_synonyms = { ["meth"] = "method" },
   names = {
@@ -120,6 +135,7 @@ def test_meth_role_resolves_a_py_method_inventory_entry(tmp_path):
 _CONTRACT_INDEX = """
 return {
   add_function_parentheses = true,
+  callable_roles = { ["function"] = true, ["method"] = true },
   prefixes = { ["np"] = {"numpy"} },
   role_synonyms = { ["func"] = "function", ["meth"] = "method",
                     ["exc"] = "exception", ["obj"] = "" },
@@ -215,6 +231,64 @@ def test_parentheses_are_omitted_when_configured_off(tmp_path):
     index = _CONTRACT_INDEX.replace(
         "add_function_parentheses = true", "add_function_parentheses = false"
     )
+    out = _run_filter("[](`mypkg.run`)", index, tmp_path)
+
+    assert "/reference/run.html" in out
+    assert "mypkg.run()" not in out
+
+
+def test_the_written_index_resolves_a_reference_through_the_filter(tmp_path):
+    """
+    Read an index the build itself wrote
+
+    Every other test here hands the filter a hand-written table, so renaming a
+    key in `write_index` would break every real build while they stayed green.
+    One reference of each kind pins the keys the filter reads: a local name, an
+    alias prefix, a role abbreviation and the roles shown with parentheses.
+    """
+    index = Index(
+        names={
+            "mypkg.run": (
+                IndexEntry(uri="/reference/run.html", domain="py", role="function", is_local=True),
+            ),
+            "mypkg.Thing.flush": (
+                IndexEntry(
+                    uri="/reference/Thing.html#flush",
+                    domain="py",
+                    role="method",
+                    is_local=True,
+                ),
+            ),
+            "numpy.ndarray": (
+                IndexEntry(
+                    uri="https://numpy.org/doc/stable/ndarray.html",
+                    domain="py",
+                    role="class",
+                    source="numpy",
+                ),
+            ),
+        },
+        prefixes={"np": ("numpy",)},
+    )
+
+    out = _run_filter_over_written_index(
+        "[](`mypkg.run`), [](:meth:`mypkg.Thing.flush`) and [](`np.ndarray`)\n",
+        index,
+        tmp_path,
+    )
+
+    assert "/reference/run.html" in out
+    assert "mypkg.run()" in out
+    assert "/reference/Thing.html#flush" in out
+    assert "numpy.org/doc/stable/ndarray.html" in out
+
+
+def test_an_index_without_the_callable_roles_adds_no_parentheses(tmp_path):
+    """An index missing the key still resolves; only the trailing `()` is lost."""
+    index = _CONTRACT_INDEX.replace(
+        '  callable_roles = { ["function"] = true, ["method"] = true },\n', ""
+    )
+
     out = _run_filter("[](`mypkg.run`)", index, tmp_path)
 
     assert "/reference/run.html" in out
