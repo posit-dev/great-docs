@@ -82,3 +82,29 @@ def test_explicit_interlink_still_resolves(tmp_path):
     output = _run_filter("See [](`Thing`) for details.\n", _INDEX, tmp_path)
 
     assert "/reference/Thing.html" in output
+
+
+_METHOD_INDEX = """
+return {
+  add_function_parentheses = true,
+  prefixes = {},
+  names = {
+    ["Foo.bar"] = {{
+      uri = "https://ext.example/Foo.html#bar",
+      domain = "py",
+      role = "method",
+      source = "extdemo",
+    }},
+  },
+}
+"""
+
+
+def test_meth_role_resolves_a_py_method_inventory_entry(tmp_path):
+    """Resolve `:py:meth:` against a `method` inventory entry."""
+    if not shutil.which("pandoc"):
+        pytest.skip("pandoc not available")
+
+    output = _run_filter("See [](:py:meth:`Foo.bar`) for details.\n", _METHOD_INDEX, tmp_path)
+
+    assert "https://ext.example/Foo.html#bar" in output

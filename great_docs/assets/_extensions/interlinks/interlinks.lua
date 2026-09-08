@@ -90,8 +90,10 @@ end
 --- @param role string
 --- @return string
 local function standard_role(role)
-  if role == "func" or role == "meth" then
+  if role == "func" then
     return "function"
+  elseif role == "meth" then
+    return "method"
   elseif role == "attr" then
     return "attribute"
   elseif role == "mod" then
