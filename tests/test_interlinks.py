@@ -6,6 +6,7 @@ import requests
 from great_docs._interlinks import (
     Source,
     build_index,
+    build_project_index,
     cache_path,
     load_source,
     resolve_aliases,
@@ -434,6 +435,25 @@ def test_an_external_uri_is_joined_against_its_source(uri, expected):
     index = build_index(Inventory("mypkg", "1", ()), [], [(sources[0], inv)])
 
     assert index.names["numpy.ndarray"][0].uri == expected
+
+
+def test_a_local_path_source_with_site_url_is_linked(tmp_path):
+    """A filesystem `url` paired with `site_url` links to the declared published path."""
+    sibling_dir = tmp_path / "sibling"
+    sibling_dir.mkdir()
+    (sibling_dir / "objects.inv").write_bytes(encode(DEMO))
+
+    project_dir = tmp_path / "myproj"
+    project_dir.mkdir()
+    (project_dir / "great-docs.yml").write_text(
+        "module: myproj\ninterlinks:\n  sources:\n    sibling:\n      url: ../sibling\n"
+        "      site_url: /sibling/\n"
+    )
+
+    index, notes = build_project_index(project_dir, Config(project_dir), "myproj", None)
+
+    assert index.names["numpy.ndarray"][0].uri == "/sibling/ndarray.html"
+    assert notes == []
 
 
 def test_a_kept_alias_points_at_the_target_entry():
