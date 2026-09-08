@@ -72,6 +72,14 @@ first. Qualify the reference to fix it.
 The build reports each ambiguous name it drops, and `great-docs lint` reports each reference
 that hits one, so you do not have to find them by reading the built pages.
 
+Only your own objects compete for a short name. If a project you link to publishes an
+object spelled the same way, your own still wins, and the other project's stays reachable
+under its full name.
+
+A version built from an API snapshot or a git tag resolves references against that version's
+own API, so a name added since then stays unlinked in the older version's pages rather than
+pointing at a page it does not have.
+
 ## The `%seealso` Directive
 
 The most common cross-referencing need is connecting items that serve complementary roles: an
