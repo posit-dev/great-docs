@@ -5,6 +5,7 @@ import requests
 from great_docs._interlinks import (
     Source,
     build_index,
+    build_project_index,
     cache_path,
     load_source,
     resolve_aliases,
@@ -360,6 +361,51 @@ def test_external_uris_are_prefixed_with_the_source_url():
     index = build_index(LOCAL, [], [(src, DEMO)])
     assert index.names["numpy.ndarray"][0].uri == "https://numpy.org/doc/stable/ndarray.html"
     assert index.names["numpy.ndarray"][0].is_local is False
+
+
+def test_site_url_overrides_the_source_url_as_the_link_prefix():
+    """A source's `site_url`, not its `url`, is where its pages are published."""
+    src = Source.from_config(
+        "sibling", {"url": "/srv/docs/sibling-build", "site_url": "https://mysite.example/sibling/"}
+    )
+    index = build_index(LOCAL, [], [(src, DEMO)])
+    assert index.names["numpy.ndarray"][0].uri == "https://mysite.example/sibling/ndarray.html"
+
+
+def test_a_local_path_source_without_site_url_is_not_linked(tmp_path):
+    """A filesystem `url` is where the build reads from, not where pages are served."""
+    sibling_dir = tmp_path / "sibling"
+    sibling_dir.mkdir()
+    (sibling_dir / "objects.inv").write_bytes(encode(DEMO))
+
+    project_dir = tmp_path / "myproj"
+    project_dir.mkdir()
+    (project_dir / "great-docs.yml").write_text(
+        "module: myproj\ninterlinks:\n  sources:\n    sibling:\n      url: ../sibling\n"
+    )
+
+    index, notes = build_project_index(project_dir, Config(project_dir), "myproj", None)
+
+    assert "numpy.ndarray" not in index.names
+    assert any("sibling" in n and "site_url" in n for n in notes)
+
+
+def test_a_local_path_source_with_site_url_is_linked(tmp_path):
+    """A filesystem `url` paired with `site_url` links to the declared published path."""
+    sibling_dir = tmp_path / "sibling"
+    sibling_dir.mkdir()
+    (sibling_dir / "objects.inv").write_bytes(encode(DEMO))
+
+    project_dir = tmp_path / "myproj"
+    project_dir.mkdir()
+    (project_dir / "great-docs.yml").write_text(
+        "module: myproj\ninterlinks:\n  sources:\n    sibling:\n      url: ../sibling\n"
+        "      site_url: /sibling/\n"
+    )
+
+    index, notes = build_project_index(project_dir, Config(project_dir), "myproj", None)
+
+    assert index.names["numpy.ndarray"][0].uri == "/sibling/ndarray.html"
 
 
 def test_a_kept_alias_points_at_the_target_entry():

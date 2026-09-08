@@ -78,6 +78,8 @@ class Source:
     name: str
     url: str
     aliases: tuple[str, ...] = ()
+    site_url: str = ""
+    """Where the source's pages are actually served, when that differs from `url`"""
 
     @classmethod
     def from_config(cls, name: str, value: Any) -> Source:
@@ -101,12 +103,18 @@ class Source:
             name=name,
             url=str(value.get("url", "") or ""),
             aliases=tuple(value.get("aliases", []) or []),
+            site_url=str(value.get("site_url", "") or ""),
         )
 
     @property
     def location(self) -> str:
         """Where the inventory is read from, by the convention every project follows"""
         return f"{self.url.rstrip('/')}/{INVENTORY_FILENAME}"
+
+    @property
+    def is_local_path(self) -> bool:
+        """Whether `url` names a filesystem location rather than a served one"""
+        return "://" not in self.url
 
 
 def sources_from_config(sources: dict[str, Any]) -> list[Source]:
@@ -339,7 +347,7 @@ def build_index(
 
     prefixes: dict[str, tuple[str, ...]] = {}
     for source, inv in external:
-        base = source.url.rstrip("/")
+        base = (source.site_url or source.url).rstrip("/")
         for e in inv.entries:
             add(
                 e.name,
@@ -439,7 +447,11 @@ def build_project_index(
 
     Read the project's `objects.inv` when available, merge it with the
     sources declared in `config.interlinks_sources`, and write the result to
-    `project_path/_inv/index.lua` for the interlinks filter.
+    `project_path/_inv/index.lua` for the interlinks filter. A source whose
+    `url` is a filesystem path (read during the build, the way a sibling
+    project's local build directory is) is skipped unless it also declares
+    `site_url`; without one, its inventory has no known published prefix to
+    link into.
 
     Parameters
     ----------
@@ -476,8 +488,15 @@ def build_project_index(
         inv, note = load_source(source, cache_dir, root=config.project_root)
         if note:
             notes.append(note)
-        if inv is not None:
-            external.append((source, inv))
+        if inv is None:
+            continue
+        if source.is_local_path and not source.site_url:
+            notes.append(
+                f"{source.name}: url is a filesystem path with no site_url configured; "
+                "its inventory was read but will not be linked"
+            )
+            continue
+        external.append((source, inv))
 
     index = build_index(
         local,
