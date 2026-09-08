@@ -4,6 +4,7 @@ Build the lookup index used to resolve inter-project references
 
 from __future__ import annotations
 
+import hashlib
 import time
 from collections import Counter
 from collections.abc import Container, Iterable, Sequence
@@ -127,6 +128,30 @@ def sources_from_config(sources: dict[str, Any]) -> list[Source]:
     return [s for s in out if s.url]
 
 
+def cache_path(source: Source, cache_dir: Path) -> Path:
+    """
+    Where a source's downloaded inventory is cached
+
+    Keyed by the source's location as well as its name, so pointing a source
+    at a different url (a new documentation version, say) misses the old
+    entry rather than reusing it under the new prefix.
+
+    Parameters
+    ----------
+    source :
+        The source being cached.
+    cache_dir :
+        Directory downloads are kept under.
+
+    Returns
+    -------
+    :
+        Path to the cached inventory.
+    """
+    digest = hashlib.md5(source.location.encode("utf-8")).hexdigest()[:12]
+    return cache_dir / f"{source.name}-{digest}.inv"
+
+
 def load_source(
     source: Source,
     cache_dir: Path,
@@ -167,7 +192,7 @@ def load_source(
             return None, f"{source.name}: no inventory at {location}"
         return decode(path.read_bytes()), ""
 
-    cached = cache_dir / f"{source.name}.inv"
+    cached = cache_path(source, cache_dir)
     if cached.exists() and time.time() - cached.stat().st_mtime < max_age.total_seconds():
         return decode(cached.read_bytes()), ""
 

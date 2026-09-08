@@ -5,6 +5,7 @@ import requests
 from great_docs._interlinks import (
     Source,
     build_index,
+    cache_path,
     load_source,
     resolve_aliases,
     root_modules,
@@ -125,18 +126,45 @@ def test_load_source_downloads_and_caches(tmp_path, monkeypatch):
 def test_load_source_falls_back_to_a_stale_cache(tmp_path, monkeypatch):
     cache = tmp_path / "cache"
     cache.mkdir()
-    (cache / "numpy.inv").write_bytes(encode(DEMO))
+    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+    cache_path(src, cache).write_bytes(encode(DEMO))
 
     def _get(url, **kwargs):
         raise requests.RequestException("offline")
 
     monkeypatch.setattr(requests, "get", _get)
-    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
 
     inv, note = load_source(src, cache, max_age=timedelta(seconds=0))
 
     assert inv is not None
     assert "cached" in note
+
+
+def test_load_source_misses_the_cache_when_the_url_changes(tmp_path, monkeypatch):
+    """Changing a source's url must not reuse the previous url's cached inventory."""
+    cache = tmp_path / "cache"
+    old_src = Source.from_config("numpy", {"url": "https://numpy.org/doc/1.0/"})
+    cache_path(old_src, cache).parent.mkdir(parents=True, exist_ok=True)
+    cache_path(old_src, cache).write_bytes(encode(DEMO))
+
+    calls = []
+
+    class _Response:
+        content = encode(DEMO)
+
+        def raise_for_status(self):
+            return None
+
+    def _get(url, **kwargs):
+        calls.append(url)
+        return _Response()
+
+    monkeypatch.setattr(requests, "get", _get)
+    new_src = Source.from_config("numpy", {"url": "https://numpy.org/doc/2.0/"})
+
+    load_source(new_src, cache)
+
+    assert calls == ["https://numpy.org/doc/2.0/objects.inv"]
 
 
 def test_load_source_reports_a_source_it_cannot_read(tmp_path, monkeypatch):
