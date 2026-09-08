@@ -21,6 +21,9 @@ _FILTER = (
 
 def _run_filter(markdown: str, index_lua: str, tmp_path: Path) -> str:
     """Render Markdown through the real filter and return Pandoc's native AST"""
+    if not shutil.which("pandoc"):
+        pytest.skip("pandoc not available")
+
     project = tmp_path / "proj"
     (project / "_inv").mkdir(parents=True)
     (project / "_inv" / "index.lua").write_text(index_lua, encoding="utf-8")
@@ -63,9 +66,6 @@ return {
 
 def test_ordinary_link_label_is_not_autolinked(tmp_path):
     """Leave a code span in an ordinary link label unlinked."""
-    if not shutil.which("pandoc"):
-        pytest.skip("pandoc not available")
-
     output = _run_filter("See [`Thing`](guide.qmd) for details.\n", _INDEX, tmp_path)
 
     # Keep the code span inside only the authored link.
@@ -76,9 +76,6 @@ def test_ordinary_link_label_is_not_autolinked(tmp_path):
 
 def test_explicit_interlink_still_resolves(tmp_path):
     """Continue resolving an explicit interlink target."""
-    if not shutil.which("pandoc"):
-        pytest.skip("pandoc not available")
-
     output = _run_filter("See [](`Thing`) for details.\n", _INDEX, tmp_path)
 
     assert "/reference/Thing.html" in output
@@ -86,9 +83,6 @@ def test_explicit_interlink_still_resolves(tmp_path):
 
 def test_ordinary_url_with_encoded_backticks_is_left_alone(tmp_path):
     """A URL that merely contains an encoded backtick pair is not a reference target."""
-    if not shutil.which("pandoc"):
-        pytest.skip("pandoc not available")
-
     url = "https://example.org/search?q=%60Thing%60"
     output = _run_filter(f"See [search here]({url}) for details.\n", _INDEX, tmp_path)
 
@@ -115,42 +109,99 @@ return {
 
 def test_meth_role_resolves_a_py_method_inventory_entry(tmp_path):
     """Resolve `:py:meth:` against a `method` inventory entry."""
-    if not shutil.which("pandoc"):
-        pytest.skip("pandoc not available")
-
     output = _run_filter("See [](:py:meth:`Foo.bar`) for details.\n", _METHOD_INDEX, tmp_path)
 
     assert "https://ext.example/Foo.html#bar" in output
 
 
-_ROLE_INDEX = """
+# Shared by both contract tests below. `role_synonyms` maps the Sphinx role
+# abbreviations the user guide documents to the role names the index stores;
+# an empty string is the generic role, which constrains nothing.
+_CONTRACT_INDEX = """
 return {
   add_function_parentheses = true,
-  prefixes = {},
-  role_synonyms = { ["exc"] = "exception", ["obj"] = "", ["meth"] = "method" },
+  prefixes = { ["np"] = {"numpy"} },
+  role_synonyms = { ["func"] = "function", ["meth"] = "method",
+                    ["exc"] = "exception", ["obj"] = "" },
   names = {
+    ["mypkg.Thing"] = {{ uri = "/reference/Thing.html", domain = "py",
+                         role = "class", ["local"] = true }},
+    ["mypkg.run"] = {{ uri = "/reference/run.html", domain = "py",
+                       role = "function", ["local"] = true }},
+    ["mypkg.Thing.flush"] = {{ uri = "/reference/Thing.html#flush", domain = "py",
+                               role = "method", ["local"] = true }},
     ["mypkg.Boom"] = {{ uri = "/reference/Boom.html", domain = "py",
                         role = "exception", ["local"] = true }},
+    ["numpy.ndarray"] = {{ uri = "https://numpy.org/doc/stable/ndarray.html",
+                           domain = "py", role = "class", source = "numpy" }},
   },
 }
 """
 
 
-def test_the_exception_abbreviation_resolves_an_exception_entry(tmp_path):
-    """Resolve `:exc:` against an `exception` inventory entry."""
-    if not shutil.which("pandoc"):
-        pytest.skip("pandoc not available")
+@pytest.mark.parametrize(
+    "markdown,expected",
+    [
+        # Display forms
+        ("[](`mypkg.Thing`)", ["/reference/Thing.html", "mypkg.Thing"]),
+        ("[](`~mypkg.Thing`)", ["/reference/Thing.html", "Thing"]),
+        ("[named](`mypkg.Thing`)", ["/reference/Thing.html", "named"]),
+        # Callable parentheses
+        ("[](`mypkg.run`)", ["/reference/run.html", "mypkg.run()"]),
+        # Role forms. Only the name is backtick-quoted; the `:role:` prefix
+        # is not, so Pandoc percent-encodes just the backticks around it.
+        ("[](:func:`mypkg.run`)", ["/reference/run.html"]),
+        ("[](:py:class:`mypkg.Thing`)", ["/reference/Thing.html"]),
+        ("[](:meth:`mypkg.Thing.flush`)", ["/reference/Thing.html#flush"]),
+        ("[](:exc:`mypkg.Boom`)", ["/reference/Boom.html"]),
+        ("[](:obj:`mypkg.Thing`)", ["/reference/Thing.html"]),
+        ("[](:external+numpy:py:class:`numpy.ndarray`)", ["numpy.org/doc/stable/ndarray.html"]),
+        # Module alias
+        ("[](`np.ndarray`)", ["numpy.org/doc/stable/ndarray.html"]),
+        # Code autolinks
+        ("`mypkg.Thing`", ["/reference/Thing.html", "mypkg.Thing"]),
+        ("`~~mypkg.Thing`", ["/reference/Thing.html", "Thing"]),
+        ("`~~.mypkg.Thing`", ["/reference/Thing.html", ".Thing"]),
+    ],
+)
+def test_the_filter_resolves_every_documented_form(markdown, expected, tmp_path):
+    """Resolve every reference form the user guide promises."""
+    out = _run_filter(markdown, _CONTRACT_INDEX, tmp_path)
 
-    out = _run_filter("See [](:exc:`mypkg.Boom`) for details.\n", _ROLE_INDEX, tmp_path)
+    for fragment in expected:
+        assert fragment in out
 
-    assert "/reference/Boom.html" in out
+
+@pytest.mark.parametrize(
+    "markdown,present,absent",
+    [
+        # Autolinking never leaves the project
+        ("`numpy.ndarray`", ["numpy.ndarray"], ["numpy.org/doc/stable"]),
+        # Opt-out
+        ("`mypkg.Thing`{.gd-no-link}", ["mypkg.Thing"], ["/reference/Thing.html"]),
+        # Unresolved degradations
+        ("[](`mypkg.Missing`)", ["mypkg.Missing"], ["Link"]),
+        ("[shown](`mypkg.Missing`)", ["shown"], ["Link"]),
+        ("`~~mypkg.Missing`", ["Missing"], ["~~"]),
+        ("`plain_word`", ["plain_word"], ["Link"]),
+    ],
+)
+def test_the_filter_degrades_without_breaking(markdown, present, absent, tmp_path):
+    """Leave an unresolved or opted-out reference readable, never broken."""
+    out = _run_filter(markdown, _CONTRACT_INDEX, tmp_path)
+
+    for fragment in present:
+        assert fragment in out
+    for fragment in absent:
+        assert fragment not in out
 
 
-def test_the_generic_role_constrains_nothing(tmp_path):
-    """`:obj:` maps to no role, so it matches an entry regardless of role."""
-    if not shutil.which("pandoc"):
-        pytest.skip("pandoc not available")
+def test_parentheses_are_omitted_when_configured_off(tmp_path):
+    """Respect `add_function_parentheses: false` for an interlink target."""
+    index = _CONTRACT_INDEX.replace(
+        "add_function_parentheses = true", "add_function_parentheses = false"
+    )
+    out = _run_filter("[](`mypkg.run`)", index, tmp_path)
 
-    out = _run_filter("See [](:obj:`mypkg.Boom`) for details.\n", _ROLE_INDEX, tmp_path)
-
-    assert "/reference/Boom.html" in out
+    assert "/reference/run.html" in out
+    assert "mypkg.run()" not in out

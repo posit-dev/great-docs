@@ -220,13 +220,11 @@ end
 --- Resolve an explicit reference
 --- @param link table
 local function Link(link)
-  if not link.target:match(HEX_QUOTE) then
-    return link, false
-  end
-
   local ref = parse_target(link.target)
   if not ref then
-    return nil, false
+    -- Not a reference. Leave the link alone and do not descend: a code span in
+    -- an ordinary label must not become a link inside a link.
+    return link, false
   end
 
   local entry = lookup(ref, false)
