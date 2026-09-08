@@ -838,8 +838,9 @@ def _snapshot_claims(snap: ApiSnapshot) -> AliasClaims:
 
     The live build reads these from the resolved API reference, which a
     historical version has no way to run. A snapshot's stems carry the same
-    information: the last component is the bare short name, and a dotted stem
-    is already the class-qualified form.
+    information: the last component is the bare short name, and a member of a
+    class the snapshot records also claims the class-qualified form, which is
+    the shortest spelling that cannot collide with another class's member.
 
     Parameters
     ----------
@@ -859,9 +860,14 @@ def _snapshot_claims(snap: ApiSnapshot) -> AliasClaims:
         full = f"{snap.package_name}.{stem}"
         published.append(full)
         claimed.append((stem, full))
-        bare = stem.rpartition(".")[2]
-        if bare != stem:
-            claimed.append((bare, full))
+        owner, _, bare = stem.rpartition(".")
+        if not owner:
+            continue
+        claimed.append((bare, full))
+        owner_bare = owner.rpartition(".")[2]
+        owner_sym = snap.symbols.get(owner)
+        if owner_bare != owner and owner_sym is not None and owner_sym.kind == "class":
+            claimed.append((f"{owner_bare}.{bare}", full))
     return AliasClaims(claimed=tuple(claimed), published=frozenset(published))
 
 
@@ -876,9 +882,12 @@ def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config)
     version actually publishes rather than what the live build did.
 
     The claims come from the snapshot's own stems rather than from a resolved
-    API reference, which a historical version has no way to run. That recovers
-    every short name the live build indexes except one: a name written into an
-    `api-reference:` config that differs from the object's path.
+    API reference, which a historical version has no way to run. A stem yields
+    the bare name, and a member yields the class-qualified one, so the two
+    paths claim the same spellings for the same object. Out of reach is any
+    claim that depends on the object behind the stem: a name written into an
+    `api-reference:` config that differs from the object's path, and an object
+    documented under a name other than its own.
 
     Parameters
     ----------

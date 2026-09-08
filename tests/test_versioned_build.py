@@ -2632,6 +2632,30 @@ class TestRebuildApiFromSnapshotInventory:
         assert ("MAX_SIZE", "demo.MAX_SIZE") in claims.claimed
         assert claims.published == frozenset({"demo.Cache", "demo.Cache.flush", "demo.MAX_SIZE"})
 
+    def test_a_submodule_qualified_member_claims_its_class_qualified_name(self):
+        """The live build claims `Cache.flush` for a member, so a snapshot must claim it too."""
+        snap = ApiSnapshot(
+            version="1.0",
+            package_name="demo",
+            symbols={
+                "store.Cache": SymbolInfo(name="store.Cache", kind="class"),
+                "store.Cache.flush": SymbolInfo(name="store.Cache.flush", kind="function"),
+                "store.helper": SymbolInfo(name="store.helper", kind="function"),
+            },
+        )
+
+        claimed = set(_snapshot_claims(snap).claimed)
+
+        assert ("Cache", "demo.store.Cache") in claimed
+        assert ("store.Cache", "demo.store.Cache") in claimed
+        assert ("flush", "demo.store.Cache.flush") in claimed
+        assert ("Cache.flush", "demo.store.Cache.flush") in claimed
+        assert ("store.Cache.flush", "demo.store.Cache.flush") in claimed
+        # `store` is a module, not a class, so its function claims no
+        # module-qualified form the live build would not claim either.
+        assert ("store.helper", "demo.store.helper") in claimed
+        assert ("helper", "demo.store.helper") in claimed
+
     def test_a_snapshot_version_writes_an_index_that_resolves_a_short_name(self, tmp_path: Path):
         """The written interlinks index must resolve a short name to this version's own page."""
         from great_docs.config import Config
