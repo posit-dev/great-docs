@@ -108,6 +108,58 @@ def test_load_source_reports_a_corrupt_local_inventory(tmp_path):
     assert "numpy" in note
 
 
+def test_load_source_reports_a_local_inventory_path_that_is_a_directory(tmp_path):
+    """A directory at the inventory path (IsADirectoryError) is reported, not raised."""
+    (tmp_path / "objects.inv").mkdir()
+    src = Source.from_config("numpy", {"url": str(tmp_path)})
+
+    inv, note = load_source(src, tmp_path / "cache")
+
+    assert inv is None
+    assert "numpy" in note
+
+
+def test_load_source_reports_an_unreadable_cache_without_a_working_network(tmp_path, monkeypatch):
+    """A cache that raises OSError on read is treated as unreadable, not fatal."""
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+    # A directory where the cached inventory file should be: reading it raises
+    # IsADirectoryError rather than decoding cleanly or cleanly missing.
+    cache_path(src, cache).mkdir()
+
+    def _get(url, **kwargs):
+        raise requests.RequestException("offline")
+
+    monkeypatch.setattr(requests, "get", _get)
+
+    inv, note = load_source(src, cache)
+
+    assert inv is None
+    assert "numpy" in note
+
+
+def test_load_source_retains_a_download_when_caching_fails(tmp_path, monkeypatch):
+    """A download that decodes fine is still returned when writing the cache fails."""
+    cache = tmp_path / "cache"
+    # A file occupies the cache directory's path, so mkdir() cannot create it.
+    cache.write_bytes(b"not a directory")
+    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+
+    class _Response:
+        content = encode(DEMO)
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(requests, "get", lambda url, **kwargs: _Response())
+
+    inv, note = load_source(src, cache)
+
+    assert inv is not None and inv.entries[0].name == "numpy.ndarray"
+    assert "could not cache" in note
+
+
 def test_load_source_downloads_and_caches(tmp_path, monkeypatch):
     calls = []
 

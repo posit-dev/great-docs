@@ -163,9 +163,10 @@ def load_source(
     """
     Read a source inventory, using a fresh cache entry when available
 
-    Use an older cache when downloading or decoding the fresh copy fails.
-    Report and skip a source when neither its local inventory nor its cache is
-    readable.
+    Use an older cache when downloading, decoding, or reading the fresh copy
+    fails. Report and skip a source when neither its local inventory nor its
+    cache is readable. A download that decodes but cannot be cached is still
+    returned, since caching is an optimization the read must not depend on.
 
     Parameters
     ----------
@@ -189,24 +190,31 @@ def load_source(
         path = Path(location)
         if not path.is_absolute() and root is not None:
             path = root / path
-        if not path.exists():
-            return None, f"{source.name}: no inventory at {location}"
         try:
+            if not path.exists():
+                return None, f"{source.name}: no inventory at {location}"
             return decode(path.read_bytes()), ""
-        except (ValueError, zlib.error) as exc:
+        except (ValueError, zlib.error, OSError) as exc:
             return None, f"{source.name}: could not read {location} ({exc})"
 
     cached = cache_path(source, cache_dir)
 
     def _read_cache() -> Inventory | None:
-        if not cached.exists():
-            return None
         try:
+            if not cached.exists():
+                return None
             return decode(cached.read_bytes())
-        except (ValueError, zlib.error):
+        except (ValueError, zlib.error, OSError):
             return None
 
-    if cached.exists() and time.time() - cached.stat().st_mtime < max_age.total_seconds():
+    try:
+        cache_is_fresh = (
+            cached.exists() and time.time() - cached.stat().st_mtime < max_age.total_seconds()
+        )
+    except OSError:
+        cache_is_fresh = False
+
+    if cache_is_fresh:
         inv = _read_cache()
         if inv is not None:
             return inv, ""
@@ -228,10 +236,16 @@ def load_source(
     except (ValueError, zlib.error) as exc:
         return _fall_back(exc)
 
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    tmp = cached.with_suffix(f"{cached.suffix}.{os.getpid()}.tmp")
-    tmp.write_bytes(response.content)
-    os.replace(tmp, cached)
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        tmp = cached.with_suffix(f"{cached.suffix}.{os.getpid()}.tmp")
+        tmp.write_bytes(response.content)
+        os.replace(tmp, cached)
+    except OSError as exc:
+        # The download itself succeeded; a caching problem is not a reason to
+        # discard it, only to refetch again next time.
+        return inv, f"{source.name}: downloaded but could not cache it ({exc})"
+
     return inv, ""
 
 
