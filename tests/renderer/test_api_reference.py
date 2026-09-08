@@ -89,3 +89,27 @@ def test_settings_defaults():
     s = Settings()
     assert s.dir == "reference"
     assert s.parser == "numpy"
+
+
+def test_the_manifest_is_available_without_building(tmp_path, monkeypatch):
+    """Reading the claims must not write pages, an index or an inventory."""
+    from great_docs._apiref.api_reference import APIReference
+
+    (tmp_path / "mypkg").mkdir()
+    (tmp_path / "mypkg" / "__init__.py").write_text(
+        '"""A package."""\n\n\nclass Cache:\n    """A cache."""\n\n'
+        "    def flush(self):\n"
+        '        """Flush buffered writes."""\n',
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+
+    ref = APIReference(
+        {"api-reference": {"package": "mypkg", "sections": [{"contents": ["Cache"]}]}}
+    )
+    names = [item.name for item in ref.items]
+
+    assert "mypkg.Cache" in names
+    assert list(tmp_path.glob("objects.inv")) == []
+    assert not (tmp_path / "reference").exists()
