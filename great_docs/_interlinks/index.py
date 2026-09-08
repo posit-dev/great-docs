@@ -53,9 +53,7 @@ class AliasClaims:
         """
         items = list(items)
         return cls(
-            claimed=tuple(
-                (alias, item.name) for item in items for alias in getattr(item, "aliases", ())
-            ),
+            claimed=tuple((alias, item.name) for item in items for alias in item.aliases),
             published=frozenset(item.name for item in items),
         )
 
