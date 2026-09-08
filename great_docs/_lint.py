@@ -192,8 +192,14 @@ def run_lint(
 
     if "cross-refs" in checks:
         _check_cross_references(pkg, importable_name, exports, result)
+        documented_stems = set(docs.documented_symbol_names(package_name))
+        if not documented_stems and exports:
+            # A resolution hiccup returned nothing usable; fall back to the
+            # heuristic membership `_gather_reference_inputs` applies on its
+            # own rather than gating every claim out.
+            documented_stems = None
         claims, documented_names, prose = _gather_reference_inputs(
-            pkg, importable_name, exports, project_root, docs.project_path
+            pkg, importable_name, exports, project_root, docs.project_path, documented_stems
         )
         _check_ambiguous_references(claims, documented_names, prose, result)
 
@@ -392,6 +398,7 @@ def _gather_reference_inputs(
     exports: list[str],
     project_root: Path,
     build_dir: Path,
+    documented_stems: set[str] | None = None,
 ) -> tuple[list[tuple[str, str]], set[str], dict[str, str]]:
     """
     Gather what the ambiguity check reads
@@ -411,6 +418,12 @@ def _gather_reference_inputs(
         Root of the project, whose pages are scanned alongside the docstrings.
     build_dir :
         Generated build directory, whose copies of those pages are skipped.
+    documented_stems :
+        Dotted stems (e.g. `MyClass`, `MyClass.flush`) the renderer's actual
+        member selection documents, such as a `members:` config narrowing a
+        class's rendered members. An export or member outside this set claims
+        no name, on top of the heuristics below. Every export and member
+        claims its name when omitted.
 
     Returns
     -------
@@ -424,6 +437,8 @@ def _gather_reference_inputs(
 
     for name in exports:
         if name not in pkg.members:
+            continue
+        if documented_stems is not None and name not in documented_stems:
             continue
         obj = pkg.members[name]
         if exclude_nodoc(obj) is None:
@@ -441,6 +456,8 @@ def _gather_reference_inputs(
             if obj.kind.value != "class":
                 continue
             for member_name, member in _iter_public_members(obj):
+                if documented_stems is not None and f"{name}.{member_name}" not in documented_stems:
+                    continue
                 member_doc = _get_docstring(member)
                 if member_doc is None:
                     # Undocumented members are omitted by the renderer's

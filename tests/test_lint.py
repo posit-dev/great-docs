@@ -434,6 +434,34 @@ class TestGatherReferenceInputs:
 
         assert result.issues == []
 
+    def test_a_member_outside_the_configured_selection_claims_no_name(self, tmp_path):
+        """A `members:` config narrowing a class's rendered members must not cause a false ambiguity."""
+        store_flush = _make_griffe_obj(kind="function", docstring="Flush buffered writes.")
+        net_flush = _make_griffe_obj(kind="function", docstring="Flush the socket.")
+        store_cls = _make_griffe_obj(
+            kind="class", docstring="A store.", members={"flush": store_flush}
+        )
+        net_cls = _make_griffe_obj(
+            kind="class", docstring="A connection.", members={"flush": net_flush}
+        )
+        pkg = _make_pkg({"StoreCache": store_cls, "NetCache": net_cls})
+
+        # NetCache is configured with `members: false`, so the renderer never
+        # documents NetCache.flush even though it has a docstring.
+        documented_stems = {"StoreCache", "StoreCache.flush", "NetCache"}
+        claims, documented_names, prose = _gather_reference_inputs(
+            pkg, "mypkg", ["StoreCache", "NetCache"], tmp_path, tmp_path, documented_stems
+        )
+        prose["guide.qmd"] = "See [](`flush`) for details."
+
+        assert "mypkg.NetCache.flush" not in documented_names
+        assert ("flush", "mypkg.NetCache.flush") not in claims
+
+        result = LintResult()
+        _check_ambiguous_references(claims, documented_names, prose, result)
+
+        assert result.issues == []
+
     def test_nodoc_export_does_not_make_a_real_reference_ambiguous(self, tmp_path):
         """Ignore a top-level export marked `%nodoc`."""
         real = _make_griffe_obj(kind="class", docstring="A store.")
@@ -619,6 +647,43 @@ class TestRunLint:
 
         # func_b has no docstring -> error
         assert any(i.check == "missing-docstring" and i.symbol == "func_b" for i in result.issues)
+
+    @patch("griffe.load")
+    @patch("great_docs.core.GreatDocs")
+    def test_ambiguity_check_respects_the_renderer_member_selection(
+        self, mock_gd_cls, mock_griffe_load, tmp_path
+    ):
+        """A `members:` config narrowing NetCache must not make `flush` look ambiguous."""
+        mock_gd = MagicMock()
+        mock_gd._detect_package_name.return_value = "mypkg"
+        mock_gd._resolve_importable_name.return_value = "mypkg"
+        mock_gd._get_package_exports.return_value = ["StoreCache", "NetCache"]
+        mock_gd._config.get.return_value = "numpy"
+        mock_gd._config.__getitem__.return_value = "numpy"
+        # The renderer documents NetCache itself but, per its `members: false`
+        # config, none of its members — only StoreCache.flush gets a page.
+        mock_gd.documented_symbol_names.return_value = [
+            "StoreCache",
+            "StoreCache.flush",
+            "NetCache",
+        ]
+        mock_gd_cls.return_value = mock_gd
+
+        store_flush = _make_griffe_obj(kind="function", docstring="Flush buffered writes.")
+        net_flush = _make_griffe_obj(kind="function", docstring="Flush the socket.")
+        store_cls = _make_griffe_obj(
+            kind="class", docstring="A store.\n\nSee [](`flush`).", members={"flush": store_flush}
+        )
+        net_cls = _make_griffe_obj(
+            kind="class", docstring="A connection.", members={"flush": net_flush}
+        )
+        mock_pkg = MagicMock()
+        mock_pkg.members = {"StoreCache": store_cls, "NetCache": net_cls}
+        mock_griffe_load.return_value = mock_pkg
+
+        result = run_lint(tmp_path)
+
+        assert not any(i.check == "ambiguous-xref" for i in result.issues)
 
     @patch("griffe.load")
     @patch("great_docs.core.GreatDocs")
