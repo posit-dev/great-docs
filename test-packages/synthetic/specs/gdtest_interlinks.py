@@ -19,7 +19,8 @@ Focus: Exercise all interlinks syntax variants in docstrings and user-guide
 
 from pathlib import Path
 
-from great_docs._interlinks import Source, cache_path
+from great_docs._interlinks import Source
+from great_docs._interlinks.sources import InventoryCache
 from great_docs._sphinx_inventory import Inventory, InventoryEntry, encode
 
 _EXTDEMO_URL = "https://extdemo.example/docs/"
@@ -43,9 +44,9 @@ _EXTERNAL_INVENTORY = encode(
 )
 
 # Match the cache filename derived from the source URL.
-_EXTDEMO_CACHE_NAME = cache_path(
-    Source(name="extdemo", url=_EXTDEMO_URL), cache_dir=Path(".")
-).name
+_EXTDEMO_CACHE_NAME = (
+    InventoryCache(Path(".")).path_for(Source(name="extdemo", url=_EXTDEMO_URL)).name
+)
 
 SPEC = {
     "name": "gdtest_interlinks",

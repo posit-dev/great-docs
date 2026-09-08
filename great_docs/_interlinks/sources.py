@@ -223,25 +223,6 @@ class InventoryCache:
         return ""
 
 
-def cache_path(source: Source, cache_dir: Path) -> Path:
-    """
-    Return the cache path for a source inventory
-
-    Parameters
-    ----------
-    source :
-        The source being cached.
-    cache_dir :
-        Directory downloads are kept under.
-
-    Returns
-    -------
-    :
-        Path to the cached inventory.
-    """
-    return InventoryCache(cache_dir).path_for(source)
-
-
 def load_source(
     source: Source,
     cache_dir: Path,

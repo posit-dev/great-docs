@@ -9,13 +9,13 @@ from great_docs._interlinks import (
     Source,
     build_index,
     build_project_index,
-    cache_path,
     load_source,
     resolve_aliases,
     root_modules,
     sources_from_config,
     write_index,
 )
+from great_docs._interlinks.sources import InventoryCache
 from great_docs._sphinx_inventory import Inventory, InventoryEntry, encode
 from great_docs.config import Config
 
@@ -178,7 +178,7 @@ def test_load_source_reports_an_unreadable_cache_without_a_working_network(tmp_p
     src = Source(name="numpy", url="https://numpy.org/doc/stable/")
     # A directory where the cached inventory file should be: reading it raises
     # IsADirectoryError rather than decoding cleanly or cleanly missing.
-    cache_path(src, cache).mkdir()
+    InventoryCache(cache).path_for(src).mkdir()
 
     def _get(url, **kwargs):
         raise requests.RequestException("offline")
@@ -241,7 +241,7 @@ def test_load_source_falls_back_to_a_stale_cache(tmp_path, monkeypatch):
     cache = tmp_path / "cache"
     cache.mkdir()
     src = Source(name="numpy", url="https://numpy.org/doc/stable/")
-    cache_path(src, cache).write_bytes(encode(DEMO))
+    InventoryCache(cache).path_for(src).write_bytes(encode(DEMO))
 
     def _get(url, **kwargs):
         raise requests.RequestException("offline")
@@ -259,7 +259,7 @@ def test_load_source_falls_back_to_a_stale_cache_on_a_corrupt_download(tmp_path,
     cache = tmp_path / "cache"
     cache.mkdir()
     src = Source(name="numpy", url="https://numpy.org/doc/stable/")
-    good_cache = cache_path(src, cache)
+    good_cache = InventoryCache(cache).path_for(src)
     good_cache.write_bytes(encode(DEMO))
 
     class _Response:
@@ -283,7 +283,7 @@ def test_load_source_redownloads_when_the_fresh_cache_is_corrupt(tmp_path, monke
     cache = tmp_path / "cache"
     cache.mkdir()
     src = Source(name="numpy", url="https://numpy.org/doc/stable/")
-    cache_path(src, cache).write_bytes(b"not an inventory")
+    InventoryCache(cache).path_for(src).write_bytes(b"not an inventory")
 
     class _Response:
         content = encode(DEMO)
@@ -296,7 +296,7 @@ def test_load_source_redownloads_when_the_fresh_cache_is_corrupt(tmp_path, monke
     inv, note = load_source(src, cache)
 
     assert inv is not None and inv.entries[0].name == "numpy.ndarray"
-    assert cache_path(src, cache).read_bytes() == encode(DEMO)
+    assert InventoryCache(cache).path_for(src).read_bytes() == encode(DEMO)
 
 
 def test_load_source_reports_when_the_cache_and_the_download_are_both_unreadable(
@@ -305,7 +305,7 @@ def test_load_source_reports_when_the_cache_and_the_download_are_both_unreadable
     cache = tmp_path / "cache"
     cache.mkdir()
     src = Source(name="numpy", url="https://numpy.org/doc/stable/")
-    cache_path(src, cache).write_bytes(b"not an inventory")
+    InventoryCache(cache).path_for(src).write_bytes(b"not an inventory")
 
     def _get(url, **kwargs):
         raise requests.RequestException("offline")
@@ -340,8 +340,8 @@ def test_load_source_misses_the_cache_when_the_url_changes(tmp_path, monkeypatch
     """Use a new cache entry when a source URL changes."""
     cache = tmp_path / "cache"
     old_src = Source(name="numpy", url="https://numpy.org/doc/1.0/")
-    cache_path(old_src, cache).parent.mkdir(parents=True, exist_ok=True)
-    cache_path(old_src, cache).write_bytes(encode(DEMO))
+    InventoryCache(cache).path_for(old_src).parent.mkdir(parents=True, exist_ok=True)
+    InventoryCache(cache).path_for(old_src).write_bytes(encode(DEMO))
 
     calls = []
 
@@ -551,8 +551,6 @@ def test_load_source_reads_a_relative_url_from_the_project_root(tmp_path):
 
 def test_the_cache_returns_none_for_a_file_that_is_a_directory(tmp_path):
     """A cache entry that is a directory is a miss, not a crash."""
-    from great_docs._interlinks.sources import InventoryCache
-
     source = Source(name="numpy", url="https://numpy.org/doc/stable/")
     cache = InventoryCache(tmp_path)
     cache.path_for(source).mkdir(parents=True)
@@ -562,8 +560,6 @@ def test_the_cache_returns_none_for_a_file_that_is_a_directory(tmp_path):
 
 
 def test_the_cache_returns_none_for_a_truncated_entry(tmp_path):
-    from great_docs._interlinks.sources import InventoryCache
-
     source = Source(name="numpy", url="https://numpy.org/doc/stable/")
     cache = InventoryCache(tmp_path)
     path = cache.path_for(source)
@@ -574,8 +570,6 @@ def test_the_cache_returns_none_for_a_truncated_entry(tmp_path):
 
 
 def test_the_cache_returns_none_for_a_file_that_is_not_an_inventory(tmp_path):
-    from great_docs._interlinks.sources import InventoryCache
-
     source = Source(name="numpy", url="https://numpy.org/doc/stable/")
     cache = InventoryCache(tmp_path)
     path = cache.path_for(source)
@@ -587,8 +581,6 @@ def test_the_cache_returns_none_for_a_file_that_is_not_an_inventory(tmp_path):
 
 def test_the_cache_reports_a_directory_it_cannot_create(tmp_path):
     """Storing into an unusable directory returns a note rather than raising."""
-    from great_docs._interlinks.sources import InventoryCache
-
     blocker = tmp_path / "blocked"
     blocker.write_text("not a directory")
 

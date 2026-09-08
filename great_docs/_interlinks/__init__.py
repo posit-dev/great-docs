@@ -15,7 +15,7 @@ from .index import (
 )
 from .lua import write_index
 from .project import build_project_index
-from .sources import Source, cache_path, load_source, sources_from_config
+from .sources import Source, load_source, sources_from_config
 
 __all__ = (
     "AliasClaims",
@@ -25,7 +25,6 @@ __all__ = (
     "Source",
     "build_index",
     "build_project_index",
-    "cache_path",
     "load_source",
     "resolve_aliases",
     "root_modules",
