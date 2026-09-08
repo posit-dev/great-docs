@@ -196,6 +196,15 @@ def _make_pkg(members_dict):
     return pkg
 
 
+def _make_documented_item(name, aliases, docstring):
+    """Create a mock manifest item, shaped like the `InventoryItem`s `AliasClaims.make` reads."""
+    item = MagicMock()
+    item.name = name
+    item.aliases = aliases
+    item.obj = _make_griffe_obj(docstring=docstring)
+    return item
+
+
 class TestCheckMissingDocstrings:
     def test_export_with_docstring(self):
         pkg = _make_pkg({"func_a": _make_griffe_obj(docstring="Documented function.")})
@@ -536,10 +545,14 @@ class TestRunLint:
         mock_gd._config.__getitem__.return_value = "numpy"
         # The renderer documents NetCache itself but, per its `members: false`
         # config, none of its members — only StoreCache.flush gets a page.
-        mock_gd.documented_symbol_names.return_value = [
-            "StoreCache",
-            "StoreCache.flush",
-            "NetCache",
+        mock_gd.documented_objects.return_value = [
+            _make_documented_item(
+                "mypkg.StoreCache", ("StoreCache",), "A store.\n\nSee [](`flush`)."
+            ),
+            _make_documented_item(
+                "mypkg.StoreCache.flush", ("flush", "StoreCache.flush"), "Flush buffered writes."
+            ),
+            _make_documented_item("mypkg.NetCache", ("NetCache",), "A connection."),
         ]
         mock_gd_cls.return_value = mock_gd
 
@@ -1484,6 +1497,7 @@ class TestCheckStaleVersions:
     def test_qmd_file_read_error_skipped(self, tmp_path):
         """Files that raise OSError when read are silently skipped."""
         from pathlib import Path
+
         from great_docs._lint import _check_stale_versions
 
         self._make_project(
