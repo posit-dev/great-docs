@@ -33475,6 +33475,28 @@ def test_create_inventory_basic():
     assert result["items"][0]["domain"] == "py"
 
 
+def test_create_inventory_classifies_a_class_method_as_py_method():
+    """A method's inventory role must be `method`, not griffe's bare `function`."""
+    cls = gf.Class(name="MyClass", lineno=1)
+    method = gf.Function(name="my_method", lineno=2)
+    cls.set_member("my_method", method)
+
+    item = InventoryItem(name="myproj.MyClass.my_method", obj=method, uri="MyClass.html#my_method")
+    result = create_inventory("myproj", "1.0", [item])
+
+    assert result["items"][0]["role"] == "method"
+
+
+def test_create_inventory_keeps_a_plain_function_as_py_function():
+    """A module-level function keeps griffe's `function` kind as its role."""
+    func = gf.Function(name="my_func", lineno=1)
+
+    item = InventoryItem(name="myproj.my_func", obj=func, uri="my_func.html")
+    result = create_inventory("myproj", "1.0", [item])
+
+    assert result["items"][0]["role"] == "function"
+
+
 def test_create_inventory_with_layout_item():
     """create_inventory handles InventoryItem objects."""
 

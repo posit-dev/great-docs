@@ -77,12 +77,38 @@ def create_inventory(
 _KIND_ROLES = {"type alias": "type"}
 
 
+def _inventory_role(obj: gf.Object | gf.Alias) -> str:
+    """
+    Return the Sphinx role for a documented object
+
+    Griffe has no `method` kind of its own; a method is a `Function` whose
+    parent happens to be a class. The published inventory still needs the
+    distinction, since a real Sphinx inventory publishes `py:method` for
+    methods and `:py:meth:` references match against that role.
+
+    Parameters
+    ----------
+    obj :
+        The documented object.
+
+    Returns
+    -------
+    :
+        The Sphinx role.
+    """
+    kind = obj.kind.value
+    parent = obj.parent
+    if kind == "function" and parent is not None and parent.is_class:
+        return "method"
+    return _KIND_ROLES.get(kind, kind)
+
+
 def _create_inventory_item(item: InventoryItem, priority: str = "1") -> dict[str, Any]:
     """Build a single inventory entry as a dict"""
     return {
         "name": item.name,
         "domain": "py",
-        "role": _KIND_ROLES.get(item.obj.kind.value, item.obj.kind.value),
+        "role": _inventory_role(item.obj),
         "priority": priority,
         "uri": item.uri,
         "dispname": item.dispname or "-",
