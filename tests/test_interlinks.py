@@ -98,6 +98,16 @@ def test_load_source_reads_a_local_inventory(tmp_path):
     assert note == ""
 
 
+def test_load_source_reports_a_corrupt_local_inventory(tmp_path):
+    (tmp_path / "objects.inv").write_bytes(b"not an inventory")
+    src = Source.from_config("numpy", {"url": str(tmp_path)})
+
+    inv, note = load_source(src, tmp_path / "cache")
+
+    assert inv is None
+    assert "numpy" in note
+
+
 def test_load_source_downloads_and_caches(tmp_path, monkeypatch):
     calls = []
 
@@ -162,6 +172,46 @@ def test_load_source_falls_back_to_a_stale_cache_on_a_corrupt_download(tmp_path,
     assert "cached" in note
     # Retain the valid cached copy after rejecting the corrupt download.
     assert good_cache.read_bytes() == encode(DEMO)
+
+
+def test_load_source_redownloads_when_the_fresh_cache_is_corrupt(tmp_path, monkeypatch):
+    """Refetch a fresh cache file that cannot be decoded."""
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+    cache_path(src, cache).write_bytes(b"not an inventory")
+
+    class _Response:
+        content = encode(DEMO)
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(requests, "get", lambda url, **kwargs: _Response())
+
+    inv, note = load_source(src, cache)
+
+    assert inv is not None and inv.entries[0].name == "numpy.ndarray"
+    assert cache_path(src, cache).read_bytes() == encode(DEMO)
+
+
+def test_load_source_reports_when_the_cache_and_the_download_are_both_unreadable(
+    tmp_path, monkeypatch
+):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+    cache_path(src, cache).write_bytes(b"not an inventory")
+
+    def _get(url, **kwargs):
+        raise requests.RequestException("offline")
+
+    monkeypatch.setattr(requests, "get", _get)
+
+    inv, note = load_source(src, cache)
+
+    assert inv is None
+    assert "numpy" in note
 
 
 def test_load_source_reports_a_corrupt_download_with_no_cache_to_fall_back_on(

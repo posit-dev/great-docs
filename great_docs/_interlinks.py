@@ -5,6 +5,7 @@ Build the lookup index used to resolve inter-project references
 from __future__ import annotations
 
 import hashlib
+import os
 import time
 import zlib
 from collections import Counter
@@ -162,8 +163,9 @@ def load_source(
     """
     Read a source inventory, using a fresh cache entry when available
 
-    Fall back to a cached copy of any age when the download fails or does not
-    decode as an inventory. Report and skip a source with no readable copy.
+    Use an older cache when downloading or decoding the fresh copy fails.
+    Report and skip a source when neither its local inventory nor its cache is
+    readable.
 
     Parameters
     ----------
@@ -189,15 +191,30 @@ def load_source(
             path = root / path
         if not path.exists():
             return None, f"{source.name}: no inventory at {location}"
-        return decode(path.read_bytes()), ""
+        try:
+            return decode(path.read_bytes()), ""
+        except (ValueError, zlib.error) as exc:
+            return None, f"{source.name}: could not read {location} ({exc})"
 
     cached = cache_path(source, cache_dir)
+
+    def _read_cache() -> Inventory | None:
+        if not cached.exists():
+            return None
+        try:
+            return decode(cached.read_bytes())
+        except (ValueError, zlib.error):
+            return None
+
     if cached.exists() and time.time() - cached.stat().st_mtime < max_age.total_seconds():
-        return decode(cached.read_bytes()), ""
+        inv = _read_cache()
+        if inv is not None:
+            return inv, ""
 
     def _fall_back(exc: Exception) -> tuple[Inventory | None, str]:
-        if cached.exists():
-            return decode(cached.read_bytes()), f"{source.name}: using cached inventory ({exc})"
+        inv = _read_cache()
+        if inv is not None:
+            return inv, f"{source.name}: using cached inventory ({exc})"
         return None, f"{source.name}: could not read {location} ({exc})"
 
     try:
@@ -212,7 +229,9 @@ def load_source(
         return _fall_back(exc)
 
     cache_dir.mkdir(parents=True, exist_ok=True)
-    cached.write_bytes(response.content)
+    tmp = cached.with_suffix(f"{cached.suffix}.{os.getpid()}.tmp")
+    tmp.write_bytes(response.content)
+    os.replace(tmp, cached)
     return inv, ""
 
 
