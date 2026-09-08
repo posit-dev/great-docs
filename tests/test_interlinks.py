@@ -24,9 +24,7 @@ def test_a_uniquely_claimed_alias_is_kept():
 
 
 def test_an_alias_claimed_twice_is_dropped_and_reported():
-    res = resolve_aliases(
-        [("Cache", "demo.store.Cache"), ("Cache", "demo.net.Cache")], taken=set()
-    )
+    res = resolve_aliases([("Cache", "demo.store.Cache"), ("Cache", "demo.net.Cache")], taken=set())
     assert res.kept == {}
     assert res.dropped == {"Cache": ("demo.net.Cache", "demo.store.Cache")}
 
@@ -459,6 +457,55 @@ def test_load_source_reads_a_relative_url_from_the_project_root(tmp_path):
 
     assert inv is not None
     assert note == ""
+
+
+def test_the_cache_returns_none_for_a_file_that_is_a_directory(tmp_path):
+    """A cache entry that is a directory is a miss, not a crash."""
+    from great_docs._interlinks.sources import InventoryCache
+
+    source = Source(name="numpy", url="https://numpy.org/doc/stable/")
+    cache = InventoryCache(tmp_path)
+    cache.path_for(source).mkdir(parents=True)
+
+    assert cache.read(source) is None
+    assert cache.is_fresh(source, timedelta(days=7)) is False
+
+
+def test_the_cache_returns_none_for_a_truncated_entry(tmp_path):
+    from great_docs._interlinks.sources import InventoryCache
+
+    source = Source(name="numpy", url="https://numpy.org/doc/stable/")
+    cache = InventoryCache(tmp_path)
+    path = cache.path_for(source)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"# Sphinx inventory version 2\n# Project: x\n# Version: 1\n# z\nnot-zlib")
+
+    assert cache.read(source) is None
+
+
+def test_the_cache_returns_none_for_a_file_that_is_not_an_inventory(tmp_path):
+    from great_docs._interlinks.sources import InventoryCache
+
+    source = Source(name="numpy", url="https://numpy.org/doc/stable/")
+    cache = InventoryCache(tmp_path)
+    path = cache.path_for(source)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"hello")
+
+    assert cache.read(source) is None
+
+
+def test_the_cache_reports_a_directory_it_cannot_create(tmp_path):
+    """Storing into an unusable directory returns a note rather than raising."""
+    from great_docs._interlinks.sources import InventoryCache
+
+    blocker = tmp_path / "blocked"
+    blocker.write_text("not a directory")
+
+    source = Source(name="numpy", url="https://numpy.org/doc/stable/")
+    note = InventoryCache(blocker / "interlinks").store(source, b"payload")
+
+    assert note != ""
 
 
 def test_function_parentheses_are_on_by_default():
