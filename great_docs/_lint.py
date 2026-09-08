@@ -411,13 +411,16 @@ def _gather_reference_inputs(
             if obj.kind.value != "class":
                 continue
             for member_name, member in _iter_public_members(obj):
+                member_doc = _get_docstring(member)
+                if member_doc is None:
+                    # Undocumented members are omitted by the renderer's
+                    # default `include_empty=False`, so they claim no name.
+                    continue
                 member_full = f"{full}.{member_name}"
                 documented_names.add(member_full)
                 claims.append((f"{name}.{member_name}", member_full))
                 claims.append((member_name, member_full))
-                member_doc = _get_docstring(member)
-                if member_doc:
-                    prose[member_full] = member_doc
+                prose[member_full] = member_doc
         except AttributeError:
             continue
 
