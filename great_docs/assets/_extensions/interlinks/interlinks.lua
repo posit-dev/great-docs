@@ -42,7 +42,7 @@ local function load_index()
 
   local chunk = loadfile(source)
   if not chunk then
-    return { prefixes = {}, names = {} }
+    return { prefixes = {}, names = {}, role_synonyms = {} }
   end
 
   -- Rename rather than write in place: a parallel render must never load a
@@ -87,19 +87,22 @@ local function short_name(name)
 end
 
 --- Give a role its standard name
+---
+--- The vocabulary comes from the index, so the filter holds none of its own.
+--- A synonym mapping to the empty string is Sphinx's generic role, which
+--- constrains nothing, so the reference is left with no role at all.
 --- @param role string
---- @return string
+--- @return string|nil
 local function standard_role(role)
-  if role == "func" then
-    return "function"
-  elseif role == "meth" then
-    return "method"
-  elseif role == "attr" then
-    return "attribute"
-  elseif role == "mod" then
-    return "module"
+  local synonyms = get_index().role_synonyms
+  local standard = synonyms and synonyms[role]
+  if standard == nil then
+    return role
   end
-  return role
+  if standard == "" then
+    return nil
+  end
+  return standard
 end
 
 --- Read a link target into a reference

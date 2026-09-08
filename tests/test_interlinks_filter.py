@@ -100,6 +100,7 @@ _METHOD_INDEX = """
 return {
   add_function_parentheses = true,
   prefixes = {},
+  role_synonyms = { ["meth"] = "method" },
   names = {
     ["Foo.bar"] = {{
       uri = "https://ext.example/Foo.html#bar",
@@ -120,3 +121,36 @@ def test_meth_role_resolves_a_py_method_inventory_entry(tmp_path):
     output = _run_filter("See [](:py:meth:`Foo.bar`) for details.\n", _METHOD_INDEX, tmp_path)
 
     assert "https://ext.example/Foo.html#bar" in output
+
+
+_ROLE_INDEX = """
+return {
+  add_function_parentheses = true,
+  prefixes = {},
+  role_synonyms = { ["exc"] = "exception", ["obj"] = "", ["meth"] = "method" },
+  names = {
+    ["mypkg.Boom"] = {{ uri = "/reference/Boom.html", domain = "py",
+                        role = "exception", ["local"] = true }},
+  },
+}
+"""
+
+
+def test_the_exception_abbreviation_resolves_an_exception_entry(tmp_path):
+    """Resolve `:exc:` against an `exception` inventory entry."""
+    if not shutil.which("pandoc"):
+        pytest.skip("pandoc not available")
+
+    out = _run_filter("See [](:exc:`mypkg.Boom`) for details.\n", _ROLE_INDEX, tmp_path)
+
+    assert "/reference/Boom.html" in out
+
+
+def test_the_generic_role_constrains_nothing(tmp_path):
+    """`:obj:` maps to no role, so it matches an entry regardless of role."""
+    if not shutil.which("pandoc"):
+        pytest.skip("pandoc not available")
+
+    out = _run_filter("See [](:obj:`mypkg.Boom`) for details.\n", _ROLE_INDEX, tmp_path)
+
+    assert "/reference/Boom.html" in out

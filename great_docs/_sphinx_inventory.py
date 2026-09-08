@@ -20,9 +20,10 @@ from dataclasses import dataclass
 INVENTORY_FILENAME = "objects.inv"
 """Filename used for the inventory published by every project"""
 
-# Griffe's kinds and Sphinx's py-domain roles agree except in three places.
-# A PEP 695 alias is `py:type` (Sphinx 7.4+), a function inside a class is
-# `py:method`, and a module-level name is `py:data` rather than an attribute.
+# A PEP 695 alias is `py:type` (Sphinx 7.4+); every other kind griffe reports
+# is already the Sphinx py-domain role. The two exceptions that depend on
+# context, a function inside a class and a module-level attribute, are
+# branches in `role_for_kind` below rather than entries here.
 _KIND_ROLES = {"type alias": "type"}
 
 ROLE_SYNONYMS = {
@@ -33,7 +34,8 @@ ROLE_SYNONYMS = {
     "exc": "exception",
     "obj": "",
 }
-"""Abbreviations a reference may be written with, mapped to the role it means
+"""
+Abbreviations a reference may be written with, mapped to the role it means
 
 `obj` is Sphinx's generic role and constrains nothing, so it maps to the empty
 string and a reader treats it as no role at all.

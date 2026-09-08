@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .._sphinx_inventory import ROLE_SYNONYMS
 from .index import Index
 
 
@@ -21,7 +22,8 @@ def write_index(index: Index, path: Path) -> None:
 
     A chunk is written rather than JSON because Quarto runs one pandoc process
     per file and each one loads the index; Lua reads its own syntax faster than
-    it decodes JSON.
+    it decodes JSON. A compiled index left over from an earlier build is
+    removed, since it would otherwise be loaded in preference to this one.
 
     Parameters
     ----------
@@ -33,8 +35,12 @@ def write_index(index: Index, path: Path) -> None:
     lines = [
         "return {",
         f"  add_function_parentheses = {str(index.add_function_parentheses).lower()},",
-        "  prefixes = {",
+        "  role_synonyms = {",
     ]
+    for abbrev in sorted(ROLE_SYNONYMS):
+        lines.append(f"    [{_quote_lua(abbrev)}] = {_quote_lua(ROLE_SYNONYMS[abbrev])},")
+    lines.append("  },")
+    lines.append("  prefixes = {")
     for alias in sorted(index.prefixes):
         roots = ", ".join(_quote_lua(r) for r in index.prefixes[alias])
         lines.append(f"    [{_quote_lua(alias)}] = {{{roots}}},")
@@ -61,3 +67,6 @@ def write_index(index: Index, path: Path) -> None:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # A compiled index the filter wrote for an earlier build would be loaded in
+    # preference to this one.
+    path.with_suffix(".luac").unlink(missing_ok=True)

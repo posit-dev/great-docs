@@ -4,6 +4,7 @@ import pytest
 import requests
 
 from great_docs._interlinks import (
+    Index,
     Source,
     build_index,
     build_project_index,
@@ -571,3 +572,25 @@ def test_the_index_carries_the_parentheses_choice(tmp_path):
     write_index(index, out)
 
     assert "add_function_parentheses = false," in out.read_text()
+
+
+def test_the_index_carries_the_role_synonyms(tmp_path):
+    """The filter reads the role vocabulary rather than holding its own."""
+    path = tmp_path / "index.lua"
+    write_index(Index(), path)
+    text = path.read_text(encoding="utf-8")
+
+    assert '["meth"] = "method"' in text
+    assert '["exc"] = "exception"' in text
+    assert '["obj"] = ""' in text
+
+
+def test_write_index_removes_a_stale_compiled_index(tmp_path):
+    """A compiled index must never outlive the source it was compiled from."""
+    path = tmp_path / "index.lua"
+    compiled = tmp_path / "index.luac"
+    compiled.write_bytes(b"stale")
+
+    write_index(Index(), path)
+
+    assert not compiled.exists()
