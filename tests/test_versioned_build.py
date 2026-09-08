@@ -2524,6 +2524,68 @@ class TestRebuildApiFromSnapshotEdge:
 
 
 # ---------------------------------------------------------------------------
+# _rebuild_api_from_snapshot — rebuilding the inventory and interlinks index
+# ---------------------------------------------------------------------------
+
+
+class TestRebuildApiFromSnapshotInventory:
+    def test_config_rebuilds_the_inventory_from_the_snapshot(self, tmp_path: Path):
+        """The published inventory must match this version's own snapshot, not the live build's."""
+        from great_docs._sphinx_inventory import decode
+        from great_docs.config import Config
+
+        snap_path = tmp_path / "snap.json"
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="pkg",
+            symbols={
+                "Pipeline": SymbolInfo(name="Pipeline", kind="class"),
+                "Pipeline.run": SymbolInfo(name="Pipeline.run", kind="function"),
+                "removed_func": SymbolInfo(name="removed_func", kind="function"),
+            },
+        )
+        snap.save(snap_path)
+
+        dest_dir = tmp_path / "build"
+        dest_dir.mkdir()
+        # A stale inventory from the live build, advertising an object this
+        # version never documented and missing one it does.
+        (dest_dir / "objects.inv").write_bytes(b"stale bytes from the live build")
+
+        config = Config(tmp_path)
+        entry = _make_entry("0.2")
+        _rebuild_api_from_snapshot(dest_dir, snap_path, entry, config)
+
+        inv = decode((dest_dir / "objects.inv").read_bytes())
+        by_name = {e.name: e for e in inv.entries}
+
+        assert by_name["pkg.Pipeline"].role == "class"
+        assert by_name["pkg.Pipeline.run"].role == "method"
+        assert "pkg.removed_func" in by_name
+        assert (dest_dir / "_inv" / "index.lua").exists()
+
+    def test_no_config_leaves_the_inventory_untouched(self, tmp_path: Path):
+        """Without a config, the copied (stale) inventory is left as-is."""
+        snap_path = tmp_path / "snap.json"
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="pkg",
+            symbols={"my_func": SymbolInfo(name="my_func", kind="function")},
+        )
+        snap.save(snap_path)
+
+        dest_dir = tmp_path / "build"
+        dest_dir.mkdir()
+        (dest_dir / "objects.inv").write_bytes(b"stale bytes from the live build")
+
+        entry = _make_entry("0.2")
+        _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+
+        assert (dest_dir / "objects.inv").read_bytes() == b"stale bytes from the live build"
+        assert not (dest_dir / "_inv").exists()
+
+
+# ---------------------------------------------------------------------------
 # _prune_reference_index — definition-list description lines
 # ---------------------------------------------------------------------------
 

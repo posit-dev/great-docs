@@ -16537,6 +16537,7 @@ anchor-sections: true
                     progress_callback=_progress_cb,
                     on_renders_done=_on_renders_done,
                     badge_expiry_raw=self._config["new_is_old"],
+                    config=self._config,
                 )
 
                 for warning in vb_result.get("warnings", []):
