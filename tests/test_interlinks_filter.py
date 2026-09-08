@@ -146,22 +146,36 @@ return {
         ("[](`mypkg.Thing`)", ["/reference/Thing.html", "mypkg.Thing"]),
         ("[](`~mypkg.Thing`)", ["/reference/Thing.html", "Thing"]),
         ("[named](`mypkg.Thing`)", ["/reference/Thing.html", "named"]),
+        # Authored text wins over the `~` shortening marker, not just over the
+        # full path: the marker is ignored whenever link text is supplied.
+        # (One word, like the "named" row above: Pandoc's native writer
+        # tokenizes multi-word text into separate Str/Space nodes, so a
+        # multi-word phrase would not appear as one contiguous substring.)
+        ("[labelled](`~mypkg.Thing`)", ["/reference/Thing.html", "labelled"]),
         # Callable parentheses
         ("[](`mypkg.run`)", ["/reference/run.html", "mypkg.run()"]),
         # Role forms. Only the name is backtick-quoted; the `:role:` prefix
         # is not, so Pandoc percent-encodes just the backticks around it.
+        # (Undocumented but supported quartodoc-era syntax; regression
+        # coverage only, not a form the user guide names.)
         ("[](:func:`mypkg.run`)", ["/reference/run.html"]),
         ("[](:py:class:`mypkg.Thing`)", ["/reference/Thing.html"]),
         ("[](:meth:`mypkg.Thing.flush`)", ["/reference/Thing.html#flush"]),
         ("[](:exc:`mypkg.Boom`)", ["/reference/Boom.html"]),
         ("[](:obj:`mypkg.Thing`)", ["/reference/Thing.html"]),
         ("[](:external+numpy:py:class:`numpy.ndarray`)", ["numpy.org/doc/stable/ndarray.html"]),
-        # Module alias
+        # External reference: the canonical unaliased form, and the alias
+        # that rewrites a prefix onto the same source.
+        ("[](`numpy.ndarray`)", ["numpy.org/doc/stable/ndarray.html"]),
         ("[](`np.ndarray`)", ["numpy.org/doc/stable/ndarray.html"]),
         # Code autolinks
         ("`mypkg.Thing`", ["/reference/Thing.html", "mypkg.Thing"]),
         ("`~~mypkg.Thing`", ["/reference/Thing.html", "Thing"]),
         ("`~~.mypkg.Thing`", ["/reference/Thing.html", ".Thing"]),
+        # Author-supplied parentheses are cosmetic: stripped for lookup,
+        # preserved in the display text.
+        ("`mypkg.run()`", ["/reference/run.html", "mypkg.run()"]),
+        ("`~~mypkg.run()`", ["/reference/run.html", "run()"]),
     ],
 )
 def test_the_filter_resolves_every_documented_form(markdown, expected, tmp_path):
