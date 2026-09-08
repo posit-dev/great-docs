@@ -111,7 +111,10 @@ end
 --- @return table|nil
 local function parse_target(target)
   local ref = {}
-  local quoted = HEX_QUOTE .. "(.*)" .. HEX_QUOTE
+  -- Anchored so a URL that merely contains an encoded backtick pair in its
+  -- query string, say, is left as an ordinary link rather than misread as a
+  -- reference target.
+  local quoted = "^" .. HEX_QUOTE .. "(.*)" .. HEX_QUOTE .. "$"
 
   if target:sub(1, 1) == ":" then
     local tokens = split_on(target, ":")

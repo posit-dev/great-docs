@@ -84,6 +84,18 @@ def test_explicit_interlink_still_resolves(tmp_path):
     assert "/reference/Thing.html" in output
 
 
+def test_ordinary_url_with_encoded_backticks_is_left_alone(tmp_path):
+    """A URL that merely contains an encoded backtick pair is not a reference target."""
+    if not shutil.which("pandoc"):
+        pytest.skip("pandoc not available")
+
+    url = "https://example.org/search?q=%60Thing%60"
+    output = _run_filter(f"See [search here]({url}) for details.\n", _INDEX, tmp_path)
+
+    assert url in output
+    assert "/reference/Thing.html" not in output
+
+
 _METHOD_INDEX = """
 return {
   add_function_parentheses = true,
