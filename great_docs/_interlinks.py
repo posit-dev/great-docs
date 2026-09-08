@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import time
+import zlib
 from collections import Counter
 from collections.abc import Container, Iterable, Sequence
 from dataclasses import dataclass, field
@@ -130,11 +131,10 @@ def sources_from_config(sources: dict[str, Any]) -> list[Source]:
 
 def cache_path(source: Source, cache_dir: Path) -> Path:
     """
-    Where a source's downloaded inventory is cached
+    Return the cache path for a source inventory
 
-    Keyed by the source's location as well as its name, so pointing a source
-    at a different url (a new documentation version, say) misses the old
-    entry rather than reusing it under the new prefix.
+    Include the source location in the key so a new documentation version does
+    not reuse an older inventory under the new URL prefix.
 
     Parameters
     ----------
@@ -160,11 +160,10 @@ def load_source(
     root: Path | None = None,
 ) -> tuple[Inventory | None, str]:
     """
-    Read a source's inventory, from the cache when it is fresh enough
+    Read a source inventory, using a fresh cache entry when available
 
-    A download failure falls back to any cached copy whatever its age. A source
-    that cannot be read at all is reported and skipped, leaving its references
-    unresolved.
+    Fall back to a cached copy of any age when the download fails or does not
+    decode as an inventory. Report and skip a source with no readable copy.
 
     Parameters
     ----------
@@ -196,17 +195,25 @@ def load_source(
     if cached.exists() and time.time() - cached.stat().st_mtime < max_age.total_seconds():
         return decode(cached.read_bytes()), ""
 
-    try:
-        response = requests.get(location, timeout=_TIMEOUT)
-        response.raise_for_status()
-    except requests.RequestException as exc:
+    def _fall_back(exc: Exception) -> tuple[Inventory | None, str]:
         if cached.exists():
             return decode(cached.read_bytes()), f"{source.name}: using cached inventory ({exc})"
         return None, f"{source.name}: could not read {location} ({exc})"
 
+    try:
+        response = requests.get(location, timeout=_TIMEOUT)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        return _fall_back(exc)
+
+    try:
+        inv = decode(response.content)
+    except (ValueError, zlib.error) as exc:
+        return _fall_back(exc)
+
     cache_dir.mkdir(parents=True, exist_ok=True)
     cached.write_bytes(response.content)
-    return decode(response.content), ""
+    return inv, ""
 
 
 @dataclass(frozen=True)

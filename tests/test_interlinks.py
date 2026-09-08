@@ -140,8 +140,50 @@ def test_load_source_falls_back_to_a_stale_cache(tmp_path, monkeypatch):
     assert "cached" in note
 
 
+def test_load_source_falls_back_to_a_stale_cache_on_a_corrupt_download(tmp_path, monkeypatch):
+    """Do not overwrite a valid cache with a corrupt successful response."""
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+    good_cache = cache_path(src, cache)
+    good_cache.write_bytes(encode(DEMO))
+
+    class _Response:
+        content = b"<html>not an inventory</html>"
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(requests, "get", lambda url, **kwargs: _Response())
+
+    inv, note = load_source(src, cache, max_age=timedelta(seconds=0))
+
+    assert inv is not None
+    assert "cached" in note
+    # Retain the valid cached copy after rejecting the corrupt download.
+    assert good_cache.read_bytes() == encode(DEMO)
+
+
+def test_load_source_reports_a_corrupt_download_with_no_cache_to_fall_back_on(
+    tmp_path, monkeypatch
+):
+    class _Response:
+        content = b"<html>not an inventory</html>"
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(requests, "get", lambda url, **kwargs: _Response())
+    src = Source.from_config("numpy", {"url": "https://numpy.org/doc/stable/"})
+
+    inv, note = load_source(src, tmp_path / "cache")
+
+    assert inv is None
+    assert "numpy" in note
+
+
 def test_load_source_misses_the_cache_when_the_url_changes(tmp_path, monkeypatch):
-    """Changing a source's url must not reuse the previous url's cached inventory."""
+    """Use a new cache entry when a source URL changes."""
     cache = tmp_path / "cache"
     old_src = Source.from_config("numpy", {"url": "https://numpy.org/doc/1.0/"})
     cache_path(old_src, cache).parent.mkdir(parents=True, exist_ok=True)
