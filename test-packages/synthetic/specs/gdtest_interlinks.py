@@ -17,7 +17,12 @@ Focus: Exercise all interlinks syntax variants in docstrings and user-guide
        ``../reference/``.
 """
 
+from pathlib import Path
+
+from great_docs._interlinks import Source, cache_path
 from great_docs._sphinx_inventory import Inventory, InventoryEntry, encode
+
+_EXTDEMO_URL = "https://extdemo.example/docs/"
 
 # Represent another project's published inventory.
 _EXTERNAL_INVENTORY = encode(
@@ -36,6 +41,11 @@ _EXTERNAL_INVENTORY = encode(
         ),
     )
 )
+
+# Match the cache filename derived from the source URL.
+_EXTDEMO_CACHE_NAME = cache_path(
+    Source(name="extdemo", url=_EXTDEMO_URL), cache_dir=Path(".")
+).name
 
 SPEC = {
     "name": "gdtest_interlinks",
@@ -61,16 +71,15 @@ SPEC = {
         "interlinks": {
             "sources": {
                 "extdemo": {
-                    "url": "https://extdemo.example/docs/",
+                    "url": _EXTDEMO_URL,
                     "aliases": ["ed"],
                 },
             },
         },
     },
     "binary_files": {
-        # Seed the download cache so the build resolves this source without
-        # accessing the network, as it would on a repeat build.
-        ".great-docs-cache/interlinks/extdemo.inv": _EXTERNAL_INVENTORY,
+        # Seed the cache so the build resolves this source without network access.
+        f".great-docs-cache/interlinks/{_EXTDEMO_CACHE_NAME}": _EXTERNAL_INVENTORY,
     },
     "files": {
         "gdtest_interlinks/__init__.py": '''\
