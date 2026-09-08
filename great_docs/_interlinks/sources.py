@@ -24,10 +24,12 @@ _TIMEOUT = 30
 
 @dataclass(frozen=True)
 class Source:
-    """An external project's documentation and its inventory location
+    """
+    An external project's documentation and its inventory location
 
-    Only a source that can both be read and be linked into is constructed;
-    `sources_from_config` rejects the rest.
+    `url` is never empty, so a `Source` always has somewhere to read its
+    inventory from. Whether that location is also somewhere to link into is a
+    separate question `sources_from_config` decides before construction.
     """
 
     name: str
@@ -35,6 +37,10 @@ class Source:
     aliases: tuple[str, ...] = ()
     site_url: str = ""
     """Where the source's pages are actually served, when that differs from `url`"""
+
+    def __post_init__(self) -> None:
+        if not self.url:
+            raise ValueError(f"source {self.name!r} has no url to read its inventory from")
 
     @property
     def inventory_location(self) -> str:
@@ -269,7 +275,7 @@ def load_source(
         The inventory, and a note for the build log.
     """
     location = source.inventory_location
-    if "://" not in location:
+    if not _is_served(location):
         return _read_local(source, location, root)
 
     cache = InventoryCache(cache_dir)
