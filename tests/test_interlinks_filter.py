@@ -130,8 +130,9 @@ def test_meth_role_resolves_a_py_method_inventory_entry(tmp_path):
 
 
 # Shared by both contract tests below. `role_synonyms` maps the Sphinx role
-# abbreviations the user guide documents to the role names the index stores;
-# an empty string is the generic role, which constrains nothing.
+# abbreviations to the role names the index stores; an empty string is the
+# generic role, which constrains nothing. The guide names none of these
+# abbreviations: they are undocumented back-compatibility.
 _CONTRACT_INDEX = """
 return {
   add_function_parentheses = true,
