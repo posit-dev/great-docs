@@ -8,12 +8,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .._sphinx_inventory import INVENTORY_FILENAME, Inventory, decode
-from .index import Index, build_index
+from .index import AliasClaims, Index, build_index
 from .lua import write_index
 from .sources import Source, load_source, sources_from_config
 
 if TYPE_CHECKING:
-    from .._apiref.api_reference import APIReference
     from ..config import Config
 
 
@@ -21,7 +20,7 @@ def build_project_index(
     project_path: Path,
     config: Config,
     package_name: str,
-    ref: APIReference | None,
+    claims: AliasClaims,
 ) -> tuple[Index, list[str]]:
     """
     Build and write the interlinks index for a project
@@ -40,8 +39,9 @@ def build_project_index(
         directory, and the root for resolving relative source URLs.
     package_name :
         Project name to use when `project_path` has no `objects.inv`.
-    ref :
-        Built API reference, or `None` when only external links are available.
+    claims :
+        The short names this project's documented objects claim. Empty when
+        only external links are available.
 
     Returns
     -------
@@ -53,10 +53,6 @@ def build_project_index(
         local = decode(inventory_path.read_bytes())
     else:
         local = Inventory(project=package_name, version="", entries=())
-
-    claims: list[tuple[str, str]] = []
-    if ref is not None:
-        claims = [(alias, item.name) for item in ref.items for alias in item.aliases]
 
     cache_dir = config.cache_dir / "interlinks"
     external: list[tuple[Source, Inventory]] = []

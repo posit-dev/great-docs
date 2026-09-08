@@ -854,7 +854,7 @@ def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config)
     config
         Project configuration, for the interlinks sources and cache.
     """
-    from ._interlinks import build_project_index
+    from ._interlinks import AliasClaims, build_project_index
     from ._sphinx_inventory import INVENTORY_FILENAME, Inventory, InventoryEntry, encode
 
     classes = {name for name, sym in snap.symbols.items() if sym.kind == "class"}
@@ -877,7 +877,7 @@ def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config)
     inv = Inventory(project=snap.package_name, version=snap.version, entries=entries)
     (dest_dir / INVENTORY_FILENAME).write_bytes(encode(inv))
 
-    build_project_index(dest_dir, config, snap.package_name, None)
+    build_project_index(dest_dir, config, snap.package_name, AliasClaims())
 
 
 def _format_signature(name: str, sym) -> str:

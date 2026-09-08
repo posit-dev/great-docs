@@ -4,6 +4,7 @@ import pytest
 import requests
 
 from great_docs._interlinks import (
+    AliasClaims,
     Index,
     Source,
     build_index,
@@ -19,33 +20,47 @@ from great_docs._sphinx_inventory import Inventory, InventoryEntry, encode
 from great_docs.config import Config
 
 
+class _Item:
+    """Stand-in for the renderer's InventoryItem"""
+
+    def __init__(self, alias: str, name: str) -> None:
+        self.name = name
+        self.aliases = (alias,)
+
+
+def _item(alias: str, name: str) -> _Item:
+    return _Item(alias, name)
+
+
 def test_a_uniquely_claimed_alias_is_kept():
-    res = resolve_aliases([("Thing", "demo.Thing")], taken=set())
+    res = resolve_aliases(AliasClaims(claimed=(("Thing", "demo.Thing"),), published=frozenset()))
     assert res.kept == {"Thing": "demo.Thing"}
     assert res.dropped == {}
 
 
 def test_an_alias_claimed_twice_is_dropped_and_reported():
-    res = resolve_aliases([("Cache", "demo.store.Cache"), ("Cache", "demo.net.Cache")], taken=set())
+    res = resolve_aliases(
+        AliasClaims(claimed=(("Cache", "demo.store.Cache"), ("Cache", "demo.net.Cache")))
+    )
     assert res.kept == {}
     assert res.dropped == {"Cache": ("demo.net.Cache", "demo.store.Cache")}
 
 
 def test_one_object_claiming_an_alias_twice_is_not_a_collision():
-    res = resolve_aliases([("Thing", "demo.Thing"), ("Thing", "demo.Thing")], taken=set())
+    res = resolve_aliases(AliasClaims(claimed=(("Thing", "demo.Thing"), ("Thing", "demo.Thing"))))
     assert res.kept == {"Thing": "demo.Thing"}
     assert res.dropped == {}
 
 
 def test_class_qualified_aliases_disambiguate_a_shared_method_name():
     """`StoreCache.flush` and `NetCache.flush` each resolve even though `flush` alone is ambiguous."""
-    claims = [
+    claims = (
         ("flush", "demo.StoreCache.flush"),
         ("flush", "demo.NetCache.flush"),
         ("StoreCache.flush", "demo.StoreCache.flush"),
         ("NetCache.flush", "demo.NetCache.flush"),
-    ]
-    res = resolve_aliases(claims, taken=set())
+    )
+    res = resolve_aliases(AliasClaims(claimed=claims))
     assert res.dropped == {"flush": ("demo.NetCache.flush", "demo.StoreCache.flush")}
     assert res.kept == {
         "StoreCache.flush": "demo.StoreCache.flush",
@@ -55,7 +70,11 @@ def test_class_qualified_aliases_disambiguate_a_shared_method_name():
 
 def test_an_alias_that_is_already_a_real_name_is_skipped_quietly():
     """The real name wins, and the reference is not ambiguous."""
-    res = resolve_aliases([("demo.Thing", "demo.pkg.Thing")], taken={"demo.Thing"})
+    res = resolve_aliases(
+        AliasClaims(
+            claimed=(("demo.Thing", "demo.pkg.Thing"),), published=frozenset({"demo.Thing"})
+        )
+    )
     assert res.kept == {}
     assert res.dropped == {}
 
@@ -397,14 +416,14 @@ def test_root_modules_ignore_entries_outside_the_python_domain():
 
 
 def test_local_entries_are_marked_and_keep_their_uri():
-    index = build_index(LOCAL, [], [])
+    index = build_index(LOCAL, AliasClaims(), [])
     assert index.names["demo.Thing"][0].uri == "/reference/Thing.html#demo.Thing"
     assert index.names["demo.Thing"][0].is_local is True
 
 
 def test_external_uris_are_prefixed_with_the_source_url():
     src = Source(name="numpy", url="https://numpy.org/doc/stable/")
-    index = build_index(LOCAL, [], [(src, DEMO)])
+    index = build_index(LOCAL, AliasClaims(), [(src, DEMO)])
     assert index.names["numpy.ndarray"][0].uri == "https://numpy.org/doc/stable/ndarray.html"
     assert index.names["numpy.ndarray"][0].is_local is False
 
@@ -416,7 +435,7 @@ def test_site_url_overrides_the_source_url_as_the_link_prefix():
         url="/srv/docs/sibling-build",
         site_url="https://mysite.example/sibling/",
     )
-    index = build_index(LOCAL, [], [(src, DEMO)])
+    index = build_index(LOCAL, AliasClaims(), [(src, DEMO)])
     assert index.names["numpy.ndarray"][0].uri == "https://mysite.example/sibling/ndarray.html"
 
 
@@ -433,7 +452,7 @@ def test_an_external_uri_is_joined_against_its_source(uri, expected):
     inv = Inventory("numpy", "1", (InventoryEntry("numpy.ndarray", "py", "class", 1, uri, "-"),))
     sources, _ = sources_from_config({"numpy": {"url": "https://numpy.org/doc/stable/"}})
 
-    index = build_index(Inventory("mypkg", "1", ()), [], [(sources[0], inv)])
+    index = build_index(Inventory("mypkg", "1", ()), AliasClaims(), [(sources[0], inv)])
 
     assert index.names["numpy.ndarray"][0].uri == expected
 
@@ -451,26 +470,46 @@ def test_a_local_path_source_with_site_url_is_linked(tmp_path):
         "      site_url: /sibling/\n"
     )
 
-    index, notes = build_project_index(project_dir, Config(project_dir), "myproj", None)
+    index, notes = build_project_index(project_dir, Config(project_dir), "myproj", AliasClaims())
 
     assert index.names["numpy.ndarray"][0].uri == "/sibling/ndarray.html"
     assert notes == []
 
 
 def test_a_kept_alias_points_at_the_target_entry():
-    index = build_index(LOCAL, [("Thing", "demo.Thing")], [])
+    index = build_index(LOCAL, AliasClaims(claimed=(("Thing", "demo.Thing"),)), [])
     assert index.names["Thing"] == index.names["demo.Thing"]
 
 
 def test_an_ambiguous_alias_is_absent_and_reported():
-    index = build_index(LOCAL, [("T", "demo.Thing"), ("T", "demo.go")], [])
+    index = build_index(LOCAL, AliasClaims(claimed=(("T", "demo.Thing"), ("T", "demo.go"))), [])
     assert "T" not in index.names
     assert index.dropped["T"] == ("demo.Thing", "demo.go")
 
 
+def test_a_local_claim_beats_an_external_name_of_the_same_spelling():
+    """Prose in this project means this project's object."""
+    local = Inventory(
+        "mypkg", "1", (InventoryEntry("mypkg.store.Cache", "py", "class", 1, "r/Cache.html", "-"),)
+    )
+    external = Inventory("other", "1", (InventoryEntry("Cache", "py", "class", 1, "c.html", "-"),))
+    source = Source(name="other", url="https://other.example/")
+
+    index = build_index(
+        local,
+        AliasClaims.make([_item("Cache", "mypkg.store.Cache")]),
+        [(source, external)],
+    )
+
+    assert index.names["Cache"][0].is_local is True
+    assert index.names["Cache"][0].uri == "/r/Cache.html"
+    assert index.names["Cache"][1].source == "other"
+    assert index.dropped == {}
+
+
 def test_an_alias_prefix_maps_to_the_sources_root_modules():
     src = Source(name="numpy", url="https://numpy.org/", aliases=("np",))
-    index = build_index(LOCAL, [], [(src, DEMO)])
+    index = build_index(LOCAL, AliasClaims(), [(src, DEMO)])
     assert index.prefixes["np"] == ("numpy",)
 
 
@@ -481,12 +520,12 @@ def test_a_local_entry_outranks_an_external_one_for_the_same_name():
         "1",
         (InventoryEntry("demo.Thing", "py", "class", 1, "t.html", "demo.Thing"),),
     )
-    index = build_index(LOCAL, [], [(src, clash)])
+    index = build_index(LOCAL, AliasClaims(), [(src, clash)])
     assert index.names["demo.Thing"][0].is_local is True
 
 
 def test_write_index_writes_a_loadable_lua_chunk(tmp_path):
-    index = build_index(LOCAL, [("Thing", "demo.Thing")], [])
+    index = build_index(LOCAL, AliasClaims(claimed=(("Thing", "demo.Thing"),)), [])
     out = tmp_path / "index.lua"
 
     write_index(index, out)
@@ -560,13 +599,13 @@ def test_the_cache_reports_a_directory_it_cannot_create(tmp_path):
 
 
 def test_function_parentheses_are_on_by_default():
-    index = build_index(LOCAL, [], [])
+    index = build_index(LOCAL, AliasClaims(), [])
     assert index.add_function_parentheses is True
 
 
 def test_the_index_carries_the_parentheses_choice(tmp_path):
     """The filter knows only what the index tells it."""
-    index = build_index(LOCAL, [], [], add_function_parentheses=False)
+    index = build_index(LOCAL, AliasClaims(), [], add_function_parentheses=False)
     out = tmp_path / "index.lua"
 
     write_index(index, out)

@@ -518,9 +518,11 @@ def _check_ambiguous_references(
     result :
         Aggregated results to append to.
     """
-    from ._interlinks import resolve_aliases
+    from ._interlinks import AliasClaims, resolve_aliases
 
-    dropped = resolve_aliases(claims, taken=documented_names).dropped
+    dropped = resolve_aliases(
+        AliasClaims(claimed=tuple(claims), published=frozenset(documented_names))
+    ).dropped
     if not dropped:
         return
 

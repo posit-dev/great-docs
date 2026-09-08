@@ -5,6 +5,7 @@ Build the lookup index used to resolve inter-project references
 from __future__ import annotations
 
 from .index import (
+    AliasClaims,
     AliasResolution,
     Index,
     IndexEntry,
@@ -17,6 +18,7 @@ from .project import build_project_index
 from .sources import Source, cache_path, load_source, sources_from_config
 
 __all__ = (
+    "AliasClaims",
     "AliasResolution",
     "Index",
     "IndexEntry",

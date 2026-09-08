@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import re
@@ -6,7 +7,7 @@ import sys
 from datetime import datetime
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
 
@@ -14,6 +15,12 @@ from ._subprocess import TEXT_MODE_KWARGS
 from ._typer_cli import is_cli_command, is_cli_group, param_kind, to_click_command
 from ._utils import QUARTO_YML_HEADER, is_great_docs_build_dir
 from .config import Config, create_default_config
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from ._apiref.api_reference import APIReference
+    from ._apiref.inventory import InventoryItem
 
 # Injected into marimo `--mode edit` WASM exports (iframe mode). Those load inert
 # — cells are stale and the kernel isn't instantiated, so nothing renders and
@@ -9299,28 +9306,26 @@ class GreatDocs:
 
         return sections if sections else None
 
-    def documented_symbol_names(self, package_name: str) -> list[str]:
-        """Dotted reference-page stems for the documented public API
+    @contextlib.contextmanager
+    def _resolved_api_reference(self, package_name: str) -> "Iterator[APIReference | None]":
+        """
+        Yield the API reference for a package, or None when it cannot be resolved
 
-        Each stem names one published reference page: a top-level class or
-        function, a submodule-qualified class (`scores.CosineScore`), or a
-        method (`scores.CosineScore.fit`). The set matches the rendered
-        reference — top-level objects and their documented members, `%nodoc`
-        excluded — whether from an explicit `reference:` config or
-        auto-discovery, so a versioned snapshot and the live build describe the
-        same API surface. Empty when the package documents nothing.
+        Restores `sys.path`, `sys.modules` and the artefact-write suppression
+        flag on the way out, so a read-only query leaves no trace. In `dynamic`
+        mode resolving the reference performs a real import of the target
+        package.
 
         Parameters
         ----------
         package_name
             The package name (may contain dashes).
 
-        Returns
-        -------
-        list[str]
-            Dotted stems, deduplicated, in first-occurrence order.
+        Yields
+        ------
+        APIReference | None
+            The resolved reference, or None when the package documents nothing.
         """
-        import contextlib
         import io
         import sys
         from types import ModuleType
@@ -9361,11 +9366,11 @@ class GreatDocs:
             ):
                 sections = self._create_api_sections_with_config(package_name)
                 if not sections:
-                    return []
+                    yield None
+                    return
                 from great_docs._apiref.api_reference import APIReference
-                from great_docs._apiref.resolve import ObjectNotFoundError
 
-                # In `dynamic` mode, resolving `documented_symbols` below performs a real
+                # In `dynamic` mode, reading the yielded reference performs a real
                 # import of the target package (executing its top-level code). The
                 # `sys.modules` eviction above only refreshes the target package's own
                 # modules, not third-party packages it imports — so a same-process loop
@@ -9381,10 +9386,7 @@ class GreatDocs:
                         }
                     }
                 )
-                try:
-                    return ref.documented_symbols
-                except (ObjectNotFoundError, ImportError, AttributeError):
-                    return []
+                yield ref
         finally:
             self._suppress_artifact_writes = False
             if modules_evicted:
@@ -9398,6 +9400,65 @@ class GreatDocs:
             for p in added_paths:
                 if p in sys.path:
                     sys.path.remove(p)
+
+    def documented_symbol_names(self, package_name: str) -> list[str]:
+        """Dotted reference-page stems for the documented public API
+
+        Each stem names one published reference page: a top-level class or
+        function, a submodule-qualified class (`scores.CosineScore`), or a
+        method (`scores.CosineScore.fit`). The set matches the rendered
+        reference — top-level objects and their documented members, `%nodoc`
+        excluded — whether from an explicit `reference:` config or
+        auto-discovery, so a versioned snapshot and the live build describe the
+        same API surface. Empty when the package documents nothing.
+
+        Parameters
+        ----------
+        package_name
+            The package name (may contain dashes).
+
+        Returns
+        -------
+        list[str]
+            Dotted stems, deduplicated, in first-occurrence order.
+        """
+        with self._resolved_api_reference(package_name) as ref:
+            if ref is None:
+                return []
+            from great_docs._apiref.resolve import ObjectNotFoundError
+
+            try:
+                return ref.documented_symbols
+            except (ObjectNotFoundError, ImportError, AttributeError):
+                return []
+
+    def documented_objects(self, package_name: str) -> "list[InventoryItem]":
+        """The objects the reference publishes, each with its page, claims and docstring
+
+        The build indexes exactly these, so a caller reading them sees what the
+        build will do rather than an approximation of it. Empty when the
+        package documents nothing.
+
+        Parameters
+        ----------
+        package_name
+            The package name (may contain dashes).
+
+        Returns
+        -------
+        list[InventoryItem]
+            The documented objects, empty when the reference cannot be
+            resolved.
+        """
+        with self._resolved_api_reference(package_name) as ref:
+            if ref is None:
+                return []
+            from great_docs._apiref.resolve import ObjectNotFoundError
+
+            try:
+                return ref.items
+            except (ObjectNotFoundError, ImportError, AttributeError):
+                return []
 
     def _create_api_sections_with_config(self, package_name: str) -> list | None:
         """
@@ -16422,13 +16483,13 @@ anchor-sections: true
             # ── Step 15: Build the interlinks index ────────────────────
             step += 1
             log.step_start(step, "Build interlinks index")
-            from great_docs._interlinks import build_project_index
+            from great_docs._interlinks import AliasClaims, build_project_index
 
             index, interlinks_notes = build_project_index(
                 self.project_path,
                 self._config,
                 self._detect_package_name() or "",
-                ref,
+                AliasClaims.make(ref.items) if ref is not None else AliasClaims(),
             )
             for note in interlinks_notes:
                 log.detail(note)
