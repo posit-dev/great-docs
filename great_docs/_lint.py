@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from ._builtin.directives import DIRECTIVES
+from ._builtin.directives._nodoc import exclude_nodoc
 from ._utils import is_in_great_docs_build_dir, parse_seealso
 
 
@@ -399,6 +400,9 @@ def _gather_reference_inputs(
         if name not in pkg.members:
             continue
         obj = pkg.members[name]
+        if exclude_nodoc(obj) is None:
+            # Excluded objects do not appear in the rendered reference index.
+            continue
         full = f"{package_name}.{name}"
         documented_names.add(full)
         claims.append((name, full))
@@ -415,6 +419,8 @@ def _gather_reference_inputs(
                 if member_doc is None:
                     # Undocumented members are omitted by the renderer's
                     # default `include_empty=False`, so they claim no name.
+                    continue
+                if exclude_nodoc(member) is None:
                     continue
                 member_full = f"{full}.{member_name}"
                 documented_names.add(member_full)

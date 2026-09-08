@@ -412,6 +412,42 @@ class TestGatherReferenceInputs:
 
         assert result.issues == []
 
+    def test_nodoc_member_does_not_make_a_real_reference_ambiguous(self, tmp_path):
+        """Ignore a member excluded from the rendered reference index."""
+        documented = _make_griffe_obj(kind="function", docstring="Flush buffered writes.")
+        nodoc = _make_griffe_obj(kind="function", docstring="Flush the socket.\n\n%nodoc")
+        store_cls = _make_griffe_obj(
+            kind="class", docstring="A store.", members={"flush": documented}
+        )
+        net_cls = _make_griffe_obj(
+            kind="class", docstring="A connection.", members={"flush": nodoc}
+        )
+        pkg = _make_pkg({"StoreCache": store_cls, "NetCache": net_cls})
+
+        claims, documented_names, prose = _gather_reference_inputs(
+            pkg, "mypkg", ["StoreCache", "NetCache"], tmp_path, tmp_path
+        )
+        prose["guide.qmd"] = "See [](`flush`) for details."
+
+        result = LintResult()
+        _check_ambiguous_references(claims, documented_names, prose, result)
+
+        assert result.issues == []
+
+    def test_nodoc_export_does_not_make_a_real_reference_ambiguous(self, tmp_path):
+        """Ignore a top-level export marked `%nodoc`."""
+        real = _make_griffe_obj(kind="class", docstring="A store.")
+        nodoc = _make_griffe_obj(kind="class", docstring="Legacy alias.\n\n%nodoc")
+        pkg = _make_pkg({"Cache": real, "OldCache": nodoc})
+
+        claims, documented_names, prose = _gather_reference_inputs(
+            pkg, "mypkg", ["Cache", "OldCache"], tmp_path, tmp_path
+        )
+
+        assert ("OldCache", "mypkg.OldCache") not in claims
+        assert "mypkg.OldCache" not in documented_names
+        assert "mypkg.OldCache" not in prose
+
 
 class TestCheckDocstringStyle:
     def test_matching_style(self):
