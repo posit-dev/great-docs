@@ -2,7 +2,14 @@ import zlib
 
 import pytest
 
-from great_docs._sphinx_inventory import Inventory, InventoryEntry, decode, encode
+from great_docs._sphinx_inventory import (
+    ROLE_SYNONYMS,
+    Inventory,
+    InventoryEntry,
+    decode,
+    encode,
+    role_for_kind,
+)
 
 
 def _bytes(*lines: str) -> bytes:
@@ -67,3 +74,56 @@ def test_encode_compresses_the_records():
     data = encode(inv)
     body = data.split(b"\n", 4)[4]
     assert zlib.decompress(body).decode() == "a.B py:class 1 b.html -\n"
+
+
+def test_a_function_inside_a_class_is_a_method():
+    assert role_for_kind("function", in_class=True) == "method"
+
+
+def test_a_function_outside_a_class_stays_a_function():
+    assert role_for_kind("function", in_class=False) == "function"
+
+
+def test_an_attribute_inside_a_class_is_an_attribute():
+    assert role_for_kind("attribute", in_class=True) == "attribute"
+
+
+def test_an_attribute_outside_a_class_is_data():
+    """Sphinx publishes a module-level name as py:data."""
+    assert role_for_kind("attribute", in_class=False) == "data"
+
+
+def test_a_type_alias_is_a_type():
+    assert role_for_kind("type alias", in_class=False) == "type"
+
+
+def test_a_class_keeps_its_kind():
+    assert role_for_kind("class", in_class=False) == "class"
+
+
+def test_the_generic_role_constrains_nothing():
+    assert ROLE_SYNONYMS["obj"] == ""
+
+
+def test_the_abbreviations_map_to_role_names():
+    assert ROLE_SYNONYMS["func"] == "function"
+    assert ROLE_SYNONYMS["meth"] == "method"
+    assert ROLE_SYNONYMS["attr"] == "attribute"
+    assert ROLE_SYNONYMS["mod"] == "module"
+    assert ROLE_SYNONYMS["exc"] == "exception"
+
+
+def test_encode_and_decode_round_trip_every_field_shorthand():
+    """The two shorthands the format allows must survive a round trip."""
+    entries = (
+        InventoryEntry("mypkg.Thing", "py", "class", 1, "reference/Thing.html", "mypkg.Thing"),
+        InventoryEntry("a name with spaces", "std", "label", -1, "guide.html", "Shown"),
+        InventoryEntry("mypkg.empty", "py", "data", 1, "", "mypkg.empty"),
+    )
+    inv = Inventory(project="mypkg", version="1.0", entries=entries)
+
+    result = decode(encode(inv))
+
+    assert result.project == "mypkg"
+    assert result.version == "1.0"
+    assert result.entries == entries

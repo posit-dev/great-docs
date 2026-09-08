@@ -527,7 +527,7 @@ def test_inventory_roles_unchanged_for_other_kinds():
     from great_docs._apiref.inventory import InventoryItem, _create_inventory_item
 
     code = "def f(): ...\nclass C: ...\nMAX: int = 3\n"
-    expected = {"f": "function", "C": "class", "MAX": "attribute"}
+    expected = {"f": "function", "C": "class", "MAX": "data"}
     for name, role in expected.items():
         obj = _load_member(code, name)
         entry = _create_inventory_item(InventoryItem(obj=obj, name=name))

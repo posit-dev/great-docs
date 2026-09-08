@@ -33525,6 +33525,18 @@ def test_create_inventory_default_dispname():
     assert result["items"][0]["dispname"] == "-"
 
 
+def test_create_inventory_publishes_a_module_level_attribute_as_data():
+    obj = MagicMock()
+    obj.kind.value = "attribute"
+    obj.parent = MagicMock()
+    obj.parent.is_class = False
+    item = InventoryItem(obj=obj, name="myproj.MAX_SIZE", uri="reference/MAX_SIZE.html")
+
+    result = create_inventory("myproj", "1.0", [item])
+
+    assert result["items"][0]["role"] == "data"
+
+
 def test_extend_base_class_copies_methods():
     """extend_base_class copies methods from child to base class."""
 

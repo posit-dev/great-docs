@@ -20,6 +20,49 @@ from dataclasses import dataclass
 INVENTORY_FILENAME = "objects.inv"
 """Filename used for the inventory published by every project"""
 
+# Griffe's kinds and Sphinx's py-domain roles agree except in three places.
+# A PEP 695 alias is `py:type` (Sphinx 7.4+), a function inside a class is
+# `py:method`, and a module-level name is `py:data` rather than an attribute.
+_KIND_ROLES = {"type alias": "type"}
+
+ROLE_SYNONYMS = {
+    "func": "function",
+    "meth": "method",
+    "attr": "attribute",
+    "mod": "module",
+    "exc": "exception",
+    "obj": "",
+}
+"""Abbreviations a reference may be written with, mapped to the role it means
+
+`obj` is Sphinx's generic role and constrains nothing, so it maps to the empty
+string and a reader treats it as no role at all.
+"""
+
+
+def role_for_kind(kind: str, *, in_class: bool) -> str:
+    """
+    Return the Sphinx py-domain role for a documented object
+
+    Parameters
+    ----------
+    kind :
+        The kind griffe reports for the object.
+    in_class :
+        Whether the object's parent is a class.
+
+    Returns
+    -------
+    :
+        The role an inventory publishes for it.
+    """
+    if kind == "function":
+        return "method" if in_class else "function"
+    if kind == "attribute":
+        return "attribute" if in_class else "data"
+    return _KIND_ROLES.get(kind, kind)
+
+
 _VERSION_LINE = b"# Sphinx inventory version 2"
 
 _ZLIB_NOTE = b"# The remainder of this file is compressed using zlib."

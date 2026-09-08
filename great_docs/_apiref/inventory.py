@@ -5,7 +5,7 @@ from typing import Any
 
 import griffe as gf
 
-from .._sphinx_inventory import Inventory, InventoryEntry, encode
+from .._sphinx_inventory import Inventory, InventoryEntry, encode, role_for_kind
 from ._walkable import Walkable
 
 
@@ -71,20 +71,14 @@ def create_inventory(
     }
 
 
-# Sphinx roles have no spaces, so griffe's kind values cannot be used verbatim.
-# A PEP 695 alias maps to `py:type` (Sphinx 7.4+); every other kind already
-# matches its role name.
-_KIND_ROLES = {"type alias": "type"}
-
-
 def _inventory_role(obj: gf.Object | gf.Alias) -> str:
     """
     Return the Sphinx role for a documented object
 
-    Griffe has no `method` kind of its own; a method is a `Function` whose
-    parent happens to be a class. The published inventory still needs the
-    distinction, since a real Sphinx inventory publishes `py:method` for
-    methods and `:py:meth:` references match against that role.
+    Griffe has no `method` kind of its own, and no `data` kind: a method is a
+    `Function` whose parent is a class, and a module-level constant is an
+    `Attribute`. The published inventory needs both distinctions, because a
+    consumer's intersphinx lookup matches against Sphinx's own vocabulary.
 
     Parameters
     ----------
@@ -96,11 +90,8 @@ def _inventory_role(obj: gf.Object | gf.Alias) -> str:
     :
         The Sphinx role.
     """
-    kind = obj.kind.value
     parent = obj.parent
-    if kind == "function" and parent is not None and parent.is_class:
-        return "method"
-    return _KIND_ROLES.get(kind, kind)
+    return role_for_kind(obj.kind.value, in_class=parent is not None and parent.is_class)
 
 
 def _create_inventory_item(item: InventoryItem, priority: str = "1") -> dict[str, Any]:
