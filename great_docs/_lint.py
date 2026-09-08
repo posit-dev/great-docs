@@ -195,8 +195,8 @@ def run_lint(
         _check_missing_docstrings(pkg, importable_name, exports, result)
 
     if "cross-refs" in checks:
-        _check_cross_references(pkg, importable_name, exports, result)
         documented = docs.documented_objects(package_name)
+        _check_cross_references(pkg, importable_name, exports, documented, result)
         _check_ambiguous_references(
             AliasClaims.make(documented),
             _gather_prose(documented, project_root),
@@ -293,23 +293,38 @@ def _check_cross_references(
     pkg,
     package_name: str,
     exports: list[str],
+    documented: list[InventoryItem],
     result: LintResult,
 ) -> None:
-    """Check %seealso directives for broken cross-references."""
-    # Build a set of all known public names (fully unqualified)
-    known_names = set(exports)
+    """
+    Check `%seealso` directives for broken cross-references
 
-    # Also add qualified class member names
-    for name in exports:
-        if name not in pkg.members:
-            continue
-        obj = pkg.members[name]
-        try:
-            if obj.kind.value == "class":
-                for member_name, _ in _iter_public_members(obj):
-                    known_names.add(f"{name}.{member_name}")
-        except Exception:
-            pass
+    A `%seealso` entry becomes a cross-reference the build resolves against
+    what it indexes, so the known names are the documented objects' own names
+    and the short names they claim. Deriving them a second time from the
+    package would report a reference the build resolves, such as one naming a
+    submodule-qualified class. A reference that names nothing documented is
+    reported, since the rendered link would go nowhere.
+
+    Parameters
+    ----------
+    pkg :
+        The package loaded by griffe, whose docstrings are scanned.
+    package_name :
+        Importable name of the package.
+    exports :
+        Public export names to scan.
+    documented :
+        The objects the reference documents. Empty when it cannot be resolved,
+        in which case the check reports nothing rather than calling every
+        reference broken.
+    result :
+        Aggregated results to append to.
+    """
+    if not documented:
+        return
+
+    known_names = {name for item in documented for name in (item.name, *item.aliases) if name}
 
     # Check each export's docstring for %seealso references
     for name in exports:
@@ -329,7 +344,7 @@ def _check_cross_references(
                         severity="error",
                         symbol=name,
                         message=(
-                            f"%%seealso references '{ref_name}' which is not a known public export."
+                            f"%%seealso references '{ref_name}' which the reference does not document."
                         ),
                     )
                 )
@@ -350,7 +365,7 @@ def _check_cross_references(
                                     symbol=f"{name}.{member_name}",
                                     message=(
                                         f"%%seealso references '{ref_name}' "
-                                        f"which is not a known public export."
+                                        f"which the reference does not document."
                                     ),
                                 )
                             )
