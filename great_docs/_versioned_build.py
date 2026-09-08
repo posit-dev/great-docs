@@ -26,6 +26,7 @@ from great_docs._versioning import (
 
 if TYPE_CHECKING:
     from great_docs._api_diff import ApiSnapshot
+    from great_docs._interlinks import AliasClaims
     from great_docs.config import Config
 
 # ---------------------------------------------------------------------------
@@ -831,6 +832,39 @@ def _rebuild_api_from_snapshot(
     return generated
 
 
+def _snapshot_claims(snap: ApiSnapshot) -> AliasClaims:
+    """
+    Derive the short names a snapshot-built version's objects claim
+
+    The live build reads these from the resolved API reference, which a
+    historical version has no way to run. A snapshot's stems carry the same
+    information: the last component is the bare short name, and a dotted stem
+    is already the class-qualified form.
+
+    Parameters
+    ----------
+    snap
+        The snapshot the version's reference pages were rebuilt from.
+
+    Returns
+    -------
+    :
+        The claims, in the shape `build_project_index` consumes.
+    """
+    from ._interlinks import AliasClaims
+
+    claimed: list[tuple[str, str]] = []
+    published: list[str] = []
+    for stem in snap.symbols:
+        full = f"{snap.package_name}.{stem}"
+        published.append(full)
+        claimed.append((stem, full))
+        bare = stem.rpartition(".")[2]
+        if bare != stem:
+            claimed.append((bare, full))
+    return AliasClaims(claimed=tuple(claimed), published=frozenset(published))
+
+
 def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config) -> None:
     """
     Publish this version's own inventory and interlinks index
@@ -841,9 +875,10 @@ def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config)
     *snap*, rebuild both from the same snapshot so they describe what this
     version actually publishes rather than what the live build did.
 
-    A snapshot alone cannot recover the class-qualified aliases the live
-    build derives from the resolved API reference, so a historical version's
-    interlinks resolve by full and short name but not by those aliases.
+    The claims come from the snapshot's own stems rather than from a resolved
+    API reference, which a historical version has no way to run. That recovers
+    every short name the live build indexes except one: a name written into an
+    `api-reference:` config that differs from the object's path.
 
     Parameters
     ----------
@@ -854,8 +889,15 @@ def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config)
     config
         Project configuration, for the interlinks sources and cache.
     """
-    from ._interlinks import AliasClaims, build_project_index
-    from ._sphinx_inventory import INVENTORY_FILENAME, Inventory, InventoryEntry, encode
+    from ._apiref.inventory import reference_uri
+    from ._interlinks import build_project_index
+    from ._sphinx_inventory import (
+        INVENTORY_FILENAME,
+        Inventory,
+        InventoryEntry,
+        encode,
+        role_for_kind,
+    )
 
     classes = {name for name, sym in snap.symbols.items() if sym.kind == "class"}
 
@@ -863,13 +905,9 @@ def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config)
         InventoryEntry(
             name=f"{snap.package_name}.{name}",
             domain="py",
-            role=(
-                "method"
-                if sym.kind == "function" and name.rpartition(".")[0] in classes
-                else sym.kind
-            ),
+            role=role_for_kind(sym.kind, in_class=name.rpartition(".")[0] in classes),
             priority=1,
-            uri=f"reference/{name}.html",
+            uri=reference_uri("reference", name),
             dispname=f"{snap.package_name}.{name}",
         )
         for name, sym in snap.symbols.items()
@@ -877,7 +915,7 @@ def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config)
     inv = Inventory(project=snap.package_name, version=snap.version, entries=entries)
     (dest_dir / INVENTORY_FILENAME).write_bytes(encode(inv))
 
-    build_project_index(dest_dir, config, snap.package_name, AliasClaims())
+    build_project_index(dest_dir, config, snap.package_name, _snapshot_claims(snap))
 
 
 def _format_signature(name: str, sym) -> str:

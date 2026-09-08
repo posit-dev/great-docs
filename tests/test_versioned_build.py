@@ -21,8 +21,10 @@ from great_docs._versioned_build import (
     _redirect_page,
     _rewrite_quarto_yml_for_version,
     _snapshot_cache_path,
+    _snapshot_claims,
     _validate_git_ref_is_tag,
     _version_build_dir,
+    _write_snapshot_inventory,
     assemble_site,
     create_version_aliases,
     expand_version_badges,
@@ -2583,6 +2585,72 @@ class TestRebuildApiFromSnapshotInventory:
 
         assert (dest_dir / "objects.inv").read_bytes() == b"stale bytes from the live build"
         assert not (dest_dir / "_inv").exists()
+
+    def test_a_module_level_constant_is_published_as_data(self, tmp_path: Path):
+        """The snapshot path uses the same role rules as the live build."""
+        from great_docs._sphinx_inventory import INVENTORY_FILENAME, decode
+        from great_docs.config import Config
+
+        snap = ApiSnapshot(
+            version="1.0",
+            package_name="demo",
+            symbols={
+                "Cache": SymbolInfo(name="Cache", kind="class"),
+                "Cache.flush": SymbolInfo(name="Cache.flush", kind="function"),
+                "MAX_SIZE": SymbolInfo(name="MAX_SIZE", kind="attribute"),
+            },
+        )
+        dest_dir = tmp_path / "build"
+        dest_dir.mkdir()
+
+        _write_snapshot_inventory(dest_dir, snap, Config(tmp_path))
+
+        inv = decode((dest_dir / INVENTORY_FILENAME).read_bytes())
+        roles = {e.name: e.role for e in inv.entries}
+
+        assert roles["demo.Cache"] == "class"
+        assert roles["demo.Cache.flush"] == "method"
+        assert roles["demo.MAX_SIZE"] == "data"
+
+    def test_a_snapshot_version_resolves_its_own_short_names(self):
+        """A historical version's prose must link `[](`Cache`)` the way the live build does."""
+        snap = ApiSnapshot(
+            version="1.0",
+            package_name="demo",
+            symbols={
+                "Cache": SymbolInfo(name="Cache", kind="class"),
+                "Cache.flush": SymbolInfo(name="Cache.flush", kind="function"),
+                "MAX_SIZE": SymbolInfo(name="MAX_SIZE", kind="attribute"),
+            },
+        )
+
+        claims = _snapshot_claims(snap)
+
+        assert ("Cache", "demo.Cache") in claims.claimed
+        assert ("flush", "demo.Cache.flush") in claims.claimed
+        assert ("Cache.flush", "demo.Cache.flush") in claims.claimed
+        assert ("MAX_SIZE", "demo.MAX_SIZE") in claims.claimed
+        assert claims.published == frozenset({"demo.Cache", "demo.Cache.flush", "demo.MAX_SIZE"})
+
+    def test_a_snapshot_version_writes_an_index_that_resolves_a_short_name(self, tmp_path: Path):
+        """The written interlinks index must resolve a short name to this version's own page."""
+        from great_docs.config import Config
+
+        snap = ApiSnapshot(
+            version="1.0",
+            package_name="demo",
+            symbols={"Pipeline": SymbolInfo(name="Pipeline", kind="class")},
+        )
+        dest_dir = tmp_path / "build"
+        dest_dir.mkdir()
+
+        _write_snapshot_inventory(dest_dir, snap, Config(tmp_path))
+
+        lua = (dest_dir / "_inv" / "index.lua").read_text(encoding="utf-8")
+
+        # The bare short name, not just the full name `demo.Pipeline`, must
+        # resolve — that is the defect this task closes.
+        assert '["Pipeline"] = {{uri = "/reference/Pipeline.html"' in lua
 
 
 # ---------------------------------------------------------------------------
