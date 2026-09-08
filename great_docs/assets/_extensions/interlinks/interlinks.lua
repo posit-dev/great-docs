@@ -213,7 +213,7 @@ end
 --- @param link table
 local function Link(link)
   if not link.target:match(HEX_QUOTE) then
-    return nil
+    return link, false
   end
 
   local ref = parse_target(link.target)
