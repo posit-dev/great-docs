@@ -46,7 +46,8 @@ parser: numpy
 # names a project, where its documentation lives, and optionally the module
 # aliases your prose uses for it. The inventory is read from
 # `<url>/objects.inv`, where every project publishes it, and links are written
-# against `<url>`. A url may name a directory on disk instead of a served site.
+# against `<url>`. A url may name a directory on disk, which works when that
+# path is also the path the project is served from.
 # interlinks:
 #   sources:
 #     numpy:

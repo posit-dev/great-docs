@@ -281,20 +281,17 @@ Each source takes two fields:
 - `aliases` lists the module names your prose uses for the project. With `aliases: [np]`, a
   reference to `` [](`np.ndarray`) `` resolves as `numpy.ndarray`.
 
-A `url` may name a directory on disk rather than a served site, which is how you reach a
-project you build alongside this one:
+A `url` may name a directory on disk rather than a served site. Great Docs reads the
+inventory from that directory and writes links against the same path, so this reaches a
+project you build alongside this one only when its path on disk is also its path on the
+site. Where the two differ, point `url` at the published site and let the build fetch the
+inventory over the network.
 
-```yaml
-interlinks:
-  sources:
-    sibling:
-      url: ../sibling/great-docs
-```
-
-Great Docs reads the inventory from that directory and writes links against the same path.
-Whether those links resolve from the page the reader is on depends on how the two sites sit
-relative to each other, which is yours to arrange. A source with no `url` is skipped, and the
-build log says so.
+Give a `url` that means the same thing from every page. One prefix is written into the
+index and used from pages at every depth, so a relative `url` such as `../sibling` resolves
+from wherever the reading page sits and cannot suit them all. Great Docs reports a relative
+`url` in the build log and writes the links as configured. A source with no `url` at all is
+skipped, and the build log says that too.
 
 Add Python's standard library as a source in the same way:
 

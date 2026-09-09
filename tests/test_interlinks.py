@@ -112,12 +112,29 @@ def test_sources_from_config_rejects_an_entry_with_no_url():
 
 def test_a_filesystem_url_needs_nothing_further():
     """One url answers both questions, whether it is served or on disk."""
-    sources, notes = sources_from_config({"sibling": {"url": "../sibling/great-docs"}})
+    sources, notes = sources_from_config({"sibling": {"url": "/srv/docs/sibling"}})
 
     assert notes == []
     assert len(sources) == 1
-    assert sources[0].inventory_location == "../sibling/great-docs/objects.inv"
-    assert sources[0].link_prefix == "../sibling/great-docs"
+    assert sources[0].inventory_location == "/srv/docs/sibling/objects.inv"
+    assert sources[0].link_prefix == "/srv/docs/sibling"
+
+
+def test_a_relative_url_is_reported_but_still_used():
+    """One prefix serves every page depth, so a relative url cannot suit them all."""
+    sources, notes = sources_from_config({"sibling": {"url": "../sibling/great-docs"}})
+
+    assert len(sources) == 1
+    assert len(notes) == 1
+    assert "relative" in notes[0]
+    assert "sibling" in notes[0]
+
+
+def test_an_absolute_url_is_not_reported_as_relative():
+    """A leading slash resolves from the site root, the same from every page."""
+    _, notes = sources_from_config({"sibling": {"url": "/sibling/"}})
+
+    assert notes == []
 
 
 def test_a_served_url_answers_both_questions():
@@ -452,12 +469,12 @@ def test_a_filesystem_source_is_read_and_linked_from_one_url(tmp_path):
     project_dir = tmp_path / "myproj"
     project_dir.mkdir()
     (project_dir / "great-docs.yml").write_text(
-        "module: myproj\ninterlinks:\n  sources:\n    sibling:\n      url: ../sibling\n"
+        f"module: myproj\ninterlinks:\n  sources:\n    sibling:\n      url: {sibling_dir}\n"
     )
 
     index, notes = build_project_index(project_dir, Config(project_dir), "myproj", AliasClaims())
 
-    assert index.names["numpy.ndarray"][0].uri == "../sibling/ndarray.html"
+    assert index.names["numpy.ndarray"][0].uri == f"{sibling_dir}/ndarray.html"
     assert notes == []
 
 

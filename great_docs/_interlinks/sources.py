@@ -70,12 +70,34 @@ def _is_served(url: str) -> bool:
     return "://" in url
 
 
+def _is_relative(url: str) -> bool:
+    """
+    Report whether a url is resolved relative to the page that carries the link
+
+    Parameters
+    ----------
+    url :
+        The configured url.
+
+    Returns
+    -------
+    :
+        Whether the url carries neither a scheme nor a leading slash.
+    """
+    return not _is_served(url) and not url.startswith("/")
+
+
 def sources_from_config(sources: dict[str, Any]) -> tuple[list[Source], list[str]]:
     """
     Build the sources declared in the configuration
 
     Reject an entry with no `url`, since neither its inventory nor its links
     have an address without one. That is the only reason an entry is rejected.
+
+    Note a relative `url` rather than rejecting it. One prefix is written into
+    the index and used from pages at every depth, so a relative one resolves to
+    a different place from each of them. Report it and write the links as
+    configured, since a site whose pages all sit at one depth still works.
 
     Parameters
     ----------
@@ -85,7 +107,8 @@ def sources_from_config(sources: dict[str, Any]) -> tuple[list[Source], list[str
     Returns
     -------
     :
-        The usable sources, and a note for each rejected entry.
+        The usable sources, and a note for each entry that was rejected or that
+        names a url whose links cannot resolve from every page.
     """
     usable: list[Source] = []
     notes: list[str] = []
@@ -95,6 +118,11 @@ def sources_from_config(sources: dict[str, Any]) -> tuple[list[Source], list[str
         if not url:
             notes.append(f"{name}: no url configured; it will not be linked")
             continue
+        if _is_relative(url):
+            notes.append(
+                f"{name}: '{url}' is relative, so links into it resolve from wherever the "
+                "reading page sits; give a url that is the same on disk and on the site"
+            )
         usable.append(Source(name=name, url=url, aliases=tuple(value.get("aliases", []) or [])))
     return usable, notes
 
