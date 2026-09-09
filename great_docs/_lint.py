@@ -8,11 +8,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ._builtin.directives import DIRECTIVES
-from ._interlinks import AliasClaims
+from ._interlinks import AliasClaims, resolve_aliases
 from ._utils import fenced_lines, is_in_great_docs_build_dir, parse_seealso
 
 if TYPE_CHECKING:
     from ._apiref.inventory import InventoryItem
+    from ._interlinks import AliasResolution
 
 
 @dataclass
@@ -196,12 +197,10 @@ def run_lint(
 
     if "cross-refs" in checks:
         documented = docs.documented_objects(package_name)
-        _check_cross_references(pkg, importable_name, exports, documented, result)
-        _check_ambiguous_references(
-            AliasClaims.make(documented),
-            _gather_prose(documented, project_root),
-            result,
-        )
+        # Resolve aliases once so both checks judge each reference identically.
+        resolution = resolve_aliases(AliasClaims.make(documented))
+        _check_cross_references(pkg, importable_name, exports, documented, resolution, result)
+        _check_ambiguous_references(resolution, _gather_prose(documented, project_root), result)
 
     if "style" in checks:
         _check_docstring_style(pkg, importable_name, exports, config_style, result)
@@ -294,17 +293,16 @@ def _check_cross_references(
     package_name: str,
     exports: list[str],
     documented: list[InventoryItem],
+    resolution: AliasResolution,
     result: LintResult,
 ) -> None:
     """
-    Check `%seealso` directives for broken cross-references
+    Check `%seealso` directives for unresolved cross-references
 
-    A `%seealso` entry becomes a cross-reference the build resolves against
-    what it indexes, so the known names are the documented objects' own names
-    and the short names they claim. Deriving them a second time from the
-    package would report a reference the build resolves, such as one naming a
-    submodule-qualified class. A reference that names nothing documented is
-    reported, since the rendered link would go nowhere.
+    The build resolves `%seealso` entries against its index. A documented name
+    or an alias claimed by one object resolves. A shared alias is ambiguous,
+    and an undocumented name is broken. Each leaves the rendered link
+    unlinked, but requires a different correction.
 
     Parameters
     ----------
@@ -318,57 +316,74 @@ def _check_cross_references(
         The objects the reference documents. Empty when it cannot be resolved,
         in which case the check reports nothing rather than calling every
         reference broken.
+    resolution :
+        The short names the build resolves, and the ambiguous ones it drops.
     result :
         Aggregated results to append to.
     """
     if not documented:
         return
 
-    known_names = {name for item in documented for name in (item.name, *item.aliases) if name}
+    # Shared aliases are absent from `kept` and present in `dropped`.
+    known_names = {item.name for item in documented if item.name} | set(resolution.kept)
 
-    # Check each export's docstring for %seealso references
+    def check(text: str, symbol: str) -> None:
+        """
+        Report unresolved `%seealso` names in one docstring
+
+        Parameters
+        ----------
+        text :
+            The docstring to scan.
+        symbol :
+            The object the docstring belongs to, named in any issue raised.
+
+        Returns
+        -------
+        :
+        """
+        for ref_name, _ in parse_seealso(text):
+            claimants = resolution.dropped.get(ref_name)
+            if claimants is not None:
+                result.issues.append(
+                    LintIssue(
+                        check="ambiguous-xref",
+                        severity="error",
+                        symbol=symbol,
+                        message=(
+                            f"%%seealso references '{ref_name}', which is claimed by "
+                            f"{' and '.join(claimants)}, so it stays unlinked. Qualify it."
+                        ),
+                    )
+                )
+            elif ref_name not in known_names:
+                result.issues.append(
+                    LintIssue(
+                        check="broken-xref",
+                        severity="error",
+                        symbol=symbol,
+                        message=(
+                            f"%%seealso references '{ref_name}' "
+                            "which the API reference does not document."
+                        ),
+                    )
+                )
+
     for name in exports:
         if name not in pkg.members:
             continue
 
         obj = pkg.members[name]
         docstring = _get_docstring(obj)
-        if not docstring:
-            continue
+        if docstring:
+            check(docstring, name)
 
-        for ref_name, _ in parse_seealso(docstring):
-            if ref_name not in known_names:
-                result.issues.append(
-                    LintIssue(
-                        check="broken-xref",
-                        severity="error",
-                        symbol=name,
-                        message=(
-                            f"%%seealso references '{ref_name}' which the reference does not document."
-                        ),
-                    )
-                )
-
-        # Also check class methods
         try:
             if obj.kind.value == "class":
                 for member_name, member in _iter_public_members(obj):
                     member_doc = _get_docstring(member)
-                    if not member_doc:  # pragma: no cover
-                        continue
-                    for ref_name, _ in parse_seealso(member_doc):
-                        if ref_name not in known_names:  # pragma: no cover
-                            result.issues.append(
-                                LintIssue(
-                                    check="broken-xref",
-                                    severity="error",
-                                    symbol=f"{name}.{member_name}",
-                                    message=(
-                                        f"%%seealso references '{ref_name}' "
-                                        f"which the reference does not document."
-                                    ),
-                                )
-                            )
+                    if member_doc:
+                        check(member_doc, f"{name}.{member_name}")
         except Exception:
             pass
 
@@ -459,7 +474,7 @@ def _gather_prose(items: list[InventoryItem], project_root: Path) -> dict[str, s
 
 
 def _check_ambiguous_references(
-    claims: AliasClaims,
+    resolution: AliasResolution,
     prose: dict[str, str],
     result: LintResult,
 ) -> None:
@@ -468,17 +483,14 @@ def _check_ambiguous_references(
 
     Parameters
     ----------
-    claims :
-        What the build's documented objects claim, and the names they may not
-        shadow.
+    resolution :
+        The short names the build resolves, and the ambiguous ones it drops.
     prose :
         Text to scan, keyed by the symbol or file it came from.
     result :
         Aggregated results to append to.
     """
-    from ._interlinks import resolve_aliases
-
-    dropped = resolve_aliases(claims).dropped
+    dropped = resolution.dropped
     if not dropped:
         return
 

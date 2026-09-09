@@ -205,6 +205,13 @@ def _make_documented_item(name, aliases, docstring):
     return item
 
 
+def _resolution(documented):
+    """Return the alias resolution shared by the cross-reference checks."""
+    from great_docs._interlinks import AliasClaims, resolve_aliases
+
+    return resolve_aliases(AliasClaims.make(documented))
+
+
 def _documented(*names):
     """Mock manifest items for objects documented under `mypkg`, each claiming its own name."""
     return [_make_documented_item(f"mypkg.{name}", (name,), "Documented.") for name in names]
@@ -296,7 +303,12 @@ class TestCheckCrossReferences:
         )
         result = LintResult()
         _check_cross_references(
-            pkg, "mypkg", ["func_a", "func_b"], _documented("func_a", "func_b"), result
+            pkg,
+            "mypkg",
+            ["func_a", "func_b"],
+            _documented("func_a", "func_b"),
+            _resolution(_documented("func_a", "func_b")),
+            result,
         )
 
         assert len(result.issues) == 0
@@ -308,7 +320,14 @@ class TestCheckCrossReferences:
             }
         )
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["func_a"], _documented("func_a"), result)
+        _check_cross_references(
+            pkg,
+            "mypkg",
+            ["func_a"],
+            _documented("func_a"),
+            _resolution(_documented("func_a")),
+            result,
+        )
 
         assert len(result.issues) == 1
         assert result.issues[0].check == "broken-xref"
@@ -326,7 +345,12 @@ class TestCheckCrossReferences:
         )
         result = LintResult()
         _check_cross_references(
-            pkg, "mypkg", ["func_a", "func_b"], _documented("func_a", "func_b"), result
+            pkg,
+            "mypkg",
+            ["func_a", "func_b"],
+            _documented("func_a", "func_b"),
+            _resolution(_documented("func_a", "func_b")),
+            result,
         )
 
         assert len(result.issues) == 1
@@ -340,7 +364,14 @@ class TestCheckCrossReferences:
             }
         )
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["func_a"], _documented("func_a"), result)
+        _check_cross_references(
+            pkg,
+            "mypkg",
+            ["func_a"],
+            _documented("func_a"),
+            _resolution(_documented("func_a")),
+            result,
+        )
 
         assert len(result.issues) == 0
 
@@ -354,7 +385,12 @@ class TestCheckCrossReferences:
         pkg = _make_pkg({"MyClass": cls})
         result = LintResult()
         _check_cross_references(
-            pkg, "mypkg", ["MyClass"], _documented("MyClass", "MyClass.do_stuff"), result
+            pkg,
+            "mypkg",
+            ["MyClass"],
+            _documented("MyClass", "MyClass.do_stuff"),
+            _resolution(_documented("MyClass", "MyClass.do_stuff")),
+            result,
         )
 
         assert len(result.issues) == 0
@@ -366,7 +402,14 @@ class TestCheckCrossReferences:
             }
         )
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["func_a"], _documented("func_a"), result)
+        _check_cross_references(
+            pkg,
+            "mypkg",
+            ["func_a"],
+            _documented("func_a"),
+            _resolution(_documented("func_a")),
+            result,
+        )
 
         assert len(result.issues) == 0
 
@@ -388,7 +431,9 @@ class TestCheckCrossReferences:
             _make_documented_item("mypkg.store.Cache", ("store.Cache", "Cache"), "A cache."),
         ]
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["func_a"], documented, result)
+        _check_cross_references(
+            pkg, "mypkg", ["func_a"], documented, _resolution(documented), result
+        )
 
         assert len(result.issues) == 0
 
@@ -404,7 +449,9 @@ class TestCheckCrossReferences:
             _make_documented_item("mypkg.store.Cache", ("store.Cache", "Cache"), "A cache."),
         ]
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["func_a"], documented, result)
+        _check_cross_references(
+            pkg, "mypkg", ["func_a"], documented, _resolution(documented), result
+        )
 
         assert len(result.issues) == 1
         assert result.issues[0].check == "broken-xref"
@@ -418,9 +465,89 @@ class TestCheckCrossReferences:
             }
         )
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["func_a"], [], result)
+        _check_cross_references(pkg, "mypkg", ["func_a"], [], _resolution([]), result)
 
         assert len(result.issues) == 0
+
+
+class TestSeealsoAgainstArbitration:
+    """`%seealso` is resolved by the same arbitration the build applies."""
+
+    def _resolution(self, documented):
+        from great_docs._interlinks import AliasClaims, resolve_aliases
+
+        return resolve_aliases(AliasClaims.make(documented))
+
+    def test_a_seealso_to_an_ambiguous_short_name_is_reported(self):
+        """Two objects claiming `flush` means `%seealso flush` links nowhere."""
+        documented = [
+            _make_documented_item("mypkg.StoreCache", ("StoreCache",), "A store."),
+            _make_documented_item(
+                "mypkg.StoreCache.flush", ("flush", "StoreCache.flush"), "Flush writes."
+            ),
+            _make_documented_item("mypkg.NetCache", ("NetCache",), "A connection."),
+            _make_documented_item(
+                "mypkg.NetCache.flush", ("flush", "NetCache.flush"), "Flush the socket."
+            ),
+        ]
+        pkg = _make_pkg(
+            {"StoreCache": _make_griffe_obj(kind="class", docstring="A store.\n\n%seealso flush")}
+        )
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["StoreCache"], documented, self._resolution(documented), result
+        )
+
+        assert len(result.issues) == 1
+        assert result.issues[0].check == "ambiguous-xref"
+        assert "mypkg.NetCache.flush" in result.issues[0].message
+        assert "mypkg.StoreCache.flush" in result.issues[0].message
+
+    def test_a_seealso_to_an_unambiguous_short_name_passes(self):
+        documented = _documented("Thing", "run")
+        pkg = _make_pkg(
+            {"Thing": _make_griffe_obj(kind="class", docstring="A thing.\n\n%seealso run")}
+        )
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["Thing"], documented, self._resolution(documented), result
+        )
+
+        assert result.issues == []
+
+    def test_a_seealso_to_nothing_documented_is_still_broken(self):
+        """An unknown name keeps its own diagnosis rather than becoming ambiguous."""
+        documented = _documented("Thing")
+        pkg = _make_pkg(
+            {"Thing": _make_griffe_obj(kind="class", docstring="A thing.\n\n%seealso nope")}
+        )
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["Thing"], documented, self._resolution(documented), result
+        )
+
+        assert len(result.issues) == 1
+        assert result.issues[0].check == "broken-xref"
+
+    def test_a_class_member_seealso_is_checked_too(self):
+        """The member branch was previously uncovered."""
+        documented = _documented("Thing", "run")
+        method = _make_griffe_obj(kind="function", docstring="Do it.\n\n%seealso nope")
+        pkg = _make_pkg(
+            {"Thing": _make_griffe_obj(kind="class", docstring="A thing.", members={"go": method})}
+        )
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["Thing"], documented, self._resolution(documented), result
+        )
+
+        assert len(result.issues) == 1
+        assert result.issues[0].check == "broken-xref"
+        assert result.issues[0].symbol == "Thing.go"
 
 
 class TestCheckDocstringStyle:
@@ -959,7 +1086,14 @@ class TestCheckCrossReferencesEdgeCases:
         """Exports not found in pkg.members should be skipped."""
         pkg = _make_pkg({})
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["missing_export"], _documented("other"), result)
+        _check_cross_references(
+            pkg,
+            "mypkg",
+            ["missing_export"],
+            _documented("other"),
+            _resolution(_documented("other")),
+            result,
+        )
 
         assert len(result.issues) == 0
 
@@ -977,7 +1111,12 @@ class TestCheckCrossReferencesEdgeCases:
         pkg = _make_pkg({"MyClass": cls})
         result = LintResult()
         _check_cross_references(
-            pkg, "mypkg", ["MyClass"], _documented("MyClass", "MyClass.my_method"), result
+            pkg,
+            "mypkg",
+            ["MyClass"],
+            _documented("MyClass", "MyClass.my_method"),
+            _resolution(_documented("MyClass", "MyClass.my_method")),
+            result,
         )
 
         assert len(result.issues) == 1
@@ -1003,6 +1142,7 @@ class TestCheckCrossReferencesEdgeCases:
             "mypkg",
             ["MyClass", "helper_func"],
             _documented("MyClass", "MyClass.my_method", "helper_func"),
+            _resolution(_documented("MyClass", "MyClass.my_method", "helper_func")),
             result,
         )
 
@@ -1022,7 +1162,12 @@ class TestCheckCrossReferencesEdgeCases:
         pkg = _make_pkg({"MyClass": cls})
         result = LintResult()
         _check_cross_references(
-            pkg, "mypkg", ["MyClass"], _documented("MyClass", "MyClass.my_method"), result
+            pkg,
+            "mypkg",
+            ["MyClass"],
+            _documented("MyClass", "MyClass.my_method"),
+            _resolution(_documented("MyClass", "MyClass.my_method")),
+            result,
         )
 
         assert len(result.issues) == 1
@@ -1036,7 +1181,14 @@ class TestCheckCrossReferencesEdgeCases:
         type(obj.kind).value = property(lambda self: (_ for _ in ()).throw(RuntimeError("boom")))
         pkg = _make_pkg({"broken_cls": obj})
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["broken_cls"], _documented("broken_cls"), result)
+        _check_cross_references(
+            pkg,
+            "mypkg",
+            ["broken_cls"],
+            _documented("broken_cls"),
+            _resolution(_documented("broken_cls")),
+            result,
+        )
 
     def test_class_outer_exception_in_method_xref(self):
         """When iterating class methods raises, the outer except catches it."""
@@ -1049,7 +1201,12 @@ class TestCheckCrossReferencesEdgeCases:
         pkg = _make_pkg({"MyClass": obj, "something": _make_griffe_obj(docstring="X.")})
         result = LintResult()
         _check_cross_references(
-            pkg, "mypkg", ["MyClass", "something"], _documented("MyClass", "something"), result
+            pkg,
+            "mypkg",
+            ["MyClass", "something"],
+            _documented("MyClass", "something"),
+            _resolution(_documented("MyClass", "something")),
+            result,
         )
 
 

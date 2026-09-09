@@ -88,14 +88,13 @@ the rendered documentation.
 
 ### Broken Cross-References
 
-Cross-references that point to nonexistent symbols produce dead links on the rendered site. The
-linter validates that `%seealso` directives reference symbols that actually exist in your public
-API.
+Cross-references to undocumented symbols produce dead links on the rendered site. The linter
+validates that `%seealso` directives name documented API objects.
 
 | Finding | Severity | Description |
 |---------|----------|-------------|
-| `broken-xref` | Error | `%seealso` references a name that is not a known public export |
-| `ambiguous-xref` | Error | An interlink names a short form that two documented objects claim |
+| `broken-xref` | Error | A reference names something the API reference does not document |
+| `ambiguous-xref` | Error | A reference names a short form claimed by two documented objects |
 
 For example, this would flag an error:
 
@@ -109,21 +108,21 @@ def process(data):
     ...
 ```
 
-If `validate_input` exists in your public API but `transform_data` does not, the linter reports
+If `validate_input` is documented but `transform_data` is not, the linter reports
 `transform_data` as a broken cross-reference. This is especially useful after renaming or removing
 functions.
 
-The same check reports an interlink whose short form two objects claim. If both `StoreCache` and
-`NetCache` document a `flush` method, then `` [](`flush`) `` names neither of them, and the
-reference renders unlinked:
+A reference can also be ambiguous. If both `StoreCache` and `NetCache` document a `flush`
+method, neither claims the short name `flush`, so a reference to it renders unlinked:
 
 ```
 'flush' is claimed by demo.NetCache.flush and demo.StoreCache.flush, so the reference stays
 unlinked. Qualify it.
 ```
 
-Writing `` [](`StoreCache.flush`) `` resolves it. Docstrings and the pages of your documentation
-are both scanned.
+Writing `` [](`StoreCache.flush`) `` resolves it. The linter judges `%seealso` entries and inline
+references identically because the build resolves both through one index. It scans docstrings and
+documentation pages.
 
 ### Style Consistency
 
