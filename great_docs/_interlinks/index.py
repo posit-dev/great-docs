@@ -115,6 +115,33 @@ class Index:
     add_function_parentheses: bool = True
     """Whether a link to a function or method shows a trailing `()`"""
 
+    def resolves(self, name: str) -> bool:
+        """
+        Report whether an unqualified reference resolves
+
+        Match the filter for a reference with no role or source. It checks the
+        name as written, then forms expanded from a source alias. A locally
+        ambiguous name does not resolve.
+
+        Parameters
+        ----------
+        name :
+            The target name as written in the reference.
+
+        Returns
+        -------
+        :
+            Whether the reference resolves in this index.
+        """
+        if name in self.dropped:
+            return False
+        if name in self.names:
+            return True
+        head, _, rest = name.partition(".")
+        if not rest:
+            return False
+        return any(f"{root}.{rest}" in self.names for root in self.prefixes.get(head, ()))
+
 
 def root_modules(inv: Inventory) -> tuple[str, ...]:
     """

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from .._sphinx_inventory import INVENTORY_FILENAME, Inventory, decode
 from .index import AliasClaims, Index, build_index
 from .lua import write_index
-from .sources import Source, load_source, sources_from_config
+from .sources import load_sources
 
 if TYPE_CHECKING:
     from ..config import Config
@@ -54,23 +54,13 @@ def build_project_index(
     else:
         local = Inventory(project=package_name, version="", entries=())
 
-    cache_dir = config.cache_dir / "interlinks"
-    external: list[tuple[Source, Inventory]] = []
-    configured, notes = sources_from_config(config.interlinks_sources)
-    for source in configured:
-        inv, note = load_source(source, cache_dir, root=config.project_root)
-        if note:
-            notes.append(note)
-        if inv is None:
-            continue
-        external.append((source, inv))
-
+    sources = load_sources(config)
     index = build_index(
         local,
         claims,
-        external,
+        sources.read,
         add_function_parentheses=config.interlinks_add_function_parentheses,
     )
     write_index(index, project_path / "_inv" / "index.lua")
 
-    return index, notes
+    return index, list(sources.notes)

@@ -15,17 +15,19 @@ from .index import (
 )
 from .lua import write_index
 from .project import build_project_index
-from .sources import Source, load_source, sources_from_config
+from .sources import LoadedSources, Source, load_source, load_sources, sources_from_config
 
 __all__ = (
     "AliasClaims",
     "AliasResolution",
     "Index",
     "IndexEntry",
+    "LoadedSources",
     "Source",
     "build_index",
     "build_project_index",
     "load_source",
+    "load_sources",
     "resolve_aliases",
     "root_modules",
     "sources_from_config",

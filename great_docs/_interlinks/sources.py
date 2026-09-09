@@ -12,11 +12,14 @@ from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 from stat import S_ISREG
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import requests
 
 from .._sphinx_inventory import INVENTORY_FILENAME, Inventory, decode
+
+if TYPE_CHECKING:
+    from ..config import Config
 
 _TIMEOUT = 30
 """Seconds to wait for an inventory download"""
@@ -325,3 +328,52 @@ def _read_local(source: Source, location: str, root: Path | None) -> tuple[Inven
         return None, f"{source.name}: no inventory at {location}"
     except (OSError, ValueError, zlib.error) as exc:
         return None, f"{source.name}: could not read {location} ({exc})"
+
+
+@dataclass(frozen=True)
+class LoadedSources:
+    """Configured sources and the inventories that were read"""
+
+    read: tuple[tuple[Source, Inventory], ...] = ()
+    """Sources paired with successfully read inventories"""
+
+    unread: tuple[str, ...] = ()
+    """Source names whose inventories could not be read"""
+
+    notes: tuple[str, ...] = ()
+    """Notes for the build log"""
+
+
+def load_sources(config: Config) -> LoadedSources:
+    """
+    Load the inventories for configured sources
+
+    Sources without a URL are not unread. The build cannot resolve a reference
+    to them either.
+
+    Parameters
+    ----------
+    config :
+        Project configuration, for the declared sources, the cache directory
+        and the root used to read a relative URL.
+
+    Returns
+    -------
+    :
+        The read and unread sources and build-log notes.
+    """
+    configured, notes = sources_from_config(config.interlinks_sources)
+    cache_dir = config.cache_dir / "interlinks"
+    read: list[tuple[Source, Inventory]] = []
+    unread: list[str] = []
+
+    for source in configured:
+        inv, note = load_source(source, cache_dir, root=config.project_root)
+        if note:
+            notes.append(note)
+        if inv is None:
+            unread.append(source.name)
+            continue
+        read.append((source, inv))
+
+    return LoadedSources(read=tuple(read), unread=tuple(unread), notes=tuple(notes))

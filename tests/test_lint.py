@@ -17,6 +17,8 @@ from great_docs._lint import (
     _version_distance,
     run_lint,
 )
+from great_docs._interlinks import Source
+from great_docs._sphinx_inventory import Inventory, InventoryEntry
 from great_docs._utils import QUARTO_YML_HEADER
 
 
@@ -202,14 +204,21 @@ def _make_documented_item(name, aliases, docstring):
     item.name = name
     item.aliases = aliases
     item.obj = _make_griffe_obj(docstring=docstring)
+    item.uri = f"reference/{name}.html"
+    item.dispname = name
     return item
 
 
-def _resolution(documented):
-    """Return the alias resolution shared by the cross-reference checks."""
-    from great_docs._interlinks import AliasClaims, resolve_aliases
+def _index(documented, external=()):
+    """Build the index used by cross-reference checks"""
+    from great_docs._apiref.inventory import create_inventory
+    from great_docs._interlinks import AliasClaims, build_index
 
-    return resolve_aliases(AliasClaims.make(documented))
+    return build_index(
+        create_inventory("mypkg", "", documented),
+        AliasClaims.make(documented),
+        list(external),
+    )
 
 
 def _documented(*names):
@@ -307,7 +316,8 @@ class TestCheckCrossReferences:
             "mypkg",
             ["func_a", "func_b"],
             _documented("func_a", "func_b"),
-            _resolution(_documented("func_a", "func_b")),
+            _index(_documented("func_a", "func_b")),
+            (),
             result,
         )
 
@@ -325,7 +335,8 @@ class TestCheckCrossReferences:
             "mypkg",
             ["func_a"],
             _documented("func_a"),
-            _resolution(_documented("func_a")),
+            _index(_documented("func_a")),
+            (),
             result,
         )
 
@@ -349,7 +360,8 @@ class TestCheckCrossReferences:
             "mypkg",
             ["func_a", "func_b"],
             _documented("func_a", "func_b"),
-            _resolution(_documented("func_a", "func_b")),
+            _index(_documented("func_a", "func_b")),
+            (),
             result,
         )
 
@@ -369,7 +381,8 @@ class TestCheckCrossReferences:
             "mypkg",
             ["func_a"],
             _documented("func_a"),
-            _resolution(_documented("func_a")),
+            _index(_documented("func_a")),
+            (),
             result,
         )
 
@@ -389,7 +402,8 @@ class TestCheckCrossReferences:
             "mypkg",
             ["MyClass"],
             _documented("MyClass", "MyClass.do_stuff"),
-            _resolution(_documented("MyClass", "MyClass.do_stuff")),
+            _index(_documented("MyClass", "MyClass.do_stuff")),
+            (),
             result,
         )
 
@@ -407,7 +421,8 @@ class TestCheckCrossReferences:
             "mypkg",
             ["func_a"],
             _documented("func_a"),
-            _resolution(_documented("func_a")),
+            _index(_documented("func_a")),
+            (),
             result,
         )
 
@@ -432,7 +447,7 @@ class TestCheckCrossReferences:
         ]
         result = LintResult()
         _check_cross_references(
-            pkg, "mypkg", ["func_a"], documented, _resolution(documented), result
+            pkg, "mypkg", ["func_a"], documented, _index(documented), (), result
         )
 
         assert len(result.issues) == 0
@@ -450,7 +465,7 @@ class TestCheckCrossReferences:
         ]
         result = LintResult()
         _check_cross_references(
-            pkg, "mypkg", ["func_a"], documented, _resolution(documented), result
+            pkg, "mypkg", ["func_a"], documented, _index(documented), (), result
         )
 
         assert len(result.issues) == 1
@@ -465,18 +480,13 @@ class TestCheckCrossReferences:
             }
         )
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["func_a"], [], _resolution([]), result)
+        _check_cross_references(pkg, "mypkg", ["func_a"], [], _index([]), (), result)
 
         assert len(result.issues) == 0
 
 
 class TestSeealsoAgainstArbitration:
-    """`%seealso` is resolved by the same arbitration the build applies."""
-
-    def _resolution(self, documented):
-        from great_docs._interlinks import AliasClaims, resolve_aliases
-
-        return resolve_aliases(AliasClaims.make(documented))
+    """Cross-reference checks apply the build's resolution rules"""
 
     def test_a_seealso_to_an_ambiguous_short_name_is_reported(self):
         """Two objects claiming `flush` means `%seealso flush` links nowhere."""
@@ -496,7 +506,7 @@ class TestSeealsoAgainstArbitration:
         result = LintResult()
 
         _check_cross_references(
-            pkg, "mypkg", ["StoreCache"], documented, self._resolution(documented), result
+            pkg, "mypkg", ["StoreCache"], documented, _index(documented), (), result
         )
 
         assert len(result.issues) == 1
@@ -511,9 +521,7 @@ class TestSeealsoAgainstArbitration:
         )
         result = LintResult()
 
-        _check_cross_references(
-            pkg, "mypkg", ["Thing"], documented, self._resolution(documented), result
-        )
+        _check_cross_references(pkg, "mypkg", ["Thing"], documented, _index(documented), (), result)
 
         assert result.issues == []
 
@@ -525,9 +533,7 @@ class TestSeealsoAgainstArbitration:
         )
         result = LintResult()
 
-        _check_cross_references(
-            pkg, "mypkg", ["Thing"], documented, self._resolution(documented), result
-        )
+        _check_cross_references(pkg, "mypkg", ["Thing"], documented, _index(documented), (), result)
 
         assert len(result.issues) == 1
         assert result.issues[0].check == "broken-xref"
@@ -541,13 +547,78 @@ class TestSeealsoAgainstArbitration:
         )
         result = LintResult()
 
-        _check_cross_references(
-            pkg, "mypkg", ["Thing"], documented, self._resolution(documented), result
-        )
+        _check_cross_references(pkg, "mypkg", ["Thing"], documented, _index(documented), (), result)
 
         assert len(result.issues) == 1
         assert result.issues[0].check == "broken-xref"
         assert result.issues[0].symbol == "Thing.go"
+
+
+_NUMPY = (
+    Source(name="numpy", url="https://numpy.org/doc/stable", aliases=("np",)),
+    Inventory(
+        "numpy",
+        "2.1",
+        (InventoryEntry("numpy.ndarray", "py", "class", 1, "reference/ndarray.html", "-"),),
+    ),
+)
+"""A linked NumPy source in the form returned by `load_sources`"""
+
+
+class TestSeealsoAgainstLinkedSources:
+    """Validate linked-source `%seealso` references as the build does"""
+
+    def test_a_seealso_into_a_linked_source_resolves(self):
+        pkg = _make_pkg({"func_a": _make_griffe_obj(docstring="Docs.\n\n%seealso numpy.ndarray")})
+        documented = _documented("func_a")
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["func_a"], documented, _index(documented, [_NUMPY]), (), result
+        )
+
+        assert result.issues == []
+
+    def test_a_seealso_through_a_source_alias_resolves(self):
+        """Resolve `%seealso` through a source alias as the filter does"""
+        pkg = _make_pkg({"func_a": _make_griffe_obj(docstring="Docs.\n\n%seealso np.ndarray")})
+        documented = _documented("func_a")
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["func_a"], documented, _index(documented, [_NUMPY]), (), result
+        )
+
+        assert result.issues == []
+
+    def test_a_seealso_naming_nothing_in_a_linked_source_is_broken(self):
+        pkg = _make_pkg({"func_a": _make_griffe_obj(docstring="Docs.\n\n%seealso numpy.ghost")})
+        documented = _documented("func_a")
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["func_a"], documented, _index(documented, [_NUMPY]), (), result
+        )
+
+        assert len(result.issues) == 1
+        assert result.issues[0].check == "broken-xref"
+        assert "%seealso" in result.issues[0].message
+        assert "%%" not in result.issues[0].message
+
+    def test_an_unread_source_reports_itself_instead_of_the_references(self):
+        """Report an unread source rather than guess at an unresolved reference"""
+        pkg = _make_pkg({"func_a": _make_griffe_obj(docstring="Docs.\n\n%seealso numpy.ndarray")})
+        documented = _documented("func_a")
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["func_a"], documented, _index(documented), ("numpy",), result
+        )
+
+        assert len(result.issues) == 1
+        assert result.issues[0].check == "unread-source"
+        assert result.issues[0].severity == "info"
+        assert "numpy" in result.issues[0].message
 
 
 class TestCheckDocstringStyle:
@@ -1091,7 +1162,8 @@ class TestCheckCrossReferencesEdgeCases:
             "mypkg",
             ["missing_export"],
             _documented("other"),
-            _resolution(_documented("other")),
+            _index(_documented("other")),
+            (),
             result,
         )
 
@@ -1115,7 +1187,8 @@ class TestCheckCrossReferencesEdgeCases:
             "mypkg",
             ["MyClass"],
             _documented("MyClass", "MyClass.my_method"),
-            _resolution(_documented("MyClass", "MyClass.my_method")),
+            _index(_documented("MyClass", "MyClass.my_method")),
+            (),
             result,
         )
 
@@ -1142,7 +1215,8 @@ class TestCheckCrossReferencesEdgeCases:
             "mypkg",
             ["MyClass", "helper_func"],
             _documented("MyClass", "MyClass.my_method", "helper_func"),
-            _resolution(_documented("MyClass", "MyClass.my_method", "helper_func")),
+            _index(_documented("MyClass", "MyClass.my_method", "helper_func")),
+            (),
             result,
         )
 
@@ -1166,7 +1240,8 @@ class TestCheckCrossReferencesEdgeCases:
             "mypkg",
             ["MyClass"],
             _documented("MyClass", "MyClass.my_method"),
-            _resolution(_documented("MyClass", "MyClass.my_method")),
+            _index(_documented("MyClass", "MyClass.my_method")),
+            (),
             result,
         )
 
@@ -1186,7 +1261,8 @@ class TestCheckCrossReferencesEdgeCases:
             "mypkg",
             ["broken_cls"],
             _documented("broken_cls"),
-            _resolution(_documented("broken_cls")),
+            _index(_documented("broken_cls")),
+            (),
             result,
         )
 
@@ -1205,7 +1281,8 @@ class TestCheckCrossReferencesEdgeCases:
             "mypkg",
             ["MyClass", "something"],
             _documented("MyClass", "something"),
-            _resolution(_documented("MyClass", "something")),
+            _index(_documented("MyClass", "something")),
+            (),
             result,
         )
 

@@ -93,8 +93,9 @@ validates that `%seealso` directives name documented API objects.
 
 | Finding | Severity | Description |
 |---------|----------|-------------|
-| `broken-xref` | Error | A reference names something the API reference does not document |
+| `broken-xref` | Error | A reference names no object documented by this project or a linked source |
 | `ambiguous-xref` | Error | A reference names a short form claimed by two documented objects |
+| `unread-source` | Info | A linked source inventory could not be read, so `%seealso` was not checked |
 
 For example, this would flag an error:
 
@@ -123,6 +124,12 @@ unlinked. Qualify it.
 Writing `` [](`StoreCache.flush`) `` resolves it. The linter judges `%seealso` entries and inline
 references identically because the build resolves both through one index. It scans docstrings and
 documentation pages.
+
+References to linked projects use the same index. `%seealso numpy.ndarray` passes whenever
+the built page resolves it, by full name or source alias. Great Docs uses a fresh cached
+inventory or downloads one when needed. If it cannot read a source, its names are unavailable,
+so the linter reports `unread-source` and does not classify `%seealso` references as broken
+for that run.
 
 ### Style Consistency
 

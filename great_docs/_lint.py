@@ -8,12 +8,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ._builtin.directives import DIRECTIVES
-from ._interlinks import AliasClaims, resolve_aliases
+from ._interlinks import AliasClaims, LoadedSources, build_index, load_sources
 from ._utils import fenced_lines, is_in_great_docs_build_dir, parse_seealso
 
 if TYPE_CHECKING:
     from ._apiref.inventory import InventoryItem
-    from ._interlinks import AliasResolution
+    from ._interlinks import Index
 
 
 @dataclass
@@ -196,11 +196,22 @@ def run_lint(
         _check_missing_docstrings(pkg, importable_name, exports, result)
 
     if "cross-refs" in checks:
+        from ._apiref.inventory import create_inventory
+
         documented = docs.documented_objects(package_name)
-        # Resolve aliases once so both checks judge each reference identically.
-        resolution = resolve_aliases(AliasClaims.make(documented))
-        _check_cross_references(pkg, importable_name, exports, documented, resolution, result)
-        _check_ambiguous_references(resolution, _gather_prose(documented, project_root), result)
+        # Skip source loading when nothing is documented. The cross-reference
+        # checks cannot report a result, and an inventory download is needless.
+        sources = load_sources(docs._config) if documented else LoadedSources()
+        # Use the index the build writes so both checks apply render resolution.
+        index = build_index(
+            create_inventory(importable_name, "", documented),
+            AliasClaims.make(documented),
+            sources.read,
+        )
+        _check_cross_references(
+            pkg, importable_name, exports, documented, index, sources.unread, result
+        )
+        _check_ambiguous_references(index.dropped, _gather_prose(documented, project_root), result)
 
     if "style" in checks:
         _check_docstring_style(pkg, importable_name, exports, config_style, result)
@@ -293,16 +304,17 @@ def _check_cross_references(
     package_name: str,
     exports: list[str],
     documented: list[InventoryItem],
-    resolution: AliasResolution,
+    index: Index,
+    unread_sources: tuple[str, ...],
     result: LintResult,
 ) -> None:
     """
     Check `%seealso` directives for unresolved cross-references
 
-    The build resolves `%seealso` entries against its index. A documented name
-    or an alias claimed by one object resolves. A shared alias is ambiguous,
-    and an undocumented name is broken. Each leaves the rendered link
-    unlinked, but requires a different correction.
+    The build resolves each entry against its index. Use the same index here:
+    resolved names pass, local ambiguities report `ambiguous-xref`, and unknown
+    names report `broken-xref`. Each leaves a rendered link unlinked, but each
+    needs a different correction.
 
     Parameters
     ----------
@@ -316,34 +328,49 @@ def _check_cross_references(
         The objects the reference documents. Empty when it cannot be resolved,
         in which case the check reports nothing rather than calling every
         reference broken.
-    resolution :
-        The short names the build resolves, and the ambiguous ones it drops.
+    index :
+        The index the build resolves references against.
+    unread_sources :
+        Sources whose inventory could not be read. A name one of them
+        publishes cannot be told from a misspelling. Report those sources and
+        leave directives unjudged for this run.
     result :
         Aggregated results to append to.
     """
     if not documented:
         return
 
-    # Shared aliases are absent from `kept` and present in `dropped`.
-    known_names = {item.name for item in documented if item.name} | set(resolution.kept)
+    if unread_sources:
+        result.issues.append(
+            LintIssue(
+                check="unread-source",
+                severity="info",
+                symbol="",
+                message=(
+                    f"Could not read the inventory of {', '.join(unread_sources)}, so "
+                    "'%seealso' references were not checked this run."
+                ),
+            )
+        )
+        return
 
     def check(text: str, symbol: str) -> None:
         """
-        Report unresolved `%seealso` names in one docstring
+        Report unresolved `%seealso` names in a docstring
 
         Parameters
         ----------
         text :
             The docstring to scan.
         symbol :
-            The object the docstring belongs to, named in any issue raised.
+            The documented object named in any reported issue.
 
         Returns
         -------
         :
         """
         for ref_name, _ in parse_seealso(text):
-            claimants = resolution.dropped.get(ref_name)
+            claimants = index.dropped.get(ref_name)
             if claimants is not None:
                 result.issues.append(
                     LintIssue(
@@ -351,20 +378,20 @@ def _check_cross_references(
                         severity="error",
                         symbol=symbol,
                         message=(
-                            f"%%seealso references '{ref_name}', which is claimed by "
+                            f"%seealso references '{ref_name}', which is claimed by "
                             f"{' and '.join(claimants)}, so it stays unlinked. Qualify it."
                         ),
                     )
                 )
-            elif ref_name not in known_names:
+            elif not index.resolves(ref_name):
                 result.issues.append(
                     LintIssue(
                         check="broken-xref",
                         severity="error",
                         symbol=symbol,
                         message=(
-                            f"%%seealso references '{ref_name}' "
-                            "which the API reference does not document."
+                            f"%seealso references '{ref_name}', which neither the API "
+                            "reference nor a source it links to documents."
                         ),
                     )
                 )
@@ -474,7 +501,7 @@ def _gather_prose(items: list[InventoryItem], project_root: Path) -> dict[str, s
 
 
 def _check_ambiguous_references(
-    resolution: AliasResolution,
+    dropped: dict[str, tuple[str, ...]],
     prose: dict[str, str],
     result: LintResult,
 ) -> None:
@@ -483,14 +510,13 @@ def _check_ambiguous_references(
 
     Parameters
     ----------
-    resolution :
-        The short names the build resolves, and the ambiguous ones it drops.
+    dropped :
+        Each short name two objects claim, and the objects claiming it.
     prose :
         Text to scan, keyed by the symbol or file it came from.
     result :
         Aggregated results to append to.
     """
-    dropped = resolution.dropped
     if not dropped:
         return
 

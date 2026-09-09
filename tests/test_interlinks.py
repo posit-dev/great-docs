@@ -10,6 +10,7 @@ from great_docs._interlinks import (
     build_index,
     build_project_index,
     load_source,
+    load_sources,
     resolve_aliases,
     root_modules,
     sources_from_config,
@@ -478,9 +479,69 @@ def test_a_filesystem_source_is_read_and_linked_from_one_url(tmp_path):
     assert notes == []
 
 
+def test_load_sources_names_a_source_it_could_not_read(tmp_path):
+    """A source whose inventory is missing is named, so a caller can say why."""
+    (tmp_path / "great-docs.yml").write_text(
+        "module: myproj\n"
+        "interlinks:\n"
+        "  sources:\n"
+        "    good:\n"
+        f"      url: {tmp_path / 'good'}\n"
+        "    bad:\n"
+        f"      url: {tmp_path / 'bad'}\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "good").mkdir()
+    (tmp_path / "good" / "objects.inv").write_bytes(encode(DEMO))
+
+    loaded = load_sources(Config(tmp_path))
+
+    assert [source.name for source, _ in loaded.read] == ["good"]
+    assert loaded.unread == ("bad",)
+    assert any("bad" in note for note in loaded.notes)
+
+
+def test_load_sources_does_not_count_a_source_with_no_url(tmp_path):
+    """Nothing links into it, so a reference naming it is broken in the build too."""
+    (tmp_path / "great-docs.yml").write_text(
+        "module: myproj\ninterlinks:\n  sources:\n    nameless:\n      aliases: [n]\n",
+        encoding="utf-8",
+    )
+
+    loaded = load_sources(Config(tmp_path))
+
+    assert loaded.read == ()
+    assert loaded.unread == ()
+    assert any("no url" in note for note in loaded.notes)
+
+
 def test_a_kept_alias_points_at_the_target_entry():
     index = build_index(LOCAL, AliasClaims(claimed=(("Thing", "demo.Thing"),)), [])
     assert index.names["Thing"] == index.names["demo.Thing"]
+
+
+def test_the_index_resolves_a_name_it_holds():
+    index = build_index(LOCAL, AliasClaims(claimed=(("Thing", "demo.Thing"),)), [])
+
+    assert index.resolves("demo.Thing") is True
+    assert index.resolves("Thing") is True
+    assert index.resolves("demo.Missing") is False
+
+
+def test_the_index_resolves_a_name_written_with_a_source_alias():
+    """`np.ndarray` is what the filter expands, so it is what the index answers."""
+    source = Source(name="numpy", url="https://numpy.org/", aliases=("np",))
+    index = build_index(LOCAL, AliasClaims(), [(source, DEMO)])
+
+    assert index.resolves("np.ndarray") is True
+    assert index.resolves("np.missing") is False
+
+
+def test_the_index_resolves_nothing_for_an_ambiguous_name():
+    """The filter refuses it, so a caller asking must be told the same."""
+    index = build_index(LOCAL, AliasClaims(claimed=(("T", "demo.Thing"), ("T", "demo.go"))), [])
+
+    assert index.resolves("T") is False
 
 
 def test_an_ambiguous_alias_is_absent_and_reported():
