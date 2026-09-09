@@ -368,14 +368,51 @@ def test_resolves_agrees_with_the_filter_over_an_explicit_link(tmp_path):
                     source="ext",
                 ),
             ),
+            "vendor.close": (
+                IndexEntry(
+                    uri="https://vendor.example/close.html",
+                    domain="py",
+                    role="function",
+                    source="vendor",
+                ),
+            ),
         },
-        prefixes={"ex": ("ext",)},
-        dropped={"ext.Widget": ("mypkg.a.Widget", "mypkg.b.Widget")},
+        # Two local `Client` classes claim `close`; `Client` also aliases the
+        # external source.
+        prefixes={"ex": ("ext",), "Client": ("vendor",)},
+        dropped={
+            "ext.Widget": ("mypkg.a.Widget", "mypkg.b.Widget"),
+            "Client.close": ("mypkg.a.Client.close", "mypkg.b.Client.close"),
+        },
     )
 
-    for name in ("mypkg.run", "ex.Widget", "ext.Widget", "nope"):
+    for name in ("mypkg.run", "ex.Widget", "ext.Widget", "Client.close", "nope"):
         out = _run_filter_over_written_index(f"[](`{name}`)\n", index, tmp_path)
         assert ("gdls-link" in out) == index.resolves(name), name
+
+
+def test_a_source_qualified_reference_reaches_an_ambiguous_name_through_an_alias(tmp_path):
+    """Resolve a source-qualified alias with an ambiguous unqualified name"""
+    index = Index(
+        names={
+            "vendor.close": (
+                IndexEntry(
+                    uri="https://vendor.example/close.html",
+                    domain="py",
+                    role="function",
+                    source="vendor",
+                ),
+            ),
+        },
+        prefixes={"Client": ("vendor",)},
+        dropped={"Client.close": ("mypkg.a.Client.close", "mypkg.b.Client.close")},
+    )
+
+    out = _run_filter_over_written_index(
+        "[](:external+vendor:py:func:`Client.close`)\n", index, tmp_path
+    )
+
+    assert "https://vendor.example/close.html" in out
 
 
 def test_an_index_without_the_callable_roles_adds_no_parentheses(tmp_path):

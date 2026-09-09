@@ -170,18 +170,22 @@ end
 --- Find the entry a reference points at
 ---
 --- Two local objects can claim the same short name. An unqualified reference
---- to that name stays unresolved, even if an external source publishes it. A
---- source-qualified reference may still resolve to the external object.
+--- to that name stays unresolved. Do not expand it through a source alias,
+--- even if the source publishes the expanded name. A source-qualified
+--- reference may still resolve to the external object.
 --- @param ref table
 --- @param local_only boolean
 --- @return table|nil
 local function lookup(ref, local_only)
+  local ambiguous = get_index().ambiguous or {}
+  if ambiguous[ref.name] and not ref.source then
+    return nil
+  end
+
   local candidates = { ref.name }
   for _, form in ipairs(alias_forms(ref.name)) do
     candidates[#candidates + 1] = form
   end
-
-  local ambiguous = get_index().ambiguous or {}
 
   for _, name in ipairs(candidates) do
     local claimed_twice = ambiguous[name] and not ref.source
