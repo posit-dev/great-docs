@@ -886,8 +886,12 @@ def _retained_entries(dest_dir: Path, snap: ApiSnapshot) -> tuple[InventoryEntry
     and make its references unlinked. The live build's outgoing inventory
     records the retained page's target.
 
-    Keep an entry when its target page still exists. This also preserves a
-    member published as an anchor on its class page.
+    Keep an entry only if its target page exists directly in
+    `dest_dir / "reference"`. This also preserves a member published as an
+    anchor on its class page. Snapshot pruning reviews only that directory.
+    Pages in a custom `api-reference:` directory are not reviewed. Existing
+    pages there are not evidence that the historical version retained
+    them.
 
     Parameters
     ----------
@@ -921,6 +925,8 @@ def _retained_entries(dest_dir: Path, snap: ApiSnapshot) -> tuple[InventoryEntry
         if entry.name[len(prefix) :] in snap.symbols:
             continue
         page = dest_dir / Path(entry.uri.split("#", 1)[0])
+        if page.parent != dest_dir / "reference":
+            continue
         if page.with_suffix(".qmd").exists() or page.with_suffix(".md").exists():
             retained.append(entry)
     return tuple(retained)

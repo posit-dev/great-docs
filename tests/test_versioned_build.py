@@ -2739,6 +2739,73 @@ class TestRebuildApiFromSnapshotInventory:
         assert '["Cache.flush"]' in index_lua
         assert '["flush"]' in index_lua
 
+    def test_a_page_outside_the_pruned_directory_is_not_retained(self, tmp_path: Path):
+        """
+        Exclude pages outside the snapshot-pruned directory
+
+        Snapshot pruning assesses only `reference/`. A custom
+        `api-reference:` directory remains untouched, so its existing pages
+        cannot justify retaining live-inventory entries.
+        """
+        from great_docs._apiref.inventory import reference_uri
+        from great_docs._sphinx_inventory import (
+            INVENTORY_FILENAME,
+            Inventory,
+            InventoryEntry,
+            decode,
+            encode,
+        )
+        from great_docs.config import Config
+
+        snap_path = tmp_path / "snap.json"
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="demo",
+            symbols={"Cache": SymbolInfo(name="Cache", kind="class")},
+        )
+        snap.save(snap_path)
+
+        dest_dir = tmp_path / "build"
+        ref_dir = dest_dir / "reference"
+        ref_dir.mkdir(parents=True)
+        for stem in ("Cache", "Cache.flush", "index"):
+            (ref_dir / f"{stem}.qmd").write_text(f"# {stem} {{.doc-heading}}\n", encoding="utf-8")
+        other_dir = dest_dir / "other"
+        other_dir.mkdir()
+        (other_dir / "Widget.qmd").write_text("# Widget {.doc-heading}\n", encoding="utf-8")
+
+        live = Inventory(
+            project="demo",
+            version="0.3",
+            entries=(
+                InventoryEntry(
+                    "demo.Cache", "py", "class", 1, reference_uri("reference", "Cache"), "-"
+                ),
+                InventoryEntry(
+                    "demo.Cache.flush",
+                    "py",
+                    "method",
+                    1,
+                    reference_uri("reference", "Cache.flush"),
+                    "-",
+                ),
+                InventoryEntry(
+                    "demo.Widget", "py", "class", 1, reference_uri("other", "Widget"), "-"
+                ),
+            ),
+        )
+        (dest_dir / INVENTORY_FILENAME).write_bytes(encode(live))
+
+        _rebuild_api_from_snapshot(dest_dir, snap_path, _make_entry("0.2"), Config(tmp_path))
+
+        inv = decode((dest_dir / INVENTORY_FILENAME).read_bytes())
+        by_name = {e.name: e for e in inv.entries}
+
+        # Snapshot pruning reviewed this member page under `reference/`.
+        assert "demo.Cache.flush" in by_name
+        # Snapshot pruning never reviewed the `other/` page.
+        assert "demo.Widget" not in by_name
+
     def test_a_retained_page_claims_the_short_names_the_live_build_claims(self):
         """Claim short names for a member page retained by pruning"""
         snap = ApiSnapshot(
