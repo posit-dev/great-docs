@@ -140,7 +140,10 @@ class Index:
         head, _, rest = name.partition(".")
         if not rest:
             return False
-        return any(f"{root}.{rest}" in self.names for root in self.prefixes.get(head, ()))
+        return any(
+            f"{root}.{rest}" in self.names and f"{root}.{rest}" not in self.dropped
+            for root in self.prefixes.get(head, ())
+        )
 
 
 def root_modules(inv: Inventory) -> tuple[str, ...]:

@@ -89,7 +89,8 @@ the rendered documentation.
 ### Broken Cross-References
 
 Cross-references to undocumented symbols produce dead links on the rendered site. The linter
-validates that `%seealso` directives name documented API objects.
+checks that each `%seealso` target names an object this project documents or a linked project
+publishes.
 
 | Finding | Severity | Description |
 |---------|----------|-------------|

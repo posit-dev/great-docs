@@ -620,6 +620,22 @@ class TestSeealsoAgainstLinkedSources:
         assert result.issues[0].severity == "info"
         assert "numpy" in result.issues[0].message
 
+    def test_an_unread_source_does_not_silence_local_ambiguity(self):
+        """Report local ambiguity despite an unread source"""
+        pkg = _make_pkg({"func_a": _make_griffe_obj(docstring="Docs.\n\n%seealso Cache")})
+        documented = [
+            _make_documented_item("mypkg.a.Cache", ("Cache",), "Documented."),
+            _make_documented_item("mypkg.b.Cache", ("Cache",), "Documented."),
+        ]
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["func_a"], documented, _index(documented), ("numpy",), result
+        )
+
+        checks = {issue.check for issue in result.issues}
+        assert checks == {"ambiguous-xref", "unread-source"}
+
 
 class TestCheckDocstringStyle:
     def test_matching_style(self):
@@ -832,6 +848,33 @@ class TestRunLint:
         result = run_lint(tmp_path)
 
         assert not any(i.check == "ambiguous-xref" for i in result.issues)
+
+    @patch("great_docs._lint.load_sources")
+    @patch("griffe.load")
+    @patch("great_docs.core.GreatDocs")
+    def test_an_unresolvable_reference_reads_no_sources(
+        self, mock_gd_cls, mock_griffe_load, mock_load_sources, tmp_path
+    ):
+        """`load_sources` is the only thing that would put a lint run on the
+        network, so a run over a project whose reference resolves nothing
+        must never call it."""
+        mock_gd = MagicMock()
+        mock_gd._detect_package_name.return_value = "mypkg"
+        mock_gd._resolve_importable_name.return_value = "mypkg"
+        mock_gd._get_package_exports.return_value = ["func_a"]
+        mock_gd._config.get.return_value = "numpy"
+        mock_gd._config.__getitem__.return_value = "numpy"
+        mock_gd.documented_objects.return_value = []
+        mock_gd_cls.return_value = mock_gd
+
+        func_a = _make_griffe_obj(docstring="Docs.\n\n%seealso nope")
+        mock_pkg = MagicMock()
+        mock_pkg.members = {"func_a": func_a}
+        mock_griffe_load.return_value = mock_pkg
+
+        run_lint(tmp_path)
+
+        mock_load_sources.assert_not_called()
 
     @patch("griffe.load")
     @patch("great_docs.core.GreatDocs")

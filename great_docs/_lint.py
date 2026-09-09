@@ -199,8 +199,8 @@ def run_lint(
         from ._apiref.inventory import create_inventory
 
         documented = docs.documented_objects(package_name)
-        # Skip source loading when nothing is documented. The cross-reference
-        # checks cannot report a result, and an inventory download is needless.
+        # No documented objects means both checks are no-ops, so skip source
+        # loading and any inventory download.
         sources = load_sources(docs._config) if documented else LoadedSources()
         # Use the index the build writes so both checks apply render resolution.
         index = build_index(
@@ -311,10 +311,10 @@ def _check_cross_references(
     """
     Check `%seealso` directives for unresolved cross-references
 
-    The build resolves each entry against its index. Use the same index here:
-    resolved names pass, local ambiguities report `ambiguous-xref`, and unknown
-    names report `broken-xref`. Each leaves a rendered link unlinked, but each
-    needs a different correction.
+    The build resolves each entry against its index. Use the same index here.
+    A locally ambiguous name reports `ambiguous-xref` even if a source is
+    unread, because only local claims create ambiguity. Report another
+    unresolved name as broken only after every configured source is read.
 
     Parameters
     ----------
@@ -332,8 +332,8 @@ def _check_cross_references(
         The index the build resolves references against.
     unread_sources :
         Sources whose inventory could not be read. A name one of them
-        publishes cannot be told from a misspelling. Report those sources and
-        leave directives unjudged for this run.
+        publishes cannot be told from a misspelling. Do not report unresolved
+        names as broken for this run. Still report locally ambiguous names.
     result :
         Aggregated results to append to.
     """
@@ -352,7 +352,6 @@ def _check_cross_references(
                 ),
             )
         )
-        return
 
     def check(text: str, symbol: str) -> None:
         """
@@ -383,7 +382,7 @@ def _check_cross_references(
                         ),
                     )
                 )
-            elif not index.resolves(ref_name):
+            elif not unread_sources and not index.resolves(ref_name):
                 result.issues.append(
                     LintIssue(
                         check="broken-xref",

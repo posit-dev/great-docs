@@ -347,6 +347,37 @@ def test_the_written_index_keeps_an_ambiguous_name_unlinked(tmp_path):
     assert "other.example/cache.html" not in out
 
 
+def test_resolves_agrees_with_the_filter_over_an_explicit_link(tmp_path):
+    """
+    Match `Index.resolves` to explicit-link filter lookup
+
+    Both paths determine whether an explicit `[](`name`)` reference resolves.
+    A bare code span also requires a local entry, which `resolves` does not
+    check.
+    """
+    index = Index(
+        names={
+            "mypkg.run": (
+                IndexEntry(uri="/reference/run.html", domain="py", role="function", is_local=True),
+            ),
+            "ext.Widget": (
+                IndexEntry(
+                    uri="https://ext.example/widget.html",
+                    domain="py",
+                    role="class",
+                    source="ext",
+                ),
+            ),
+        },
+        prefixes={"ex": ("ext",)},
+        dropped={"ext.Widget": ("mypkg.a.Widget", "mypkg.b.Widget")},
+    )
+
+    for name in ("mypkg.run", "ex.Widget", "ext.Widget", "nope"):
+        out = _run_filter_over_written_index(f"[](`{name}`)\n", index, tmp_path)
+        assert ("gdls-link" in out) == index.resolves(name), name
+
+
 def test_an_index_without_the_callable_roles_adds_no_parentheses(tmp_path):
     """An index missing the key still resolves; only the trailing `()` is lost."""
     index = _CONTRACT_INDEX.replace(
