@@ -137,6 +137,35 @@ def root_modules(inv: Inventory) -> tuple[str, ...]:
     return tuple(name for name, _ in counts.most_common())
 
 
+def _resolve_uri(base: str, uri: str) -> str:
+    """
+    Resolve an inventory uri against the url its source is served from
+
+    A url carrying a scheme gets URL resolution, so an inventory entry that is
+    already absolute wins and a root-relative one lands at the host root, which
+    is what a consumer of that inventory is meant to do with each. A url naming
+    a directory has no such algebra: `urljoin` would normalise a leading `../`
+    away, so the two are joined as written and resolve from the reading page.
+
+    Parameters
+    ----------
+    base :
+        The source's url, with a trailing slash.
+    uri :
+        The uri as the inventory publishes it.
+
+    Returns
+    -------
+    :
+        Where the link points.
+    """
+    if "://" in base:
+        return urljoin(base, uri)
+    if "://" in uri:
+        return uri
+    return f"{base}{uri.lstrip('/')}"
+
+
 def build_index(
     local: Inventory,
     claims: AliasClaims,
@@ -186,9 +215,6 @@ def build_index(
 
     prefixes: dict[str, tuple[str, ...]] = {}
     for source, inv in external:
-        # urljoin discards the last path segment of a base without a trailing
-        # slash, and leaves an absolute or root-relative uri to win, which is
-        # what a consumer of that inventory is meant to do with one.
         base = f"{source.link_prefix}/"
         for e in inv.entries:
             add(
@@ -196,7 +222,7 @@ def build_index(
                 1,
                 e.priority,
                 IndexEntry(
-                    uri=urljoin(base, e.uri),
+                    uri=_resolve_uri(base, e.uri),
                     domain=e.domain,
                     role=e.role,
                     source=source.name,

@@ -110,27 +110,17 @@ def test_sources_from_config_rejects_an_entry_with_no_url():
     assert "numpy" in notes[0]
 
 
-def test_sources_from_config_rejects_a_filesystem_url_with_no_site_url():
-    """A local build directory has no published prefix to link into."""
+def test_a_filesystem_url_needs_nothing_further():
+    """One url answers both questions, whether it is served or on disk."""
     sources, notes = sources_from_config({"sibling": {"url": "../sibling/great-docs"}})
-
-    assert sources == []
-    assert len(notes) == 1
-    assert "site_url" in notes[0]
-
-
-def test_a_filesystem_url_with_a_site_url_is_usable():
-    sources, notes = sources_from_config(
-        {"sibling": {"url": "../sibling/great-docs", "site_url": "https://sibling.example/"}}
-    )
 
     assert notes == []
     assert len(sources) == 1
     assert sources[0].inventory_location == "../sibling/great-docs/objects.inv"
-    assert sources[0].link_prefix == "https://sibling.example"
+    assert sources[0].link_prefix == "../sibling/great-docs"
 
 
-def test_a_served_url_is_its_own_link_prefix():
+def test_a_served_url_answers_both_questions():
     sources, notes = sources_from_config({"numpy": {"url": "https://numpy.org/doc/stable/"}})
 
     assert notes == []
@@ -428,15 +418,11 @@ def test_external_uris_are_prefixed_with_the_source_url():
     assert index.names["numpy.ndarray"][0].is_local is False
 
 
-def test_site_url_overrides_the_source_url_as_the_link_prefix():
-    """A source's `site_url`, not its `url`, is where its pages are published."""
-    src = Source(
-        name="sibling",
-        url="/srv/docs/sibling-build",
-        site_url="https://mysite.example/sibling/",
-    )
+def test_a_filesystem_url_prefixes_links_as_written():
+    """A url on disk is the link prefix too, resolving relative to the reading page."""
+    src = Source(name="sibling", url="../sibling/great-docs")
     index = build_index(LOCAL, AliasClaims(), [(src, DEMO)])
-    assert index.names["numpy.ndarray"][0].uri == "https://mysite.example/sibling/ndarray.html"
+    assert index.names["numpy.ndarray"][0].uri == "../sibling/great-docs/ndarray.html"
 
 
 @pytest.mark.parametrize(
@@ -457,8 +443,8 @@ def test_an_external_uri_is_joined_against_its_source(uri, expected):
     assert index.names["numpy.ndarray"][0].uri == expected
 
 
-def test_a_local_path_source_with_site_url_is_linked(tmp_path):
-    """A filesystem `url` paired with `site_url` links to the declared published path."""
+def test_a_filesystem_source_is_read_and_linked_from_one_url(tmp_path):
+    """The inventory is read from the directory and links are prefixed with it."""
     sibling_dir = tmp_path / "sibling"
     sibling_dir.mkdir()
     (sibling_dir / "objects.inv").write_bytes(encode(DEMO))
@@ -467,12 +453,11 @@ def test_a_local_path_source_with_site_url_is_linked(tmp_path):
     project_dir.mkdir()
     (project_dir / "great-docs.yml").write_text(
         "module: myproj\ninterlinks:\n  sources:\n    sibling:\n      url: ../sibling\n"
-        "      site_url: /sibling/\n"
     )
 
     index, notes = build_project_index(project_dir, Config(project_dir), "myproj", AliasClaims())
 
-    assert index.names["numpy.ndarray"][0].uri == "/sibling/ndarray.html"
+    assert index.names["numpy.ndarray"][0].uri == "../sibling/ndarray.html"
     assert notes == []
 
 

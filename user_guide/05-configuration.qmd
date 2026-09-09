@@ -273,30 +273,28 @@ interlinks:
 With that in place, `` [](`numpy.ndarray`) `` resolves to numpy's page for `ndarray`, exactly
 as a reference to one of your own objects resolves to yours.
 
-Each source takes three fields:
+Each source takes two fields:
 
-- `url` is where the inventory is read from. Its `objects.inv` is fetched from
-  `<url>/objects.inv`, where every project publishes one.
-- `site_url` is where the documentation is served, when that is not `url`. It prefixes every
-  link into the project.
+- `url` is where the project's documentation lives. Its inventory is read from
+  `<url>/objects.inv`, where every project publishes one, and every link into the project is
+  written against `<url>`.
 - `aliases` lists the module names your prose uses for the project. With `aliases: [np]`, a
   reference to `` [](`np.ndarray`) `` resolves as `numpy.ndarray`.
 
-For a project published on the web, `url` is both, and `site_url` is unnecessary. For a
-project you build alongside this one, `url` is the build directory on disk and `site_url` is
-where that project is published:
+A `url` may name a directory on disk rather than a served site, which is how you reach a
+project you build alongside this one:
 
 ```yaml
 interlinks:
   sources:
     sibling:
       url: ../sibling/great-docs
-      site_url: https://sibling.example/docs/
 ```
 
-Great Docs reads the inventory from the directory and writes links against the site URL.
-Without `site_url` it has no published address to link to, so it skips the source and says so
-in the build log.
+Great Docs reads the inventory from that directory and writes links against the same path.
+Whether those links resolve from the page the reader is on depends on how the two sites sit
+relative to each other, which is yours to arrange. A source with no `url` is skipped, and the
+build log says so.
 
 Add Python's standard library as a source in the same way:
 

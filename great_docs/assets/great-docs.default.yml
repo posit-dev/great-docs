@@ -43,9 +43,10 @@ parser: numpy
 # Interlinks
 # ----------
 # Other documentation sites your prose can link to. Each entry under `sources`
-# names a project, the URL its documentation is served from, and optionally the
-# module aliases your prose uses for it. The inventory is read from
-# `<url>/objects.inv`, where every project publishes it.
+# names a project, where its documentation lives, and optionally the module
+# aliases your prose uses for it. The inventory is read from
+# `<url>/objects.inv`, where every project publishes it, and links are written
+# against `<url>`. A url may name a directory on disk instead of a served site.
 # interlinks:
 #   sources:
 #     numpy:

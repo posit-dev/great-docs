@@ -25,18 +25,18 @@ _TIMEOUT = 30
 @dataclass(frozen=True)
 class Source:
     """
-    An external project's documentation and its inventory location
+    An external project's documentation
 
-    `url` is never empty, so a `Source` always has somewhere to read its
-    inventory from. Whether that location is also somewhere to link into is a
-    separate question `sources_from_config` decides before construction.
+    One `url` answers both questions a source is asked: its inventory is read
+    from `<url>/objects.inv`, and every URI in that inventory is resolved
+    against `<url>`. A `url` addressing a directory on disk is read the same
+    way and prefixes links the same way. Whether those links resolve from the
+    reading page is the site's arrangement to get right, not this module's.
     """
 
     name: str
     url: str
     aliases: tuple[str, ...] = ()
-    site_url: str = ""
-    """Where the source's pages are actually served, when that differs from `url`"""
 
     def __post_init__(self) -> None:
         if not self.url:
@@ -50,7 +50,7 @@ class Source:
     @property
     def link_prefix(self) -> str:
         """What every URI in this source's inventory is prefixed with"""
-        return (self.site_url or self.url).rstrip("/")
+        return self.url.rstrip("/")
 
 
 def _is_served(url: str) -> bool:
@@ -74,10 +74,8 @@ def sources_from_config(sources: dict[str, Any]) -> tuple[list[Source], list[str
     """
     Build the sources declared in the configuration
 
-    Reject an entry with no `url`, since no URI in its inventory can be
-    resolved. Reject an entry whose `url` is a filesystem path and which
-    declares no `site_url`, since its inventory can be read during the build
-    but has no published prefix to link into.
+    Reject an entry with no `url`, since neither its inventory nor its links
+    have an address without one. That is the only reason an entry is rejected.
 
     Parameters
     ----------
@@ -94,24 +92,10 @@ def sources_from_config(sources: dict[str, Any]) -> tuple[list[Source], list[str
     for name, value in sources.items():
         value = value or {}
         url = str(value.get("url", "") or "")
-        site_url = str(value.get("site_url", "") or "")
         if not url:
             notes.append(f"{name}: no url configured; it will not be linked")
             continue
-        if not _is_served(url) and not site_url:
-            notes.append(
-                f"{name}: url is a filesystem path with no site_url configured; "
-                "it will not be linked"
-            )
-            continue
-        usable.append(
-            Source(
-                name=name,
-                url=url,
-                aliases=tuple(value.get("aliases", []) or []),
-                site_url=site_url,
-            )
-        )
+        usable.append(Source(name=name, url=url, aliases=tuple(value.get("aliases", []) or [])))
     return usable, notes
 
 
