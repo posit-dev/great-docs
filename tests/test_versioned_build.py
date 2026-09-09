@@ -17,11 +17,11 @@ from great_docs._versioned_build import (
     _prune_cli_pages,
     _prune_reference_index,
     _prune_sidebar_contents,
+    _published_claims,
     _rebuild_api_from_snapshot,
     _redirect_page,
     _rewrite_quarto_yml_for_version,
     _snapshot_cache_path,
-    _snapshot_claims,
     _validate_git_ref_is_tag,
     _version_build_dir,
     _write_snapshot_inventory,
@@ -2624,7 +2624,7 @@ class TestRebuildApiFromSnapshotInventory:
             },
         )
 
-        claims = _snapshot_claims(snap)
+        claims = _published_claims(snap, snap.symbols)
 
         assert ("Cache", "demo.Cache") in claims.claimed
         assert ("flush", "demo.Cache.flush") in claims.claimed
@@ -2644,7 +2644,7 @@ class TestRebuildApiFromSnapshotInventory:
             },
         )
 
-        claimed = set(_snapshot_claims(snap).claimed)
+        claimed = set(_published_claims(snap, snap.symbols).claimed)
 
         assert ("Cache", "demo.store.Cache") in claimed
         assert ("store.Cache", "demo.store.Cache") in claimed
@@ -2675,6 +2675,83 @@ class TestRebuildApiFromSnapshotInventory:
         # The bare short name, not just the full name `demo.Pipeline`, must
         # resolve — that is the defect this task closes.
         assert '["Pipeline"] = {{uri = "/reference/Pipeline.html"' in lua
+
+    def test_a_page_a_shallow_snapshot_retains_stays_published(self, tmp_path: Path):
+        """Publish a member page retained by shallow-snapshot pruning"""
+        from great_docs._apiref.inventory import reference_uri
+        from great_docs._sphinx_inventory import (
+            INVENTORY_FILENAME,
+            Inventory,
+            InventoryEntry,
+            decode,
+            encode,
+        )
+        from great_docs.config import Config
+
+        snap_path = tmp_path / "snap.json"
+        # The compatibility fallback records only top-level exports when it
+        # cannot resolve the documented set.
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="demo",
+            symbols={"Cache": SymbolInfo(name="Cache", kind="class")},
+        )
+        snap.save(snap_path)
+
+        dest_dir = tmp_path / "build"
+        ref_dir = dest_dir / "reference"
+        ref_dir.mkdir(parents=True)
+        for stem in ("Cache", "Cache.flush", "index"):
+            (ref_dir / f"{stem}.qmd").write_text(f"# {stem} {{.doc-heading}}\n", encoding="utf-8")
+        live = Inventory(
+            project="demo",
+            version="0.3",
+            entries=(
+                InventoryEntry(
+                    "demo.Cache", "py", "class", 1, reference_uri("reference", "Cache"), "-"
+                ),
+                InventoryEntry(
+                    "demo.Cache.flush",
+                    "py",
+                    "method",
+                    1,
+                    reference_uri("reference", "Cache.flush"),
+                    "-",
+                ),
+                InventoryEntry(
+                    "demo.gone", "py", "function", 1, reference_uri("reference", "gone"), "-"
+                ),
+            ),
+        )
+        (dest_dir / INVENTORY_FILENAME).write_bytes(encode(live))
+
+        _rebuild_api_from_snapshot(dest_dir, snap_path, _make_entry("0.2"), Config(tmp_path))
+
+        inv = decode((dest_dir / INVENTORY_FILENAME).read_bytes())
+        by_name = {e.name: e for e in inv.entries}
+
+        assert (ref_dir / "Cache.flush.qmd").exists()
+        assert by_name["demo.Cache.flush"].role == "method"
+        # Pruning removes the page for an absent name, so its entry is removed.
+        assert "demo.gone" not in by_name
+
+        index_lua = (dest_dir / "_inv" / "index.lua").read_text(encoding="utf-8")
+        assert '["Cache.flush"]' in index_lua
+        assert '["flush"]' in index_lua
+
+    def test_a_retained_page_claims_the_short_names_the_live_build_claims(self):
+        """Claim short names for a member page retained by pruning"""
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="demo",
+            symbols={"Cache": SymbolInfo(name="Cache", kind="class")},
+        )
+
+        claims = _published_claims(snap, ["Cache", "Cache.flush"])
+
+        assert ("flush", "demo.Cache.flush") in claims.claimed
+        assert ("Cache.flush", "demo.Cache.flush") in claims.claimed
+        assert claims.published == frozenset({"demo.Cache", "demo.Cache.flush"})
 
 
 # ---------------------------------------------------------------------------

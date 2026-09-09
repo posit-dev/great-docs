@@ -7,6 +7,7 @@ import re as _re
 import shutil
 import subprocess
 import threading
+from collections.abc import Iterable
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
@@ -27,6 +28,7 @@ from great_docs._versioning import (
 if TYPE_CHECKING:
     from great_docs._api_diff import ApiSnapshot
     from great_docs._interlinks import AliasClaims
+    from great_docs._sphinx_inventory import InventoryEntry
     from great_docs.config import Config
 
 # ---------------------------------------------------------------------------
@@ -832,31 +834,34 @@ def _rebuild_api_from_snapshot(
     return generated
 
 
-def _snapshot_claims(snap: ApiSnapshot) -> AliasClaims:
+def _published_claims(snap: ApiSnapshot, stems: Iterable[str]) -> AliasClaims:
     """
-    Derive the short names a snapshot-built version's objects claim
+    Build short-name claims for a version inventory
 
-    The live build reads these from the resolved API reference, which a
-    historical version has no way to run. A snapshot's stems carry the same
-    information: the last component is the bare short name, and a member of a
-    class the snapshot records also claims the class-qualified form, which is
-    the shortest spelling that cannot collide with another class's member.
+    The live build reads claims from its resolved API reference.
+    A historical version cannot run that resolution. Derive claims from its
+    inventory stems. Each stem claims its bare name. A member of a recorded
+    class also claims its class-qualified name.
 
     Parameters
     ----------
     snap
-        The snapshot the version's reference pages were rebuilt from.
+        The snapshot that identifies class owners.
+    stems
+        Dotted names of all objects in the version's
+        inventory.
 
     Returns
     -------
     :
-        The claims, in the shape `build_project_index` consumes.
+        Claims accepted by
+        `build_project_index`.
     """
     from ._interlinks import AliasClaims
 
     claimed: list[tuple[str, str]] = []
     published: list[str] = []
-    for stem in snap.symbols:
+    for stem in stems:
         full = f"{snap.package_name}.{stem}"
         published.append(full)
         claimed.append((stem, full))
@@ -869,6 +874,56 @@ def _snapshot_claims(snap: ApiSnapshot) -> AliasClaims:
         if owner_bare != owner and owner_sym is not None and owner_sym.kind == "class":
             claimed.append((f"{owner_bare}.{bare}", full))
     return AliasClaims(claimed=tuple(claimed), published=frozenset(published))
+
+
+def _retained_entries(dest_dir: Path, snap: ApiSnapshot) -> tuple[InventoryEntry, ...]:
+    """
+    Return inventory entries for reference pages retained by pruning
+
+    A shallow snapshot can name only top-level exports. Pruning can then retain
+    a member page such as `Cache.flush.qmd`, which the snapshot cannot assess.
+    Rebuilding from the snapshot alone would omit that page's inventory entry
+    and make its references unlinked. The live build's outgoing inventory
+    records the retained page's target.
+
+    Keep an entry when its target page still exists. This also preserves a
+    member published as an anchor on its class page.
+
+    Parameters
+    ----------
+    dest_dir
+        The build directory containing the outgoing inventory and the pages
+        pruning has already processed.
+    snap
+        The snapshot used to rebuild the version's
+        reference pages.
+
+    Returns
+    -------
+    :
+        Entries for retained pages that are absent from the
+        snapshot.
+    """
+    import zlib
+
+    from ._sphinx_inventory import INVENTORY_FILENAME, decode
+
+    try:
+        published = decode((dest_dir / INVENTORY_FILENAME).read_bytes())
+    except (OSError, ValueError, zlib.error):
+        return ()
+
+    prefix = f"{snap.package_name}."
+    retained: list[InventoryEntry] = []
+    for entry in published.entries:
+        if entry.domain != "py" or not entry.uri or not entry.name.startswith(prefix):
+            continue
+        if entry.name[len(prefix) :] in snap.symbols:
+            continue
+        page = dest_dir / Path(entry.uri.split("#", 1)[0])
+        if page.with_suffix(".qmd").exists() or page.with_suffix(".md").exists():
+            retained.append(entry)
+    return tuple(retained)
 
 
 def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config) -> None:
@@ -888,6 +943,10 @@ def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config)
     claim that depends on the object behind the stem: a name written into an
     `api-reference:` config that differs from the object's path, and an object
     documented under a name other than its own.
+
+    Entries for pages pruning retains come from the live inventory. Include
+    their claims too, so the inventory and index describe the same reference
+    pages.
 
     Parameters
     ----------
@@ -910,7 +969,7 @@ def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config)
 
     classes = {name for name, sym in snap.symbols.items() if sym.kind == "class"}
 
-    entries = tuple(
+    entries = [
         InventoryEntry(
             name=f"{snap.package_name}.{name}",
             domain="py",
@@ -920,11 +979,18 @@ def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config)
             dispname=f"{snap.package_name}.{name}",
         )
         for name, sym in snap.symbols.items()
-    )
-    inv = Inventory(project=snap.package_name, version=snap.version, entries=entries)
+    ]
+    # Read the live inventory before replacing it with the historical
+    # inventory.
+    entries.extend(_retained_entries(dest_dir, snap))
+    inv = Inventory(project=snap.package_name, version=snap.version, entries=tuple(entries))
     (dest_dir / INVENTORY_FILENAME).write_bytes(encode(inv))
 
-    build_project_index(dest_dir, config, snap.package_name, _snapshot_claims(snap))
+    # Derive claims from the final inventory so the index names the same
+    # pages.
+    prefix = f"{snap.package_name}."
+    stems = [e.name[len(prefix) :] for e in inv.entries if e.name.startswith(prefix)]
+    build_project_index(dest_dir, config, snap.package_name, _published_claims(snap, stems))
 
 
 def _format_signature(name: str, sym) -> str:
