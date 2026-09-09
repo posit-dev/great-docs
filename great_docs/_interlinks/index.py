@@ -110,6 +110,8 @@ class Index:
     names: dict[str, tuple[IndexEntry, ...]] = field(default_factory=dict)
     prefixes: dict[str, tuple[str, ...]] = field(default_factory=dict)
     dropped: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    """Short names claimed by multiple local objects and their claimants"""
+
     add_function_parentheses: bool = True
     """Whether a link to a function or method shows a trailing `()`"""
 

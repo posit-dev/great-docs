@@ -24,6 +24,9 @@ def write_index(index: Index, path: Path) -> None:
     per file and each one loads the index; Lua reads its own syntax faster than
     it decodes JSON. A compiled index left over from an earlier build is
     removed, since it would otherwise be loaded in preference to this one.
+    The chunk also records ambiguous local names. The filter leaves an
+    unqualified reference to one unlinked, even if an external inventory
+    publishes the same spelling.
 
     Parameters
     ----------
@@ -43,6 +46,10 @@ def write_index(index: Index, path: Path) -> None:
     lines.append("  callable_roles = {")
     for role in sorted(CALLABLE_ROLES):
         lines.append(f"    [{_quote_lua(role)}] = true,")
+    lines.append("  },")
+    lines.append("  ambiguous = {")
+    for name in sorted(index.dropped):
+        lines.append(f"    [{_quote_lua(name)}] = true,")
     lines.append("  },")
     lines.append("  prefixes = {")
     for alias in sorted(index.prefixes):

@@ -40,7 +40,7 @@ local function load_index()
 
   local chunk = loadfile(source)
   if not chunk then
-    return { prefixes = {}, names = {}, role_synonyms = {}, callable_roles = {} }
+    return { prefixes = {}, names = {}, role_synonyms = {}, callable_roles = {}, ambiguous = {} }
   end
 
   -- Rename rather than write in place: a parallel render must never load a
@@ -168,6 +168,10 @@ local function alias_forms(name)
 end
 
 --- Find the entry a reference points at
+---
+--- Two local objects can claim the same short name. An unqualified reference
+--- to that name stays unresolved, even if an external source publishes it. A
+--- source-qualified reference may still resolve to the external object.
 --- @param ref table
 --- @param local_only boolean
 --- @return table|nil
@@ -177,9 +181,12 @@ local function lookup(ref, local_only)
     candidates[#candidates + 1] = form
   end
 
+  local ambiguous = get_index().ambiguous or {}
+
   for _, name in ipairs(candidates) do
+    local claimed_twice = ambiguous[name] and not ref.source
     local entries = get_index().names[name]
-    if entries then
+    if entries and not claimed_twice then
       for _, entry in ipairs(entries) do
         local matches = (not ref.role or entry.role == ref.role)
           and (not ref.domain or entry.domain == ref.domain)

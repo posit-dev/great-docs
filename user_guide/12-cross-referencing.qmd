@@ -72,9 +72,10 @@ first. Qualify the reference to fix it.
 The build reports each ambiguous name it drops, and `great-docs lint` reports each reference
 that hits one, so you do not have to find them by reading the built pages.
 
-Only your own objects compete for a short name. If a project you link to publishes an
-object spelled the same way, your own still wins, and the other project's stays reachable
-under its full name.
+Only your own objects compete for a short name. If a linked project publishes the same
+spelling, an unambiguous local name still wins and the external object remains reachable
+by its full name. An ambiguous local name stays unlinked even when an external object has
+that spelling. Qualify the source to link to the external object.
 
 A version built from an API snapshot or a git tag resolves references against that version's
 own API, so a name added since then stays unlinked in the older version's pages rather than

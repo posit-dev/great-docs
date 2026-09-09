@@ -509,6 +509,29 @@ def test_a_local_claim_beats_an_external_name_of_the_same_spelling():
     assert index.dropped == {}
 
 
+def test_an_ambiguous_claim_leaves_an_external_name_marked_but_present():
+    """Mark a locally ambiguous short name even when an external target exists"""
+    local = Inventory(
+        "mypkg",
+        "1",
+        (
+            InventoryEntry("mypkg.store.Cache", "py", "class", 1, "r/store.Cache.html", "-"),
+            InventoryEntry("mypkg.net.Cache", "py", "class", 1, "r/net.Cache.html", "-"),
+        ),
+    )
+    external = Inventory("other", "1", (InventoryEntry("Cache", "py", "class", 1, "c.html", "-"),))
+    source = Source(name="other", url="https://other.example/")
+
+    index = build_index(
+        local,
+        AliasClaims.make([_item("Cache", "mypkg.store.Cache"), _item("Cache", "mypkg.net.Cache")]),
+        [(source, external)],
+    )
+
+    assert index.dropped["Cache"] == ("mypkg.net.Cache", "mypkg.store.Cache")
+    assert index.names["Cache"][0].source == "other"
+
+
 def test_an_alias_prefix_maps_to_the_sources_root_modules():
     src = Source(name="numpy", url="https://numpy.org/", aliases=("np",))
     index = build_index(LOCAL, AliasClaims(), [(src, DEMO)])
@@ -626,6 +649,16 @@ def test_the_index_carries_the_callable_roles(tmp_path):
 
     assert '["function"] = true' in text
     assert '["method"] = true' in text
+
+
+def test_the_index_carries_the_ambiguous_names(tmp_path):
+    """Write ambiguous short names for the filter to reject"""
+    index = build_index(LOCAL, AliasClaims(claimed=(("T", "demo.Thing"), ("T", "demo.go"))), [])
+    path = tmp_path / "index.lua"
+
+    write_index(index, path)
+
+    assert '["T"] = true' in path.read_text(encoding="utf-8")
 
 
 def test_write_index_removes_a_stale_compiled_index(tmp_path):

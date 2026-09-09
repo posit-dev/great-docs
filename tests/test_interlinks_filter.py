@@ -129,6 +129,48 @@ def test_meth_role_resolves_a_py_method_inventory_entry(tmp_path):
     assert "https://ext.example/Foo.html#bar" in output
 
 
+# Two local objects claim `Cache`; an external source also publishes `Cache`.
+_AMBIGUOUS_INDEX = """
+return {
+  add_function_parentheses = true,
+  callable_roles = { ["function"] = true, ["method"] = true },
+  prefixes = {},
+  role_synonyms = {},
+  ambiguous = { ["Cache"] = true },
+  names = {
+    ["Cache"] = {{ uri = "https://other.example/cache.html", domain = "py",
+                   role = "class", source = "other" }},
+    ["mypkg.store.Cache"] = {{ uri = "/reference/store.Cache.html", domain = "py",
+                               role = "class", ["local"] = true }},
+  },
+}
+"""
+
+
+def test_an_ambiguous_name_does_not_reach_another_project(tmp_path):
+    """Leave a locally ambiguous short name unlinked"""
+    output = _run_filter("See [](`Cache`) for details.\n", _AMBIGUOUS_INDEX, tmp_path)
+
+    assert "other.example/cache.html" not in output
+    assert 'Code ( "" , [] , [] ) "Cache"' in output
+
+
+def test_a_source_qualified_reference_reaches_an_ambiguous_name(tmp_path):
+    """Resolve an ambiguous name when its source is explicit"""
+    output = _run_filter(
+        "See [](:external+other:py:class:`Cache`) for details.\n", _AMBIGUOUS_INDEX, tmp_path
+    )
+
+    assert "https://other.example/cache.html" in output
+
+
+def test_a_qualified_local_name_still_resolves_beside_an_ambiguous_short_one(tmp_path):
+    """Resolve a fully qualified local name beside an ambiguous short name"""
+    output = _run_filter("See [](`mypkg.store.Cache`).\n", _AMBIGUOUS_INDEX, tmp_path)
+
+    assert "/reference/store.Cache.html" in output
+
+
 # Shared by both contract tests below. `role_synonyms` maps the Sphinx role
 # abbreviations to the role names the index stores; an empty string is the
 # generic role, which constrains nothing. The guide names none of these
@@ -282,6 +324,27 @@ def test_the_written_index_resolves_a_reference_through_the_filter(tmp_path):
     assert "mypkg.run()" in out
     assert "/reference/Thing.html#flush" in out
     assert "numpy.org/doc/stable/ndarray.html" in out
+
+
+def test_the_written_index_keeps_an_ambiguous_name_unlinked(tmp_path):
+    """Propagate an ambiguous name from the written index to the filter"""
+    index = Index(
+        names={
+            "Cache": (
+                IndexEntry(
+                    uri="https://other.example/cache.html",
+                    domain="py",
+                    role="class",
+                    source="other",
+                ),
+            )
+        },
+        dropped={"Cache": ("mypkg.net.Cache", "mypkg.store.Cache")},
+    )
+
+    out = _run_filter_over_written_index("[](`Cache`)\n", index, tmp_path)
+
+    assert "other.example/cache.html" not in out
 
 
 def test_an_index_without_the_callable_roles_adds_no_parentheses(tmp_path):
