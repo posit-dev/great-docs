@@ -177,7 +177,9 @@ def _resolve_uri(base: str, uri: str) -> str:
     already absolute wins and a root-relative one lands at the host root, which
     is what a consumer of that inventory is meant to do with each. A url naming
     a directory has no such algebra: `urljoin` would normalise a leading `../`
-    away, so the two are joined as written and resolve from the reading page.
+    away, so join only a relative URI as written. A directory is not a host.
+    A URI with a scheme or one beginning with `/`, including a protocol-relative
+    URI, already identifies its own location.
 
     Parameters
     ----------
@@ -193,9 +195,9 @@ def _resolve_uri(base: str, uri: str) -> str:
     """
     if "://" in base:
         return urljoin(base, uri)
-    if "://" in uri:
+    if "://" in uri or uri.startswith("/"):
         return uri
-    return f"{base}{uri.lstrip('/')}"
+    return f"{base}{uri}"
 
 
 def build_index(

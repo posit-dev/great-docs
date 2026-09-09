@@ -461,6 +461,28 @@ def test_an_external_uri_is_joined_against_its_source(uri, expected):
     assert index.names["numpy.ndarray"][0].uri == expected
 
 
+@pytest.mark.parametrize(
+    "uri,expected",
+    [
+        # The source directory prefixes relative URIs only.
+        ("ndarray.html", "/docs/vendor/ndarray.html"),
+        ("api/ndarray.html", "/docs/vendor/api/ndarray.html"),
+        # These targets already identify their own locations.
+        ("/api/ndarray.html", "/api/ndarray.html"),
+        ("//other.example/ndarray.html", "//other.example/ndarray.html"),
+        ("https://other.example/ndarray.html", "https://other.example/ndarray.html"),
+    ],
+)
+def test_a_filesystem_source_prefixes_only_a_relative_uri(uri, expected):
+    """Prefix only relative URIs from a filesystem source"""
+    inv = Inventory("vendor", "1", (InventoryEntry("numpy.ndarray", "py", "class", 1, uri, "-"),))
+    sources, _ = sources_from_config({"vendor": {"url": "/docs/vendor"}})
+
+    index = build_index(Inventory("mypkg", "1", ()), AliasClaims(), [(sources[0], inv)])
+
+    assert index.names["numpy.ndarray"][0].uri == expected
+
+
 def test_a_filesystem_source_is_read_and_linked_from_one_url(tmp_path):
     """The inventory is read from the directory and links are prefixed with it."""
     sibling_dir = tmp_path / "sibling"
