@@ -2820,6 +2820,54 @@ class TestRebuildApiFromSnapshotInventory:
         assert ("Cache.flush", "demo.Cache.flush") in claims.claimed
         assert claims.published == frozenset({"demo.Cache", "demo.Cache.flush"})
 
+    def test_a_re_exported_object_keeps_its_short_name(self, tmp_path: Path):
+        """Keep a re-export's short name with its public entry"""
+        from great_docs._sphinx_inventory import (
+            INVENTORY_FILENAME,
+            Inventory,
+            InventoryEntry,
+            decode,
+            encode,
+        )
+        from great_docs.config import Config
+
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="demo",
+            symbols={"Cache": SymbolInfo(name="Cache", kind="class")},
+        )
+        dest_dir = tmp_path / "build"
+        ref_dir = dest_dir / "reference"
+        ref_dir.mkdir(parents=True)
+        (ref_dir / "Cache.qmd").write_text("# Cache {.doc-heading}\n", encoding="utf-8")
+
+        # The live build publishes the canonical path beside the public name
+        # for the same page, with the public name as its display name.
+        live = Inventory(
+            project="demo",
+            version="0.3",
+            entries=(
+                InventoryEntry("demo.Cache", "py", "class", 1, "reference/Cache.html", "-"),
+                InventoryEntry(
+                    "demo._impl.Cache", "py", "class", 1, "reference/Cache.html", "demo.Cache"
+                ),
+            ),
+        )
+        (dest_dir / INVENTORY_FILENAME).write_bytes(encode(live))
+
+        _write_snapshot_inventory(dest_dir, snap, Config(tmp_path))
+
+        inv = decode((dest_dir / INVENTORY_FILENAME).read_bytes())
+        lua = (dest_dir / "_inv" / "index.lua").read_text(encoding="utf-8")
+
+        # Both entries continue to address the same page.
+        assert {"demo.Cache", "demo._impl.Cache"} <= {e.name for e in inv.entries}
+        # Only the public entry claims `Cache`, so the short name resolves.
+        assert '["Cache"] = true' not in lua
+        assert '["Cache"] = {{uri = "/reference/Cache.html"' in lua
+        # The canonical path contributes no additional short name.
+        assert '["_impl.Cache"]' not in lua
+
 
 # ---------------------------------------------------------------------------
 # _prune_reference_index — definition-list description lines

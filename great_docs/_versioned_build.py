@@ -993,9 +993,16 @@ def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config)
     (dest_dir / INVENTORY_FILENAME).write_bytes(encode(inv))
 
     # Derive claims from the final inventory so the index names the same
-    # pages.
+    # pages. A second entry with another display name identifies a canonical
+    # path for a re-exported object. It shares the public page target.
+    # It must not claim short names: the public and canonical entries would
+    # otherwise make each short name ambiguous.
     prefix = f"{snap.package_name}."
-    stems = [e.name[len(prefix) :] for e in inv.entries if e.name.startswith(prefix)]
+    stems = [
+        e.name[len(prefix) :]
+        for e in inv.entries
+        if e.name.startswith(prefix) and e.dispname == e.name
+    ]
     build_project_index(dest_dir, config, snap.package_name, _published_claims(snap, stems))
 
 
