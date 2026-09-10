@@ -90,7 +90,9 @@ the rendered documentation.
 
 Cross-references to undocumented symbols produce dead links on the rendered site. The linter
 checks that each `%seealso` target names an object this project documents or a linked project
-publishes.
+publishes. The linter checks only docstrings that render in the reference. A `%seealso` in a
+hidden member, such as one from a class configured `members: false`, has no rendered page and
+produces no finding.
 
 | Finding | Severity | Description |
 |---------|----------|-------------|

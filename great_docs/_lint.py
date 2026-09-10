@@ -316,14 +316,22 @@ def _check_cross_references(
     unread, because only local claims create ambiguity. Report another
     unresolved name as broken only after every configured source is read.
 
+    Check only docstrings the reference renders. A `%seealso` in a hidden
+    member, such as one from a class configured `members: false`, has no page
+    where a reader can act on its finding.
+
+    Read directives from the Griffe tree, where `%seealso` remains written.
+    The rendered reference replaces it with a See Also section. Documented
+    objects identify which of those source docstrings reach a page.
+
     Parameters
     ----------
     pkg :
-        The package loaded by griffe, whose docstrings are scanned.
+        The package loaded by Griffe, whose docstrings contain directives.
     package_name :
-        Importable name of the package.
+        Importable package name used in documented object paths.
     exports :
-        Public export names to scan.
+        Public export names whose documented objects are considered.
     documented :
         The objects the reference documents. Empty when it cannot be resolved,
         in which case the check reports nothing rather than calling every
@@ -395,18 +403,22 @@ def _check_cross_references(
                     )
                 )
 
+    documented_paths = {item.name for item in documented}
+
     for name in exports:
         if name not in pkg.members:
             continue
 
         obj = pkg.members[name]
         docstring = _get_docstring(obj)
-        if docstring:
+        if docstring and f"{package_name}.{name}" in documented_paths:
             check(docstring, name)
 
         try:
             if obj.kind.value == "class":
                 for member_name, member in _iter_public_members(obj):
+                    if f"{package_name}.{name}.{member_name}" not in documented_paths:
+                        continue
                     member_doc = _get_docstring(member)
                     if member_doc:
                         check(member_doc, f"{name}.{member_name}")

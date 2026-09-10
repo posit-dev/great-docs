@@ -485,6 +485,62 @@ class TestCheckCrossReferences:
         assert len(result.issues) == 0
 
 
+class TestSeealsoScannedObjects:
+    """Cross-reference checks scan rendered docstrings only"""
+
+    def test_an_undocumented_member_docstring_is_not_scanned(self):
+        """Skip a hidden member docstring"""
+        method = _make_griffe_obj(kind="function", docstring="Flush it.\n\n%seealso helper")
+        pkg = _make_pkg(
+            {"Cache": _make_griffe_obj(kind="class", docstring="A cache.", members={"flush": method})}
+        )
+        documented = [_make_documented_item("mypkg.Cache", ("Cache",), "A cache.")]
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["Cache"], documented, _index(documented), (), result
+        )
+
+        assert result.issues == []
+
+    def test_a_documented_member_docstring_is_scanned(self):
+        """Check a documented member docstring"""
+        method = _make_griffe_obj(kind="function", docstring="Flush it.\n\n%seealso helper")
+        pkg = _make_pkg(
+            {"Cache": _make_griffe_obj(kind="class", docstring="A cache.", members={"flush": method})}
+        )
+        documented = [
+            _make_documented_item("mypkg.Cache", ("Cache",), "A cache."),
+            _make_documented_item("mypkg.Cache.flush", ("flush", "Cache.flush"), "Flush it."),
+        ]
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["Cache"], documented, _index(documented), (), result
+        )
+
+        assert len(result.issues) == 1
+        assert result.issues[0].check == "broken-xref"
+        assert result.issues[0].symbol == "Cache.flush"
+
+    def test_an_undocumented_export_docstring_is_not_scanned(self):
+        """Skip an export omitted from the reference"""
+        pkg = _make_pkg(
+            {
+                "Cache": _make_griffe_obj(kind="class", docstring="A cache."),
+                "Hidden": _make_griffe_obj(kind="class", docstring="Hidden.\n\n%seealso helper"),
+            }
+        )
+        documented = [_make_documented_item("mypkg.Cache", ("Cache",), "A cache.")]
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["Cache", "Hidden"], documented, _index(documented), (), result
+        )
+
+        assert result.issues == []
+
+
 class TestSeealsoAgainstArbitration:
     """Cross-reference checks apply the build's resolution rules"""
 
@@ -537,22 +593,6 @@ class TestSeealsoAgainstArbitration:
 
         assert len(result.issues) == 1
         assert result.issues[0].check == "broken-xref"
-
-    def test_a_class_member_seealso_is_checked_too(self):
-        """The member branch was previously uncovered."""
-        documented = _documented("Thing", "run")
-        method = _make_griffe_obj(kind="function", docstring="Do it.\n\n%seealso nope")
-        pkg = _make_pkg(
-            {"Thing": _make_griffe_obj(kind="class", docstring="A thing.", members={"go": method})}
-        )
-        result = LintResult()
-
-        _check_cross_references(pkg, "mypkg", ["Thing"], documented, _index(documented), (), result)
-
-        assert len(result.issues) == 1
-        assert result.issues[0].check == "broken-xref"
-        assert result.issues[0].symbol == "Thing.go"
-
 
 _NUMPY = (
     Source(name="numpy", url="https://numpy.org/doc/stable", aliases=("np",)),
@@ -624,6 +664,7 @@ class TestSeealsoAgainstLinkedSources:
         """Report local ambiguity despite an unread source"""
         pkg = _make_pkg({"func_a": _make_griffe_obj(docstring="Docs.\n\n%seealso Cache")})
         documented = [
+            _make_documented_item("mypkg.func_a", ("func_a",), "Docs."),
             _make_documented_item("mypkg.a.Cache", ("Cache",), "Documented."),
             _make_documented_item("mypkg.b.Cache", ("Cache",), "Documented."),
         ]
