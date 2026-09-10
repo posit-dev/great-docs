@@ -12732,15 +12732,41 @@ anchor-sections: true
                 ]
 
             # Build the sections list for the data attribute.
-            # Only include "api" if a Python API reference was actually generated.
-            ref_sections = []
+            # Only include sections that are actually present in this build.
+            available_sections = []
             if self._has_api_reference:
-                ref_sections.append("api")
+                available_sections.append("api")
             if cli_enabled or go_cli_enabled or rust_cli_enabled:
-                ref_sections.append("cli")
+                available_sections.append("cli")
             if mcp_enabled:
-                ref_sections.append("mcp")
+                available_sections.append("mcp")
+
+            custom_order = self._config.ref_section_order
+            if custom_order:
+                ref_sections = [s for s in custom_order if s in available_sections]
+                for s in available_sections:
+                    if s not in ref_sections:
+                        ref_sections.append(s)
+            else:
+                ref_sections = available_sections
             sections_attr = ",".join(ref_sections)
+
+            # When the first ref section isn't "api", update the navbar
+            # "Reference" link to point to the first section's index page.
+            _SECTION_INDEX = {
+                "api": "reference/index.qmd",
+                "cli": "reference/cli/index.qmd",
+                "mcp": "reference/mcp/index.qmd",
+            }
+            if ref_sections and ref_sections[0] != "api":
+                first_href = _SECTION_INDEX.get(ref_sections[0], "reference/index.qmd")
+                navbar = config.get("website", {}).get("navbar", {})
+                for item in navbar.get("left", []):
+                    if isinstance(item, dict) and (item.get("href") or "").startswith(
+                        "reference/"
+                    ):
+                        item["href"] = first_href
+                        break
 
             # Inject data-gd-ref-sections on <body> via include-in-header script
             if "include-in-header" not in config["format"]["html"]:

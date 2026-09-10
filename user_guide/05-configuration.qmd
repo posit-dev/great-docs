@@ -782,6 +782,25 @@ Items are matched by their display text. Any navbar items not listed are appende
 their original order. This is useful when you want a specific item (like the User Guide) to appear
 first.
 
+## Reference Section Order
+
+When your site includes multiple reference sections (Python API, CLI, MCP Server), the default
+ordering of sections is: Python API, CLI, MCP Server. You may prefer a different order and we can
+use `ref_section_order` to change this. For example, a CLI-first tool might want this particular
+ordering of reference pages:
+
+```{.yaml filename="great-docs.yml"}
+ref_section_order:
+  - cli
+  - api
+  - mcp
+```
+
+Valid values are `api`, `cli`, and `mcp`. Sections listed here that don't exist in your project are
+silently ignored, so it's safe to include `mcp` even if your package has no MCP server. Sections not
+listed are appended at the end in the default order. The navbar "Reference" link will point to
+whichever section is first.
+
 ## Author Information
 
 Customize author display in the landing page sidebar:
@@ -1128,6 +1147,12 @@ navbar_order:
   - Examples
   - Tutorials
   - Changelog
+
+# Reference Section Order (within the Reference area)
+ref_section_order:
+  - cli
+  - api
+  - mcp
 
 # API Reference Structure
 reference:

@@ -197,6 +197,14 @@ mcp:
   #     "Data tools": [load, save]
   categories: {}
 
+# Reference Section Order
+# -----------------------
+# Controls the display order of API subsections (the switcher tabs) in the
+# Reference area. Valid values: "api", "cli", "mcp". Sections listed here
+# that don't exist in the project are silently ignored. When empty or omitted,
+# the default order is: api, cli, mcp.
+ref_section_order: []
+
 # Dark Mode Toggle
 # ----------------
 # Enable/disable the dark mode toggle in navbar (default: true)

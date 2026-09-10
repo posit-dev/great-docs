@@ -1339,6 +1339,18 @@ class Config:
         return None
 
     @property
+    def ref_section_order(self) -> list[str] | None:
+        """Custom display order for reference subsection tabs (api, cli, mcp)."""
+        try:
+            raw = self["ref_section_order"]
+        except KeyError:
+            return None
+        if isinstance(raw, list) and all(isinstance(item, str) for item in raw):
+            valid = [s for s in raw if s in ("api", "cli", "mcp")]
+            return valid if valid else None
+        return None
+
+    @property
     def content_style(self) -> dict[str, str] | None:
         """The content-area gradient config, or None when no preset is set"""
         preset = self["content_style.preset"]
