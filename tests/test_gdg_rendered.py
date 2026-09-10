@@ -7898,8 +7898,7 @@ def test_DED_interlinks_userguide_full_qualified():
     link_texts = [a.get_text(strip=True) for a in gdls_links]
 
     assert "gdtest_interlinks.BaseStore" in link_texts, (
-        f"Advanced: full qualified 'gdtest_interlinks.BaseStore' not found. "
-        f"Found: {link_texts}"
+        f"Advanced: full qualified 'gdtest_interlinks.BaseStore' not found. Found: {link_texts}"
     )
 
 
@@ -11606,3 +11605,36 @@ def test_DED_d2_block_replaced_not_left_as_code():
     html = page.read_text(encoding="utf-8")
     _skip_if_no_diagrams(html)
     assert "Decision" not in html, "d2 source leaked into HTML — block was not pre-rendered"
+
+
+# ── ref_section_order ───────────────────────────────────────────────────────
+
+
+@pytest.mark.dedicated
+def test_DED_ref_section_order_cli_first():
+    """gdtest_ref_section_order: data-gd-ref-sections has cli before api."""
+    pkg = "gdtest_ref_section_order"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    quarto_yml = _RENDERED_DIR / pkg / "great-docs" / "_quarto.yml"
+    assert quarto_yml.exists(), "_quarto.yml missing"
+    content = quarto_yml.read_text(encoding="utf-8")
+    assert "data-gd-ref-sections','cli,api'" in content, (
+        "Expected cli,api order in data-gd-ref-sections but got something else"
+    )
+
+
+@pytest.mark.dedicated
+def test_DED_ref_section_order_navbar_links_to_first_section():
+    """gdtest_ref_section_order: navbar Reference link points to CLI index."""
+    pkg = "gdtest_ref_section_order"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    quarto_yml = _RENDERED_DIR / pkg / "great-docs" / "_quarto.yml"
+    assert quarto_yml.exists(), "_quarto.yml missing"
+    content = quarto_yml.read_text(encoding="utf-8")
+    assert "href: reference/cli/index.qmd" in content, (
+        "Navbar Reference link should point to reference/cli/index.qmd when CLI is first"
+    )
