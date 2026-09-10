@@ -1714,6 +1714,199 @@ def check_links(
 cli.add_command(check_links)
 
 
+# ---------------------------------------------------------------------------
+# great-docs check-examples
+# ---------------------------------------------------------------------------
+
+
+@click.command(name="check-examples")
+@click.argument("paths", nargs=-1, type=click.Path(exists=True))
+@click.option(
+    "--project-path",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Path to your project root directory (default: current directory)",
+)
+@click.option(
+    "--timeout",
+    type=int,
+    default=30,
+    help="Per-cell timeout in seconds (default: 30)",
+)
+@click.option(
+    "--json-output",
+    is_flag=True,
+    help="Output results as JSON",
+)
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    help="Show full tracebacks in console output",
+)
+@click.option(
+    "--include",
+    type=str,
+    default=None,
+    help="Glob pattern to filter which files to check",
+)
+@click.option(
+    "--exclude",
+    type=str,
+    default=None,
+    help="Glob pattern to exclude files from checking",
+)
+@click.option(
+    "--no-docstrings",
+    is_flag=True,
+    help="Skip docstring example checking",
+)
+@click.option(
+    "--docstrings-only",
+    is_flag=True,
+    help="Only check docstring examples, skip .qmd files",
+)
+@click.option(
+    "--parallel",
+    is_flag=True,
+    help="Run pages concurrently (each in its own subprocess/kernel)",
+)
+@click.option(
+    "--jobs",
+    "-j",
+    type=int,
+    default=1,
+    help="Number of concurrent pages (implies --parallel if > 1)",
+)
+@click.option(
+    "--log-file",
+    type=click.Path(),
+    default=None,
+    help="Where to write full tracebacks (default: .great-docs/check-examples.log)",
+)
+def check_examples(
+    paths: tuple[str, ...],
+    project_path: str | None,
+    timeout: int,
+    json_output: bool,
+    verbose: bool,
+    include: str | None,
+    exclude: str | None,
+    no_docstrings: bool,
+    docstrings_only: bool,
+    parallel: bool,
+    jobs: int,
+    log_file: str | None,
+) -> None:
+    """Check that Python code examples execute without errors.
+
+    Renders .qmd files and docstring examples via Quarto, reporting which
+    cells succeed and which error. Every cell is executed even if earlier
+    cells fail (Quarto's error: true mode).
+
+    Requires Quarto to be installed (https://quarto.org).
+
+    PATHS are optional files or directories to check. When omitted, the
+    entire project is scanned.
+
+    \b
+    Examples:
+      great-docs check-examples
+      great-docs check-examples reference/
+      great-docs check-examples guide/getting-started.qmd --verbose
+      great-docs check-examples --json-output
+      great-docs check-examples --parallel --jobs 4
+      great-docs check-examples --no-docstrings --timeout 60
+    """
+    from ._build_log import Colors, MultiProgressBar, ProgressBar
+    from ._check_examples import (
+        check_examples as run_check,
+        format_console,
+        format_json,
+        write_log_file,
+    )
+
+    project_root = Path(project_path) if project_path else Path.cwd()
+
+    if not json_output:
+        click.echo("Checking examples...")
+
+    # Progress bar state — populated by progress_setup callback
+    colors = Colors()
+    progress_bar: ProgressBar | MultiProgressBar | None = None
+    section_indices: dict[str, int] = {}
+
+    def _progress_setup(section_totals: dict[str, int]) -> None:
+        nonlocal progress_bar, section_indices
+        if json_output or not section_totals:
+            return
+        labels = list(section_totals.keys())
+        if len(labels) == 1:
+            progress_bar = ProgressBar(
+                label=labels[0],
+                total=section_totals[labels[0]],
+                colors=colors,
+            )
+            section_indices[labels[0]] = 0
+        else:
+            progress_bar = MultiProgressBar(labels=labels, colors=colors)
+            for i, label in enumerate(labels):
+                section_indices[label] = i
+                progress_bar.set_total(i, section_totals[label])
+
+    def _progress_callback(
+        section: str, page_path: str, current: int, total: int
+    ) -> None:
+        if progress_bar is None:
+            return
+        idx = section_indices.get(section, 0)
+        if isinstance(progress_bar, MultiProgressBar):
+            progress_bar.update(idx, current)
+        else:
+            progress_bar.update(current)
+
+    result = run_check(
+        project_root=project_root,
+        paths=paths if paths else None,
+        timeout=timeout,
+        include=include,
+        exclude=exclude,
+        no_docstrings=no_docstrings,
+        docstrings_only=docstrings_only,
+        parallel=parallel,
+        jobs=jobs,
+        progress_callback=_progress_callback if not json_output else None,
+        progress_setup=_progress_setup if not json_output else None,
+    )
+
+    if progress_bar is not None:
+        progress_bar.finish()
+
+    # Check for setup errors (exit code 2)
+    setup_errors = [p for p in result.pages if p.status == "error" and p.path == "(setup)"]
+    if setup_errors:
+        for err in setup_errors:
+            click.echo(f"Error: {err.message}", err=True)
+        sys.exit(2)
+
+    if json_output:
+        click.echo(format_json(result))
+    else:
+        click.echo(format_console(result, verbose=verbose))
+
+        # Write log file
+        resolved_log = Path(log_file) if log_file else project_root / ".great-docs" / "check-examples.log"
+        if write_log_file(result, resolved_log):
+            click.echo(f"Full tracebacks: {resolved_log}")
+
+    if result.cells_failed > 0:
+        sys.exit(1)
+    else:
+        sys.exit(0)
+
+
+cli.add_command(check_examples)
+
+
 @click.command()
 @click.option(
     "--project-path",
