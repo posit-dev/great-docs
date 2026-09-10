@@ -1,5 +1,5 @@
 from great_docs._apiref.inventory import reference_uri, write_inventory
-from great_docs._sphinx_inventory import Inventory, InventoryEntry, decode
+from great_docs._interlinks.sphinx_inventory import Inventory, InventoryEntry, decode
 
 
 def test_write_inventory_writes_an_objects_inv(tmp_path):

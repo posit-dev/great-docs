@@ -2,7 +2,7 @@ import zlib
 
 import pytest
 
-from great_docs._sphinx_inventory import (
+from great_docs._interlinks.sphinx_inventory import (
     ROLE_SYNONYMS,
     Inventory,
     InventoryEntry,

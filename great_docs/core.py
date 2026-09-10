@@ -13419,7 +13419,7 @@ anchor-sections: true
         if isinstance(resources, str):
             resources = [resources]
             project["resources"] = resources
-        from great_docs._sphinx_inventory import INVENTORY_FILENAME
+        from great_docs._interlinks.sphinx_inventory import INVENTORY_FILENAME
 
         if INVENTORY_FILENAME not in resources:
             resources.append(INVENTORY_FILENAME)

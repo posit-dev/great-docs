@@ -18,7 +18,7 @@ from great_docs._lint import (
     run_lint,
 )
 from great_docs._interlinks import Source
-from great_docs._sphinx_inventory import Inventory, InventoryEntry
+from great_docs._interlinks.sphinx_inventory import Inventory, InventoryEntry
 from great_docs._utils import QUARTO_YML_HEADER
 
 

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import griffe as gf
 
-from .._sphinx_inventory import (
+from .._interlinks.sphinx_inventory import (
     Inventory,
     InventoryEntry,
     encode,

@@ -28,7 +28,7 @@ from great_docs._versioning import (
 if TYPE_CHECKING:
     from great_docs._api_diff import ApiSnapshot
     from great_docs._interlinks import AliasClaims
-    from great_docs._sphinx_inventory import InventoryEntry
+    from great_docs._interlinks.sphinx_inventory import InventoryEntry
     from great_docs.config import Config
 
 # ---------------------------------------------------------------------------
@@ -910,7 +910,7 @@ def _retained_entries(dest_dir: Path, snap: ApiSnapshot) -> tuple[InventoryEntry
     """
     import zlib
 
-    from ._sphinx_inventory import INVENTORY_FILENAME, decode
+    from ._interlinks.sphinx_inventory import INVENTORY_FILENAME, decode
 
     try:
         published = decode((dest_dir / INVENTORY_FILENAME).read_bytes())
@@ -953,7 +953,7 @@ def _snapshot_exceptions(snap: ApiSnapshot) -> set[str]:
     :
         Stems of the exception classes.
     """
-    from ._sphinx_inventory import is_builtin_exception
+    from ._interlinks.sphinx_inventory import is_builtin_exception
 
     # A base is written as it was spelled at the point of use, which is
     # rarely the stem the snapshot files the class under.
@@ -1008,7 +1008,7 @@ def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config)
     """
     from ._apiref.inventory import reference_uri
     from ._interlinks import build_project_index
-    from ._sphinx_inventory import (
+    from ._interlinks.sphinx_inventory import (
         INVENTORY_FILENAME,
         Inventory,
         InventoryEntry,

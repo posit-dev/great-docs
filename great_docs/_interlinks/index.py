@@ -10,8 +10,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 from urllib.parse import urljoin
 
-from .._sphinx_inventory import Inventory
 from .sources import Source
+from .sphinx_inventory import Inventory
 
 if TYPE_CHECKING:
     from .._apiref.inventory import InventoryItem
@@ -22,23 +22,38 @@ class AliasResolution:
     """Resolved short names and names claimed by multiple objects"""
 
     kept: dict[str, str] = field(default_factory=dict)
+    """Unambiguous short names mapped to their full names"""
+
     dropped: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    """Ambiguous short names mapped to every full name that claims them"""
 
 
 @dataclass(frozen=True)
 class AliasClaims:
-    """The short names a project's documented objects claim, and the names they may not shadow"""
+    """
+    Short-name claims for one project's documented objects
+
+    References may use a shortened object name. For example,
+    `mypkg.store.Cache` claims `Cache`, while its `flush` method claims `flush`
+    and `Cache.flush`. Resolution keeps a short-name claim only when it is
+    unique and does not shadow a published full name.
+    """
 
     claimed: tuple[tuple[str, str], ...] = ()
-    """`(short name, full name)` pairs"""
+    """A `(short name, full name)` pair for each claim"""
 
     published: frozenset[str] = frozenset()
-    """Full names the project's own inventory publishes"""
+    """
+    Full names the project's own inventory publishes
+
+    A published full name always resolves to itself, even when another object
+    claims the same spelling as a short name.
+    """
 
     @classmethod
     def make(cls, items: Iterable[InventoryItem]) -> AliasClaims:
         """
-        Build the claims from the objects a reference publishes
+        Collect short-name claims from documented objects
 
         Parameters
         ----------

@@ -1,5 +1,5 @@
 """
-Build the lookup index used to resolve inter-project references
+Build reference indexes from local and external inventories
 """
 
 from __future__ import annotations
@@ -13,8 +13,7 @@ from .index import (
     resolve_aliases,
     root_modules,
 )
-from .lua import write_index
-from .project import build_project_index
+from .project import build_project_index, write_index
 from .sources import LoadedSources, Source, load_source, load_sources, sources_from_config
 
 __all__ = (

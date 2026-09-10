@@ -7795,7 +7795,7 @@ def test_DED_interlinks_prose_hrefs_valid():
 @pytest.mark.dedicated
 def test_DED_interlinks_prose_publishes_its_inventory():
     """gdtest_interlinks: the site publishes objects.inv at its root."""
-    from great_docs._sphinx_inventory import decode
+    from great_docs._interlinks.sphinx_inventory import decode
 
     pkg = "gdtest_interlinks"
     if not _has_rendered_site(pkg):

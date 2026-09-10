@@ -17,7 +17,7 @@ from great_docs._interlinks import (
     write_index,
 )
 from great_docs._interlinks.sources import InventoryCache
-from great_docs._sphinx_inventory import Inventory, InventoryEntry, encode
+from great_docs._interlinks.sphinx_inventory import Inventory, InventoryEntry, encode
 from great_docs.config import Config
 
 

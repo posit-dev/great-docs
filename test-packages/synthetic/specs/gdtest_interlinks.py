@@ -21,7 +21,7 @@ from pathlib import Path
 
 from great_docs._interlinks import Source
 from great_docs._interlinks.sources import InventoryCache
-from great_docs._sphinx_inventory import Inventory, InventoryEntry, encode
+from great_docs._interlinks.sphinx_inventory import Inventory, InventoryEntry, encode
 
 _EXTDEMO_URL = "https://extdemo.example/docs/"
 

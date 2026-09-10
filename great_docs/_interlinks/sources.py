@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 import requests
 
-from .._sphinx_inventory import INVENTORY_FILENAME, Inventory, decode
+from .sphinx_inventory import INVENTORY_FILENAME, Inventory, decode
 
 if TYPE_CHECKING:
     from ..config import Config

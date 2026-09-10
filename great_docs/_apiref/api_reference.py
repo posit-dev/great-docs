@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from yaml12 import read_yaml
 
-from .._sphinx_inventory import INVENTORY_FILENAME
+from .._interlinks.sphinx_inventory import INVENTORY_FILENAME
 from ._settings import Settings, active_settings
 from .content import Link, Page
 from .inventory import create_inventory, write_inventory

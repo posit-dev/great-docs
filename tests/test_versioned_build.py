@@ -2533,7 +2533,7 @@ class TestRebuildApiFromSnapshotEdge:
 class TestRebuildApiFromSnapshotInventory:
     def test_config_rebuilds_the_inventory_from_the_snapshot(self, tmp_path: Path):
         """The published inventory must match this version's own snapshot, not the live build's."""
-        from great_docs._sphinx_inventory import decode
+        from great_docs._interlinks.sphinx_inventory import decode
         from great_docs.config import Config
 
         snap_path = tmp_path / "snap.json"
@@ -2588,7 +2588,7 @@ class TestRebuildApiFromSnapshotInventory:
 
     def test_a_module_level_constant_is_published_as_data(self, tmp_path: Path):
         """The snapshot path uses the same role rules as the live build."""
-        from great_docs._sphinx_inventory import INVENTORY_FILENAME, decode
+        from great_docs._interlinks.sphinx_inventory import INVENTORY_FILENAME, decode
         from great_docs.config import Config
 
         snap = ApiSnapshot(
@@ -2679,7 +2679,7 @@ class TestRebuildApiFromSnapshotInventory:
     def test_a_page_a_shallow_snapshot_retains_stays_published(self, tmp_path: Path):
         """Publish a member page retained by shallow-snapshot pruning"""
         from great_docs._apiref.inventory import reference_uri
-        from great_docs._sphinx_inventory import (
+        from great_docs._interlinks.sphinx_inventory import (
             INVENTORY_FILENAME,
             Inventory,
             InventoryEntry,
@@ -2748,7 +2748,7 @@ class TestRebuildApiFromSnapshotInventory:
         cannot justify retaining live-inventory entries.
         """
         from great_docs._apiref.inventory import reference_uri
-        from great_docs._sphinx_inventory import (
+        from great_docs._interlinks.sphinx_inventory import (
             INVENTORY_FILENAME,
             Inventory,
             InventoryEntry,
@@ -2822,7 +2822,7 @@ class TestRebuildApiFromSnapshotInventory:
 
     def test_an_exception_class_is_published_as_an_exception(self, tmp_path: Path):
         """A version publishes the roles the live build publishes, exceptions included"""
-        from great_docs._sphinx_inventory import INVENTORY_FILENAME, decode
+        from great_docs._interlinks.sphinx_inventory import INVENTORY_FILENAME, decode
         from great_docs.config import Config
 
         snap = ApiSnapshot(
@@ -2852,7 +2852,7 @@ class TestRebuildApiFromSnapshotInventory:
 
     def test_a_re_exported_object_keeps_its_short_name(self, tmp_path: Path):
         """Keep a re-export's short name with its public entry"""
-        from great_docs._sphinx_inventory import (
+        from great_docs._interlinks.sphinx_inventory import (
             INVENTORY_FILENAME,
             Inventory,
             InventoryEntry,
