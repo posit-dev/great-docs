@@ -1848,6 +1848,35 @@ class TestNavbarOrder:
         assert cfg.navbar_order == ["Reference", "Guide", "Changelog"]
 
 
+# ref_section_order
+
+
+class TestRefSectionOrder:
+    def test_default_none(self, tmp_path):
+        assert Config(tmp_path).ref_section_order is None
+
+    def test_valid_list(self, tmp_path):
+        cfg = _make_config(tmp_path, "ref_section_order:\n  - cli\n  - api\n  - mcp\n")
+        assert cfg.ref_section_order == ["cli", "api", "mcp"]
+
+    def test_filters_invalid_values(self, tmp_path):
+        cfg = _make_config(tmp_path, "ref_section_order:\n  - cli\n  - bogus\n  - api\n")
+        assert cfg.ref_section_order == ["cli", "api"]
+
+    def test_all_invalid_returns_none(self, tmp_path):
+        cfg = _make_config(tmp_path, "ref_section_order:\n  - bogus\n  - nope\n")
+        assert cfg.ref_section_order is None
+
+    def test_non_list_returns_none(self, tmp_path):
+        cfg = _make_config(tmp_path, "ref_section_order: cli\n")
+        assert cfg.ref_section_order is None
+
+    def test_key_missing_returns_none(self, tmp_path):
+        cfg = Config(tmp_path)
+        del cfg._config["ref_section_order"]
+        assert cfg.ref_section_order is None
+
+
 # scale_to_fit branches
 
 
