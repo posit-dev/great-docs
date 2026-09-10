@@ -156,3 +156,39 @@ def test_the_prose_walk_reads_a_submodule_qualified_docstring(tmp_path):
     prose = _gather_prose([_fake_item("demo.store.Cache", "See [](`Cache`).")], tmp_path)
 
     assert prose["demo.store.Cache"] == "See [](`Cache`)."
+
+
+def test_a_reference_in_an_indented_code_block_is_not_reported():
+    """Ignore an indented example while still reporting the prose around it"""
+    result = LintResult()
+
+    _check_ambiguous_references(
+        {"Cache": ("demo.net.Cache", "demo.store.Cache")},
+        {
+            "guide.qmd": (
+                "Write it like this:\n"
+                "\n"
+                "    See [](`Cache`) for details.\n"
+                "\n"
+                "        A deeper line of the same example, [](`Cache`) again.\n"
+                "\n"
+                "And [](`Cache`) here is a reference the page really makes.\n"
+            )
+        },
+        result,
+    )
+
+    assert len(result.issues) == 1
+
+
+def test_a_reference_in_an_indented_list_continuation_is_reported():
+    """Indented prose under a list item is prose, not an example"""
+    result = LintResult()
+
+    _check_ambiguous_references(
+        {"Cache": ("demo.net.Cache", "demo.store.Cache")},
+        {"guide.qmd": "- The first item\n\n      goes on about [](`Cache`) at length.\n"},
+        result,
+    )
+
+    assert len(result.issues) == 1

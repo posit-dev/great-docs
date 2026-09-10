@@ -425,9 +425,61 @@ _CODE_SPAN_RE = re.compile(r"(`{2,})(?:(?!\1).)*?\1", re.DOTALL)
 """A multi-backtick span that Markdown renders as literal text"""
 
 
+_LIST_MARKER_RE = re.compile(r"(?:[-*+]|\d+[.)])\s")
+"""The start of a Markdown list item"""
+
+
+def _indented_code(lines: list[str]) -> list[bool]:
+    """
+    Mark the lines Markdown renders as an indented code block
+
+    Four spaces of indentation after a blank line opens a code block, and
+    further indented or blank lines continue it. The exception is indentation
+    under a list item, which continues the item's own prose, so a reference
+    written there is one the page really makes.
+
+    Parameters
+    ----------
+    lines
+        Markdown source lines, with any fenced block already removed.
+
+    Returns
+    -------
+    :
+        Whether each line is part of an indented code block.
+    """
+    code = [False] * len(lines)
+    in_code = False
+    after_blank = True
+    in_list = False
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            after_blank = True
+            continue
+
+        indent = len(line) - len(line.lstrip(" "))
+        if in_code:
+            if indent >= 4:
+                code[i] = True
+                after_blank = False
+                continue
+            in_code = False
+
+        if indent >= 4 and after_blank and not in_list:
+            in_code = True
+            code[i] = True
+        elif indent < 4:
+            in_list = _LIST_MARKER_RE.match(stripped) is not None
+        after_blank = False
+
+    return code
+
+
 def _strip_code(text: str) -> str:
     """
-    Remove fenced code blocks and multi-backtick code spans from Markdown
+    Remove code blocks and multi-backtick code spans from Markdown
 
     Markdown renders references inside these constructs as example text. A
     single-backtick span cannot contain the backticks around an interlink
@@ -441,11 +493,14 @@ def _strip_code(text: str) -> str:
     Returns
     -------
     :
-        The text with fenced and multi-backtick spans removed.
+        The text with fenced blocks, indented blocks and multi-backtick spans
+        removed.
     """
     lines, fenced = fenced_lines(text)
-    unfenced = "\n".join(line for line, is_fenced in zip(lines, fenced) if not is_fenced)
-    return _CODE_SPAN_RE.sub("", unfenced)
+    unfenced = [line for line, is_fenced in zip(lines, fenced) if not is_fenced]
+    indented = _indented_code(unfenced)
+    prose = "\n".join(line for line, is_code in zip(unfenced, indented) if not is_code)
+    return _CODE_SPAN_RE.sub("", prose)
 
 
 def _gather_prose(items: list[InventoryItem], project_root: Path) -> dict[str, str]:
