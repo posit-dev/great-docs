@@ -419,6 +419,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_mcp",  # 208
     # 209: Build-time D2 diagrams (separate light/dark SVGs)
     "gdtest_d2_diagrams",  # 209
+    # 210: Custom reference section ordering (CLI before API)
+    "gdtest_ref_section_order",  # 210
 ]
 
 
@@ -2336,6 +2338,12 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "container holding two `<img>` elements — a light-theme and a dark-theme SVG "
         "swapped via `.light-mode-only` / `.dark-mode-only` — with the generated "
         "`d2-<hash>-{light,dark}.svg` files copied into the site."
+    ),
+    "gdtest_ref_section_order": (
+        "CLI-first package with ref_section_order: [cli, api, mcp] in config. "
+        "The reference switcher tabs should appear CLI-first (cli,api) instead "
+        "of the default (api,cli). The data-gd-ref-sections body attribute "
+        "should be 'cli,api' since there is no MCP server."
     ),
 }
 
