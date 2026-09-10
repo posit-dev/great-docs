@@ -143,6 +143,7 @@ __marimo__/
 /*.md
 !README.md
 !ROADMAP.md
+!AGENTS.md
 
 # Great Docs build directory (ephemeral, do not commit)
 /great-docs/
