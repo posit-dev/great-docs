@@ -9316,10 +9316,15 @@ class GreatDocs:
         mode resolving the reference performs a real import of the target
         package.
 
+        Resolve the reference under the configured import name. It can differ
+        from the project name with dashes replaced. Projects may configure
+        that name explicitly. Otherwise, the project would produce no
+        documented objects.
+
         Parameters
         ----------
         package_name
-            The package name (may contain dashes).
+            The project name, which need not be the module name.
 
         Yields
         ------
@@ -9333,7 +9338,7 @@ class GreatDocs:
         added_paths: list[str] = []
         cached_modules: dict[str, ModuleType] = {}
         modules_evicted = False
-        importable_name = self._normalize_package_name(package_name)
+        importable_name = self._resolve_importable_name(package_name)
 
         try:
             # Suppress diagnostic prints from the resolution/filtering pipeline — this is a
