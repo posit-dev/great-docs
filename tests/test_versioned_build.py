@@ -17,12 +17,14 @@ from great_docs._versioned_build import (
     _prune_cli_pages,
     _prune_reference_index,
     _prune_sidebar_contents,
+    _published_claims,
     _rebuild_api_from_snapshot,
     _redirect_page,
     _rewrite_quarto_yml_for_version,
     _snapshot_cache_path,
     _validate_git_ref_is_tag,
     _version_build_dir,
+    _write_snapshot_inventory,
     assemble_site,
     create_version_aliases,
     expand_version_badges,
@@ -2521,6 +2523,380 @@ class TestRebuildApiFromSnapshotEdge:
         index_content = (ref_dir / "index.qmd").read_text()
         assert "kept" in index_content
         assert "removed" not in index_content
+
+
+# ---------------------------------------------------------------------------
+# _rebuild_api_from_snapshot — rebuilding the inventory and interlinks index
+# ---------------------------------------------------------------------------
+
+
+class TestRebuildApiFromSnapshotInventory:
+    def test_config_rebuilds_the_inventory_from_the_snapshot(self, tmp_path: Path):
+        """The published inventory must match this version's own snapshot, not the live build's."""
+        from great_docs._interlinks.sphinx_inventory import decode
+        from great_docs.config import Config
+
+        snap_path = tmp_path / "snap.json"
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="pkg",
+            symbols={
+                "Pipeline": SymbolInfo(name="Pipeline", kind="class"),
+                "Pipeline.run": SymbolInfo(name="Pipeline.run", kind="function"),
+                "removed_func": SymbolInfo(name="removed_func", kind="function"),
+            },
+        )
+        snap.save(snap_path)
+
+        dest_dir = tmp_path / "build"
+        dest_dir.mkdir()
+        # A stale inventory from the live build, advertising an object this
+        # version never documented and missing one it does.
+        (dest_dir / "objects.inv").write_bytes(b"stale bytes from the live build")
+
+        config = Config(tmp_path)
+        entry = _make_entry("0.2")
+        _rebuild_api_from_snapshot(dest_dir, snap_path, entry, config)
+
+        inv = decode((dest_dir / "objects.inv").read_bytes())
+        by_name = {e.name: e for e in inv.entries}
+
+        assert by_name["pkg.Pipeline"].role == "class"
+        assert by_name["pkg.Pipeline.run"].role == "method"
+        assert "pkg.removed_func" in by_name
+        assert (dest_dir / "_inv" / "index.lua").exists()
+
+    def test_no_config_leaves_the_inventory_untouched(self, tmp_path: Path):
+        """Without a config, the copied (stale) inventory is left as-is."""
+        snap_path = tmp_path / "snap.json"
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="pkg",
+            symbols={"my_func": SymbolInfo(name="my_func", kind="function")},
+        )
+        snap.save(snap_path)
+
+        dest_dir = tmp_path / "build"
+        dest_dir.mkdir()
+        (dest_dir / "objects.inv").write_bytes(b"stale bytes from the live build")
+
+        entry = _make_entry("0.2")
+        _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+
+        assert (dest_dir / "objects.inv").read_bytes() == b"stale bytes from the live build"
+        assert not (dest_dir / "_inv").exists()
+
+    def test_a_module_level_constant_is_published_as_data(self, tmp_path: Path):
+        """The snapshot path uses the same role rules as the live build."""
+        from great_docs._interlinks.sphinx_inventory import INVENTORY_FILENAME, decode
+        from great_docs.config import Config
+
+        snap = ApiSnapshot(
+            version="1.0",
+            package_name="demo",
+            symbols={
+                "Cache": SymbolInfo(name="Cache", kind="class"),
+                "Cache.flush": SymbolInfo(name="Cache.flush", kind="function"),
+                "MAX_SIZE": SymbolInfo(name="MAX_SIZE", kind="attribute"),
+            },
+        )
+        dest_dir = tmp_path / "build"
+        dest_dir.mkdir()
+
+        _write_snapshot_inventory(dest_dir, snap, Config(tmp_path))
+
+        inv = decode((dest_dir / INVENTORY_FILENAME).read_bytes())
+        roles = {e.name: e.role for e in inv.entries}
+
+        assert roles["demo.Cache"] == "class"
+        assert roles["demo.Cache.flush"] == "method"
+        assert roles["demo.MAX_SIZE"] == "data"
+
+    def test_a_snapshot_version_resolves_its_own_short_names(self):
+        """A historical version's prose must link `[](`Cache`)` the way the live build does."""
+        snap = ApiSnapshot(
+            version="1.0",
+            package_name="demo",
+            symbols={
+                "Cache": SymbolInfo(name="Cache", kind="class"),
+                "Cache.flush": SymbolInfo(name="Cache.flush", kind="function"),
+                "MAX_SIZE": SymbolInfo(name="MAX_SIZE", kind="attribute"),
+            },
+        )
+
+        claims = _published_claims(snap, snap.symbols)
+
+        assert ("Cache", "demo.Cache") in claims.claimed
+        assert ("flush", "demo.Cache.flush") in claims.claimed
+        assert ("Cache.flush", "demo.Cache.flush") in claims.claimed
+        assert ("MAX_SIZE", "demo.MAX_SIZE") in claims.claimed
+        assert claims.published == frozenset({"demo.Cache", "demo.Cache.flush", "demo.MAX_SIZE"})
+
+    def test_a_submodule_qualified_member_claims_its_class_qualified_name(self):
+        """The live build claims `Cache.flush` for a member, so a snapshot must claim it too."""
+        snap = ApiSnapshot(
+            version="1.0",
+            package_name="demo",
+            symbols={
+                "store.Cache": SymbolInfo(name="store.Cache", kind="class"),
+                "store.Cache.flush": SymbolInfo(name="store.Cache.flush", kind="function"),
+                "store.helper": SymbolInfo(name="store.helper", kind="function"),
+            },
+        )
+
+        claimed = set(_published_claims(snap, snap.symbols).claimed)
+
+        assert ("Cache", "demo.store.Cache") in claimed
+        assert ("store.Cache", "demo.store.Cache") in claimed
+        assert ("flush", "demo.store.Cache.flush") in claimed
+        assert ("Cache.flush", "demo.store.Cache.flush") in claimed
+        assert ("store.Cache.flush", "demo.store.Cache.flush") in claimed
+        # `store` is a module, not a class, so its function claims no
+        # module-qualified form the live build would not claim either.
+        assert ("store.helper", "demo.store.helper") in claimed
+        assert ("helper", "demo.store.helper") in claimed
+
+    def test_a_snapshot_version_writes_an_index_that_resolves_a_short_name(self, tmp_path: Path):
+        """The written interlinks index must resolve a short name to this version's own page."""
+        from great_docs.config import Config
+
+        snap = ApiSnapshot(
+            version="1.0",
+            package_name="demo",
+            symbols={"Pipeline": SymbolInfo(name="Pipeline", kind="class")},
+        )
+        dest_dir = tmp_path / "build"
+        dest_dir.mkdir()
+
+        _write_snapshot_inventory(dest_dir, snap, Config(tmp_path))
+
+        lua = (dest_dir / "_inv" / "index.lua").read_text(encoding="utf-8")
+
+        # The bare short name, not just the full name `demo.Pipeline`, must
+        # resolve — that is the defect this task closes.
+        assert '["Pipeline"] = {{uri = "/reference/Pipeline.html"' in lua
+
+    def test_a_page_a_shallow_snapshot_retains_stays_published(self, tmp_path: Path):
+        """Publish a member page retained by shallow-snapshot pruning"""
+        from great_docs._apiref.inventory import reference_uri
+        from great_docs._interlinks.sphinx_inventory import (
+            INVENTORY_FILENAME,
+            Inventory,
+            InventoryEntry,
+            decode,
+            encode,
+        )
+        from great_docs.config import Config
+
+        snap_path = tmp_path / "snap.json"
+        # The compatibility fallback records only top-level exports when it
+        # cannot resolve the documented set.
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="demo",
+            symbols={"Cache": SymbolInfo(name="Cache", kind="class")},
+        )
+        snap.save(snap_path)
+
+        dest_dir = tmp_path / "build"
+        ref_dir = dest_dir / "reference"
+        ref_dir.mkdir(parents=True)
+        for stem in ("Cache", "Cache.flush", "index"):
+            (ref_dir / f"{stem}.qmd").write_text(f"# {stem} {{.doc-heading}}\n", encoding="utf-8")
+        live = Inventory(
+            project="demo",
+            version="0.3",
+            entries=(
+                InventoryEntry(
+                    "demo.Cache", "py", "class", 1, reference_uri("reference", "Cache"), "-"
+                ),
+                InventoryEntry(
+                    "demo.Cache.flush",
+                    "py",
+                    "method",
+                    1,
+                    reference_uri("reference", "Cache.flush"),
+                    "-",
+                ),
+                InventoryEntry(
+                    "demo.gone", "py", "function", 1, reference_uri("reference", "gone"), "-"
+                ),
+            ),
+        )
+        (dest_dir / INVENTORY_FILENAME).write_bytes(encode(live))
+
+        _rebuild_api_from_snapshot(dest_dir, snap_path, _make_entry("0.2"), Config(tmp_path))
+
+        inv = decode((dest_dir / INVENTORY_FILENAME).read_bytes())
+        by_name = {e.name: e for e in inv.entries}
+
+        assert (ref_dir / "Cache.flush.qmd").exists()
+        assert by_name["demo.Cache.flush"].role == "method"
+        # Pruning removes the page for an absent name, so its entry is removed.
+        assert "demo.gone" not in by_name
+
+        index_lua = (dest_dir / "_inv" / "index.lua").read_text(encoding="utf-8")
+        assert '["Cache.flush"]' in index_lua
+        assert '["flush"]' in index_lua
+
+    def test_a_page_outside_the_pruned_directory_is_not_retained(self, tmp_path: Path):
+        """
+        Exclude pages outside the snapshot-pruned directory
+
+        Snapshot pruning assesses only `reference/`. A custom
+        `api-reference:` directory remains untouched, so its existing pages
+        cannot justify retaining live-inventory entries.
+        """
+        from great_docs._apiref.inventory import reference_uri
+        from great_docs._interlinks.sphinx_inventory import (
+            INVENTORY_FILENAME,
+            Inventory,
+            InventoryEntry,
+            decode,
+            encode,
+        )
+        from great_docs.config import Config
+
+        snap_path = tmp_path / "snap.json"
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="demo",
+            symbols={"Cache": SymbolInfo(name="Cache", kind="class")},
+        )
+        snap.save(snap_path)
+
+        dest_dir = tmp_path / "build"
+        ref_dir = dest_dir / "reference"
+        ref_dir.mkdir(parents=True)
+        for stem in ("Cache", "Cache.flush", "index"):
+            (ref_dir / f"{stem}.qmd").write_text(f"# {stem} {{.doc-heading}}\n", encoding="utf-8")
+        other_dir = dest_dir / "other"
+        other_dir.mkdir()
+        (other_dir / "Widget.qmd").write_text("# Widget {.doc-heading}\n", encoding="utf-8")
+
+        live = Inventory(
+            project="demo",
+            version="0.3",
+            entries=(
+                InventoryEntry(
+                    "demo.Cache", "py", "class", 1, reference_uri("reference", "Cache"), "-"
+                ),
+                InventoryEntry(
+                    "demo.Cache.flush",
+                    "py",
+                    "method",
+                    1,
+                    reference_uri("reference", "Cache.flush"),
+                    "-",
+                ),
+                InventoryEntry(
+                    "demo.Widget", "py", "class", 1, reference_uri("other", "Widget"), "-"
+                ),
+            ),
+        )
+        (dest_dir / INVENTORY_FILENAME).write_bytes(encode(live))
+
+        _rebuild_api_from_snapshot(dest_dir, snap_path, _make_entry("0.2"), Config(tmp_path))
+
+        inv = decode((dest_dir / INVENTORY_FILENAME).read_bytes())
+        by_name = {e.name: e for e in inv.entries}
+
+        # Snapshot pruning reviewed this member page under `reference/`.
+        assert "demo.Cache.flush" in by_name
+        # Snapshot pruning never reviewed the `other/` page.
+        assert "demo.Widget" not in by_name
+
+    def test_a_retained_page_claims_the_short_names_the_live_build_claims(self):
+        """Claim short names for a member page retained by pruning"""
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="demo",
+            symbols={"Cache": SymbolInfo(name="Cache", kind="class")},
+        )
+
+        claims = _published_claims(snap, ["Cache", "Cache.flush"])
+
+        assert ("flush", "demo.Cache.flush") in claims.claimed
+        assert ("Cache.flush", "demo.Cache.flush") in claims.claimed
+        assert claims.published == frozenset({"demo.Cache", "demo.Cache.flush"})
+
+    def test_an_exception_class_is_published_as_an_exception(self, tmp_path: Path):
+        """A version publishes the roles the live build publishes, exceptions included"""
+        from great_docs._interlinks.sphinx_inventory import INVENTORY_FILENAME, decode
+        from great_docs.config import Config
+
+        snap = ApiSnapshot(
+            version="1.0",
+            package_name="demo",
+            symbols={
+                "MyError": SymbolInfo(name="MyError", kind="class", bases=["Exception"]),
+                # Deriving from another class the snapshot holds.
+                "Nested": SymbolInfo(name="Nested", kind="class", bases=["MyError"]),
+                # Deriving from a builtin that is not `Exception` itself.
+                "ViaBuiltin": SymbolInfo(name="ViaBuiltin", kind="class", bases=["ValueError"]),
+                "Plain": SymbolInfo(name="Plain", kind="class", bases=["object"]),
+            },
+        )
+        dest_dir = tmp_path / "build"
+        dest_dir.mkdir()
+
+        _write_snapshot_inventory(dest_dir, snap, Config(tmp_path))
+
+        inv = decode((dest_dir / INVENTORY_FILENAME).read_bytes())
+        roles = {e.name: e.role for e in inv.entries}
+
+        assert roles["demo.MyError"] == "exception"
+        assert roles["demo.Nested"] == "exception"
+        assert roles["demo.ViaBuiltin"] == "exception"
+        assert roles["demo.Plain"] == "class"
+
+    def test_a_re_exported_object_keeps_its_short_name(self, tmp_path: Path):
+        """Keep a re-export's short name with its public entry"""
+        from great_docs._interlinks.sphinx_inventory import (
+            INVENTORY_FILENAME,
+            Inventory,
+            InventoryEntry,
+            decode,
+            encode,
+        )
+        from great_docs.config import Config
+
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="demo",
+            symbols={"Cache": SymbolInfo(name="Cache", kind="class")},
+        )
+        dest_dir = tmp_path / "build"
+        ref_dir = dest_dir / "reference"
+        ref_dir.mkdir(parents=True)
+        (ref_dir / "Cache.qmd").write_text("# Cache {.doc-heading}\n", encoding="utf-8")
+
+        # The live build publishes the canonical path beside the public name
+        # for the same page, with the public name as its display name.
+        live = Inventory(
+            project="demo",
+            version="0.3",
+            entries=(
+                InventoryEntry("demo.Cache", "py", "class", 1, "reference/Cache.html", "-"),
+                InventoryEntry(
+                    "demo._impl.Cache", "py", "class", 1, "reference/Cache.html", "demo.Cache"
+                ),
+            ),
+        )
+        (dest_dir / INVENTORY_FILENAME).write_bytes(encode(live))
+
+        _write_snapshot_inventory(dest_dir, snap, Config(tmp_path))
+
+        inv = decode((dest_dir / INVENTORY_FILENAME).read_bytes())
+        lua = (dest_dir / "_inv" / "index.lua").read_text(encoding="utf-8")
+
+        # Both entries continue to address the same page.
+        assert {"demo.Cache", "demo._impl.Cache"} <= {e.name for e in inv.entries}
+        # Only the public entry claims `Cache`, so the short name resolves.
+        assert '["Cache"] = true' not in lua
+        assert '["Cache"] = {{uri = "/reference/Cache.html"' in lua
+        # The canonical path contributes no additional short name.
+        assert '["_impl.Cache"]' not in lua
 
 
 # ---------------------------------------------------------------------------

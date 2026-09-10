@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from ._visitor import NodeTransformer, NodeVisitor, ctx_node
 from .content import Doc, Page, Section
-from .inventory import InventoryItem
+from .inventory import InventoryItem, reference_uri
 
 
 @dataclass
@@ -44,13 +44,28 @@ class _ManifestBuilder(NodeVisitor):
     def _exit_doc(self, el: Doc) -> Doc:
         p_el = self.enclosing_page()
 
-        uri = f"{self.base_dir}/{p_el.path}.html#{el.anchor}"
+        uri = reference_uri(self.base_dir, p_el.path, el.anchor)
 
         obj = el.obj
         name_path = obj.path
         canonical_path = obj.canonical_path
 
-        self.items.append(InventoryItem(name=name_path, obj=obj, uri=uri, dispname=None))
+        # Bare member names often collide across classes (`flush`, `close`), so
+        # claim `Class.member` as a shorter unambiguous form.
+        aliases = (el.name, obj.name)
+        parent = obj.parent
+        if parent is not None and parent.is_class:
+            aliases = (*aliases, f"{parent.name}.{obj.name}")
+
+        self.items.append(
+            InventoryItem(
+                name=name_path,
+                obj=obj,
+                uri=uri,
+                dispname=None,
+                aliases=aliases,
+            )
+        )
 
         if name_path != canonical_path:
             self.items.append(

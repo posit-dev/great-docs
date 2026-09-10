@@ -7,9 +7,10 @@ import re as _re
 import shutil
 import subprocess
 import threading
+from collections.abc import Iterable
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from great_docs._subprocess import TEXT_MODE_KWARGS
 from great_docs._utils import QUARTO_YML_HEADER, is_great_docs_build_dir
@@ -23,6 +24,12 @@ from great_docs._versioning import (
     parse_versions_config,
     process_version_fences,
 )
+
+if TYPE_CHECKING:
+    from great_docs._api_diff import ApiSnapshot
+    from great_docs._interlinks import AliasClaims
+    from great_docs._interlinks.sphinx_inventory import InventoryEntry
+    from great_docs.config import Config
 
 # ---------------------------------------------------------------------------
 # Stage 1: Preprocess — create version-specific build directories
@@ -478,6 +485,7 @@ def preprocess_version(
     project_root: Path | None = None,
     section_configs: list[dict] | None = None,
     badge_expiry: "BadgeExpiry | None" = None,
+    config: Config | None = None,
 ) -> list[str]:
     """
     Prepare the documentation source for one version
@@ -488,8 +496,10 @@ def preprocess_version(
     2. Remove sections whose configuration excludes the version.
     3. Process version fences in the remaining `.qmd` files.
     4. Expand version badges and callouts.
-    5. Generate API reference pages from a configured snapshot.
-    6. Generate API reference pages from a configured Git tag.
+    5. Generate API reference pages from a configured snapshot, and rebuild
+       the inventory and interlinks index to match them.
+    6. Generate API reference pages from a configured Git tag, and rebuild
+       the inventory and interlinks index to match them.
 
     Parameters
     ----------
@@ -508,6 +518,10 @@ def preprocess_version(
         Section configuration entries from `great-docs.yml`.
     badge_expiry
         Default expiry policy for `new` badges.
+    config
+        Project configuration, forwarded to steps 5 and 6 for rebuilding the
+        inventory and interlinks index. Skipped for a version that keeps the
+        live inventory when omitted.
 
     Returns
     -------
@@ -578,12 +592,12 @@ def preprocess_version(
     if entry.api_snapshot and project_root:
         snap_path = project_root / entry.api_snapshot
         if snap_path.exists():
-            api_pages = _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+            api_pages = _rebuild_api_from_snapshot(dest_dir, snap_path, entry, config)
             included_pages.extend(api_pages)
 
     # 4. Strategy B: git-ref introspection with caching
     elif entry.git_ref and project_root:
-        api_pages = _rebuild_api_from_git_ref(dest_dir, project_root, entry)
+        api_pages = _rebuild_api_from_git_ref(dest_dir, project_root, entry, config)
         included_pages.extend(api_pages)
 
     # 5. Prune CLI pages that don't exist at this version
@@ -664,6 +678,7 @@ def _rebuild_api_from_snapshot(
     dest_dir: Path,
     snapshot_path: Path,
     entry: VersionEntry,
+    config: Config | None = None,
 ) -> list[str]:
     """
     Rebuild API reference pages from a snapshot, pruning pages not in the snapshot.
@@ -671,6 +686,8 @@ def _rebuild_api_from_snapshot(
     When the source tree already contains reference pages (e.g. from the main build), pages for
     symbols in the snapshot are regenerated from the snapshot data and pages for symbols *not* in
     the snapshot are removed. When no reference directory exists, pages are generated from scratch.
+    When *config* is given, the version's inventory and interlinks index are rebuilt from the same
+    snapshot afterwards, so they describe the pages this call just produced.
 
     Parameters
     ----------
@@ -680,6 +697,9 @@ def _rebuild_api_from_snapshot(
         Path to the snapshot JSON file.
     entry
         The version being built.
+    config
+        Project configuration, for rebuilding the inventory and interlinks
+        index. Skipped when omitted.
 
     Returns
     -------
@@ -808,7 +828,230 @@ def _rebuild_api_from_snapshot(
     # --- Update _quarto.yml sidebar to remove missing reference entries ---
     _prune_quarto_sidebar(dest_dir, "reference", snapshot_symbols)
 
+    if config is not None:
+        _write_snapshot_inventory(dest_dir, snap, config)
+
     return generated
+
+
+def _published_claims(snap: ApiSnapshot, stems: Iterable[str]) -> AliasClaims:
+    """
+    Build short-name claims for a version inventory
+
+    The live build reads claims from its resolved API reference.
+    A historical version cannot run that resolution. Derive claims from its
+    inventory stems. Each stem claims its bare name. A member of a recorded
+    class also claims its class-qualified name.
+
+    Parameters
+    ----------
+    snap
+        The snapshot that identifies class owners.
+    stems
+        Dotted names of all objects in the version's
+        inventory.
+
+    Returns
+    -------
+    :
+        Claims accepted by
+        `build_project_index`.
+    """
+    from ._interlinks import AliasClaims
+
+    claimed: list[tuple[str, str]] = []
+    published: list[str] = []
+    for stem in stems:
+        full = f"{snap.package_name}.{stem}"
+        published.append(full)
+        claimed.append((stem, full))
+        owner, _, bare = stem.rpartition(".")
+        if not owner:
+            continue
+        claimed.append((bare, full))
+        owner_bare = owner.rpartition(".")[2]
+        owner_sym = snap.symbols.get(owner)
+        if owner_bare != owner and owner_sym is not None and owner_sym.kind == "class":
+            claimed.append((f"{owner_bare}.{bare}", full))
+    return AliasClaims(claimed=tuple(claimed), published=frozenset(published))
+
+
+def _retained_entries(dest_dir: Path, snap: ApiSnapshot) -> tuple[InventoryEntry, ...]:
+    """
+    Return inventory entries for reference pages retained by pruning
+
+    A shallow snapshot can name only top-level exports. Pruning can then retain
+    a member page such as `Cache.flush.qmd`, which the snapshot cannot assess.
+    Rebuilding from the snapshot alone would omit that page's inventory entry
+    and make its references unlinked. The live build's outgoing inventory
+    records the retained page's target.
+
+    Keep an entry only if its target page exists directly in
+    `dest_dir / "reference"`. This also preserves a member published as an
+    anchor on its class page. Snapshot pruning reviews only that directory.
+    Pages in a custom `api-reference:` directory are not reviewed. Existing
+    pages there are not evidence that the historical version retained
+    them.
+
+    Parameters
+    ----------
+    dest_dir
+        The build directory containing the outgoing inventory and the pages
+        pruning has already processed.
+    snap
+        The snapshot used to rebuild the version's
+        reference pages.
+
+    Returns
+    -------
+    :
+        Entries for retained pages that are absent from the
+        snapshot.
+    """
+    import zlib
+
+    from ._interlinks.sphinx_inventory import INVENTORY_FILENAME, decode
+
+    try:
+        published = decode((dest_dir / INVENTORY_FILENAME).read_bytes())
+    except (OSError, ValueError, zlib.error):
+        return ()
+
+    prefix = f"{snap.package_name}."
+    retained: list[InventoryEntry] = []
+    for entry in published.entries:
+        if entry.domain != "py" or not entry.uri or not entry.name.startswith(prefix):
+            continue
+        if entry.name[len(prefix) :] in snap.symbols:
+            continue
+        page = dest_dir / Path(entry.uri.split("#", 1)[0])
+        if page.parent != dest_dir / "reference":
+            continue
+        if page.with_suffix(".qmd").exists() or page.with_suffix(".md").exists():
+            retained.append(entry)
+    return tuple(retained)
+
+
+def _snapshot_exceptions(snap: ApiSnapshot) -> set[str]:
+    """
+    Find the stems of the classes a snapshot records as exceptions
+
+    A snapshot records each class's bases as they were written, so a class
+    deriving straight from one of Python's exceptions is recognised by name,
+    and one deriving from another class the snapshot holds by following that
+    class's own bases. The live build publishes an exception as
+    `py:exception`, and a version's own inventory has to say the same or an
+    `:exc:` reference to it resolves nowhere.
+
+    Parameters
+    ----------
+    snap
+        The snapshot the version's reference pages were rebuilt from.
+
+    Returns
+    -------
+    :
+        Stems of the exception classes.
+    """
+    from ._interlinks.sphinx_inventory import is_builtin_exception
+
+    # A base is written as it was spelled at the point of use, which is
+    # rarely the stem the snapshot files the class under.
+    by_bare_name = {stem.rpartition(".")[2]: stem for stem in snap.symbols}
+
+    def derives_from_an_exception(stem: str, seen: set[str]) -> bool:
+        sym = snap.symbols.get(stem)
+        if sym is None or sym.kind != "class" or stem in seen:
+            return False
+        seen.add(stem)
+        for base in sym.bases:
+            if is_builtin_exception(base):
+                return True
+            owner = by_bare_name.get(base.rpartition(".")[2])
+            if owner is not None and derives_from_an_exception(owner, seen):
+                return True
+        return False
+
+    return {stem for stem in snap.symbols if derives_from_an_exception(stem, set())}
+
+
+def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config) -> None:
+    """
+    Publish this version's own inventory and interlinks index
+
+    The inventory and interlinks index copied into `dest_dir` describe the
+    live checkout's API, not this version's. Since `_rebuild_api_from_snapshot`
+    has just pruned and regenerated `dest_dir`'s reference pages to match
+    *snap*, rebuild both from the same snapshot so they describe what this
+    version actually publishes rather than what the live build did.
+
+    The claims come from the snapshot's own stems rather than from a resolved
+    API reference, which a historical version has no way to run. A stem yields
+    the bare name, and a member yields the class-qualified one, so the two
+    paths claim the same spellings for the same object. Out of reach is any
+    claim that depends on the object behind the stem: a name written into an
+    `api-reference:` config that differs from the object's path, and an object
+    documented under a name other than its own.
+
+    Entries for pages pruning retains come from the live inventory. Include
+    their claims too, so the inventory and index describe the same reference
+    pages.
+
+    Parameters
+    ----------
+    dest_dir
+        The version's build directory.
+    snap
+        The snapshot the version's reference pages were rebuilt from.
+    config
+        Project configuration, for the interlinks sources and cache.
+    """
+    from ._apiref.inventory import reference_uri
+    from ._interlinks import build_project_index
+    from ._interlinks.sphinx_inventory import (
+        INVENTORY_FILENAME,
+        Inventory,
+        InventoryEntry,
+        encode,
+        role_for_kind,
+    )
+
+    classes = {name for name, sym in snap.symbols.items() if sym.kind == "class"}
+    exceptions = _snapshot_exceptions(snap)
+
+    entries = [
+        InventoryEntry(
+            name=f"{snap.package_name}.{name}",
+            domain="py",
+            role=role_for_kind(
+                sym.kind,
+                in_class=name.rpartition(".")[0] in classes,
+                is_exception=name in exceptions,
+            ),
+            priority=1,
+            uri=reference_uri("reference", name),
+            dispname=f"{snap.package_name}.{name}",
+        )
+        for name, sym in snap.symbols.items()
+    ]
+    # Read the live inventory before replacing it with the historical
+    # inventory.
+    entries.extend(_retained_entries(dest_dir, snap))
+    inv = Inventory(project=snap.package_name, version=snap.version, entries=tuple(entries))
+    (dest_dir / INVENTORY_FILENAME).write_bytes(encode(inv))
+
+    # Derive claims from the final inventory so the index names the same
+    # pages. A second entry with another display name identifies a canonical
+    # path for a re-exported object. It shares the public page target.
+    # It must not claim short names: the public and canonical entries would
+    # otherwise make each short name ambiguous.
+    prefix = f"{snap.package_name}."
+    stems = [
+        e.name[len(prefix) :]
+        for e in inv.entries
+        if e.name.startswith(prefix) and e.dispname == e.name
+    ]
+    build_project_index(dest_dir, config, snap.package_name, _published_claims(snap, stems))
 
 
 def _format_signature(name: str, sym) -> str:
@@ -1090,6 +1333,7 @@ def _rebuild_api_from_git_ref(
     dest_dir: Path,
     project_root: Path,
     entry: VersionEntry,
+    config: Config | None = None,
 ) -> list[str]:
     """
     Introspect a package at a git tag and generate API reference pages.
@@ -1105,6 +1349,9 @@ def _rebuild_api_from_git_ref(
         Project root (git repo root).
     entry
         The version entry with `git_ref` set.
+    config
+        Project configuration, forwarded to `_rebuild_api_from_snapshot` for
+        rebuilding the inventory and interlinks index. Skipped when omitted.
 
     Returns
     -------
@@ -1153,7 +1400,7 @@ def _rebuild_api_from_git_ref(
         snap.save(cache_path)
 
     # Reuse the snapshot-based builder
-    return _rebuild_api_from_snapshot(dest_dir, cache_path, entry)
+    return _rebuild_api_from_snapshot(dest_dir, cache_path, entry, config)
 
 
 # ---------------------------------------------------------------------------
@@ -1806,6 +2053,7 @@ def run_versioned_build(  # pragma: no cover
     progress_callback: Callable[[int, int, int], None] | None = None,
     on_renders_done: Callable[[], None] | None = None,
     badge_expiry_raw: str | None = None,
+    config: Config | None = None,
 ) -> dict[str, Any]:
     """
     Build and assemble the configured documentation versions
@@ -1834,6 +2082,10 @@ def run_versioned_build(  # pragma: no cover
         Callback invoked after rendering and before site assembly.
     badge_expiry_raw
         Global `new_is_old` configuration value.
+    config
+        Project configuration. A historical version built from a snapshot or
+        git tag uses it to rebuild its own inventory and interlinks index;
+        omitting it leaves such a version publishing the live checkout's.
 
     Returns
     -------
@@ -1909,6 +2161,7 @@ def run_versioned_build(  # pragma: no cover
             versions,
             project_root=project_root,
             badge_expiry=badge_expiry,
+            config=config,
         )
         _prune_missing_sidebar_pages(ver_dir)
         _rewrite_quarto_yml_for_version(ver_dir, entry, latest_tag, site_url=site_url)

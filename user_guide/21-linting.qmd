@@ -88,13 +88,17 @@ the rendered documentation.
 
 ### Broken Cross-References
 
-Cross-references that point to nonexistent symbols produce dead links on the rendered site. The
-linter validates that `%seealso` directives reference symbols that actually exist in your public
-API.
+Cross-references to undocumented symbols produce dead links on the rendered site. The linter
+checks that each `%seealso` target names an object this project documents or a linked project
+publishes. The linter checks only docstrings that render in the reference. A `%seealso` in a
+hidden member, such as one from a class configured `members: false`, has no rendered page and
+produces no finding.
 
 | Finding | Severity | Description |
 |---------|----------|-------------|
-| `broken-xref` | Error | `%seealso` references a name that is not a known public export |
+| `broken-xref` | Error | A reference names no object documented by this project or a linked source |
+| `ambiguous-xref` | Error | A reference names a short form claimed by two documented objects |
+| `unread-source` | Info | A linked source inventory could not be read, so `%seealso` was not checked |
 
 For example, this would flag an error:
 
@@ -108,9 +112,27 @@ def process(data):
     ...
 ```
 
-If `validate_input` exists in your public API but `transform_data` does not, the linter reports
+If `validate_input` is documented but `transform_data` is not, the linter reports
 `transform_data` as a broken cross-reference. This is especially useful after renaming or removing
 functions.
+
+A reference can also be ambiguous. If both `StoreCache` and `NetCache` document a `flush`
+method, neither claims the short name `flush`, so a reference to it renders unlinked:
+
+```
+'flush' is claimed by demo.NetCache.flush and demo.StoreCache.flush, so the reference stays
+unlinked. Qualify it.
+```
+
+Writing `` [](`StoreCache.flush`) `` resolves it. The linter judges `%seealso` entries and inline
+references identically because the build resolves both through one index. It scans docstrings and
+documentation pages.
+
+References to linked projects use the same index. `%seealso numpy.ndarray` passes whenever
+the built page resolves it, by full name or source alias. Great Docs uses a fresh cached
+inventory or downloads one when needed. If it cannot read a source, its names are unavailable,
+so the linter reports `unread-source` and does not classify `%seealso` references as broken
+for that run.
 
 ### Style Consistency
 
@@ -180,7 +202,7 @@ Available check names:
 | Name | What it checks |
 |------|----------------|
 | `docstrings` | Missing docstrings on public exports and methods |
-| `cross-refs` | Broken `%seealso` references |
+| `cross-refs` | Broken `%seealso` references and ambiguous interlinks |
 | `style` | Docstring style consistency with configured parser |
 | `directives` | Unknown or malformed `%` directives |
 

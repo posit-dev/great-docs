@@ -17,6 +17,8 @@ from great_docs._lint import (
     _version_distance,
     run_lint,
 )
+from great_docs._interlinks import Source
+from great_docs._interlinks.sphinx_inventory import Inventory, InventoryEntry
 from great_docs._utils import QUARTO_YML_HEADER
 
 
@@ -196,6 +198,34 @@ def _make_pkg(members_dict):
     return pkg
 
 
+def _make_documented_item(name, aliases, docstring):
+    """Create a mock manifest item, shaped like the `InventoryItem`s `AliasClaims.make` reads."""
+    item = MagicMock()
+    item.name = name
+    item.aliases = aliases
+    item.obj = _make_griffe_obj(docstring=docstring)
+    item.uri = f"reference/{name}.html"
+    item.dispname = name
+    return item
+
+
+def _index(documented, external=()):
+    """Build the index used by cross-reference checks"""
+    from great_docs._apiref.inventory import create_inventory
+    from great_docs._interlinks import AliasClaims, build_index
+
+    return build_index(
+        create_inventory("mypkg", "", documented),
+        AliasClaims.make(documented),
+        list(external),
+    )
+
+
+def _documented(*names):
+    """Mock manifest items for objects documented under `mypkg`, each claiming its own name."""
+    return [_make_documented_item(f"mypkg.{name}", (name,), "Documented.") for name in names]
+
+
 class TestCheckMissingDocstrings:
     def test_export_with_docstring(self):
         pkg = _make_pkg({"func_a": _make_griffe_obj(docstring="Documented function.")})
@@ -281,7 +311,15 @@ class TestCheckCrossReferences:
             }
         )
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["func_a", "func_b"], result)
+        _check_cross_references(
+            pkg,
+            "mypkg",
+            ["func_a", "func_b"],
+            _documented("func_a", "func_b"),
+            _index(_documented("func_a", "func_b")),
+            (),
+            result,
+        )
 
         assert len(result.issues) == 0
 
@@ -292,7 +330,15 @@ class TestCheckCrossReferences:
             }
         )
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["func_a"], result)
+        _check_cross_references(
+            pkg,
+            "mypkg",
+            ["func_a"],
+            _documented("func_a"),
+            _index(_documented("func_a")),
+            (),
+            result,
+        )
 
         assert len(result.issues) == 1
         assert result.issues[0].check == "broken-xref"
@@ -309,7 +355,15 @@ class TestCheckCrossReferences:
             }
         )
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["func_a", "func_b"], result)
+        _check_cross_references(
+            pkg,
+            "mypkg",
+            ["func_a", "func_b"],
+            _documented("func_a", "func_b"),
+            _index(_documented("func_a", "func_b")),
+            (),
+            result,
+        )
 
         assert len(result.issues) == 1
         assert result.issues[0].check == "broken-xref"
@@ -322,7 +376,15 @@ class TestCheckCrossReferences:
             }
         )
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["func_a"], result)
+        _check_cross_references(
+            pkg,
+            "mypkg",
+            ["func_a"],
+            _documented("func_a"),
+            _index(_documented("func_a")),
+            (),
+            result,
+        )
 
         assert len(result.issues) == 0
 
@@ -335,7 +397,15 @@ class TestCheckCrossReferences:
         )
         pkg = _make_pkg({"MyClass": cls})
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["MyClass"], result)
+        _check_cross_references(
+            pkg,
+            "mypkg",
+            ["MyClass"],
+            _documented("MyClass", "MyClass.do_stuff"),
+            _index(_documented("MyClass", "MyClass.do_stuff")),
+            (),
+            result,
+        )
 
         assert len(result.issues) == 0
 
@@ -346,9 +416,266 @@ class TestCheckCrossReferences:
             }
         )
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["func_a"], result)
+        _check_cross_references(
+            pkg,
+            "mypkg",
+            ["func_a"],
+            _documented("func_a"),
+            _index(_documented("func_a")),
+            (),
+            result,
+        )
 
         assert len(result.issues) == 0
+
+    def test_seealso_to_a_submodule_qualified_class(self):
+        """
+        A reference the build resolves is not reported
+
+        `store.Cache` is documented and claims that spelling, but it is not a
+        top-level export, so a check deriving its own names from the package
+        called it broken.
+        """
+        pkg = _make_pkg(
+            {
+                "func_a": _make_griffe_obj(docstring="Docs.\n\n%seealso store.Cache"),
+            }
+        )
+        documented = [
+            _make_documented_item("mypkg.func_a", ("func_a",), "Docs."),
+            _make_documented_item("mypkg.store.Cache", ("store.Cache", "Cache"), "A cache."),
+        ]
+        result = LintResult()
+        _check_cross_references(
+            pkg, "mypkg", ["func_a"], documented, _index(documented), (), result
+        )
+
+        assert len(result.issues) == 0
+
+    def test_seealso_to_an_undocumented_name_is_reported(self):
+        """A reference naming nothing the build indexes still fails the check."""
+        pkg = _make_pkg(
+            {
+                "func_a": _make_griffe_obj(docstring="Docs.\n\n%seealso store.Ghost"),
+            }
+        )
+        documented = [
+            _make_documented_item("mypkg.func_a", ("func_a",), "Docs."),
+            _make_documented_item("mypkg.store.Cache", ("store.Cache", "Cache"), "A cache."),
+        ]
+        result = LintResult()
+        _check_cross_references(
+            pkg, "mypkg", ["func_a"], documented, _index(documented), (), result
+        )
+
+        assert len(result.issues) == 1
+        assert result.issues[0].check == "broken-xref"
+        assert "store.Ghost" in result.issues[0].message
+
+    def test_no_documented_objects_reports_nothing(self):
+        """An unresolvable reference means the check cannot see the API, so it stays silent."""
+        pkg = _make_pkg(
+            {
+                "func_a": _make_griffe_obj(docstring="Docs.\n\n%seealso anything"),
+            }
+        )
+        result = LintResult()
+        _check_cross_references(pkg, "mypkg", ["func_a"], [], _index([]), (), result)
+
+        assert len(result.issues) == 0
+
+
+class TestSeealsoScannedObjects:
+    """Cross-reference checks scan rendered docstrings only"""
+
+    def test_an_undocumented_member_docstring_is_not_scanned(self):
+        """Skip a hidden member docstring"""
+        method = _make_griffe_obj(kind="function", docstring="Flush it.\n\n%seealso helper")
+        pkg = _make_pkg(
+            {"Cache": _make_griffe_obj(kind="class", docstring="A cache.", members={"flush": method})}
+        )
+        documented = [_make_documented_item("mypkg.Cache", ("Cache",), "A cache.")]
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["Cache"], documented, _index(documented), (), result
+        )
+
+        assert result.issues == []
+
+    def test_a_documented_member_docstring_is_scanned(self):
+        """Check a documented member docstring"""
+        method = _make_griffe_obj(kind="function", docstring="Flush it.\n\n%seealso helper")
+        pkg = _make_pkg(
+            {"Cache": _make_griffe_obj(kind="class", docstring="A cache.", members={"flush": method})}
+        )
+        documented = [
+            _make_documented_item("mypkg.Cache", ("Cache",), "A cache."),
+            _make_documented_item("mypkg.Cache.flush", ("flush", "Cache.flush"), "Flush it."),
+        ]
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["Cache"], documented, _index(documented), (), result
+        )
+
+        assert len(result.issues) == 1
+        assert result.issues[0].check == "broken-xref"
+        assert result.issues[0].symbol == "Cache.flush"
+
+    def test_an_undocumented_export_docstring_is_not_scanned(self):
+        """Skip an export omitted from the reference"""
+        pkg = _make_pkg(
+            {
+                "Cache": _make_griffe_obj(kind="class", docstring="A cache."),
+                "Hidden": _make_griffe_obj(kind="class", docstring="Hidden.\n\n%seealso helper"),
+            }
+        )
+        documented = [_make_documented_item("mypkg.Cache", ("Cache",), "A cache.")]
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["Cache", "Hidden"], documented, _index(documented), (), result
+        )
+
+        assert result.issues == []
+
+
+class TestSeealsoAgainstArbitration:
+    """Cross-reference checks apply the build's resolution rules"""
+
+    def test_a_seealso_to_an_ambiguous_short_name_is_reported(self):
+        """Two objects claiming `flush` means `%seealso flush` links nowhere."""
+        documented = [
+            _make_documented_item("mypkg.StoreCache", ("StoreCache",), "A store."),
+            _make_documented_item(
+                "mypkg.StoreCache.flush", ("flush", "StoreCache.flush"), "Flush writes."
+            ),
+            _make_documented_item("mypkg.NetCache", ("NetCache",), "A connection."),
+            _make_documented_item(
+                "mypkg.NetCache.flush", ("flush", "NetCache.flush"), "Flush the socket."
+            ),
+        ]
+        pkg = _make_pkg(
+            {"StoreCache": _make_griffe_obj(kind="class", docstring="A store.\n\n%seealso flush")}
+        )
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["StoreCache"], documented, _index(documented), (), result
+        )
+
+        assert len(result.issues) == 1
+        assert result.issues[0].check == "ambiguous-xref"
+        assert "mypkg.NetCache.flush" in result.issues[0].message
+        assert "mypkg.StoreCache.flush" in result.issues[0].message
+
+    def test_a_seealso_to_an_unambiguous_short_name_passes(self):
+        documented = _documented("Thing", "run")
+        pkg = _make_pkg(
+            {"Thing": _make_griffe_obj(kind="class", docstring="A thing.\n\n%seealso run")}
+        )
+        result = LintResult()
+
+        _check_cross_references(pkg, "mypkg", ["Thing"], documented, _index(documented), (), result)
+
+        assert result.issues == []
+
+    def test_a_seealso_to_nothing_documented_is_still_broken(self):
+        """An unknown name keeps its own diagnosis rather than becoming ambiguous."""
+        documented = _documented("Thing")
+        pkg = _make_pkg(
+            {"Thing": _make_griffe_obj(kind="class", docstring="A thing.\n\n%seealso nope")}
+        )
+        result = LintResult()
+
+        _check_cross_references(pkg, "mypkg", ["Thing"], documented, _index(documented), (), result)
+
+        assert len(result.issues) == 1
+        assert result.issues[0].check == "broken-xref"
+
+_NUMPY = (
+    Source(name="numpy", url="https://numpy.org/doc/stable", aliases=("np",)),
+    Inventory(
+        "numpy",
+        "2.1",
+        (InventoryEntry("numpy.ndarray", "py", "class", 1, "reference/ndarray.html", "-"),),
+    ),
+)
+"""A linked NumPy source in the form returned by `load_sources`"""
+
+
+class TestSeealsoAgainstLinkedSources:
+    """Validate linked-source `%seealso` references as the build does"""
+
+    def test_a_seealso_into_a_linked_source_resolves(self):
+        pkg = _make_pkg({"func_a": _make_griffe_obj(docstring="Docs.\n\n%seealso numpy.ndarray")})
+        documented = _documented("func_a")
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["func_a"], documented, _index(documented, [_NUMPY]), (), result
+        )
+
+        assert result.issues == []
+
+    def test_a_seealso_through_a_source_alias_resolves(self):
+        """Resolve `%seealso` through a source alias as the filter does"""
+        pkg = _make_pkg({"func_a": _make_griffe_obj(docstring="Docs.\n\n%seealso np.ndarray")})
+        documented = _documented("func_a")
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["func_a"], documented, _index(documented, [_NUMPY]), (), result
+        )
+
+        assert result.issues == []
+
+    def test_a_seealso_naming_nothing_in_a_linked_source_is_broken(self):
+        pkg = _make_pkg({"func_a": _make_griffe_obj(docstring="Docs.\n\n%seealso numpy.ghost")})
+        documented = _documented("func_a")
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["func_a"], documented, _index(documented, [_NUMPY]), (), result
+        )
+
+        assert len(result.issues) == 1
+        assert result.issues[0].check == "broken-xref"
+        assert "%seealso" in result.issues[0].message
+        assert "%%" not in result.issues[0].message
+
+    def test_an_unread_source_reports_itself_instead_of_the_references(self):
+        """Report an unread source rather than guess at an unresolved reference"""
+        pkg = _make_pkg({"func_a": _make_griffe_obj(docstring="Docs.\n\n%seealso numpy.ndarray")})
+        documented = _documented("func_a")
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["func_a"], documented, _index(documented), ("numpy",), result
+        )
+
+        assert len(result.issues) == 1
+        assert result.issues[0].check == "unread-source"
+        assert result.issues[0].severity == "info"
+        assert "numpy" in result.issues[0].message
+
+    def test_an_unread_source_does_not_silence_local_ambiguity(self):
+        """Report local ambiguity despite an unread source"""
+        pkg = _make_pkg({"func_a": _make_griffe_obj(docstring="Docs.\n\n%seealso Cache")})
+        documented = [
+            _make_documented_item("mypkg.func_a", ("func_a",), "Docs."),
+            _make_documented_item("mypkg.a.Cache", ("Cache",), "Documented."),
+            _make_documented_item("mypkg.b.Cache", ("Cache",), "Documented."),
+        ]
+        result = LintResult()
+
+        _check_cross_references(
+            pkg, "mypkg", ["func_a"], documented, _index(documented), ("numpy",), result
+        )
+
+        checks = {issue.check for issue in result.issues}
+        assert checks == {"ambiguous-xref", "unread-source"}
 
 
 class TestCheckDocstringStyle:
@@ -521,6 +848,74 @@ class TestRunLint:
 
         # func_b has no docstring -> error
         assert any(i.check == "missing-docstring" and i.symbol == "func_b" for i in result.issues)
+
+    @patch("griffe.load")
+    @patch("great_docs.core.GreatDocs")
+    def test_ambiguity_check_respects_the_renderer_member_selection(
+        self, mock_gd_cls, mock_griffe_load, tmp_path
+    ):
+        """A `members:` config narrowing NetCache must not make `flush` look ambiguous."""
+        mock_gd = MagicMock()
+        mock_gd._detect_package_name.return_value = "mypkg"
+        mock_gd._resolve_importable_name.return_value = "mypkg"
+        mock_gd._get_package_exports.return_value = ["StoreCache", "NetCache"]
+        mock_gd._config.get.return_value = "numpy"
+        mock_gd._config.__getitem__.return_value = "numpy"
+        # The renderer documents NetCache itself but, per its `members: false`
+        # config, none of its members — only StoreCache.flush gets a page.
+        mock_gd.documented_objects.return_value = [
+            _make_documented_item(
+                "mypkg.StoreCache", ("StoreCache",), "A store.\n\nSee [](`flush`)."
+            ),
+            _make_documented_item(
+                "mypkg.StoreCache.flush", ("flush", "StoreCache.flush"), "Flush buffered writes."
+            ),
+            _make_documented_item("mypkg.NetCache", ("NetCache",), "A connection."),
+        ]
+        mock_gd_cls.return_value = mock_gd
+
+        store_flush = _make_griffe_obj(kind="function", docstring="Flush buffered writes.")
+        net_flush = _make_griffe_obj(kind="function", docstring="Flush the socket.")
+        store_cls = _make_griffe_obj(
+            kind="class", docstring="A store.\n\nSee [](`flush`).", members={"flush": store_flush}
+        )
+        net_cls = _make_griffe_obj(
+            kind="class", docstring="A connection.", members={"flush": net_flush}
+        )
+        mock_pkg = MagicMock()
+        mock_pkg.members = {"StoreCache": store_cls, "NetCache": net_cls}
+        mock_griffe_load.return_value = mock_pkg
+
+        result = run_lint(tmp_path)
+
+        assert not any(i.check == "ambiguous-xref" for i in result.issues)
+
+    @patch("great_docs._lint.load_sources")
+    @patch("griffe.load")
+    @patch("great_docs.core.GreatDocs")
+    def test_an_unresolvable_reference_reads_no_sources(
+        self, mock_gd_cls, mock_griffe_load, mock_load_sources, tmp_path
+    ):
+        """`load_sources` is the only thing that would put a lint run on the
+        network, so a run over a project whose reference resolves nothing
+        must never call it."""
+        mock_gd = MagicMock()
+        mock_gd._detect_package_name.return_value = "mypkg"
+        mock_gd._resolve_importable_name.return_value = "mypkg"
+        mock_gd._get_package_exports.return_value = ["func_a"]
+        mock_gd._config.get.return_value = "numpy"
+        mock_gd._config.__getitem__.return_value = "numpy"
+        mock_gd.documented_objects.return_value = []
+        mock_gd_cls.return_value = mock_gd
+
+        func_a = _make_griffe_obj(docstring="Docs.\n\n%seealso nope")
+        mock_pkg = MagicMock()
+        mock_pkg.members = {"func_a": func_a}
+        mock_griffe_load.return_value = mock_pkg
+
+        run_lint(tmp_path)
+
+        mock_load_sources.assert_not_called()
 
     @patch("griffe.load")
     @patch("great_docs.core.GreatDocs")
@@ -846,7 +1241,15 @@ class TestCheckCrossReferencesEdgeCases:
         """Exports not found in pkg.members should be skipped."""
         pkg = _make_pkg({})
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["missing_export"], result)
+        _check_cross_references(
+            pkg,
+            "mypkg",
+            ["missing_export"],
+            _documented("other"),
+            _index(_documented("other")),
+            (),
+            result,
+        )
 
         assert len(result.issues) == 0
 
@@ -863,7 +1266,15 @@ class TestCheckCrossReferencesEdgeCases:
         )
         pkg = _make_pkg({"MyClass": cls})
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["MyClass"], result)
+        _check_cross_references(
+            pkg,
+            "mypkg",
+            ["MyClass"],
+            _documented("MyClass", "MyClass.my_method"),
+            _index(_documented("MyClass", "MyClass.my_method")),
+            (),
+            result,
+        )
 
         assert len(result.issues) == 1
         assert result.issues[0].symbol == "MyClass.my_method"
@@ -883,7 +1294,15 @@ class TestCheckCrossReferencesEdgeCases:
         helper = _make_griffe_obj(docstring="Helper.")
         pkg = _make_pkg({"MyClass": cls, "helper_func": helper})
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["MyClass", "helper_func"], result)
+        _check_cross_references(
+            pkg,
+            "mypkg",
+            ["MyClass", "helper_func"],
+            _documented("MyClass", "MyClass.my_method", "helper_func"),
+            _index(_documented("MyClass", "MyClass.my_method", "helper_func")),
+            (),
+            result,
+        )
 
         assert len(result.issues) == 0
 
@@ -900,20 +1319,36 @@ class TestCheckCrossReferencesEdgeCases:
         )
         pkg = _make_pkg({"MyClass": cls})
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["MyClass"], result)
+        _check_cross_references(
+            pkg,
+            "mypkg",
+            ["MyClass"],
+            _documented("MyClass", "MyClass.my_method"),
+            _index(_documented("MyClass", "MyClass.my_method")),
+            (),
+            result,
+        )
 
         assert len(result.issues) == 1
         assert result.issues[0].check == "broken-xref"
         assert result.issues[0].symbol == "MyClass.my_method"
         assert "ghost_func" in result.issues[0].message
 
-    def test_class_kind_exception_in_known_names(self):
-        """When obj.kind.value raises during known_names building, skip gracefully."""
+    def test_class_kind_exception_while_scanning(self):
+        """When obj.kind.value raises while scanning a docstring, skip gracefully."""
         obj = _make_griffe_obj(docstring="Doc.")
         type(obj.kind).value = property(lambda self: (_ for _ in ()).throw(RuntimeError("boom")))
         pkg = _make_pkg({"broken_cls": obj})
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["broken_cls"], result)
+        _check_cross_references(
+            pkg,
+            "mypkg",
+            ["broken_cls"],
+            _documented("broken_cls"),
+            _index(_documented("broken_cls")),
+            (),
+            result,
+        )
 
     def test_class_outer_exception_in_method_xref(self):
         """When iterating class methods raises, the outer except catches it."""
@@ -925,7 +1360,15 @@ class TestCheckCrossReferencesEdgeCases:
         obj.members.items.side_effect = RuntimeError("boom")
         pkg = _make_pkg({"MyClass": obj, "something": _make_griffe_obj(docstring="X.")})
         result = LintResult()
-        _check_cross_references(pkg, "mypkg", ["MyClass", "something"], result)
+        _check_cross_references(
+            pkg,
+            "mypkg",
+            ["MyClass", "something"],
+            _documented("MyClass", "something"),
+            _index(_documented("MyClass", "something")),
+            (),
+            result,
+        )
 
 
 class TestMixedStyleDocstrings:
@@ -1447,6 +1890,7 @@ class TestCheckStaleVersions:
     def test_qmd_file_read_error_skipped(self, tmp_path):
         """Files that raise OSError when read are silently skipped."""
         from pathlib import Path
+
         from great_docs._lint import _check_stale_versions
 
         self._make_project(

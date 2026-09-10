@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ._builtin.directives import DIRECTIVES
-from ._utils import is_in_great_docs_build_dir, parse_seealso
+from ._interlinks import AliasClaims, LoadedSources, build_index, load_sources
+from ._utils import fenced_lines, is_in_great_docs_build_dir, parse_seealso
+
+if TYPE_CHECKING:
+    from ._apiref.inventory import InventoryItem
+    from ._interlinks import Index
 
 
 @dataclass
@@ -189,7 +196,22 @@ def run_lint(
         _check_missing_docstrings(pkg, importable_name, exports, result)
 
     if "cross-refs" in checks:
-        _check_cross_references(pkg, importable_name, exports, result)
+        from ._apiref.inventory import create_inventory
+
+        documented = docs.documented_objects(package_name)
+        # No documented objects means both checks are no-ops, so skip source
+        # loading and any inventory download.
+        sources = load_sources(docs._config) if documented else LoadedSources()
+        # Use the index the build writes so both checks apply render resolution.
+        index = build_index(
+            create_inventory(importable_name, "", documented),
+            AliasClaims.make(documented),
+            sources.read,
+        )
+        _check_cross_references(
+            pkg, importable_name, exports, documented, index, sources.unread, result
+        )
+        _check_ambiguous_references(index.dropped, _gather_prose(documented, project_root), result)
 
     if "style" in checks:
         _check_docstring_style(pkg, importable_name, exports, config_style, result)
@@ -281,69 +303,305 @@ def _check_cross_references(
     pkg,
     package_name: str,
     exports: list[str],
+    documented: list[InventoryItem],
+    index: Index,
+    unread_sources: tuple[str, ...],
     result: LintResult,
 ) -> None:
-    """Check %seealso directives for broken cross-references."""
-    # Build a set of all known public names (fully unqualified)
-    known_names = set(exports)
+    """
+    Check `%seealso` directives for unresolved cross-references
 
-    # Also add qualified class member names
-    for name in exports:
-        if name not in pkg.members:
-            continue
-        obj = pkg.members[name]
-        try:
-            if obj.kind.value == "class":
-                for member_name, _ in _iter_public_members(obj):
-                    known_names.add(f"{name}.{member_name}")
-        except Exception:
-            pass
+    The build resolves each entry against its index. Use the same index here.
+    A locally ambiguous name reports `ambiguous-xref` even if a source is
+    unread, because only local claims create ambiguity. Report another
+    unresolved name as broken only after every configured source is read.
 
-    # Check each export's docstring for %seealso references
+    Check only docstrings the reference renders. A `%seealso` in a hidden
+    member, such as one from a class configured `members: false`, has no page
+    where a reader can act on its finding.
+
+    Read directives from the Griffe tree, where `%seealso` remains written.
+    The rendered reference replaces it with a See Also section. Documented
+    objects identify which of those source docstrings reach a page.
+
+    Parameters
+    ----------
+    pkg :
+        The package loaded by Griffe, whose docstrings contain directives.
+    package_name :
+        Importable package name used in documented object paths.
+    exports :
+        Public export names whose documented objects are considered.
+    documented :
+        The objects the reference documents. Empty when it cannot be resolved,
+        in which case the check reports nothing rather than calling every
+        reference broken.
+    index :
+        The index the build resolves references against.
+    unread_sources :
+        Sources whose inventory could not be read. A name one of them
+        publishes cannot be told from a misspelling. Do not report unresolved
+        names as broken for this run. Still report locally ambiguous names.
+    result :
+        Aggregated results to append to.
+    """
+    if not documented:
+        return
+
+    if unread_sources:
+        result.issues.append(
+            LintIssue(
+                check="unread-source",
+                severity="info",
+                symbol="",
+                message=(
+                    f"Could not read the inventory of {', '.join(unread_sources)}, so "
+                    "'%seealso' references were not checked this run."
+                ),
+            )
+        )
+
+    def check(text: str, symbol: str) -> None:
+        """
+        Report unresolved `%seealso` names in a docstring
+
+        Parameters
+        ----------
+        text :
+            The docstring to scan.
+        symbol :
+            The documented object named in any reported issue.
+
+        Returns
+        -------
+        :
+        """
+        for ref_name, _ in parse_seealso(text):
+            claimants = index.dropped.get(ref_name)
+            if claimants is not None:
+                result.issues.append(
+                    LintIssue(
+                        check="ambiguous-xref",
+                        severity="error",
+                        symbol=symbol,
+                        message=(
+                            f"%seealso references '{ref_name}', which is claimed by "
+                            f"{' and '.join(claimants)}, so it stays unlinked. Qualify it."
+                        ),
+                    )
+                )
+            elif not unread_sources and not index.resolves(ref_name):
+                result.issues.append(
+                    LintIssue(
+                        check="broken-xref",
+                        severity="error",
+                        symbol=symbol,
+                        message=(
+                            f"%seealso references '{ref_name}', which neither the API "
+                            "reference nor a source it links to documents."
+                        ),
+                    )
+                )
+
+    documented_paths = {item.name for item in documented}
+
     for name in exports:
         if name not in pkg.members:
             continue
 
         obj = pkg.members[name]
         docstring = _get_docstring(obj)
-        if not docstring:
-            continue
+        if docstring and f"{package_name}.{name}" in documented_paths:
+            check(docstring, name)
 
-        for ref_name, _ in parse_seealso(docstring):
-            if ref_name not in known_names:
-                result.issues.append(
-                    LintIssue(
-                        check="broken-xref",
-                        severity="error",
-                        symbol=name,
-                        message=(
-                            f"%%seealso references '{ref_name}' which is not a known public export."
-                        ),
-                    )
-                )
-
-        # Also check class methods
         try:
             if obj.kind.value == "class":
                 for member_name, member in _iter_public_members(obj):
-                    member_doc = _get_docstring(member)
-                    if not member_doc:  # pragma: no cover
+                    if f"{package_name}.{name}.{member_name}" not in documented_paths:
                         continue
-                    for ref_name, _ in parse_seealso(member_doc):
-                        if ref_name not in known_names:  # pragma: no cover
-                            result.issues.append(
-                                LintIssue(
-                                    check="broken-xref",
-                                    severity="error",
-                                    symbol=f"{name}.{member_name}",
-                                    message=(
-                                        f"%%seealso references '{ref_name}' "
-                                        f"which is not a known public export."
-                                    ),
-                                )
-                            )
+                    member_doc = _get_docstring(member)
+                    if member_doc:
+                        check(member_doc, f"{name}.{member_name}")
         except Exception:
             pass
+
+
+_NOT_AUTHORED = {"node_modules"}
+"""Directories that do not contain author-written pages"""
+
+
+_INTERLINK_RE = re.compile(r"\[[^\]]*\]\(`(~?)([\w.]+)`\)")
+"""An explicit reference written as `[text](`~pkg.Name`)`"""
+
+_CODE_SPAN_RE = re.compile(r"(`{2,})(?:(?!\1).)*?\1", re.DOTALL)
+"""A multi-backtick span that Markdown renders as literal text"""
+
+
+_LIST_MARKER_RE = re.compile(r"(?:[-*+]|\d+[.)])\s")
+"""The start of a Markdown list item"""
+
+
+def _indented_code(lines: list[str]) -> list[bool]:
+    """
+    Mark the lines Markdown renders as an indented code block
+
+    Four spaces of indentation after a blank line opens a code block, and
+    further indented or blank lines continue it. The exception is indentation
+    under a list item, which continues the item's own prose, so a reference
+    written there is one the page really makes.
+
+    Parameters
+    ----------
+    lines
+        Markdown source lines, with any fenced block already removed.
+
+    Returns
+    -------
+    :
+        Whether each line is part of an indented code block.
+    """
+    code = [False] * len(lines)
+    in_code = False
+    after_blank = True
+    in_list = False
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            after_blank = True
+            continue
+
+        indent = len(line) - len(line.lstrip(" "))
+        if in_code:
+            if indent >= 4:
+                code[i] = True
+                after_blank = False
+                continue
+            in_code = False
+
+        if indent >= 4 and after_blank and not in_list:
+            in_code = True
+            code[i] = True
+        elif indent < 4:
+            in_list = _LIST_MARKER_RE.match(stripped) is not None
+        after_blank = False
+
+    return code
+
+
+def _strip_code(text: str) -> str:
+    """
+    Remove code blocks and multi-backtick code spans from Markdown
+
+    Markdown renders references inside these constructs as example text. A
+    single-backtick span cannot contain the backticks around an interlink
+    target, so multi-backtick spans are sufficient here.
+
+    Parameters
+    ----------
+    text
+        Markdown source to scan.
+
+    Returns
+    -------
+    :
+        The text with fenced blocks, indented blocks and multi-backtick spans
+        removed.
+    """
+    lines, fenced = fenced_lines(text)
+    unfenced = [line for line, is_fenced in zip(lines, fenced) if not is_fenced]
+    indented = _indented_code(unfenced)
+    prose = "\n".join(line for line, is_code in zip(unfenced, indented) if not is_code)
+    return _CODE_SPAN_RE.sub("", prose)
+
+
+def _gather_prose(items: list[InventoryItem], project_root: Path) -> dict[str, str]:
+    """
+    Gather the text the ambiguity check scans
+
+    Read the docstring of every object the reference documents, and the pages
+    an author writes under the project root.
+
+    Parameters
+    ----------
+    items :
+        The objects the reference documents.
+    project_root :
+        Root of the project, whose pages are scanned alongside the docstrings.
+
+    Returns
+    -------
+    :
+        The prose, keyed by the symbol or file it came from.
+    """
+    prose: dict[str, str] = {}
+
+    for item in items:
+        docstring = _get_docstring(item.obj)
+        if docstring:
+            prose[item.name] = docstring
+
+    for dirpath, dirnames, filenames in os.walk(project_root):
+        here = Path(dirpath)
+        # Prune rather than filter afterwards. Quarto renders no path beginning
+        # with an underscore, so those pages carry no reference the site can show,
+        # and a nested `great-docs.yml` marks a separate documentation project,
+        # whose pages are checked against its own names rather than ours.
+        dirnames[:] = [
+            d
+            for d in dirnames
+            if not d.startswith((".", "_"))
+            and d not in _NOT_AUTHORED
+            and not (here / d / "great-docs.yml").exists()
+            and not is_in_great_docs_build_dir(
+                (here / d).relative_to(project_root).parts, project_root
+            )
+        ]
+        for filename in sorted(filenames):
+            if not filename.endswith((".qmd", ".md")):
+                continue
+            path = here / filename
+            prose[str(path.relative_to(project_root))] = path.read_text(encoding="utf-8")
+
+    return prose
+
+
+def _check_ambiguous_references(
+    dropped: dict[str, tuple[str, ...]],
+    prose: dict[str, str],
+    result: LintResult,
+) -> None:
+    """
+    Check prose for references to a short name that two objects claim
+
+    Parameters
+    ----------
+    dropped :
+        Each short name two objects claim, and the objects claiming it.
+    prose :
+        Text to scan, keyed by the symbol or file it came from.
+    result :
+        Aggregated results to append to.
+    """
+    if not dropped:
+        return
+
+    for origin, text in prose.items():
+        for _, name in _INTERLINK_RE.findall(_strip_code(text)):
+            targets = dropped.get(name)
+            if targets is None:
+                continue
+            result.issues.append(
+                LintIssue(
+                    check="ambiguous-xref",
+                    severity="error",
+                    symbol=origin,
+                    message=(
+                        f"'{name}' is claimed by {' and '.join(targets)}, so the "
+                        "reference stays unlinked. Qualify it."
+                    ),
+                )
+            )
 
 
 _STYLES = ("numpy", "google", "sphinx")

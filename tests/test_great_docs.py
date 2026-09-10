@@ -129,7 +129,6 @@ from great_docs._apiref.introspect import (
 from great_docs._apiref.inventory import (
     InventoryItem,
     create_inventory,
-    write_inventory,
 )
 from great_docs._apiref.resolve import (
     ObjectNotFoundError,
@@ -7184,6 +7183,9 @@ def test_collect_single_doc():
     assert len(items) >= 1
     assert items[0].name == "pkg.myfunc"
     assert items[0].uri == "api/reference.html#pkg.myfunc"
+    # The short names an author may write in prose. The pair repeats because a
+    # top-level export's config name is its own name.
+    assert items[0].aliases == ("myfunc", "myfunc")
 
 
 def test_collect_with_canonical_path_diff():
@@ -7200,6 +7202,37 @@ def test_collect_with_canonical_path_diff():
     assert items[0].name == "pkg.submod.func"
     assert items[1].name == "pkg.func"
     assert items[1].dispname == "pkg.submod.func"
+
+
+def test_collect_class_member_gets_a_class_qualified_alias():
+    """A member's bare name collides across classes, so it also claims `Class.member`."""
+    mod = gf.Module("pkg")
+    cls = gf.Class("StoreCache")
+    mod.set_member("StoreCache", cls)
+    meth = gf.Function("flush")
+    cls.set_member("flush", meth)
+
+    doc_meth = DocFunction(name="flush", obj=meth, anchor="pkg.StoreCache.flush")
+    doc_cls = DocClass(name="StoreCache", obj=cls, anchor="pkg.StoreCache", members=[doc_meth])
+    page = Page(path="reference/StoreCache", contents=[doc_cls])
+
+    manifest = build_manifest([page], dir="api")
+    items = {item.name: item for item in manifest.items}
+
+    assert items["pkg.StoreCache.flush"].aliases == ("flush", "flush", "StoreCache.flush")
+
+
+def test_collect_top_level_doc_gets_no_class_qualified_alias():
+    """A module-level function has no enclosing class, so the pair repeats as before."""
+    mod = gf.Module("pkg")
+    func_obj = gf.Function("myfunc")
+    mod.set_member("myfunc", func_obj)
+    doc = DocFunction(name="myfunc", obj=func_obj, anchor="pkg.myfunc")
+    page = Page(path="reference", contents=[doc])
+
+    manifest = build_manifest([page], dir="api")
+
+    assert manifest.items[0].aliases == ("myfunc", "myfunc")
 
 
 def test_collect_nested_section():
@@ -29372,7 +29405,7 @@ def test_api_reference_build_basic():
             assert (Path(tmp_dir) / "reference" / "greet.qmd").exists()
 
             # Check inventory was created
-            assert (Path(tmp_dir) / "objects.json").exists()
+            assert (Path(tmp_dir) / "objects.inv").exists()
         finally:
             os.chdir(old_cwd)
             sys.path.remove(tmp_dir)
@@ -33428,30 +33461,77 @@ def test_class_label_abc():
     assert _class_label(obj) == "abc"
 
 
-def test_write_inventory_dict(tmp_path):
-    """write_inventory writes a dict directly as JSON."""
-
-    inv = {"project": "test", "version": "1.0", "items": []}
-    out = str(tmp_path / "inv.json")
-    write_inventory(inv, out_name=out)
-
-    with open(out) as f:
-        result = json.load(f)
-    assert result == inv
-
-
 def test_create_inventory_basic():
-    """create_inventory returns a properly structured dict."""
+    """create_inventory returns an Inventory carrying the project and version."""
+    obj = MagicMock()
+    obj.kind.value = "function"
+    obj.parent = None
+    item = InventoryItem(obj=obj, name="myproj.func", uri="reference/func.html")
 
-    obj = gf.Function(name="my_func", lineno=1)
-    item = InventoryItem(name="myproj.my_func", obj=obj, uri="my_func.html")
     result = create_inventory("myproj", "1.0", [item])
 
-    assert result["project"] == "myproj"
-    assert result["version"] == "1.0"
-    assert result["count"] == 1
-    assert len(result["items"]) == 1
-    assert result["items"][0]["domain"] == "py"
+    assert result.project == "myproj"
+    assert result.version == "1.0"
+    assert len(result.entries) == 1
+    assert result.entries[0].name == "myproj.func"
+    assert result.entries[0].domain == "py"
+    assert result.entries[0].role == "function"
+    assert result.entries[0].priority == 1
+    assert result.entries[0].uri == "reference/func.html"
+    assert result.entries[0].dispname == "myproj.func"
+
+
+def test_create_inventory_classifies_a_class_method_as_py_method():
+    """A method's inventory role must be `method`, not griffe's bare `function`."""
+    cls = gf.Class(name="MyClass", lineno=1)
+    method = gf.Function(name="my_method", lineno=2)
+    cls.set_member("my_method", method)
+
+    item = InventoryItem(name="myproj.MyClass.my_method", obj=method, uri="MyClass.html#my_method")
+    result = create_inventory("myproj", "1.0", [item])
+
+    assert result.entries[0].role == "method"
+
+
+def test_create_inventory_publishes_an_exception_class_as_py_exception(tmp_path):
+    """Sphinx publishes an exception as py:exception, and `:exc:` matches only that."""
+    pkg = tmp_path / "expkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text(
+        "class MyError(Exception):\n"
+        '    """Base failure."""\n'
+        "\n"
+        "class Nested(MyError):\n"
+        '    """A failure deriving from another of ours."""\n'
+        "\n"
+        "class ViaBuiltin(ValueError):\n"
+        '    """A failure deriving from a builtin that is not Exception itself."""\n'
+        "\n"
+        "class Plain:\n"
+        '    """Not a failure at all."""\n'
+    )
+    loaded = gf.load("expkg", search_paths=[str(tmp_path)])
+
+    items = [
+        InventoryItem(name=f"expkg.{name}", obj=loaded[name], uri=f"{name}.html")
+        for name in ("MyError", "Nested", "ViaBuiltin", "Plain")
+    ]
+    roles = {e.name: e.role for e in create_inventory("expkg", "1.0", items).entries}
+
+    assert roles["expkg.MyError"] == "exception"
+    assert roles["expkg.Nested"] == "exception"
+    assert roles["expkg.ViaBuiltin"] == "exception"
+    assert roles["expkg.Plain"] == "class"
+
+
+def test_create_inventory_keeps_a_plain_function_as_py_function():
+    """A module-level function keeps griffe's `function` kind as its role."""
+    func = gf.Function(name="my_func", lineno=1)
+
+    item = InventoryItem(name="myproj.my_func", obj=func, uri="my_func.html")
+    result = create_inventory("myproj", "1.0", [item])
+
+    assert result.entries[0].role == "function"
 
 
 def test_create_inventory_with_layout_item():
@@ -33466,20 +33546,32 @@ def test_create_inventory_with_layout_item():
     )
     result = create_inventory("myproj", "1.0", [item])
 
-    assert result["count"] == 1
-    assert result["items"][0]["name"] == "myproj.my_func"
-    assert result["items"][0]["uri"] == "my_func.html"
-    assert result["items"][0]["dispname"] == "my_func"
+    assert len(result.entries) == 1
+    assert result.entries[0].name == "myproj.my_func"
+    assert result.entries[0].uri == "my_func.html"
+    assert result.entries[0].dispname == "my_func"
 
 
 def test_create_inventory_default_dispname():
-    """create_inventory falls back to "-" when an item has no dispname."""
+    """create_inventory falls back to the object's name when an item has no dispname."""
 
     obj = gf.Function(name="my_func", lineno=1)
     item = InventoryItem(name="myproj.my_func", obj=obj, uri="my_func.html")
     result = create_inventory("myproj", "1.0", [item])
 
-    assert result["items"][0]["dispname"] == "-"
+    assert result.entries[0].dispname == "myproj.my_func"
+
+
+def test_create_inventory_publishes_a_module_level_attribute_as_data():
+    obj = MagicMock()
+    obj.kind.value = "attribute"
+    obj.parent = MagicMock()
+    obj.parent.is_class = False
+    item = InventoryItem(obj=obj, name="myproj.MAX_SIZE", uri="reference/MAX_SIZE.html")
+
+    result = create_inventory("myproj", "1.0", [item])
+
+    assert result.entries[0].role == "data"
 
 
 def test_extend_base_class_copies_methods():

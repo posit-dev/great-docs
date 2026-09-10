@@ -63,6 +63,13 @@ def generate_package(
         # Dedent the content to allow indented multi-line strings in specs
         file_path.write_text(textwrap.dedent(content), encoding="utf-8")
 
+    # --- Binary files ----------------------------------------------------
+    binary_files: dict[str, bytes] = spec.get("binary_files", {})
+    for rel_path, blob in binary_files.items():
+        file_path = pkg_dir / rel_path
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_bytes(blob)
+
     # --- great-docs.yml (config) -----------------------------------------
     if "config" in spec:
         _write_yaml(pkg_dir / "great-docs.yml", spec["config"])

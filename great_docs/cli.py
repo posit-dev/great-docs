@@ -2494,6 +2494,8 @@ def lint(project_path: str | None, checks: tuple[str, ...], json_output: bool) -
     Checks performed:
       • missing-docstring    Public exports or methods without docstrings
       • broken-xref          '%seealso' references to unknown symbols
+      • ambiguous-xref       References to a short name two objects claim
+      • unread-source        A linked source's inventory could not be read
       • style-mismatch       Docstrings not matching configured style (numpy/google/sphinx)
       • unknown-directive    Unrecognized '%directive' names
       • stale-badge          Version badges far behind latest release

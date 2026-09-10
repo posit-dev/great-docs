@@ -40,6 +40,25 @@ project_type: python
 # : sphinx - Sphinx/reStructuredText style
 parser: numpy
 
+# Interlinks
+# ----------
+# Other documentation sites your prose can link to. Each entry under `sources`
+# names a project, where its documentation lives, and optionally the module
+# aliases your prose uses for it. The inventory is read from
+# `<url>/objects.inv`, where every project publishes it, and links are written
+# against `<url>`. A url may name a directory on disk, which works when that
+# path is also the path the project is served from.
+# interlinks:
+#   sources:
+#     numpy:
+#       url: https://numpy.org/doc/stable/
+#       aliases: [np]
+interlinks:
+  sources: {} # Projects to link to; none by default
+  # A link to a function or method shows a trailing "()", as `decode()` rather
+  # than `decode`. Links to classes never show one.
+  add_function_parentheses: true
+
 # Callable Signatures
 # -------------------
 # How the signature of a function, method or class is written.

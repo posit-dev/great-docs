@@ -83,6 +83,7 @@ class Config:
         """
         self.project_root = project_root
         self.config_path = project_root / "great-docs.yml"
+        self.cache_dir = project_root / ".great-docs-cache"
         self._config = self._load_config()
 
     def _load_config(self) -> dict[str, Any]:
@@ -973,6 +974,16 @@ class Config:
     def jupyter(self) -> str:
         """Get the Jupyter kernel for executing code cells."""
         return self["jupyter"]
+
+    @property
+    def interlinks_sources(self) -> dict[str, Any]:
+        """Get the external documentation projects to link to."""
+        return cast("dict[str, Any]", self["interlinks.sources"])
+
+    @property
+    def interlinks_add_function_parentheses(self) -> bool:
+        """Whether function and method links display a trailing `()`."""
+        return bool(self["interlinks.add_function_parentheses"])
 
     @property
     def logo(self) -> dict[str, Any] | None:
