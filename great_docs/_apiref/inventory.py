@@ -4,7 +4,13 @@ from dataclasses import dataclass
 
 import griffe as gf
 
-from .._sphinx_inventory import Inventory, InventoryEntry, encode, role_for_kind
+from .._sphinx_inventory import (
+    Inventory,
+    InventoryEntry,
+    encode,
+    is_builtin_exception,
+    role_for_kind,
+)
 from ._walkable import Walkable
 
 
@@ -114,4 +120,39 @@ def _inventory_role(obj: gf.Object | gf.Alias) -> str:
         The Sphinx role.
     """
     parent = obj.parent
-    return role_for_kind(obj.kind.value, in_class=parent is not None and parent.is_class)
+    return role_for_kind(
+        obj.kind.value,
+        in_class=parent is not None and parent.is_class,
+        is_exception=_is_exception(obj),
+    )
+
+
+def _is_exception(obj: gf.Object | gf.Alias) -> bool:
+    """
+    Report whether a documented class derives from one of Python's exceptions
+
+    Griffe leaves a base outside the loaded tree unresolved, so a class
+    deriving straight from `Exception` is recognised by the name it names,
+    and one deriving from another class in the project by walking the
+    ancestors griffe did resolve. A base neither of those reaches, such as a
+    third-party exception, is not recognised.
+
+    Parameters
+    ----------
+    obj :
+        The documented object.
+
+    Returns
+    -------
+    :
+        Whether the object is an exception class.
+    """
+    try:
+        if obj.kind.value != "class":
+            return False
+        ancestors = [obj, *obj.mro()]  # pyright: ignore[reportAttributeAccessIssue]
+    except (gf.AliasResolutionError, gf.CyclicAliasError, ValueError):
+        return False
+    return any(
+        is_builtin_exception(str(base)) for cls in ancestors for base in getattr(cls, "bases", ())
+    )

@@ -8,6 +8,7 @@ from great_docs._sphinx_inventory import (
     InventoryEntry,
     decode,
     encode,
+    is_builtin_exception,
     role_for_kind,
 )
 
@@ -99,6 +100,29 @@ def test_a_type_alias_is_a_type():
 
 def test_a_class_keeps_its_kind():
     assert role_for_kind("class", in_class=False) == "class"
+
+
+def test_an_exception_class_is_an_exception():
+    """Sphinx publishes a class deriving from BaseException as py:exception."""
+    assert role_for_kind("class", in_class=False, is_exception=True) == "exception"
+
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("Exception", True),
+        ("BaseException", True),
+        ("ValueError", True),
+        # A dotted base names its own last component.
+        ("builtins.OSError", True),
+        ("int", False),
+        ("object", False),
+        # A name Python does not ship says nothing about its ancestry here.
+        ("MyError", False),
+    ],
+)
+def test_pythons_own_exceptions_are_recognised_by_name(name, expected):
+    assert is_builtin_exception(name) is expected
 
 
 def test_the_generic_role_constrains_nothing():

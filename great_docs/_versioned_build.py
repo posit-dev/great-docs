@@ -932,6 +932,49 @@ def _retained_entries(dest_dir: Path, snap: ApiSnapshot) -> tuple[InventoryEntry
     return tuple(retained)
 
 
+def _snapshot_exceptions(snap: ApiSnapshot) -> set[str]:
+    """
+    Find the stems of the classes a snapshot records as exceptions
+
+    A snapshot records each class's bases as they were written, so a class
+    deriving straight from one of Python's exceptions is recognised by name,
+    and one deriving from another class the snapshot holds by following that
+    class's own bases. The live build publishes an exception as
+    `py:exception`, and a version's own inventory has to say the same or an
+    `:exc:` reference to it resolves nowhere.
+
+    Parameters
+    ----------
+    snap
+        The snapshot the version's reference pages were rebuilt from.
+
+    Returns
+    -------
+    :
+        Stems of the exception classes.
+    """
+    from ._sphinx_inventory import is_builtin_exception
+
+    # A base is written as it was spelled at the point of use, which is
+    # rarely the stem the snapshot files the class under.
+    by_bare_name = {stem.rpartition(".")[2]: stem for stem in snap.symbols}
+
+    def derives_from_an_exception(stem: str, seen: set[str]) -> bool:
+        sym = snap.symbols.get(stem)
+        if sym is None or sym.kind != "class" or stem in seen:
+            return False
+        seen.add(stem)
+        for base in sym.bases:
+            if is_builtin_exception(base):
+                return True
+            owner = by_bare_name.get(base.rpartition(".")[2])
+            if owner is not None and derives_from_an_exception(owner, seen):
+                return True
+        return False
+
+    return {stem for stem in snap.symbols if derives_from_an_exception(stem, set())}
+
+
 def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config) -> None:
     """
     Publish this version's own inventory and interlinks index
@@ -974,12 +1017,17 @@ def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config)
     )
 
     classes = {name for name, sym in snap.symbols.items() if sym.kind == "class"}
+    exceptions = _snapshot_exceptions(snap)
 
     entries = [
         InventoryEntry(
             name=f"{snap.package_name}.{name}",
             domain="py",
-            role=role_for_kind(sym.kind, in_class=name.rpartition(".")[0] in classes),
+            role=role_for_kind(
+                sym.kind,
+                in_class=name.rpartition(".")[0] in classes,
+                is_exception=name in exceptions,
+            ),
             priority=1,
             uri=reference_uri("reference", name),
             dispname=f"{snap.package_name}.{name}",

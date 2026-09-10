@@ -13,6 +13,7 @@ records, one per documented object:
 
 from __future__ import annotations
 
+import builtins
 import re
 import zlib
 from dataclasses import dataclass
@@ -21,9 +22,10 @@ INVENTORY_FILENAME = "objects.inv"
 """Filename used for the inventory published by every project"""
 
 # A PEP 695 alias is `py:type` (Sphinx 7.4+); every other kind griffe reports
-# is already the Sphinx py-domain role. The two exceptions that depend on
-# context, a function inside a class and a module-level attribute, are
-# branches in `role_for_kind` below rather than entries here.
+# is already the Sphinx py-domain role. The three roles that depend on more
+# than the kind, a function inside a class, a module-level attribute and a
+# class deriving from an exception, are branches in `role_for_kind` below
+# rather than entries here.
 _KIND_ROLES = {"type alias": "type"}
 
 ROLE_SYNONYMS = {
@@ -50,7 +52,29 @@ here beside the roles themselves rather than in whatever renders a reference.
 """
 
 
-def role_for_kind(kind: str, *, in_class: bool) -> str:
+def is_builtin_exception(name: str) -> bool:
+    """
+    Report whether a base class name is one of Python's own exceptions
+
+    A base outside the project cannot be inspected, so the one case worth
+    recognising by name is the one every exception ends at: a class Python
+    itself ships. A dotted base names its own last component.
+
+    Parameters
+    ----------
+    name :
+        A base class as it was written.
+
+    Returns
+    -------
+    :
+        Whether the name is a built-in exception.
+    """
+    builtin = getattr(builtins, name.rpartition(".")[2], None)
+    return isinstance(builtin, type) and issubclass(builtin, BaseException)
+
+
+def role_for_kind(kind: str, *, in_class: bool, is_exception: bool = False) -> str:
     """
     Return the Sphinx py-domain role for a documented object
 
@@ -60,12 +84,19 @@ def role_for_kind(kind: str, *, in_class: bool) -> str:
         The kind griffe reports for the object.
     in_class :
         Whether the object's parent is a class.
+    is_exception :
+        Whether a class derives from `BaseException`. Sphinx publishes such a
+        class as `py:exception`, which is the role an `:exc:` reference
+        matches against, so a class published as `py:class` answers no `:exc:`
+        reference at all.
 
     Returns
     -------
     :
         The role an inventory publishes for it.
     """
+    if kind == "class" and is_exception:
+        return "exception"
     if kind == "function":
         return "method" if in_class else "function"
     if kind == "attribute":

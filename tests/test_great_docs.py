@@ -33493,6 +33493,37 @@ def test_create_inventory_classifies_a_class_method_as_py_method():
     assert result.entries[0].role == "method"
 
 
+def test_create_inventory_publishes_an_exception_class_as_py_exception(tmp_path):
+    """Sphinx publishes an exception as py:exception, and `:exc:` matches only that."""
+    pkg = tmp_path / "expkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text(
+        "class MyError(Exception):\n"
+        '    """Base failure."""\n'
+        "\n"
+        "class Nested(MyError):\n"
+        '    """A failure deriving from another of ours."""\n'
+        "\n"
+        "class ViaBuiltin(ValueError):\n"
+        '    """A failure deriving from a builtin that is not Exception itself."""\n'
+        "\n"
+        "class Plain:\n"
+        '    """Not a failure at all."""\n'
+    )
+    loaded = gf.load("expkg", search_paths=[str(tmp_path)])
+
+    items = [
+        InventoryItem(name=f"expkg.{name}", obj=loaded[name], uri=f"{name}.html")
+        for name in ("MyError", "Nested", "ViaBuiltin", "Plain")
+    ]
+    roles = {e.name: e.role for e in create_inventory("expkg", "1.0", items).entries}
+
+    assert roles["expkg.MyError"] == "exception"
+    assert roles["expkg.Nested"] == "exception"
+    assert roles["expkg.ViaBuiltin"] == "exception"
+    assert roles["expkg.Plain"] == "class"
+
+
 def test_create_inventory_keeps_a_plain_function_as_py_function():
     """A module-level function keeps griffe's `function` kind as its role."""
     func = gf.Function(name="my_func", lineno=1)

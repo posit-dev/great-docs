@@ -2820,6 +2820,36 @@ class TestRebuildApiFromSnapshotInventory:
         assert ("Cache.flush", "demo.Cache.flush") in claims.claimed
         assert claims.published == frozenset({"demo.Cache", "demo.Cache.flush"})
 
+    def test_an_exception_class_is_published_as_an_exception(self, tmp_path: Path):
+        """A version publishes the roles the live build publishes, exceptions included"""
+        from great_docs._sphinx_inventory import INVENTORY_FILENAME, decode
+        from great_docs.config import Config
+
+        snap = ApiSnapshot(
+            version="1.0",
+            package_name="demo",
+            symbols={
+                "MyError": SymbolInfo(name="MyError", kind="class", bases=["Exception"]),
+                # Deriving from another class the snapshot holds.
+                "Nested": SymbolInfo(name="Nested", kind="class", bases=["MyError"]),
+                # Deriving from a builtin that is not `Exception` itself.
+                "ViaBuiltin": SymbolInfo(name="ViaBuiltin", kind="class", bases=["ValueError"]),
+                "Plain": SymbolInfo(name="Plain", kind="class", bases=["object"]),
+            },
+        )
+        dest_dir = tmp_path / "build"
+        dest_dir.mkdir()
+
+        _write_snapshot_inventory(dest_dir, snap, Config(tmp_path))
+
+        inv = decode((dest_dir / INVENTORY_FILENAME).read_bytes())
+        roles = {e.name: e.role for e in inv.entries}
+
+        assert roles["demo.MyError"] == "exception"
+        assert roles["demo.Nested"] == "exception"
+        assert roles["demo.ViaBuiltin"] == "exception"
+        assert roles["demo.Plain"] == "class"
+
     def test_a_re_exported_object_keeps_its_short_name(self, tmp_path: Path):
         """Keep a re-export's short name with its public entry"""
         from great_docs._sphinx_inventory import (
