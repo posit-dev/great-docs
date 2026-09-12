@@ -10339,11 +10339,13 @@ class GreatDocs:
                 '<path d="M20 3v4"/><path d="M22 5h-4"/></svg>'
             )
             ai_items.append(f'<a href="skills.html">Skills{_sparkle_svg}</a><br>')
-        ai_items.append("[llms.txt](llms.txt)<br>")
-        ai_items.append("[llms-full.txt](llms-full.txt)<br>")
+        if self._llms_txt_available():
+            ai_items.append("[llms.txt](llms.txt)<br>")
+            ai_items.append("[llms-full.txt](llms-full.txt)<br>")
 
-        margin_sections.append(f"\n#### {get_translation('ai_agents', lang)}\n")
-        margin_sections.extend(ai_items)
+        if ai_items:
+            margin_sections.append(f"\n#### {get_translation('ai_agents', lang)}\n")
+            margin_sections.extend(ai_items)
 
         # ── 3. Developers (Authors + Funding) ────────────────────────────
         authors_to_display = metadata.get("rich_authors") or metadata.get("authors", [])
@@ -13671,6 +13673,28 @@ anchor-sections: true
         with open(index_path, "w") as f:
             f.write(content)
 
+    def _llms_txt_available(self) -> bool:
+        """
+        Whether `llms.txt` and `llms-full.txt` will be generated for this project.
+
+        Both generators return early unless `_quarto.yml` carries an `api-reference`
+        block with a `package` and at least one section. Every place that links to
+        the files (the metadata margin, SKILL.md resources, the build log) should ask
+        this instead of assuming, so links and files cannot drift apart.
+        """
+        quarto_yml = self.project_path / "_quarto.yml"
+        if not quarto_yml.exists():
+            return False
+        try:
+            with open(quarto_yml, "r") as f:
+                config = read_yaml(f) or {}
+        except Exception:
+            return False
+        api_ref_config = config.get("api-reference")
+        if not isinstance(api_ref_config, dict):
+            return False
+        return bool(api_ref_config.get("package")) and bool(api_ref_config.get("sections"))
+
     def _generate_llms_txt(self) -> None:
         """
         Generate an llms.txt file for LLM documentation indexing.
@@ -14211,8 +14235,9 @@ anchor-sections: true
         lines.append("")
         if site_url:
             lines.append(f"- [Full documentation]({site_url})")
-        lines.append("- [llms.txt](llms.txt) — Indexed API reference for LLMs")
-        lines.append("- [llms-full.txt](llms-full.txt) — Comprehensive documentation for LLMs")
+        if self._llms_txt_available():
+            lines.append("- [llms.txt](llms.txt) — Indexed API reference for LLMs")
+            lines.append("- [llms-full.txt](llms-full.txt) — Comprehensive documentation for LLMs")
         if repo_url:
             lines.append(f"- [Source code]({repo_url})")
         lines.append("")
@@ -16160,10 +16185,13 @@ anchor-sections: true
             # ── Step 3: Generate llms.txt / llms-full.txt ──────────────
             step += 1
             log.step_start(step, "Generate llms.txt / llms-full.txt")
-            with _quiet_prints():
-                self._generate_llms_txt()
-                self._generate_llms_full_txt()
-            log.step_done("Created llms.txt + llms-full.txt")
+            if self._llms_txt_available():
+                with _quiet_prints():
+                    self._generate_llms_txt()
+                    self._generate_llms_full_txt()
+                log.step_done("Created llms.txt + llms-full.txt")
+            else:
+                log.step_skip(step, "no API reference")
 
             # ── Step 4: Generate SKILL.md ──────────────────────────────
             step += 1

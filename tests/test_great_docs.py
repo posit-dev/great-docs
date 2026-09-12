@@ -13954,15 +13954,53 @@ def test_build_metadata_margin_with_authors():
 
 
 def test_build_metadata_margin_llms_links():
-    """_build_metadata_margin always includes llms.txt links."""
+    """_build_metadata_margin links llms.txt only when the files will be generated."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         gd_dir = Path(tmp_dir) / "great-docs"
         gd_dir.mkdir()
+        (gd_dir / "_quarto.yml").write_text(
+            "api-reference:\n  package: pkg\n  sections:\n    - title: Core\n      contents: [pkg.f]\n",
+            encoding="utf-8",
+        )
         docs = GreatDocs(project_path=tmp_dir)
         result = docs._build_metadata_margin()
 
         assert "llms.txt" in result
         assert "llms-full.txt" in result
+
+
+def test_build_metadata_margin_no_llms_links_without_api_reference():
+    """A docs-only site gets no llms.txt links, because no files are generated (#350)."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        gd_dir = Path(tmp_dir) / "great-docs"
+        gd_dir.mkdir()
+        (gd_dir / "_quarto.yml").write_text(
+            "project:\n  type: website\nwebsite:\n  title: Docs only\n", encoding="utf-8"
+        )
+        docs = GreatDocs(project_path=tmp_dir)
+        result = docs._build_metadata_margin()
+
+        assert "llms.txt" not in result
+        assert "llms-full.txt" not in result
+
+
+def test_llms_txt_available_matches_generators():
+    """The predicate agrees with the generators' own early returns."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        gd_dir = Path(tmp_dir) / "great-docs"
+        gd_dir.mkdir()
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._llms_txt_available() is False  # no _quarto.yml
+        quarto = gd_dir / "_quarto.yml"
+        quarto.write_text("project:\n  type: website\n", encoding="utf-8")
+        assert docs._llms_txt_available() is False  # no api-reference
+        quarto.write_text("api-reference:\n  package: pkg\n  sections: []\n", encoding="utf-8")
+        assert docs._llms_txt_available() is False  # no sections
+        quarto.write_text(
+            "api-reference:\n  package: pkg\n  sections:\n    - title: Core\n      contents: [pkg.f]\n",
+            encoding="utf-8",
+        )
+        assert docs._llms_txt_available() is True
 
 
 def test_build_metadata_margin_authors_with_rich_metadata():
@@ -39612,6 +39650,12 @@ def test_homepage_sidebar_skills_link_position():
 
         great_docs_dir = Path(tmp_dir) / "great-docs"
         great_docs_dir.mkdir()
+        # llms.txt links are only shown when the files will be generated (#350)
+        (great_docs_dir / "_quarto.yml").write_text(
+            "api-reference:\n  package: test_package\n  sections:\n"
+            "    - title: Core\n      contents: [test_package.f]\n",
+            encoding="utf-8",
+        )
 
         margin = docs._build_metadata_margin()
 
