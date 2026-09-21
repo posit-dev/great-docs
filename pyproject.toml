@@ -67,15 +67,19 @@ dev = [
     "pyright>=1.1.407",
     "build>=0.7",
     "twine>=3.4",
-    "great_tables>=0.21.0",
-    "pandas>=2.0",
-    "polars>=0.20",
-    "pyarrow>=12.0",
-    "mcp>=1.0.0",
     "typer>=0.12.0",
+    "great-docs[docs]",
 ]
 docs = [
     "plotnine>=0.13.0",
+    "jupyter>=1.0.0",
+    "polars>=0.20",
+    "pandas>=2.0",
+    "pyarrow>=12.0",
+    # Pin below 0.22: that release depends on multimark, a compiled package
+    # with no WASM wheel, which breaks the marimo notebooks' Pyodide export.
+    "great_tables>=0.21.0,<0.22",
+    "great-docs[mcp,marimo]",
 ]
 
 
