@@ -45,6 +45,6 @@ GitHub automatically provisions a free TLS certificate through Let's Encrypt. Th
 
 Once the DNS has propagated and the certificate is active, your site should be accessible at your custom domain with HTTPS. The old `*.github.io` URL will redirect to your custom domain automatically.
 
-If the site does not load, check the following: make sure the CNAME file was included in the build output (look for it in `great-docs/_site/CNAME`), verify the DNS record is correct using a tool like `dig docs.example.com`, and confirm the GitHub Pages section in your repository settings shows the custom domain as active.
+If the site does not load, check the following: make sure the CNAME file was included in the build output (look for it in `docs/_site/CNAME`), verify the DNS record is correct using a tool like `dig docs.example.com`, and confirm the GitHub Pages section in your repository settings shows the custom domain as active.
 
 For more deployment options and troubleshooting, see the [Deployment](../user-guide/deployment.html) page in the User Guide.

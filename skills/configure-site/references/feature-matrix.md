@@ -1,4 +1,4 @@
-# Feature Matrix — great-docs.yml
+# Feature Matrix — docs/great-docs.yml
 
 Quick reference for every toggleable feature and its config key.
 

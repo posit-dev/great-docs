@@ -65,7 +65,7 @@ SPEC = {
                 """
                 pass
         ''',
-        "user_guide/index.qmd": """\
+        "docs/user_guide/index.qmd": """\
             ---
             title: User Guide
             ---
@@ -74,14 +74,14 @@ SPEC = {
 
             This guide is organized into sections using numbered subdirectories.
         """,
-        "user_guide/01-getting-started/index.qmd": """\
+        "docs/user_guide/01-getting-started/index.qmd": """\
             ---
             title: Getting Started
             ---
 
             Everything you need to get up and running.
         """,
-        "user_guide/01-getting-started/01-installation.qmd": """\
+        "docs/user_guide/01-getting-started/01-installation.qmd": """\
             ---
             title: Installation
             ---
@@ -92,7 +92,7 @@ SPEC = {
             pip install gdtest-ug-subdir-numbered
             ```
         """,
-        "user_guide/01-getting-started/02-quickstart.qmd": """\
+        "docs/user_guide/01-getting-started/02-quickstart.qmd": """\
             ---
             title: Quickstart
             ---
@@ -105,14 +105,14 @@ SPEC = {
             connect("localhost")
             ```
         """,
-        "user_guide/02-guides/index.qmd": """\
+        "docs/user_guide/02-guides/index.qmd": """\
             ---
             title: Guides
             ---
 
             In-depth guides for common tasks.
         """,
-        "user_guide/02-guides/01-configuration.qmd": """\
+        "docs/user_guide/02-guides/01-configuration.qmd": """\
             ---
             title: Configuration
             ---
@@ -121,7 +121,7 @@ SPEC = {
 
             Pass the host and port to `connect()`.
         """,
-        "user_guide/02-guides/02-troubleshooting.qmd": """\
+        "docs/user_guide/02-guides/02-troubleshooting.qmd": """\
             ---
             title: Troubleshooting
             ---

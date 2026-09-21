@@ -15,10 +15,10 @@ If you need a single hand-written HTML page rather than a section of `.qmd` file
 
 ## Quick Start
 
-1. Create a directory in your project root with `.qmd` files:
+1. Create a directory under `docs/` with `.qmd` files:
 
 ```
-my-package/
+my-package/docs/
 ├── examples/
 │   ├── 01-basic-usage.qmd
 │   ├── 02-advanced.qmd
@@ -29,7 +29,7 @@ my-package/
 
 2. Add the section to `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 sections:
   - title: Examples
     dir: examples
@@ -41,7 +41,7 @@ sections:
 
 Each section is defined as an entry in the `sections` array:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 sections:
   - title: Examples          # Navbar link text (required)
     dir: examples            # Source directory (required)
@@ -55,7 +55,7 @@ sections:
 | Field   | Description |
 |---------|-------------|
 | `title` | The text shown in the navbar link and sidebar heading |
-| `dir`   | Path to the source directory (relative to project root) |
+| `dir`   | Path to the source directory (relative to the configuration directory) |
 
 ### Optional Fields
 
@@ -77,7 +77,7 @@ sections:
 
 Add as many sections as you need:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 sections:
   - title: Examples
     dir: examples
@@ -151,7 +151,7 @@ By default, sections do **not** get an index page. The navbar links directly to 
 
 Set `index: true` to generate a gallery-style index page with cards for each page, using each file's `title`, `description`, and `image` from frontmatter:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 sections:
   - title: Examples
     dir: examples
@@ -171,7 +171,7 @@ When both zones are present, a horizontal rule separates them. This design mirro
 
 By default, image cards use a **2-column** responsive grid. Set `index_columns: 1` for a single-column layout (useful for wide screenshots or fewer items):
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 sections:
   - title: Gallery
     dir: gallery
@@ -203,7 +203,7 @@ demos/
 
 With this config:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 sections:
   - title: Demos
     dir: demos
@@ -267,7 +267,7 @@ The sidebar displays these as **"Getting Started"**, **"Results And Reporting"**
 
 The auto-generated title converts hyphens and underscores to spaces and applies title case. If you need different capitalization or phrasing, use `dir_titles` to override specific subdirectory headings:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 sections:
   - title: Demos
     dir: examples
@@ -334,7 +334,7 @@ A comprehensive example.
 
 3. Add to config:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 sections:
   - title: Examples
     dir: demos

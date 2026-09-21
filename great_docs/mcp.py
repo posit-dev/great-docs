@@ -10,8 +10,10 @@ Usage:
 
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -31,7 +33,8 @@ from mcp.types import (
 )
 from pydantic import AnyUrl
 
-from ._utils import is_great_docs_build_dir, is_in_great_docs_build_dir
+from ._layout import Layout, LayoutError
+from ._utils import is_in_great_docs_build_dir, recognised_build_dirs
 
 server = Server("great-docs")
 
@@ -95,7 +98,7 @@ def _get_project_root(project_path: str | None = None) -> Path:
     return Path.cwd()
 
 
-def _sibling_build_dirs(root: Path) -> list[Path]:
+def _sibling_build_dirs(root: Path, layout: Layout | None = None) -> list[Path]:
     """
     Return historical Great Docs build directories under `root`
 
@@ -112,16 +115,10 @@ def _sibling_build_dirs(root: Path) -> list[Path]:
     -------
     Marked sibling directories in name order.
     """
-    dirs: list[Path] = []
-    for candidate in sorted(root.glob("great-docs-*")):
-        if not candidate.is_dir() or candidate.is_symlink():
-            continue
-        if is_great_docs_build_dir(candidate):
-            dirs.append(candidate)
-    return dirs
+    return recognised_build_dirs(layout or Layout.make(root))
 
 
-def _build_output_dirs(root: Path) -> list[Path]:
+def _build_output_dirs(root: Path, layout: Layout | None = None) -> list[Path]:
     """
     Return all Great Docs build directories under `root`
 
@@ -137,15 +134,32 @@ def _build_output_dirs(root: Path) -> list[Path]:
     -------
     Current and historical build directories.
     """
-    current = [root / "great-docs"] if (root / "great-docs").is_dir() else []
-    return current + _sibling_build_dirs(root)
+    layout = layout or Layout.make(root)
+    current = (
+        [layout.build_dir]
+        if layout.build_dir.is_dir() and not layout.build_dir.is_symlink()
+        else []
+    )
+    return current + _sibling_build_dirs(root, layout)
 
 
-def _get_great_docs(project_path: str | None = None):
-    """Create a GreatDocs instance for the given project."""
+def _get_great_docs(
+    project_path: str | None = None, config_path: str | None = None, *, create: bool = False
+) -> Any:
+    """Resolve the selected documentation project"""
     from .core import GreatDocs
 
-    return GreatDocs(project_path=project_path)
+    return GreatDocs(project_path=project_path, config_path=config_path, create=create)
+
+
+def _get_layout(arguments: dict, *, create: bool = False) -> Layout:
+    """Resolve paths for a tool's project and configuration arguments"""
+    config_path = arguments.get("config_path")
+    return Layout.make(
+        _get_project_root(arguments.get("project_path")),
+        Path(config_path) if config_path else None,
+        create=create,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +170,7 @@ def _get_great_docs(project_path: str | None = None):
 @_handler("list_tools")
 async def list_tools() -> list[Tool]:
     """List all available Great Docs tools."""
-    return [
+    tools = [
         Tool(
             name="gd_build",
             description=(
@@ -364,6 +378,14 @@ async def list_tools() -> list[Tool]:
         ),
     ]
 
+    for tool in tools:
+        schema = tool.inputSchema if _MCP_V1 else tool.input_schema
+        schema["properties"]["config_path"] = {
+            "type": "string",
+            "description": "Configuration file path. Relative paths use the server's current working directory.",
+        }
+    return tools
+
 
 # ---------------------------------------------------------------------------
 # Tool Handlers
@@ -418,12 +440,13 @@ async def _handle_build(arguments: dict) -> list[TextContent]:
     project_path = arguments.get("project_path")
     clean = arguments.get("clean", False)
 
-    docs = _get_great_docs(project_path)
+    docs = _get_great_docs(project_path, arguments.get("config_path"))
 
     if clean:
         import shutil
 
-        for ver_dir in _sibling_build_dirs(_get_project_root(project_path)):
+        docs._validate_build_outputs()
+        for ver_dir in _sibling_build_dirs(_get_project_root(project_path), _get_layout(arguments)):
             shutil.rmtree(ver_dir)
 
     # Capture build output
@@ -440,8 +463,8 @@ async def _handle_preview(arguments: dict) -> list[TextContent]:
     port = arguments.get("port", 3000)
 
     # Check if build output exists
-    root = _get_project_root(project_path)
-    build_dir = root / "great-docs"
+    layout = _get_layout(arguments)
+    build_dir = layout.build_dir
     if not build_dir.exists():
         return [
             TextContent(
@@ -453,12 +476,24 @@ async def _handle_preview(arguments: dict) -> list[TextContent]:
             )
         ]
 
+    command = shlex.join(
+        [
+            "great-docs",
+            "preview",
+            "--project-path",
+            str(layout.package_root),
+            "--config",
+            str(layout.config_path),
+            "--port",
+            str(port),
+        ]
+    )
     return [
         TextContent(
             type="text",
             text=(
                 f"Preview server can be started with:\n"
-                f"  great-docs preview --port {port}\n\n"
+                f"  {command}\n\n"
                 f"Build directory: {build_dir}\n"
                 f"The site will be available at http://localhost:{port}/"
             ),
@@ -471,7 +506,7 @@ async def _handle_scan(arguments: dict) -> list[TextContent]:
     project_path = arguments.get("project_path")
     verbose = arguments.get("verbose", False)
 
-    docs = _get_great_docs(project_path)
+    docs = _get_great_docs(project_path, arguments.get("config_path"))
     package_name = docs._detect_package_name()
     if not package_name:
         return [TextContent(type="text", text="Error: Could not detect package name.")]
@@ -549,7 +584,7 @@ async def _handle_lint(arguments: dict) -> list[TextContent]:
     root = _get_project_root(project_path)
     checks = set(checks_arg) if checks_arg else None
 
-    result = run_lint(root, checks=checks, quiet=True)
+    result = run_lint(root, checks=checks, quiet=True, config_path=arguments.get("config_path"))
 
     if not result.issues:
         return [TextContent(type="text", text="No lint issues found. Documentation looks good!")]
@@ -568,8 +603,8 @@ async def _handle_config(arguments: dict) -> list[TextContent]:
     project_path = arguments.get("project_path")
     generate = arguments.get("generate", False)
 
-    root = _get_project_root(project_path)
-    config_path = root / "great-docs.yml"
+    layout = _get_layout(arguments, create=generate)
+    config_path = layout.config_path
 
     if generate:
         if config_path.exists():
@@ -580,8 +615,8 @@ async def _handle_config(arguments: dict) -> list[TextContent]:
                 )
             ]
 
-        docs = _get_great_docs(project_path)
-        docs.install()
+        docs = _get_great_docs(project_path, arguments.get("config_path"), create=True)
+        docs.install(force=True)
         return [
             TextContent(
                 type="text",
@@ -613,10 +648,12 @@ async def _handle_status(arguments: dict) -> list[TextContent]:
     lines = [f"Project: {root.name}", f"Path: {root}", ""]
 
     # Config status
-    config_path = root / "great-docs.yml"
+    layout = _get_layout(arguments)
+    root = layout.package_root
+    config_path = layout.config_path
     if config_path.exists():
-        lines.append("Configuration: great-docs.yml ✓")
-        docs = _get_great_docs(project_path)
+        lines.append(f"Configuration: {config_path.relative_to(root)} ✓")
+        docs = _get_great_docs(project_path, arguments.get("config_path"))
         pkg = docs._detect_package_name()
         if pkg:
             lines.append(f"Package: {pkg}")
@@ -642,7 +679,7 @@ async def _handle_status(arguments: dict) -> list[TextContent]:
 
     # Build status
     lines.append("")
-    build_dirs = _build_output_dirs(root)
+    build_dirs = _build_output_dirs(root, layout)
     if build_dirs:
         lines.append(f"Build output directories: {len(build_dirs)}")
         for d in build_dirs:
@@ -661,7 +698,7 @@ async def _handle_add_page(arguments: dict) -> list[TextContent]:
     filename = arguments.get("filename")
     content = arguments.get("content", "")
 
-    root = _get_project_root(project_path)
+    root = _get_layout(arguments).source_dir
 
     # Derive filename from title if not provided
     if not filename:
@@ -712,7 +749,7 @@ async def _handle_api_diff(arguments: dict) -> list[TextContent]:
     base_ref = arguments.get("base")
     head_ref = arguments.get("head")
 
-    docs = _get_great_docs(project_path)
+    docs = _get_great_docs(project_path, arguments.get("config_path"))
     package_name = docs._detect_package_name()
     if not package_name:
         return [TextContent(type="text", text="Error: Could not detect package name.")]
@@ -1021,8 +1058,11 @@ async def list_resources() -> list[Resource]:
     root = Path.cwd()
 
     # Configuration file
-    config_path = root / "great-docs.yml"
-    if config_path.exists():
+    try:
+        config_path = Layout.make(root).config_path
+    except LayoutError:
+        config_path = None
+    if config_path is not None and config_path.exists():
         resources.append(
             Resource(
                 name="configuration",
@@ -1088,18 +1128,26 @@ async def list_resources() -> list[Resource]:
 
 @_handler("read_resource")
 async def read_resource(uri: AnyUrl) -> str:
-    """Read the contents of a documentation resource."""
-    uri_str = str(uri)
-    root = Path.cwd()
+    """
+    Read a resource with optional project and configuration selection
+
+    The `project_path` and `config_path` query parameters follow tool argument
+    semantics. Bare URIs use automatic project configuration discovery.
+    """
+    parts = urlsplit(str(uri))
+    uri_str = parts._replace(query="").geturl()
+    query = parse_qs(parts.query)
+    arguments = {name: query[name][0] for name in ("project_path", "config_path") if name in query}
+    root = _get_project_root(arguments.get("project_path"))
 
     if uri_str == "gd://config":
-        config_path = root / "great-docs.yml"
+        config_path = _get_layout(arguments).config_path
         if not config_path.exists():
             return "# No great-docs.yml found.\n# Run `gd_config` with generate=true to create one."
         return config_path.read_text(encoding="utf-8")
 
     elif uri_str == "gd://build-log":
-        build_dirs = _build_output_dirs(root)
+        build_dirs = _build_output_dirs(root, _get_layout(arguments))
         if build_dirs:
             names = ", ".join(d.name for d in build_dirs)
             return (
@@ -1110,7 +1158,7 @@ async def read_resource(uri: AnyUrl) -> str:
 
     elif uri_str == "gd://api-surface":
         try:
-            docs = _get_great_docs()
+            docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
             package_name = docs._detect_package_name()
             if not package_name:
                 return "Error: Could not detect package name."
@@ -1143,7 +1191,7 @@ async def read_resource(uri: AnyUrl) -> str:
             return f"Error discovering API surface: {e}"
 
     elif uri_str == "gd://status":
-        result = await _handle_status({})
+        result = await _handle_status(arguments)
         return result[0].text
 
     elif uri_str == "gd://pyproject":
@@ -1156,7 +1204,7 @@ async def read_resource(uri: AnyUrl) -> str:
         # Dynamic reference page resource (from template)
         symbol = uri_str.removeprefix("gd://reference/")
         try:
-            docs = _get_great_docs()
+            docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
             package_name = docs._detect_package_name()
             module_name = docs._detect_module_name()
             importable_name = module_name or docs._normalize_package_name(package_name)
@@ -1194,9 +1242,23 @@ async def read_resource(uri: AnyUrl) -> str:
 async def list_resource_templates() -> list[ResourceTemplate]:
     """List dynamic resource templates."""
     return [
+        *[
+            ResourceTemplate(
+                name=f"selected-{resource}",
+                uriTemplate=f"gd://{resource}{{?project_path,config_path}}",
+                description=f"Read {description}. Select a configuration with config_path when automatic discovery is ambiguous or a custom path is used.",
+                mimeType="text/yaml" if resource == "config" else "text/plain",
+            )
+            for resource, description in (
+                ("config", "the project configuration"),
+                ("api-surface", "the selected package's public API"),
+                ("status", "the selected documentation project's status"),
+                ("build-log", "the selected documentation project's build output locations"),
+            )
+        ],
         ResourceTemplate(
             name="reference-symbol",
-            uriTemplate="gd://reference/{symbol}",
+            uriTemplate="gd://reference/{symbol}{?project_path,config_path}",
             description=(
                 "Read documentation for a specific API symbol. "
                 "Returns the symbol's kind, module path, and docstring."
@@ -1205,7 +1267,7 @@ async def list_resource_templates() -> list[ResourceTemplate]:
         ),
         ResourceTemplate(
             name="doc-page",
-            uriTemplate="gd://page/{path}",
+            uriTemplate="gd://page/{path}{?project_path,config_path}",
             description=(
                 "Read the source content of any documentation page (.qmd file). "
                 "Path is relative to the project root (e.g., 'user_guide/getting-started.qmd')."
@@ -1228,6 +1290,7 @@ async def handle_completion(
 ) -> Completion | None:
     """Provide auto-completions for prompt arguments and resource template URIs."""
     value = argument.value or ""
+    arguments = getattr(context, "arguments", None) or {}
 
     # Prompt argument completions
     if isinstance(ref, PromptReference):
@@ -1260,7 +1323,7 @@ async def handle_completion(
         if ref.name == "improve-docstrings" and argument.name == "symbol":
             # Complete with actual package symbols
             try:
-                docs = _get_great_docs()
+                docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
                 package_name = docs._detect_package_name()
                 module_name = docs._detect_module_name()
                 importable_name = module_name or docs._normalize_package_name(package_name)
@@ -1274,11 +1337,18 @@ async def handle_completion(
             # Suggest current directory
             return Completion(values=[str(Path.cwd())])
 
+        if argument.name == "config_path":
+            root = _get_project_root(arguments.get("project_path"))
+            paths = [root / "great-docs.yml", root / "docs/great-docs.yml"]
+            return Completion(
+                values=[str(path) for path in paths if path.is_file() and value in str(path)]
+            )
+
     # Resource template completions
     if isinstance(ref, ResourceTemplateReference):
         if "reference" in str(ref.uri) and argument.name == "symbol":
             try:
-                docs = _get_great_docs()
+                docs = _get_great_docs(arguments.get("project_path"), arguments.get("config_path"))
                 package_name = docs._detect_package_name()
                 module_name = docs._detect_module_name()
                 importable_name = module_name or docs._normalize_package_name(package_name)
@@ -1290,10 +1360,13 @@ async def handle_completion(
 
         if "page" in str(ref.uri) and argument.name == "path":
             # List source pages without their generated build copies.
-            root = Path.cwd()
-            rel_paths = (p.relative_to(root) for p in root.rglob("*.qmd"))
+            layout = _get_layout(arguments)
+            root = layout.package_root
+            rel_paths = (p.relative_to(root) for p in layout.source_dir.rglob("*.qmd"))
             qmd_files = sorted(
-                str(rel) for rel in rel_paths if not is_in_great_docs_build_dir(rel.parts, root)
+                str(rel)
+                for rel in rel_paths
+                if not is_in_great_docs_build_dir(rel.parts, root, layout)
             )
             filtered = [f for f in qmd_files if value.lower() in f.lower()]
             return Completion(values=filtered[:20], hasMore=len(filtered) > 20)

@@ -47,7 +47,7 @@ SPEC = {
                 """
                 return f"rendered: {topic}"
         ''',
-        "marketing/pages/launch.htm": """
+        "docs/marketing/pages/launch.htm": """
             ---
             title: Launch Home
             layout: passthrough
@@ -58,7 +58,7 @@ SPEC = {
               <p>Passthrough page sourced from a nested `.htm` file.</p>
             </section>
         """,
-        "marketing/pages/assets/site.css": ":root { --launch-home: 1; }\n",
+        "docs/marketing/pages/assets/site.css": ":root { --launch-home: 1; }\n",
         "README.md": (
             "# gdtest-custom-basename-output\n\n"
             "Synthetic package for basename-derived custom page output coverage.\n"

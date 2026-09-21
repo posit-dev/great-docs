@@ -1346,8 +1346,84 @@ class TestSiteUrlVersionAdjustment:
 
 class TestSnapshotCachePath:
     def test_cache_path(self, tmp_path: Path):
-        path = _snapshot_cache_path(tmp_path, "v0.3.0")
+        path = _snapshot_cache_path(tmp_path / ".great-docs-cache", "v0.3.0")
         assert path == tmp_path / ".great-docs-cache" / "snapshots" / "v0.3.0.json"
+
+
+class TestRebuildApiFromGitRefCustomCacheDir:
+    def test_uses_config_cache_dir_over_project_root(self, tmp_path: Path) -> None:
+        from unittest.mock import patch
+
+        from great_docs._versioned_build import _rebuild_api_from_git_ref
+        from great_docs.config import Config
+
+        entry = VersionEntry(tag="0.2", label="0.2", latest=False, git_ref="v0.2.0")
+        custom_cache = tmp_path / "docs" / ".cache"
+        cache_dir = custom_cache / "snapshots"
+        cache_dir.mkdir(parents=True)
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="pkg",
+            symbols={"my_func": SymbolInfo(name="my_func", kind="function")},
+        )
+        snap.save(cache_dir / "v0.2.0.json")
+        config = Config(
+            tmp_path, config_path=tmp_path / "docs" / "great-docs.yml", cache_dir=custom_cache
+        )
+        dest = tmp_path / "dest"
+        dest.mkdir()
+
+        with patch(
+            "great_docs._versioned_build._validate_git_ref_is_tag",
+            return_value=True,
+        ):
+            pages = _rebuild_api_from_git_ref(dest, tmp_path, entry, config)
+
+        assert "reference/my_func.html" in pages
+        assert not (tmp_path / ".great-docs-cache").exists()
+
+
+class TestPruneCliPagesForVersionCustomCacheDir:
+    def test_uses_config_cache_dir_over_project_root(self, tmp_path: Path) -> None:
+        from great_docs._api_diff import ApiSnapshot, CliCommandInfo
+        from great_docs._versioned_build import _prune_cli_pages_for_version
+        from great_docs.config import Config
+
+        entry = VersionEntry(tag="0.2", label="0.2", latest=False, git_ref="v0.2.0")
+
+        # Keep the snapshot only in the custom cache; leave the legacy path absent.
+        custom_cache = tmp_path / "docs" / ".cache"
+        cache_dir = custom_cache / "snapshots"
+        cache_dir.mkdir(parents=True)
+        snap = ApiSnapshot(
+            version="0.2",
+            package_name="pkg",
+            symbols={"func": SymbolInfo(name="func", kind="function")},
+            cli_commands=CliCommandInfo(
+                name="cli",
+                help="CLI tool",
+                subcommands=[
+                    CliCommandInfo(name="build", help="Build docs"),
+                ],
+            ),
+        )
+        snap.save(cache_dir / "v0.2.0.json")
+        config = Config(
+            tmp_path, config_path=tmp_path / "docs" / "great-docs.yml", cache_dir=custom_cache
+        )
+
+        cli_dir = tmp_path / "reference" / "cli"
+        cli_dir.mkdir(parents=True)
+        (cli_dir / "index.qmd").write_text("CLI index")
+        (cli_dir / "build.qmd").write_text("Build command")
+        (cli_dir / "old_command.qmd").write_text("Old command")
+
+        _prune_cli_pages_for_version(tmp_path, tmp_path, entry, config)
+
+        assert (cli_dir / "build.qmd").exists()
+        assert (cli_dir / "index.qmd").exists()
+        assert not (cli_dir / "old_command.qmd").exists()
+        assert not (tmp_path / ".great-docs-cache").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -4488,7 +4564,6 @@ class TestEscapingRelativePaths:
 
 
 class TestPruneCliPagesNonQmd:
-
     def test_non_qmd_file_not_deleted(self, tmp_path: Path):
         from great_docs._versioned_build import _prune_cli_pages
 
@@ -4514,15 +4589,12 @@ class TestPruneCliPagesNonQmd:
 
 
 class TestRewriteCliIndexMdHref:
-
     def test_md_extension_stripped(self, tmp_path: Path):
         from great_docs._versioned_build import _rewrite_cli_index
 
         index = tmp_path / "index.qmd"
         index.write_text(
-            "---\ntitle: CLI\n---\n\n"
-            "[build](build.md){.doc-function}\n"
-            ":   Build docs\n\n",
+            "---\ntitle: CLI\n---\n\n[build](build.md){.doc-function}\n:   Build docs\n\n",
         )
         _rewrite_cli_index(index, {"index", "build"})
         assert "[build](build.md)" in index.read_text()
@@ -4534,7 +4606,6 @@ class TestRewriteCliIndexMdHref:
 
 
 class TestPruneQuartoCliSidebarEdges:
-
     def test_empty_yaml_returns_early(self, tmp_path: Path):
         from great_docs._versioned_build import _prune_quarto_cli_sidebar
 
@@ -4594,7 +4665,6 @@ class TestPruneQuartoCliSidebarEdges:
 
 
 class TestPruneSidebarContentsEdges:
-
     def test_dict_without_href_or_section_kept(self, tmp_path: Path):
         from great_docs._versioned_build import _prune_sidebar_contents
 
@@ -4617,7 +4687,6 @@ class TestPruneSidebarContentsEdges:
 
 
 class TestExpandVersionBadgesEdges:
-
     def test_fence_closing_at_eof_without_newline(self):
         entry = _make_entry("0.3")
         versions = parse_versions_config(["0.3", "0.2"])
@@ -4625,3 +4694,15 @@ class TestExpandVersionBadgesEdges:
         result = expand_version_badges(content, entry, versions)
         assert "gd-badge-new" in result
         assert "```python" in result
+
+
+# Both redirect formats and HTML aliases must use the same published segment.
+def test_prefixed_prerelease_redirects(tmp_path: Path) -> None:
+    versions = parse_versions_config(
+        [{"tag": "v2.0rc1", "prerelease": True}, {"tag": "1.0", "latest": True}]
+    )
+    create_version_aliases(tmp_path, versions, "1.0")
+    generate_redirect_files(tmp_path, versions, "1.0")
+    assert "/v/2.0rc1/" in (tmp_path / "v/dev/index.html").read_text()
+    assert "/v/2.0rc1/:splat" in (tmp_path / "_redirects").read_text()
+    assert "/v/2.0rc1/:path*" in (tmp_path / "vercel.json").read_text()

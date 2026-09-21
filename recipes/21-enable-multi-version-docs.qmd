@@ -14,7 +14,7 @@ This recipe walks you through enabling versioned documentation for a project wit
 
 Add a `versions` list to your `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 versions:
   - label: "0.3.0 (dev)"
     tag: dev
@@ -48,7 +48,7 @@ git stash pop
 
 Then reference the snapshots in your config:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 versions:
   - label: "0.3.0 (dev)"
     tag: dev
@@ -90,7 +90,7 @@ A version selector dropdown appears in the navbar.
 
 Mark content that only applies to certain versions:
 
-```{.markdown filename="user_guide/getting-started.qmd"}
+```{.markdown filename="docs/user_guide/getting-started.qmd"}
 ::: {.version-only versions=">=0.2"}
 ## New Configuration Format
 
@@ -100,7 +100,7 @@ Starting in 0.2, configuration uses YAML instead of TOML.
 
 Or scope an entire page to specific versions using frontmatter:
 
-```{.yaml filename="user_guide/migration.qmd"}
+```{.yaml filename="docs/user_guide/migration.qmd"}
 ---
 title: "Migrating from 0.1 to 0.2"
 versions: ["0.2", "dev"]
@@ -121,7 +121,7 @@ When you're ready to publish, run a full build to generate all versions.
 
 When you drop support for a version, add `eol: true`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
   - label: "0.1.0"
     tag: "0.1"
     eol: true

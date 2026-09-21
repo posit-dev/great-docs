@@ -495,7 +495,7 @@ The full set of shortcode parameters mirrors the Python function:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `file` | string | — | Path to data file (required, relative to project root) |
+| `file` | string | — | Path to data file (required, relative to the generated Quarto project) |
 | `columns` | string | all | Comma-separated column names to display |
 | `n_head` | string | `"5"` | Number of rows from the start |
 | `n_tail` | string | `"5"` | Number of rows from the end |

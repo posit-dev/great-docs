@@ -79,12 +79,13 @@ cli:
 
 ## Build and rendering errors
 
-### `great-docs/` directory has stale content
+### Generated documentation has stale content
 
-**Cause**: Edited files inside `great-docs/` directly.
+**Cause**: Edited files inside `docs/_quarto/default/` directly.
 
-**Fix**: Delete `great-docs/` and rebuild. Never edit the build
-directory — it's overwritten on every build.
+**Fix**: Put changes in the source files under `docs/` and run
+`great-docs build`. The generated Quarto project is overwritten on every build;
+deploy the assembled output from `docs/_site/`.
 
 ### User guide pages in wrong order
 

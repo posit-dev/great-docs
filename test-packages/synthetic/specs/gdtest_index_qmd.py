@@ -40,7 +40,7 @@ SPEC = {
                 """
                 return "Hello!"
         ''',
-        "index.qmd": """\
+        "docs/index.qmd": """\
             ---
             title: Custom Landing Page
             ---

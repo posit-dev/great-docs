@@ -73,9 +73,9 @@ SPEC = {
                 """
                 return data
         ''',
-        "assets/logo.svg": _NAVBAR_LOGO_SVG,
-        "assets/logo-hero.svg": _HERO_LOGO_SVG,
-        "assets/logo-hero-dark.svg": _HERO_LOGO_DARK_SVG,
+        "docs/assets/logo.svg": _NAVBAR_LOGO_SVG,
+        "docs/assets/logo-hero.svg": _HERO_LOGO_SVG,
+        "docs/assets/logo-hero-dark.svg": _HERO_LOGO_DARK_SVG,
         "README.md": """\
             # gdtest-hero-auto-logo
 

@@ -888,12 +888,12 @@ class TestNormalizeFreezeShorthand:
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "testpkg"\nversion = "0.1"\n')
         docs = GreatDocs(project_path=str(tmp_path))
         # Create build dir manually for testing
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         return docs
 
     def test_shorthand_auto(self, tmp_project: Path):
         docs = self._make_docs(tmp_project)
-        qmd = docs.project_path / "page.qmd"
+        qmd = docs.build_dir / "page.qmd"
         qmd.write_text("---\ntitle: Test\nfreeze: auto\n---\n\n# Hello\n")
 
         count = docs._normalize_freeze_shorthand()
@@ -906,7 +906,7 @@ class TestNormalizeFreezeShorthand:
 
     def test_shorthand_true(self, tmp_project: Path):
         docs = self._make_docs(tmp_project)
-        qmd = docs.project_path / "page.qmd"
+        qmd = docs.build_dir / "page.qmd"
         qmd.write_text("---\ntitle: Test\nfreeze: true\n---\n\n# Hello\n")
 
         count = docs._normalize_freeze_shorthand()
@@ -917,7 +917,7 @@ class TestNormalizeFreezeShorthand:
 
     def test_already_nested_unchanged(self, tmp_project: Path):
         docs = self._make_docs(tmp_project)
-        qmd = docs.project_path / "page.qmd"
+        qmd = docs.build_dir / "page.qmd"
         original = "---\ntitle: Test\nexecute:\n  freeze: auto\n---\n\n# Hello\n"
         qmd.write_text(original)
 
@@ -928,7 +928,7 @@ class TestNormalizeFreezeShorthand:
 
     def test_no_frontmatter_skipped(self, tmp_project: Path):
         docs = self._make_docs(tmp_project)
-        qmd = docs.project_path / "page.qmd"
+        qmd = docs.build_dir / "page.qmd"
         qmd.write_text("# No frontmatter\n")
 
         count = docs._normalize_freeze_shorthand()
@@ -936,7 +936,7 @@ class TestNormalizeFreezeShorthand:
 
     def test_no_freeze_key_skipped(self, tmp_project: Path):
         docs = self._make_docs(tmp_project)
-        qmd = docs.project_path / "page.qmd"
+        qmd = docs.build_dir / "page.qmd"
         original = "---\ntitle: Normal Page\n---\n\n# Hello\n"
         qmd.write_text(original)
 
@@ -947,7 +947,7 @@ class TestNormalizeFreezeShorthand:
 
     def test_existing_execute_block_gets_freeze_added(self, tmp_project: Path):
         docs = self._make_docs(tmp_project)
-        qmd = docs.project_path / "page.qmd"
+        qmd = docs.build_dir / "page.qmd"
         qmd.write_text("---\ntitle: Test\nexecute:\n  echo: false\nfreeze: auto\n---\n\n# Hi\n")
 
         count = docs._normalize_freeze_shorthand()
@@ -965,11 +965,11 @@ class TestNormalizeFreezeShorthand:
 
     def test_multiple_files(self, tmp_project: Path):
         docs = self._make_docs(tmp_project)
-        subdir = docs.project_path / "user-guide"
+        subdir = docs.build_dir / "user-guide"
         subdir.mkdir()
-        (docs.project_path / "a.qmd").write_text("---\nfreeze: auto\n---\n\n# A\n")
+        (docs.build_dir / "a.qmd").write_text("---\nfreeze: auto\n---\n\n# A\n")
         (subdir / "b.qmd").write_text("---\nfreeze: true\n---\n\n# B\n")
-        (docs.project_path / "c.qmd").write_text("---\ntitle: No freeze\n---\n\n# C\n")
+        (docs.build_dir / "c.qmd").write_text("---\ntitle: No freeze\n---\n\n# C\n")
 
         count = docs._normalize_freeze_shorthand()
 
@@ -1370,9 +1370,9 @@ def _quarto_config_for(tmp_path: Path, gd_yaml: str) -> dict:
     )
     (tmp_path / "great-docs.yml").write_text(gd_yaml, encoding="utf-8")
     docs = GreatDocs(project_path=str(tmp_path))
-    docs.project_path.mkdir(parents=True, exist_ok=True)
+    docs.build_dir.mkdir(parents=True, exist_ok=True)
     docs._update_quarto_config()
-    with open(docs.project_path / "_quarto.yml") as f:
+    with open(docs.build_dir / "_quarto.yml") as f:
         return read_yaml(f)
 
 

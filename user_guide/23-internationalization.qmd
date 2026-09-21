@@ -21,7 +21,7 @@ attribute across the site is automatically translated.
 Add the `language` key under `site` in your configuration file. The value is a
 [BCP 47](https://en.wikipedia.org/wiki/IETF_language_tag) language code:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 site:
   language: fr
 ```

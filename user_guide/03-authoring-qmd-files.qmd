@@ -1025,10 +1025,10 @@ manual copying required.
 
 When you need purpose-written examples that don't belong in your library's source tree, place them
 in an underscore-prefixed subdirectory of your user guide directory (for example,
-`user_guide/_includes/` or `user_guide/_snippets/`):
+`docs/user_guide/_includes/` or `docs/user_guide/_snippets/`):
 
 ```text
-user_guide/
+docs/user_guide/
 ├── _includes/
 │   ├── quickstart.py
 │   ├── config-example.yaml
@@ -1052,7 +1052,7 @@ for rendering.
 ::: {.callout-important}
 ## Use underscore-prefixed directories for snippet files
 
-Directories inside `user_guide/` that contain `.qmd` files are normally treated as content
+Directories inside `docs/user_guide/` that contain `.qmd` files are normally treated as content
 subdirectories. Their `.qmd` files are discovered as user guide pages. A leading underscore
 (e.g., `_includes/`, `_snippets/`) tells Great Docs to treat the directory as an **asset
 directory** instead: the files are copied to the build output but are not discovered as standalone
@@ -1186,7 +1186,7 @@ coordination tool that costs nothing in the rendered output.
 
 Here's a realistic User Guide page that combines many of these features:
 
-````{.yaml filename="user_guide/04-getting-started.qmd"}
+````{.yaml filename="docs/user_guide/04-getting-started.qmd"}
 ---
 title: "Getting Started"
 guide-section: "Tutorials"
@@ -1232,7 +1232,7 @@ great-docs init
 great-docs build
 ```
 
-The generated site is in `great-docs/_site/`. Open `index.html` to preview it.
+The generated site is in `docs/_site/`. Open `index.html` to preview it.
 
 ## What's Next?
 

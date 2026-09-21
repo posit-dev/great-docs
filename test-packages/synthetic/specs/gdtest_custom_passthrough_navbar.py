@@ -47,7 +47,7 @@ SPEC = {
                 """
                 return f"rendered: {topic}"
         ''',
-        "marketing/index.html": """
+        "docs/marketing/index.html": """
             ---
             title: Shiny for Python
             layout: passthrough

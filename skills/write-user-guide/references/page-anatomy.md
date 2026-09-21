@@ -101,11 +101,12 @@ mypackage.hello()
 
 ```
 project-root/
-├── user_guide/
-│   ├── 00-introduction.qmd
-│   ├── 01-installation.qmd
-│   └── ...
-├── great-docs.yml
+├── docs/
+│   ├── great-docs.yml
+│   └── user_guide/
+│       ├── 00-introduction.qmd
+│       ├── 01-installation.qmd
+│       └── ...
 └── pyproject.toml
 ```
 

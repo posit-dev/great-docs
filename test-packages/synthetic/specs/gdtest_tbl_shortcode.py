@@ -63,7 +63,7 @@ SPEC = {
             '    return f"Dataset: {name}"\n'
         ),
         # ── Data files in assets/ ─────────────────────────────────────────
-        "assets/students.csv": (
+        "docs/assets/students.csv": (
             "name,subject,score,grade,passed\n"
             "Alice,Math,95.5,A,true\n"
             "Bob,Science,82.0,B,true\n"
@@ -76,7 +76,7 @@ SPEC = {
             "Iris,History,66.4,D+,true\n"
             "Jack,Art,73.7,C,true\n"
         ),
-        "assets/products.tsv": (
+        "docs/assets/products.tsv": (
             "product\tcategory\tprice\tstock\trating\n"
             "Widget\tElectronics\t29.99\t150\t4.5\n"
             "Gadget\tTools\t49.50\t80\t3.8\n"
@@ -86,7 +86,7 @@ SPEC = {
             "Contraption\tElectronics\t65.00\t44\t3.5\n"
             "Apparatus\tTools\t120.00\t12\t4.7\n"
         ),
-        "assets/server_logs.jsonl": (
+        "docs/assets/server_logs.jsonl": (
             '{"timestamp":"2025-01-15T08:30:00","level":"INFO","module":"auth","message":"User login successful"}\n'
             '{"timestamp":"2025-01-15T08:31:12","level":"WARNING","module":"db","message":"Slow query detected (3.2s)"}\n'
             '{"timestamp":"2025-01-15T08:32:45","level":"ERROR","module":"api","message":"Request timeout on /v2/users"}\n'
@@ -94,7 +94,7 @@ SPEC = {
             '{"timestamp":"2025-01-15T08:34:20","level":"DEBUG","module":"auth","message":"Token refresh for session abc123"}\n'
             '{"timestamp":"2025-01-15T08:35:55","level":"ERROR","module":"db","message":"Connection pool exhausted"}\n'
         ),
-        "assets/wide_metrics.csv": (
+        "docs/assets/wide_metrics.csv": (
             "metric,jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec\n"
             "revenue,120.5,135.2,128.7,142.3,155.8,148.9,162.1,170.4,165.3,178.2,185.6,192.0\n"
             "costs,80.1,82.3,79.5,85.2,90.1,88.7,95.3,100.2,97.8,105.1,110.3,115.0\n"
@@ -103,7 +103,7 @@ SPEC = {
             "conversion,3.2,3.5,3.1,3.8,4.0,3.7,4.2,4.5,4.3,4.6,4.8,5.0\n"
         ),
         # ── User guide pages (flat layout) ────────────────────────────────
-        "user_guide/01-csv-basics.qmd": (
+        "docs/user_guide/01-csv-basics.qmd": (
             "---\n"
             "title: CSV via Shortcode\n"
             "---\n"
@@ -126,7 +126,7 @@ SPEC = {
             "\n"
             '{{< tbl-preview file="assets/students.csv" columns="name,score,grade" show_all="true" >}}\n'
         ),
-        "user_guide/02-tsv-files.qmd": (
+        "docs/user_guide/02-tsv-files.qmd": (
             "---\n"
             "title: TSV via Shortcode\n"
             "---\n"
@@ -143,7 +143,7 @@ SPEC = {
             "\n"
             '{{< tbl-preview file="assets/products.tsv" n_head="3" n_tail="0" >}}\n'
         ),
-        "user_guide/03-jsonl-files.qmd": (
+        "docs/user_guide/03-jsonl-files.qmd": (
             "---\n"
             "title: JSONL via Shortcode\n"
             "---\n"
@@ -160,7 +160,7 @@ SPEC = {
             "\n"
             '{{< tbl-preview file="assets/server_logs.jsonl" show_all="true" max_col_width="120" >}}\n'
         ),
-        "user_guide/04-shortcode-options.qmd": (
+        "docs/user_guide/04-shortcode-options.qmd": (
             "---\n"
             "title: Shortcode Options\n"
             "---\n"
@@ -192,7 +192,7 @@ SPEC = {
             '{{< tbl-preview file="assets/students.csv" show_all="true" '
             'show_row_numbers="false" show_dtypes="false" show_dimensions="false" >}}\n'
         ),
-        "user_guide/05-multiple-tables.qmd": (
+        "docs/user_guide/05-multiple-tables.qmd": (
             "---\n"
             "title: Multiple Tables\n"
             "---\n"

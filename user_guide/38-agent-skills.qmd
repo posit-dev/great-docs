@@ -167,7 +167,7 @@ because you can encode knowledge that can't be inferred from docstrings alone.
 If you'd rather let Great Docs generate the base skill but want to add your own sections, use the
 `skill` configuration options in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 skill:
   gotchas:
     - "Always call init() before process()"
@@ -207,16 +207,17 @@ Some packages have distinct functional areas that benefit from separate skills. 
 data visualization library might have one skill for building charts and another for theming. The
 `skill.skills` configuration lets you publish multiple named skills from a single package:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 skill:
   skills:
     - name: my-package
-      file: skills/my-package/SKILL.md
+      file: ../skills/my-package/SKILL.md
     - name: my-package-themes
-      file: skills/my-package-themes/SKILL.md
+      file: ../skills/my-package-themes/SKILL.md
 ```
 
-Each entry must have a `name` and a `file` path (relative to the project root). During the build:
+Each entry must have a `name` and a `file` path relative to `docs/great-docs.yml`.
+Use `../skills/` for curated skills kept at the package root. During the build:
 
 - the first skill in the list becomes the primary `skill.md` in the docs output
 - all skills are aggregated into a single `.well-known/agent-skills/index.json` manifest
@@ -262,7 +263,7 @@ Great Docs generates this workflow for you with the correct settings. See the
 
 ### Configuration Reference
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 skill:
   enabled: true          # Set to false to disable skill.md entirely
   file: null             # Path to a SKILL.md (overrides curated and generated)
@@ -532,7 +533,7 @@ Authors write a `SKILL.md`, and it is published and bundled exactly as written.
 
 If you don't want Great Docs to generate or serve a `SKILL.md` at all:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 skill:
   enabled: false
 ```

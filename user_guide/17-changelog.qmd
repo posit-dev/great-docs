@@ -37,7 +37,7 @@ If no GitHub URL is found, the changelog step is silently skipped and the build 
 
 The changelog works out of the box with sensible defaults. You only need to add a `changelog` section to `great-docs.yml` if you want to change the behavior:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 changelog:
   enabled: true        # Enable/disable changelog (default: true)
   max_releases: 50     # Maximum releases to include (default: 50)
@@ -47,7 +47,7 @@ changelog:
 
 If you don't want a changelog page at all:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 changelog:
   enabled: false
 ```
@@ -56,7 +56,7 @@ changelog:
 
 For projects with many releases, you can cap how many appear:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 changelog:
   max_releases: 20
 ```

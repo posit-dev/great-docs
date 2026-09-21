@@ -10,7 +10,7 @@ If your package has a Click-based CLI, Great Docs can auto-discover it and gener
 
 ## Enable CLI Docs
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 cli:
   enabled: true
 ```
@@ -35,7 +35,7 @@ Great Docs looks for Click commands in these locations:
 
 If auto-discovery doesn't find your CLI, specify the module and object name:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 cli:
   enabled: true
   module: my_package.commands  # Where the Click group lives

@@ -52,7 +52,7 @@ SPEC = {
                 """
                 return f"rendered: {topic}"
         ''',
-        "marketing/launchpad.html": """
+        "docs/marketing/launchpad.html": """
             ---
             title: Launchpad
             layout: passthrough
@@ -63,7 +63,7 @@ SPEC = {
               <p>Custom passthrough content with the Great Docs shell.</p>
             </section>
         """,
-        "playgrounds/widget.html": """
+        "docs/playgrounds/widget.html": """
             ---
             layout: raw
             navbar: Widget Lab
@@ -77,14 +77,14 @@ SPEC = {
               </body>
             </html>
         """,
-        "marketing/hidden.html": """
+        "docs/marketing/hidden.html": """
             ---
             title: Hidden Canvas
             layout: passthrough
             ---
             <section><p>This page should not appear in the navbar.</p></section>
         """,
-        "playgrounds/assets/chart.js": "window.GDTEST_CUSTOM_CHART = true;\n",
+        "docs/playgrounds/assets/chart.js": "window.GDTEST_CUSTOM_CHART = true;\n",
         "README.md": (
             "# gdtest-custom-mixed-modes\n\nSynthetic package for mixed custom page coverage.\n"
         ),

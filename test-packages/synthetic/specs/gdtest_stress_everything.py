@@ -356,7 +356,7 @@ SPEC = {
                     raise ValueError("name must not be empty")
                 return True
         ''',
-        "user_guide/01-intro.qmd": (
+        "docs/user_guide/01-intro.qmd": (
             "---\n"
             "title: Introduction\n"
             "guide-section: Basics\n"
@@ -366,7 +366,7 @@ SPEC = {
             "\n"
             "Welcome to the Everything Stress Test package.\n"
         ),
-        "user_guide/02-install.qmd": (
+        "docs/user_guide/02-install.qmd": (
             "---\n"
             "title: Installation\n"
             "guide-section: Basics\n"
@@ -376,7 +376,7 @@ SPEC = {
             "\n"
             "Install the package using pip.\n"
         ),
-        "user_guide/03-advanced.qmd": (
+        "docs/user_guide/03-advanced.qmd": (
             "---\n"
             "title: Advanced Usage\n"
             "guide-section: Advanced\n"
@@ -386,7 +386,7 @@ SPEC = {
             "\n"
             "Advanced topics for power users.\n"
         ),
-        "examples/basic.qmd": (
+        "docs/examples/basic.qmd": (
             "---\n"
             "title: Basic Example\n"
             "---\n"
@@ -395,7 +395,7 @@ SPEC = {
             "\n"
             "A basic example showing core functionality.\n"
         ),
-        "tutorials/getting-started.qmd": (
+        "docs/tutorials/getting-started.qmd": (
             "---\n"
             "title: Getting Started\n"
             "---\n"

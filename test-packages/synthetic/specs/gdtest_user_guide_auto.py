@@ -69,21 +69,21 @@ SPEC = {
                 app.start()
                 return app
         ''',
-        "user_guide/01-intro.qmd": """\
+        "docs/user_guide/01-intro.qmd": """\
             ---
             title: Introduction
             ---
 
             Welcome to the user guide!
         """,
-        "user_guide/02-quickstart.qmd": """\
+        "docs/user_guide/02-quickstart.qmd": """\
             ---
             title: Quick Start
             ---
 
             Get started quickly.
         """,
-        "user_guide/03-advanced.qmd": """\
+        "docs/user_guide/03-advanced.qmd": """\
             ---
             title: Advanced Topics
             ---

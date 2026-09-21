@@ -114,13 +114,13 @@ After a build, you can inspect the generated files directly:
 
 ```bash
 # Check that both files were created
-ls -la great-docs/llms.txt great-docs/llms-full.txt
+ls -la docs/_site/llms.txt docs/_site/llms-full.txt
 
 # Preview the compact index
-head -30 great-docs/llms.txt
+head -30 docs/_site/llms.txt
 
 # Check the size of the full file
-wc -l great-docs/llms-full.txt
+wc -l docs/_site/llms-full.txt
 ```
 
 Or visit them on your deployed site:

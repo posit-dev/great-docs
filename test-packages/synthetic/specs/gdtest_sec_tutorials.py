@@ -72,7 +72,7 @@ SPEC = {
                 """
                 return True
         ''',
-        "tutorials/getting-started.qmd": (
+        "docs/tutorials/getting-started.qmd": (
             "---\n"
             "title: Getting Started\n"
             "---\n"
@@ -81,7 +81,7 @@ SPEC = {
             "\n"
             "A beginner-friendly tutorial to help you get started.\n"
         ),
-        "tutorials/intermediate.qmd": (
+        "docs/tutorials/intermediate.qmd": (
             "---\n"
             "title: Intermediate Tutorial\n"
             "---\n"

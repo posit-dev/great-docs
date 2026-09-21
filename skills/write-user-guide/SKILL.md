@@ -28,8 +28,8 @@ the auto-generated API reference.
 ## Quick start
 
 ```bash
-mkdir -p user_guide
-cat > user_guide/00-introduction.qmd << 'EOF'
+mkdir -p docs/user_guide
+cat > docs/user_guide/00-introduction.qmd << 'EOF'
 ---
 title: "Introduction"
 guide-section: "Getting Started"
@@ -58,23 +58,23 @@ skills/write-user-guide/
 
 | Need                         | Action                                         |
 | ---------------------------- | ---------------------------------------------- |
-| Add a new guide page         | Create `user_guide/NN-topic.qmd`               |
+| Add a new guide page         | Create `docs/user_guide/NN-topic.qmd`          |
 | Reorder pages                | Rename numeric prefixes                        |
 | Group pages into sections    | Set `guide-section` in frontmatter             |
 | Add an interactive example   | Use `{python}` code cells in the `.qmd`        |
 | Cross-reference another page | Use `[text](../user-guide/page.qmd)` links     |
 | Embed a callout              | Use `:::{.callout-tip}` / `:::{.callout-note}` |
-| Add images                   | Place in `assets/` and reference from QMD      |
+| Add images                   | Place in `docs/assets/` and reference from QMD |
 
 ## Core concepts
 
 ### File naming convention
 
-Every page in `user_guide/` must have a two-digit numeric prefix
+Every page in `docs/user_guide/` must have a two-digit numeric prefix
 that controls sidebar ordering:
 
 ```
-user_guide/
+docs/user_guide/
 ├── 00-introduction.qmd     # appears first
 ├── 01-installation.qmd
 ├── 02-quickstart.qmd
@@ -222,7 +222,7 @@ Additional cell-level controls:
 When a page involves sample datasets or transformed DataFrames,
 use the built-in table widgets instead of raw `print()` output.
 
-**Shortcodes** (for static data files in `assets/data/`):
+**Shortcodes** (for static data files in `docs/assets/data/`):
 
 ```markdown
 {{< tbl-preview file="assets/data/students.csv" >}}
@@ -256,17 +256,17 @@ See the [API reference](../reference/GreatDocs.qmd) page.
 ```
 
 Use relative paths from the rendered output location
-(`great-docs/user-guide/`), not the source.
+(`docs/_quarto/default/user-guide/`), not the source.
 
 ### Images and assets
 
-Place images in `assets/` at the project root:
+Place images in `docs/assets/`, beside `docs/great-docs.yml`:
 
 ```markdown
 ![Architecture diagram](../assets/architecture.png)
 ```
 
-Great Docs copies the `assets/` directory into the build
+Great Docs copies the `docs/assets/` directory into the build
 automatically.
 
 ## Workflows
@@ -321,7 +321,7 @@ the sidebar ordering and rendered content.
 4. **`guide-section` is case-sensitive.** `"Getting Started"` and
    `"getting started"` create separate sections.
 5. **Don't nest directories.** All pages must be directly in
-   `user_guide/`, not in subdirectories.
+   `docs/user_guide/`, not in subdirectories.
 6. **Hyphens, not underscores, in filenames.** Great Docs converts
    underscores to hyphens in URLs, so `my_page.qmd` becomes
    `my-page.html`.

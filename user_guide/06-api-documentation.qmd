@@ -105,7 +105,7 @@ log
 To exclude additional names from `init` and `scan`, add them to the `exclude` list in
 `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 exclude:
   - InternalHelper
   - deprecated_function
@@ -131,7 +131,7 @@ their methods inline on the class page.
 
 You can control this behavior with the `inline_methods` setting in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 # Keep the default (split above 5 methods)
 inline_methods: 5
 
@@ -215,7 +215,7 @@ The `callable_signatures` block in `great-docs.yml` controls how a callable's si
 written to the page. It applies to functions, methods, and classes; attributes and type aliases
 render the same way whatever it says.
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 callable_signatures:
   style: highlighted   # a highlighted code block (default)
   wrap: per_parameter  # one parameter per line (default)
@@ -274,7 +274,7 @@ guiding readers to the right part of the documentation based on what they are tr
 
 You can explicitly control the structure in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 reference:
   - title: User Management
     desc: Functions for managing users
@@ -304,7 +304,7 @@ exports.
 You can customize the heading and introductory text of the API reference page using the `title` and
 `desc` keys:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 reference:
   title: "API Docs"
   desc: >
@@ -319,7 +319,7 @@ context before the section listings.
 Without explicit `sections`, sections are auto-generated from your package's public API. You can
 also combine `title`/`desc` with explicit section ordering using a `sections` key:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 reference:
   title: "API Reference"
   desc: "Complete reference for all public symbols."
@@ -345,7 +345,7 @@ By default, class methods are documented inline on the class page. To exclude me
 documentation (for example, if you want to document them separately elsewhere), use
 `members: false`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 reference:
   - title: Core Classes
     desc: Main classes for the package
@@ -377,7 +377,7 @@ are two approaches.
 **Explicit member list.** List the methods you want documented (including inherited ones) in the
 `members` key:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 reference:
   - title: API
     contents:
@@ -394,7 +394,7 @@ This gives you full control over which inherited methods appear and in what orde
 **Auto-include inherited methods.** Use `include_inherited: true` to automatically document all
 inherited methods without listing them explicitly:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 reference:
   - title: Shapes
     contents:
@@ -415,7 +415,7 @@ explicit `members` list when you want to cherry-pick specific inherited methods 
 
 To exclude items from documentation, add them to the `exclude` list in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 exclude:
   - internal_helper
   - deprecated_function
@@ -440,7 +440,7 @@ especially valuable during code reviews and debugging.
 
 ### Configuration
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 source:
   # Use a specific branch (default: auto-detected)
   branch: main
@@ -459,7 +459,7 @@ of its individual members.
 For example, if your package exports a `parser` submodule containing a `parse()` function, a
 `parser` class, and a `ParserError` exception, writing:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 reference:
   - title: Parser
     desc: Date string parsing
@@ -614,7 +614,7 @@ hierarchy.
 
 You can customize when the filter appears in your `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 sidebar_filter:
   enabled: true
   min_items: 15   # Show filter with 15+ items
@@ -655,7 +655,7 @@ Quarto rendering) but differ in where configuration lives and how much you need 
 | API discovery | Manual: you list every object | Automatic: discovers your public API from source |
 | Build command | `quartodoc build` then `quarto render` | `great-docs build` (handles both steps) |
 | Preview command | `quarto preview` | `great-docs preview` |
-| Generated output | `reference/` directory with `.qmd` files and `_sidebar.yml` | `great-docs/` directory (ephemeral, gitignored) |
+| Generated output | `reference/` directory with `.qmd` files and `_sidebar.yml` | `docs/_quarto/default/` project (generated, gitignored) |
 | Sidebar | You include a generated `_sidebar.yml` via `metadata-files` | Managed automatically |
 
 ### Step-by-Step Migration
@@ -683,7 +683,7 @@ Quarto rendering) but differ in where configuration lives and how much you need 
 
    becomes this in Great Docs:
 
-   ```{.yaml filename="great-docs.yml"}
+   ```{.yaml filename="docs/great-docs.yml"}
    reference:
      sections:
        - title: Core
@@ -721,7 +721,7 @@ Quarto rendering) but differ in where configuration lives and how much you need 
    conventions and sidebar ordering.
 
 4. **Clean up quartodoc artifacts.** Great Docs generates its own `_quarto.yml` inside the
-   ephemeral `great-docs/` build directory on every build, so you don't need to edit or keep your
+   generated `docs/_quarto/default/` directory on every build, so you don't need to edit or keep your
    old `_quarto.yml`. The main thing to do is delete the `reference/` directory that quartodoc
    generated (but check it first for any hand-written `.qmd` content you want to migrate into
    your `user_guide/` directory or `great-docs.yml` reference config).

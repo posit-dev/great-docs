@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Sequence
 from pathlib import Path
+
+from ._layout import Layout
 
 _SEEALSO_RE = re.compile(
     r"^[^\S\r\n]*%seealso[^\S\r\n]+(.+?)[^\S\r\n]*$",
@@ -85,14 +88,24 @@ QUARTO_YML_HEADER = (
     "# Configure settings in great-docs.yml instead.\n\n"
 )
 
+GITIGNORE_CONTENT = """# Great Docs build directory
+# This directory is ephemeral and regenerated on each build
+# Do not commit this directory to version control
+*
+!.gitignore
+"""
+
 
 def is_great_docs_build_dir(path: Path) -> bool:
     """
-    Identify a Great Docs-generated Quarto project directory
+    Identify a directory Great Docs generated and owns
 
-    The directory must contain a readable UTF-8 `_quarto.yml` that begins with
-    the complete generated-file header. The exact match prevents build cleanup
-    from treating user directories as generated output.
+    A generated directory either contains a readable UTF-8 `_quarto.yml` that
+    begins with the complete generated-file header, or holds nothing but the
+    generated `.gitignore` a fresh clone leaves behind before the first
+    build (`.gitignore`'s own `!.gitignore` rule keeps it, and only it,
+    tracked by git). Either exact match prevents build cleanup from treating
+    a user directory as generated output.
 
     Parameters
     ----------
@@ -101,25 +114,39 @@ def is_great_docs_build_dir(path: Path) -> bool:
 
     Returns
     -------
-    Whether the directory contains a Great Docs-generated `_quarto.yml`.
+    Whether Great Docs generated this directory's contents.
     """
+    if path.is_symlink():
+        return False
+    quarto_yml = path / "_quarto.yml"
+    if not quarto_yml.is_symlink():
+        try:
+            with quarto_yml.open(encoding="utf-8") as opened:
+                if opened.read(len(QUARTO_YML_HEADER)) == QUARTO_YML_HEADER:
+                    return True
+        except (OSError, UnicodeDecodeError):
+            pass
     try:
-        with (path / "_quarto.yml").open(encoding="utf-8") as quarto_yml:
-            header = quarto_yml.read(len(QUARTO_YML_HEADER))
+        entries = list(path.iterdir())
+    except OSError:
+        return False
+    if len(entries) != 1 or entries[0].name != ".gitignore" or entries[0].is_symlink():
+        return False
+    try:
+        return entries[0].read_text(encoding="utf-8") == GITIGNORE_CONTENT
     except (OSError, UnicodeDecodeError):
         return False
-    return header == QUARTO_YML_HEADER
 
 
-def is_in_great_docs_build_dir(parts: Sequence[str], project_root: Path) -> bool:
+def is_in_great_docs_build_dir(
+    parts: Sequence[str], project_root: Path, layout: Layout | None = None
+) -> bool:
     """
     Identify a project-relative path within Great Docs build output
 
-    Every path below the root `great-docs/` directory belongs to the current
-    build. A path below a root `great-docs-<tag>/` directory belongs to a
-    historical build only when that directory is not a symlink and contains
-    the complete generated-file header. Similar names elsewhere remain source
-    paths.
+    Use the selected layout's default build, marked historical projects, and
+    recorded deployment output. Similar names elsewhere remain source paths.
+    Omit `layout` to retain legacy root-directory exclusions.
 
     Parameters
     ----------
@@ -127,12 +154,23 @@ def is_in_great_docs_build_dir(parts: Sequence[str], project_root: Path) -> bool
         Path components relative to `project_root`.
     project_root
         Project root used to inspect historical build directories.
+    layout
+        Resolved documentation layout, when available.
 
     Returns
     -------
     Whether the path belongs to current or historical build output.
     """
     if not parts:
+        return False
+
+    if layout is not None:
+        path = project_root.joinpath(*parts)
+        for build in [layout.build_dir, *recognised_build_dirs(layout)]:
+            if path.is_relative_to(build) and not build.is_symlink():
+                return True
+        if path.is_relative_to(layout.site_dir) and is_great_docs_site_dir(layout.site_dir):
+            return True
         return False
 
     name = parts[0]
@@ -143,3 +181,86 @@ def is_in_great_docs_build_dir(parts: Sequence[str], project_root: Path) -> bool
 
     candidate = project_root / name
     return candidate.is_dir() and not candidate.is_symlink() and is_great_docs_build_dir(candidate)
+
+
+def recognised_build_dirs(layout: Layout) -> list[Path]:
+    """Find marked historical projects beside the default build directory"""
+    pattern = f"{layout.build_dir.name}-*" if layout.source_dir == layout.package_root else "*"
+    if layout.build_dir.parent.is_symlink():
+        return []
+    return [
+        path
+        for path in sorted(layout.build_dir.parent.glob(pattern))
+        if path != layout.build_dir and is_great_docs_build_dir(path)
+    ]
+
+
+def validate_tree_symlinks(path: Path) -> None:
+    """Reject symlinks before copying or removing an output tree"""
+    if path.is_symlink() or any(item.is_symlink() for item in path.rglob("*")):
+        raise ValueError(f"Generated output contains a symlink: {path}")
+
+
+def validate_build_dir(path: Path) -> None:
+    """Reject an existing build path unless it is a generated Quarto project"""
+    validate_tree_symlinks(path)
+    if path.exists() and not is_great_docs_build_dir(path):
+        raise ValueError(f"Build directory is not a Great Docs-generated Quarto project: {path}")
+
+
+_SITE_MANIFEST = ".great-docs-site.json"
+
+
+def is_great_docs_site_dir(path: Path) -> bool:
+    """Identify a deployment directory with a readable ownership manifest"""
+    manifest = path / _SITE_MANIFEST
+    if path.is_symlink() or manifest.is_symlink():
+        return False
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError):
+        return False
+    return (
+        isinstance(data, dict)
+        and data.get("generator") == "great-docs"
+        and isinstance(data.get("paths"), list)
+        and all(isinstance(item, str) for item in data["paths"])
+    )
+
+
+def validate_site_dir(path: Path) -> None:
+    """Refuse to replace deployment output containing unrecognised files"""
+    validate_tree_symlinks(path)
+    if not path.exists():
+        return
+    if not is_great_docs_site_dir(path):
+        raise ValueError(f"Deployment directory is not Great Docs-generated output: {path}")
+    data = json.loads((path / _SITE_MANIFEST).read_text(encoding="utf-8"))
+    owned = set(data["paths"]) | {_SITE_MANIFEST}
+    unexpected = [
+        item for item in path.rglob("*") if item.relative_to(path).as_posix() not in owned
+    ]
+    if unexpected:
+        raise ValueError(f"Deployment directory contains unrecognised content: {unexpected[0]}")
+
+
+def record_site_ownership(path: Path) -> None:
+    """Record generated deployment paths for safe replacement and removal"""
+    validate_tree_symlinks(path)
+    paths = sorted(item.relative_to(path).as_posix() for item in path.rglob("*"))
+    (path / _SITE_MANIFEST).write_text(
+        json.dumps({"generator": "great-docs", "paths": paths}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def validate_layout_outputs(layout: Layout) -> None:
+    """Check output ownership before changing a documentation project"""
+    if layout.source_dir != layout.package_root:
+        container = layout.build_dir.parent
+        if container.is_symlink() or (container.exists() and not container.is_dir()):
+            raise ValueError(f"Quarto build container is not a regular directory: {container}")
+        validate_site_dir(layout.site_dir)
+    validate_build_dir(layout.build_dir)
+    for build in recognised_build_dirs(layout):
+        validate_build_dir(build)

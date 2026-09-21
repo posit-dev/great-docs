@@ -115,14 +115,14 @@ body.quarto-dark .gd-demo-tag-seg-sep { background-color: rgba(107,114,128,0.4);
 
 Tags are disabled by default. To enable them, add a `tags` section to `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 tags:
   enabled: true
 ```
 
 Or use the shorthand:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 tags: true
 ```
 
@@ -163,7 +163,7 @@ page lives:
 
 If you want tag pills on pages but don't want a dedicated index page:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 tags:
   enabled: true
   index_page: false
@@ -181,7 +181,7 @@ the corresponding tag's section on the tags index page, helping readers discover
 
 To disable the pills while keeping the tags index page:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 tags:
   enabled: true
   show_on_pages: false
@@ -195,7 +195,7 @@ metadata block (dates and author info) or under a horizontal rule if no metadata
 
 Set the default location globally in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 tags:
   enabled: true
   location: bottom
@@ -278,7 +278,7 @@ strings will consume the backslash as an escape character.
 
 To disable hierarchical tag support entirely and treat all `/` characters as literal:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 tags:
   enabled: true
   hierarchical: false
@@ -294,7 +294,7 @@ page.
 This is useful for editorial workflows. For example, you can tag pages as `needs-review` or `draft`
 without exposing those labels to readers.
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 tags:
   enabled: true
   shadow:
@@ -321,7 +321,7 @@ You can associate tags with icons from the [Lucide](https://lucide.dev/icons/) i
 icon set used by `nav_icons`). Icons appear inside the tag pill and next to the tag heading on the
 index page.
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 tags:
   enabled: true
   icons:
@@ -338,7 +338,7 @@ The icon names are Lucide icon names (lowercase, hyphenated). Browse the full ca
 
 Here is the complete `tags` configuration with all options and their defaults:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 tags:
   enabled: false          # Master switch (default: false)
   index_page: true        # Generate a tags index page (default: true)

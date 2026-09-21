@@ -22,8 +22,8 @@ metadata:
 # Configure Site
 
 Skill for customizing a Great Docs documentation site through
-`great-docs.yml`. All configuration is centralized in this single
-YAML file at the project root.
+`docs/great-docs.yml`. Source paths are relative to this configuration
+directory; package metadata remains at the project root.
 
 ## Quick start
 
@@ -32,7 +32,7 @@ YAML file at the project root.
 great-docs init
 
 # Or generate a full template with all options
-great-docs config > great-docs.yml
+great-docs config
 
 # Edit, then rebuild
 great-docs build && great-docs preview
@@ -78,9 +78,9 @@ skills/configure-site/
 
 ### Configuration file location
 
-`great-docs.yml` must be at the project root, alongside
-`pyproject.toml`. Great Docs reads it automatically on every
-command.
+`docs/great-docs.yml` is discovered from the package root containing
+`pyproject.toml`. Select a custom directory with
+`great-docs build --config website/great-docs.yml`.
 
 ### Configuration categories
 
@@ -253,7 +253,7 @@ Task Progress:
 
 **Step 2**: Set `content_style` to a complementary preset.
 
-**Step 3**: Add SVG or PNG logo files to `assets/` and configure
+**Step 3**: Add SVG or PNG logo files to `docs/assets/` and configure
 the `logo` key. Set `favicon` similarly.
 
 **Step 4**: Enable `hero` with a tagline. Add `starfield: true`
@@ -273,8 +273,8 @@ for the animated background.
 
 If you started with `great-docs init` and want to add more features:
 
-1. Run `great-docs config` to see all available options.
-2. Copy the sections you want into your existing `great-docs.yml`.
+1. Read the [feature matrix](references/feature-matrix.md) for available options.
+2. Copy the sections you want into your existing `docs/great-docs.yml`.
 3. Customize values.
 4. Rebuild.
 
@@ -288,8 +288,8 @@ If you started with `great-docs init` and want to add more features:
    `Sky`.
 4. **`hero: true` is shorthand.** For full control, use the dict
    form with `enabled`, `tagline`, and `starfield` keys.
-5. **Logo paths are relative to the project root.** Not relative
-   to `great-docs.yml`.
+5. **Resolve logo paths from the configuration directory.** For
+   `docs/great-docs.yml`, `assets/logo.svg` selects `docs/assets/logo.svg`.
 6. **`content_style` on homepage only.** Use the dict form with
    `pages: homepage` to avoid the glow on every page.
 7. **Changes require rebuild.** Config changes are not hot-reloaded.

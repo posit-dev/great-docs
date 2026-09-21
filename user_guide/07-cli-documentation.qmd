@@ -30,7 +30,7 @@ help text that produces clear reference pages.
 
 Add the following to your `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 cli:
   enabled: true
 ```
@@ -81,7 +81,7 @@ Great Docs uses `my-cli` as the command name in documentation.
 If your CLI lives in a non-standard location, or if auto-discovery picks up the wrong command
 object, you can specify the module and command name explicitly in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 cli:
   enabled: true
   module: my_package.commands   # Module containing Click commands
@@ -245,7 +245,7 @@ it with `--help`, and parses the output into structured reference pages.
 
 Set `project_type` to `go` (or include `go` in a list for mixed projects) and enable `go_cli`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 project_type: go
 go_cli:
   enabled: true
@@ -292,7 +292,7 @@ into structured reference pages.
 
 Set `project_type` to `rust` and enable `rust_cli`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 project_type: rust
 rust_cli:
   enabled: true
@@ -364,7 +364,7 @@ struct Cli {
 For projects that include both a Rust CLI and a Python package (e.g., a Rust binary with Python
 bindings), use a list for `project_type`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 project_type: [python, rust]
 rust_cli:
   enabled: true
@@ -449,7 +449,7 @@ If your Click CLI isn't found:
 3. ensure the Click command is importable
 4. use explicit configuration:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 cli:
   enabled: true
   module: your_package.cli

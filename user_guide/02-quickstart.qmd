@@ -18,7 +18,7 @@ project's root directory and run:
 great-docs init
 ```
 
-You only need to run this **once**. It creates `great-docs.yml` with sensible defaults. After that,
+You only need to run this **once**. It creates `docs/great-docs.yml` with sensible defaults. After that,
 `great-docs build` is the only command you need.
 
 Great Docs will automatically:
@@ -26,8 +26,8 @@ Great Docs will automatically:
 1. **Find your package**: Auto-detects your package name from `pyproject.toml`, `setup.cfg`,
 `setup.py`, or directory structure
 2. **Discover your API**: Finds all public classes, functions, and methods
-3. **Create configuration**: Generates `great-docs.yml` with your API structure
-4. **Update .gitignore**: Optionally adds `great-docs/` to exclude build artifacts
+3. **Create configuration**: Generates `docs/great-docs.yml` with your API structure
+4. **Update .gitignore**: Excludes `docs/_quarto/` and `docs/_site/` generated output
 
 You'll see output like this:
 
@@ -43,16 +43,15 @@ MyClass: class with 8 public methods
 Testing dynamic introspection mode...
 Dynamic introspection mode works for this package
 Generated 2 section(s) from reference config
-Created /path/to/project/great-docs.yml
+Created /path/to/project/docs/great-docs.yml
 
-The great-docs/ directory is ephemeral and should not be committed to git.
-Add 'great-docs/' to .gitignore? [Y/n]: Y
-✅ Updated .gitignore to exclude great-docs/ directory
+The generated Quarto projects and deployment output should not be committed to git.
+✅ Updated .gitignore to exclude docs/_quarto/ and docs/_site/
 
 ✅ Great Docs initialization complete!
 
 Next steps:
-1. Review great-docs.yml to customize your API reference structure
+1. Review docs/great-docs.yml to customize your API reference structure
    (Reorder items, add sections, set 'members: false' to exclude methods)
 2. Run `great-docs build` to generate and build your documentation site
 3. Run `great-docs preview` to view the site locally
@@ -65,15 +64,21 @@ Other helpful commands:
 ::: {.callout-note}
 ## Configuration File
 
-The `great-docs.yml` file contains your API structure and is **committed to git**. The `great-docs/`
-build directory is **ephemeral** and should be gitignored.
+Commit `docs/great-docs.yml` with your API structure. Ignore the generated
+`docs/_quarto/` and `docs/_site/` directories.
 :::
 
 ## Customize Your Configuration
 
-Open `great-docs.yml` and tailor it to your project. Organize API sections, add authors or funding
+Open `docs/great-docs.yml` and tailor it to your project. Organize API sections, add authors or funding
 info, set a `display_name`, add a `user_guide` directory, etc. See
 [Configuration](configuration.qmd) for all available options.
+
+Resolve documentation source paths from the configuration directory: `assets/logo.svg`
+means `docs/assets/logo.svg`. Keep `pyproject.toml`, Python sources, and the README at
+the package root. To use a custom directory, run
+`great-docs init --config website/great-docs.yml`, then
+`great-docs build --config website/great-docs.yml`. Deploy `website/_site/`.
 
 ## Build Your Documentation
 
@@ -90,7 +95,7 @@ the final HTML site. The output shows each step with its status and timing:
 
 ```{.default filename="Build output (abbreviated)"}
 ━━ Step  1/19 ─ Prepare build directory ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   [OK] great-docs/ ready                                                <0.1s
+   [OK] docs/_quarto/default/ ready                                                <0.1s
 
 ━━ Step  2/19 ─ Configure API reference ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    [OK] 2 section(s), 15 item(s)                                           1.2s
@@ -112,25 +117,26 @@ the final HTML site. The output shows each step with its status and timing:
 |  Total time: 35.6s                                                         |
 |                                                                            |
 |  🎉 Site ready →                                                           |
-|     /path/to/project/great-docs/_site/index.html                           |
+|     /path/to/project/docs/_site/index.html                           |
 ==============================================================================
 ```
 
-The built site is in `great-docs/_site/`.
+The built site is in `docs/_site/`.
 
 ::: {.callout-tip}
 ## Images in README.md
 
 If your README contains images with relative paths (like `![](images/screenshot.png)`), they will be
 copied to the build directory automatically. For the most portable setup (working in both GitHub and
-your docs site) place images in the `assets/` directory at your project root.
+your docs site), keep shared README images at the package root and use paths relative to
+the README. Put documentation-only images in `docs/assets/`.
 :::
 
 ::: {.callout-tip}
 ## Ephemeral Build Directory
 
-The `great-docs/` directory is created fresh on each build. You can safely delete it between builds
-(it will be recreated from `great-docs.yml` and your source files).
+The `docs/_quarto/default/` directory is created fresh on each build. You can safely delete it between builds
+(it will be recreated from `docs/great-docs.yml` and your source files).
 :::
 
 ## Preview Locally
@@ -150,29 +156,20 @@ After initialization and your first build, your project will have:
 
 ```{.default filename="Project structure"}
 your-project/
-├── great-docs.yml           # Configuration (committed to git)
-├── great-docs/              # Build directory (gitignored, ephemeral)
-│   ├── _quarto.yml          # Generated Quarto config
-│   ├── index.qmd            # Landing page (from README.md)
-│   ├── great-docs.scss      # Styling
-│   ├── github-widget.js     # GitHub stars widget
-│   ├── sidebar-filter.js    # API search filter
-│   ├── llms.txt             # LLM-friendly docs index
-│   ├── llms-full.txt        # Full API docs for LLMs
-│   ├── _source_links.json   # Source code links
-│   ├── reference/           # API reference pages (generated)
-│   │   ├── index.qmd
-│   │   ├── MyClass.qmd
-│   │   └── ...
-│   ├── user-guide/          # Copied from user_guide/
-│   ├── scripts/
-│   │   └── post-render.py   # HTML post-processing
-│   └── _site/               # Built HTML site
-│       ├── index.html
-│       └── ...
-├── user_guide/              # Your narrative docs (optional)
-│   ├── 01-installation.qmd
-│   └── ...
+├── docs/
+│   ├── great-docs.yml       # Configuration (committed)
+│   ├── user_guide/          # Narrative sources (committed)
+│   │   └── 01-installation.qmd
+│   ├── assets/              # Documentation images (committed)
+│   ├── _freeze/             # Cached execution results (committed)
+│   ├── _quarto/             # Generated Quarto projects (gitignored)
+│   │   └── default/
+│   │       ├── _quarto.yml
+│   │       ├── reference/
+│   │       ├── user-guide/
+│   │       └── _site/
+│   └── _site/               # Deploy this directory (gitignored)
+│       └── index.html
 ├── pyproject.toml
 ├── README.md
 └── your_package/
@@ -182,17 +179,18 @@ your-project/
 ::: {.callout-important}
 ## What to Commit
 
-- ✅ `great-docs.yml` – Your configuration
-- ✅ `user_guide/` – Your narrative documentation
-- ✅ `README.md` – Your project readme
-- ❌ `great-docs/` – Ephemeral build directory (gitignored)
+- Commit `docs/great-docs.yml` for configuration
+- Commit `docs/user_guide/` for narrative documentation
+- Commit `README.md` for the package homepage
+- Commit `docs/_freeze/` to reuse execution results
+- Ignore `docs/_quarto/` and `docs/_site/` generated output
 :::
 
 ## Scan Your API
 
 Before (or after) running `init`, you can use `great-docs scan` to preview what Great Docs
 discovered in your package. It shows every public class, function, constant, and enum, along with
-whether each item appears in your `great-docs.yml` reference config:
+whether each item appears in your `docs/great-docs.yml` reference config:
 
 ```{.bash filename="Terminal"}
 great-docs scan            # Show discovered exports
@@ -200,7 +198,7 @@ great-docs scan --verbose  # Include method names for each class
 ```
 
 This is useful for auditing your configuration: items marked `[x]` are included in your docs,
-while `[ ]` items are not. You can then add or remove entries in `great-docs.yml` accordingly.
+while `[ ]` items are not. You can then add or remove entries in `docs/great-docs.yml` accordingly.
 
 ## Command Options
 
@@ -210,14 +208,14 @@ while `[ ]` items are not. You can then add or remove entries in `great-docs.yml
 # Initialize a different project
 great-docs init --project-path /path/to/project
 
-# Reset config to fresh defaults (deletes existing great-docs.yml)
+# Reset config to fresh defaults (deletes existing docs/great-docs.yml)
 great-docs init --force
 ```
 
 ::: {.callout-warning}
 ## --force Starts From Scratch
 
-`great-docs init --force` **deletes** your existing `great-docs.yml`
+`great-docs init --force` **deletes** your existing `docs/great-docs.yml`
 and generates a brand-new default config. Any customizations you made
 (authors, sections, display_name, etc.) will be lost. Only use this if
 you genuinely want to reset.

@@ -67,13 +67,13 @@ SPEC = {
                 """
                 return f"Guide: {topic}"
         ''',
-        "user_guide/intro.qmd": (
+        "docs/user_guide/intro.qmd": (
             "---\ntitle: Introduction\n---\n\n# Introduction\n\nAn introduction to the project.\n"
         ),
-        "user_guide/usage.qmd": (
+        "docs/user_guide/usage.qmd": (
             "---\ntitle: Usage Guide\n---\n\n# Usage Guide\n\nHow to use the project effectively.\n"
         ),
-        "examples/demo.qmd": (
+        "docs/examples/demo.qmd": (
             "---\ntitle: Demo\n---\n\n# Demo\n\nA demonstration of the package features.\n"
         ),
         "README.md": (

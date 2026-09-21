@@ -60,7 +60,7 @@ SPEC = {
                 """
                 pass
         ''',
-        "user_guide/getting-started.qmd": (
+        "docs/user_guide/getting-started.qmd": (
             "---\n"
             "title: Getting Started\n"
             "---\n"

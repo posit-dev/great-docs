@@ -119,7 +119,7 @@ SPEC = {
                 p.validate()
                 return p.execute()
         ''',
-        "user_guide/01-getting-started.qmd": """\
+        "docs/user_guide/01-getting-started.qmd": """\
             ---
             title: Getting Started
             status: new
@@ -130,7 +130,7 @@ SPEC = {
             This page has `status: new` and should show a green
             "New" badge in the sidebar and below the title.
         """,
-        "user_guide/02-configuration.qmd": """\
+        "docs/user_guide/02-configuration.qmd": """\
             ---
             title: Configuration Guide
             status: updated
@@ -141,7 +141,7 @@ SPEC = {
             This page has `status: updated` and should show a blue
             "Updated" badge.
         """,
-        "user_guide/03-advanced.qmd": """\
+        "docs/user_guide/03-advanced.qmd": """\
             ---
             title: Advanced Usage
             status: beta
@@ -152,7 +152,7 @@ SPEC = {
             This page has `status: beta` and should show an amber
             "Beta" badge with a flask icon.
         """,
-        "user_guide/04-migration.qmd": """\
+        "docs/user_guide/04-migration.qmd": """\
             ---
             title: Migration from v1
             status: deprecated
@@ -163,7 +163,7 @@ SPEC = {
             The v1 API has been removed. This page has `status: deprecated`
             and should show a red "Deprecated" badge with a warning icon.
         """,
-        "user_guide/05-experimental.qmd": """\
+        "docs/user_guide/05-experimental.qmd": """\
             ---
             title: Experimental Features
             status: experimental
@@ -174,7 +174,7 @@ SPEC = {
             This page has `status: experimental` and should show a
             purple "Experimental" badge.
         """,
-        "user_guide/06-draft-notes.qmd": """\
+        "docs/user_guide/06-draft-notes.qmd": """\
             ---
             title: Draft Notes
             status: draft
@@ -183,7 +183,7 @@ SPEC = {
             This page uses a custom status `draft` defined in
             the great-docs.yml configuration.
         """,
-        "user_guide/07-stable.qmd": """\
+        "docs/user_guide/07-stable.qmd": """\
             ---
             title: Stable Features
             ---
@@ -191,7 +191,7 @@ SPEC = {
             This page has no status and should NOT display any
             status badge.
         """,
-        "user_guide/08-subtitle-only.qmd": """\
+        "docs/user_guide/08-subtitle-only.qmd": """\
             ---
             title: Subtitle Only
             subtitle: A page with a subtitle but no description
@@ -201,7 +201,7 @@ SPEC = {
             This page tests the badge layout when a subtitle is present
             but there is no description.
         """,
-        "user_guide/09-description-only.qmd": """\
+        "docs/user_guide/09-description-only.qmd": """\
             ---
             title: Description Only
             description: A page with a description but no subtitle
@@ -211,7 +211,7 @@ SPEC = {
             This page tests the badge layout when a description is present
             but there is no subtitle.
         """,
-        "user_guide/10-subtitle-and-description.qmd": """\
+        "docs/user_guide/10-subtitle-and-description.qmd": """\
             ---
             title: Subtitle and Description
             subtitle: Both subtitle and description present
@@ -222,7 +222,7 @@ SPEC = {
             This page tests the badge layout when both a subtitle and a
             description are present.
         """,
-        "user_guide/11-neither.qmd": """\
+        "docs/user_guide/11-neither.qmd": """\
             ---
             title: Title Only
             status: deprecated

@@ -289,7 +289,7 @@ SPEC = {
                 }
         ''',
         # ── Data files for shortcode demos ────────────────────────────────
-        "assets/cities.csv": (
+        "docs/assets/cities.csv": (
             "city,country,population,latitude,longitude\n"
             "Tokyo,Japan,13960000,35.6762,139.6503\n"
             "Paris,France,2161000,48.8566,2.3522\n"
@@ -304,7 +304,7 @@ SPEC = {
             "Seoul,South Korea,9776000,37.5665,126.9780\n"
             "Mexico City,Mexico,9210000,19.4326,-99.1332\n"
         ),
-        "assets/products.tsv": (
+        "docs/assets/products.tsv": (
             "product\tcategory\tprice\tstock\trating\n"
             "Widget\tElectronics\t29.99\t150\t4.5\n"
             "Gadget\tTools\t49.50\t80\t3.8\n"
@@ -314,7 +314,7 @@ SPEC = {
             "Contraption\tElectronics\t65.00\t44\t3.5\n"
             "Apparatus\tTools\t120.00\t12\t4.7\n"
         ),
-        "assets/logs.jsonl": (
+        "docs/assets/logs.jsonl": (
             '{"ts":"2025-01-15T08:30:00","level":"INFO","module":"auth","msg":"User login OK"}\n'
             '{"ts":"2025-01-15T08:31:12","level":"WARN","module":"db","msg":"Slow query (3.2s)"}\n'
             '{"ts":"2025-01-15T08:32:45","level":"ERROR","module":"api","msg":"Timeout /v2/users"}\n'
@@ -323,7 +323,7 @@ SPEC = {
             '{"ts":"2025-01-15T08:35:55","level":"ERROR","module":"db","msg":"Pool exhausted"}\n'
         ),
         # ── User guide pages ──────────────────────────────────────────────
-        "user_guide/01-basic-explorer.qmd": (
+        "docs/user_guide/01-basic-explorer.qmd": (
             "---\n"
             "title: Basic Explorer\n"
             "---\n"
@@ -361,7 +361,7 @@ SPEC = {
             'tbl_explorer(sample_products(), caption="Product Catalog")\n'
             "```\n"
         ),
-        "user_guide/02-pagination.qmd": (
+        "docs/user_guide/02-pagination.qmd": (
             "---\n"
             "title: Pagination\n"
             "---\n"
@@ -401,7 +401,7 @@ SPEC = {
             'tbl_explorer(sample_large(30), page_size=0, caption="All 30 rows")\n'
             "```\n"
         ),
-        "user_guide/03-column-toggle.qmd": (
+        "docs/user_guide/03-column-toggle.qmd": (
             "---\n"
             "title: Column Toggling\n"
             "---\n"
@@ -448,7 +448,7 @@ SPEC = {
             ")\n"
             "```\n"
         ),
-        "user_guide/04-copy-download.qmd": (
+        "docs/user_guide/04-copy-download.qmd": (
             "---\n"
             "title: Copy & Download\n"
             "---\n"
@@ -500,7 +500,7 @@ SPEC = {
             ")\n"
             "```\n"
         ),
-        "user_guide/05-missing-values.qmd": (
+        "docs/user_guide/05-missing-values.qmd": (
             "---\n"
             "title: Missing Values\n"
             "---\n"
@@ -528,7 +528,7 @@ SPEC = {
             ")\n"
             "```\n"
         ),
-        "user_guide/06-minimal-chrome.qmd": (
+        "docs/user_guide/06-minimal-chrome.qmd": (
             "---\n"
             "title: Minimal Chrome\n"
             "---\n"
@@ -600,7 +600,7 @@ SPEC = {
             ")\n"
             "```\n"
         ),
-        "user_guide/07-shortcode.qmd": (
+        "docs/user_guide/07-shortcode.qmd": (
             "---\n"
             "title: Shortcode Explorer\n"
             "---\n"
@@ -634,7 +634,7 @@ SPEC = {
             '{{< tbl-explorer file="assets/cities.csv" filterable="false" '
             'caption="No filter input" >}}\n'
         ),
-        "user_guide/08-comparison.qmd": (
+        "docs/user_guide/08-comparison.qmd": (
             "---\n"
             "title: Preview vs Explorer\n"
             "---\n"

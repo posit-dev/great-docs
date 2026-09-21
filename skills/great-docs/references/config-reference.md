@@ -1,4 +1,8 @@
-# Configuration Reference — great-docs.yml
+# Configuration Reference — docs/great-docs.yml
+
+Resolve source paths from the configuration directory. For example,
+`assets/logo.svg` selects `docs/assets/logo.svg`. Select a custom directory
+with `great-docs build --config website/great-docs.yml`.
 
 ## Contents
 

@@ -33,7 +33,7 @@ Next, ask the agent to build and preview:
 
 > Build the documentation and start the preview server.
 
-The agent will run `great-docs build` followed by `great-docs preview`. The build generates all reference pages, processes user guides, and renders the site to `great-docs/_site/`. The preview server opens a local URL (usually `http://localhost:8765`) where you can browse the result.
+The agent will run `great-docs build` followed by `great-docs preview`. The build generates all reference pages, processes user guides, and renders the site to `docs/_site/`. The preview server opens a local URL (usually `http://localhost:8765`) where you can browse the result.
 
 ## Step 3: Add configuration
 
@@ -51,7 +51,7 @@ You can ask the agent to scaffold user guide content:
 
 > Create a user guide page about authentication. It should explain API keys, OAuth tokens, and session management.
 
-The agent will create a numbered `.qmd` file in `user_guide/` with the right frontmatter and section structure. Great Docs discovers new files automatically on the next build, so no additional configuration is needed.
+The agent will create a numbered `.qmd` file in `docs/user_guide/` with the right frontmatter and section structure. Great Docs discovers new files automatically on the next build, so no additional configuration is needed.
 
 ## Step 5: Deploy
 

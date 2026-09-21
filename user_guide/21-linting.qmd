@@ -139,7 +139,7 @@ for that run.
 Detects docstrings that don't match your project's configured parser style. The `parser` setting in
 `great-docs.yml` determines which style is expected:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 parser: numpy    # or "google" or "sphinx"
 ```
 

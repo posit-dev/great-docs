@@ -51,7 +51,7 @@ SPEC = {
                 """
                 pass
         ''',
-        "assets/logo.svg": _LOGO_SVG,
+        "docs/assets/logo.svg": _LOGO_SVG,
         "README.md": """\
             # gdtest-hero-disabled
 

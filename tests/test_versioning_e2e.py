@@ -2,19 +2,24 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
 import pytest
+from yaml12 import read_yaml
 
 from great_docs._api_diff import ApiSnapshot, ParameterInfo, SymbolInfo
+from great_docs._layout import Layout
+from great_docs._utils import QUARTO_YML_HEADER
 from great_docs._versioned_build import (
     _version_build_dir,
     assemble_site,
     create_version_aliases,
     generate_redirect_files,
     preprocess_version,
+    run_versioned_build,
     write_version_map,
 )
 from great_docs._versioning import (
@@ -22,6 +27,98 @@ from great_docs._versioning import (
     get_latest_version,
     parse_versions_config,
 )
+
+
+@pytest.mark.parametrize("directory", [".", "docs", "website"])
+def test_layout_pipeline(tmp_path: Path, directory: str) -> None:
+    source = tmp_path / directory
+    source.mkdir(exist_ok=True)
+    config = source / "great-docs.yml"
+    config.write_text("module: sample\n")
+    layout = Layout.make(tmp_path, config)
+    layout.build_dir.mkdir(parents=True)
+    (layout.build_dir / "_quarto.yml").write_text(
+        QUARTO_YML_HEADER
+        + "project:\n  type: website\nwebsite:\n  site-url: https://example.com/docs\n"
+    )
+    (layout.build_dir / "index.qmd").write_text("# Home\n")
+    (layout.build_dir / "old.qmd").write_text('---\nversions: ["v1.5.0"]\n---\nOld page\n')
+
+    def render(build_dirs: list[Path], **kwargs: Any) -> list[tuple[str, int, str, str, list]]:
+        for build in build_dirs:
+            fake_quarto_render(build)
+        return [(str(build), 0, "", "", []) for build in build_dirs]
+
+    with patch("great_docs._versioned_build.render_versions_parallel", side_effect=render):
+        result = run_versioned_build(
+            layout.build_dir,
+            tmp_path,
+            ["2.0", "v1.5.0"],
+            layout=layout,
+            site_url="https://example.com/docs",
+        )
+    assert result["success"]
+    assert (layout.site_dir / "v/1.5.0/old.html").is_file()
+    assert not (layout.site_dir / "old.html").exists()
+    assert (layout.build_dir_for("v1.5.0", "2.0") / "_site/old.html").is_file()
+    historical_config = (layout.build_dir_for("v1.5.0", "2.0") / "_quarto.yml").read_text()
+    assert "https://example.com/docs/v/1.5.0/" in historical_config
+    parsed = read_yaml(layout.build_dir_for("v1.5.0", "2.0") / "_quarto.yml")
+    scripts = parsed["format"]["html"]["include-in-header"]
+    assert any('var prefix="/v/1.5.0/"' in item["text"] for item in scripts)
+    manifest = json.loads((layout.site_dir / "_version_map.json").read_text())
+    assert manifest["versions"][1]["path_prefix"] == "v/1.5.0"
+
+
+@pytest.mark.parametrize("prefix", ["v/1.5.0", "v/v1.5.0"])
+def test_selector_uses_version_map(prefix: str) -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is required to exercise the browser selector")
+    script = Path(__file__).parents[1] / "great_docs/assets/version-selector.js"
+    harness = r"""
+const fs = require("fs");
+const vm = require("vm");
+const input = JSON.parse(fs.readFileSync(0, "utf8"));
+const stored = {};
+const context = {
+  window: {location: {pathname: "/docs/" + input.prefix + "/guide.html"}},
+  document: {readyState: "loading", addEventListener() {}},
+  localStorage: {getItem(key) {return stored[key]}, setItem(key, value) {stored[key] = value}}
+};
+const source = input.script.replace('if (document.readyState === "loading")',
+  'globalThis.selector = {getSiteBasePath, detectCurrentVersion, getCurrentRelPath, ' +
+  'buildVersionUrl, getStoredVersion, setStoredVersion}; if (document.readyState === "loading")');
+vm.runInNewContext(source, context);
+const selector = context.selector;
+const map = {versions: [
+  {tag: "2.0", latest: true, path_prefix: ""},
+  {tag: "v1.5.0", latest: false, path_prefix: input.prefix}
+], pages: {"guide.html": ["2.0", "v1.5.0"]}};
+const base = selector.getSiteBasePath(map);
+selector.setStoredVersion("v1.5.0");
+process.stdout.write(JSON.stringify({
+  base, tag: selector.detectCurrentVersion(map),
+  page: selector.getCurrentRelPath(map, base), stored: selector.getStoredVersion(),
+  old: selector.buildVersionUrl(map, selector.getStoredVersion(), "guide.html", base),
+  latest: selector.buildVersionUrl(map, "2.0", "guide.html", base)
+}));
+"""
+    result = subprocess.run(
+        [node, "-e", harness],
+        input=json.dumps({"script": script.read_text(), "prefix": prefix}),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert json.loads(result.stdout) == {
+        "base": "/docs",
+        "tag": "v1.5.0",
+        "page": "guide.html",
+        "stored": "v1.5.0",
+        "old": f"/docs/{prefix}/guide.html",
+        "latest": "/docs/guide.html",
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1936,10 +2033,10 @@ class TestSemverLikeTags:
         assert_page_exists(site["output_dir"], "index.html")
 
     def test_rc_under_v_prefix(self, site):
-        assert_page_exists(site["output_dir"], "index.html", version="v1.5.0-rc1")
+        assert_page_exists(site["output_dir"], "index.html", version="1.5.0-rc1")
 
     def test_old_semver_under_v_prefix(self, site):
-        assert_page_exists(site["output_dir"], "index.html", version="v1.0.0")
+        assert_page_exists(site["output_dir"], "index.html", version="1.0.0")
 
 
 class TestManyVersionsScale:

@@ -16,10 +16,10 @@ Custom static pages are configured with `custom_pages` in `great-docs.yml`.
 
 ### Zero-config fallback
 
-If you do not set `custom_pages`, Great Docs falls back to a conventional `custom/` directory:
+If you do not set `custom_pages`, Great Docs uses `custom/` beside the configuration:
 
 ```{.default filename="project layout"}
-my-package/
+my-package/docs/
 ├── custom/
 │   ├── py.html
 │   ├── playground.html
@@ -33,25 +33,25 @@ That is only the default on-ramp. You can override it.
 
 ### One custom page directory
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 custom_pages: marketing
 ```
 
-This reads pages from `marketing/` and publishes them under `marketing/` in the built site.
+This reads pages from `docs/marketing/` and publishes them under `marketing/` in the built site.
 
 ### One directory with a custom URL prefix
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 custom_pages:
   dir: marketing
   output: py
 ```
 
-This reads files from `marketing/` but publishes them under `py/`, which is useful when your source directory name and URL shape should differ.
+This reads files from `docs/marketing/` but publishes them under `py/`, so the source directory and URL can have different names.
 
 ### Multiple custom page directories
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 custom_pages:
   - dir: marketing
     output: py
@@ -63,7 +63,7 @@ This lets a larger site keep different HTML surfaces in separate source trees wh
 
 ### Disable custom pages entirely
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 custom_pages: false
 ```
 

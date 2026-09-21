@@ -50,9 +50,9 @@ SPEC = {
                 """
                 return f"rendered: {topic}"
         ''',
-        "user_guide/start.qmd": "---\ntitle: Start\n---\n\n# Start\n\nGuide start.\n",
-        "tutorials/first.qmd": "---\ntitle: First Tutorial\n---\n\n# First Tutorial\n\nTutorial page.\n",
-        "apps/tools/lab.html": """
+        "docs/user_guide/start.qmd": "---\ntitle: Start\n---\n\n# Start\n\nGuide start.\n",
+        "docs/tutorials/first.qmd": "---\ntitle: First Tutorial\n---\n\n# First Tutorial\n\nTutorial page.\n",
+        "docs/apps/tools/lab.html": """
             ---
             title: API Lab
             layout: passthrough

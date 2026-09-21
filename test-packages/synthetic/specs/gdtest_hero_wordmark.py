@@ -90,10 +90,10 @@ SPEC = {
                 """
                 return template
         ''',
-        "assets/lettermark.svg": _LETTERMARK_SVG,
-        "assets/lettermark-dark.svg": _LETTERMARK_DARK_SVG,
-        "assets/wordmark.svg": _WORDMARK_SVG,
-        "assets/wordmark-dark.svg": _WORDMARK_DARK_SVG,
+        "docs/assets/lettermark.svg": _LETTERMARK_SVG,
+        "docs/assets/lettermark-dark.svg": _LETTERMARK_DARK_SVG,
+        "docs/assets/wordmark.svg": _WORDMARK_SVG,
+        "docs/assets/wordmark-dark.svg": _WORDMARK_DARK_SVG,
         "README.md": """\
             # gdtest-hero-wordmark
 

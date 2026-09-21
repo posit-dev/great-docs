@@ -30,6 +30,7 @@ from yaml12 import format_yaml as _format_yaml
 from yaml12 import parse_yaml as _parse_yaml
 
 from great_docs import Config, GreatDocs, create_default_config, load_config
+from great_docs._content_naming import fix_numeric_prefix_links, strip_numeric_prefix
 from great_docs._apiref import _globals, content, spec, write
 from great_docs._apiref._docstring_sections import (
     DCDocstringSection,
@@ -52,7 +53,6 @@ from great_docs._apiref._format import (
     repr_obj,
 )
 from great_docs._apiref._globals import EXCLUSIONS
-from great_docs._apiref._signature import make_call_signature_text
 from great_docs._apiref._preview import Formatter
 from great_docs._apiref._render import (
     RenderDocAttribute,
@@ -85,6 +85,7 @@ from great_docs._apiref._render.mixin_members import (
 from great_docs._apiref._render.mixin_page import RenderPageMixin
 from great_docs._apiref._render.reference_page import RenderReferencePage
 from great_docs._apiref._render.reference_section import RenderReferenceSection
+from great_docs._apiref._signature import make_call_signature_text
 from great_docs._apiref._tools import render_code_variable, render_type_object
 from great_docs._apiref._type_checks import (
     griffe_to_doc,
@@ -132,10 +133,10 @@ from great_docs._apiref.inventory import (
 )
 from great_docs._apiref.resolve import (
     ObjectNotFoundError,
-    _Resolver,
     _autogenerate_sections,
     _is_external_alias,
     _join_path,
+    _Resolver,
     _sections_from_package,
     _to_simple_dict,
 )
@@ -143,6 +144,7 @@ from great_docs._apiref.spec import ChildrenStyle, SpecObject, SpecOptions, Spec
 from great_docs._apiref.typing_information import TypeInformation, TypeSections
 from great_docs._apiref.write import _insert_contents
 from great_docs._apiref.write import merge_frontmatter as _merge_frontmatter
+from great_docs._utils import QUARTO_YML_HEADER
 from great_docs.cli import (
     _detect_optional_dependencies,
     _detect_package_manager,
@@ -206,7 +208,7 @@ def test_great_docs_init_project_path_always_absolute():
     """Test that project_path is always absolute, even with relative input like '.'."""
     docs = GreatDocs(project_path=".")
     assert docs.project_root.is_absolute()
-    assert docs.project_path.is_absolute()
+    assert docs.build_dir.is_absolute()
     assert docs.project_root == Path(".").resolve()
 
 
@@ -218,7 +220,7 @@ def test_great_docs_init_relative_path_resolves():
             os.chdir(tmp_dir)
             docs = GreatDocs(project_path=".")
             assert docs.project_root.is_absolute()
-            assert docs.project_path.is_absolute()
+            assert docs.build_dir.is_absolute()
             # After chdir, project_path should still be valid
             os.chdir("/")
             assert docs.project_root == Path(tmp_dir).resolve()
@@ -235,14 +237,15 @@ def test_install_creates_files():
         # Check that config file was created
         project_path = Path(tmp_dir)
 
-        assert (project_path / "great-docs.yml").exists()
+        assert (project_path / "docs/great-docs.yml").exists()
 
         # Check that .gitignore was updated (or created)
         gitignore_path = project_path / ".gitignore"
         if gitignore_path.exists():
             content = gitignore_path.read_text()
 
-            assert "great-docs/" in content
+            assert "docs/_quarto/" in content
+            assert "docs/_site/" in content
 
 
 def test_uninstall_removes_files():
@@ -255,16 +258,16 @@ def test_uninstall_removes_files():
 
         project_path = Path(tmp_dir)
 
-        assert (project_path / "great-docs.yml").exists()
+        assert (project_path / "docs/great-docs.yml").exists()
 
         # Then uninstall
         docs.uninstall()
 
         # Check that config was removed
-        assert not (project_path / "great-docs.yml").exists()
+        assert not (project_path / "docs/great-docs.yml").exists()
 
-        # Check that great-docs directory was removed if it existed
-        assert not (project_path / "great-docs").exists()
+        assert not docs.layout.build_dir.exists()
+        assert not docs.layout.site_dir.exists()
 
 
 def test_build_requires_config():
@@ -286,14 +289,15 @@ def test_init_refuses_when_config_exists():
         docs = GreatDocs(project_path=tmp_dir)
         docs.install(force=True)
 
-        assert (project_path / "great-docs.yml").exists()
+        assert (project_path / "docs/great-docs.yml").exists()
+        original = (project_path / "docs/great-docs.yml").read_bytes()
 
         # A second init without --force should refuse (not overwrite)
         docs2 = GreatDocs(project_path=tmp_dir)
         docs2.install(force=False)
 
         # The original file should still be there, unchanged
-        assert (project_path / "great-docs.yml").exists()
+        assert (project_path / "docs/great-docs.yml").read_bytes() == original
 
 
 def test_parse_package_exports_real_project():
@@ -2580,9 +2584,9 @@ def test_strip_numeric_prefix_single_digit():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._strip_numeric_prefix("1-getting-started.qmd") == "getting-started.qmd"
-        assert docs._strip_numeric_prefix("2-configuration.qmd") == "configuration.qmd"
-        assert docs._strip_numeric_prefix("9-advanced.qmd") == "advanced.qmd"
+        assert strip_numeric_prefix("1-getting-started.qmd") == "getting-started.qmd"
+        assert strip_numeric_prefix("2-configuration.qmd") == "configuration.qmd"
+        assert strip_numeric_prefix("9-advanced.qmd") == "advanced.qmd"
 
 
 def test_strip_numeric_prefix_two_digit():
@@ -2593,11 +2597,11 @@ def test_strip_numeric_prefix_two_digit():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._strip_numeric_prefix("00-introduction.qmd") == "introduction.qmd"
-        assert docs._strip_numeric_prefix("01-installation.qmd") == "installation.qmd"
-        assert docs._strip_numeric_prefix("09-conclusion.qmd") == "conclusion.qmd"
-        assert docs._strip_numeric_prefix("10-appendix.qmd") == "appendix.qmd"
-        assert docs._strip_numeric_prefix("99-final.qmd") == "final.qmd"
+        assert strip_numeric_prefix("00-introduction.qmd") == "introduction.qmd"
+        assert strip_numeric_prefix("01-installation.qmd") == "installation.qmd"
+        assert strip_numeric_prefix("09-conclusion.qmd") == "conclusion.qmd"
+        assert strip_numeric_prefix("10-appendix.qmd") == "appendix.qmd"
+        assert strip_numeric_prefix("99-final.qmd") == "final.qmd"
 
 
 def test_strip_numeric_prefix_three_digit():
@@ -2608,9 +2612,9 @@ def test_strip_numeric_prefix_three_digit():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._strip_numeric_prefix("001-overview.qmd") == "overview.qmd"
-        assert docs._strip_numeric_prefix("010-details.qmd") == "details.qmd"
-        assert docs._strip_numeric_prefix("0100-reference.qmd") == "reference.qmd"
+        assert strip_numeric_prefix("001-overview.qmd") == "overview.qmd"
+        assert strip_numeric_prefix("010-details.qmd") == "details.qmd"
+        assert strip_numeric_prefix("0100-reference.qmd") == "reference.qmd"
 
 
 def test_strip_numeric_prefix_underscore():
@@ -2621,8 +2625,8 @@ def test_strip_numeric_prefix_underscore():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._strip_numeric_prefix("01_introduction.qmd") == "introduction.qmd"
-        assert docs._strip_numeric_prefix("1_getting_started.qmd") == "getting_started.qmd"
+        assert strip_numeric_prefix("01_introduction.qmd") == "introduction.qmd"
+        assert strip_numeric_prefix("1_getting_started.qmd") == "getting_started.qmd"
 
 
 def test_strip_numeric_prefix_no_prefix():
@@ -2633,9 +2637,9 @@ def test_strip_numeric_prefix_no_prefix():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._strip_numeric_prefix("introduction.qmd") == "introduction.qmd"
-        assert docs._strip_numeric_prefix("index.qmd") == "index.qmd"
-        assert docs._strip_numeric_prefix("getting-started.qmd") == "getting-started.qmd"
+        assert strip_numeric_prefix("introduction.qmd") == "introduction.qmd"
+        assert strip_numeric_prefix("index.qmd") == "index.qmd"
+        assert strip_numeric_prefix("getting-started.qmd") == "getting-started.qmd"
 
 
 def test_strip_numeric_prefix_preserves_internal_numbers():
@@ -2646,8 +2650,8 @@ def test_strip_numeric_prefix_preserves_internal_numbers():
 
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._strip_numeric_prefix("01-python3-setup.qmd") == "python3-setup.qmd"
-        assert docs._strip_numeric_prefix("02-chapter-10.qmd") == "chapter-10.qmd"
+        assert strip_numeric_prefix("01-python3-setup.qmd") == "python3-setup.qmd"
+        assert strip_numeric_prefix("02-chapter-10.qmd") == "chapter-10.qmd"
 
 
 def test_fix_numeric_prefix_links_basic():
@@ -2659,7 +2663,7 @@ def test_fix_numeric_prefix_links_basic():
         docs = GreatDocs(project_path=tmp_dir)
 
         content = "- [Theming](11-theming.qmd): customize colors"
-        result = docs._fix_numeric_prefix_links(content)
+        result = fix_numeric_prefix_links(content)
         assert result == "- [Theming](theming.qmd): customize colors"
 
 
@@ -2672,11 +2676,11 @@ def test_fix_numeric_prefix_links_with_anchors():
         docs = GreatDocs(project_path=tmp_dir)
 
         assert (
-            docs._fix_numeric_prefix_links("[Config](05-configuration.qmd#options)")
+            fix_numeric_prefix_links("[Config](05-configuration.qmd#options)")
             == "[Config](configuration.qmd#options)"
         )
         assert (
-            docs._fix_numeric_prefix_links("[Config](05-configuration.qmd?v=2)")
+            fix_numeric_prefix_links("[Config](05-configuration.qmd?v=2)")
             == "[Config](configuration.qmd?v=2)"
         )
 
@@ -2690,13 +2694,13 @@ def test_fix_numeric_prefix_links_skips_absolute_urls():
         docs = GreatDocs(project_path=tmp_dir)
 
         content = "[Docs](https://example.com/11-theming.qmd)"
-        assert docs._fix_numeric_prefix_links(content) == content
+        assert fix_numeric_prefix_links(content) == content
 
         content_http = "[Docs](http://example.com/05-config.qmd)"
-        assert docs._fix_numeric_prefix_links(content_http) == content_http
+        assert fix_numeric_prefix_links(content_http) == content_http
 
         content_abs = "[Docs](/root/11-theming.qmd)"
-        assert docs._fix_numeric_prefix_links(content_abs) == content_abs
+        assert fix_numeric_prefix_links(content_abs) == content_abs
 
 
 def test_fix_numeric_prefix_links_no_prefix():
@@ -2708,7 +2712,7 @@ def test_fix_numeric_prefix_links_no_prefix():
         docs = GreatDocs(project_path=tmp_dir)
 
         content = "[Theming](theming.qmd)"
-        assert docs._fix_numeric_prefix_links(content) == content
+        assert fix_numeric_prefix_links(content) == content
 
 
 def test_fix_numeric_prefix_links_subdirectory():
@@ -2720,7 +2724,7 @@ def test_fix_numeric_prefix_links_subdirectory():
         docs = GreatDocs(project_path=tmp_dir)
 
         content = "[Guide](01-getting-started/02-install.qmd)"
-        result = docs._fix_numeric_prefix_links(content)
+        result = fix_numeric_prefix_links(content)
         assert result == "[Guide](getting-started/install.qmd)"
 
 
@@ -2737,7 +2741,7 @@ def test_fix_numeric_prefix_links_multiple():
             "- [Config](05-configuration.qmd): options\n"
             "- [Building](13-building.qmd): build pipeline"
         )
-        result = docs._fix_numeric_prefix_links(content)
+        result = fix_numeric_prefix_links(content)
         assert result == (
             "- [Theming](theming.qmd): colors\n"
             "- [Config](configuration.qmd): options\n"
@@ -2754,10 +2758,10 @@ def test_fix_numeric_prefix_links_ignores_non_qmd():
         docs = GreatDocs(project_path=tmp_dir)
 
         content = "[Image](11-diagram.png)"
-        assert docs._fix_numeric_prefix_links(content) == content
+        assert fix_numeric_prefix_links(content) == content
 
         content_html = "[Page](11-theming.html)"
-        assert docs._fix_numeric_prefix_links(content_html) == content_html
+        assert fix_numeric_prefix_links(content_html) == content_html
 
 
 def test_user_guide_files_renamed_on_copy():
@@ -2800,7 +2804,7 @@ guide-section: Getting Started
         assert "user-guide/installation.qmd" in copied_files
 
         # Check files exist with clean names
-        docs_user_guide = docs.project_path / "user-guide"
+        docs_user_guide = docs.build_dir / "user-guide"
 
         assert (docs_user_guide / "introduction.qmd").exists()
         assert (docs_user_guide / "installation.qmd").exists()
@@ -2869,7 +2873,7 @@ def test_user_guide_discovers_mixed_extensions_and_nested_files():
 
         assert len(copied_files) == 6
 
-        docs_ug = docs.project_path / "user-guide"
+        docs_ug = docs.build_dir / "user-guide"
 
         # Top-level files
         assert (docs_ug / "intro.qmd").exists()
@@ -3179,7 +3183,7 @@ def test_expand_code_includes_in_user_guide_copy():
         docs._copy_user_guide_to_docs(user_guide_info)
 
         # Verify the expanded content in the build directory
-        built_file = docs.project_path / "user-guide" / "tutorial.qmd"
+        built_file = docs.build_dir / "user-guide" / "tutorial.qmd"
         assert built_file.exists()
         built_content = built_file.read_text(encoding="utf-8")
         assert "```python" in built_content
@@ -3266,12 +3270,12 @@ def test_underscore_dir_copied_as_assets_with_qmd():
         docs._copy_user_guide_to_docs(ug_info)
 
         # The _includes dir should be copied as an asset directory
-        copied_includes = docs.project_path / "user-guide" / "_includes"
+        copied_includes = docs.build_dir / "user-guide" / "_includes"
         assert copied_includes.exists(), "_includes dir was not copied"
         assert (copied_includes / "example.qmd").exists()
 
         # The include with lang= should have been expanded in the built file
-        built = docs.project_path / "user-guide" / "tutorial.qmd"
+        built = docs.build_dir / "user-guide" / "tutorial.qmd"
         built_content = built.read_text(encoding="utf-8")
         assert "```markdown" in built_content
         assert "print('hello')" in built_content
@@ -3364,7 +3368,7 @@ def test_copy_assets_basic():
         assert result is True
 
         # Check that files were copied
-        docs_assets = docs.project_path / "assets"
+        docs_assets = docs.build_dir / "assets"
 
         assert docs_assets.exists()
         assert (docs_assets / "image.png").exists()
@@ -3405,7 +3409,7 @@ def test_copy_assets_nested_directories():
         assert result is True
 
         # Check nested structure was preserved
-        docs_assets = docs.project_path / "assets"
+        docs_assets = docs.build_dir / "assets"
 
         assert (docs_assets / "images" / "logo.png").exists()
         assert (docs_assets / "images" / "icons" / "star.svg").exists()
@@ -3434,7 +3438,7 @@ def test_copy_assets_no_directory():
         assert result is False
 
         # Assets directory should not exist in docs
-        docs_assets = docs.project_path / "assets"
+        docs_assets = docs.build_dir / "assets"
         assert not docs_assets.exists()
 
 
@@ -3455,7 +3459,7 @@ def test_copy_assets_replaces_existing():
         docs = GreatDocs(project_path=tmp_dir)
 
         # Create existing assets in docs directory
-        docs_assets = docs.project_path / "assets"
+        docs_assets = docs.build_dir / "assets"
         docs_assets.mkdir(parents=True)
         (docs_assets / "old_file.txt").write_text("old content")
 
@@ -3494,7 +3498,7 @@ def test_assets_added_to_quarto_config():
         docs._update_quarto_config()
 
         # Read the generated _quarto.yml
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         assert quarto_yml.exists()
 
         with open(quarto_yml, "r") as f:
@@ -3528,11 +3532,11 @@ def test_dark_only_logo_does_not_crash_quarto_config():
         gd_yml.write_text("logo:\n  dark: assets/logo-dark.svg\n", encoding="utf-8")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         docs._update_quarto_config()
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "r") as f:
             config = read_yaml(f)
 
@@ -3552,13 +3556,13 @@ def test_assets_not_added_to_quarto_config_when_missing():
         docs = GreatDocs(project_path=tmp_dir)
 
         # Create great-docs directory (required for _quarto.yml)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         # Update Quarto config without assets
         docs._update_quarto_config()
 
         # Read the generated _quarto.yml
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
 
         assert quarto_yml.exists()
 
@@ -3589,11 +3593,11 @@ def test_assets_added_to_config_after_copy():
         docs = GreatDocs(project_path=tmp_dir)
 
         # Create great-docs directory and initial config (simulating _prepare_build_directory)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._update_quarto_config()
 
         # Read initial config - should NOT have assets/**
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "r") as f:
             initial_config = read_yaml(f)
 
@@ -3628,7 +3632,7 @@ def test_assets_config_update_only_when_copied():
         docs = GreatDocs(project_path=tmp_dir)
 
         # Create great-docs directory and initial config
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._update_quarto_config()
 
         # Try to copy assets when none exist: should return False
@@ -3637,7 +3641,7 @@ def test_assets_config_update_only_when_copied():
         assert assets_copied is False
 
         # Config should still not have assets/** since copy returned False
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "r") as f:
             config = read_yaml(f)
 
@@ -3658,10 +3662,10 @@ def test_skill_render_exclusion_uses_enumerated_globs():
         pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._update_quarto_config()
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "r") as f:
             config = read_yaml(f)
 
@@ -3897,11 +3901,11 @@ def test_copy_user_guide_files_uses_config():
         config_path.write_text("user_guide: my_docs\n")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         docs._copy_user_guide_files()
 
-        dest = docs.project_path / "user-guide"
+        dest = docs.build_dir / "user-guide"
 
         assert dest.exists()
         assert (dest / "guide.qmd").exists()
@@ -4083,14 +4087,14 @@ def test_user_guide_explicit_config_no_prefix_stripping():
         user_guide_info = docs._discover_user_guide()
 
         # Copy files - should preserve names
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         copied_files = docs._copy_user_guide_to_docs(user_guide_info)
 
         assert "user-guide/01-intro.qmd" in copied_files
         assert "user-guide/02-setup.qmd" in copied_files
 
         # Verify files exist with original names
-        docs_ug = docs.project_path / "user-guide"
+        docs_ug = docs.build_dir / "user-guide"
 
         assert (docs_ug / "01-intro.qmd").exists()
         assert (docs_ug / "02-setup.qmd").exists()
@@ -4274,10 +4278,10 @@ def test_landing_page_generated_when_no_readme():
         (pkg_dir / "__init__.py").write_text("")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme()
 
-        index_qmd = docs.project_path / "index.qmd"
+        index_qmd = docs.build_dir / "index.qmd"
 
         assert index_qmd.exists()
 
@@ -4379,10 +4383,10 @@ def test_landing_page_not_generated_when_readme_exists():
         (pkg_dir / "__init__.py").write_text("")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme()
 
-        index_qmd = docs.project_path / "index.qmd"
+        index_qmd = docs.build_dir / "index.qmd"
 
         assert index_qmd.exists()
 
@@ -4416,10 +4420,10 @@ def test_landing_page_has_sidebar_metadata():
         (pkg_dir / "__init__.py").write_text("")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme()
 
-        index_qmd = docs.project_path / "index.qmd"
+        index_qmd = docs.build_dir / "index.qmd"
         content = index_qmd.read_text()
 
         # Should have sidebar with metadata
@@ -4521,10 +4525,10 @@ def test_readme_rst_creates_index():
         (pkg_dir / "__init__.py").write_text("")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme()
 
-        index_qmd = docs.project_path / "index.qmd"
+        index_qmd = docs.build_dir / "index.qmd"
 
         assert index_qmd.exists()
 
@@ -4556,10 +4560,10 @@ def test_readme_rst_not_used_when_readme_md_exists():
         (pkg_dir / "__init__.py").write_text("")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme()
 
-        index_qmd = docs.project_path / "index.qmd"
+        index_qmd = docs.build_dir / "index.qmd"
         content = index_qmd.read_text()
 
         assert "Markdown README" in content
@@ -4589,10 +4593,10 @@ def test_index_qmd_frontmatter_title_preserved():
         (pkg_dir / "__init__.py").write_text("")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(force_rebuild=True)
 
-        content = (docs.project_path / "index.qmd").read_text()
+        content = (docs.build_dir / "index.qmd").read_text()
         fm = _homepage_frontmatter(content)
 
         assert fm["title"] == "My Package"
@@ -4614,10 +4618,10 @@ def test_index_qmd_frontmatter_title_empty_without_source_title():
         (pkg_dir / "__init__.py").write_text("")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(force_rebuild=True)
 
-        content = (docs.project_path / "index.qmd").read_text()
+        content = (docs.build_dir / "index.qmd").read_text()
         fm = _homepage_frontmatter(content)
 
         assert fm["title"] == ""
@@ -4641,10 +4645,10 @@ def test_index_qmd_frontmatter_title_yaml_safe():
         (pkg_dir / "__init__.py").write_text("")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(force_rebuild=True)
 
-        content = (docs.project_path / "index.qmd").read_text()
+        content = (docs.build_dir / "index.qmd").read_text()
         fm = _homepage_frontmatter(content)
 
         assert fm["title"] == tricky_title
@@ -6546,7 +6550,7 @@ def test_write_object_types_json():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         categories = docs._empty_categories()
         categories["classes"] = ["MyClass", "parser.ParserInfo"]
@@ -6563,7 +6567,7 @@ def test_write_object_types_json():
 
         docs._write_object_types_json(categories)
 
-        types_path = docs.project_path / "_object_types.json"
+        types_path = docs.build_dir / "_object_types.json"
         assert types_path.exists()
 
         with open(types_path) as f:
@@ -6603,12 +6607,12 @@ def test_write_object_types_json_empty_categories():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         categories = docs._empty_categories()
 
         docs._write_object_types_json(categories)
 
-        types_path = docs.project_path / "_object_types.json"
+        types_path = docs.build_dir / "_object_types.json"
 
         assert types_path.exists()
 
@@ -6652,14 +6656,14 @@ def test_object_types_integrated_with_categorization():
 
         try:
             docs = GreatDocs(project_path=str(build_dir))
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
             categories = docs._categorize_api_objects(
                 "typepkg", ["MyClass", "my_func", "MyError", "MAX_SIZE"]
             )
 
             docs._write_object_types_json(categories)
 
-            types_path = docs.project_path / "_object_types.json"
+            types_path = docs.build_dir / "_object_types.json"
             assert types_path.exists()
 
             with open(types_path) as f:
@@ -7346,6 +7350,7 @@ def _make_class_with_method(method_name: str = "my_method", method_doc: str = "A
 def test_resolve_members_skips_nodoc_member():
     """member_doc is None -> continue"""
     import griffe as gf
+
     from great_docs._apiref.api_reference import Settings
 
     cls, method = _make_class_with_method(method_doc="%nodoc")
@@ -7365,6 +7370,7 @@ def test_resolve_members_skips_nodoc_member():
 def test_resolve_members_skips_module_member():
     """member is a module -> continue"""
     import griffe as gf
+
     from great_docs._apiref.api_reference import Settings
 
     cls = gf.Class("MyClass")
@@ -7398,6 +7404,7 @@ def test_resolve_members_skips_module_member():
 def test_resolve_members_children_separate():
     """ChildrenStyle.separate produces MemberPage"""
     import griffe as gf
+
     from great_docs._apiref.api_reference import Settings
     from great_docs._apiref.content import MemberPage
 
@@ -7419,6 +7426,7 @@ def test_resolve_members_children_separate():
 def test_resolve_members_children_linked():
     """ChildrenStyle.linked produces Link"""
     import griffe as gf
+
     from great_docs._apiref.api_reference import Settings
     from great_docs._apiref.content import Link
 
@@ -7439,9 +7447,11 @@ def test_resolve_members_children_linked():
 
 def test_resolve_members_children_invalid_raises():
     """Unsupported children value raises ValueError"""
-    import griffe as gf
-    from great_docs._apiref.api_reference import Settings
     from unittest.mock import MagicMock
+
+    import griffe as gf
+
+    from great_docs._apiref.api_reference import Settings
 
     cls, method = _make_class_with_method()
     objects = {"mymod:MyClass": cls, "mymod:MyClass.my_method": method}
@@ -7466,6 +7476,7 @@ def test_resolve_members_children_invalid_raises():
 def test_fetch_members_module_with_exports_filters_unexported():
     """obj.is_module and obj.exports is not None filters to exported only"""
     import griffe as gf
+
     from great_docs._apiref.api_reference import Settings
 
     mod = gf.Module("mymod")
@@ -7487,6 +7498,7 @@ def test_fetch_members_module_with_exports_filters_unexported():
 def test_fetch_members_module_exclude_imports():
     """not el.include_imports and obj.is_module filters aliases"""
     import griffe as gf
+
     from great_docs._apiref.api_reference import Settings
 
     mod = gf.Module("mymod")
@@ -7506,6 +7518,7 @@ def test_fetch_members_module_exclude_imports():
 def test_fetch_members_exclude_attributes():
     """include_attributes=False removes attribute members"""
     import griffe as gf
+
     from great_docs._apiref.api_reference import Settings
 
     mod = gf.Module("mymod")
@@ -7526,6 +7539,7 @@ def test_fetch_members_exclude_attributes():
 def test_fetch_members_exclude_classes():
     """include_classes=False removes class members"""
     import griffe as gf
+
     from great_docs._apiref.api_reference import Settings
 
     mod = gf.Module("mymod")
@@ -7546,6 +7560,7 @@ def test_fetch_members_exclude_classes():
 def test_fetch_members_exclude_functions():
     """include_functions=False removes function members"""
     import griffe as gf
+
     from great_docs._apiref.api_reference import Settings
 
     mod = gf.Module("mymod")
@@ -7566,6 +7581,7 @@ def test_fetch_members_exclude_functions():
 def test_fetch_members_exclude_list():
     """el.exclude filters listed names"""
     import griffe as gf
+
     from great_docs._apiref.api_reference import Settings
 
     mod = gf.Module("mymod")
@@ -7586,6 +7602,7 @@ def test_fetch_members_exclude_list():
 def test_fetch_members_source_order():
     """member_order='source' returns insertion order"""
     import griffe as gf
+
     from great_docs._apiref.api_reference import Settings
 
     mod = gf.Module("mymod")
@@ -7603,6 +7620,7 @@ def test_fetch_members_source_order():
 def test_fetch_members_invalid_order_raises():
     """Unknown member_order raises ValueError"""
     import griffe as gf
+
     from great_docs._apiref.api_reference import Settings
 
     mod = gf.Module("mymod")
@@ -7621,6 +7639,7 @@ def test_fetch_members_invalid_order_raises():
 def test_fetch_members_include_private_skips_private_filter():
     """include_private=True bypasses the private-name filter"""
     import griffe as gf
+
     from great_docs._apiref.api_reference import Settings
 
     mod = gf.Module("mymod")
@@ -7637,6 +7656,7 @@ def test_fetch_members_include_private_skips_private_filter():
 def test_fetch_members_include_empty_skips_docstring_filter():
     """include_empty=True bypasses the docstring-presence filter"""
     import griffe as gf
+
     from great_docs._apiref.api_reference import Settings
 
     mod = gf.Module("mymod")
@@ -7677,8 +7697,9 @@ def test_autogenerate_sections_returns_sections(capsys):
 
 def test_autogenerate_sections_empty_result_raises(capsys):
     """_autogenerate_sections raises when _sections_from_package returns empty"""
-    import griffe as gf
     from unittest.mock import patch
+
+    import griffe as gf
 
     mod = gf.Module("mymod")
 
@@ -8138,13 +8159,13 @@ class TestFaviconLinkInjection:
             (tmp / "logo.svg").write_text(_MINIMAL_SVG)
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         # Run the config build
         docs._update_quarto_config()
 
         # Read the generated _quarto.yml
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml) as f:
             return read_yaml(f)
 
@@ -8366,10 +8387,10 @@ def test_config_markdown_pages_disabled():
         assert docs._config.markdown_pages is False
         assert docs._config.markdown_pages_widget is False
 
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._update_quarto_config()
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "r") as f:
             config = read_yaml(f)
 
@@ -8402,10 +8423,10 @@ def test_config_markdown_pages_widget_disabled():
         assert docs._config.markdown_pages is True
         assert docs._config.markdown_pages_widget is False
 
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._update_quarto_config()
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
 
         with open(quarto_yml, "r") as f:
             config = read_yaml(f)
@@ -8431,10 +8452,10 @@ def test_config_markdown_pages_default_enabled():
         pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._update_quarto_config()
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "r") as f:
             config = read_yaml(f)
 
@@ -8466,10 +8487,10 @@ class TestPositBadgeInjection:
         (tmp / "great-docs.yml").write_text("".join(yml_lines))
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._update_quarto_config()
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml) as f:
             return read_yaml(f)
 
@@ -8537,11 +8558,11 @@ class TestPositBadgeInjection:
             (tmp / "great-docs.yml").write_text("display_name: Test\nfunding:\n  name: Posit\n")
 
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
             docs._update_quarto_config()
             docs._update_quarto_config()  # second run
 
-            quarto_yml = docs.project_path / "_quarto.yml"
+            quarto_yml = docs.build_dir / "_quarto.yml"
 
             with open(quarto_yml) as f:
                 config = read_yaml(f)
@@ -9052,7 +9073,8 @@ def test_build_source_links_use_module_name(
         (root / "great-docs.yml").write_text("module: actual_module\n")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
         with pytest.raises(_StopBuild):
             docs.build(refresh=False)
@@ -10167,9 +10189,9 @@ def test_process_custom_pages_passthrough_and_raw():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(docs.project_path / "_quarto.yml", "w") as f:
+        with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml({"website": {"sidebar": [], "navbar": {"left": []}}}, f)
 
         custom_dir = tmp / "custom"
@@ -10194,9 +10216,9 @@ def test_process_custom_pages_passthrough_and_raw():
 
         assert result == 2
 
-        passthrough = docs.project_path / "custom" / "landing.qmd"
-        raw = docs.project_path / "custom" / "widget.html"
-        asset = docs.project_path / "custom" / "app.js"
+        passthrough = docs.build_dir / "custom" / "landing.qmd"
+        raw = docs.build_dir / "custom" / "widget.html"
+        asset = docs.build_dir / "custom" / "app.js"
 
         assert passthrough.exists()
         assert raw.exists()
@@ -10212,7 +10234,7 @@ def test_process_custom_pages_passthrough_and_raw():
         raw_text = raw.read_text(encoding="utf-8")
         assert raw_text == "<html><body>Widget</body></html>\n"
 
-        with open(docs.project_path / "_quarto.yml") as f:
+        with open(docs.build_dir / "_quarto.yml") as f:
             config = read_yaml(f)
 
         resources = config["project"]["resources"]
@@ -10231,9 +10253,9 @@ def test_process_custom_pages_missing_dir():
     """Custom page processing is a no-op when no custom/ directory exists."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(docs.project_path / "_quarto.yml", "w") as f:
+        with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml({"website": {"sidebar": [], "navbar": {"left": []}}}, f)
 
         assert docs._process_custom_pages() == 0
@@ -10249,9 +10271,9 @@ def test_process_custom_pages_respects_configured_output_prefix():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(docs.project_path / "_quarto.yml", "w") as f:
+        with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml({"website": {"sidebar": [], "navbar": {"left": []}}}, f)
 
         marketing_dir = tmp / "marketing"
@@ -10270,10 +10292,10 @@ def test_process_custom_pages_respects_configured_output_prefix():
         result = docs._process_custom_pages()
 
         assert result == 1
-        assert (docs.project_path / "py" / "landing.qmd").exists()
-        assert (docs.project_path / "py" / "app.js").exists()
+        assert (docs.build_dir / "py" / "landing.qmd").exists()
+        assert (docs.build_dir / "py" / "app.js").exists()
 
-        with open(docs.project_path / "_quarto.yml") as f:
+        with open(docs.build_dir / "_quarto.yml") as f:
             config = read_yaml(f)
 
         resources = config["project"]["resources"]
@@ -10302,9 +10324,9 @@ def test_process_custom_pages_supports_multiple_directories():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(docs.project_path / "_quarto.yml", "w") as f:
+        with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(
                 {
                     "website": {
@@ -10333,10 +10355,10 @@ def test_process_custom_pages_supports_multiple_directories():
         result = docs._process_custom_pages()
 
         assert result == 2
-        assert (docs.project_path / "py" / "landing.qmd").exists()
-        assert (docs.project_path / "demos" / "showcase.html").exists()
+        assert (docs.build_dir / "py" / "landing.qmd").exists()
+        assert (docs.build_dir / "demos" / "showcase.html").exists()
 
-        with open(docs.project_path / "_quarto.yml") as f:
+        with open(docs.build_dir / "_quarto.yml") as f:
             config = read_yaml(f)
 
         items = config["website"]["navbar"]["left"]
@@ -10359,9 +10381,9 @@ def test_process_custom_pages_supports_nested_output_prefixes():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(docs.project_path / "_quarto.yml", "w") as f:
+        with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml({"website": {"sidebar": [], "navbar": {"left": []}}}, f)
 
         apps_dir = tmp / "apps"
@@ -10381,10 +10403,10 @@ def test_process_custom_pages_supports_nested_output_prefixes():
         result = docs._process_custom_pages()
 
         assert result == 1
-        assert (docs.project_path / "products" / "python" / "start.qmd").exists()
-        assert (docs.project_path / "products" / "python" / "assets" / "widget.js").exists()
+        assert (docs.build_dir / "products" / "python" / "start.qmd").exists()
+        assert (docs.build_dir / "products" / "python" / "assets" / "widget.js").exists()
 
-        with open(docs.project_path / "_quarto.yml") as f:
+        with open(docs.build_dir / "_quarto.yml") as f:
             config = read_yaml(f)
 
         resources = config["project"]["resources"]
@@ -10413,9 +10435,9 @@ def test_process_custom_pages_skips_missing_configured_directories():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(docs.project_path / "_quarto.yml", "w") as f:
+        with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml({"website": {"sidebar": [], "navbar": {"left": []}}}, f)
 
         playgrounds_dir = tmp / "playgrounds"
@@ -10428,10 +10450,10 @@ def test_process_custom_pages_skips_missing_configured_directories():
         result = docs._process_custom_pages()
 
         assert result == 1
-        assert not (docs.project_path / "ghost").exists()
-        assert (docs.project_path / "demos" / "widget.html").exists()
+        assert not (docs.build_dir / "ghost").exists()
+        assert (docs.build_dir / "demos" / "widget.html").exists()
 
-        with open(docs.project_path / "_quarto.yml") as f:
+        with open(docs.build_dir / "_quarto.yml") as f:
             config = read_yaml(f)
 
         resources = config["project"]["resources"]
@@ -10453,13 +10475,13 @@ def test_process_custom_pages_can_be_disabled_explicitly():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(docs.project_path / "_quarto.yml", "w") as f:
+        with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml({"website": {"sidebar": [], "navbar": {"left": []}}}, f)
 
         assert docs._process_custom_pages() == 0
-        assert not (docs.project_path / "custom" / "landing.qmd").exists()
+        assert not (docs.build_dir / "custom" / "landing.qmd").exists()
 
 
 def test_process_custom_pages_frontmatter_allows_leading_blank_lines():
@@ -10467,9 +10489,9 @@ def test_process_custom_pages_frontmatter_allows_leading_blank_lines():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(docs.project_path / "_quarto.yml", "w") as f:
+        with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(
                 {
                     "website": {
@@ -10499,7 +10521,7 @@ def test_process_custom_pages_frontmatter_allows_leading_blank_lines():
 
         docs._process_custom_pages()
 
-        with open(docs.project_path / "_quarto.yml") as f:
+        with open(docs.build_dir / "_quarto.yml") as f:
             config = read_yaml(f)
 
         items = config["website"]["navbar"]["left"]
@@ -10515,9 +10537,9 @@ def test_process_custom_pages_adds_passthrough_navbar_link():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(docs.project_path / "_quarto.yml", "w") as f:
+        with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(
                 {
                     "website": {
@@ -10547,7 +10569,7 @@ def test_process_custom_pages_adds_passthrough_navbar_link():
 
         docs._process_custom_pages()
 
-        with open(docs.project_path / "_quarto.yml") as f:
+        with open(docs.build_dir / "_quarto.yml") as f:
             config = read_yaml(f)
 
         items = config["website"]["navbar"]["left"]
@@ -10567,9 +10589,9 @@ def test_process_custom_pages_adds_raw_navbar_link_with_custom_text():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(docs.project_path / "_quarto.yml", "w") as f:
+        with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(
                 {
                     "website": {
@@ -10600,7 +10622,7 @@ def test_process_custom_pages_adds_raw_navbar_link_with_custom_text():
 
         docs._process_custom_pages()
 
-        with open(docs.project_path / "_quarto.yml") as f:
+        with open(docs.build_dir / "_quarto.yml") as f:
             config = read_yaml(f)
 
         items = config["website"]["navbar"]["left"]
@@ -10618,8 +10640,8 @@ def test_add_section_sidebar_creates_sidebar():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {"website": {"sidebar": [], "navbar": {"left": []}}}
         with open(quarto_yml, "w") as f:
@@ -10647,8 +10669,8 @@ def test_add_section_sidebar_skips_single_page():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {"website": {"sidebar": [], "navbar": {"left": []}}}
         with open(quarto_yml, "w") as f:
@@ -10668,8 +10690,8 @@ def test_add_section_sidebar_replaces_existing():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {
             "website": {
@@ -10700,8 +10722,8 @@ def test_add_section_sidebar_strips_numeric_prefix_from_subdirs():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {"website": {"sidebar": [], "navbar": {"left": []}}}
         with open(quarto_yml, "w") as f:
@@ -10735,8 +10757,8 @@ def test_add_section_sidebar_preserves_subdir_order():
     """_add_section_sidebar orders subsections by source order, not stripped name."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {"website": {"sidebar": [], "navbar": {"left": []}}}
         with open(quarto_yml, "w") as f:
@@ -10766,8 +10788,8 @@ def test_add_section_sidebar_dir_titles_override():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {"website": {"sidebar": [], "navbar": {"left": []}}}
         with open(quarto_yml, "w") as f:
@@ -10930,8 +10952,8 @@ def test_add_section_to_navbar_basic():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {"website": {"sidebar": [], "navbar": {"left": []}}}
         with open(quarto_yml, "w") as f:
@@ -10952,8 +10974,8 @@ def test_add_section_to_navbar_idempotent_project_root():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {
             "website": {
@@ -10980,8 +11002,8 @@ def test_add_section_to_navbar_after():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {
             "website": {
@@ -11013,8 +11035,8 @@ def test_add_section_to_navbar_before_reference():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {
             "website": {
@@ -11046,8 +11068,8 @@ def test_add_section_to_navbar_no_navbar():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {"website": {"sidebar": []}}
 
@@ -11063,8 +11085,8 @@ def test_add_section_to_navbar_after_not_found():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {
             "website": {
@@ -11097,8 +11119,8 @@ def test_add_changelog_to_navbar():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {"website": {"navbar": {"left": [{"text": "Guide", "href": "guide/"}]}}}
 
@@ -11120,8 +11142,8 @@ def test_add_changelog_to_navbar_idempotent_v2():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {"website": {"navbar": {"left": [{"text": "Changelog", "href": "changelog.qmd"}]}}}
         with open(quarto_yml, "w") as f:
@@ -11387,7 +11409,7 @@ def test_copy_user_guide_to_docs_auto():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         src = tmp / "user_guide"
         src.mkdir()
@@ -11402,7 +11424,7 @@ def test_copy_user_guide_to_docs_auto():
 
         assert len(result) == 1
         assert "intro.qmd" in result[0]
-        assert (docs.project_path / "user-guide" / "intro.qmd").exists()
+        assert (docs.build_dir / "user-guide" / "intro.qmd").exists()
 
 
 def test_copy_user_guide_to_docs_explicit():
@@ -11410,7 +11432,7 @@ def test_copy_user_guide_to_docs_explicit():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         src = tmp / "user_guide"
         src.mkdir()
@@ -11431,7 +11453,7 @@ def test_copy_user_guide_to_docs_adds_breadcrumbs():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         src = tmp / "user_guide"
         src.mkdir()
@@ -11444,7 +11466,7 @@ def test_copy_user_guide_to_docs_adds_breadcrumbs():
         }
         docs._copy_user_guide_to_docs(guide_info)
 
-        content = (docs.project_path / "user-guide" / "page.qmd").read_text()
+        content = (docs.build_dir / "user-guide" / "page.qmd").read_text()
 
         assert "bread-crumbs" in content
 
@@ -11463,7 +11485,7 @@ def test_copy_user_guide_to_docs_copies_assets():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         src = tmp / "user_guide"
         src.mkdir()
@@ -11479,7 +11501,7 @@ def test_copy_user_guide_to_docs_copies_assets():
         }
         docs._copy_user_guide_to_docs(guide_info)
 
-        assert (docs.project_path / "user-guide" / "images" / "logo.png").exists()
+        assert (docs.build_dir / "user-guide" / "images" / "logo.png").exists()
 
 
 def test_update_sidebar_with_cli_new():
@@ -11487,8 +11509,8 @@ def test_update_sidebar_with_cli_new():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {"website": {"sidebar": []}}
         with open(quarto_yml, "w") as f:
@@ -11511,8 +11533,8 @@ def test_update_sidebar_with_cli_updates_existing_no_subdir():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {
             "website": {
@@ -11543,8 +11565,8 @@ def test_update_sidebar_with_cli_empty():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {"website": {"sidebar": []}}
 
@@ -11564,8 +11586,8 @@ def test_update_sidebar_with_cli_adds_api_link():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {
             "website": {
@@ -11763,15 +11785,15 @@ def test_process_sections_default_section():
 
         docs = GreatDocs(project_path=tmp_dir)
         # Create the project build dir and _quarto.yml
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         config = {"website": {"sidebar": [], "navbar": {"left": []}}}
-        with open(docs.project_path / "_quarto.yml", "w") as f:
+        with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(config, f)
 
         result = docs._process_sections()
 
         assert result == 1
-        assert (docs.project_path / "recipes").exists()
+        assert (docs.build_dir / "recipes").exists()
 
 
 def test_process_sections_blog_section():
@@ -11789,9 +11811,9 @@ def test_process_sections_blog_section():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         config = {"website": {"sidebar": [], "navbar": {"left": []}}}
-        with open(docs.project_path / "_quarto.yml", "w") as f:
+        with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(config, f)
 
         result = docs._process_sections()
@@ -11799,7 +11821,7 @@ def test_process_sections_blog_section():
         assert result == 1
 
         # Blog should create an auto-generated index
-        assert (docs.project_path / "blog" / "index.qmd").exists()
+        assert (docs.build_dir / "blog" / "index.qmd").exists()
 
 
 def test_process_sections_missing_dir():
@@ -11810,7 +11832,7 @@ def test_process_sections_missing_dir():
         (tmp / "great-docs.yml").write_text("sections:\n  - title: Missing\n    dir: no-such-dir\n")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         result = docs._process_sections()
 
         assert result == 0
@@ -11844,19 +11866,19 @@ def test_process_sections_with_navbar_after():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         config = {
             "website": {
                 "sidebar": [],
                 "navbar": {"left": [{"text": "Guide", "href": "guide/"}]},
             }
         }
-        with open(docs.project_path / "_quarto.yml", "w") as f:
+        with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(config, f)
 
         docs._process_sections()
 
-        with open(docs.project_path / "_quarto.yml") as f:
+        with open(docs.build_dir / "_quarto.yml") as f:
             result = read_yaml(f)
 
         items = result["website"]["navbar"]["left"]
@@ -11892,9 +11914,9 @@ def test_read_quarto_config_existing():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "w") as f:
             write_yaml({"project": {"type": "website"}}, f)
 
@@ -12343,7 +12365,7 @@ def test_generate_cli_reference_pages_basic():
     """_generate_cli_reference_pages generates index and subcommand pages."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         cli_info = {
             "name": "tool",
@@ -12362,11 +12384,11 @@ def test_generate_cli_reference_pages_basic():
 
         # The index is now a labeled listing entry (not the root command page).
         assert {"text": "CLI Index", "href": "reference/cli/index.qmd"} in result
-        assert (docs.project_path / "reference" / "cli" / "index.qmd").exists()
+        assert (docs.build_dir / "reference" / "cli" / "index.qmd").exists()
         # The root command page now lives on its own page (entry name -> safe name).
         assert "reference/cli/tool.qmd" in result
-        assert (docs.project_path / "reference" / "cli" / "tool.qmd").exists()
-        assert (docs.project_path / "reference" / "cli" / "build.qmd").exists()
+        assert (docs.build_dir / "reference" / "cli" / "tool.qmd").exists()
+        assert (docs.build_dir / "reference" / "cli" / "build.qmd").exists()
 
 
 def test_generate_cli_index_page_auto_layout():
@@ -12472,8 +12494,8 @@ def test_generate_subcommand_pages_nested():
     """_generate_subcommand_pages handles nested command groups."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
-        cli_dir = docs.project_path / "reference" / "cli"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        cli_dir = docs.build_dir / "reference" / "cli"
         cli_dir.mkdir(parents=True)
 
         cmd_info = {
@@ -12506,8 +12528,8 @@ def test_generate_subcommand_pages_leaf():
     """_generate_subcommand_pages returns strings for leaf commands."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
-        cli_dir = docs.project_path / "reference" / "cli"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        cli_dir = docs.build_dir / "reference" / "cli"
         cli_dir.mkdir(parents=True)
 
         cmd_info = {
@@ -12708,8 +12730,8 @@ def test_update_config_with_user_guide_adds_sidebar():
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {
             "website": {
@@ -12765,8 +12787,8 @@ def test_update_config_with_user_guide_idempotent():
         tmp = Path(tmp_dir)
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         config = {
             "website": {
@@ -12836,13 +12858,13 @@ def test_process_user_guide_with_pages():
         (ug / "02-usage.qmd").write_text("---\ntitle: Usage\n---\nContent\n")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         config = {"website": {"sidebar": [], "navbar": {"left": []}}}
-        with open(docs.project_path / "_quarto.yml", "w") as f:
+        with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(config, f)
 
         assert docs._process_user_guide() is True
-        assert (docs.project_path / "user-guide").exists()
+        assert (docs.build_dir / "user-guide").exists()
 
 
 def test_process_user_guide_with_sections():
@@ -12857,17 +12879,17 @@ def test_process_user_guide_with_sections():
         (ug / "02-b.qmd").write_text("---\ntitle: B\nguide-section: Advanced\n---\nB\n")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         config = {"website": {"sidebar": [], "navbar": {"left": []}}}
 
-        with open(docs.project_path / "_quarto.yml", "w") as f:
+        with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(config, f)
 
         result = docs._process_user_guide()
 
         assert result is True
 
-        with open(docs.project_path / "_quarto.yml") as f:
+        with open(docs.build_dir / "_quarto.yml") as f:
             result_config = read_yaml(f)
         ug_sidebar = next(
             s
@@ -12933,10 +12955,10 @@ def test_strip_numeric_prefix_various():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        assert docs._strip_numeric_prefix("01-intro.qmd") == "intro.qmd"
-        assert docs._strip_numeric_prefix("99_advanced.qmd") == "advanced.qmd"
-        assert docs._strip_numeric_prefix("no-prefix.qmd") == "no-prefix.qmd"
-        assert docs._strip_numeric_prefix("001-triple.qmd") == "triple.qmd"
+        assert strip_numeric_prefix("01-intro.qmd") == "intro.qmd"
+        assert strip_numeric_prefix("99_advanced.qmd") == "advanced.qmd"
+        assert strip_numeric_prefix("no-prefix.qmd") == "no-prefix.qmd"
+        assert strip_numeric_prefix("001-triple.qmd") == "triple.qmd"
 
 
 def test_normalize_package_name_v2():
@@ -15592,7 +15614,7 @@ def test_generate_source_links_json_disabled():
         docs._generate_source_links_json("mypkg")
 
         # Should return early; no JSON file created
-        assert not (docs.project_path / "_source_links.json").exists()
+        assert not (docs.build_dir / "_source_links.json").exists()
 
 
 def test_generate_source_links_json_no_repo():
@@ -15603,7 +15625,7 @@ def test_generate_source_links_json_no_repo():
         # No pyproject.toml = no repo
         docs._generate_source_links_json("mypkg")
 
-        assert not (docs.project_path / "_source_links.json").exists()
+        assert not (docs.build_dir / "_source_links.json").exists()
 
 
 def test_get_source_location_no_griffe():
@@ -15683,7 +15705,7 @@ def test_write_quarto_yml_adds_header():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         config = {"project": {"type": "website"}}
@@ -15703,7 +15725,7 @@ def test_update_sidebar_from_sections_basic():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         config = {
@@ -15758,7 +15780,7 @@ def test_update_sidebar_from_sections_dict_items():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         config = {
@@ -15800,7 +15822,7 @@ def test_update_sidebar_no_api_reference():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         config = {"project": {"type": "website"}, "website": {"sidebar": []}}
@@ -15826,7 +15848,7 @@ def test_update_reference_index_frontmatter_adds_page_nav():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        ref_dir = docs.docs_dir / "reference"
+        ref_dir = docs.build_dir / "reference"
         ref_dir.mkdir(parents=True, exist_ok=True)
 
         index_qmd = ref_dir / "index.qmd"
@@ -15844,7 +15866,7 @@ def test_update_reference_index_frontmatter_no_frontmatter():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        ref_dir = docs.docs_dir / "reference"
+        ref_dir = docs.build_dir / "reference"
         ref_dir.mkdir(parents=True, exist_ok=True)
 
         index_qmd = ref_dir / "index.qmd"
@@ -15863,7 +15885,7 @@ def test_update_reference_index_frontmatter_already_has_page_nav():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        ref_dir = docs.docs_dir / "reference"
+        ref_dir = docs.build_dir / "reference"
         ref_dir.mkdir(parents=True, exist_ok=True)
 
         index_qmd = ref_dir / "index.qmd"
@@ -15884,7 +15906,7 @@ def test_generate_llms_txt_no_quarto_yml():
         docs = GreatDocs(project_path=tmp_dir)
         docs._generate_llms_txt()
 
-        assert not (docs.project_path / "llms.txt").exists()
+        assert not (docs.build_dir / "llms.txt").exists()
 
 
 def test_generate_llms_txt_no_api_reference():
@@ -15893,7 +15915,7 @@ def test_generate_llms_txt_no_api_reference():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         with open(quarto_yml, "w") as f:
@@ -15901,7 +15923,7 @@ def test_generate_llms_txt_no_api_reference():
 
         docs._generate_llms_txt()
 
-        assert not (docs.project_path / "llms.txt").exists()
+        assert not (docs.build_dir / "llms.txt").exists()
 
 
 def test_generate_llms_txt_writes_file():
@@ -15916,7 +15938,7 @@ def test_generate_llms_txt_writes_file():
             encoding="utf-8",
         )
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         config = {
@@ -15938,7 +15960,7 @@ def test_generate_llms_txt_writes_file():
 
         docs._generate_llms_txt()
 
-        llms_path = docs.project_path / "llms.txt"
+        llms_path = docs.build_dir / "llms.txt"
 
         assert llms_path.exists()
 
@@ -15958,7 +15980,7 @@ def test_generate_llms_txt_with_site_url():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         config = {
@@ -15981,7 +16003,7 @@ def test_generate_llms_txt_with_site_url():
 
         docs._generate_llms_txt()
 
-        content = (docs.project_path / "llms.txt").read_text()
+        content = (docs.build_dir / "llms.txt").read_text()
 
         # URL should have the anchor stripped
         assert "https://example.com/docs/" in content
@@ -15994,7 +16016,7 @@ def test_generate_llms_full_txt_no_api_reference():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         with open(quarto_yml, "w") as f:
@@ -16002,7 +16024,7 @@ def test_generate_llms_full_txt_no_api_reference():
 
         docs._generate_llms_full_txt()
 
-        assert not (docs.project_path / "llms-full.txt").exists()
+        assert not (docs.build_dir / "llms-full.txt").exists()
 
 
 def test_generate_llms_full_txt_no_package_name():
@@ -16011,7 +16033,7 @@ def test_generate_llms_full_txt_no_package_name():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         config = {
@@ -16025,7 +16047,7 @@ def test_generate_llms_full_txt_no_package_name():
 
         docs._generate_llms_full_txt()
 
-        assert not (docs.project_path / "llms-full.txt").exists()
+        assert not (docs.build_dir / "llms-full.txt").exists()
 
 
 def test_update_quarto_config_navbar_color_light_dark():
@@ -16044,7 +16066,7 @@ def test_update_quarto_config_navbar_color_light_dark():
         )
         docs._config = Config(Path(tmp_dir))
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16081,7 +16103,7 @@ def test_update_quarto_config_navbar_color_light_only():
         gd_yml.write_text("navbar_color:\n  light: '#003366'\n", encoding="utf-8")
         docs._config = Config(Path(tmp_dir))
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16121,7 +16143,7 @@ def test_update_quarto_config_navbar_color_does_not_leak_onto_root():
         )
         docs._config = Config(Path(tmp_dir))
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         with open(quarto_yml, "w") as f:
@@ -16175,7 +16197,7 @@ def test_update_quarto_config_announcement_banner():
         )
         docs._config = Config(Path(tmp_dir))
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16225,7 +16247,7 @@ def test_update_quarto_config_content_style():
         )
         docs._config = Config(Path(tmp_dir))
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16268,7 +16290,7 @@ def test_update_quarto_config_navbar_style():
         gd_yml.write_text("navbar_style: midnight\n", encoding="utf-8")
         docs._config = Config(Path(tmp_dir))
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16307,7 +16329,7 @@ def test_update_quarto_config_dark_mode_toggle():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16348,7 +16370,7 @@ def test_update_quarto_config_cli_enabled_adds_ref_switcher():
         gd_yml.write_text("cli:\n  enabled: true\n  module: mypkg.cli\n", encoding="utf-8")
         docs._config = Config(Path(tmp_dir))
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16385,7 +16407,7 @@ def test_update_quarto_config_page_footer_with_authors():
             encoding="utf-8",
         )
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16429,7 +16451,7 @@ def test_update_quarto_config_page_footer_with_funding():
         )
         docs._config = Config(Path(tmp_dir))
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16466,7 +16488,7 @@ def test_update_quarto_config_page_footer_funding_no_authors():
         gd_yml.write_text("funding:\n  name: TestFund\n", encoding="utf-8")
         docs._config = Config(Path(tmp_dir))
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16503,7 +16525,7 @@ def test_update_quarto_config_posit_badge():
         gd_yml.write_text("funding:\n  name: Posit PBC\n", encoding="utf-8")
         docs._config = Config(Path(tmp_dir))
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16535,7 +16557,7 @@ def test_update_quarto_config_sidebar_filter():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16571,7 +16593,7 @@ def test_update_quarto_config_sidebar_filter_custom_min_items():
         gd_yml.write_text("sidebar_filter:\n  min_items: 10\n", encoding="utf-8")
         docs._config = Config(Path(tmp_dir))
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16607,7 +16629,7 @@ def test_update_quarto_config_attribution():
         )
 
         # Attribution is True by default
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16643,7 +16665,7 @@ def test_update_quarto_config_version_badge_metadata():
             encoding="utf-8",
         )
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16660,7 +16682,7 @@ def test_update_quarto_config_version_badge_metadata():
         with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
             docs._update_quarto_config()
 
-        meta_path = docs.project_path / "_package_meta.json"
+        meta_path = docs.build_dir / "_package_meta.json"
 
         assert meta_path.exists()
 
@@ -16683,7 +16705,7 @@ def test_update_quarto_config_version_badge_no_releases():
             encoding="utf-8",
         )
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16696,7 +16718,7 @@ def test_update_quarto_config_version_badge_no_releases():
             write_yaml(base_config, f)
 
         # Create a stale meta file
-        meta_path = docs.project_path / "_package_meta.json"
+        meta_path = docs.build_dir / "_package_meta.json"
         meta_path.write_text(json.dumps({"version": "old"}))
 
         with patch.object(docs, "_fetch_github_releases", return_value=[]):
@@ -16722,7 +16744,7 @@ def test_update_quarto_config_site_url():
         )
         docs._config = Config(Path(tmp_dir))
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16751,7 +16773,7 @@ def test_update_quarto_config_site_url_not_set():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -16802,10 +16824,10 @@ def test_create_index_from_readme_citation_parsing():
         readme = Path(tmp_dir) / "README.md"
         readme.write_text("# My Package\n\nHello world.\n", encoding="utf-8")
 
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(force_rebuild=True)
 
-        citation_qmd = docs.project_path / "citation.qmd"
+        citation_qmd = docs.build_dir / "citation.qmd"
 
         assert citation_qmd.exists()
 
@@ -16843,10 +16865,10 @@ def test_create_index_from_readme_citation_single_author():
         readme = Path(tmp_dir) / "README.md"
         readme.write_text("# Solo\n\nContent.\n", encoding="utf-8")
 
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(force_rebuild=True)
 
-        citation_qmd = docs.project_path / "citation.qmd"
+        citation_qmd = docs.build_dir / "citation.qmd"
 
         assert citation_qmd.exists()
 
@@ -16881,10 +16903,10 @@ def test_create_index_from_readme_citation_three_authors():
         readme = Path(tmp_dir) / "README.md"
         readme.write_text("# Team\n\nContent.\n", encoding="utf-8")
 
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(force_rebuild=True)
 
-        citation_qmd = docs.project_path / "citation.qmd"
+        citation_qmd = docs.build_dir / "citation.qmd"
         content = citation_qmd.read_text()
 
         # 3 authors -> APA uses ", &" format for last author
@@ -16902,10 +16924,10 @@ def test_create_index_from_readme_no_citation():
         readme = Path(tmp_dir) / "README.md"
         readme.write_text("# My Pkg\n\nSome content.\n", encoding="utf-8")
 
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(force_rebuild=True)
 
-        citation_qmd = docs.project_path / "citation.qmd"
+        citation_qmd = docs.build_dir / "citation.qmd"
 
         assert not citation_qmd.exists()
 
@@ -16924,10 +16946,10 @@ def test_create_index_from_readme_heading_adjustment():
             encoding="utf-8",
         )
 
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(force_rebuild=True)
 
-        index_qmd = docs.project_path / "index.qmd"
+        index_qmd = docs.build_dir / "index.qmd"
 
         assert index_qmd.exists()
 
@@ -16950,7 +16972,7 @@ def test_create_index_from_readme_rst_source():
         readme_rst = Path(tmp_dir) / "README.rst"
         readme_rst.write_text("My Package\n==========\n\nSome RST content.\n", encoding="utf-8")
 
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         # Mock RST conversion since pandoc may not be available
         with patch.object(
@@ -16958,7 +16980,7 @@ def test_create_index_from_readme_rst_source():
         ):
             docs._create_index_from_readme(force_rebuild=True)
 
-        index_qmd = docs.project_path / "index.qmd"
+        index_qmd = docs.build_dir / "index.qmd"
 
         assert index_qmd.exists()
 
@@ -16975,10 +16997,10 @@ def test_create_index_from_readme_landing_page_fallback():
         )
 
         # No README.md, no index.qmd, no README.rst
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(force_rebuild=True)
 
-        index_qmd = docs.project_path / "index.qmd"
+        index_qmd = docs.build_dir / "index.qmd"
 
         assert index_qmd.exists()
 
@@ -17002,10 +17024,10 @@ def test_create_index_from_readme_hero_section():
         readme = Path(tmp_dir) / "README.md"
         readme.write_text("# mypkg\n\nHello world.\n", encoding="utf-8")
 
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(force_rebuild=True)
 
-        index_qmd = docs.project_path / "index.qmd"
+        index_qmd = docs.build_dir / "index.qmd"
 
         assert index_qmd.exists()
 
@@ -17033,10 +17055,10 @@ def test_create_index_from_readme_hero_strips_duplicate_h1():
         readme = Path(tmp_dir) / "README.md"
         readme.write_text("# testpkg\n\n## Features\n\nSome features.\n", encoding="utf-8")
 
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._create_index_from_readme(force_rebuild=True)
 
-        index_qmd = docs.project_path / "index.qmd"
+        index_qmd = docs.build_dir / "index.qmd"
         content = index_qmd.read_text()
 
         # The first h1 "# testpkg" should be stripped because hero shows the name
@@ -17058,7 +17080,7 @@ def test_refresh_api_reference_config_no_api_reference():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         with open(quarto_yml, "w") as f:
@@ -17073,7 +17095,7 @@ def test_refresh_api_reference_config_no_package():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         config = {"api-reference": {"sections": []}}
@@ -17093,7 +17115,7 @@ def test_refresh_api_reference_config_updates_sections():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         config = {
@@ -17137,7 +17159,7 @@ def test_refresh_api_reference_config_fallback_to_explicit():
         )
         docs._config = Config(Path(tmp_dir))
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         config = {
@@ -17181,7 +17203,7 @@ def test_add_api_reference_config_disabled():
         gd_yml.write_text("reference: false\n", encoding="utf-8")
         docs._config = Config(Path(tmp_dir))
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         with open(quarto_yml, "w") as f:
@@ -17209,7 +17231,7 @@ def test_add_api_reference_config_non_python_project():
         gd_yml.write_text("project_type: go\n", encoding="utf-8")
         docs._config = Config(Path(tmp_dir))
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         with open(quarto_yml, "w") as f:
@@ -17231,7 +17253,7 @@ def test_add_api_reference_config_no_exports():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         with open(quarto_yml, "w") as f:
@@ -17263,7 +17285,7 @@ def test_add_api_reference_config_carries_the_callable_signature_settings():
         )
         docs._config = Config(Path(tmp_dir))
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         with open(quarto_yml, "w") as f:
@@ -17291,7 +17313,7 @@ def test_add_api_reference_config_defaults_the_callable_signature_settings():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         with open(quarto_yml, "w") as f:
@@ -17319,7 +17341,7 @@ def test_add_api_reference_config_already_exists():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         config = {
@@ -17347,7 +17369,7 @@ def test_add_api_reference_config_with_sections():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -17427,12 +17449,12 @@ def test_prepare_build_directory_creates_structure():
                     docs._prepare_build_directory()
 
         # Check directory structure
-        assert docs.project_path.exists()
-        assert (docs.project_path / "scripts").is_dir()
-        assert (docs.project_path / "reference").is_dir()
+        assert docs.build_dir.exists()
+        assert (docs.build_dir / "scripts").is_dir()
+        assert (docs.build_dir / "reference").is_dir()
 
         # Check .gitignore
-        gitignore = docs.project_path / ".gitignore"
+        gitignore = docs.build_dir / ".gitignore"
 
         assert gitignore.exists()
 
@@ -17441,14 +17463,14 @@ def test_prepare_build_directory_creates_structure():
         assert "Great Docs build directory" in content
 
         # Check SCSS theme file was copied
-        assert (docs.project_path / "great-docs.scss").exists()
+        assert (docs.build_dir / "great-docs.scss").exists()
 
         # Check _quarto.yml was created
-        assert (docs.project_path / "_quarto.yml").exists()
+        assert (docs.build_dir / "_quarto.yml").exists()
 
         # Check _gd_options.json was created
 
-        options_path = docs.project_path / "_gd_options.json"
+        options_path = docs.build_dir / "_gd_options.json"
 
         assert options_path.exists()
 
@@ -17480,7 +17502,7 @@ def test_prepare_build_directory_adds_llms_links_after_api_reference_setup():
             with patch.object(docs, "_create_api_sections_with_config", return_value=sections):
                 docs._prepare_build_directory()
 
-            index_content = (docs.project_path / "index.qmd").read_text()
+            index_content = (docs.build_dir / "index.qmd").read_text()
             assert "llms.txt" in index_content
             assert "llms-full.txt" in index_content
         finally:
@@ -17505,13 +17527,13 @@ def test_prepare_build_directory_copies_js_files():
                     docs._prepare_build_directory()
 
         # Core JS files should be present
-        assert (docs.project_path / "github-widget.js").exists()
-        assert (docs.project_path / "sidebar-filter.js").exists()
-        assert (docs.project_path / "dark-mode-toggle.js").exists()
-        assert (docs.project_path / "theme-init.js").exists()
-        assert (docs.project_path / "copy-code.js").exists()
-        assert (docs.project_path / "tooltips.js").exists()
-        assert (docs.project_path / "responsive-tables.js").exists()
+        assert (docs.build_dir / "github-widget.js").exists()
+        assert (docs.build_dir / "sidebar-filter.js").exists()
+        assert (docs.build_dir / "dark-mode-toggle.js").exists()
+        assert (docs.build_dir / "theme-init.js").exists()
+        assert (docs.build_dir / "copy-code.js").exists()
+        assert (docs.build_dir / "tooltips.js").exists()
+        assert (docs.build_dir / "responsive-tables.js").exists()
 
 
 def test_config_bibliography_normalization():
@@ -17569,10 +17591,10 @@ def test_prepare_build_directory_copies_bibliography():
                     docs._prepare_build_directory()
 
         # .bib copied into build dir by basename
-        assert (docs.project_path / "references.bib").exists()
+        assert (docs.build_dir / "references.bib").exists()
 
         # _quarto.yml references it by basename
-        with open(docs.project_path / "_quarto.yml", "r") as f:
+        with open(docs.build_dir / "_quarto.yml", "r") as f:
             config = read_yaml(f)
         assert config["bibliography"] == "references.bib"
 
@@ -17604,11 +17626,11 @@ def test_prepare_build_directory_copies_multiple_bib_and_csl():
                 with patch.object(docs, "_update_reference_index_frontmatter"):
                     docs._prepare_build_directory()
 
-        assert (docs.project_path / "refs.bib").exists()
-        assert (docs.project_path / "software.bib").exists()
-        assert (docs.project_path / "nature.csl").exists()
+        assert (docs.build_dir / "refs.bib").exists()
+        assert (docs.build_dir / "software.bib").exists()
+        assert (docs.build_dir / "nature.csl").exists()
 
-        with open(docs.project_path / "_quarto.yml", "r") as f:
+        with open(docs.build_dir / "_quarto.yml", "r") as f:
             config = read_yaml(f)
         assert config["bibliography"] == ["refs.bib", "software.bib"]
         assert config["csl"] == "nature.csl"
@@ -17637,7 +17659,7 @@ def test_prepare_build_directory_bibliography_missing_warns(capsys):
         out = capsys.readouterr().out
         assert "Bibliography file not found" in out
         assert "CSL file not found" in out
-        assert not (docs.project_path / "missing.bib").exists()
+        assert not (docs.build_dir / "missing.bib").exists()
 
 
 def test_bibliography_does_not_set_reference_section_title():
@@ -17667,7 +17689,7 @@ def test_bibliography_does_not_set_reference_section_title():
                 with patch.object(docs, "_update_reference_index_frontmatter"):
                     docs._prepare_build_directory()
 
-        with open(docs.project_path / "_quarto.yml", encoding="utf-8") as f:
+        with open(docs.build_dir / "_quarto.yml", encoding="utf-8") as f:
             config = read_yaml(f)
 
         # The bibliography is still wired up...
@@ -17699,7 +17721,7 @@ def test_prepare_build_directory_optional_js_copy_page():
                 with patch.object(docs, "_update_reference_index_frontmatter"):
                     docs._prepare_build_directory()
 
-        assert (docs.project_path / "copy-page.js").exists()
+        assert (docs.build_dir / "copy-page.js").exists()
 
 
 def test_prepare_build_directory_cleans_existing():
@@ -17715,8 +17737,9 @@ def test_prepare_build_directory_cleans_existing():
         readme.write_text("# My Pkg\n", encoding="utf-8")
 
         # Create a stale file in the build directory
-        docs.project_path.mkdir(parents=True, exist_ok=True)
-        stale_file = docs.project_path / "stale.txt"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
+        stale_file = docs.build_dir / "stale.txt"
         stale_file.write_text("old content")
 
         with patch.object(docs, "_add_api_reference_config"):
@@ -17728,7 +17751,7 @@ def test_prepare_build_directory_cleans_existing():
         assert not stale_file.exists()
 
         # But new files should exist
-        assert docs.project_path.exists()
+        assert docs.build_dir.exists()
 
 
 def test_find_package_init_standard_location():
@@ -17937,7 +17960,7 @@ def test_update_quarto_config_page_footer_three_authors():
             encoding="utf-8",
         )
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -17972,7 +17995,7 @@ def test_update_quarto_config_page_footer_single_author():
             encoding="utf-8",
         )
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -18014,7 +18037,7 @@ def test_update_quarto_config_page_footer_author_homepage():
         )
         docs._config = Config(Path(tmp_dir))
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         base_config = {
@@ -18046,7 +18069,7 @@ def test_generate_llms_txt_dict_items_in_sections():
         pyproject = Path(tmp_dir) / "pyproject.toml"
         pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
-        quarto_yml = docs.project_path / "_quarto.yml"
+        quarto_yml = docs.build_dir / "_quarto.yml"
         quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
         config = {
@@ -18071,7 +18094,7 @@ def test_generate_llms_txt_dict_items_in_sections():
 
         docs._generate_llms_txt()
 
-        content = (docs.project_path / "llms.txt").read_text()
+        content = (docs.build_dir / "llms.txt").read_text()
 
         assert "BigClass" in content
         assert "simple_func" in content
@@ -18278,7 +18301,7 @@ def test_write_object_types_json_basic():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         categories = GreatDocs._empty_categories()
         categories["classes"] = ["Widget", "Panel"]
@@ -18294,7 +18317,7 @@ def test_write_object_types_json_basic():
 
         docs._write_object_types_json(categories)
 
-        types_path = docs.project_path / "_object_types.json"
+        types_path = docs.build_dir / "_object_types.json"
         assert types_path.exists()
         data = json.loads(types_path.read_text())
         assert data["Widget"] == "class"
@@ -18312,7 +18335,7 @@ def test_write_object_types_json_with_constant_metadata():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         categories = GreatDocs._empty_categories()
         categories["constants"] = ["VERSION"]
@@ -18320,7 +18343,7 @@ def test_write_object_types_json_with_constant_metadata():
 
         docs._write_object_types_json(categories)
 
-        values_path = docs.project_path / "_constant_values.json"
+        values_path = docs.build_dir / "_constant_values.json"
         assert values_path.exists()
         data = json.loads(values_path.read_text())
         assert data["VERSION"]["value"] == "1.0.0"
@@ -18447,7 +18470,7 @@ def test_create_api_sections_basic():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         categories = GreatDocs._empty_categories()
         categories["classes"] = ["Widget"]
@@ -18474,7 +18497,7 @@ def test_create_api_sections_large_class():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         categories = GreatDocs._empty_categories()
         categories["classes"] = ["BigClass"]
@@ -18513,7 +18536,7 @@ def test_create_api_sections_all_types():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         categories = GreatDocs._empty_categories()
         categories["classes"] = ["MyClass"]
@@ -19084,11 +19107,11 @@ def test_copy_user_guide_files_basic():
         )
         (ug_dir / "02-advanced.qmd").write_text("---\ntitle: Advanced\n---\n\n# Advanced\n")
 
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._copy_user_guide_files()
 
         # Files should be copied to build dir with numeric prefix
-        ug_build = docs.project_path / "user-guide"
+        ug_build = docs.build_dir / "user-guide"
         assert ug_build.exists()
 
 
@@ -20444,9 +20467,9 @@ def test_strip_numeric_prefix():
     """Test _strip_numeric_prefix removes numeric prefixes."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        assert docs._strip_numeric_prefix("01-intro.qmd") == "intro.qmd"
-        assert docs._strip_numeric_prefix("10-advanced.qmd") == "advanced.qmd"
-        assert docs._strip_numeric_prefix("no-prefix.qmd") == "no-prefix.qmd"
+        assert strip_numeric_prefix("01-intro.qmd") == "intro.qmd"
+        assert strip_numeric_prefix("10-advanced.qmd") == "advanced.qmd"
+        assert strip_numeric_prefix("no-prefix.qmd") == "no-prefix.qmd"
 
 
 def test_rewrite_sidebar_first_entry():
@@ -23418,6 +23441,7 @@ def test_uninstall_removes_config_and_dir():
         # Create build directory
         build_dir = Path(tmp_dir) / "great-docs"
         build_dir.mkdir()
+        (build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
         (build_dir / "index.qmd").write_text("# Test\n")
 
         docs = GreatDocs(project_path=tmp_dir)
@@ -23435,6 +23459,7 @@ def test_uninstall_removes_generated_historical_dirs_and_preserves_others(tmp_pa
 
     build_dir = tmp_path / "great-docs"
     build_dir.mkdir()
+    (build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
     historical = tmp_path / "great-docs-0.2"
     historical.mkdir()
@@ -23569,9 +23594,9 @@ def test_strip_numeric_prefix_basic():
     """Test _strip_numeric_prefix removes numeric prefixes."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        assert docs._strip_numeric_prefix("01-introduction.qmd") == "introduction.qmd"
-        assert docs._strip_numeric_prefix("10-advanced.qmd") == "advanced.qmd"
-        assert docs._strip_numeric_prefix("readme.qmd") == "readme.qmd"
+        assert strip_numeric_prefix("01-introduction.qmd") == "introduction.qmd"
+        assert strip_numeric_prefix("10-advanced.qmd") == "advanced.qmd"
+        assert strip_numeric_prefix("readme.qmd") == "readme.qmd"
 
 
 def test_get_quarto_env():
@@ -24501,15 +24526,16 @@ def test_build_prepare_and_render_flow():
 
             docs._has_api_reference = True
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.has_versions = False
             docs._config.changelog_enabled = False
             docs._config.sections = None
             docs._config.dynamic = False
 
             # Ensure project_path exists for _quarto.yml writes
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            (docs.project_path / "_quarto.yml").write_text(
-                "api-reference:\n  package: mypkg\n", encoding="utf-8"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(
+                QUARTO_YML_HEADER + "api-reference:\n  package: mypkg\n", encoding="utf-8"
             )
 
             docs.build(watch=False, refresh=True)
@@ -24548,11 +24574,13 @@ def test_build_no_api_reference():
 
             docs._has_api_reference = False
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.has_versions = False
             docs._config.changelog_enabled = False
             docs._config.sections = None
 
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
             docs.build(watch=False, refresh=False)
 
@@ -24604,14 +24632,16 @@ def test_build_dynamic_fallback_to_static():
 
             docs._has_api_reference = True
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.has_versions = False
             docs._config.changelog_enabled = False
             docs._config.sections = None
             docs._config.dynamic = True
 
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            (docs.project_path / "_quarto.yml").write_text(
-                format_yaml({"api-reference": {"package": "mypkg", "dynamic": True}}),
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(
+                QUARTO_YML_HEADER
+                + format_yaml({"api-reference": {"package": "mypkg", "dynamic": True}}),
                 encoding="utf-8",
             )
 
@@ -24651,13 +24681,15 @@ def test_build_static_mode_failure_exits():
         ):
             docs._has_api_reference = True
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.changelog_enabled = False
             docs._config.sections = None
             docs._config.dynamic = True
 
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            (docs.project_path / "_quarto.yml").write_text(
-                format_yaml({"api-reference": {"package": "mypkg", "dynamic": True}}),
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(
+                QUARTO_YML_HEADER
+                + format_yaml({"api-reference": {"package": "mypkg", "dynamic": True}}),
                 encoding="utf-8",
             )
 
@@ -24696,13 +24728,14 @@ def test_build_non_dynamic_failure_exits():
         ):
             docs._has_api_reference = True
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.changelog_enabled = False
             docs._config.sections = None
             docs._config.dynamic = False
 
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            (docs.project_path / "_quarto.yml").write_text(
-                format_yaml({"api-reference": {"package": "mypkg"}}),
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(
+                QUARTO_YML_HEADER + format_yaml({"api-reference": {"package": "mypkg"}}),
                 encoding="utf-8",
             )
 
@@ -24746,11 +24779,13 @@ def test_build_with_changelog():
 
             docs._has_api_reference = False
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.has_versions = False
             docs._config.changelog_enabled = True
             docs._config.sections = None
 
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
             docs.build(watch=False, refresh=False)
 
@@ -24793,11 +24828,13 @@ def test_build_changelog_error_handled():
 
             docs._has_api_reference = False
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.has_versions = False
             docs._config.changelog_enabled = True
             docs._config.sections = None
 
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
             # Should not raise
             docs.build(watch=False, refresh=False)
@@ -24843,11 +24880,13 @@ def test_build_with_cli_documentation():
 
             docs._has_api_reference = False
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.has_versions = False
             docs._config.changelog_enabled = False
             docs._config.sections = None
 
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
             docs.build(watch=False, refresh=False)
 
@@ -24886,11 +24925,13 @@ def test_build_with_sections():
 
             docs._has_api_reference = False
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.has_versions = False
             docs._config.changelog_enabled = False
             docs._config.sections = [{"title": "Recipes"}]
 
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
             docs.build(watch=False, refresh=False)
 
@@ -24927,11 +24968,13 @@ def test_build_with_assets_triggers_config_update():
 
             docs._has_api_reference = False
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.has_versions = False
             docs._config.changelog_enabled = False
             docs._config.sections = None
 
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
             docs.build(watch=False, refresh=False)
 
@@ -24960,6 +25003,7 @@ def test_build_watch_mode():
         ):
             docs._has_api_reference = False
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.has_versions = False
             docs._config.changelog_enabled = False
             docs._config.sections = None
@@ -24968,7 +25012,8 @@ def test_build_watch_mode():
             # quarto preview invocation.
             docs._config.attribution = False
 
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
             docs.build(watch=True, refresh=False)
 
@@ -25005,11 +25050,13 @@ def test_build_quarto_render_failure():
 
             docs._has_api_reference = False
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.has_versions = False
             docs._config.changelog_enabled = False
             docs._config.sections = None
 
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
             with pytest.raises(SystemExit):
                 docs.build(watch=False, refresh=False)
@@ -25049,11 +25096,13 @@ def test_build_cli_error_handled():
 
             docs._has_api_reference = False
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.has_versions = False
             docs._config.changelog_enabled = False
             docs._config.sections = None
 
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
             docs.build(watch=False, refresh=False)
 
@@ -25995,13 +26044,13 @@ def test_generate_llms_full_txt_no_quarto_yml():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path = Path(tmp_dir) / "great-docs"
-        docs.project_path.mkdir()
+        docs.build_dir = Path(tmp_dir) / "great-docs"
+        docs.build_dir.mkdir()
 
         # No _quarto.yml — should return without writing anything
         docs._generate_llms_full_txt()
 
-        assert not (docs.project_path / "llms-full.txt").exists()
+        assert not (docs.build_dir / "llms-full.txt").exists()
 
 
 def test_generate_llms_full_txt_no_api_reference():
@@ -26009,17 +26058,17 @@ def test_generate_llms_full_txt_no_api_reference():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path = Path(tmp_dir) / "great-docs"
-        docs.project_path.mkdir()
+        docs.build_dir = Path(tmp_dir) / "great-docs"
+        docs.build_dir.mkdir()
 
-        (docs.project_path / "_quarto.yml").write_text(
+        (docs.build_dir / "_quarto.yml").write_text(
             format_yaml({"project": {"type": "website"}}),
             encoding="utf-8",
         )
 
         docs._generate_llms_full_txt()
 
-        assert not (docs.project_path / "llms-full.txt").exists()
+        assert not (docs.build_dir / "llms-full.txt").exists()
 
 
 def test_generate_llms_full_txt_basic():
@@ -26041,8 +26090,8 @@ def test_generate_llms_full_txt_basic():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path = Path(tmp_dir) / "great-docs"
-        docs.project_path.mkdir()
+        docs.build_dir = Path(tmp_dir) / "great-docs"
+        docs.build_dir.mkdir()
 
         config = {
             "api-reference": {
@@ -26052,7 +26101,7 @@ def test_generate_llms_full_txt_basic():
                 ],
             },
         }
-        (docs.project_path / "_quarto.yml").write_text(format_yaml(config), encoding="utf-8")
+        (docs.build_dir / "_quarto.yml").write_text(format_yaml(config), encoding="utf-8")
 
         sys.path.insert(0, tmp_dir)
         try:
@@ -26067,7 +26116,7 @@ def test_generate_llms_full_txt_basic():
             ):
                 docs._generate_llms_full_txt()
 
-            llms_path = docs.project_path / "llms-full.txt"
+            llms_path = docs.build_dir / "llms-full.txt"
             assert llms_path.exists()
             content = llms_path.read_text()
             assert "Functions" in content
@@ -26085,8 +26134,8 @@ def test_generate_llms_full_txt_with_cli_and_user_guide():
         (pkg_dir / "__init__.py").write_text("def func(): pass\n", encoding="utf-8")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path = Path(tmp_dir) / "great-docs"
-        docs.project_path.mkdir()
+        docs.build_dir = Path(tmp_dir) / "great-docs"
+        docs.build_dir.mkdir()
 
         config = {
             "api-reference": {
@@ -26096,7 +26145,7 @@ def test_generate_llms_full_txt_with_cli_and_user_guide():
                 ],
             },
         }
-        (docs.project_path / "_quarto.yml").write_text(format_yaml(config), encoding="utf-8")
+        (docs.build_dir / "_quarto.yml").write_text(format_yaml(config), encoding="utf-8")
 
         sys.path.insert(0, tmp_dir)
         try:
@@ -26115,7 +26164,7 @@ def test_generate_llms_full_txt_with_cli_and_user_guide():
             ):
                 docs._generate_llms_full_txt()
 
-            content = (docs.project_path / "llms-full.txt").read_text()
+            content = (docs.build_dir / "llms-full.txt").read_text()
             assert "CLI documentation" in content
             assert "User Guide documentation" in content
         finally:
@@ -26472,7 +26521,7 @@ def test_preview_port_in_use():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        site_dir = docs.project_path / "_site"
+        site_dir = docs.build_dir / "_site"
         site_dir.mkdir(parents=True)
         (site_dir / "index.html").write_text("<html></html>", encoding="utf-8")
 
@@ -26492,7 +26541,7 @@ def test_preview_serves_and_stops():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        site_dir = docs.project_path / "_site"
+        site_dir = docs.build_dir / "_site"
         site_dir.mkdir(parents=True)
         (site_dir / "index.html").write_text("<html></html>", encoding="utf-8")
 
@@ -26999,8 +27048,8 @@ def test_build_hero_section_with_logo_dict():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path = Path(tmp_dir) / "great-docs"
-        docs.project_path.mkdir()
+        docs.build_dir = Path(tmp_dir) / "great-docs"
+        docs.build_dir.mkdir()
 
         docs._config = MagicMock()
         docs._config.hero_explicitly_disabled = False
@@ -27048,8 +27097,8 @@ def test_add_api_reference_config_already_exists():
         docs._config = MagicMock()
         docs._config.reference_enabled = True
 
-        docs.project_path.mkdir(parents=True, exist_ok=True)
-        (docs.project_path / "_quarto.yml").write_text(
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        (docs.build_dir / "_quarto.yml").write_text(
             format_yaml({"api-reference": {"package": "existing"}}),
             encoding="utf-8",
         )
@@ -27066,10 +27115,8 @@ def test_add_api_reference_config_no_package():
         docs._config = MagicMock()
         docs._config.reference_enabled = True
 
-        docs.project_path.mkdir(parents=True, exist_ok=True)
-        (docs.project_path / "_quarto.yml").write_text(
-            format_yaml({"website": {}}), encoding="utf-8"
-        )
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        (docs.build_dir / "_quarto.yml").write_text(format_yaml({"website": {}}), encoding="utf-8")
 
         with (
             patch.object(docs, "_detect_package_name", return_value=None),
@@ -27088,10 +27135,8 @@ def test_add_api_reference_config_no_exports():
         docs._config = MagicMock()
         docs._config.reference_enabled = True
 
-        docs.project_path.mkdir(parents=True, exist_ok=True)
-        (docs.project_path / "_quarto.yml").write_text(
-            format_yaml({"website": {}}), encoding="utf-8"
-        )
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        (docs.build_dir / "_quarto.yml").write_text(format_yaml({"website": {}}), encoding="utf-8")
 
         with (
             patch.object(docs, "_detect_package_name", return_value="mypkg"),
@@ -27117,9 +27162,9 @@ def test_add_api_reference_config_success():
         docs._config.parser = "numpy"
         docs._config.jupyter = None
 
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         config = {"website": {"navbar": {"left": []}, "sidebar": []}}
-        (docs.project_path / "_quarto.yml").write_text(format_yaml(config), encoding="utf-8")
+        (docs.build_dir / "_quarto.yml").write_text(format_yaml(config), encoding="utf-8")
 
         sections = [{"title": "Functions", "contents": ["func_a"]}]
 
@@ -27143,10 +27188,8 @@ def test_add_api_reference_config_eof_error():
         docs._config = MagicMock()
         docs._config.reference_enabled = True
 
-        docs.project_path.mkdir(parents=True, exist_ok=True)
-        (docs.project_path / "_quarto.yml").write_text(
-            format_yaml({"website": {}}), encoding="utf-8"
-        )
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        (docs.build_dir / "_quarto.yml").write_text(format_yaml({"website": {}}), encoding="utf-8")
 
         with (
             patch.object(docs, "_detect_package_name", return_value=None),
@@ -27162,8 +27205,8 @@ def test_refresh_api_reference_config_no_quarto_yml():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path = Path(tmp_dir) / "great-docs"
-        docs.project_path.mkdir()
+        docs.build_dir = Path(tmp_dir) / "great-docs"
+        docs.build_dir.mkdir()
 
         # No _quarto.yml — should return early
         docs._refresh_api_reference_config()
@@ -27174,11 +27217,9 @@ def test_refresh_api_reference_config_no_api_ref():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path = Path(tmp_dir) / "great-docs"
-        docs.project_path.mkdir()
-        (docs.project_path / "_quarto.yml").write_text(
-            format_yaml({"project": {}}), encoding="utf-8"
-        )
+        docs.build_dir = Path(tmp_dir) / "great-docs"
+        docs.build_dir.mkdir()
+        (docs.build_dir / "_quarto.yml").write_text(format_yaml({"project": {}}), encoding="utf-8")
 
         docs._refresh_api_reference_config()
 
@@ -27188,11 +27229,11 @@ def test_refresh_api_reference_config_fallback_to_explicit():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path = Path(tmp_dir) / "great-docs"
-        docs.project_path.mkdir()
+        docs.build_dir = Path(tmp_dir) / "great-docs"
+        docs.build_dir.mkdir()
 
         config = {"api-reference": {"package": "mypkg"}}
-        (docs.project_path / "_quarto.yml").write_text(format_yaml(config), encoding="utf-8")
+        (docs.build_dir / "_quarto.yml").write_text(format_yaml(config), encoding="utf-8")
 
         docs._config = MagicMock()
         docs._config.parser = "numpy"
@@ -27233,9 +27274,9 @@ def test_create_blended_index_missing_first_page():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path = Path(tmp_dir) / "great-docs"
-        docs.project_path.mkdir()
-        (docs.project_path / "user-guide").mkdir()
+        docs.build_dir = Path(tmp_dir) / "great-docs"
+        docs.build_dir.mkdir()
+        (docs.build_dir / "user-guide").mkdir()
 
         ug_info = {
             "files": [{"path": Path(tmp_dir) / "user_guide" / "intro.qmd", "title": "Intro"}],
@@ -27245,7 +27286,7 @@ def test_create_blended_index_missing_first_page():
         docs._create_blended_index(ug_info, [])
 
         # Should not crash, index.qmd should not be created
-        assert not (docs.project_path / "index.qmd").exists()
+        assert not (docs.build_dir / "index.qmd").exists()
 
 
 def test_discover_package_exports_submodule_detection():
@@ -27579,9 +27620,9 @@ def test_create_blended_index_creates_index():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path = Path(tmp_dir) / "great-docs"
-        docs.project_path.mkdir()
-        ug_dir = docs.project_path / "user-guide"
+        docs.build_dir = Path(tmp_dir) / "great-docs"
+        docs.build_dir.mkdir()
+        ug_dir = docs.build_dir / "user-guide"
         ug_dir.mkdir()
 
         ug_source = Path(tmp_dir) / "user_guide"
@@ -27608,11 +27649,11 @@ def test_create_blended_index_creates_index():
             patch.object(docs, "_add_frontmatter_option", side_effect=lambda c, k, v: c),
             patch.object(docs, "_build_metadata_margin", return_value=""),
             patch.object(docs, "_build_hero_section", return_value=("", None)),
-            patch.object(docs, "_strip_numeric_prefix", return_value="intro.qmd"),
+            patch("great_docs.core.strip_numeric_prefix", return_value="intro.qmd"),
         ):
             docs._create_blended_index(ug_info, [])
 
-        index_qmd = docs.project_path / "index.qmd"
+        index_qmd = docs.build_dir / "index.qmd"
         assert index_qmd.exists()
         # The first UG page should be removed
         assert not (ug_dir / "intro.qmd").exists()
@@ -27844,11 +27885,13 @@ def test_build_section_error_handled():
 
             docs._has_api_reference = False
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.has_versions = False
             docs._config.changelog_enabled = False
             docs._config.sections = [{"title": "Test"}]
 
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
             # Should not raise
             docs.build(watch=False, refresh=False)
@@ -27883,11 +27926,13 @@ def test_build_user_guide_error_handled():
 
             docs._has_api_reference = False
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.has_versions = False
             docs._config.changelog_enabled = False
             docs._config.sections = None
 
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
             # Should not raise
             docs.build(watch=False, refresh=False)
@@ -27922,11 +27967,13 @@ def test_build_copy_assets_error_handled():
 
             docs._has_api_reference = False
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.has_versions = False
             docs._config.changelog_enabled = False
             docs._config.sections = None
 
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
             # Should not raise
             docs.build(watch=False, refresh=False)
@@ -27967,11 +28014,13 @@ def test_build_changelog_no_releases():
 
             docs._has_api_reference = False
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.has_versions = False
             docs._config.changelog_enabled = True
             docs._config.sections = None
 
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
             docs.build(watch=False, refresh=False)
 
@@ -28006,11 +28055,13 @@ def test_build_changelog_no_repo():
 
             docs._has_api_reference = False
             docs._config = MagicMock()
+            docs._config.versions = None
             docs._config.has_versions = False
             docs._config.changelog_enabled = True
             docs._config.sections = None
 
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
             docs.build(watch=False, refresh=False)
 
@@ -28028,7 +28079,7 @@ def _make_uqc_docs(tmp_dir, gd_yml_content="", pyproject_content=None, quarto_co
     docs = GreatDocs(project_path=tmp_dir)
     docs._config = Config(Path(tmp_dir))
 
-    quarto_yml = docs.project_path / "_quarto.yml"
+    quarto_yml = docs.build_dir / "_quarto.yml"
     quarto_yml.parent.mkdir(parents=True, exist_ok=True)
 
     if quarto_content is None:
@@ -28039,6 +28090,7 @@ def _make_uqc_docs(tmp_dir, gd_yml_content="", pyproject_content=None, quarto_co
         }
 
     with open(quarto_yml, "w") as f:
+        f.write(QUARTO_YML_HEADER)
         write_yaml(quarto_content, f)
 
     return docs, quarto_yml
@@ -28663,7 +28715,7 @@ def test_update_quarto_config_version_badge_metadata_v2():
         ):
             docs._update_quarto_config()
 
-        meta_path = docs.project_path / "_package_meta.json"
+        meta_path = docs.build_dir / "_package_meta.json"
         assert meta_path.exists()
         with open(meta_path) as f:
             meta = json.load(f)
@@ -28697,7 +28749,7 @@ def test_update_quarto_config_no_releases():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
 
-        meta_path = docs.project_path / "_package_meta.json"
+        meta_path = docs.build_dir / "_package_meta.json"
         meta_path.write_text('{"version": "old"}', encoding="utf-8")
 
         with (
@@ -29949,7 +30001,7 @@ def test_cli_init_success():
 
             result = runner.invoke(init, ["--project-path", tmp_dir])
             assert result.exit_code == 0
-            MockGD.assert_called_once_with(project_path=tmp_dir)
+            MockGD.assert_called_once_with(project_path=tmp_dir, config_path=None, create=True)
             mock_instance.install.assert_called_once_with(force=False)
 
 
@@ -30148,7 +30200,7 @@ def test_cli_config_success():
         assert result.exit_code == 0
         assert "Created" in result.output
 
-        config_file = Path(tmp_dir) / "great-docs.yml"
+        config_file = Path(tmp_dir) / "docs/great-docs.yml"
         assert config_file.exists()
 
 
@@ -30679,7 +30731,7 @@ def test_cli_changelog_success():
             MockGD.return_value = mock_docs
             mock_docs._get_github_repo_info.return_value = ("owner", "repo", "https://github.com")
             mock_docs._generate_changelog_page.return_value = "great-docs/changelog.qmd"
-            mock_docs.project_path = Path(tmp_dir)
+            mock_docs.build_dir = Path(tmp_dir)
 
             result = runner.invoke(changelog, ["--project-path", tmp_dir])
             assert result.exit_code == 0
@@ -30728,7 +30780,7 @@ def test_cli_changelog_with_max_releases():
             MockGD.return_value = mock_docs
             mock_docs._get_github_repo_info.return_value = ("owner", "repo", "https://github.com")
             mock_docs._generate_changelog_page.return_value = "great-docs/changelog.qmd"
-            mock_docs.project_path = Path(tmp_dir)
+            mock_docs.build_dir = Path(tmp_dir)
             mock_docs._config._config = {}
 
             result = runner.invoke(changelog, ["--project-path", tmp_dir, "--max-releases", "10"])
@@ -34638,18 +34690,19 @@ def test_prepare_build_directory_config_js_branches():
         )
         docs = GreatDocs(project_path=tmp_dir)
         # Ensure the docs dir exists
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
         # Copy scss so the method doesn't fail
         scss_src = docs.assets_path / "great-docs.scss"
         if scss_src.exists():
-            shutil.copy2(scss_src, docs.project_path / "great-docs.scss")
+            shutil.copy2(scss_src, docs.build_dir / "great-docs.scss")
 
         docs._prepare_build_directory()
 
         # Verify the config-specific JS files were copied
-        assert (docs.project_path / "announcement-banner.js").exists()
-        assert (docs.project_path / "navbar-style.js").exists()
-        assert (docs.project_path / "content-style.js").exists()
+        assert (docs.build_dir / "announcement-banner.js").exists()
+        assert (docs.build_dir / "navbar-style.js").exists()
+        assert (docs.build_dir / "content-style.js").exists()
 
 
 def test_copy_user_guide_files_hyphen_variant():
@@ -34663,12 +34716,12 @@ def test_copy_user_guide_files_hyphen_variant():
         (ug / "intro.qmd").write_text("---\ntitle: Intro\n---\nHello")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         docs._copy_user_guide_files()
 
         # Verify the file was copied to the build directory
-        assert (docs.project_path / "user-guide" / "intro.qmd").exists()
+        assert (docs.build_dir / "user-guide" / "intro.qmd").exists()
 
 
 def test_update_project_gitignore_force_new():
@@ -34867,8 +34920,8 @@ def test_inject_section_body_class_yaml_error():
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
-        dest = docs.project_path / "section"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        dest = docs.build_dir / "section"
         dest.mkdir()
 
         # File with invalid YAML but valid --- delimiters
@@ -34899,8 +34952,8 @@ def test_inject_section_body_class_adds_body_class():
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
-        dest = docs.project_path / "section"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        dest = docs.build_dir / "section"
         dest.mkdir()
 
         (dest / "page.qmd").write_text("---\ntitle: Test\n---\nContent\n")
@@ -35495,8 +35548,8 @@ class TestAddSectionToNavbar:
     def _make_docs(self, tmp_dir, navbar_left=None):
         """Helper to create a GreatDocs with a _quarto.yml containing a navbar."""
         docs = GreatDocs(project_path=tmp_dir)
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         config = {"website": {"navbar": {"left": navbar_left or []}}}
         with open(quarto_yml, "w") as f:
             write_yaml(config, f)
@@ -35513,7 +35566,7 @@ class TestAddSectionToNavbar:
                 ],
             )
             docs._add_section_to_navbar("Recipes", "recipes/index.qmd")
-            config = read_yaml(open(docs.project_path / "_quarto.yml"))
+            config = read_yaml(open(docs.build_dir / "_quarto.yml"))
             left = config["website"]["navbar"]["left"]
             texts = [item.get("text") for item in left if isinstance(item, dict)]
             assert "Recipes" in texts
@@ -35531,7 +35584,7 @@ class TestAddSectionToNavbar:
                 ],
             )
             docs._add_section_to_navbar("Recipes", "recipes/other.qmd")
-            config = read_yaml(open(docs.project_path / "_quarto.yml"))
+            config = read_yaml(open(docs.build_dir / "_quarto.yml"))
             left = config["website"]["navbar"]["left"]
             count = sum(
                 1 for item in left if isinstance(item, dict) and item.get("text") == "Recipes"
@@ -35550,7 +35603,7 @@ class TestAddSectionToNavbar:
                 ],
             )
             docs._add_section_to_navbar("Recipes", "recipes/index.qmd", navbar_after="User Guide")
-            config = read_yaml(open(docs.project_path / "_quarto.yml"))
+            config = read_yaml(open(docs.build_dir / "_quarto.yml"))
             left = config["website"]["navbar"]["left"]
             texts = [item.get("text") for item in left if isinstance(item, dict)]
             assert texts.index("Recipes") == texts.index("User Guide") + 1
@@ -35565,7 +35618,7 @@ class TestAddSectionToNavbar:
                 ],
             )
             docs._add_section_to_navbar("Recipes", "recipes/index.qmd", navbar_after="Nonexistent")
-            config = read_yaml(open(docs.project_path / "_quarto.yml"))
+            config = read_yaml(open(docs.build_dir / "_quarto.yml"))
             left = config["website"]["navbar"]["left"]
             texts = [item.get("text") for item in left if isinstance(item, dict)]
             assert texts.index("Recipes") < texts.index("Reference")
@@ -35574,8 +35627,8 @@ class TestAddSectionToNavbar:
         """When website has no navbar, _read_quarto_config initializes it."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            quarto_yml = docs.project_path / "_quarto.yml"
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
             with open(quarto_yml, "w") as f:
                 write_yaml({"website": {}}, f)
             docs._add_section_to_navbar("Recipes", "recipes/index.qmd")
@@ -35595,8 +35648,8 @@ class TestUpdateSidebarWithCli:
         """Creates cli-reference sidebar section with contents."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             config = {
                 "website": {
                     "sidebar": [
@@ -35618,8 +35671,8 @@ class TestUpdateSidebarWithCli:
         """Updates contents of an existing cli-reference section."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             config = {
                 "website": {
                     "sidebar": [
@@ -35640,8 +35693,8 @@ class TestUpdateSidebarWithCli:
         """Adds API link at top of reference sidebar if missing."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             config = {
                 "website": {
                     "sidebar": [
@@ -35662,8 +35715,8 @@ class TestUpdateSidebarWithCli:
         """Returns early for empty cli_files list."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             with open(quarto_yml, "w") as f:
                 write_yaml({"website": {"sidebar": []}}, f)
             docs._update_sidebar_with_cli([])
@@ -35996,7 +36049,7 @@ class TestCopyUserGuideToDocs:
             ug_dir.mkdir()
             (ug_dir / "01-intro.qmd").write_text("---\ntitle: Intro\n---\nContent\n")
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
             info = {
                 "files": [{"path": ug_dir / "01-intro.qmd", "title": "Intro"}],
                 "source_dir": ug_dir,
@@ -36014,7 +36067,7 @@ class TestCopyUserGuideToDocs:
             ug_dir.mkdir()
             (ug_dir / "01-intro.qmd").write_text("---\ntitle: Intro\n---\nContent\n")
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
             info = {
                 "files": [{"path": ug_dir / "01-intro.qmd", "title": "Intro"}],
                 "source_dir": ug_dir,
@@ -36035,14 +36088,14 @@ class TestCopyUserGuideToDocs:
             assets_dir.mkdir()
             (assets_dir / "logo.png").write_bytes(b"PNG")
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
             info = {
                 "files": [{"path": ug_dir / "01-intro.qmd", "title": "Intro"}],
                 "source_dir": ug_dir,
                 "explicit": False,
             }
             docs._copy_user_guide_to_docs(info)
-            assert (docs.project_path / "user-guide" / "images" / "logo.png").exists()
+            assert (docs.build_dir / "user-guide" / "images" / "logo.png").exists()
 
     def test_empty_info_returns_empty(self):
         """Returns empty list for empty user_guide_info."""
@@ -36511,8 +36564,8 @@ class TestCreateBlendedIndex:
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
         (tmp / "great-docs.yml").write_text("display_name: My Package\nhomepage: user_guide\n")
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
-        ug_dir = docs.project_path / "user-guide"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        ug_dir = docs.build_dir / "user-guide"
         ug_dir.mkdir(parents=True, exist_ok=True)
         (ug_dir / "intro.qmd").write_text(first_content)
         return docs
@@ -36531,12 +36584,12 @@ class TestCreateBlendedIndex:
             }
             copied_files = ["user-guide/intro.qmd"]
             docs._create_blended_index(user_guide_info, copied_files)
-            index_qmd = docs.project_path / "index.qmd"
+            index_qmd = docs.build_dir / "index.qmd"
             assert index_qmd.exists()
             content = index_qmd.read_text()
             assert "title: Intro" in content
             # First UG page should be removed
-            assert not (docs.project_path / "user-guide" / "intro.qmd").exists()
+            assert not (docs.build_dir / "user-guide" / "intro.qmd").exists()
 
     def test_empty_files_returns_early(self):
         """Returns early if no files in user_guide_info."""
@@ -36544,7 +36597,7 @@ class TestCreateBlendedIndex:
             docs = self._setup_blended(tmp_dir)
             user_guide_info = {"files": [], "source_dir": Path(tmp_dir), "explicit": False}
             docs._create_blended_index(user_guide_info, [])
-            assert not (docs.project_path / "index.qmd").exists()
+            assert not (docs.build_dir / "index.qmd").exists()
 
     def test_tracks_blended_first_page(self):
         """Sets _blended_first_page attribute."""
@@ -36571,8 +36624,8 @@ class TestUpdateConfigWithUserGuide:
             tmp = Path(tmp_dir)
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             with open(quarto_yml, "w") as f:
                 write_yaml(
                     {
@@ -36609,7 +36662,7 @@ class TestUpdateConfigWithUserGuide:
         """Returns early if no _quarto.yml exists."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
             # No quarto_yml — should not raise
             docs._update_config_with_user_guide(
                 {
@@ -36627,8 +36680,8 @@ class TestUpdateConfigWithUserGuide:
             tmp = Path(tmp_dir)
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             with open(quarto_yml, "w") as f:
                 write_yaml(
                     {
@@ -36788,9 +36841,9 @@ class TestProcessSections:
             recipes_dir.mkdir()
             (recipes_dir / "01-basic.qmd").write_text("---\ntitle: Basic Recipe\n---\nContent.\n")
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
             # Create a minimal _quarto.yml
-            with open(docs.project_path / "_quarto.yml", "w") as f:
+            with open(docs.build_dir / "_quarto.yml", "w") as f:
                 write_yaml(
                     {
                         "website": {
@@ -36827,8 +36880,8 @@ class TestProcessSections:
                 "---\ntitle: First Post\ndate: 2024-01-01\n---\nHello.\n"
             )
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            with open(docs.project_path / "_quarto.yml", "w") as f:
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            with open(docs.build_dir / "_quarto.yml", "w") as f:
                 write_yaml(
                     {
                         "website": {
@@ -36843,7 +36896,7 @@ class TestProcessSections:
             count = docs._process_sections()
             assert count == 1
             # Blog index should be generated
-            assert (docs.project_path / "blog" / "index.qmd").exists()
+            assert (docs.build_dir / "blog" / "index.qmd").exists()
 
 
 class TestParseUserGuideFile:
@@ -37001,8 +37054,8 @@ class TestUpdateSidebarFromSections:
     def _make_docs(self, tmp_dir, sections):
         """Helper: create a GreatDocs with _quarto.yml containing api-reference sections."""
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
-        quarto_yml = docs.project_path / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
         config = {
             "website": {"sidebar": []},
             "api-reference": {"package": "mypkg", "sections": sections},
@@ -37023,7 +37076,7 @@ class TestUpdateSidebarFromSections:
             ]
             docs = self._make_docs(tmp_dir, sections)
             docs._update_sidebar_from_sections()
-            with open(docs.project_path / "_quarto.yml") as f:
+            with open(docs.build_dir / "_quarto.yml") as f:
                 config = read_yaml(f)
             sidebar = config["website"]["sidebar"]
             assert len(sidebar) == 1
@@ -37044,7 +37097,7 @@ class TestUpdateSidebarFromSections:
             ]
             docs = self._make_docs(tmp_dir, sections)
             docs._update_sidebar_from_sections()
-            with open(docs.project_path / "_quarto.yml") as f:
+            with open(docs.build_dir / "_quarto.yml") as f:
                 config = read_yaml(f)
             contents = config["website"]["sidebar"][0]["contents"]
             assert {"text": "Graph", "href": "reference/Graph.qmd"} in contents[1]["contents"]
@@ -37055,8 +37108,8 @@ class TestUpdateSidebarFromSections:
             tmp = Path(tmp_dir)
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             config = {"website": {"sidebar": [{"id": "reference", "contents": []}]}}
             with open(quarto_yml, "w") as f:
                 write_yaml(config, f)
@@ -37076,8 +37129,8 @@ class TestUpdateReferenceIndexFrontmatter:
             tmp = Path(tmp_dir)
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            ref_dir = docs.project_path / "reference"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            ref_dir = docs.build_dir / "reference"
             ref_dir.mkdir()
             index_path = ref_dir / "index.qmd"
             index_path.write_text("---\ntitle: API Reference\n---\n\nContent here.\n")
@@ -37096,8 +37149,8 @@ class TestUpdateReferenceIndexFrontmatter:
             tmp = Path(tmp_dir)
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            ref_dir = docs.project_path / "reference"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            ref_dir = docs.build_dir / "reference"
             ref_dir.mkdir()
             index_path = ref_dir / "index.qmd"
             index_path.write_text("# API Reference\n\nSome content.\n")
@@ -37118,8 +37171,8 @@ class TestUpdateReferenceIndexFrontmatter:
             tmp = Path(tmp_dir)
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            ref_dir = docs.project_path / "reference"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            ref_dir = docs.build_dir / "reference"
             ref_dir.mkdir()
             index_path = ref_dir / "index.qmd"
             original = "---\ntitle: API\npage-navigation: false\nhtml-table-processing: none\n---\nContent.\n"
@@ -37133,7 +37186,7 @@ class TestUpdateReferenceIndexFrontmatter:
             tmp = Path(tmp_dir)
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
             # No reference dir at all
             docs._update_reference_index_frontmatter()  # Should not raise
 
@@ -37179,14 +37232,14 @@ class TestUpdateQuartoConfigScripts:
                 write_yaml(gd_config, f)
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         return docs
 
     def test_injects_sidebar_wrap_script(self):
         """Injects sidebar-wrap.js into include-after-body."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = self._make_project(tmp_dir)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            quarto_yml = docs.build_dir / "_quarto.yml"
             config = {
                 "project": {"type": "website"},
                 "website": {"navbar": {"left": []}, "sidebar": []},
@@ -37207,7 +37260,7 @@ class TestUpdateQuartoConfigScripts:
         """Injects theme-init.js into include-in-header for dark mode."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = self._make_project(tmp_dir)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            quarto_yml = docs.build_dir / "_quarto.yml"
             config = {
                 "project": {"type": "website"},
                 "website": {"navbar": {"left": []}, "sidebar": []},
@@ -37229,7 +37282,7 @@ class TestUpdateQuartoConfigScripts:
                 tmp_dir,
                 metadata={"authors": [{"name": "Jane Doe"}, {"name": "John Smith"}]},
             )
-            quarto_yml = docs.project_path / "_quarto.yml"
+            quarto_yml = docs.build_dir / "_quarto.yml"
             config = {
                 "project": {"type": "website"},
                 "website": {"navbar": {"left": []}, "sidebar": []},
@@ -37251,7 +37304,7 @@ class TestUpdateQuartoConfigScripts:
                 tmp_dir,
                 gd_config={"cli": {"enabled": True}},
             )
-            quarto_yml = docs.project_path / "_quarto.yml"
+            quarto_yml = docs.build_dir / "_quarto.yml"
             config = {
                 "project": {"type": "website"},
                 "website": {"navbar": {"left": []}, "sidebar": []},
@@ -37324,8 +37377,8 @@ class TestProcessSectionsBatch9:
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(file_content)
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
-        with open(docs.project_path / "_quarto.yml", "w") as f:
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        with open(docs.build_dir / "_quarto.yml", "w") as f:
             write_yaml(
                 {
                     "website": {
@@ -37351,7 +37404,7 @@ class TestProcessSectionsBatch9:
             count = docs._process_sections()
             assert count == 1
             # User index was copied, so no generated index overwrites it
-            index_content = (docs.project_path / "blog" / "index.qmd").read_text()
+            index_content = (docs.build_dir / "blog" / "index.qmd").read_text()
             assert "My Blog" in index_content
 
     def test_default_section_no_index_no_generate(self):
@@ -37368,7 +37421,7 @@ class TestProcessSectionsBatch9:
             count = docs._process_sections()
             assert count == 1
             # Navbar should link to the first content page (basic.qmd)
-            with open(docs.project_path / "_quarto.yml") as f:
+            with open(docs.build_dir / "_quarto.yml") as f:
                 config = read_yaml(f)
             nav_items = config["website"]["navbar"]["left"]
             recipes_link = next(
@@ -37442,8 +37495,8 @@ class TestAddSectionToNavbarBatch9:
         """Inserts section link after the specified navbar item."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             with open(quarto_yml, "w") as f:
                 write_yaml(
                     {
@@ -37469,8 +37522,8 @@ class TestAddSectionToNavbarBatch9:
         """Falls back to insert-before-Reference when navbar_after target not found."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             with open(quarto_yml, "w") as f:
                 write_yaml(
                     {
@@ -37496,8 +37549,8 @@ class TestAddSectionToNavbarBatch9:
         """Skips adding if section already exists in navbar."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             with open(quarto_yml, "w") as f:
                 write_yaml(
                     {
@@ -37526,8 +37579,8 @@ class TestUpdateSidebarWithCliBatch9:
         """Does not duplicate API link if reference sidebar already has one."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             config = {
                 "website": {
                     "sidebar": [
@@ -37558,8 +37611,8 @@ class TestUpdateSidebarWithCliBatch9:
         """Handles missing website key in config."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             with open(quarto_yml, "w") as f:
                 write_yaml({"project": {"type": "website"}}, f)
             # Should not raise
@@ -37571,7 +37624,7 @@ class TestUpdateSidebarWithCliBatch9:
         """Returns early if _quarto.yml doesn't exist."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
             # No _quarto.yml created
             docs._update_sidebar_with_cli(["cli.qmd"])
             # Should not raise
@@ -37761,17 +37814,11 @@ class TestUpdateReferenceIndexFrontmatterBatch9:
         """Injects page-navigation: false into existing frontmatter."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            ref_dir = docs.project_path / "reference"
+            ref_dir = docs.build_dir / "reference"
             ref_dir.mkdir(parents=True, exist_ok=True)
             index_qmd = ref_dir / "index.qmd"
             index_qmd.write_text("---\ntitle: API Reference\n---\n# Reference\n")
-            # Temporarily point docs_dir at project_path so the method finds the file
-            original_docs_dir = docs.docs_dir
-            docs.docs_dir = docs.project_path
-            try:
-                docs._update_reference_index_frontmatter()
-            finally:
-                docs.docs_dir = original_docs_dir
+            docs._update_reference_index_frontmatter()
             content = index_qmd.read_text()
             assert "page-navigation: false" in content
 
@@ -37779,16 +37826,11 @@ class TestUpdateReferenceIndexFrontmatterBatch9:
         """Creates frontmatter block when index has none."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            ref_dir = docs.project_path / "reference"
+            ref_dir = docs.build_dir / "reference"
             ref_dir.mkdir(parents=True, exist_ok=True)
             index_qmd = ref_dir / "index.qmd"
             index_qmd.write_text("# API Reference\nSome content.\n")
-            original_docs_dir = docs.docs_dir
-            docs.docs_dir = docs.project_path
-            try:
-                docs._update_reference_index_frontmatter()
-            finally:
-                docs.docs_dir = original_docs_dir
+            docs._update_reference_index_frontmatter()
             content = index_qmd.read_text()
             assert content.startswith(
                 "---\npage-navigation: false\nhtml-table-processing: none\n---\n"
@@ -37798,17 +37840,12 @@ class TestUpdateReferenceIndexFrontmatterBatch9:
         """Does not duplicate page-navigation if already present."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            ref_dir = docs.project_path / "reference"
+            ref_dir = docs.build_dir / "reference"
             ref_dir.mkdir(parents=True, exist_ok=True)
             index_qmd = ref_dir / "index.qmd"
             original = "---\ntitle: API Reference\npage-navigation: false\n---\n# Reference\n"
             index_qmd.write_text(original)
-            original_docs_dir = docs.docs_dir
-            docs.docs_dir = docs.project_path
-            try:
-                docs._update_reference_index_frontmatter()
-            finally:
-                docs.docs_dir = original_docs_dir
+            docs._update_reference_index_frontmatter()
             content = index_qmd.read_text()
             assert content.count("page-navigation") == 1
 
@@ -37816,12 +37853,7 @@ class TestUpdateReferenceIndexFrontmatterBatch9:
         """Does nothing when reference/index.qmd doesn't exist."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            original_docs_dir = docs.docs_dir
-            docs.docs_dir = docs.project_path
-            try:
-                docs._update_reference_index_frontmatter()
-            finally:
-                docs.docs_dir = original_docs_dir
+            docs._update_reference_index_frontmatter()
             # Should not raise
 
 
@@ -38082,8 +38114,8 @@ class TestRefreshApiReferenceConfigBatch9:
                     f,
                 )
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             config = {
                 "project": {"type": "website"},
                 "website": {"sidebar": []},
@@ -38111,8 +38143,8 @@ class TestRefreshApiReferenceConfigBatch9:
             tmp = Path(tmp_dir)
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             config = {
                 "project": {"type": "website"},
                 "website": {"sidebar": []},
@@ -38135,8 +38167,8 @@ class TestGenerateLlmsTxtBatch9:
         """Generates llms.txt with API reference sections."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             config = {
                 "project": {"type": "website"},
                 "website": {"site-url": "https://example.com/docs/"},
@@ -38155,7 +38187,7 @@ class TestGenerateLlmsTxtBatch9:
                 '[project]\nname = "mypkg"\nversion = "1.0"\ndescription = "A test pkg"\n'
             )
             docs._generate_llms_txt()
-            llms_path = docs.project_path / "llms.txt"
+            llms_path = docs.build_dir / "llms.txt"
             assert llms_path.exists()
             content = llms_path.read_text()
             assert "mypkg" in content
@@ -38164,20 +38196,20 @@ class TestGenerateLlmsTxtBatch9:
         """Does nothing when _quarto.yml doesn't exist."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
             docs._generate_llms_txt()
-            assert not (docs.project_path / "llms.txt").exists()
+            assert not (docs.build_dir / "llms.txt").exists()
 
     def test_noop_without_api_reference(self):
         """Does nothing when no api-reference in config."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             with open(quarto_yml, "w") as f:
                 write_yaml({"website": {}}, f)
             docs._generate_llms_txt()
-            assert not (docs.project_path / "llms.txt").exists()
+            assert not (docs.build_dir / "llms.txt").exists()
 
 
 class TestCopyUserGuideToDocsBatch9:
@@ -38213,8 +38245,8 @@ class TestCopyUserGuideToDocsBatch9:
             result = docs._copy_user_guide_to_docs(user_guide_info)
             assert len(result) == 2
             # Check files were copied
-            assert (docs.project_path / "user-guide" / "intro.qmd").exists()
-            assert (docs.project_path / "user-guide" / "basics" / "setup.qmd").exists()
+            assert (docs.build_dir / "user-guide" / "intro.qmd").exists()
+            assert (docs.build_dir / "user-guide" / "basics" / "setup.qmd").exists()
 
 
 class TestGenerateUserGuideSidebarExplicitBatch9:
@@ -38297,8 +38329,8 @@ class TestUpdateQuartoConfigStrNormalizationBatch10:
         )
         (tmp / "great-docs.yml").write_text("display_name: My\n")
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
-        quarto_yml = docs.project_path / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
         with open(quarto_yml, "w") as f:
             write_yaml(quarto_content, f)
         docs._update_quarto_config()
@@ -38384,7 +38416,7 @@ class TestBuildHeroSectionBatch10:
             (tmp / "logo-light.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"/>')
             (tmp / "logo-dark.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"/>')
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
             html, _ = docs._build_hero_section()
             assert "gd-only-light" in html
             assert "gd-only-dark" in html
@@ -38396,7 +38428,7 @@ class TestBuildHeroSectionBatch10:
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\ndescription = "Desc"\n')
             (tmp / "great-docs.yml").write_text("hero:\n  enabled: true\n")
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
             html, _ = docs._build_hero_section()
             assert "mypkg" in html
 
@@ -38409,7 +38441,7 @@ class TestBuildHeroSectionBatch10:
                 "hero:\n  enabled: true\n  name: false\n  tagline: false\n"
             )
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
             html, cleaned = docs._build_hero_section()
             # Should have at least the name (fallback)
             assert isinstance(html, str)
@@ -38455,8 +38487,8 @@ class TestCreateBlendedIndexBatch10:
                 "---\ntitle: Intro\n---\n# Introduction\nHello world\n"
             )
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            ug_docs = docs.project_path / "user-guide"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            ug_docs = docs.build_dir / "user-guide"
             ug_docs.mkdir(parents=True, exist_ok=True)
             # Copy as explicit-mode would (preserving name)
 
@@ -38468,7 +38500,7 @@ class TestCreateBlendedIndexBatch10:
                 "has_index": False,
             }
             docs._create_blended_index(user_guide_info, [])
-            index = docs.project_path / "index.qmd"
+            index = docs.build_dir / "index.qmd"
             assert index.exists()
             content = index.read_text()
             assert "Hello world" in content
@@ -38485,8 +38517,8 @@ class TestCreateBlendedIndexBatch10:
                 "---\ntitle: My Title\n---\n# My Title\nBody text here.\n"
             )
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            ug_docs = docs.project_path / "user-guide"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            ug_docs = docs.build_dir / "user-guide"
             ug_docs.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ug_dir / "intro.qmd", ug_docs / "intro.qmd")
             user_guide_info = {
@@ -38496,7 +38528,7 @@ class TestCreateBlendedIndexBatch10:
                 "has_index": False,
             }
             docs._create_blended_index(user_guide_info, [])
-            content = (docs.project_path / "index.qmd").read_text()
+            content = (docs.build_dir / "index.qmd").read_text()
             assert "title: My Title" in content
             # The first '# My Title' heading should be stripped
             assert "# My Title" not in content
@@ -38512,8 +38544,8 @@ class TestCreateBlendedIndexBatch10:
             ug_dir.mkdir()
             (ug_dir / "plain.qmd").write_text("Just plain content.\n")
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            ug_docs = docs.project_path / "user-guide"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            ug_docs = docs.build_dir / "user-guide"
             ug_docs.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ug_dir / "plain.qmd", ug_docs / "plain.qmd")
             user_guide_info = {
@@ -38523,7 +38555,7 @@ class TestCreateBlendedIndexBatch10:
                 "has_index": False,
             }
             docs._create_blended_index(user_guide_info, [])
-            content = (docs.project_path / "index.qmd").read_text()
+            content = (docs.build_dir / "index.qmd").read_text()
             assert "Just plain content." in content
 
 
@@ -38537,8 +38569,8 @@ class TestUpdateConfigWithUserGuideBatch10:
             (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
             (tmp / "great-docs.yml").write_text("")
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             # Write a minimal quarto.yml with no website key
             with open(quarto_yml, "w") as f:
                 write_yaml({"project": {"type": "website"}}, f)
@@ -38636,10 +38668,10 @@ def test_create_blended_index_with_subdirectory_structure():
         (sub / "01-quickstart.qmd").write_text("---\ntitle: Quickstart\n---\nQuick.\n")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         # Set up the user-guide destination as _copy_user_guide_to_docs would
-        ug_docs = docs.project_path / "user-guide"
+        ug_docs = docs.build_dir / "user-guide"
         ug_docs.mkdir(parents=True, exist_ok=True)
         (ug_docs / "index.qmd").write_text(
             "---\ntitle: Welcome\n---\n# Welcome\nThis is the landing page.\n"
@@ -38661,7 +38693,7 @@ def test_create_blended_index_with_subdirectory_structure():
         docs._create_blended_index(user_guide_info, ["user-guide/index.qmd"])
 
         # index.qmd should be created at site root
-        index_qmd = docs.project_path / "index.qmd"
+        index_qmd = docs.build_dir / "index.qmd"
         assert index_qmd.exists()
         content = index_qmd.read_text()
         assert "title: Welcome" in content
@@ -38691,10 +38723,10 @@ def test_create_blended_index_subdir_file_first():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         # Set up destination as _copy_user_guide_to_docs would (prefix-stripped)
-        ug_docs = docs.project_path / "user-guide"
+        ug_docs = docs.build_dir / "user-guide"
         sub_dest = ug_docs / "getting-started"
         sub_dest.mkdir(parents=True)
         (sub_dest / "intro.qmd").write_text(
@@ -38713,7 +38745,7 @@ def test_create_blended_index_subdir_file_first():
         docs._create_blended_index(user_guide_info, ["user-guide/getting-started/intro.qmd"])
 
         # index.qmd should be created at site root
-        index_qmd = docs.project_path / "index.qmd"
+        index_qmd = docs.build_dir / "index.qmd"
         assert index_qmd.exists()
         content = index_qmd.read_text()
         assert "title: Introduction" in content
@@ -38785,8 +38817,8 @@ class TestCopySectionFilesYamlErrorBatch10:
                 "sections:\n  - title: Recipes\n    path: recipes\n"
             )
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            dest = docs.project_path / "recipes"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            dest = docs.build_dir / "recipes"
             dest.mkdir(parents=True, exist_ok=True)
             docs._copy_section_files([bad_file], section_dir, dest)
             # File should be copied despite malformed frontmatter
@@ -38809,8 +38841,8 @@ class TestProcessSectionsFallbackHrefBatch10:
                 "sections:\n  - title: Tutorials\n    dir: tutorials\n"
             )
             docs = GreatDocs(project_path=tmp_dir)
-            docs.project_path.mkdir(parents=True, exist_ok=True)
-            quarto_yml = docs.project_path / "_quarto.yml"
+            docs.build_dir.mkdir(parents=True, exist_ok=True)
+            quarto_yml = docs.build_dir / "_quarto.yml"
             with open(quarto_yml, "w") as f:
                 write_yaml(
                     {
@@ -39219,7 +39251,7 @@ def test_generate_skill_md_no_quarto_yml():
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = GreatDocs(project_path=tmp_dir)
         docs._generate_skill_md()
-        assert not (docs.project_path / "skill.md").exists()
+        assert not (docs.build_dir / "skill.md").exists()
 
 
 def test_generate_skill_md_with_site_url():
@@ -40108,7 +40140,7 @@ def test_prepare_build_directory_copies_video_embed_js():
                 with patch.object(docs, "_update_reference_index_frontmatter"):
                     docs._prepare_build_directory()
 
-        assert (docs.project_path / "video-embed.js").exists()
+        assert (docs.build_dir / "video-embed.js").exists()
 
 
 def test_video_embed_js_asset_exists():
@@ -40661,7 +40693,7 @@ def test_back_to_top_js_copied_to_project():
         docs, _ = _make_uqc_docs(tmp_dir)
         docs._prepare_build_directory()
 
-        js_file = docs.project_path / "back-to-top.js"
+        js_file = docs.build_dir / "back-to-top.js"
         assert js_file.exists()
 
 
@@ -40675,7 +40707,7 @@ def test_back_to_top_js_not_copied_when_disabled():
         )
         docs._prepare_build_directory()
 
-        js_file = docs.project_path / "back-to-top.js"
+        js_file = docs.build_dir / "back-to-top.js"
         assert not js_file.exists()
 
 
@@ -40842,7 +40874,7 @@ def test_on_this_page_js_copied_to_project():
         docs, _ = _make_uqc_docs(tmp_dir)
         docs._prepare_build_directory()
 
-        js_file = docs.project_path / "on-this-page.js"
+        js_file = docs.build_dir / "on-this-page.js"
 
         assert js_file.exists()
 
@@ -40857,7 +40889,7 @@ def test_on_this_page_js_not_copied_when_disabled():
         )
         docs._prepare_build_directory()
 
-        js_file = docs.project_path / "on-this-page.js"
+        js_file = docs.build_dir / "on-this-page.js"
 
         assert not js_file.exists()
 
@@ -41020,7 +41052,7 @@ def test_keyboard_nav_js_copied_to_project():
         docs, _ = _make_uqc_docs(tmp_dir)
         docs._prepare_build_directory()
 
-        js_file = docs.project_path / "keyboard-nav.js"
+        js_file = docs.build_dir / "keyboard-nav.js"
         assert js_file.exists()
 
 
@@ -41034,7 +41066,7 @@ def test_keyboard_nav_js_not_copied_when_disabled():
         )
         docs._prepare_build_directory()
 
-        js_file = docs.project_path / "keyboard-nav.js"
+        js_file = docs.build_dir / "keyboard-nav.js"
         assert not js_file.exists()
 
 
@@ -41336,7 +41368,7 @@ def test_inject_tags_data_inline_no_tags_json():
     """Does nothing when _tags.json doesn't exist."""
     with tempfile.TemporaryDirectory() as tmp:
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = Path(tmp)
+        gd.build_dir = Path(tmp)
         gd._inject_tags_data_inline()
         # Should not crash
 
@@ -41346,7 +41378,7 @@ def test_inject_tags_data_inline_injects_script():
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         # Create _tags.json
         tags_data = {"page_tags": {}, "tag_meta": {}}
@@ -41370,7 +41402,7 @@ def test_inject_tags_data_inline_idempotent():
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         (project / "_tags.json").write_text('{"page_tags": {}}')
         quarto_config = {"format": {"html": {"include-after-body": ["page-tags.js"]}}}
@@ -41392,7 +41424,7 @@ def test_inject_status_data_inline_no_json():
     """Does nothing when _page_status.json doesn't exist."""
     with tempfile.TemporaryDirectory() as tmp:
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = Path(tmp)
+        gd.build_dir = Path(tmp)
         gd._inject_status_data_inline()
 
 
@@ -41401,7 +41433,7 @@ def test_inject_status_data_inline_injects():
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         status_data = {"page_statuses": {}, "definitions": {}}
         (project / "_page_status.json").write_text(json.dumps(status_data))
@@ -41421,7 +41453,7 @@ def test_inject_status_data_inline_string_body():
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp)
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         (project / "_page_status.json").write_text('{"page_statuses": {}}')
         quarto_config = {"format": {"html": {"include-after-body": "existing.js"}}}
@@ -41444,7 +41476,7 @@ def test_collect_page_tags_from_user_guide():
         project = Path(tmp)
         (project / "great-docs.yml").write_text("tags: true\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         ug = project / "user-guide"
         ug.mkdir()
@@ -41464,7 +41496,7 @@ def test_collect_page_tags_skips_index():
         project = Path(tmp)
         (project / "great-docs.yml").write_text("tags: true\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         ug = project / "user-guide"
         ug.mkdir()
@@ -41483,7 +41515,7 @@ def test_collect_page_statuses():
         project = Path(tmp)
         (project / "great-docs.yml").write_text("page_status: true\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         ug = project / "user-guide"
         ug.mkdir()
@@ -41500,7 +41532,7 @@ def test_collect_page_statuses_ignores_invalid():
         project = Path(tmp)
         (project / "great-docs.yml").write_text("page_status: true\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         ug = project / "user-guide"
         ug.mkdir()
@@ -41520,7 +41552,7 @@ def test_build_metadata_margin_roadmap():
         (project / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         # Create ROADMAP.md
         (project / "ROADMAP.md").write_text("# Roadmap\n\nUpcoming features.")
@@ -41536,7 +41568,7 @@ def test_build_metadata_margin_meta_tags():
         (project / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
         (project / "great-docs.yml").write_text("display_name: MyPkg\ntags: true\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         result = gd._build_metadata_margin()
         assert "tags" in result.lower()
@@ -41590,7 +41622,7 @@ def test_generate_tags_index_page_flat():
         project = Path(tmp)
         (project / "great-docs.yml").write_text("tags: true\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         tag_index = {
             "Python": [{"title": "Intro", "href": "user-guide/intro.qmd", "section": "Guide"}],
@@ -41616,7 +41648,7 @@ def test_process_tags_no_tags_returns_false():
         project = Path(tmp)
         (project / "great-docs.yml").write_text("tags: true\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
         assert gd._process_tags() is False
 
 
@@ -41628,7 +41660,7 @@ def test_process_tags_index_page_disabled():
             "tags:\n  enabled: true\n  index_page: false\n  show_on_pages: false\n"
         )
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         ug = project / "user-guide"
         ug.mkdir()
@@ -41647,7 +41679,7 @@ def test_process_tags_show_on_pages():
             "tags:\n  enabled: true\n  index_page: false\n  show_on_pages: true\n"
         )
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         ug = project / "user-guide"
         ug.mkdir()
@@ -41672,7 +41704,7 @@ def test_generate_tags_json_resolves_icons():
             "tags:\n  enabled: true\n  show_on_pages: true\n  icons:\n    Python: code\n"
         )
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         tag_index = {
             "Python": [{"title": "Intro", "href": "user-guide/intro.qmd", "section": "Guide"}],
@@ -41698,7 +41730,7 @@ def test_generate_tags_json_warns_unknown_icon(capsys):
             "tags:\n  enabled: true\n  show_on_pages: true\n  icons:\n    Python: bad-icon\n"
         )
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         tag_index = {
             "Python": [{"title": "Intro", "href": "user-guide/intro.qmd", "section": "Guide"}],
@@ -41720,7 +41752,7 @@ def test_add_tags_to_navbar_already_present():
         project = Path(tmp)
         (project / "great-docs.yml").write_text("tags: true\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         quarto_config = {
             "website": {"navbar": {"left": [{"text": "Tags", "href": "tags/index.qmd"}]}}
@@ -41751,7 +41783,7 @@ def test_build_metadata_margin_requires_python():
         )
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         result = gd._build_metadata_margin()
         assert "3.9" in result
@@ -41767,7 +41799,7 @@ def test_build_metadata_margin_extras():
         )
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         result = gd._build_metadata_margin()
         assert "dev" in result
@@ -41783,7 +41815,7 @@ def test_generate_skills_page_with_companions():
         project = Path(tmp)
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         # Create skill dir with SKILL.md and companion files
         skill_dir = project / "skill-test"
@@ -41816,7 +41848,7 @@ def test_generate_skills_page_multi_skill_switcher():
         project = Path(tmp)
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         # Create primary skill
         skill_dir_a = project / "skill-a"
@@ -41884,7 +41916,7 @@ def test_generate_skills_page_multi_skill_install_section():
         # pyproject.toml so _detect_package_name works
         (project / "pyproject.toml").write_text('[project]\nname = "test-pkg"\n')
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         # _quarto.yml with site-url so URLs are generated
         (project / "_quarto.yml").write_text("website:\n  site-url: https://example.com/docs/\n")
@@ -41935,7 +41967,7 @@ def test_generate_skills_page_multi_skill_no_cli_without_package_name():
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
         # No pyproject.toml -> _detect_package_name returns None
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         skill_dir_a = project / "skill-a"
         skill_dir_a.mkdir()
@@ -41969,7 +42001,7 @@ def test_generate_skills_page_single_skill_install_section():
         project = Path(tmp)
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         (project / "_quarto.yml").write_text("website:\n  site-url: https://example.com/docs/\n")
 
@@ -42007,7 +42039,7 @@ def test_generate_skills_page_single_skill_no_switcher():
         project = Path(tmp)
         (project / "great-docs.yml").write_text("display_name: MyPkg\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         skill_dir = project / "skill-solo"
         skill_dir.mkdir()
@@ -42038,10 +42070,9 @@ def test_generate_sitemap_xml_basic():
             "seo:\n  sitemap: true\n  canonical:\n    base_url: https://example.com/\n"
         )
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
 
-        site_dir = project / "_site"
-        site_dir.mkdir()
+        site_dir = gd.layout.site_dir
+        site_dir.mkdir(parents=True)
         (site_dir / "index.html").write_text("<html></html>")
         sub = site_dir / "reference"
         sub.mkdir()
@@ -42065,7 +42096,6 @@ def test_generate_sitemap_xml_no_site_dir(capsys):
             "seo:\n  sitemap: true\n  canonical:\n    base_url: https://example.com/\n"
         )
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
 
         gd._generate_sitemap_xml()
         captured = capsys.readouterr()
@@ -42078,10 +42108,9 @@ def test_generate_sitemap_xml_no_base_url(capsys):
         project = Path(tmp)
         (project / "great-docs.yml").write_text("seo:\n  sitemap: true\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
 
-        site_dir = project / "_site"
-        site_dir.mkdir()
+        site_dir = gd.layout.site_dir
+        site_dir.mkdir(parents=True)
         (site_dir / "index.html").write_text("<html></html>")
 
         gd._generate_sitemap_xml()
@@ -42100,10 +42129,9 @@ def test_generate_robots_txt_basic():
             "seo:\n  robots: true\n  sitemap: true\n  canonical:\n    base_url: https://example.com/\n"
         )
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
 
-        site_dir = project / "_site"
-        site_dir.mkdir()
+        site_dir = gd.layout.site_dir
+        site_dir.mkdir(parents=True)
 
         gd._generate_robots_txt()
 
@@ -42121,7 +42149,6 @@ def test_generate_robots_txt_no_site_dir(capsys):
         project = Path(tmp)
         (project / "great-docs.yml").write_text("seo:\n  robots: true\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
 
         gd._generate_robots_txt()
         captured = capsys.readouterr()
@@ -42211,7 +42238,7 @@ def test_collect_page_tags_shadow():
             "tags:\n  enabled: true\n  shadow:\n    - Internal\n"
         )
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         ug = project / "user-guide"
         ug.mkdir()
@@ -42233,7 +42260,7 @@ def test_collect_page_tags_from_recipes():
         project = Path(tmp)
         (project / "great-docs.yml").write_text("tags: true\n")
         gd = GreatDocs(project_path=tmp)
-        gd.project_path = project
+        gd.build_dir = project
 
         rec = project / "recipes"
         rec.mkdir()
@@ -42834,10 +42861,10 @@ def test_announcement_position_in_meta_tag():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._update_quarto_config()
 
-        with open(docs.project_path / "_quarto.yml", "r") as f:
+        with open(docs.build_dir / "_quarto.yml", "r") as f:
             config = read_yaml(f)
 
         header = config["format"]["html"]["include-in-header"]
@@ -42855,10 +42882,10 @@ def test_announcement_position_defaults_above_in_meta_tag():
         (project_path / "great-docs.yml").write_text("announcement: Hi\n", encoding="utf-8")
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
         docs._update_quarto_config()
 
-        with open(docs.project_path / "_quarto.yml", "r") as f:
+        with open(docs.build_dir / "_quarto.yml", "r") as f:
             config = read_yaml(f)
 
         header = config["format"]["html"]["include-in-header"]
@@ -43326,8 +43353,8 @@ def test_add_section_sidebar_with_sidebar_groups():
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
         docs = GreatDocs(project_path=str(tmp_dir))
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         from great_docs._utils import QUARTO_YML_HEADER
 
@@ -43374,8 +43401,8 @@ def test_add_section_sidebar_with_sidebar_groups_ungrouped_pages():
         (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
 
         docs = GreatDocs(project_path=str(tmp_dir))
-        quarto_yml = docs.project_path / "_quarto.yml"
-        docs.project_path.mkdir(parents=True, exist_ok=True)
+        quarto_yml = docs.build_dir / "_quarto.yml"
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
 
         from great_docs._utils import QUARTO_YML_HEADER
 
@@ -43429,7 +43456,7 @@ def test_prepare_build_dir_pre_render_script_exists(tmp_path):
                 docs._prepare_build_directory()
 
     # Script should be copied to scripts/ in the build dir
-    assert (docs.project_path / "scripts" / "prerender.py").exists()
+    assert (docs.build_dir / "scripts" / "prerender.py").exists()
 
 
 def test_prepare_build_dir_css_file_warning(tmp_path):
@@ -43464,7 +43491,7 @@ def test_prepare_build_dir_css_file_exists(tmp_path):
                 docs._prepare_build_directory()
 
     # CSS file should be in the build dir
-    assert (docs.project_path / "custom.css").exists()
+    assert (docs.build_dir / "custom.css").exists()
 
     """Warning printed when pre_render script path doesn't exist."""
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
@@ -44001,28 +44028,28 @@ def test_html_escape_no_special():
 
 def test_strip_numeric_prefix_double_digit():
     docs = GreatDocs()
-    assert docs._strip_numeric_prefix("00-introduction.qmd") == "introduction.qmd"
+    assert strip_numeric_prefix("00-introduction.qmd") == "introduction.qmd"
 
 
 def test_strip_numeric_prefix_single_digit():
     docs = GreatDocs()
-    assert docs._strip_numeric_prefix("1-getting-started.qmd") == "getting-started.qmd"
+    assert strip_numeric_prefix("1-getting-started.qmd") == "getting-started.qmd"
 
 
 def test_strip_numeric_prefix_no_prefix():
     docs = GreatDocs()
-    assert docs._strip_numeric_prefix("introduction.qmd") == "introduction.qmd"
+    assert strip_numeric_prefix("introduction.qmd") == "introduction.qmd"
 
 
 def test_strip_numeric_prefix_underscore_separator():
     docs = GreatDocs()
-    result = docs._strip_numeric_prefix("01_getting_started.qmd")
+    result = strip_numeric_prefix("01_getting_started.qmd")
     assert result == "getting_started.qmd"
 
 
 def test_strip_numeric_prefix_preserves_non_numeric():
     docs = GreatDocs()
-    assert docs._strip_numeric_prefix("advanced.qmd") == "advanced.qmd"
+    assert strip_numeric_prefix("advanced.qmd") == "advanced.qmd"
 
 
 # ---------------------------------------------------------------------------
@@ -44149,120 +44176,48 @@ def test_ensure_quarto_installed_passes_when_present():
 
 
 # ---------------------------------------------------------------------------
-# _copy_readme_images
+# Source references
 # ---------------------------------------------------------------------------
 
 
-def test_copy_readme_images_none_source_file(tmp_path):
-    """Returns 0 when source_file is None."""
+@pytest.mark.parametrize(
+    "markup",
+    [
+        "![Logo](images/logo.png)",
+        '<img src="images/logo.png">',
+        "[Download](images/logo.png)",
+    ],
+)
+def test_rebase_source_references_copies_local_files(tmp_path: Path, markup: str) -> None:
+    (tmp_path / "images").mkdir()
+    (tmp_path / "images/logo.png").write_bytes(b"image")
     docs = GreatDocs(project_path=str(tmp_path))
-    result = docs._copy_readme_images(None)
-    assert result == 0
+    result = docs._rebase_source_references(
+        markup, tmp_path / "README.md", docs.build_dir / "index.qmd"
+    )
+    assert result == markup
+    assert (docs.build_dir / "images/logo.png").read_bytes() == b"image"
 
 
-def test_copy_readme_images_nonexistent_file(tmp_path):
-    """Returns 0 when source_file does not exist."""
+@pytest.mark.parametrize(
+    "reference",
+    [
+        "https://example.com/logo.png",
+        "//example.com/logo.png",
+        "data:image/png;base64,abc",
+        "#anchor",
+        "images/missing.png",
+    ],
+)
+def test_rebase_source_references_preserves_unavailable_files(
+    tmp_path: Path, reference: str
+) -> None:
     docs = GreatDocs(project_path=str(tmp_path))
-    result = docs._copy_readme_images(tmp_path / "nonexistent.md")
-    assert result == 0
-
-
-def test_copy_readme_images_markdown_image(tmp_path):
-    """Copies a local image referenced with Markdown syntax."""
-    # Create source image
-    img_dir = tmp_path / "images"
-    img_dir.mkdir()
-    img_file = img_dir / "logo.png"
-    img_file.write_bytes(b"\x89PNG\r\n\x1a\n")  # minimal PNG header
-
-    # Create a README with a markdown image reference
-    readme = tmp_path / "README.md"
-    readme.write_text("# Title\n\n![Logo](images/logo.png)\n")
-
-    # project_path for the docs instance is tmp_path (build dir)
-    docs = GreatDocs(project_path=str(tmp_path))
-
-    result = docs._copy_readme_images(readme)
-
-    assert result == 1
-    assert (tmp_path / "images" / "logo.png").exists()
-
-
-def test_copy_readme_images_html_image(tmp_path):
-    """Copies a local image referenced with HTML img tag."""
-    img_dir = tmp_path / "assets"
-    img_dir.mkdir()
-
-    # Note: assets/ is excluded by the function, use a different dir
-    sub_dir = tmp_path / "media"
-    sub_dir.mkdir()
-    img_file = sub_dir / "hero.png"
-    img_file.write_bytes(b"\x89PNG\r\n\x1a\n")
-
-    readme = tmp_path / "README.md"
-    readme.write_text('# Title\n\n<img src="media/hero.png" alt="Hero">\n')
-
-    docs = GreatDocs(project_path=str(tmp_path))
-    result = docs._copy_readme_images(readme)
-
-    assert result == 1
-    assert (tmp_path / "media" / "hero.png").exists()
-
-
-def test_copy_readme_images_skips_urls(tmp_path):
-    """Does not attempt to copy URL-referenced images."""
-    readme = tmp_path / "README.md"
-    readme.write_text("# Title\n\n![Logo](https://example.com/logo.png)\n")
-
-    docs = GreatDocs(project_path=str(tmp_path))
-    result = docs._copy_readme_images(readme)
-
-    assert result == 0
-
-
-def test_copy_readme_images_skips_assets_dir(tmp_path):
-    """Images under assets/ are skipped (handled by _copy_assets)."""
-    (tmp_path / "assets").mkdir()
-    readme = tmp_path / "README.md"
-    readme.write_text("# Title\n\n![Logo](assets/logo.png)\n")
-
-    docs = GreatDocs(project_path=str(tmp_path))
-    result = docs._copy_readme_images(readme)
-
-    assert result == 0
-
-
-def test_copy_readme_images_nonexistent_image_skipped(tmp_path):
-    """Non-existent local images are quietly skipped."""
-    readme = tmp_path / "README.md"
-    readme.write_text("# Title\n\n![Missing](images/missing.png)\n")
-
-    docs = GreatDocs(project_path=str(tmp_path))
-    result = docs._copy_readme_images(readme)
-
-    assert result == 0
-
-
-def test_copy_readme_images_multiple_images(tmp_path):
-    """Multiple local images are all copied."""
-    img1 = tmp_path / "fig1.png"
-    img2 = tmp_path / "fig2.png"
-    img1.write_bytes(b"\x89PNG\r\n\x1a\n")
-    img2.write_bytes(b"\x89PNG\r\n\x1a\n")
-
-    readme = tmp_path / "README.md"
-    readme.write_text("# Title\n\n![A](fig1.png)\n\n![B](fig2.png)\n")
-
-    build_dir = tmp_path / "build"
-    build_dir.mkdir()
-    docs = GreatDocs(project_path=str(build_dir))
-
-    # project_root is tmp_path (parent of build), README is in tmp_path
-
-    # _copy_readme_images copies relative to source_file's parent → tmp_path
-    result = docs._copy_readme_images(readme)
-
-    assert result == 2
+    markup = f"![Logo]({reference})"
+    assert (
+        docs._rebase_source_references(markup, tmp_path / "README.md", docs.build_dir / "index.qmd")
+        == markup
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -44290,6 +44245,24 @@ def test_update_gitignore_migration_only_prompts_with_migration_msg(monkeypatch)
 
         # Declined, file should be unchanged
         assert gitignore.read_text() == original
+
+
+def test_update_gitignore_docs_layout_ignores_source_relative_cache():
+    """Keep a custom-layout cache out of version control."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+        (root / "pyproject.toml").write_text('[project]\nname = "sample"\n')
+        config_path = root / "docs" / "great-docs.yml"
+        config_path.parent.mkdir()
+        config_path.write_text("module: sample\n")
+
+        docs = GreatDocs(str(root), config_path=str(config_path))
+        docs._update_project_gitignore(force=True)
+
+        content = (root / ".gitignore").read_text()
+
+        assert "/docs/.cache/" in content
+        assert ".great-docs-cache/" not in content
 
 
 # ---------------------------------------------------------------------------
@@ -44376,7 +44349,7 @@ def test_section_build_dir_valid(tmp_path):
     """_section_build_dir returns correct path for valid dir."""
     docs = GreatDocs(project_path=str(tmp_path))
     result = docs._section_build_dir({"dir": "my_section"})
-    assert result == docs.project_path / "my-section"
+    assert result == docs.build_dir / "my-section"
 
 
 # ---------------------------------------------------------------------------
@@ -44390,7 +44363,7 @@ def test_collect_page_tags_from_user_guide(tmp_path):
     docs = GreatDocs(project_path=str(tmp_path))
 
     # project_path is the build dir (tmp_path / "great-docs")
-    ug_dir = docs.project_path / "user-guide"
+    ug_dir = docs.build_dir / "user-guide"
     ug_dir.mkdir(parents=True, exist_ok=True)
     page = ug_dir / "intro.qmd"
     page.write_text(
@@ -44408,7 +44381,7 @@ def test_collect_page_tags_skips_index_qmd(tmp_path):
     """_collect_page_tags skips index.qmd files."""
     docs = GreatDocs(project_path=str(tmp_path))
 
-    ug_dir = docs.project_path / "user-guide"
+    ug_dir = docs.build_dir / "user-guide"
     ug_dir.mkdir(parents=True, exist_ok=True)
     index = ug_dir / "index.qmd"
     index.write_text("---\ntitle: Index\ntags:\n  - test\n---\n")
@@ -44422,7 +44395,7 @@ def test_collect_page_tags_skips_pages_without_tags(tmp_path):
     """_collect_page_tags skips pages with no tags."""
     docs = GreatDocs(project_path=str(tmp_path))
 
-    ug_dir = docs.project_path / "user-guide"
+    ug_dir = docs.build_dir / "user-guide"
     ug_dir.mkdir(parents=True, exist_ok=True)
     page = ug_dir / "page.qmd"
     page.write_text("---\ntitle: No Tags Page\n---\n\nContent.\n")
@@ -44436,7 +44409,7 @@ def test_collect_page_tags_from_recipes(tmp_path):
     """_collect_page_tags scans the recipes directory too."""
     docs = GreatDocs(project_path=str(tmp_path))
 
-    recipes_dir = docs.project_path / "recipes"
+    recipes_dir = docs.build_dir / "recipes"
     recipes_dir.mkdir(parents=True, exist_ok=True)
     page = recipes_dir / "howto.qmd"
     page.write_text("---\ntitle: How To\ntags:\n  - howto\n---\n")
@@ -44456,7 +44429,7 @@ def test_collect_page_tags_from_custom_section(tmp_path):
     docs = GreatDocs(project_path=str(tmp_path))
 
     # Create the custom section directory with a tagged page
-    section_dir = docs.project_path / "tutorials"
+    section_dir = docs.build_dir / "tutorials"
     section_dir.mkdir(parents=True, exist_ok=True)
     page = section_dir / "page.qmd"
     page.write_text("---\ntitle: My Tutorial\ntags:\n  - tutorial\n---\n")
@@ -44621,7 +44594,7 @@ def test_generate_tags_index_page_flat_non_hierarchical(tmp_path):
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
     (tmp_path / "great-docs.yml").write_text("tags:\n  hierarchical: false\n")
     docs = GreatDocs(project_path=str(tmp_path))
-    docs.project_path.mkdir(parents=True, exist_ok=True)
+    docs.build_dir.mkdir(parents=True, exist_ok=True)
 
     tag_index = {
         "python": [{"title": "Intro", "href": "user-guide/intro.qmd", "section": "Guide"}],
@@ -44631,7 +44604,7 @@ def test_generate_tags_index_page_flat_non_hierarchical(tmp_path):
 
     assert result == "tags/index.qmd"
 
-    content = (docs.project_path / "tags" / "index.qmd").read_text()
+    content = (docs.build_dir / "tags" / "index.qmd").read_text()
 
     assert "gd-tag-heading" in content
     assert "python" in content.lower()
@@ -44642,13 +44615,13 @@ def test_generate_tags_index_page_flat_with_section_badge(tmp_path):
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
     (tmp_path / "great-docs.yml").write_text("tags:\n  hierarchical: false\n")
     docs = GreatDocs(project_path=str(tmp_path))
-    docs.project_path.mkdir(parents=True, exist_ok=True)
+    docs.build_dir.mkdir(parents=True, exist_ok=True)
 
     tag_index = {
         "myTag": [{"title": "Some Page", "href": "user-guide/page.qmd", "section": "User Guide"}]
     }
     result = docs._generate_tags_index_page(tag_index)
-    content = (docs.project_path / "tags" / "index.qmd").read_text()
+    content = (docs.build_dir / "tags" / "index.qmd").read_text()
 
     assert "gd-tag-section" in content
 
@@ -44658,11 +44631,11 @@ def test_generate_tags_index_page_flat_no_section_badge(tmp_path):
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
     (tmp_path / "great-docs.yml").write_text("tags:\n  hierarchical: false\n")
     docs = GreatDocs(project_path=str(tmp_path))
-    docs.project_path.mkdir(parents=True, exist_ok=True)
+    docs.build_dir.mkdir(parents=True, exist_ok=True)
 
     tag_index = {"myTag": [{"title": "Some Page", "href": "user-guide/page.qmd", "section": ""}]}
     docs._generate_tags_index_page(tag_index)
-    content = (docs.project_path / "tags" / "index.qmd").read_text()
+    content = (docs.build_dir / "tags" / "index.qmd").read_text()
 
     assert "gd-tag-section" not in content
 
@@ -44675,12 +44648,12 @@ def test_generate_tags_index_page_flat_no_section_badge(tmp_path):
 def test_generate_status_json_writes_json(tmp_path):
     """_generate_status_json writes _page_status.json."""
     docs = GreatDocs(project_path=str(tmp_path))
-    docs.project_path.mkdir(parents=True, exist_ok=True)
+    docs.build_dir.mkdir(parents=True, exist_ok=True)
 
     status_map = {"user-guide/intro.qmd": "new", "user-guide/old.qmd": "deprecated"}
     docs._generate_status_json(status_map)
 
-    status_file = docs.project_path / "_page_status.json"
+    status_file = docs.build_dir / "_page_status.json"
 
     assert status_file.exists()
 
@@ -44694,10 +44667,10 @@ def test_generate_status_json_writes_json(tmp_path):
 def test_generate_status_json_builtin_statuses_have_labels(tmp_path):
     """_generate_status_json resolves labels for all built-in status types."""
     docs = GreatDocs(project_path=str(tmp_path))
-    docs.project_path.mkdir(parents=True, exist_ok=True)
+    docs.build_dir.mkdir(parents=True, exist_ok=True)
 
     docs._generate_status_json({})
-    data = json.loads((docs.project_path / "_page_status.json").read_text())
+    data = json.loads((docs.build_dir / "_page_status.json").read_text())
 
     for key in ("new", "updated", "beta", "deprecated", "experimental", "upcoming"):
         assert key in data["definitions"]
@@ -44712,7 +44685,7 @@ def test_generate_status_json_builtin_statuses_have_labels(tmp_path):
 def test_collect_page_statuses_from_user_guide(tmp_path):
     """_collect_page_statuses scans user-guide for status frontmatter."""
     docs = GreatDocs(project_path=str(tmp_path))
-    ug_dir = docs.project_path / "user-guide"
+    ug_dir = docs.build_dir / "user-guide"
     ug_dir.mkdir(parents=True, exist_ok=True)
     (ug_dir / "page.qmd").write_text("---\nstatus: new\n---\n")
 
@@ -44725,7 +44698,7 @@ def test_collect_page_statuses_from_user_guide(tmp_path):
 def test_collect_page_statuses_unknown_status_warns(tmp_path, capsys):
     """Unknown status triggers warning and is skipped."""
     docs = GreatDocs(project_path=str(tmp_path))
-    ug_dir = docs.project_path / "user-guide"
+    ug_dir = docs.build_dir / "user-guide"
     ug_dir.mkdir(parents=True, exist_ok=True)
     (ug_dir / "page.qmd").write_text("---\nstatus: completely-unknown-xyz\n---\n")
 
@@ -44746,7 +44719,7 @@ def test_collect_page_statuses_custom_section(tmp_path):
     )
     docs = GreatDocs(project_path=str(tmp_path))
 
-    section_dir = docs.project_path / "tutorials"
+    section_dir = docs.build_dir / "tutorials"
     section_dir.mkdir(parents=True, exist_ok=True)
     (section_dir / "page.qmd").write_text("---\nstatus: beta\n---\n")
 
@@ -44961,7 +44934,7 @@ def test_prepare_for_freeze_runs_all_steps(tmp_path):
     docs = GreatDocs(project_path=str(tmp_path))
 
     # Ensure project_path exists (normally created by _prepare_build_directory)
-    docs.project_path.mkdir(parents=True, exist_ok=True)
+    docs.build_dir.mkdir(parents=True, exist_ok=True)
 
     # Mock the methods that exist on the class
     existing_methods = [
@@ -44986,4 +44959,4 @@ def test_prepare_for_freeze_runs_all_steps(tmp_path):
     # Should run without error and restore cwd
     import os
 
-    assert os.getcwd() != str(docs.project_path)  # cwd restored
+    assert os.getcwd() != str(docs.build_dir)  # cwd restored

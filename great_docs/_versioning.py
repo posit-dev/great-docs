@@ -82,6 +82,13 @@ def parse_badge_expiry(raw: str | None) -> BadgeExpiry:
     return BadgeExpiry(mode="version", value=raw)
 
 
+def version_url_segment(tag: str) -> str:
+    """Remove one numeric version prefix from a published tag"""
+    if len(tag) > 1 and tag[0] == "v" and tag[1] in "0123456789":
+        return tag[1:]
+    return tag
+
+
 def parse_versions_config(raw: list[Any]) -> list[VersionEntry]:
     """
     Parse the `versions:` list from great-docs.yml.
@@ -824,7 +831,7 @@ def build_version_map(
             entry["latest"] = True
             entry["path_prefix"] = ""
         else:
-            entry["path_prefix"] = f"v/{v.tag}"
+            entry["path_prefix"] = f"v/{version_url_segment(v.tag)}"
         if v.prerelease:
             entry["prerelease"] = True
         if v.eol:

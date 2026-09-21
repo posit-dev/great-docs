@@ -6,7 +6,7 @@ echo "Building documentation..."
 great-docs build
 
 # Validate output
-SITE_DIR="great-docs/_site"
+SITE_DIR="docs/_site"
 
 if [[ ! -d "$SITE_DIR" ]]; then
     echo "ERROR: Build directory $SITE_DIR not found"
@@ -26,7 +26,7 @@ echo "Generated $PAGE_COUNT HTML pages"
 
 # Check for key outputs
 for file in llms.txt llms-full.txt; do
-    if [[ -f "great-docs/$file" ]]; then
+    if [[ -f "docs/_quarto/default/$file" ]]; then
         echo "OK: $file exists"
     else
         echo "WARN: $file not found"

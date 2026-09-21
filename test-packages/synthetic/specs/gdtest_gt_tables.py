@@ -91,7 +91,7 @@ SPEC = {
                 }
         ''',
         # ── User guide: GT table page ─────────────────────────────────────
-        "user_guide/01-gt-tables.qmd": (
+        "docs/user_guide/01-gt-tables.qmd": (
             "---\n"
             "title: Great Tables Output\n"
             "---\n"
@@ -139,7 +139,7 @@ SPEC = {
             "```\n"
         ),
         # ── User guide: Markdown table page ───────────────────────────────
-        "user_guide/02-markdown-tables.qmd": (
+        "docs/user_guide/02-markdown-tables.qmd": (
             "---\n"
             "title: Markdown Tables\n"
             "---\n"
@@ -171,7 +171,7 @@ SPEC = {
             "| Scroll      | Yes       |\n"
         ),
         # ── User guide: GT table with page-level Quarto opt-out ─────────
-        "user_guide/03-gt-page-level.qmd": (
+        "docs/user_guide/03-gt-page-level.qmd": (
             "---\n"
             "title: GT with Page-Level Processing Disabled\n"
             "jupyter: python3\n"

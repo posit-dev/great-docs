@@ -177,7 +177,7 @@ and how readers interact with it.
 
 | Option | Default | Applies to | Description |
 |--------|---------|------------|-------------|
-| `file` | *(required)* | both | Path to the `.py` marimo notebook (relative to project root) |
+| `file` | *(required)* | both | Path to the `.py` marimo notebook (relative to the generated Quarto project) |
 | `mode` | `"island"` | both | `"island"` for inline WASM cells, `"iframe"` for a full editable notebook |
 | `show-code` | `"true"` | island | Show source code alongside output |
 | `show-copy` | `"true"` | island | Display the "Copy Notebook" button |

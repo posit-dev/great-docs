@@ -66,7 +66,7 @@ SPEC = {
                 """
                 return f"Deep dive into {topic}"
         ''',
-        "user_guide/quickstart.qmd": (
+        "docs/user_guide/quickstart.qmd": (
             "---\n"
             "title: Quickstart\n"
             "---\n"
@@ -75,7 +75,7 @@ SPEC = {
             "\n"
             "Get started quickly with a minimal example.\n"
         ),
-        "user_guide/install.qmd": (
+        "docs/user_guide/install.qmd": (
             "---\n"
             "title: Installation\n"
             "---\n"
@@ -84,7 +84,7 @@ SPEC = {
             "\n"
             "How to install the package and its dependencies.\n"
         ),
-        "user_guide/internals.qmd": (
+        "docs/user_guide/internals.qmd": (
             "---\n"
             "title: Internals\n"
             "---\n"

@@ -40,7 +40,7 @@ SPEC = {
                 pass
         ''',
         **{
-            f"user_guide/{i:02d}-{title}.qmd": f"""\
+            f"docs/user_guide/{i:02d}-{title}.qmd": f"""\
             ---
             title: "{label}"
             ---

@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
+from great_docs import GreatDocs
 
 # ---------------------------------------------------------------------------
 # Regex: matches Quarto progress lines and captures page path
@@ -63,21 +64,15 @@ class TestPageRegex:
 class TestWriteBuildTiming:
     """Test the _write_build_timing method writes correct JSON."""
 
-    def _make_gd(self, tmp_path: Path):
-        """Create a minimal GreatDocs instance with a project_path pointing to tmp_path."""
-        from great_docs.core import GreatDocs
-
-        # Create a minimal great-docs.yml so Config doesn't fail
+    def _make_gd(self, tmp_path: Path) -> GreatDocs:
+        """Create a project with its resolved build and deployment paths"""
         (tmp_path / "great-docs.yml").write_text("name: test-pkg\n")
-        gd = GreatDocs.__new__(GreatDocs)
-        gd.project_path = tmp_path
-        gd.project_root = tmp_path
-        return gd
+        return GreatDocs(project_path=str(tmp_path))
 
     def test_single_version_flat(self, tmp_path: Path):
         gd = self._make_gd(tmp_path)
-        site_dir = tmp_path / "_site"
-        site_dir.mkdir()
+        site_dir = gd.layout.site_dir
+        site_dir.mkdir(parents=True)
 
         timings = [
             {"page": "user-guide/overview.html", "seconds": 1.2},
@@ -101,8 +96,8 @@ class TestWriteBuildTiming:
 
     def test_multi_version(self, tmp_path: Path):
         gd = self._make_gd(tmp_path)
-        site_dir = tmp_path / "_site"
-        site_dir.mkdir()
+        site_dir = gd.layout.site_dir
+        site_dir.mkdir(parents=True)
 
         timings_by_version = {
             "0.10": [
@@ -142,22 +137,22 @@ class TestWriteBuildTiming:
 
     def test_no_timings_returns_none(self, tmp_path: Path):
         gd = self._make_gd(tmp_path)
-        site_dir = tmp_path / "_site"
-        site_dir.mkdir()
+        site_dir = gd.layout.site_dir
+        site_dir.mkdir(parents=True)
         result = gd._write_build_timing()
         assert result is None
 
     def test_empty_timings_returns_none(self, tmp_path: Path):
         gd = self._make_gd(tmp_path)
-        site_dir = tmp_path / "_site"
-        site_dir.mkdir()
+        site_dir = gd.layout.site_dir
+        site_dir.mkdir(parents=True)
         result = gd._write_build_timing(page_timings=[])
         assert result is None
 
     def test_build_time_is_utc_iso(self, tmp_path: Path):
         gd = self._make_gd(tmp_path)
-        site_dir = tmp_path / "_site"
-        site_dir.mkdir()
+        site_dir = gd.layout.site_dir
+        site_dir.mkdir(parents=True)
 
         timings = [{"page": "index.html", "seconds": 0.5}]
         result = gd._write_build_timing(page_timings=timings)
@@ -170,8 +165,8 @@ class TestWriteBuildTiming:
 
     def test_frozen_annotation_single_version(self, tmp_path: Path):
         gd = self._make_gd(tmp_path)
-        site_dir = tmp_path / "_site"
-        site_dir.mkdir()
+        site_dir = gd.layout.site_dir
+        site_dir.mkdir(parents=True)
 
         # Create a _freeze/ entry for one page
         freeze_entry = tmp_path / "_freeze" / "recipes" / "freeze-demo" / "execute-results"
@@ -192,8 +187,8 @@ class TestWriteBuildTiming:
 
     def test_frozen_annotation_multi_version(self, tmp_path: Path):
         gd = self._make_gd(tmp_path)
-        site_dir = tmp_path / "_site"
-        site_dir.mkdir()
+        site_dir = gd.layout.site_dir
+        site_dir.mkdir(parents=True)
 
         # Create a _freeze/ entry
         freeze_entry = tmp_path / "_freeze" / "user-guide" / "benchmarks" / "execute-results"
@@ -217,8 +212,8 @@ class TestWriteBuildTiming:
 
     def test_no_freeze_dir_all_false(self, tmp_path: Path):
         gd = self._make_gd(tmp_path)
-        site_dir = tmp_path / "_site"
-        site_dir.mkdir()
+        site_dir = gd.layout.site_dir
+        site_dir.mkdir(parents=True)
 
         timings = [{"page": "index.qmd", "seconds": 0.5}]
         result = gd._write_build_timing(page_timings=timings)

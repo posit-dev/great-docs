@@ -59,8 +59,8 @@ SPEC = {
                 """
                 return x + y
         ''',
-        "assets/logo.svg": _LOGO_SVG,
-        "index.qmd": """\
+        "docs/assets/logo.svg": _LOGO_SVG,
+        "docs/index.qmd": """\
             # gdtest-hero-index-qmd
 
             [![PyPI](https://img.shields.io/badge/pypi-v0.1.0-blue)](https://pypi.org/p/gdtest-hero-index-qmd/)

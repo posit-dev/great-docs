@@ -8,7 +8,6 @@ from pathlib import Path
 from great_docs.config import Config
 from great_docs.core import GreatDocs
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -131,7 +130,7 @@ class TestPageStatusConfig:
 class TestCollectPageStatuses:
     def test_collect_from_user_guide(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        ug_dir = gd.project_path / "user-guide"
+        ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "intro.qmd", "Introduction", status="new")
         _make_qmd(ug_dir / "advanced.qmd", "Advanced Usage", status="deprecated")
 
@@ -142,7 +141,7 @@ class TestCollectPageStatuses:
 
     def test_collect_from_recipes(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        recipes_dir = gd.project_path / "recipes"
+        recipes_dir = gd.build_dir / "recipes"
         _make_qmd(recipes_dir / "recipe1.qmd", "Easy Recipe", status="beta")
 
         result = gd._collect_page_statuses()
@@ -151,7 +150,7 @@ class TestCollectPageStatuses:
 
     def test_unknown_status_warns(self, tmp_path: Path, capsys):
         gd = _bootstrap_project(tmp_path)
-        ug_dir = gd.project_path / "user-guide"
+        ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "page.qmd", "A Page", status="nonexistent")
 
         result = gd._collect_page_statuses()
@@ -162,7 +161,7 @@ class TestCollectPageStatuses:
 
     def test_no_status_pages(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        ug_dir = gd.project_path / "user-guide"
+        ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "page.qmd", "No Status")
 
         result = gd._collect_page_statuses()
@@ -175,7 +174,7 @@ class TestCollectPageStatuses:
 
     def test_case_insensitive_status(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        ug_dir = gd.project_path / "user-guide"
+        ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "page.qmd", "A Page", status="New")
 
         result = gd._collect_page_statuses()
@@ -187,7 +186,7 @@ class TestCollectPageStatuses:
             tmp_path,
             "page_status:\n  enabled: true\nsections:\n  - title: Tutorials\n    dir: tutorials\n",
         )
-        tut_dir = gd.project_path / "tutorials"
+        tut_dir = gd.build_dir / "tutorials"
         _make_qmd(tut_dir / "first.qmd", "First Tutorial", status="new")
 
         result = gd._collect_page_statuses()
@@ -200,7 +199,7 @@ class TestCollectPageStatuses:
             tmp_path,
             "page_status:\n  enabled: true\nsections:\n  - title: Examples\n    dir: docs/examples\n",
         )
-        section_dir = gd.project_path / "docs" / "examples"
+        section_dir = gd.build_dir / "docs" / "examples"
         _make_qmd(section_dir / "ex.qmd", "Example", status="new")
 
         result = gd._collect_page_statuses()
@@ -218,7 +217,7 @@ class TestGenerateStatusJson:
 
         gd._generate_status_json(status_map)
 
-        json_path = gd.project_path / "_page_status.json"
+        json_path = gd.build_dir / "_page_status.json"
         assert json_path.exists()
         data = json.loads(json_path.read_text(encoding="utf-8"))
         assert data["page_statuses"] == {"user-guide/intro.qmd": "new"}
@@ -233,7 +232,7 @@ class TestGenerateStatusJson:
 
         gd._generate_status_json(status_map)
 
-        json_path = gd.project_path / "_page_status.json"
+        json_path = gd.build_dir / "_page_status.json"
         data = json.loads(json_path.read_text(encoding="utf-8"))
         # All built-in statuses should be in definitions
         for key in ("new", "updated", "beta", "deprecated", "experimental"):
@@ -251,14 +250,14 @@ class TestProcessPageStatuses:
 
     def test_with_pages_returns_true(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        ug_dir = gd.project_path / "user-guide"
+        ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "intro.qmd", "Intro", status="new")
 
         result = gd._process_page_statuses()
         assert result is True
 
         # Verify JSON file was created
-        json_path = gd.project_path / "_page_status.json"
+        json_path = gd.build_dir / "_page_status.json"
         assert json_path.exists()
 
 

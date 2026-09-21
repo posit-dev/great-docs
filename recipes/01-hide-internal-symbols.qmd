@@ -12,7 +12,7 @@ Sometimes you need to export a symbol (for use by other modules or tests) but do
 
 Add the names to the `exclude` list in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 exclude:
   - _InternalHelper
   - _parse_raw_config

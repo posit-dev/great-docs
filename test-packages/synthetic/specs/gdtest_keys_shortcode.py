@@ -64,7 +64,7 @@ SPEC = {
             "    return data\n"
         ),
         # ── User guide page 1: Single keys ───────────────────────────────
-        "user_guide/01-single-keys.qmd": (
+        "docs/user_guide/01-single-keys.qmd": (
             "---\n"
             "title: Single Keys\n"
             "---\n"
@@ -115,7 +115,7 @@ SPEC = {
             '{{< keys "F11" >}} {{< keys "F12" >}}\n'
         ),
         # ── User guide page 2: Shortcut combos ──────────────────────────
-        "user_guide/02-shortcut-combos.qmd": (
+        "docs/user_guide/02-shortcut-combos.qmd": (
             "---\n"
             "title: Shortcut Combos\n"
             "---\n"
@@ -149,7 +149,7 @@ SPEC = {
             '{{< keys "Ctrl" >}}+{{< keys "Shift" >}}+{{< keys "P" >}}\n'
         ),
         # ── User guide page 3: Platform-aware rendering ──────────────────
-        "user_guide/03-platform-aware.qmd": (
+        "docs/user_guide/03-platform-aware.qmd": (
             "---\n"
             "title: Platform-Aware Rendering\n"
             "---\n"
@@ -186,7 +186,7 @@ SPEC = {
             '{{< keys shortcut="Ctrl+Shift+P" >}}\n'
         ),
         # ── User guide page 4: Keys in context ──────────────────────────
-        "user_guide/04-keys-in-context.qmd": (
+        "docs/user_guide/04-keys-in-context.qmd": (
             "---\n"
             "title: Keys in Context\n"
             "---\n"

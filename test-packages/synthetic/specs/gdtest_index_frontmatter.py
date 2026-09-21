@@ -49,7 +49,7 @@ SPEC = {
                 """
                 return "Hello!"
         ''',
-        "index.qmd": """\
+        "docs/index.qmd": """\
             ---
             title: "Embedded Frontmatter Title"
             toc: true

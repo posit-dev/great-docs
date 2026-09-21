@@ -45,7 +45,7 @@ SPEC = {
                 """
                 return data
         ''',
-        "user_guide/01-intro.qmd": """\
+        "docs/user_guide/01-intro.qmd": """\
             ---
             title: Introduction
             ---
@@ -54,7 +54,7 @@ SPEC = {
 
             This is a .qmd guide page.
         """,
-        "user_guide/02-setup.md": """\
+        "docs/user_guide/02-setup.md": """\
             ---
             title: Setup
             ---
@@ -63,7 +63,7 @@ SPEC = {
 
             This is a .md guide page.
         """,
-        "user_guide/03-advanced.qmd": """\
+        "docs/user_guide/03-advanced.qmd": """\
             ---
             title: Advanced
             ---

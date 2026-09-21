@@ -499,7 +499,7 @@ SPEC = {
             '    label: "Render"\n'
         ),
         # ── User guide pages ─────────────────────────────────────────────
-        "user_guide/01-quick-start.qmd": (
+        "docs/user_guide/01-quick-start.qmd": (
             "---\n"
             "title: Quick Start\n"
             "---\n"
@@ -534,7 +534,7 @@ SPEC = {
             "Now that you have `my-tool` installed, check out the\n"
             "[TUI Interface](02-tui-interface.qmd) guide for the interactive mode.\n"
         ),
-        "user_guide/02-tui-interface.qmd": (
+        "docs/user_guide/02-tui-interface.qmd": (
             "---\n"
             "title: TUI Interface\n"
             "---\n"
@@ -570,7 +570,7 @@ SPEC = {
             "- Live build output\n"
             "- Configuration editor\n"
         ),
-        "user_guide/03-recording-tips.qmd": (
+        "docs/user_guide/03-recording-tips.qmd": (
             "---\n"
             "title: Recording Tips\n"
             "---\n"
@@ -645,7 +645,7 @@ SPEC = {
             "```\n"
         ),
         # ── Detailed termshow guide ───────────────────────────────────
-        "user_guide/04-termshow-guide.qmd": (
+        "docs/user_guide/04-termshow-guide.qmd": (
             "---\n"
             "title: Termshow Guide\n"
             "---\n"
@@ -2004,7 +2004,7 @@ SPEC = {
             "      region: {row: 2, col: 0, width: 30, height: 4}\n"
         ),
         # ── Highlight gallery page ───────────────────────────────────
-        "user_guide/06-highlight-gallery.qmd": (
+        "docs/user_guide/06-highlight-gallery.qmd": (
             "---\n"
             "title: Highlight Gallery\n"
             "---\n"
@@ -2138,7 +2138,7 @@ SPEC = {
             "| `color` | `#f1fa8c` | Hex color for the highlight |\n"
         ),
         # ── Annotation gallery page ──────────────────────────────────
-        "user_guide/05-annotation-gallery.qmd": (
+        "docs/user_guide/05-annotation-gallery.qmd": (
             "---\n"
             "title: Annotation Gallery\n"
             "---\n"

@@ -1,5 +1,5 @@
-# great-docs.yml starter configuration
-# Copy to your project root and customize.
+# docs/great-docs.yml starter configuration
+# Copy to docs/great-docs.yml and customise. Resolve source paths from docs/.
 # All keys are optional — remove what you don't need.
 
 # ── Package identity ──────────────────────────────────────────

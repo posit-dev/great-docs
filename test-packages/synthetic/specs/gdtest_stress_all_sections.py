@@ -139,7 +139,7 @@ SPEC = {
                 """
                 return True
         ''',
-        "examples/demo.qmd": (
+        "docs/examples/demo.qmd": (
             "---\n"
             "title: Demo Example\n"
             "---\n"
@@ -148,7 +148,7 @@ SPEC = {
             "\n"
             "A demonstration of the package in action.\n"
         ),
-        "tutorials/start.qmd": (
+        "docs/tutorials/start.qmd": (
             "---\n"
             "title: Getting Started\n"
             "---\n"
@@ -157,10 +157,10 @@ SPEC = {
             "\n"
             "A step-by-step tutorial for new users.\n"
         ),
-        "recipes/quick.qmd": (
+        "docs/recipes/quick.qmd": (
             "---\ntitle: Quick Recipe\n---\n\n# Quick Recipe\n\nA quick recipe for common tasks.\n"
         ),
-        "faq/common.qmd": (
+        "docs/faq/common.qmd": (
             "---\n"
             "title: Common Questions\n"
             "---\n"
@@ -169,10 +169,10 @@ SPEC = {
             "\n"
             "Answers to frequently asked questions.\n"
         ),
-        "blog/latest.qmd": (
+        "docs/blog/latest.qmd": (
             "---\ntitle: Latest Updates\n---\n\n# Latest Updates\n\nThe latest news and updates.\n"
         ),
-        "user_guide/intro.qmd": (
+        "docs/user_guide/intro.qmd": (
             "---\n"
             "title: Introduction\n"
             "---\n"

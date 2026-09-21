@@ -27,7 +27,7 @@ The navbar and banner use an animated version of the gradient that shifts slowly
 
 Set the `navbar_style` key in `great-docs.yml` to one of the preset names:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 navbar_style: sky
 ```
 
@@ -37,13 +37,13 @@ Text and icons in the navbar are automatically adjusted for contrast based on th
 
 The `content_style` key adds a subtle glow at the top of the main content area:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 content_style: lilac
 ```
 
 By default the glow appears on every page. To restrict it to just the homepage, use the dictionary form:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 content_style:
   preset: lilac
   pages: homepage
@@ -53,7 +53,7 @@ content_style:
 
 If you have an announcement banner configured, add a `style` key to give it a gradient background instead of the default solid color:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 announcement:
   content: "Version 2.0 is now available!"
   style: mint
@@ -65,7 +65,7 @@ When `style` is set, the animated gradient replaces the solid-color `type` backg
 
 You can use the same preset everywhere for a unified look, or mix presets for variety. Here is an example that pairs a blue navbar with a lilac content glow:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 navbar_style: sky
 
 content_style:
@@ -81,7 +81,7 @@ announcement:
 
 If you prefer a flat color over an animated gradient, use `navbar_color` instead of `navbar_style`. Great Docs will automatically choose white or black text for maximum contrast:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 navbar_color: "#2c3e50"
 ```
 

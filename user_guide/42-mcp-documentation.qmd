@@ -25,14 +25,14 @@ server, this means documentation appears on your next build with zero setup.
 
 To point Great Docs at a non-standard module location, add:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 mcp:
   module: my_package.my_custom_mcp_module
 ```
 
 To explicitly disable MCP documentation:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 mcp:
   enabled: false
 ```
@@ -129,7 +129,7 @@ While MCP documentation works out of the box for standard project layouts, sever
 customize discovery, display names, and tool organization. The full set of MCP configuration
 options in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 mcp:
   enabled: true                # Default: true (set false to disable)
   module: my_package.mcp       # Optional: auto-detected from common locations
@@ -176,7 +176,7 @@ As your server grows, a flat list of tools becomes hard to scan. Categories let 
 tools under meaningful headings, making it easier for both developers and agents to find what they
 need. Define them by grouping tool function names under descriptive labels:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 mcp:
   enabled: true
   module: my_package.mcp
@@ -351,7 +351,7 @@ MCP reference pages support the same internationalization system as the rest of 
 documentation targets a non-English audience, or if you ship a multilingual site, MCP pages
 participate automatically. When you set a language in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 site:
   language: ja
 ```
@@ -419,7 +419,7 @@ async def list_resources() -> list[Resource]:
 
 With this module at `my_package/mcp.py` and the configuration:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 mcp:
   enabled: true
   module: my_package.mcp

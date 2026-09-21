@@ -26,7 +26,7 @@ team already uses. If you're starting from scratch, either works well.
 When you run `great-docs init`, Great Docs analyzes your existing docstrings and auto-detects the
 style. You can override this in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 parser: numpy   # or "google"
 ```
 

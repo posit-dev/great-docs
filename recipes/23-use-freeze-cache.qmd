@@ -12,12 +12,12 @@ practice and how to manage the cache for expensive notebooks.
 
 ## How It Works
 
-Great Docs uses Quarto's `freeze` mechanism to cache execution outputs in a `_freeze/` directory:
+Great Docs uses Quarto's `freeze` mechanism to cache execution outputs in a `docs/_freeze/` directory:
 
 1. **First build**: all executable cells run and their outputs are cached
 2. **Subsequent builds**: only pages whose `.qmd` source has changed are re-executed
-3. **Cache round-trip**: Great Docs automatically restores `_freeze/` into the build directory
-   before rendering, and copies the updated cache back to the project root after rendering
+3. **Cache round-trip**: Great Docs automatically restores `docs/_freeze/` into the build directory
+   before rendering, and copies the updated cache back to the configuration directory after rendering
 
 No configuration is needed — this works out of the box.
 
@@ -26,7 +26,7 @@ No configuration is needed — this works out of the box.
 For pages with especially expensive computations (MCMC sampling, large simulations, GPU workloads),
 you may want finer control. Use `freeze: true` in the page's frontmatter to lock it completely:
 
-```{.yaml filename="user_guide/benchmarks.qmd"}
+```{.yaml filename="docs/user_guide/benchmarks.qmd"}
 ---
 title: "Benchmarks"
 freeze: true
@@ -41,28 +41,30 @@ changes. The only way to update its outputs is an explicit `great-docs freeze`.
 When you change a frozen page's source code or input data, use the `great-docs freeze` command to re-execute it and update the cache:
 
 ```{.bash filename="Terminal"}
-great-docs freeze user_guide/benchmarks.qmd
+great-docs freeze docs/user_guide/benchmarks.qmd
 ```
 
 This command:
 
 1. Renders the specified page inside the build directory (always executing code)
-2. Copies the updated `_freeze/` entries back to your project root
+2. Copies the updated `docs/_freeze/` entries back to your configuration directory
 3. Tells you exactly what to commit
 
 You can freeze multiple pages at once:
 
 ```{.bash filename="Terminal"}
-great-docs freeze user_guide/benchmarks.qmd user_guide/mcmc-demo.qmd
+great-docs freeze docs/user_guide/benchmarks.qmd docs/user_guide/mcmc-demo.qmd
 ```
 
 Or specify a custom persistence directory:
 
 ```{.bash filename="Terminal"}
-great-docs freeze user_guide/benchmarks.qmd --freeze-dir docs/_freeze
+great-docs freeze docs/user_guide/benchmarks.qmd --freeze-dir cached-results
 ```
 
 The command prints a ready-to-use `git add` + `git commit` hint when it finishes.
+An explicit persistence directory applies to that command only. Later builds still restore
+the cache beside the selected configuration unless a pre-render hook supplies it.
 
 ## CI Workflow
 
@@ -73,7 +75,7 @@ The `great-docs setup-github-pages` command generates a workflow with built-in f
 - name: Restore freeze cache
   uses: actions/cache@v4
   with:
-    path: _freeze/
+    path: docs/_freeze/
     key: freeze-${{ hashFiles('**/uv.lock', ...) }}-${{ hashFiles('**/*.qmd') }}
     restore-keys: |
       freeze-${{ hashFiles('**/uv.lock', ...) }}-
@@ -91,13 +93,13 @@ branch-scoped, so PR branches benefit from `main`'s cache but never pollute it.
 
 If you need custom scripts to run before rendering (e.g., data generation), add them via `pre_render`. Great Docs automatically runs the freeze restore *before* your scripts so you don't need to include it yourself:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 freeze: auto
 pre_render:
   - scripts/generate-data.py
 ```
 
-Scripts run in order after the freeze restore, and each must exist at the specified path relative to your project root.
+Scripts run in order after the freeze restore, and each must exist at the specified path relative to your configuration directory.
 
 ## When to Re-execute
 
@@ -110,13 +112,13 @@ The freeze cache should be refreshed when:
 To re-execute specific pages:
 
 ```{.bash filename="Terminal"}
-great-docs freeze user_guide/benchmarks.qmd
+great-docs freeze docs/user_guide/benchmarks.qmd
 ```
 
 To force a full re-execution of all frozen pages, use `--clean`:
 
 ```{.bash filename="Terminal"}
-great-docs freeze --clean user_guide/benchmarks.qmd user_guide/sampling.qmd
+great-docs freeze --clean docs/user_guide/benchmarks.qmd docs/user_guide/sampling.qmd
 ```
 
 ## Build Log
@@ -149,6 +151,6 @@ This is useful for pages that pull live data or display current status informati
 To disable freeze entirely and re-execute all pages on every build, set `freeze: false` in
 `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 freeze: false
 ```

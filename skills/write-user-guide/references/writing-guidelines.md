@@ -91,7 +91,7 @@ Use callouts sparingly — more than 2-3 per page dilutes their impact.
 3. **Deep heading nesting.** If you reach `####`, the page probably
    needs splitting into two pages.
 4. **Stale cross-references.** After renaming a file, search the
-   entire `user_guide/` directory for old references.
+   entire `docs/user_guide/` directory for old references.
 5. **Overly long pages.** If a page exceeds ~800 words, consider
    splitting it. Each page should cover one focused topic.
 6. **Orphaned lists.** A list that appears without any introductory

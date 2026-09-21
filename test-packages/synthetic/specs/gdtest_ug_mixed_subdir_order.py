@@ -78,7 +78,7 @@ SPEC = {
                 return bool(value and value.strip())
         ''',
         # root file #1 — should appear first in sidebar
-        "user_guide/01-overview.qmd": """\
+        "docs/user_guide/01-overview.qmd": """\
             ---
             title: Overview
             ---
@@ -88,14 +88,14 @@ SPEC = {
             This package provides simple data processing utilities.
         """,
         # subdir #2 — should appear second in sidebar
-        "user_guide/02-setup/index.qmd": """\
+        "docs/user_guide/02-setup/index.qmd": """\
             ---
             title: Setup
             ---
 
             Everything you need to install and configure the package.
         """,
-        "user_guide/02-setup/01-install.qmd": """\
+        "docs/user_guide/02-setup/01-install.qmd": """\
             ---
             title: Installation
             ---
@@ -107,7 +107,7 @@ SPEC = {
             ```
         """,
         # root file #3 — should appear third in sidebar (after the 02 section)
-        "user_guide/03-usage.qmd": """\
+        "docs/user_guide/03-usage.qmd": """\
             ---
             title: Usage
             ---
@@ -123,14 +123,14 @@ SPEC = {
             ```
         """,
         # subdir #4 — should appear fourth in sidebar
-        "user_guide/04-advanced/index.qmd": """\
+        "docs/user_guide/04-advanced/index.qmd": """\
             ---
             title: Advanced Topics
             ---
 
             Advanced configuration and extension patterns.
         """,
-        "user_guide/04-advanced/01-tips.qmd": """\
+        "docs/user_guide/04-advanced/01-tips.qmd": """\
             ---
             title: Tips
             ---

@@ -33,7 +33,7 @@ different level of effort and control.
 ### Scenario 1: Automatic generation
 
 Great Docs generates a `skill.md` automatically from your
-package metadata, API reference sections, and `great-docs.yml`
+package metadata, API reference sections, and `docs/great-docs.yml`
 config. This is the zero-effort default.
 
 **How it works**: during `great-docs build`, the tool reads your
@@ -45,7 +45,7 @@ overview, gotchas, best practices, and resource links.
 **Config options that enrich the auto-generated skill:**
 
 ```yaml
-# great-docs.yml
+# docs/great-docs.yml
 skill:
   enabled: true # default; set false to skip
   well_known: true # publish to .well-known/agent-skills/
@@ -59,7 +59,7 @@ skill:
       use: "GT(data)"
     - need: "Format currency values"
       use: "fmt_currency()"
-  extra_body: "skills/extra-skill-content.md"
+  extra_body: "../skills/extra-skill-content.md"
 ```
 
 **When to use this scenario**: you want a skill page with minimal
@@ -69,8 +69,11 @@ your API reference.
 ### Scenario 2: Single hand-written skill
 
 Write a `SKILL.md` by hand (or with LLM assistance) and point
-`great-docs.yml` at it. Great Docs copies it into the build and
+`docs/great-docs.yml` at it. Great Docs copies it into the build and
 generates the Skills page from it.
+
+Keep curated skills under the package-root `skills/` directory. Resolve explicit
+`file` and `extra_body` paths from `docs/great-docs.yml`, using `../skills/`.
 
 **Directory layout:**
 
@@ -82,15 +85,15 @@ project-root/
 │       └── references/
 │           ├── api-patterns.md
 │           └── gotchas.md
-└── great-docs.yml
+└── docs/great-docs.yml
 ```
 
 **Config:**
 
 ```yaml
-# great-docs.yml
+# docs/great-docs.yml
 skill:
-  file: skills/my-package/SKILL.md
+  file: ../skills/my-package/SKILL.md
 ```
 
 Great Docs copies the file to `<docs>/skill.md`, places it
@@ -124,21 +127,21 @@ project-root/
 │   └── review-code/
 │       ├── SKILL.md
 │       └── references/
-└── great-docs.yml
+└── docs/great-docs.yml
 ```
 
 **Config:**
 
 ```yaml
-# great-docs.yml
+# docs/great-docs.yml
 skill:
   skills:
     - name: my-package
-      file: skills/my-package/SKILL.md
+      file: ../skills/my-package/SKILL.md
     - name: write-guides
-      file: skills/write-guides/SKILL.md
+      file: ../skills/write-guides/SKILL.md
     - name: review-code
-      file: skills/review-code/SKILL.md
+      file: ../skills/review-code/SKILL.md
 ```
 
 The first entry becomes the primary `skill.md` at the site root.
@@ -210,11 +213,11 @@ pip install my-package
 
 ````
 
-Then add one line to `great-docs.yml`:
+Then add one line to `docs/great-docs.yml`:
 
 ```yaml
 skill:
-  file: skills/my-package/SKILL.md
+  file: ../skills/my-package/SKILL.md
 ````
 
 Run `great-docs build` and verify the Skills page.
@@ -314,7 +317,7 @@ Follow these guidelines when writing skill content:
 1. Create the `skills/<name>/` directory with a `SKILL.md`.
 2. Optionally add a `references/` subdirectory with companion
    files.
-3. Set `skill.file` in `great-docs.yml` to point at the SKILL.md.
+3. Set `skill.file` in `docs/great-docs.yml` to point at the SKILL.md.
 4. Run `great-docs build` and check the Skills page.
 
 ### Converting from automatic to hand-written
@@ -324,22 +327,22 @@ Follow these guidelines when writing skill content:
    `skills/<name>/SKILL.md`.
 3. Edit the content: add custom sections, rewrite descriptions,
    curate the decision table.
-4. Set `skill.file` in `great-docs.yml`.
+4. Set `skill.file` in `docs/great-docs.yml`.
 5. Rebuild.
 
 ### Adding a second skill (switching to multi-skill mode)
 
 1. Create a second `skills/<name>/` directory with its SKILL.md.
 2. Replace the `skill.file` key with `skill.skills` in
-   `great-docs.yml`:
+   `docs/great-docs.yml`:
 
    ```yaml
    skill:
      skills:
        - name: original-skill
-         file: skills/original-skill/SKILL.md
+         file: ../skills/original-skill/SKILL.md
        - name: new-skill
-         file: skills/new-skill/SKILL.md
+         file: ../skills/new-skill/SKILL.md
    ```
 
 3. Rebuild. The Skills page now shows a switcher bar with both

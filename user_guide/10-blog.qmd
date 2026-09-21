@@ -11,10 +11,10 @@ Great Docs supports adding a blog to your documentation site using Quarto's nati
 
 ## Quick Start
 
-1. Create a `blog/` directory with each post in its own subdirectory:
+1. Create `docs/blog/` with each post in its own subdirectory:
 
 ```
-my-package/
+my-package/docs/
 ├── blog/
 │   ├── welcome-post/
 │   │   └── index.qmd
@@ -26,7 +26,7 @@ my-package/
 
 2. Add the blog section to `great-docs.yml` with `type: blog`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 sections:
   - title: Blog
     dir: blog
@@ -37,7 +37,7 @@ sections:
 
 ## Post Structure
 
-Each blog post lives in its own subdirectory under `blog/`, with an `index.qmd` file containing the post content. This is the same convention used by Quarto's blog projects.
+Each blog post lives in its own subdirectory under `docs/blog/`, with an `index.qmd` file containing the post content. The configured `dir: blog` is relative to `docs/great-docs.yml`.
 
 ```
 blog/
@@ -139,7 +139,7 @@ Blog sections (`type: blog`) differ from default sections in several ways:
 
 The blog section is configured as part of the `sections` array in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 sections:
   - title: Blog              # Navbar link text
     dir: blog                # Source directory
@@ -170,7 +170,7 @@ my-package/
 
 ### Configuration
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 sections:
   - title: Blog
     dir: blog

@@ -32,7 +32,7 @@ SPEC = {
         "cli": {
             "name": "combo-d",
         },
-        "user_guide": "docs",
+        "user_guide": "guide",
     },
     "files": {
         "gdtest_config_combo_d/__init__.py": '''\
@@ -127,7 +127,7 @@ SPEC = {
                 """Run processing on the given input path."""
                 click.echo(f"Processing {input_path}")
         ''',
-        "docs/getting-started.qmd": """\
+        "docs/guide/getting-started.qmd": """\
             ---
             title: Getting Started
             ---
@@ -142,7 +142,7 @@ SPEC = {
             pip install gdtest-config-combo-d
             ```
         """,
-        "docs/usage.qmd": """\
+        "docs/guide/usage.qmd": """\
             ---
             title: Usage
             ---

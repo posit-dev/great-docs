@@ -206,7 +206,7 @@ SPEC = {
                 """
                 return a / b
         ''',
-        "user_guide/01-quickstart.qmd": """\
+        "docs/user_guide/01-quickstart.qmd": """\
             ---
             title: "\u30af\u30a4\u30c3\u30af\u30b9\u30bf\u30fc\u30c8"
             guide-section: "\u306f\u3058\u3081\u306b"
@@ -235,7 +235,7 @@ SPEC = {
             print(calc.get_total())  # 30.8
             ```
         """,
-        "user_guide/02-functions.qmd": """\
+        "docs/user_guide/02-functions.qmd": """\
             ---
             title: "\u95a2\u6570\u30ea\u30d5\u30a1\u30ec\u30f3\u30b9"
             guide-section: "\u306f\u3058\u3081\u306b"
@@ -261,7 +261,7 @@ SPEC = {
             | `multiply` | \u4e8c\u3064\u306e\u6570\u5024\u3092\u4e57\u7b97   |
             | `divide`   | \u4e8c\u3064\u306e\u6570\u5024\u3092\u9664\u7b97   |
         """,
-        "user_guide/03-table-explorer.qmd": """\
+        "docs/user_guide/03-table-explorer.qmd": """\
             ---
             title: "\u30c6\u30fc\u30d6\u30eb\u30a8\u30af\u30b9\u30d7\u30ed\u30fc\u30e9\u30fc"
             guide-section: "\u306f\u3058\u3081\u306b"

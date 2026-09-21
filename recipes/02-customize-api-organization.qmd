@@ -12,7 +12,7 @@ By default, Great Docs organizes your API reference by type: all classes togethe
 
 Replace the auto-generated structure with explicit sections that reflect your package's domain model. Each section has a title, an optional description, and a list of items:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 reference:
   sections:
     - title: Data Loading
@@ -45,7 +45,7 @@ Items appear in the sidebar in the order listed. You only need to list items you
 
 For classes with many methods, you can suppress inline method documentation and list methods in their own section. Set `members: false` on the class entry, then reference each method individually:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 reference:
   sections:
     - title: Core
@@ -69,7 +69,7 @@ This keeps the class page focused on the overview while giving each method its o
 
 You can set a page-level title and description that appear above your sections on the reference index page:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 reference:
   title: "API Reference"
   desc: >-

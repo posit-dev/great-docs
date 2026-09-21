@@ -62,21 +62,21 @@ SPEC = {
                 """
                 return f"Goodbye, {name}!"
         ''',
-        "user_guide/basics/01-intro.qmd": """\
+        "docs/user_guide/basics/01-intro.qmd": """\
             ---
             title: Introduction
             ---
 
             Basic introduction.
         """,
-        "user_guide/basics/02-setup.qmd": """\
+        "docs/user_guide/basics/02-setup.qmd": """\
             ---
             title: Setup
             ---
 
             Basic setup instructions.
         """,
-        "user_guide/advanced/01-tips.qmd": """\
+        "docs/user_guide/advanced/01-tips.qmd": """\
             ---
             title: Tips and Tricks
             ---

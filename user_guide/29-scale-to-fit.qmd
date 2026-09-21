@@ -159,7 +159,7 @@ The scaling is applied on page load and recalculated on window resize. Together,
 
 To enable scale-to-fit for specific elements across your entire site, add `scale_to_fit` to your `great-docs.yml` with a list of CSS selectors. Any element that matches one of these selectors will be automatically scaled.
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 scale_to_fit:
   - "#my_wide_table"
   - ".wide-output"
@@ -167,7 +167,7 @@ scale_to_fit:
 
 A single selector also works:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 scale_to_fit:
   - "#gt_table_1"
 ```
@@ -176,7 +176,7 @@ scale_to_fit:
 
 By default there is no minimum scale: elements will shrink as much as needed to fit. You can set a threshold below which the system falls back to horizontal scrolling instead:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 scale_to_fit:
   - "#my_wide_table"
 scale_to_fit_min_scale: tablet
@@ -194,11 +194,11 @@ Viewport keywords switch to scrolling when the viewport is at or below the named
 | `tablet` | 768 px | Tablets in portrait |
 | `desktop` | 992 px | Small laptops and below |
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 scale_to_fit_min_scale: mobile   # Only scroll on phones
 ```
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 scale_to_fit_min_scale: desktop  # Scroll on anything below a large desktop
 ```
 
@@ -208,11 +208,11 @@ Viewport keywords are the simplest way to set a threshold: pick the device class
 
 A decimal value between 0 and 1 sets a minimum scale factor. If the computed scale drops below this value, the element scrolls instead.
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 scale_to_fit_min_scale: 0.5  # Scroll if element would shrink below 50%
 ```
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 scale_to_fit_min_scale: 0.35  # Allow more aggressive shrinking
 ```
 
@@ -222,7 +222,7 @@ Choose a numeric fraction when you want precise control over the shrink limit, i
 
 To disable scale-to-fit entirely, remove the `scale_to_fit` key from your config or set it explicitly:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 scale_to_fit: false
 ```
 
@@ -265,7 +265,7 @@ If a page specifies `scale-to-fit` selectors but omits `scale-to-fit-min-scale`,
 
 Consider a site that globally targets `#main_table` with a `tablet` threshold:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 scale_to_fit:
   - "#main_table"
 scale_to_fit_min_scale: tablet

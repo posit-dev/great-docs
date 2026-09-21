@@ -307,8 +307,8 @@ class TestUpdateSidebarWithMcp:
     def test_empty_mcp_files_returns_early(self, tmp_path):
         """empty list returns immediately."""
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
-        quarto_yml = gd.project_path / "_quarto.yml"
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
+        quarto_yml = gd.build_dir / "_quarto.yml"
         quarto_yml.write_text("website:\n  sidebar: []\n", encoding="utf-8")
         gd._update_sidebar_with_mcp([])
         content = quarto_yml.read_text()
@@ -317,14 +317,14 @@ class TestUpdateSidebarWithMcp:
     def test_no_quarto_yml_returns_early(self, tmp_path):
         """no _quarto.yml returns."""
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         gd._update_sidebar_with_mcp(["reference/mcp/tools.qmd"])
 
     def test_adds_mcp_section_to_sidebar(self, tmp_path, monkeypatch):
         """creates MCP section in sidebar and writes."""
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
-        quarto_yml = gd.project_path / "_quarto.yml"
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
+        quarto_yml = gd.build_dir / "_quarto.yml"
         quarto_yml.write_text(
             "website:\n  sidebar:\n    - id: api-reference\n      contents: []\n",
             encoding="utf-8",
@@ -348,8 +348,8 @@ class TestUpdateSidebarWithMcp:
     def test_updates_existing_mcp_section(self, tmp_path, monkeypatch):
         """existing mcp-reference section gets updated."""
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
-        quarto_yml = gd.project_path / "_quarto.yml"
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
+        quarto_yml = gd.build_dir / "_quarto.yml"
         quarto_yml.write_text(
             "website:\n  sidebar:\n    - id: mcp-reference\n      title: MCP Reference\n      contents:\n        - old.qmd\n",
             encoding="utf-8",
@@ -372,8 +372,8 @@ class TestUpdateSidebarWithMcp:
     def test_creates_website_and_sidebar_keys(self, tmp_path, monkeypatch):
         """creates website.sidebar when absent."""
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
-        quarto_yml = gd.project_path / "_quarto.yml"
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
+        quarto_yml = gd.build_dir / "_quarto.yml"
         quarto_yml.write_text("project:\n  type: website\n", encoding="utf-8")
 
         written = {}
@@ -439,14 +439,14 @@ class TestRemoveMcpFromRefSections:
     def test_no_quarto_yml_returns_early(self, tmp_path):
         """No _quarto.yml file returns immediately."""
         gd = _make_gd(tmp_path)
-        gd.project_path = tmp_path / "subdir"
-        gd.project_path.mkdir()
+        gd.build_dir = tmp_path / "subdir"
+        gd.build_dir.mkdir()
         gd._remove_mcp_from_ref_sections()
 
     def test_no_ref_sections_script_no_update(self, tmp_path, monkeypatch):
         """include-in-header has no data-gd-ref-sections so no write happens."""
         gd = _make_gd(tmp_path)
-        gd.project_path = tmp_path
+        gd.build_dir = tmp_path
         quarto_yml = tmp_path / "_quarto.yml"
         quarto_yml.write_text(
             "format:\n  html:\n    include-in-header:\n      - text: 'unrelated'\n",
@@ -460,7 +460,7 @@ class TestRemoveMcpFromRefSections:
     def test_removes_mcp_from_multi_section_list(self, tmp_path, monkeypatch):
         """Sections 'api,cli,mcp' becomes 'api,cli', script kept."""
         gd = _make_gd(tmp_path)
-        gd.project_path = tmp_path
+        gd.build_dir = tmp_path
         quarto_yml = tmp_path / "_quarto.yml"
         script_text = (
             "<script>document.body.setAttribute('data-gd-ref-sections','api,cli,mcp')</script>"
@@ -481,7 +481,7 @@ class TestRemoveMcpFromRefSections:
     def test_removes_script_entirely_when_only_api_remains(self, tmp_path, monkeypatch):
         """Sections 'api,mcp' with only 'api' remaining removes script entirely."""
         gd = _make_gd(tmp_path)
-        gd.project_path = tmp_path
+        gd.build_dir = tmp_path
         quarto_yml = tmp_path / "_quarto.yml"
         ref_script = "<script>document.body.setAttribute('data-gd-ref-sections','api,mcp')</script>"
         switcher_script = "<script src='reference-switcher.js'></script>"
@@ -2119,31 +2119,31 @@ class TestAddTagsToNavbar:
 
     def test_no_quarto_yml_returns_early(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "language", "en")
         gd._add_tags_to_navbar()
 
     def test_no_navbar_returns_early(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "language", "en")
-        quarto = gd.project_path / "_quarto.yml"
+        quarto = gd.build_dir / "_quarto.yml"
         quarto.write_text("website:\n  title: Test\n", encoding="utf-8")
         gd._add_tags_to_navbar()
 
     def test_no_left_key_returns_early(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "language", "en")
-        quarto = gd.project_path / "_quarto.yml"
+        quarto = gd.build_dir / "_quarto.yml"
         quarto.write_text("website:\n  navbar:\n    right:\n      - icon: github\n", encoding="utf-8")
         gd._add_tags_to_navbar()
 
     def test_already_present_skips(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "language", "en")
-        quarto = gd.project_path / "_quarto.yml"
+        quarto = gd.build_dir / "_quarto.yml"
         quarto.write_text(
             "website:\n  navbar:\n    left:\n      - text: Site Tags\n        href: tags/index.qmd\n",
             encoding="utf-8",
@@ -2154,9 +2154,9 @@ class TestAddTagsToNavbar:
 
     def test_adds_tags_link(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "language", "en")
-        quarto = gd.project_path / "_quarto.yml"
+        quarto = gd.build_dir / "_quarto.yml"
         quarto.write_text(
             "website:\n  navbar:\n    left:\n      - text: Reference\n        href: reference/index.qmd\n",
             encoding="utf-8",
@@ -2248,7 +2248,7 @@ class TestGenerateCliCommandPage:
 
     def test_nargs_minus1_gets_ellipsis(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "language", "en")
         cli_info = self._make_cli_info(
             arguments=[{"name": "FILES", "name_display": "FILES", "required": True, "nargs": -1}]
@@ -2258,7 +2258,7 @@ class TestGenerateCliCommandPage:
 
     def test_hidden_option_skipped(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "language", "en")
         cli_info = self._make_cli_info(
             options=[
@@ -2272,7 +2272,7 @@ class TestGenerateCliCommandPage:
 
     def test_option_with_type_and_default(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "language", "en")
         cli_info = self._make_cli_info(
             options=[{
@@ -2290,7 +2290,7 @@ class TestGenerateCliCommandPage:
 
     def test_required_option(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "language", "en")
         cli_info = self._make_cli_info(
             options=[{
@@ -2305,7 +2305,7 @@ class TestGenerateCliCommandPage:
 
     def test_envvar_option(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "language", "en")
         cli_info = self._make_cli_info(
             options=[{
@@ -2320,7 +2320,7 @@ class TestGenerateCliCommandPage:
 
     def test_envvar_list_joined(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "language", "en")
         cli_info = self._make_cli_info(
             options=[{
@@ -2362,7 +2362,7 @@ class TestWriteObjectTypesJson:
 
     def test_writes_object_types(self, tmp_path):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         gd._suppress_artifact_writes = False
         categories = {
             "classes": ["MyClass"],
@@ -2372,7 +2372,7 @@ class TestWriteObjectTypesJson:
         }
         gd._write_object_types_json(categories)
         import json
-        types_path = gd.project_path / "_object_types.json"
+        types_path = gd.build_dir / "_object_types.json"
         assert types_path.exists()
         data = json.loads(types_path.read_text())
         assert data["MyClass"] == "class"
@@ -2381,7 +2381,7 @@ class TestWriteObjectTypesJson:
 
     def test_member_types_fallback(self, tmp_path):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         gd._suppress_artifact_writes = False
         categories = {
             "classes": ["Foo"],
@@ -2390,13 +2390,13 @@ class TestWriteObjectTypesJson:
         }
         gd._write_object_types_json(categories)
         import json
-        data = json.loads((gd.project_path / "_object_types.json").read_text())
+        data = json.loads((gd.build_dir / "_object_types.json").read_text())
         assert data["Foo.bar"] == "property"
         assert data["Foo.baz"] == "attribute"
 
     def test_constant_metadata_sidecar(self, tmp_path):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         gd._suppress_artifact_writes = False
         categories = {
             "constants": ["MY_CONST"],
@@ -2406,7 +2406,7 @@ class TestWriteObjectTypesJson:
         }
         gd._write_object_types_json(categories)
         import json
-        values_path = gd.project_path / "_constant_values.json"
+        values_path = gd.build_dir / "_constant_values.json"
         assert values_path.exists()
         data = json.loads(values_path.read_text())
         assert data["MY_CONST"]["value"] == "42"
@@ -2415,7 +2415,7 @@ class TestWriteObjectTypesJson:
         gd = _make_gd(tmp_path)
         gd._suppress_artifact_writes = True
         gd._write_object_types_json({"classes": ["X"], "class_method_names": {}, "class_member_types": {}})
-        assert not (gd.project_path / "_object_types.json").exists()
+        assert not (gd.build_dir / "_object_types.json").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -2450,7 +2450,7 @@ class TestGeneratePackageInfoPage:
 
     def test_generates_page_with_optional_markers(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "package_info_page", True)
         _patch_cfg(monkeypatch, gd, "is_python_project", True)
         _patch_cfg(monkeypatch, gd, "language", "en")
@@ -2470,13 +2470,13 @@ class TestGeneratePackageInfoPage:
         monkeypatch.setattr(gd, "_fetch_pypi_dates", lambda names: {})
         result = gd._generate_package_info_page()
         assert result == "package-info.qmd"
-        content = (gd.project_path / "package-info.qmd").read_text()
+        content = (gd.build_dir / "package-info.qmd").read_text()
         assert "click" in content
         assert "pytest" in content
 
     def test_empty_optional_group(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "package_info_page", True)
         _patch_cfg(monkeypatch, gd, "is_python_project", True)
         _patch_cfg(monkeypatch, gd, "language", "en")
@@ -2492,7 +2492,7 @@ class TestGeneratePackageInfoPage:
         monkeypatch.setattr(gd, "_fetch_pypi_dates", lambda names: {})
         result = gd._generate_package_info_page()
         assert result == "package-info.qmd"
-        content = (gd.project_path / "package-info.qmd").read_text()
+        content = (gd.build_dir / "package-info.qmd").read_text()
         assert "No dependencies declared" in content
 
 
@@ -2505,8 +2505,8 @@ class TestGenerateRobotsTxt:
 
     def _setup_gd(self, tmp_path, monkeypatch, **config_overrides):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
-        site_dir = gd.project_path / "_site"
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
+        site_dir = gd.build_dir / "_site"
         site_dir.mkdir()
         _patch_cfg(monkeypatch, gd, "robots_enabled", True)
         _patch_cfg(monkeypatch, gd, "robots_allow_all", True)
@@ -2529,7 +2529,7 @@ class TestGenerateRobotsTxt:
         gd = _make_gd(tmp_path)
         _patch_cfg(monkeypatch, gd, "robots_enabled", True)
         gd._generate_robots_txt()
-        assert not (gd.project_path / "_site" / "robots.txt").exists()
+        assert not (gd.build_dir / "_site" / "robots.txt").exists()
 
     def test_disallow_rules(self, tmp_path, monkeypatch):
         gd, site_dir = self._setup_gd(tmp_path, monkeypatch, robots_disallow=["/private/", "/admin/"])
@@ -2585,8 +2585,8 @@ class TestInjectVersionSelector:
 
     def test_basic_injection(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
-        quarto_yml = gd.project_path / "_quarto.yml"
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
+        quarto_yml = gd.build_dir / "_quarto.yml"
         quarto_yml.write_text(
             "project:\n  resources: []\nformat:\n  html:\n    include-in-header: []\n    include-after-body: []\n",
             encoding="utf-8",
@@ -2609,8 +2609,8 @@ class TestInjectVersionSelector:
 
     def test_string_header_converted_to_list(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
-        quarto_yml = gd.project_path / "_quarto.yml"
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
+        quarto_yml = gd.build_dir / "_quarto.yml"
         quarto_yml.write_text(
             "project:\n  resources: []\nformat:\n  html:\n    include-in-header: old-header.html\n    include-after-body: []\n",
             encoding="utf-8",
@@ -2632,8 +2632,8 @@ class TestInjectVersionSelector:
 
     def test_string_after_body_converted_to_list(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
-        quarto_yml = gd.project_path / "_quarto.yml"
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
+        quarto_yml = gd.build_dir / "_quarto.yml"
         quarto_yml.write_text(
             "project:\n  resources: []\nformat:\n  html:\n    include-in-header: []\n    include-after-body: old-body.html\n",
             encoding="utf-8",
@@ -2655,8 +2655,8 @@ class TestInjectVersionSelector:
 
     def test_warning_banner_disabled(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
-        quarto_yml = gd.project_path / "_quarto.yml"
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
+        quarto_yml = gd.build_dir / "_quarto.yml"
         quarto_yml.write_text(
             "project:\n  resources: []\nformat:\n  html:\n    include-in-header: []\n    include-after-body: []\n",
             encoding="utf-8",
@@ -2678,8 +2678,8 @@ class TestInjectVersionSelector:
 
     def test_inserts_before_navbar_widgets(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
-        quarto_yml = gd.project_path / "_quarto.yml"
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
+        quarto_yml = gd.build_dir / "_quarto.yml"
         quarto_yml.write_text(
             'project:\n  resources: []\nformat:\n  html:\n    include-in-header: []\n    include-after-body:\n      - text: \'<script src="navbar-widgets.js"></script>\'\n',
             encoding="utf-8",
@@ -2701,8 +2701,8 @@ class TestInjectVersionSelector:
 
     def test_resources_list_not_duplicated(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
-        quarto_yml = gd.project_path / "_quarto.yml"
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
+        quarto_yml = gd.build_dir / "_quarto.yml"
         quarto_yml.write_text(
             "project:\n  resources:\n    - version-selector.js\nformat:\n  html:\n    include-in-header: []\n    include-after-body: []\n",
             encoding="utf-8",
@@ -2735,7 +2735,7 @@ class TestPersistFreezeCache:
 
     def test_merges_freeze_caches(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
 
         monkeypatch.setattr(
             "great_docs.core.is_great_docs_build_dir",
@@ -2758,7 +2758,7 @@ class TestPersistFreezeCache:
 
     def test_js_newline_appended(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
 
         monkeypatch.setattr(
             "great_docs.core.is_great_docs_build_dir",
@@ -2786,14 +2786,14 @@ class TestGenerateSourceLinksJson:
         gd = _make_gd(tmp_path)
         monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"source_link_enabled": False})
         gd._generate_source_links_json("mypkg")
-        assert not (gd.project_path / "_source_links.json").exists()
+        assert not (gd.build_dir / "_source_links.json").exists()
 
     def test_no_github_info_returns_early(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
         monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"source_link_enabled": True})
         monkeypatch.setattr(gd, "_get_github_repo_info", lambda: (None, None, None))
         gd._generate_source_links_json("mypkg")
-        assert not (gd.project_path / "_source_links.json").exists()
+        assert not (gd.build_dir / "_source_links.json").exists()
 
     def test_no_exports_returns_early(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
@@ -2801,11 +2801,11 @@ class TestGenerateSourceLinksJson:
         monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("owner", "repo", "https://github.com/o/r"))
         monkeypatch.setattr(gd, "_get_package_exports", lambda p: None)
         gd._generate_source_links_json("mypkg")
-        assert not (gd.project_path / "_source_links.json").exists()
+        assert not (gd.build_dir / "_source_links.json").exists()
 
     def test_writes_source_links(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"source_link_enabled": True})
         monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("owner", "repo", "https://github.com/o/r"))
         monkeypatch.setattr(gd, "_detect_git_ref", lambda: "main")
@@ -2821,13 +2821,13 @@ class TestGenerateSourceLinksJson:
         monkeypatch.setattr(gd, "_get_griffe_package", lambda p: mock_pkg)
         gd._generate_source_links_json("mypkg")
         import json
-        data = json.loads((gd.project_path / "_source_links.json").read_text())
+        data = json.loads((gd.build_dir / "_source_links.json").read_text())
         assert "MyFunc" in data
         assert "#L10-L20" in data["MyFunc"]["url"]
 
     def test_single_line_anchor(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"source_link_enabled": True})
         monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("o", "r", "https://github.com/o/r"))
         monkeypatch.setattr(gd, "_detect_git_ref", lambda: "main")
@@ -2843,13 +2843,13 @@ class TestGenerateSourceLinksJson:
         monkeypatch.setattr(gd, "_get_griffe_package", lambda p: mock_pkg)
         gd._generate_source_links_json("mypkg")
         import json
-        data = json.loads((gd.project_path / "_source_links.json").read_text())
+        data = json.loads((gd.build_dir / "_source_links.json").read_text())
         assert "#L5" in data["F"]["url"]
         assert "#L5-L" not in data["F"]["url"]
 
     def test_source_path_override(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         monkeypatch.setattr(
             gd, "_get_package_metadata",
             lambda: {"source_link_enabled": True, "source_link_path": "src/mypkg"},
@@ -2868,12 +2868,12 @@ class TestGenerateSourceLinksJson:
         monkeypatch.setattr(gd, "_get_griffe_package", lambda p: mock_pkg)
         gd._generate_source_links_json("mypkg")
         import json
-        data = json.loads((gd.project_path / "_source_links.json").read_text())
+        data = json.loads((gd.build_dir / "_source_links.json").read_text())
         assert "src/mypkg/module.py" in data["F"]["url"]
 
     def test_absolute_filepath_relative_to_root(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         pkg_root = tmp_path / "src" / "mypkg"
         pkg_root.mkdir(parents=True)
         monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"source_link_enabled": True})
@@ -2891,12 +2891,12 @@ class TestGenerateSourceLinksJson:
         monkeypatch.setattr(gd, "_get_griffe_package", lambda p: mock_pkg)
         gd._generate_source_links_json("mypkg")
         import json
-        data = json.loads((gd.project_path / "_source_links.json").read_text())
+        data = json.loads((gd.build_dir / "_source_links.json").read_text())
         assert "core.py" in data["F"]["url"]
 
     def test_griffe_exception_sets_pkg_none(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"source_link_enabled": True})
         monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("o", "r", "https://github.com/o/r"))
         monkeypatch.setattr(gd, "_detect_git_ref", lambda: "main")
@@ -2914,12 +2914,12 @@ class TestGenerateSourceLinksJson:
         monkeypatch.setattr(gd, "_get_griffe_package", raise_err)
         gd._generate_source_links_json("mypkg")
         import json
-        data = json.loads((gd.project_path / "_source_links.json").read_text())
+        data = json.loads((gd.build_dir / "_source_links.json").read_text())
         assert "F" in data
 
     def test_class_methods_included(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"source_link_enabled": True})
         monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("o", "r", "https://github.com/o/r"))
         monkeypatch.setattr(gd, "_detect_git_ref", lambda: "main")
@@ -2947,7 +2947,7 @@ class TestGenerateSourceLinksJson:
         monkeypatch.setattr(gd, "_get_source_location", fake_source_loc)
         gd._generate_source_links_json("mypkg")
         import json
-        data = json.loads((gd.project_path / "_source_links.json").read_text())
+        data = json.loads((gd.build_dir / "_source_links.json").read_text())
         assert "MyClass" in data
         assert "MyClass.do_stuff" in data
         assert "MyClass._private" not in data
@@ -2962,7 +2962,7 @@ class TestGenerateTagsJson:
 
     def _setup_gd(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        gd.project_path.mkdir(parents=True, exist_ok=True)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "language", "en")
         _patch_cfg(monkeypatch, gd, "tags_shadow", {"internal"})
         _patch_cfg(monkeypatch, gd, "sections", [])
@@ -2976,33 +2976,33 @@ class TestGenerateTagsJson:
         tag_index = {"mytag": [{"title": "Page 1", "href": "page1.qmd", "section": "Guide"}]}
         gd._generate_tags_json(tag_index)
         import json
-        data = json.loads((gd.project_path / "_tags.json").read_text())
+        data = json.loads((gd.build_dir / "_tags.json").read_text())
         assert "page_tags" in data
         assert "tag_meta" in data
         assert data["tag_meta"]["mytag"]["count"] == 1
 
     def test_shadow_tag_scanned(self, tmp_path, monkeypatch):
         gd = self._setup_gd(tmp_path, monkeypatch)
-        ug_dir = gd.project_path / "user-guide"
+        ug_dir = gd.build_dir / "user-guide"
         ug_dir.mkdir()
         qmd = ug_dir / "page.qmd"
         qmd.write_text("---\ntags:\n  - internal\ntitle: Secret\n---\nbody\n", encoding="utf-8")
         tag_index = {}
         gd._generate_tags_json(tag_index)
         import json
-        data = json.loads((gd.project_path / "_tags.json").read_text())
+        data = json.loads((gd.build_dir / "_tags.json").read_text())
         assert "internal" in data["shadow"]
 
     def test_tag_location_override(self, tmp_path, monkeypatch):
         gd = self._setup_gd(tmp_path, monkeypatch)
-        ug_dir = gd.project_path / "user-guide"
+        ug_dir = gd.build_dir / "user-guide"
         ug_dir.mkdir()
         qmd = ug_dir / "page.qmd"
         qmd.write_text("---\ntags:\n  - visible\ntag-location: top\ntitle: P\n---\nbody\n", encoding="utf-8")
         tag_index = {"visible": [{"title": "P", "href": "user-guide/page.qmd", "section": "UG"}]}
         gd._generate_tags_json(tag_index)
         import json
-        data = json.loads((gd.project_path / "_tags.json").read_text())
+        data = json.loads((gd.build_dir / "_tags.json").read_text())
         assert data["page_tag_locations"].get("user-guide/page.qmd") == "top"
 
     def test_icon_resolution(self, tmp_path, monkeypatch):
@@ -3012,7 +3012,7 @@ class TestGenerateTagsJson:
         tag_index = {"mytag": [{"title": "P", "href": "p.qmd", "section": "S"}]}
         gd._generate_tags_json(tag_index)
         import json
-        data = json.loads((gd.project_path / "_tags.json").read_text())
+        data = json.loads((gd.build_dir / "_tags.json").read_text())
         assert data["icons"]["mytag"] == "<svg>star</svg>"
 
     def test_unknown_icon_warns(self, tmp_path, monkeypatch, capsys):
@@ -3116,4 +3116,4 @@ class TestRefreshApiReferenceConfig:
         gd = _make_gd(tmp_path)
         gd._api_discovery_done = True
         gd._refresh_api_reference_config()
-        assert not (gd.project_path / "_quarto.yml").exists()
+        assert not (gd.build_dir / "_quarto.yml").exists()

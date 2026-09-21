@@ -62,7 +62,7 @@ _counter = 1
 for section_name, pages in _SECTIONS.items():
     for slug, title in pages:
         filename = f"{_counter:02d}-{slug}.qmd"
-        _ug_files[f"user_guide/{filename}"] = (
+        _ug_files[f"docs/user_guide/{filename}"] = (
             f"---\n"
             f'title: "{title}"\n'
             f"---\n"

@@ -36,6 +36,7 @@ dependencies = [
     "ipykernel>=6.0",
     "nbclient>=0.10",
     "py-yaml12>=0.1.0",
+    "PyYAML>=6.0",
     "click>=8.0.0",
     "griffe~=2.1.0",
     "pygments>=2.0.0",

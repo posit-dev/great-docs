@@ -76,7 +76,7 @@ SPEC = {
                 """
                 return f"{a}-{b}"
         ''',
-        "examples/demo.qmd": (
+        "docs/examples/demo.qmd": (
             "---\n"
             "title: Demo Example\n"
             "---\n"
@@ -85,7 +85,7 @@ SPEC = {
             "\n"
             "A demonstration example for the multi-section package.\n"
         ),
-        "tutorials/basics.qmd": (
+        "docs/tutorials/basics.qmd": (
             "---\n"
             "title: Basics Tutorial\n"
             "---\n"
@@ -94,7 +94,7 @@ SPEC = {
             "\n"
             "A tutorial covering the basic concepts.\n"
         ),
-        "recipes/quick.qmd": (
+        "docs/recipes/quick.qmd": (
             "---\ntitle: Quick Recipe\n---\n\n# Quick Recipe\n\nA quick recipe for common tasks.\n"
         ),
         "README.md": ("# gdtest-sec-multi\n\nTest multiple custom sections.\n"),

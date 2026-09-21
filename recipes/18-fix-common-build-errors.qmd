@@ -71,16 +71,15 @@ This usually means a cross-reference or include directive points to a file that 
 
 If a page exists but does not appear in the sidebar, check the following:
 
-For user guide pages, the file must have a numeric prefix (like `05-advanced.qmd`) and be located in the `user_guide/` directory. Great Docs discovers these files automatically based on their prefix.
+For user guide pages, the file must have a numeric prefix (like `05-advanced.qmd`) and be located in the `docs/user_guide/` directory. Great Docs discovers these files automatically based on their prefix.
 
 For recipe or custom section pages, the file must be in the directory specified by the relevant entry in the `sections` list in `great-docs.yml`. The file name does not matter for discovery, but it does control sort order (files are listed alphabetically by path).
 
 ## Build succeeds but the site looks wrong
 
-If the build completes without errors but the output does not match your expectations, try a clean rebuild. Remove the `great-docs/_site/` directory and run the build again:
+If the build completes but the output does not match your expectations, rebuild the generated Quarto project from your source files:
 
 ``` bash
-rm -rf great-docs/_site
 great-docs build
 ```
 

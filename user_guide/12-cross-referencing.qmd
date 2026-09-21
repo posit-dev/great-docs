@@ -325,10 +325,10 @@ Cross-references connect the pages *within* your documentation; citations connec
 work it builds on (e.g., a paper, a specification, a book, etc.). Great Docs supports academic
 citations and a generated **References** section, driven by a single project-level bibliography.
 
-Point `bibliography:` at a `.bib` file (path relative to the project root):
+Point `bibliography:` at a `.bib` file relative to `docs/great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
-bibliography: docs/references.bib
+```{.yaml filename="docs/great-docs.yml"}
+bibliography: references.bib
 ```
 
 Then cite by key anywhere (no per-page frontmatter required):
@@ -380,22 +380,22 @@ heading as-is (it won't add a second one).
 
 Pass a list to combine several `.bib` files; all entries become citable from any page:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 bibliography:
-  - docs/references.bib
-  - docs/software.bib
+  - references.bib
+  - software.bib
 ```
 
 ### Citation style
 
 By default citations follow the Chicago author-date style. To use a different
-[CSL](https://citationstyles.org) style, point `csl:` at a `.csl` file (relative to the project
-root); Great Docs copies it into the build alongside the bibliography. Find styles in the
+[CSL](https://citationstyles.org) style, point `csl:` at a `.csl` file relative to the configuration
+directory; Great Docs copies it into the build alongside the bibliography. Find styles in the
 [Zotero Style Repository](https://www.zotero.org/styles).
 
-```{.yaml filename="great-docs.yml"}
-bibliography: docs/references.bib
-csl: docs/nature.csl
+```{.yaml filename="docs/great-docs.yml"}
+bibliography: references.bib
+csl: nature.csl
 ```
 
 ### Localized headings
@@ -407,7 +407,7 @@ entries themselves formatted for that language too.
 ::: {.callout-note}
 If citations render as literal `[@key]` text with no References section, the key doesn't match a
 `.bib` entry or the bibliography wasn't found. So check the key spelling and that `bibliography:`
-resolves from the project root. A missing file warns (`"Bibliography file not found"`) and the build
+resolves from the configuration directory. A missing file warns (`"Bibliography file not found"`) and the build
 continues without it.
 :::
 

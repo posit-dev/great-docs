@@ -65,7 +65,7 @@ def connect(host: str, port: int = 5432) -> Connection:
 
 Great Docs auto-detects your style during `great-docs init`. You can also set it manually in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 parser: numpy   # or: google, sphinx
 ```
 

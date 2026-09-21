@@ -99,7 +99,7 @@ pre-deployment check.
 All SEO settings live under the `seo` key in `great-docs.yml`. Here's the full configuration with
 defaults:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 seo:
   enabled: true  # Master switch for all SEO features
 
@@ -166,7 +166,7 @@ site has different needs.
 
 Adjust priorities based on what's most important for your site:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 seo:
   sitemap:
     priority:
@@ -179,7 +179,7 @@ seo:
 
 If your reference documentation changes frequently:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 seo:
   sitemap:
     changefreq:
@@ -210,7 +210,7 @@ Sitemap: https://username.github.io/repo/sitemap.xml
 
 To prevent indexing of specific paths (e.g., draft pages):
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 seo:
   robots:
     disallow:
@@ -222,7 +222,7 @@ seo:
 
 Some projects prefer to block AI training crawlers:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 seo:
   robots:
     extra_rules:
@@ -236,7 +236,7 @@ seo:
 
 For sites with limited bandwidth:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 seo:
   robots:
     crawl_delay: 10  # Seconds between requests
@@ -261,7 +261,7 @@ https://username.github.io/repo/
 
 For custom domains or non-GitHub hosting, set the base URL explicitly:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 seo:
   canonical:
     base_url: https://docs.myproject.com/
@@ -287,14 +287,14 @@ The default template is `{page_title} | {site_name}`, which produces titles like
 
 Change the separator or format:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 seo:
   title_template: "{page_title} - {site_name}"
 ```
 
 Or remove the site name entirely:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 seo:
   title_template: "{page_title}"
 ```
@@ -327,7 +327,7 @@ On the homepage and reference pages, Great Docs adds a schema block like this:
 
 For different types of documentation:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 seo:
   structured_data:
     type: WebSite  # Or: SoftwareApplication, APIReference, etc.
@@ -337,7 +337,7 @@ seo:
 
 If you prefer not to include JSON-LD:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 seo:
   structured_data:
     enabled: false
@@ -360,7 +360,7 @@ For each page, Great Docs extracts a description from:
 
 Configure a fallback description for pages without extractable content:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 seo:
   default_description: "Documentation for My Package, a Python library for..."
 ```
@@ -402,14 +402,14 @@ you), you can disable individual features or all of them at once.
 
 To completely disable SEO generation:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 seo:
   enabled: false
 ```
 
 Or disable specific features:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 seo:
   sitemap:
     enabled: false
@@ -446,7 +446,7 @@ If you're deploying to GitHub Pages, SEO works out of the box:
 
 When using a custom domain, this configuration is useful:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 seo:
   canonical:
     base_url: https://docs.myproject.com/

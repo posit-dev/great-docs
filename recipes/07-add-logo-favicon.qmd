@@ -12,9 +12,8 @@ A logo replaces the plain-text package name in the navbar and gives your documen
 
 The simplest approach is to place your logo files in a conventional location. Great Docs checks these paths automatically during the build (in priority order):
 
-1. `logo.svg` or `logo.png` in the project root
-2. `assets/logo.svg` or `assets/logo.png`
-3. `docs/assets/logo.svg` or `docs/assets/logo.png`
+1. Put `logo.svg` or `logo.png` beside `docs/great-docs.yml`
+2. Put `logo.svg` or `logo.png` in `docs/assets/`
 
 If it finds a logo file, no configuration is needed. Place your file and run `great-docs build`.
 
@@ -23,7 +22,7 @@ If it finds a logo file, no configuration is needed. Place your file and run `gr
 For best results in both light and dark themes, provide a second logo file with `-dark` in the name. Place it alongside the primary logo:
 
 ```
-my-package/
+my-package/docs/
 ├── assets/
 │   ├── logo.svg          # Used in light mode
 │   └── logo-dark.svg     # Used in dark mode
@@ -35,7 +34,7 @@ The dark variant is detected automatically when it shares the same stem as the p
 
 If your files do not follow the naming conventions above, you can specify them directly in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 logo:
   light: path/to/my-logo.svg
   dark: path/to/my-logo-dark.svg
@@ -43,7 +42,7 @@ logo:
 
 You can also set extra options:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 logo:
   light: assets/logo.svg
   dark: assets/logo-dark.svg
@@ -71,7 +70,7 @@ All the necessary `<link>` tags are injected into every page automatically.
 
 If you want a different image for the favicon (for example, a simplified lettermark instead of the full logo), set the `favicon` option:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 favicon: assets/favicon.svg
 ```
 

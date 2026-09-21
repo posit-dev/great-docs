@@ -7,7 +7,7 @@ freeze: auto
 
 # Freeze a Page to Cache Outputs
 
-This page is a **live proof** that page-level freeze works. The code cells below were executed once via `great-docs freeze`, and their outputs are persisted in the repository's `_freeze/` directory. Every subsequent `great-docs build` reuses these cached outputs without re-executing the code.
+This page demonstrates page-level freeze. The code cells below were executed once via `great-docs freeze`, and their outputs persist in `_freeze/` beside the selected configuration. Subsequent `great-docs build` commands reuse these cached outputs without re-executing the code.
 
 ::: {.callout-note}
 ## How to verify this works
@@ -82,12 +82,6 @@ Great Docs enables `freeze: auto` by default, so the cache restore and persist h
 
 ## Reproducing This
 
-To update this page's cached outputs (for example, after changing the code above):
-
-```{.bash filename="Terminal"}
-great-docs freeze recipes/24-freeze-demo.qmd
-git add _freeze/
-git commit -m "Refresh freeze demo outputs"
-```
-
-This re-executes the cells, captures the new outputs in `_freeze/`, and the updated timestamp proves the refresh happened.
+Follow the [freeze workflow](../user_guide/37-freeze.qmd) to refresh a page's cached
+outputs and commit the results beside its selected configuration. A refreshed timestamp
+shows that the cells executed again.

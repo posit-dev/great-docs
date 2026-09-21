@@ -13,7 +13,7 @@ Documentation often benefits from visual aids: screenshots of output, architectu
 Keep images organized by placing them in the `assets/` subdirectory within your user guide or recipe directory. Great Docs copies the entire directory tree during the build, so relative paths are preserved:
 
 ```
-user_guide/
+docs/user_guide/
 ├── 01-installation.qmd
 ├── 02-quickstart.qmd
 └── assets/
@@ -60,7 +60,7 @@ Quarto renders Mermaid diagrams directly from fenced code blocks. This is useful
 graph LR
     A[great-docs init] --> B[great-docs.yml]
     B --> C[great-docs build]
-    C --> D[great-docs/_site/]
+    C --> D[docs/_site/]
     D --> E[great-docs preview]
 ```
 ````
@@ -120,7 +120,8 @@ Both images will be available in the built site:
 This works for both Markdown image syntax (`![alt](path)`) and HTML `<img>` tags. External URLs (starting with `http://`, `https://`, or `//`) are left unchanged.
 
 ::: {.callout-note}
-For the most portable setup, place all images in the `assets/` directory at your project root. This ensures they work in both your GitHub README and your Great Docs site without any special handling.
+Keep images shared with the package README at the package root, using paths relative to that README.
+Place documentation-only images under `docs/assets/` or beside their guide pages.
 :::
 
 ## Tips

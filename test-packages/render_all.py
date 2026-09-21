@@ -65,6 +65,8 @@ from catalog import (
 )
 from synthetic.generator import generate_package
 
+from great_docs._layout import Layout
+
 # ── Constants ────────────────────────────────────────────────────────────────
 
 RENDERED_DIR = _THIS_DIR / "_rendered"
@@ -148,12 +150,34 @@ def _count_dedicated_tests(name: str) -> int:
     return _DEDICATED_COUNTS.get(name, 0)
 
 
+def _package_layout(package_dir: Path) -> Layout:
+    """Resolve a Gauntlet package's layout within the fixture tree.
+
+    `Layout.make` searches upwards for a project manifest. Use root-layout
+    defaults when the package has not been generated, so the lookup remains
+    inside the fixture tree.
+    """
+    if package_dir.is_dir():
+        return Layout.make(package_dir)
+    build_dir = package_dir / "great-docs"
+    return Layout(
+        package_root=package_dir,
+        config_path=package_dir / "great-docs.yml",
+        source_dir=package_dir,
+        build_dir=build_dir,
+        site_dir=build_dir / "_site",
+        freeze_dir=package_dir / "_freeze",
+        cache_dir=package_dir / ".great-docs-cache",
+    )
+
+
 def _compute_coverage(name: str) -> dict[str, bool]:
     """Compute test coverage levels for a single package.
 
     Returns a dict mapping each coverage level to True/False.
     """
     result = {level: False for level in _COVERAGE_LEVELS}
+    site = _package_layout(RENDERED_DIR / name).site_dir
 
     try:
         spec = get_spec(name)
@@ -207,17 +231,17 @@ def _compute_coverage(name: str) -> dict[str, bool]:
         result["ret"] = True
 
     # Sidebar check
-    ref = RENDERED_DIR / name / "great-docs" / "_site" / "reference"
+    ref = site / "reference"
     if ref.exists() and any(f.name != "index.html" for f in ref.glob("*.html")):
         result["sbar"] = True
 
     # Heading check — applies to all rendered packages with reference pages
-    ref_exists = (RENDERED_DIR / name / "great-docs" / "_site" / "reference").exists()
+    ref_exists = ref.exists()
     if ref_exists:
         result["hdg"] = True
 
     # Navbar, meta, and a11y — apply to all packages with an index.html
-    site_index = RENDERED_DIR / name / "great-docs" / "_site" / "index.html"
+    site_index = site / "index.html"
     if site_index.exists():
         result["nav"] = True
         result["meta"] = True
@@ -308,7 +332,6 @@ def build_package(name: str) -> dict:
     """
     spec = get_spec(name)
     pkg_build_dir = RENDERED_DIR / name
-    site_dir = pkg_build_dir / "great-docs" / "_site"
 
     _common: dict = {
         "name": name,
@@ -347,6 +370,9 @@ def build_package(name: str) -> dict:
             encoding="utf-8",
         )
 
+    layout = _package_layout(pkg_dir)
+    site_dir = layout.site_dir
+
     # Add to sys.path for griffe
     if str(pkg_dir) not in sys.path:
         sys.path.insert(0, str(pkg_dir))
@@ -383,7 +409,7 @@ def build_package(name: str) -> dict:
         # provide their own config already have it written by
         # generate_package).  Running init on a pre-configured package
         # would overwrite the spec's custom settings.
-        has_config = (pkg_dir / "great-docs.yml").exists()
+        has_config = layout.config_path.exists()
 
         if not has_config:
             log_lines.append("\n--- great-docs init ---")
@@ -443,7 +469,7 @@ def build_package(name: str) -> dict:
         # inject directly into the final HTML output.
         # ----------------------------------------------------------
         site_index = site_dir / "index.html"
-        gd_yml = pkg_dir / "great-docs.yml"
+        gd_yml = layout.config_path
         if site_index.exists():
             extras: list[str] = []
 
@@ -2092,7 +2118,7 @@ def _create_detail_page(r: dict, results: list[dict]) -> str:
         spec = get_spec(name)
         file_tree_html = _build_file_tree_html(
             spec,
-            config_path=RENDERED_DIR / name / "great-docs.yml",
+            config_path=_package_layout(RENDERED_DIR / name).config_path,
         )
         is_init_pkg = not bool(spec.get("config"))
     except Exception:
@@ -2831,7 +2857,7 @@ def serve(port: int = PORT) -> None:
 def _result_from_state(name: str, pkg_state: dict) -> dict:
     """Reconstruct a result dict from persisted state + catalog data."""
     spec = get_spec(name)
-    site_dir = RENDERED_DIR / name / "great-docs" / "_site"
+    site_dir = _package_layout(RENDERED_DIR / name).site_dir
     status = pkg_state.get("status", "unknown")
     result: dict = {
         "name": name,

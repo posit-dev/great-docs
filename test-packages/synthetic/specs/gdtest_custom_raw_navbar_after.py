@@ -46,8 +46,8 @@ SPEC = {
                 """
                 return f"rendered: {topic}"
         ''',
-        "user_guide/intro.qmd": "---\ntitle: Intro\n---\n\n# Intro\n\nUser guide intro.\n",
-        "playgrounds/playground.html": """
+        "docs/user_guide/intro.qmd": "---\ntitle: Intro\n---\n\n# Intro\n\nUser guide intro.\n",
+        "docs/playgrounds/playground.html": """
             ---
             layout: raw
             navbar:

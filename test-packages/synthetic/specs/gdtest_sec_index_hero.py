@@ -165,7 +165,7 @@ SPEC = {
         ''',
         # ── Demos section (2-column, mixed images + plain) ──
         # Featured demos WITH hero images (appear as image cards)
-        "demos/01-starter-demo.qmd": (
+        "docs/demos/01-starter-demo.qmd": (
             "---\n"
             "title: Starter Demo\n"
             "description: A minimal example showing the basics of data processing.\n"
@@ -185,7 +185,7 @@ SPEC = {
             "\n"
             "The `strict` parameter filters out `None` values, giving you a clean list.\n"
         ),
-        "demos/02-advanced-demo.qmd": (
+        "docs/demos/02-advanced-demo.qmd": (
             "---\n"
             "title: Advanced Demo\n"
             "description: A comprehensive example with chained operations and validation.\n"
@@ -207,7 +207,7 @@ SPEC = {
             "assert validate(schema, stats)\n"
             "```\n"
         ),
-        "demos/03-data-pipeline.qmd": (
+        "docs/demos/03-data-pipeline.qmd": (
             "---\n"
             "title: Data Pipeline\n"
             "description: Build a complete ETL pipeline from raw data to validated output.\n"
@@ -239,7 +239,7 @@ SPEC = {
             "print(output)  # {'count': 3, 'sum': 600, 'mean': 200.0}\n"
             "```\n"
         ),
-        "demos/04-visualization.qmd": (
+        "docs/demos/04-visualization.qmd": (
             "---\n"
             "title: Visualization\n"
             "description: Create summary visualizations from processed data.\n"
@@ -261,7 +261,7 @@ SPEC = {
             "Use these summary statistics as input to your favorite plotting library.\n"
         ),
         # Plain demos WITHOUT images (appear as simple link list below the cards)
-        "demos/05-error-handling.qmd": (
+        "docs/demos/05-error-handling.qmd": (
             "---\n"
             "title: Error Handling\n"
             "description: Learn how to handle edge cases and invalid inputs gracefully.\n"
@@ -282,7 +282,7 @@ SPEC = {
             "assert not validate({'name': str}, {'age': 30})\n"
             "```\n"
         ),
-        "demos/06-batch-processing.qmd": (
+        "docs/demos/06-batch-processing.qmd": (
             "---\n"
             "title: Batch Processing\n"
             "description: Process multiple datasets in batch mode.\n"
@@ -306,7 +306,7 @@ SPEC = {
             "    print(summarize(clean))\n"
             "```\n"
         ),
-        "demos/07-schema-patterns.qmd": (
+        "docs/demos/07-schema-patterns.qmd": (
             "---\n"
             "title: Common Schema Patterns\n"
             "description: Reusable validation schemas for typical data structures.\n"
@@ -326,7 +326,7 @@ SPEC = {
             "assert validate(event_schema, {'type': 'click', 'timestamp': 1.0})\n"
             "```\n"
         ),
-        "demos/08-performance-tips.qmd": (
+        "docs/demos/08-performance-tips.qmd": (
             "---\n"
             "title: Performance Tips\n"
             "description: Optimize processing speed for large datasets.\n"
@@ -340,7 +340,7 @@ SPEC = {
             "- Pre-validate schemas once, then batch-process records\n"
             "- Use `summarize()` to get aggregate stats without storing intermediates\n"
         ),
-        "demos/09-integration-guide.qmd": (
+        "docs/demos/09-integration-guide.qmd": (
             "---\n"
             "title: Integration Guide\n"
             "description: Integrate the package with pandas, Polars, and other frameworks.\n"
@@ -362,7 +362,7 @@ SPEC = {
             "The `summarize()` function returns a plain dict, making it easy\n"
             "to convert to any format you need.\n"
         ),
-        "demos/10-custom-validators.qmd": (
+        "docs/demos/10-custom-validators.qmd": (
             "---\n"
             "title: Custom Validators\n"
             "description: Build your own validation logic on top of the validate function.\n"
@@ -384,7 +384,7 @@ SPEC = {
             "```\n"
         ),
         # ── Gallery section (1-column, all pages have images) ──
-        "gallery/01-real-time-dashboard.qmd": (
+        "docs/gallery/01-real-time-dashboard.qmd": (
             "---\n"
             "title: Real-Time Dashboard\n"
             "description: A live dashboard that processes streaming data and displays rolling statistics.\n"
@@ -406,7 +406,7 @@ SPEC = {
             "print(stats)\n"
             "```\n"
         ),
-        "gallery/02-workflow-automation.qmd": (
+        "docs/gallery/02-workflow-automation.qmd": (
             "---\n"
             "title: Workflow Automation\n"
             "description: An automated pipeline that validates, processes, and reports on incoming records.\n"
@@ -430,7 +430,7 @@ SPEC = {
             "print(report)\n"
             "```\n"
         ),
-        "gallery/03-data-explorer.qmd": (
+        "docs/gallery/03-data-explorer.qmd": (
             "---\n"
             "title: Data Explorer\n"
             "description: An interactive data exploration tool that lets you filter, summarize, and drill down.\n"
@@ -451,7 +451,7 @@ SPEC = {
             "print(summarize(subset))\n"
             "```\n"
         ),
-        "gallery/04-quality-report.qmd": (
+        "docs/gallery/04-quality-report.qmd": (
             "---\n"
             "title: Quality Report\n"
             "description: Generate a comprehensive data quality report with validation summaries.\n"

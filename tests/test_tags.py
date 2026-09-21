@@ -8,7 +8,6 @@ from pathlib import Path
 from great_docs.config import Config
 from great_docs.core import GreatDocs
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -137,7 +136,7 @@ class TestTagsConfig:
 class TestCollectPageTags:
     def test_collect_from_user_guide(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        ug_dir = gd.project_path / "user-guide"
+        ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "intro.qmd", "Introduction", tags=["Getting Started", "Python"])
         _make_qmd(ug_dir / "advanced.qmd", "Advanced Usage", tags=["Python", "API"])
 
@@ -151,7 +150,7 @@ class TestCollectPageTags:
 
     def test_collect_from_recipes(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        recipes_dir = gd.project_path / "recipes"
+        recipes_dir = gd.build_dir / "recipes"
         _make_qmd(recipes_dir / "recipe1.qmd", "Easy Recipe", tags=["Beginner"])
 
         result = gd._collect_page_tags()
@@ -165,7 +164,7 @@ class TestCollectPageTags:
             tmp_path,
             "tags:\n  enabled: true\n  shadow:\n    - internal\n",
         )
-        ug_dir = gd.project_path / "user-guide"
+        ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "page.qmd", "A Page", tags=["Python", "internal"])
 
         result = gd._collect_page_tags()
@@ -175,7 +174,7 @@ class TestCollectPageTags:
 
     def test_skips_index_qmd(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        ug_dir = gd.project_path / "user-guide"
+        ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "index.qmd", "Index", tags=["ShouldSkip"])
         _make_qmd(ug_dir / "intro.qmd", "Intro", tags=["Keep"])
 
@@ -186,7 +185,7 @@ class TestCollectPageTags:
 
     def test_empty_tags_list(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        ug_dir = gd.project_path / "user-guide"
+        ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "page.qmd", "No Tags")  # no tags kwarg
 
         result = gd._collect_page_tags()
@@ -203,7 +202,7 @@ class TestCollectPageTags:
             tmp_path,
             "tags:\n  enabled: true\nsections:\n  - title: Recipes\n    dir: recipes\n",
         )
-        recipes_dir = gd.project_path / "recipes"
+        recipes_dir = gd.build_dir / "recipes"
         _make_qmd(recipes_dir / "recipe1.qmd", "My Recipe", tags=["Cooking"])
 
         result = gd._collect_page_tags()
@@ -221,7 +220,7 @@ class TestCollectPageTags:
             "tags:\n  enabled: true\nsections:\n  - title: Examples\n    dir: docs/examples\n",
         )
         # _process_sections copies to project_path / "docs/examples" (slug from dir)
-        section_dir = gd.project_path / "docs" / "examples"
+        section_dir = gd.build_dir / "docs" / "examples"
         _make_qmd(section_dir / "example1.qmd", "Example One", tags=["Demo"])
 
         result = gd._collect_page_tags()
@@ -235,11 +234,11 @@ class TestCollectPageTags:
         """`_section_build_dir` derives the path from `dir`, with the title ignored."""
         gd = _bootstrap_project(tmp_path)
         assert gd._section_build_dir({"title": "Examples", "dir": "docs/examples"}) == (
-            gd.project_path / "docs" / "examples"
+            gd.build_dir / "docs" / "examples"
         )
         # Underscores and spaces are normalized to hyphens and lowercased
         assert gd._section_build_dir({"title": "Foo", "dir": "My_Cool Dir"}) == (
-            gd.project_path / "my-cool-dir"
+            gd.build_dir / "my-cool-dir"
         )
         # No `dir` → None
         assert gd._section_build_dir({"title": "Examples"}) is None
@@ -335,7 +334,7 @@ class TestGenerateTagsIndexPage:
         result = gd._generate_tags_index_page(tag_index)
 
         assert result == "tags/index.qmd"
-        index_path = gd.project_path / "tags" / "index.qmd"
+        index_path = gd.build_dir / "tags" / "index.qmd"
         assert index_path.exists()
 
         content = index_path.read_text(encoding="utf-8")
@@ -355,7 +354,7 @@ class TestGenerateTagsIndexPage:
         }
         gd._generate_tags_index_page(tag_index)
 
-        content = (gd.project_path / "tags" / "index.qmd").read_text(encoding="utf-8")
+        content = (gd.build_dir / "tags" / "index.qmd").read_text(encoding="utf-8")
         # Should have a parent "Python" heading and children
         assert "Python" in content
         assert "Testing" in content
@@ -373,7 +372,7 @@ class TestGenerateTagsJson:
         }
         gd._generate_tags_json(tag_index)
 
-        json_path = gd.project_path / "_tags.json"
+        json_path = gd.build_dir / "_tags.json"
         assert json_path.exists()
 
         data = json.loads(json_path.read_text())
@@ -391,7 +390,7 @@ class TestGenerateTagsJson:
         }
         gd._generate_tags_json(tag_index)
 
-        data = json.loads((gd.project_path / "_tags.json").read_text())
+        data = json.loads((gd.build_dir / "_tags.json").read_text())
         assert "internal" in data["shadow"]
 
     def test_default_location_in_json(self, tmp_path: Path):
@@ -401,7 +400,7 @@ class TestGenerateTagsJson:
         }
         gd._generate_tags_json(tag_index)
 
-        data = json.loads((gd.project_path / "_tags.json").read_text())
+        data = json.loads((gd.build_dir / "_tags.json").read_text())
         assert data["default_location"] == "bottom"
 
     def test_default_location_top_in_json(self, tmp_path: Path):
@@ -411,12 +410,12 @@ class TestGenerateTagsJson:
         }
         gd._generate_tags_json(tag_index)
 
-        data = json.loads((gd.project_path / "_tags.json").read_text())
+        data = json.loads((gd.build_dir / "_tags.json").read_text())
         assert data["default_location"] == "top"
 
     def test_per_page_tag_location_in_json(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        ug_dir = gd.project_path / "user-guide"
+        ug_dir = gd.build_dir / "user-guide"
         _make_qmd(
             ug_dir / "intro.qmd", "Introduction", tags=["Python"], extra="tag-location: bottom"
         )
@@ -425,19 +424,19 @@ class TestGenerateTagsJson:
         tag_index = gd._collect_page_tags()
         gd._generate_tags_json(tag_index)
 
-        data = json.loads((gd.project_path / "_tags.json").read_text())
+        data = json.loads((gd.build_dir / "_tags.json").read_text())
         assert data["page_tag_locations"]["user-guide/intro.qmd"] == "bottom"
         assert "user-guide/advanced.qmd" not in data["page_tag_locations"]
 
     def test_per_page_tag_location_invalid_ignored(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        ug_dir = gd.project_path / "user-guide"
+        ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "page.qmd", "Page", tags=["Python"], extra="tag-location: middle")
 
         tag_index = gd._collect_page_tags()
         gd._generate_tags_json(tag_index)
 
-        data = json.loads((gd.project_path / "_tags.json").read_text())
+        data = json.loads((gd.build_dir / "_tags.json").read_text())
         assert "user-guide/page.qmd" not in data["page_tag_locations"]
 
     def test_nested_section_rescan_picks_up_tag_location(self, tmp_path: Path):
@@ -446,13 +445,13 @@ class TestGenerateTagsJson:
             tmp_path,
             "tags:\n  enabled: true\nsections:\n  - title: Examples\n    dir: docs/examples\n",
         )
-        section_dir = gd.project_path / "docs" / "examples"
+        section_dir = gd.build_dir / "docs" / "examples"
         _make_qmd(section_dir / "ex.qmd", "Example", tags=["Demo"], extra="tag-location: bottom")
 
         tag_index = gd._collect_page_tags()
         gd._generate_tags_json(tag_index)
 
-        data = json.loads((gd.project_path / "_tags.json").read_text())
+        data = json.loads((gd.build_dir / "_tags.json").read_text())
         assert "docs/examples/ex.qmd" in data["page_tags"]
         assert data["page_tag_locations"]["docs/examples/ex.qmd"] == "bottom"
 
@@ -494,13 +493,13 @@ class TestGetTagIconHtml:
 class TestProcessTags:
     def test_process_tags_returns_true_with_tags(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
-        ug_dir = gd.project_path / "user-guide"
+        ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "page.qmd", "Page", tags=["Python"])
 
         result = gd._process_tags()
         assert result is True
-        assert (gd.project_path / "tags" / "index.qmd").exists()
-        assert (gd.project_path / "_tags.json").exists()
+        assert (gd.build_dir / "tags" / "index.qmd").exists()
+        assert (gd.build_dir / "_tags.json").exists()
 
     def test_process_tags_returns_false_without_tags(self, tmp_path: Path):
         gd = _bootstrap_project(tmp_path)
@@ -512,21 +511,21 @@ class TestProcessTags:
             tmp_path,
             "tags:\n  enabled: true\n  index_page: false\n",
         )
-        ug_dir = gd.project_path / "user-guide"
+        ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "page.qmd", "Page", tags=["Python"])
 
         gd._process_tags()
-        assert not (gd.project_path / "tags" / "index.qmd").exists()
-        assert (gd.project_path / "_tags.json").exists()
+        assert not (gd.build_dir / "tags" / "index.qmd").exists()
+        assert (gd.build_dir / "_tags.json").exists()
 
     def test_process_tags_no_show_on_pages(self, tmp_path: Path):
         gd = _bootstrap_project(
             tmp_path,
             "tags:\n  enabled: true\n  show_on_pages: false\n",
         )
-        ug_dir = gd.project_path / "user-guide"
+        ug_dir = gd.build_dir / "user-guide"
         _make_qmd(ug_dir / "page.qmd", "Page", tags=["Python"])
 
         gd._process_tags()
-        assert (gd.project_path / "tags" / "index.qmd").exists()
-        assert not (gd.project_path / "_tags.json").exists()
+        assert (gd.build_dir / "tags" / "index.qmd").exists()
+        assert not (gd.build_dir / "_tags.json").exists()

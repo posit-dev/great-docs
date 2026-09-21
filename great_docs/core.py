@@ -8,12 +8,25 @@ from datetime import datetime
 from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml, parse_yaml, read_yaml, write_yaml
 
+from ._content_naming import fix_numeric_prefix_links, section_slug, strip_numeric_prefix
+from ._layout import Layout, LayoutError
+from ._source_refs import source_reference_spans
 from ._subprocess import TEXT_MODE_KWARGS
 from ._typer_cli import is_cli_command, is_cli_group, param_kind, to_click_command
-from ._utils import QUARTO_YML_HEADER, is_great_docs_build_dir
+from ._utils import (
+    GITIGNORE_CONTENT,
+    QUARTO_YML_HEADER,
+    is_great_docs_build_dir,
+    recognised_build_dirs,
+    record_site_ownership,
+    validate_build_dir,
+    validate_layout_outputs,
+    validate_tree_symlinks,
+)
 from .config import Config, create_default_config
 
 if TYPE_CHECKING:
@@ -148,10 +161,10 @@ class GreatDocs:
     ----------
     project_root
         Absolute path to the project root directory.
-    docs_dir
-        Relative path to the documentation build directory (`great-docs`).
-    project_path
-        Full absolute path to the documentation build directory (`project_root / docs_dir`).
+    layout
+        Resolved package, documentation, build, and deployment paths.
+    build_dir
+        Absolute path to the selected Quarto project directory.
 
     Examples
     --------
@@ -186,19 +199,33 @@ class GreatDocs:
     default, so new functions and classes are picked up automatically.
     """
 
-    def __init__(self, project_path: str | None = None):
+    def __init__(
+        self,
+        project_path: str | None = None,
+        *,
+        config_path: str | None = None,
+        create: bool = False,
+    ) -> None:
         """
-        Initialize GreatDocs instance.
+        Initialise a documentation project from its package and configuration
 
         Parameters
         ----------
         project_path
             Path to the project root directory. Defaults to current directory.
+        config_path
+            Configuration file, resolved from the current working directory.
+        create
+            Permit a missing configuration for initialisation without creating files.
         """
-        self.project_root = Path(project_path or os.getcwd()).resolve()
-        # Build directory is always 'great-docs' - created during build, not init
-        self.docs_dir = Path("great-docs")
-        self.project_path = self.project_root / self.docs_dir
+        self.layout = Layout.make(
+            Path(project_path or os.getcwd()),
+            Path(config_path) if config_path else None,
+            create=create,
+        )
+        self._selected_config_path = Path(config_path).resolve() if config_path else None
+        self.project_root = self.layout.package_root
+        self.build_dir = self.layout.build_dir
         try:
             # Python 3.9+
             self.package_path = Path(resources.files("great_docs"))
@@ -210,7 +237,11 @@ class GreatDocs:
         self.assets_path = self.package_path / "assets"
 
         # Load configuration from great-docs.yml
-        self._config = Config(self._find_package_root())
+        self._config = Config(
+            self.layout.package_root,
+            config_path=self.layout.config_path,
+            cache_dir=self.layout.cache_dir,
+        )
 
         # Whether API reference was successfully configured (set during build)
         self._has_api_reference = True
@@ -300,6 +331,21 @@ class GreatDocs:
             "end_line": end_lineno or obj.lineno,
         }
 
+    def _validate_build_outputs(self) -> None:
+        """Reject version and ownership conflicts before changing project files"""
+        validate_layout_outputs(self.layout)
+        validate_build_dir(self.build_dir)
+        if self._config.versions:
+            from ._versioned_build import _check_build_dir_collisions
+            from ._versioning import get_latest_version, parse_versions_config
+
+            versions = parse_versions_config(self._config.versions)
+            latest = get_latest_version(versions)
+            latest_tag = latest.tag if latest else versions[0].tag
+            _check_build_dir_collisions(self.layout.build_dir, versions, latest_tag, self.layout)
+            for entry in versions:
+                validate_build_dir(self.layout.build_dir_for(entry.tag, latest_tag))
+
     def _prepare_build_directory(self) -> None:  # pragma: no cover
         """
         Prepare the great-docs/ build directory with all necessary assets.
@@ -311,20 +357,29 @@ class GreatDocs:
         The great-docs/ directory is ephemeral and should not be committed to
         version control. It will be recreated on each build.
         """
-        print(f"Preparing build directory: {self.project_path.relative_to(self.project_root)}/")
+        print(f"Preparing build directory: {self.build_dir.relative_to(self.project_root)}/")
+
+        self._validate_build_outputs()
+
+        hook_names = [Path(path).name for path in self._config.pre_render]
+        if len(hook_names) != len(set(hook_names)) or set(hook_names) & {
+            "post-render.py",
+            "restore-freeze.py",
+        }:
+            raise ValueError("Pre-render scripts must have distinct, non-reserved filenames")
 
         # Clean any existing build directory to avoid stale artifacts
-        if self.project_path.exists():
-            shutil.rmtree(self.project_path)
+        if self.build_dir.exists():
+            shutil.rmtree(self.build_dir)
 
         # Create the great-docs directory
-        self.project_path.mkdir(parents=True, exist_ok=True)
+        self.build_dir.mkdir(parents=True, exist_ok=True)
 
         # Create necessary subdirectories
-        scripts_dir = self.project_path / "scripts"
+        scripts_dir = self.build_dir / "scripts"
         scripts_dir.mkdir(exist_ok=True)
 
-        reference_dir = self.project_path / "reference"
+        reference_dir = self.build_dir / "reference"
         reference_dir.mkdir(exist_ok=True)
 
         # Copy post-render script
@@ -333,7 +388,7 @@ class GreatDocs:
         shutil.copy2(post_render_src, post_render_dst)
 
         # Copy restore-freeze script when freeze is configured OR _freeze/ exists
-        has_freeze_cache = (self.project_root / "_freeze").is_dir()
+        has_freeze_cache = self.layout.freeze_dir.is_dir()
         if self._config.freeze or has_freeze_cache:
             restore_freeze_src = self.assets_path / "restore-freeze.py"
             restore_freeze_dst = scripts_dir / "restore-freeze.py"
@@ -341,7 +396,7 @@ class GreatDocs:
 
         # Copy user-provided pre-render scripts
         for script_path in self._config.pre_render:
-            src = self.project_root / script_path
+            src = self.layout.source_dir / script_path
             if src.is_file():
                 dst = scripts_dir / src.name
                 shutil.copy2(src, dst)
@@ -351,53 +406,53 @@ class GreatDocs:
         # Copy bibliography and CSL files into the build directory so that
         # project-level citations resolve (see _update_quarto_config for wiring)
         for bib_path in self._config.bibliography:
-            src = self.project_root / bib_path
+            src = self.layout.source_dir / bib_path
             if src.is_file():
-                shutil.copy2(src, self.project_path / src.name)
+                self._copy_source_asset(src, self.build_dir / src.name)
             else:
                 print(f"Warning: Bibliography file not found: {bib_path}")
         csl_path = self._config.csl
         if csl_path:
-            csl_src = self.project_root / csl_path
+            csl_src = self.layout.source_dir / csl_path
             if csl_src.is_file():
-                shutil.copy2(csl_src, self.project_path / csl_src.name)
+                self._copy_source_asset(csl_src, self.build_dir / csl_src.name)
             else:
                 print(f"Warning: CSL file not found: {csl_path}")
 
         # Copy custom CSS files (site.css) into the build directory
         # where _quarto.yml will refer to them by basename
         for css_path in self._config.css:
-            css_src = self.project_root / css_path
+            css_src = self.layout.source_dir / css_path
             if css_src.is_file():
-                shutil.copy2(css_src, self.project_path / css_src.name)
+                self._copy_source_asset(css_src, self.build_dir / css_src.name)
             else:
                 print(f"Warning: CSS file not found: {css_path}")
 
         # Copy qrenderer assets
         renderer_src = self.assets_path / "_renderer.py"
         if renderer_src.exists():
-            shutil.copy2(renderer_src, self.project_path / "_renderer.py")
+            shutil.copy2(renderer_src, self.build_dir / "_renderer.py")
 
         # Copy SCSS theme file (contains all site styling)
         scss_src = self.assets_path / "great-docs.scss"
-        shutil.copy2(scss_src, self.project_path / "great-docs.scss")
+        shutil.copy2(scss_src, self.build_dir / "great-docs.scss")
 
         # Copy the evolution demo data file
         demo_json_src = self.assets_path / "api-evolution-demo.json"
         if demo_json_src.exists():
-            shutil.copy2(demo_json_src, self.project_path / "api-evolution-demo.json")
+            shutil.copy2(demo_json_src, self.build_dir / "api-evolution-demo.json")
 
         # Copy the evolution shortcode extension (auto-discovered by Quarto)
         extensions_src = self.assets_path / "_extensions"
         if extensions_src.exists():
-            extensions_dst = self.project_path / "_extensions"
+            extensions_dst = self.build_dir / "_extensions"
             shutil.copytree(extensions_src, extensions_dst, dirs_exist_ok=True)
 
         # Copy notebooks directory and pre-generate marimo island HTML
         if self._config.marimo_enabled:
             import importlib.util
 
-            notebooks_src = self.project_root / "notebooks"
+            notebooks_src = self.layout.source_dir / "notebooks"
             if importlib.util.find_spec("marimo") is None:
                 # `marimo: true` is set but the package isn't installed. Warn and
                 # skip rather than crashing the whole build; pages using the
@@ -408,7 +463,7 @@ class GreatDocs:
                     "island generation. Install it with: pip install marimo"
                 )
             elif notebooks_src.exists() and notebooks_src.is_dir():
-                notebooks_dst = self.project_path / "notebooks"
+                notebooks_dst = self.build_dir / "notebooks"
                 shutil.copytree(notebooks_src, notebooks_dst, dirs_exist_ok=True)
 
                 # Pre-generate island HTML for each .py notebook
@@ -426,7 +481,7 @@ class GreatDocs:
                 try:
                     from great_docs._marimo import generate_islands_for_build
 
-                    islands_dir = self.project_path / "_marimo_islands"
+                    islands_dir = self.build_dir / "_marimo_islands"
                     islands_dir.mkdir(exist_ok=True)
                     for nb_file in notebooks_src.glob("*.py"):
                         out_file = islands_dir / f"{nb_file.stem}.html"
@@ -445,7 +500,7 @@ class GreatDocs:
                     import subprocess
 
                     for nb_file in notebooks_src.glob("*.py"):
-                        wasm_dir = self.project_path / "notebooks" / nb_file.stem
+                        wasm_dir = self.build_dir / "notebooks" / nb_file.stem
                         wasm_dir.mkdir(parents=True, exist_ok=True)
                         result = subprocess.run(
                             [
@@ -505,7 +560,7 @@ class GreatDocs:
         ):
             lb_src = lb_ext / lb_file
             if lb_src.exists():
-                shutil.copy2(lb_src, self.project_path / lb_file)
+                shutil.copy2(lb_src, self.build_dir / lb_file)
 
         # Copy JavaScript files
         js_files = [
@@ -556,24 +611,18 @@ class GreatDocs:
         for js_file in js_files:
             js_src = self.assets_path / js_file
             if js_src.exists():
-                js_dst = self.project_path / js_file
+                js_dst = self.build_dir / js_file
                 shutil.copy2(js_src, js_dst)
 
         # Copy marimo CSS when enabled
         if self._config.marimo_enabled:
             marimo_css_src = self.assets_path / "marimo-islands.css"
             if marimo_css_src.exists():
-                shutil.copy2(marimo_css_src, self.project_path / "marimo-islands.css")
+                shutil.copy2(marimo_css_src, self.build_dir / "marimo-islands.css")
 
         # Create .gitignore for the great-docs directory
-        gitignore_content = """# Great Docs build directory
-# This directory is ephemeral and regenerated on each build
-# Do not commit this directory to version control
-*
-!.gitignore
-"""
-        gitignore_path = self.project_path / ".gitignore"
-        gitignore_path.write_text(gitignore_content, encoding="utf-8")
+        gitignore_path = self.build_dir / ".gitignore"
+        gitignore_path.write_text(GITIGNORE_CONTENT, encoding="utf-8")
 
         # Note: User guide files are copied by _process_user_guide() during build
         # which handles stripping numeric prefixes for clean URLs
@@ -583,12 +632,13 @@ class GreatDocs:
 
         # Write options JSON for the post-render script
         gd_options = {
+            "freeze_dir": os.path.relpath(self.layout.freeze_dir, self.build_dir),
             "markdown_pages": self._config.markdown_pages,
             "show_dates": self._config.show_dates,
             "date_format": self._config.date_format,
             "show_author": self._config.show_author,
-            "team_author": self._config.team_author,
-            "authors": self._config.authors,  # Rich author metadata with images
+            "team_author": self._prepare_author_image(self._config.team_author),
+            "authors": [self._prepare_author_image(author) for author in self._config.authors],
             "build_timestamp": datetime.now().isoformat(),
             "language": self._config.language,
         }
@@ -599,7 +649,7 @@ class GreatDocs:
         gd_options["rtl"] = is_rtl(self._config.language)
         # Add SEO options
         gd_options.update(self._get_seo_options())
-        gd_options_path = self.project_path / "_gd_options.json"
+        gd_options_path = self.build_dir / "_gd_options.json"
         with open(gd_options_path, "w") as f:
             json.dump(gd_options, f)
 
@@ -615,6 +665,25 @@ class GreatDocs:
         # build will generate them.
         self._create_index_from_readme(force_rebuild=True)
 
+    def _prepare_author_image(self, author: dict | None) -> dict | None:
+        """
+        Make a local author portrait available from every generated page
+        """
+        if not author or not isinstance(author.get("image"), str):
+            return author
+        reference = author["image"]
+        url = urlsplit(reference)
+        if url.scheme or url.netloc or not url.path:
+            return author
+        source = (self.layout.source_dir / unquote(url.path)).resolve()
+        if not source.is_file():
+            return author
+        destination = self.build_dir / "_shared" / "authors" / source.name
+        self._copy_source_asset(source, destination)
+        base = self._get_canonical_base_url() or "/"
+        image = base + destination.relative_to(self.build_dir).as_posix()
+        return {**author, "image": urlunsplit(("", "", image, url.query, url.fragment))}
+
     def _copy_user_guide_files(self) -> None:
         """
         Copy user guide files from project root to build directory.
@@ -625,24 +694,21 @@ class GreatDocs:
 
         Copies `.qmd` and `.md` files to `great-docs/user-guide/` directory.
         """
-        configured_path = self._config.user_guide_dir  # str or None (ignores list)
-
-        if configured_path is not None:
-            source_user_guide = self.project_root / configured_path
-        else:
-            source_user_guide = self.project_root / "user_guide"
-            if not source_user_guide.exists():
-                # Also check for 'user-guide' with hyphen
-                source_user_guide = self.project_root / "user-guide"
-
-        if source_user_guide.exists() and source_user_guide.is_dir():
-            dest_user_guide = self.project_path / "user-guide"
+        source_user_guide = self._find_user_guide_dir()
+        if source_user_guide is not None:
+            dest_user_guide = self.build_dir / "user-guide"
             dest_user_guide.mkdir(exist_ok=True)
 
             # Copy all .qmd and .md files
             for pattern in ["*.qmd", "*.md"]:
                 for file_path in source_user_guide.glob(pattern):
-                    shutil.copy2(file_path, dest_user_guide / file_path.name)
+                    destination = dest_user_guide / file_path.name
+                    destination.write_text(
+                        self._rebase_source_references(
+                            file_path.read_text(encoding="utf-8"), file_path, destination
+                        ),
+                        encoding="utf-8",
+                    )
 
     def _copy_assets(self) -> bool:
         """
@@ -657,12 +723,12 @@ class GreatDocs:
         bool
             True if assets were copied, False if no assets directory found.
         """
-        source_assets = self.project_root / "assets"
+        source_assets = self.layout.source_dir / "assets"
 
         if not source_assets.exists() or not source_assets.is_dir():
             return False
 
-        dest_assets = self.project_path / "assets"
+        dest_assets = self.build_dir / "assets"
 
         # Remove existing assets directory to ensure clean copy
         if dest_assets.exists():
@@ -677,77 +743,115 @@ class GreatDocs:
 
         return True
 
-    def _copy_readme_images(self, source_file: Path | None) -> int:
+    def _copy_source_asset(self, source: Path, destination: Path) -> Path:
         """
-        Copy images referenced in README.md (or similar) to the build directory.
-
-        Scans the source file for local image references (Markdown `![](path)` and
-        HTML `<img src="path">` syntax) and copies those files to the build directory.
-        Skips URLs and paths under `assets/` (which are already handled by `_copy_assets()`).
-
-        Parameters
-        ----------
-        source_file
-            Path to the source file (README.md, index.md, etc.) to scan for images.
-            If `None`, no action is taken.
-
-        Returns
-        -------
-        int
-            Number of image files copied.
+        Copy a referenced file without escaping or overwriting the build tree
         """
-        if source_file is None or not source_file.exists():
-            return 0
+        destination = destination.resolve()
+        if not destination.is_relative_to(self.build_dir.resolve()):
+            raise ValueError(f"Asset destination escapes the build directory: {destination}")
+        if destination.exists():
+            if not destination.is_file() or destination.read_bytes() != source.read_bytes():
+                raise ValueError(
+                    f"Asset destination conflicts with an existing file: {destination}"
+                )
+        else:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+        return destination
 
-        with open(source_file, "r", encoding="utf-8") as f:
-            content = f.read()
+    def _rebase_source_references(
+        self, content: str, source_file: Path, destination_file: Path
+    ) -> str:
+        """
+        Copy local linked assets and rewrite their generated references
 
-        # Find all image references:
-        # 1. Markdown: ![alt](path) or ![alt](path "title")
-        # 2. HTML: <img src="path"> or <img src='path'>
-        image_paths: set[str] = set()
+        Resolve inputs beside the source page. Preserve URLs, missing files,
+        anchors, and query strings. Keep shared files under the build tree.
+        """
 
-        # Markdown image pattern: ![...](path) or ![...](path "title")
-        md_pattern = r"!\[[^\]]*\]\(([^)\s\"]+)(?:\s*\"[^\"]*\")?\)"
-        for match in re.finditer(md_pattern, content):
-            image_paths.add(match.group(1))
+        def rebase(reference: str) -> str:
+            url = urlsplit(reference)
+            if url.scheme or url.netloc or not url.path or reference.startswith("/"):
+                return reference
+            source = (source_file.parent / unquote(url.path)).resolve()
+            if not source.is_file():
+                return reference
+            if source.suffix.lower() in {".qmd", ".md", ".rst", ".html", ".htm"}:
+                page = self._source_page_destination(source)
+                if page is None:
+                    return reference
+                path = Path(os.path.relpath(page, destination_file.parent)).as_posix()
+                return urlunsplit(("", "", quote(path, safe="/"), url.query, url.fragment))
+            candidate = (destination_file.parent / unquote(url.path)).resolve()
+            if not candidate.is_relative_to(self.build_dir.resolve()) or (
+                self.layout.source_dir != self.layout.package_root
+                and not source.is_relative_to(self.layout.source_dir)
+            ):
+                if source.is_relative_to(self.layout.package_root):
+                    relative = source.relative_to(self.layout.package_root)
+                else:
+                    import hashlib
 
-        # HTML img pattern: <img ... src="path" ...> or src='path'
-        html_pattern = r"<img[^>]+src=[\"']([^\"']+)[\"']"
-        for match in re.finditer(html_pattern, content, re.IGNORECASE):
-            image_paths.add(match.group(1))
+                    relative = (
+                        Path(hashlib.sha256(str(source).encode()).hexdigest()[:16]) / source.name
+                    )
+                candidate = self.build_dir / "_shared" / relative
+            copied = self._copy_source_asset(source, candidate)
+            path = Path(os.path.relpath(copied, destination_file.parent)).as_posix()
+            return urlunsplit(("", "", quote(path, safe="/"), url.query, url.fragment))
 
-        # Filter to local paths only (exclude URLs and assets/ which is handled separately)
-        local_images: list[tuple[str, Path]] = []
-        for path_str in image_paths:
-            # Skip URLs
-            if path_str.startswith(("http://", "https://", "data:", "//")):
+        spans = source_reference_spans(
+            content, html=source_file.suffix.lower() in {".html", ".htm"}
+        )
+        for start, end in reversed(spans):
+            content = content[:start] + rebase(content[start:end]) + content[end:]
+        return content
+
+    def _source_page_destination(self, source: Path) -> Path | None:
+        """
+        Map a documentation source page to its generated destination
+        """
+        landing, _ = self._find_index_source_file()
+        if landing is not None and source == landing.resolve():
+            return self.build_dir / "index.qmd"
+        roots: list[tuple[Path, Path, bool]] = []
+        guide = self._find_user_guide_dir()
+        if guide is not None:
+            if self._config.homepage == "user_guide":
+                info = self._discover_user_guide()
+                if info and info["files"] and source == info["files"][0]["path"].resolve():
+                    return self.build_dir / "index.qmd"
+            roots.append(
+                (guide, self.build_dir / "user-guide", not self._config.user_guide_is_explicit)
+            )
+        for section in self._config.sections or []:
+            if not isinstance(section, dict):
                 continue
-            # Skip assets/ directory (handled by _copy_assets)
-            if path_str.startswith("assets/"):
-                continue
-            # Resolve relative to source file's directory
-            img_path = source_file.parent / path_str
-            if img_path.exists() and img_path.is_file():
-                local_images.append((path_str, img_path))
-
-        if not local_images:
-            return 0
-
-        # Copy each image to the build directory, preserving relative paths
-        copied = 0
-        for rel_path, abs_path in local_images:
-            dest_path = self.project_path / rel_path
-            # Create parent directories if needed
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-            # Copy the file
-            shutil.copy2(abs_path, dest_path)
-            copied += 1
-
-        if copied > 0:
-            print(f"\n🖼️  Copied {copied} image(s) referenced in {source_file.name}")
-
-        return copied
+            destination = self._section_build_dir(section)
+            if destination is not None:
+                roots.append(
+                    (
+                        self.layout.source_dir / section["dir"],
+                        destination,
+                        section.get("type") != "blog",
+                    )
+                )
+        for page in self._config.custom_pages:
+            roots.append(
+                (
+                    self.layout.source_dir / page["dir"],
+                    self._output_directory(page["output"]),
+                    False,
+                )
+            )
+        for directory, destination, strip_prefix in roots:
+            if source.is_relative_to(directory.resolve()):
+                relative = source.relative_to(directory.resolve())
+                if strip_prefix:
+                    relative = Path(*(strip_numeric_prefix(part) for part in relative.parts))
+                return destination / relative
+        return None
 
     def install(self, force: bool = False) -> None:
         """
@@ -788,11 +892,18 @@ class GreatDocs:
         """
         print("Initializing great-docs...")
 
+        self.layout = Layout.make(self.project_root, self._selected_config_path, create=True)
+        self.build_dir = self.layout.build_dir
+
         # Generate great-docs.yml with discovered exports
         self._generate_initial_config(force=force)
 
         # Reload configuration after generating it
-        self._config = Config(self._find_package_root())
+        self._config = Config(
+            self.layout.package_root,
+            config_path=self.layout.config_path,
+            cache_dir=self.layout.cache_dir,
+        )
 
         # Update project root .gitignore to exclude great-docs/
         self._update_project_gitignore(force=force)
@@ -820,6 +931,31 @@ class GreatDocs:
             If True, skip the prompt and automatically update .gitignore.
         """
         gitignore_path = self.project_root / ".gitignore"
+
+        if self.layout.source_dir != self.project_root:
+            source = self.layout.source_dir.relative_to(self.project_root).as_posix()
+            entries = [
+                f"/{source}/_quarto/",
+                f"/{source}/_site/",
+                f"/{source}/.cache/",
+                "/.great-docs-build/",
+                "/.great-docs/",
+            ]
+            content = gitignore_path.read_text(encoding="utf-8") if gitignore_path.exists() else ""
+            missing = [entry for entry in entries if not _gitignore_has_entry(content, entry)]
+            if missing and (
+                force
+                or input("Ignore Great Docs build output? [Y/n]: ").strip().lower()
+                in {"", "y", "yes"}
+            ):
+                gitignore_path.write_text(
+                    content.rstrip()
+                    + "\n\n# Great Docs build output\n"
+                    + "\n".join(missing)
+                    + "\n",
+                    encoding="utf-8",
+                )
+            return
 
         # Entry to add
         entry = "# Great Docs build directory (ephemeral, do not commit)\n/great-docs/\n"
@@ -974,7 +1110,7 @@ class GreatDocs:
             A dict with `light` (and optionally `dark`) keys pointing to paths relative to the
             project root, or `None` if no logo file was found.
         """
-        package_root = self._find_package_root()
+        package_root = self.layout.source_dir
         package_name = self._detect_package_name() or ""
         importable = package_name.replace("-", "_")
 
@@ -1058,7 +1194,7 @@ class GreatDocs:
             A dict with `light` (and optionally `dark`) keys, or `None` if no hero logo file was
             found.
         """
-        package_root = self._find_package_root()
+        package_root = self.layout.source_dir
 
         # Candidate paths in priority order
         candidates = [
@@ -1447,41 +1583,9 @@ class GreatDocs:
 
     def _find_package_root(self) -> Path:
         """
-        Find the actual package root directory.
-
-        Searches upward from `project_root` for the first directory that contains a recognized
-        project manifest: `pyproject.toml`, `setup.py`, or `go.mod`. This allows great-docs to be
-        invoked from within a subdirectory (e.g. the `great-docs/` build output directory) and still
-        resolve the true project root, for both Python and Go projects.
-
-        Returns
-        -------
-        Path
-            The package root directory
+        Return the package root selected for this documentation project
         """
-        if hasattr(self, "_package_root_cache"):
-            return self._package_root_cache
-
-        current = self.project_root
-
-        # Search upward from current directory
-        for _ in range(5):  # Limit search to 5 levels up
-            if (
-                (current / "pyproject.toml").exists()
-                or (current / "setup.py").exists()
-                or (current / "go.mod").exists()
-                or (current / "Cargo.toml").exists()
-            ):
-                self._package_root_cache = current
-                return current
-            parent = current.parent
-            if parent == current:  # pragma: no cover — reached filesystem root
-                break
-            current = parent
-
-        # Fallback to project_root if we can't find it
-        self._package_root_cache = self.project_root
-        return self.project_root
+        return self.layout.package_root
 
     def _detect_go_cli_project(self):
         """Detect whether the project is a Go CLI project.
@@ -1794,7 +1898,9 @@ class GreatDocs:
 
         # Read Great Docs configuration from great-docs.yml
         # Reload config to ensure we have the latest
-        self._config = Config(package_root)
+        self._config = Config(
+            package_root, config_path=self.layout.config_path, cache_dir=self.layout.cache_dir
+        )
 
         # Map config properties to metadata dict for backward compatibility
         metadata["rich_authors"] = self._config.authors
@@ -2236,7 +2342,7 @@ class GreatDocs:
                 lines.append(body)
                 lines.append("")
 
-        changelog_path = self.project_path / "changelog.qmd"
+        changelog_path = self.build_dir / "changelog.qmd"
         changelog_path.write_text("\n".join(lines), encoding="utf-8")
         print(f"Created {changelog_path}")
 
@@ -2244,7 +2350,7 @@ class GreatDocs:
 
     def _add_changelog_to_navbar(self) -> None:
         """Add a *Changelog* link to the navbar (idempotent)."""
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
         if not quarto_yml.exists():
             return
 
@@ -2272,12 +2378,10 @@ class GreatDocs:
 
     def _section_build_dir(self, section_cfg: dict[str, object]) -> Path | None:
         """
-        Resolve the build-time destination directory for a custom section.
+        Resolve a section destination independently of its source location
 
-        Mirrors the slug logic in `_process_sections` so that tag and status
-        scanning look at the same directory the section files were copied into.
-        The build directory is derived from `section_cfg["dir"]` (not the title),
-        which is what `_process_sections` uses as the copy destination.
+        Keep shared package-relative section paths when documentation sources
+        move into a subdirectory. Keep every destination inside the build tree.
 
         Parameters
         ----------
@@ -2287,14 +2391,36 @@ class GreatDocs:
         Returns
         -------
         Path | None
-            The build directory under `project_path`, or `None` if the section
+            The directory under `build_dir`, or `None` if the section
             has no `dir`.
         """
         src_dir = section_cfg.get("dir")
         if not src_dir or not isinstance(src_dir, str):
             return None
-        slug = src_dir.replace("_", "-").replace(" ", "-").lower()
-        return self.project_path / slug
+        source = Path(src_dir)
+        if source.is_absolute() or ".." in source.parts:
+            resolved = (self.layout.source_dir / source).resolve()
+            source = (
+                resolved.relative_to(self.layout.package_root)
+                if resolved.is_relative_to(self.layout.package_root)
+                else Path(source.name)
+            )
+        slug = section_slug(source.as_posix())
+        return self._output_directory(slug)
+
+    def _output_directory(self, output: str) -> Path:
+        """
+        Validate a configured destination within the selected build directory
+        """
+        path = Path(output)
+        destination = (self.build_dir / path).resolve()
+        if (
+            path.is_absolute()
+            or ".." in path.parts
+            or not destination.is_relative_to(self.build_dir.resolve())
+        ):
+            raise ValueError(f"Output path must remain inside the build directory: {output}")
+        return destination
 
     def _collect_page_tags(self) -> dict[str, list[dict[str, str]]]:
         """
@@ -2314,11 +2440,11 @@ class GreatDocs:
         # Directories to scan for tagged pages
         scan_dirs: list[tuple[Path, str]] = []
         seen_dirs: set[Path] = set()
-        ug_dir = self.project_path / "user-guide"
+        ug_dir = self.build_dir / "user-guide"
         if ug_dir.is_dir():
             scan_dirs.append((ug_dir, "User Guide"))
             seen_dirs.add(ug_dir.resolve())
-        recipes_dir = self.project_path / "recipes"
+        recipes_dir = self.build_dir / "recipes"
         if recipes_dir.is_dir():
             scan_dirs.append((recipes_dir, "Recipes"))
             seen_dirs.add(recipes_dir.resolve())
@@ -2349,7 +2475,7 @@ class GreatDocs:
                     continue
 
                 page_title = fm.get("title", self._derive_page_title(qmd_file))
-                page_href = str(qmd_file.relative_to(self.project_path))
+                page_href = str(qmd_file.relative_to(self.build_dir))
 
                 for tag in raw_tags:
                     tag_str = str(tag).strip()
@@ -2425,7 +2551,7 @@ class GreatDocs:
         tags_title = get_translation("site_tags", lang)
         tag_icons = self._config.tags_icons
 
-        tags_dir = self.project_path / "tags"
+        tags_dir = self.build_dir / "tags"
         tags_dir.mkdir(parents=True, exist_ok=True)
 
         tags_intro = get_translation("tags_intro", lang)
@@ -2471,7 +2597,7 @@ class GreatDocs:
 
         index_path = tags_dir / "index.qmd"
         index_path.write_text("\n".join(lines), encoding="utf-8")
-        print(f"Created {index_path.relative_to(self.project_path)}")
+        print(f"Created {index_path.relative_to(self.build_dir)}")
         return "tags/index.qmd"
 
     def _render_tag_tree(
@@ -2569,7 +2695,7 @@ class GreatDocs:
         # and per-page tag_location overrides from frontmatter
         # Re-scan tagged directories
         page_tag_locations: dict[str, str] = {}
-        scan_dirs: list[Path] = [self.project_path / "user-guide", self.project_path / "recipes"]
+        scan_dirs: list[Path] = [self.build_dir / "user-guide", self.build_dir / "recipes"]
         seen_dirs: set[Path] = {d.resolve() for d in scan_dirs}
         # Include custom section directories
         for section_cfg in self._config.sections:
@@ -2591,7 +2717,7 @@ class GreatDocs:
                 raw_tags = fm.get("tags", [])
                 if not raw_tags or not isinstance(raw_tags, list):  # pragma: no cover
                     continue  # pragma: no cover
-                href = str(qmd_file.relative_to(self.project_path))
+                href = str(qmd_file.relative_to(self.build_dir))
                 for tag in raw_tags:
                     tag_str = str(tag).strip()
                     if tag_str and tag_str in shadow_tags:
@@ -2642,7 +2768,7 @@ class GreatDocs:
             "default_location": self._config.tags_location,
             "page_tag_locations": page_tag_locations,
         }
-        tags_path = self.project_path / "_tags.json"
+        tags_path = self.build_dir / "_tags.json"
         with open(tags_path, "w", encoding="utf-8") as f:
             json.dump(tags_json, f)
 
@@ -2653,7 +2779,7 @@ class GreatDocs:
         lang = self._config.language
         tags_label = get_translation("site_tags", lang)
 
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
         if not quarto_yml.exists():
             return
 
@@ -2710,11 +2836,11 @@ class GreatDocs:
         without an XHR request, which would fail under `file://` protocol or when the relative path
         depth is wrong.
         """
-        tags_json_path = self.project_path / "_tags.json"
+        tags_json_path = self.build_dir / "_tags.json"
         if not tags_json_path.is_file():
             return
 
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
         if not quarto_yml.is_file():
             return
 
@@ -2844,7 +2970,7 @@ class GreatDocs:
         scan_dirs: list[Path] = []
         seen_dirs: set[Path] = set()
         for subdir in ("user-guide", "recipes", "reference"):
-            d = self.project_path / subdir
+            d = self.build_dir / subdir
             if d.is_dir():
                 scan_dirs.append(d)
                 seen_dirs.add(d.resolve())
@@ -2873,10 +2999,10 @@ class GreatDocs:
                 if status not in valid_statuses:
                     print(
                         f"Warning: Unknown page status '{status}' in "
-                        f"{qmd_file.relative_to(self.project_path)}"
+                        f"{qmd_file.relative_to(self.build_dir)}"
                     )
                     continue
-                href = str(qmd_file.relative_to(self.project_path))
+                href = str(qmd_file.relative_to(self.build_dir))
                 status_map[href] = status
 
         return status_map
@@ -2925,7 +3051,7 @@ class GreatDocs:
             "show_in_sidebar": self._config.page_status_show_in_sidebar,
             "show_on_pages": self._config.page_status_show_on_pages,
         }
-        status_path = self.project_path / "_page_status.json"
+        status_path = self.build_dir / "_page_status.json"
         with open(status_path, "w", encoding="utf-8") as f:
             json.dump(status_json, f)
 
@@ -2935,11 +3061,11 @@ class GreatDocs:
         Ensures `page-status-badges.js` can read status data directly from
         `window.__GD_STATUS_DATA__`.
         """
-        status_json_path = self.project_path / "_page_status.json"
+        status_json_path = self.build_dir / "_page_status.json"
         if not status_json_path.is_file():
             return
 
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
         if not quarto_yml.is_file():
             return
 
@@ -3039,7 +3165,7 @@ class GreatDocs:
                 print(f"   ⚠️  Section missing 'title' or 'dir', skipping: {section_cfg}")
                 continue
 
-            source_path = self.project_root / src_dir
+            source_path = self.layout.source_dir / src_dir
             if not source_path.exists() or not source_path.is_dir():
                 print(f"   ⚠️  Section directory '{src_dir}' not found, skipping")
                 continue
@@ -3062,8 +3188,9 @@ class GreatDocs:
             # Determine the slug for the build directory (lowercase, hyphenated).
             # `_section_build_dir` mirrors this formula so tag/status scanning
             # resolves the same destination directory.
-            slug = src_dir.replace("_", "-").replace(" ", "-").lower()
-            dest_dir = self.project_path / slug
+            dest_dir = self._section_build_dir(section_cfg)
+            assert dest_dir is not None
+            slug = dest_dir.relative_to(self.build_dir).as_posix()
             dest_dir.mkdir(parents=True, exist_ok=True)
 
             # Copy asset directories (images, data, code snippets, etc.)
@@ -3185,7 +3312,7 @@ class GreatDocs:
             rel = src_file.relative_to(source_dir)
 
             # Strip numeric prefix from filename (e.g., 01-intro.qmd -> intro.qmd)
-            clean_name = self._strip_numeric_prefix(rel.name)
+            clean_name = strip_numeric_prefix(rel.name)
 
             # Strip numeric prefixes from subdirectory parts too (e.g.,
             # 02-topic-b/page.qmd -> topic-b/page.qmd), mirroring the user-guide
@@ -3193,7 +3320,7 @@ class GreatDocs:
             # by _fix_numeric_prefix_links, which strips prefixes from every path
             # component.
             clean_parent = (
-                Path(*[self._strip_numeric_prefix(p) for p in rel.parent.parts])
+                Path(*[strip_numeric_prefix(p) for p in rel.parent.parts])
                 if rel.parent.parts
                 else rel.parent
             )
@@ -3206,9 +3333,10 @@ class GreatDocs:
 
             # Expand {{< code-include >}} shortcodes before Quarto sees the file
             content = self._expand_code_includes(content, src_file.parent)
+            content = self._rebase_source_references(content, src_file, dest_file)
 
             # Fix links to .qmd files with numeric prefixes
-            content = self._fix_numeric_prefix_links(content)
+            content = fix_numeric_prefix_links(content)
 
             # Parse frontmatter for metadata
             title = clean_name.replace(".qmd", "").replace(".md", "").replace("-", " ").title()
@@ -3301,6 +3429,7 @@ class GreatDocs:
 
             # Expand {{< code-include >}} shortcodes before Quarto sees the file
             content = self._expand_code_includes(content, src_file.parent)
+            content = self._rebase_source_references(content, src_file, dest_file)
 
             # Parse frontmatter for metadata (but don't modify it —
             # Quarto's listing needs the original frontmatter)
@@ -3578,7 +3707,7 @@ class GreatDocs:
             Optional list of group dicts for organizing flat pages into sidebar sections. Each dict
             has `section` (title) and `contents` (list of page filenames without numeric prefix).
         """
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
         config = self._read_quarto_config(quarto_yml)
 
         sidebar_id = slug
@@ -3661,7 +3790,7 @@ class GreatDocs:
             # encounter order already reflects the author's intended ordering.
             # Sorting here would use the prefix-stripped names and lose it.
             for subdir in subdir_groups_dict:
-                clean_subdir = self._strip_numeric_prefix(subdir)  # pragma: no cover
+                clean_subdir = strip_numeric_prefix(subdir)  # pragma: no cover
                 section_title = dir_titles.get(  # pragma: no cover
                     clean_subdir,
                     clean_subdir.replace("-", " ").replace("_", " ").title(),
@@ -3756,7 +3885,7 @@ class GreatDocs:
             Name of an existing navbar item to insert after. If None,
             inserts before "Reference".
         """
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
         config = self._read_quarto_config(quarto_yml)
 
         navbar = config.get("website", {}).get("navbar", {})
@@ -3844,7 +3973,8 @@ class GreatDocs:
         sources: list[dict[str, Path | str]] = []
 
         for entry in self._config.custom_pages:
-            source_dir = self.project_root / entry["dir"]
+            self._output_directory(entry["output"])
+            source_dir = self.layout.source_dir / entry["dir"]
             if not source_dir.exists() or not source_dir.is_dir():
                 if entry["dir"] != "custom" or self._config.exists():
                     print(f"   ⚠️  Custom pages directory '{entry['dir']}' not found, skipping")
@@ -3926,7 +4056,7 @@ class GreatDocs:
         if not resources_to_add and not render_excludes:
             return
 
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
         config = self._read_quarto_config(quarto_yml)
         project = config.setdefault("project", {})
 
@@ -3966,7 +4096,7 @@ class GreatDocs:
         for source in sources:
             source_dir = source["source_dir"]
             output_prefix = str(source["output"])
-            dest_dir = self.project_path / output_prefix
+            dest_dir = self._output_directory(output_prefix)
             dest_dir.mkdir(parents=True, exist_ok=True)
 
             for src_path in sorted(source_dir.rglob("*")):
@@ -3984,6 +4114,7 @@ class GreatDocs:
                     continue
 
                 content = src_path.read_text(encoding="utf-8")
+                content = self._rebase_source_references(content, src_path, dest_path)
                 frontmatter, body = self._split_frontmatter(content)
                 layout = str(frontmatter.get("layout", "passthrough")).lower()
                 page_title = str(frontmatter.get("title") or self._derive_page_title(src_path))
@@ -4524,7 +4655,7 @@ class GreatDocs:
         if not cli_info:
             return []
 
-        cli_ref_dir = self.project_path / "reference" / "cli"
+        cli_ref_dir = self.build_dir / "reference" / "cli"
         cli_ref_dir.mkdir(parents=True, exist_ok=True)
 
         generated_files: list[str | dict] = []
@@ -4545,7 +4676,7 @@ class GreatDocs:
 
         cli_index_label = get_translation("cli_index", self._config.language)
         generated_files.append({"text": cli_index_label, "href": "reference/cli/index.qmd"})
-        generated_paths.append(str(index_path.relative_to(self.project_path)))
+        generated_paths.append(str(index_path.relative_to(self.build_dir)))
 
         # Generate the root command page (global options, usage, full --help) on its own page so
         # the index can stay a pure listing.
@@ -4554,7 +4685,7 @@ class GreatDocs:
         with open(root_path, "w") as f:
             f.write(root_page)
         generated_files.append(f"reference/cli/{entry_safe}.qmd")
-        generated_paths.append(str(root_path.relative_to(self.project_path)))
+        generated_paths.append(str(root_path.relative_to(self.build_dir)))
 
         # Generate pages for subcommands
         subcommand_items = self._generate_subcommand_pages(
@@ -4728,7 +4859,7 @@ class GreatDocs:
 
             rel_path = f"{rel_prefix}/{safe_name}.qmd"
             if _paths is not None:
-                _paths.append(str(page_path.relative_to(self.project_path)))
+                _paths.append(str(page_path.relative_to(self.build_dir)))
 
             # Recursively generate for nested subcommands
             if subcmd.get("commands"):
@@ -5055,7 +5186,7 @@ class GreatDocs:
         if not cli_files:
             return
 
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
         if not quarto_yml.exists():
             return
 
@@ -5158,7 +5289,7 @@ class GreatDocs:
         if not module_path:
             # Try common MCP module locations based on the documented package
             package_name = self._normalize_package_name(
-                self._config["module"] or self.project_path.name
+                self._config["module"] or self.build_dir.name
             )
             common_mcp_modules = [
                 f"{package_name}.mcp",
@@ -5202,7 +5333,7 @@ class GreatDocs:
         """
         from ._mcp_docs import generate_mcp_reference_pages
 
-        mcp_ref_dir = self.project_path / "reference" / "mcp"
+        mcp_ref_dir = self.build_dir / "reference" / "mcp"
         return generate_mcp_reference_pages(
             server_info=mcp_info,
             output_dir=mcp_ref_dir,
@@ -5222,7 +5353,7 @@ class GreatDocs:
         if not mcp_files:
             return
 
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
         if not quarto_yml.exists():
             return
 
@@ -5267,7 +5398,7 @@ class GreatDocs:
         or no MCP pages are generated. This prevents a dangling MCP navigation
         item that would lead to a 404 page.
         """
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
         if not quarto_yml.exists():
             return
 
@@ -5335,7 +5466,7 @@ class GreatDocs:
 
         generate_mcp_manifest(
             server_info=mcp_info,
-            output_dir=self.project_path,
+            output_dir=self.build_dir,
             package_name=package_name,
             repo_url=repo_url,
             site_url=site_url,
@@ -5359,7 +5490,7 @@ class GreatDocs:
         Path | None
             Path to the user guide source directory, or `None` if not found.
         """
-        package_root = self._find_package_root()
+        package_root = self.layout.source_dir
         configured_dir = self._config.user_guide_dir  # str or None (ignores list)
 
         if configured_dir is not None:
@@ -5639,64 +5770,6 @@ class GreatDocs:
             "frontmatter": frontmatter,
         }
 
-    def _strip_numeric_prefix(self, filename: str) -> str:
-        """
-        Strip numeric ordering prefix from a filename.
-
-        Handles common patterns like:
-
-        - 00-introduction.qmd -> introduction.qmd
-        - 01-installation.qmd -> installation.qmd
-        - 1-getting-started.qmd -> getting-started.qmd
-        - 0001-overview.qmd -> overview.qmd
-
-        Parameters
-        ----------
-        filename
-            The filename to process.
-
-        Returns
-        -------
-        str
-            The filename with numeric prefix stripped, or unchanged if no prefix.
-        """
-        # Pattern matches: digits followed by a hyphen or underscore at the start
-        # e.g., "00-", "01-", "1-", "0001-", "00_", etc.
-        pattern = r"^\d+-|^\d+_"
-        return re.sub(pattern, "", filename)
-
-    def _fix_numeric_prefix_links(self, content: str) -> str:
-        """
-        Rewrite relative Markdown links to `.qmd` files, stripping numeric prefixes.
-
-        When numeric prefixes are stripped from filenames during the copy step (e.g.,
-        `11-theming.qmd` -> `theming.qmd`), any cross-references between pages that use the original
-        prefixed names would break. This method fixes those links so authors can write
-        `[Theming](11-theming.qmd)` in source and it resolves correctly in the rendered site.
-
-        Only relative links to `.qmd` files are affected; absolute URLs and anchors are left
-        untouched.
-        """
-
-        def _rewrite(m: re.Match) -> str:
-            path = m.group(1)
-            # Split off anchor / query string
-            anchor = ""
-            for sep in ("#", "?"):
-                idx = path.find(sep)
-                if idx != -1:
-                    anchor = path[idx:]
-                    path = path[:idx]
-                    break
-            # Strip numeric prefix from each path component
-            parts = path.split("/")
-            clean_parts = [re.sub(r"^\d+[-_]", "", p) for p in parts]
-            return "](" + "/".join(clean_parts) + anchor + ")"
-
-        # Match markdown link targets that are relative paths ending in .qmd
-        # (skip absolute URLs starting with http://, https://, or /)
-        return re.sub(r"\]\((?!https?://|/)([^)]+\.qmd(?:[#?][^)]*)?)\)", _rewrite, content)
-
     def _copy_user_guide_to_docs(self, user_guide_info: dict) -> list[str]:
         """
         Copy user guide files from project root to docs directory.
@@ -5721,7 +5794,7 @@ class GreatDocs:
             return []
 
         source_dir = user_guide_info["source_dir"]
-        target_dir = self.project_path / "user-guide"
+        target_dir = self.build_dir / "user-guide"
         target_dir.mkdir(parents=True, exist_ok=True)
 
         is_explicit = user_guide_info.get("explicit", False)
@@ -5742,7 +5815,7 @@ class GreatDocs:
             else:
                 # Auto-discovery mode: strip numeric prefixes from both
                 # directory names and filenames for cleaner URLs
-                clean_parts = [self._strip_numeric_prefix(part) for part in rel_path.parts]
+                clean_parts = [strip_numeric_prefix(part) for part in rel_path.parts]
                 dest_rel_path = Path(*clean_parts) if clean_parts else rel_path
 
             dst_path = target_dir / dest_rel_path
@@ -5754,10 +5827,12 @@ class GreatDocs:
 
             # Expand {{< code-include >}} shortcodes before Quarto sees the file
             content = self._expand_code_includes(content, src_path.parent)
+            reference_destination = self._source_page_destination(src_path.resolve()) or dst_path
+            content = self._rebase_source_references(content, src_path, reference_destination)
 
             # In auto-discovery mode, fix links to .qmd files with numeric prefixes
             if not is_explicit:
-                content = self._fix_numeric_prefix_links(content)
+                content = fix_numeric_prefix_links(content)
 
             # Add bread-crumbs: false to frontmatter
             content = self._add_frontmatter_option(content, "bread-crumbs", False)
@@ -5996,13 +6071,15 @@ class GreatDocs:
 
     def _resolve_code_include_path(self, file_path_str: str, source_dir: Path) -> Path | None:
         """
-        Resolve a code-include file path.
+        Resolve a code-include path against the page, source, and project roots
 
-        Tries *source_dir* first, then the project root.
+        The lookup checks the page directory, documentation source directory, and
+        project root in that order.
         """
         candidates = [
             source_dir / file_path_str,
-            self.project_root / file_path_str,
+            self.layout.source_dir / file_path_str,
+            self.layout.package_root / file_path_str,
         ]
         for candidate in candidates:
             resolved = candidate.resolve()
@@ -6043,7 +6120,7 @@ class GreatDocs:
         Returns the list of relative file paths that were modified.
         """
         modified: list[str] = []
-        for qmd in self.project_path.rglob("*.qmd"):
+        for qmd in self.build_dir.rglob("*.qmd"):
             content = qmd.read_text(encoding="utf-8")
             if not content.startswith("---"):
                 continue
@@ -6083,7 +6160,7 @@ class GreatDocs:
 
             content = f"---{new_frontmatter}---{parts[2]}"
             qmd.write_text(content, encoding="utf-8")
-            rel_path = str(qmd.relative_to(self.project_path))
+            rel_path = str(qmd.relative_to(self.build_dir))
             modified.append(rel_path)
 
         return modified
@@ -6214,7 +6291,7 @@ class GreatDocs:
         # Helper to get clean href (strips numeric prefixes for cleaner URLs)
         def get_clean_href(file_info: dict) -> str:
             rel_path = file_info["path"].relative_to(source_dir)
-            clean_parts = [self._strip_numeric_prefix(part) for part in rel_path.parts]
+            clean_parts = [strip_numeric_prefix(part) for part in rel_path.parts]
             clean_rel_path = Path(*clean_parts) if clean_parts else rel_path
             return f"user-guide/{clean_rel_path}"
 
@@ -6325,7 +6402,7 @@ class GreatDocs:
                         _, _, subdir, dir_files = item
                         # Use the index.qmd title as the section title if present,
                         # otherwise derive from the directory name
-                        clean_subdir = self._strip_numeric_prefix(subdir)
+                        clean_subdir = strip_numeric_prefix(subdir)
                         section_title = clean_subdir.replace("-", " ").replace("_", " ").title()
                         section_contents = []
                         for file_info in dir_files:
@@ -6403,7 +6480,7 @@ class GreatDocs:
         user_guide_info
             User guide structure from _discover_user_guide.
         """
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
         if not quarto_yml.exists():
             return
 
@@ -6458,7 +6535,7 @@ class GreatDocs:
                         # Use the first file with clean filename
                         first_file = user_guide_info["files"][0]
                         rel_path = first_file["path"].relative_to(user_guide_info["source_dir"])
-                        clean_filename = self._strip_numeric_prefix(rel_path.name)
+                        clean_filename = strip_numeric_prefix(rel_path.name)
                         clean_rel_path = rel_path.parent / clean_filename
                         user_guide_href = f"user-guide/{clean_rel_path}"
 
@@ -6555,10 +6632,10 @@ class GreatDocs:
         if is_explicit:
             dest_rel = rel_path
         else:
-            clean_parts = [self._strip_numeric_prefix(part) for part in rel_path.parts]
+            clean_parts = [strip_numeric_prefix(part) for part in rel_path.parts]
             dest_rel = Path(*clean_parts) if clean_parts else rel_path
 
-        first_ug_path = self.project_path / "user-guide" / dest_rel
+        first_ug_path = self.build_dir / "user-guide" / dest_rel
 
         if not first_ug_path.exists():
             print(f"   ⚠️  First UG page '{first_ug_path}' not found for blended homepage")
@@ -6626,7 +6703,7 @@ class GreatDocs:
             blended_content = f"{frontmatter_block}\n{hero_block}{body}"
 
         # Write to index.qmd at the site root
-        index_qmd = self.project_path / "index.qmd"
+        index_qmd = self.build_dir / "index.qmd"
         with open(index_qmd, "w", encoding="utf-8") as f:
             f.write(blended_content)
 
@@ -6914,7 +6991,7 @@ class GreatDocs:
                             }
 
         # Write to JSON file in the docs directory
-        source_links_path = self.project_path / "_source_links.json"
+        source_links_path = self.build_dir / "_source_links.json"
         with open(source_links_path, "w", encoding="utf-8") as f:
             json.dump(source_links, f, indent=2)
 
@@ -7983,7 +8060,7 @@ class GreatDocs:
             if key not in object_types:
                 object_types[key] = member_type
 
-        types_path = self.project_path / "_object_types.json"
+        types_path = self.build_dir / "_object_types.json"
         types_path.parent.mkdir(parents=True, exist_ok=True)
         with open(types_path, "w") as f:
             json.dump(object_types, f, indent=2, sort_keys=True)
@@ -7994,7 +8071,7 @@ class GreatDocs:
         # extractable values or annotations.
         constant_metadata = categories.get("constant_metadata", {})
         if constant_metadata:
-            values_path = self.project_path / "_constant_values.json"
+            values_path = self.build_dir / "_constant_values.json"
             with open(values_path, "w") as f:
                 json.dump(constant_metadata, f, indent=2, sort_keys=True)
             print(
@@ -9608,7 +9685,7 @@ class GreatDocs:
         bool
             True if config was created, False if skipped.
         """
-        config_path = self._find_package_root() / "great-docs.yml"
+        config_path = self.layout.config_path
 
         if config_path.exists() and not force:
             print(
@@ -9616,6 +9693,8 @@ class GreatDocs:
                 "Use --force to overwrite it (this will reset to defaults)."
             )
             return False
+
+        config_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Detect package name
         package_name = self._detect_package_name()
@@ -9793,16 +9872,15 @@ class GreatDocs:
             A tuple of (source_file_path, warnings_list).
             source_file_path is None if no suitable file is found.
         """
-        package_root = self._find_package_root()
+        source_dir = self.layout.source_dir
         warnings = []
-
-        # Candidates in priority order
         candidates = [
-            package_root / "index.qmd",
-            package_root / "index.md",
-            package_root / "README.md",
-            package_root / "README.rst",
+            source_dir / name for name in ("index.qmd", "index.md", "README.md", "README.rst")
         ]
+        if source_dir != self.layout.package_root:
+            candidates.extend(
+                self.layout.package_root / name for name in ("README.md", "README.rst")
+            )
 
         found = [c for c in candidates if c.exists()]
 
@@ -10165,21 +10243,6 @@ class GreatDocs:
         if logo_config is False:
             logo_config = None  # pragma: no cover
 
-        # Copy auto-detected logo files into the build dir so the HTML
-        # references resolve.  Files under assets/ are already copied by
-        # _copy_assets; root-level files need an explicit copy.
-        if logo_config and isinstance(logo_config, dict):
-            package_root = self._find_package_root()
-            for key in ("light", "dark"):
-                rel = logo_config.get(key)
-                if rel and not rel.startswith("assets/"):
-                    src = package_root / rel
-                    if src.is_file():
-                        dest = self.project_path / rel
-                        dest.parent.mkdir(parents=True, exist_ok=True)
-                        if not dest.exists():
-                            shutil.copy2(src, dest)
-
         if logo_config:
             if isinstance(logo_config, dict):
                 light = logo_config.get("light")
@@ -10195,6 +10258,9 @@ class GreatDocs:
                     logo_html = f'<img src="{light}" alt="{alt}" class="gd-hero-logo" style="max-height:{logo_height}" />'  # pragma: no cover
             elif isinstance(logo_config, str):
                 logo_html = f'<img src="{logo_config}" alt="Logo" class="gd-hero-logo" style="max-height:{logo_height}" />'
+            logo_html = self._rebase_source_references(
+                logo_html, self.layout.config_path, self.build_dir / "index.qmd"
+            )
 
         # ── Name ────────────────────────────────────────────────────
         hero_name = self._config.hero_name
@@ -10263,9 +10329,9 @@ class GreatDocs:
         metadata = self._get_package_metadata()
 
         # Determine which supporting pages exist (already created by _create_index_from_readme)
-        license_qmd = self.project_path / "license.qmd"
+        license_qmd = self.build_dir / "license.qmd"
         license_link = "license.qmd" if license_qmd.exists() else None
-        citation_qmd = self.project_path / "citation.qmd"
+        citation_qmd = self.build_dir / "citation.qmd"
         citation_link = "citation.qmd" if citation_qmd.exists() else None
 
         margin_sections: list[str] = []
@@ -10524,7 +10590,7 @@ class GreatDocs:
             if lines and lines[0].startswith("# "):
                 contributing_content = "\n".join(lines[1:]).lstrip()
 
-            contributing_qmd = self.project_path / "contributing.qmd"
+            contributing_qmd = self.build_dir / "contributing.qmd"
             contributing_qmd_content = f"""---
 title: "Contributing"
 ---
@@ -10545,7 +10611,7 @@ title: "Contributing"
             if lines and lines[0].startswith("# "):
                 coc_content = "\n".join(lines[1:]).lstrip()
 
-            coc_qmd = self.project_path / "code-of-conduct.qmd"
+            coc_qmd = self.build_dir / "code-of-conduct.qmd"
             coc_qmd_content = f"""---
 title: "Code of Conduct"
 ---
@@ -10572,7 +10638,7 @@ title: "Code of Conduct"
             if lines and lines[0].startswith("# "):
                 roadmap_content = "\n".join(lines[1:]).lstrip()
 
-            roadmap_qmd = self.project_path / "roadmap.qmd"
+            roadmap_qmd = self.build_dir / "roadmap.qmd"
             roadmap_qmd_content = f"""---
 title: "Roadmap"
 ---
@@ -10593,7 +10659,7 @@ title: "Roadmap"
             if lines and lines[0].startswith("# "):
                 security_content = "\n".join(lines[1:]).lstrip()
 
-            security_qmd = self.project_path / "security.qmd"
+            security_qmd = self.build_dir / "security.qmd"
             security_qmd_content = f"""---
 title: "Security Policy"
 ---
@@ -10650,7 +10716,7 @@ title: "Security Policy"
             meta_items.append(f"[{tags_label}](tags/index.html)")
 
         # Package Info page link
-        pkg_info_qmd = self.project_path / "package-info.qmd"
+        pkg_info_qmd = self.build_dir / "package-info.qmd"
         if pkg_info_qmd.exists():
             _pkg_info_label = get_translation("package_info", lang)
             meta_items.append(f"[{_pkg_info_label}](package-info.html)")
@@ -10727,7 +10793,7 @@ title: "Security Policy"
         license_path = package_root / "LICENSE"
         license_link = None
         if license_path.exists():
-            license_qmd = self.project_path / "license.qmd"
+            license_qmd = self.build_dir / "license.qmd"
             with open(license_path, "r", encoding="utf-8") as f:
                 license_content = f.read()
 
@@ -10798,7 +10864,7 @@ anchor-sections: false
         citation_path = package_root / "CITATION.cff"
         citation_link = None
         if citation_path.exists():
-            citation_qmd = self.project_path / "citation.qmd"
+            citation_qmd = self.build_dir / "citation.qmd"
 
             # Get metadata first to access rich_authors and repo info
             metadata = self._get_package_metadata()
@@ -11000,7 +11066,7 @@ title: "Authors and Citation"
         self._generate_package_info_page()
 
         # Now check if we should create index.qmd
-        index_qmd = self.project_path / "index.qmd"
+        index_qmd = self.build_dir / "index.qmd"
 
         # In "user_guide" homepage mode, the first UG page becomes index.qmd
         # instead — skip README-based index generation entirely.
@@ -11057,7 +11123,7 @@ title: "Authors and Citation"
                 homepage_title = source_title
 
             # Copy images referenced in the source file to the build directory
-            self._copy_readme_images(source_file)
+            readme_content = self._rebase_source_references(readme_content, source_file, index_qmd)
 
         # Build hero section (must run before heading adjustment so badge
         # extraction works on original markdown)
@@ -11365,7 +11431,7 @@ anchor-sections: true
 {body}
 """
 
-        pkg_info_qmd = self.project_path / "package-info.qmd"
+        pkg_info_qmd = self.build_dir / "package-info.qmd"
         with open(pkg_info_qmd, "w", encoding="utf-8") as f:
             f.write(qmd_content)
         print(f"Created {pkg_info_qmd}")
@@ -11395,7 +11461,7 @@ anchor-sections: true
             self._has_api_reference = False
             return
 
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
 
         with open(quarto_yml, "r") as f:
             config = read_yaml(f) or {}
@@ -11560,7 +11626,7 @@ anchor-sections: true
             print("API reference already configured in this build, skipping re-discovery")
             return
 
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
 
         if not quarto_yml.exists():
             print("Error: _quarto.yml not found. Run 'great-docs init' first.")
@@ -11775,7 +11841,7 @@ anchor-sections: true
         settings. If website navigation is not present, it adds a navbar with Home
         and API Reference links, and sets the site title to the package name.
         """
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
 
         if not quarto_yml.exists():
             print("Warning: _quarto.yml not found. Creating minimal configuration...")
@@ -11797,6 +11863,7 @@ anchor-sections: true
             config["format"]["html"] = {}
 
         # Add post-render script
+        config["project"]["output-dir"] = "_site"
         config["project"]["post-render"] = "scripts/post-render.py"
 
         # Build pre-render script list
@@ -11804,7 +11871,7 @@ anchor-sections: true
 
         # Auto-inject restore-freeze when freeze is configured OR _freeze/ exists
         freeze_mode = self._config.freeze
-        has_freeze_cache = (self.project_root / "_freeze").is_dir()
+        has_freeze_cache = self.layout.freeze_dir.is_dir()
         if freeze_mode is not None or has_freeze_cache:
             pre_render_entries.append("scripts/restore-freeze.py")
 
@@ -11876,7 +11943,7 @@ anchor-sections: true
                 if marimo_res not in config["project"]["resources"]:
                     config["project"]["resources"].append(marimo_res)
             # Include notebooks directory so .py files are available to the shortcode
-            notebooks_dir = self.project_path / "notebooks"
+            notebooks_dir = self.build_dir / "notebooks"
             if notebooks_dir.exists() and notebooks_dir.is_dir():
                 if "notebooks/**" not in config["project"]["resources"]:
                     config["project"]["resources"].append("notebooks/**")
@@ -11899,7 +11966,7 @@ anchor-sections: true
         # Add all user-guide asset directories to resources so that images
         # referenced only via data attributes (e.g., dark-mode variants) get
         # copied to _site
-        ug_dir = self.project_path / "user-guide"
+        ug_dir = self.build_dir / "user-guide"
         if ug_dir.exists() and ug_dir.is_dir():
             for item in ug_dir.iterdir():
                 if item.is_dir() and self._is_asset_dir(item):
@@ -11908,10 +11975,12 @@ anchor-sections: true
                         config["project"]["resources"].append(res_glob)
 
         # Add assets directory to resources if it exists
-        assets_dir = self.project_path / "assets"
+        assets_dir = self.build_dir / "assets"
         if assets_dir.exists() and assets_dir.is_dir():
             if "assets/**" not in config["project"]["resources"]:
                 config["project"]["resources"].append("assets/**")
+        if "_shared/**" not in config["project"]["resources"]:
+            config["project"]["resources"].append("_shared/**")
 
         # Add custom section asset directories to resources
         sections_config = self._config.sections
@@ -11922,8 +11991,10 @@ anchor-sections: true
                 src_dir = section_cfg.get("dir")
                 if not src_dir:
                     continue
-                slug = src_dir.replace("_", "-").replace(" ", "-").lower()
-                section_build_dir = self.project_path / slug
+                section_build_dir = self._section_build_dir(section_cfg)
+                if section_build_dir is None:
+                    continue
+                slug = section_build_dir.relative_to(self.build_dir).as_posix()
                 if section_build_dir.exists() and section_build_dir.is_dir():
                     for item in section_build_dir.iterdir():
                         if item.is_dir() and self._is_asset_dir(item):
@@ -12028,6 +12099,13 @@ anchor-sections: true
 
         # Merge user-provided include-in-header entries from great-docs.yml
         for entry in self._config.include_in_header:
+            if isinstance(entry, dict) and isinstance(entry.get("file"), str):
+                source = self.layout.source_dir / entry["file"]
+                if not source.is_file():
+                    raise FileNotFoundError(f"Header include file not found: {source}")
+                destination = self.build_dir / "_includes" / source.name
+                self._copy_source_asset(source, destination)
+                entry = {**entry, "file": destination.relative_to(self.build_dir).as_posix()}
             if entry not in config["format"]["html"]["include-in-header"]:
                 config["format"]["html"]["include-in-header"].append(entry)
 
@@ -12246,29 +12324,30 @@ anchor-sections: true
             logo_config = self._detect_logo()
 
         if logo_config is not None:
-            package_root = self._find_package_root()
             navbar = config["website"]["navbar"]
 
             # Copy logo files into the Quarto project directory
-            light_src = package_root / logo_config["light"]
+            light_src = self.layout.source_dir / logo_config["light"]
             if light_src.is_file():
                 light_dest_name = light_src.name
                 # Avoid name collision: prefix with "logo-light" if needed
                 if logo_config.get("dark") and logo_config["dark"] != logo_config["light"]:
                     if light_dest_name == Path(logo_config["dark"]).name:
                         light_dest_name = f"logo-light{light_src.suffix}"
-                shutil.copy2(light_src, self.project_path / light_dest_name)
+                self._copy_source_asset(light_src, self.build_dir / light_dest_name)
                 navbar["logo"] = light_dest_name
+            elif urlsplit(logo_config["light"]).scheme or logo_config["light"].startswith("//"):
+                navbar["logo"] = logo_config["light"]
             else:
                 print(f"Warning: Logo file not found: {light_src}")
 
             # Dark variant
             dark_path = logo_config.get("dark")
             if dark_path and dark_path != logo_config["light"]:
-                dark_src = package_root / dark_path
+                dark_src = self.layout.source_dir / dark_path
                 if dark_src.is_file():
                     dark_dest_name = dark_src.name
-                    shutil.copy2(dark_src, self.project_path / dark_dest_name)
+                    self._copy_source_asset(dark_src, self.build_dir / dark_dest_name)
                     navbar["logo-dark"] = dark_dest_name
 
                     # Ensure the dark logo is included as a resource so Quarto
@@ -12313,22 +12392,20 @@ anchor-sections: true
                 # User supplied explicit favicon — generate raster variants too
                 icon_src_path = favicon_config.get("icon")
                 if icon_src_path:
-                    fav_src = package_root / icon_src_path
+                    fav_src = self.layout.source_dir / icon_src_path
                     if fav_src.is_file():
-                        generated = self._generate_favicons(fav_src, self.project_path)
+                        generated = self._generate_favicons(fav_src, self.build_dir)
                         if generated.get("icon"):
                             config["website"]["favicon"] = generated["icon"]
                         else:
                             # Fallback: just copy the file
-                            shutil.copy2(
-                                fav_src, self.project_path / fav_src.name
-                            )  # pragma: no cover
+                            shutil.copy2(fav_src, self.build_dir / fav_src.name)  # pragma: no cover
                             config["website"]["favicon"] = fav_src.name  # pragma: no cover
                     else:
                         print(f"Warning: Favicon file not found: {fav_src}")  # pragma: no cover
             elif light_src.is_file():
                 # Auto-generate favicons from the logo
-                generated = self._generate_favicons(light_src, self.project_path)
+                generated = self._generate_favicons(light_src, self.build_dir)
                 if generated.get("icon"):
                     config["website"]["favicon"] = generated["icon"]
 
@@ -12702,7 +12779,7 @@ anchor-sections: true
             if not has_page_status:  # pragma: no cover
                 # Inline the script content so Quarto doesn't need to resolve
                 # relative paths (which fail for file:// and nested pages)
-                status_js_path = self.project_path / "page-status-badges.js"  # pragma: no cover
+                status_js_path = self.build_dir / "page-status-badges.js"  # pragma: no cover
                 if status_js_path.is_file():  # pragma: no cover
                     js_content = status_js_path.read_text(encoding="utf-8")  # pragma: no cover
                     page_status_entry = {
@@ -12766,9 +12843,7 @@ anchor-sections: true
                 first_href = _SECTION_INDEX.get(ref_sections[0], "reference/index.qmd")
                 navbar = config.get("website", {}).get("navbar", {})
                 for item in navbar.get("left", []):
-                    if isinstance(item, dict) and (item.get("href") or "").startswith(
-                        "reference/"
-                    ):
+                    if isinstance(item, dict) and (item.get("href") or "").startswith("reference/"):
                         item["href"] = first_href
                         break
 
@@ -13394,7 +13469,7 @@ anchor-sections: true
         # Write package metadata JSON for post-render version badge injection.
         # The version and release date come from the latest GitHub Release so
         # the badge always reflects what has actually been published.
-        meta_path = self.project_path / "_package_meta.json"
+        meta_path = self.build_dir / "_package_meta.json"
 
         if owner and repo:
             try:
@@ -13588,7 +13663,7 @@ anchor-sections: true
         Builds a structured sidebar with sections and their contents, and excludes the index page
         from showing the sidebar.
         """
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
 
         if not quarto_yml.exists():
             return  # pragma: no cover
@@ -13648,7 +13723,7 @@ anchor-sections: true
 
     def _update_reference_index_frontmatter(self) -> None:
         """Ensure reference/index.qmd has proper frontmatter."""
-        index_path = self.docs_dir / "reference" / "index.qmd"
+        index_path = self.build_dir / "reference" / "index.qmd"
 
         if not index_path.exists():
             return
@@ -13690,7 +13765,7 @@ anchor-sections: true
         bool
             Whether the build should write both files.
         """
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
         if not quarto_yml.exists():
             return False
         try:
@@ -13727,7 +13802,7 @@ anchor-sections: true
         - package title with description
         - API Reference section with links to each documented item
         """
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
 
         if not quarto_yml.exists():
             return
@@ -13825,7 +13900,7 @@ anchor-sections: true
             lines.append("")
 
         # Write the llms.txt file
-        llms_txt_path = self.project_path / "llms.txt"
+        llms_txt_path = self.build_dir / "llms.txt"
         with open(llms_txt_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
 
@@ -13889,7 +13964,7 @@ anchor-sections: true
         - CLI documentation with --help output for all commands
         """
 
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
 
         if not quarto_yml.exists():
             return
@@ -13980,7 +14055,7 @@ anchor-sections: true
             lines.append(user_guide_text)
 
         # Write the llms-full.txt file
-        llms_full_path = self.project_path / "llms-full.txt"
+        llms_full_path = self.build_dir / "llms-full.txt"
         with open(llms_full_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
 
@@ -14070,9 +14145,9 @@ anchor-sections: true
 
         # If user provided a hand-written SKILL.md via config, copy it
         if self._config.skill_file:
-            src = package_root / self._config.skill_file
+            src = self.layout.source_dir / self._config.skill_file
             if src.exists():
-                dest = self.project_path / "skill.md"
+                dest = self.build_dir / "skill.md"
                 shutil.copy2(src, dest)
                 print(f"Copied user SKILL.md from {src}")
                 self._place_well_known_skill(dest)
@@ -14091,14 +14166,14 @@ anchor-sections: true
                 continue
             skills_path = package_root / "skills" / candidate_name / "SKILL.md"
             if skills_path.exists():
-                dest = self.project_path / "skill.md"
+                dest = self.build_dir / "skill.md"
                 shutil.copy2(skills_path, dest)
                 print(f"Using curated skill from {skills_path}")
                 self._place_well_known_skill(dest)
                 self._generate_skills_page(dest, skill_dir=skills_path.parent)
                 return
 
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
         if not quarto_yml.exists():
             return
 
@@ -14243,7 +14318,7 @@ anchor-sections: true
 
         # Append extra body content if provided
         if self._config.skill_extra_body:
-            extra_path = package_root / self._config.skill_extra_body
+            extra_path = self.layout.source_dir / self._config.skill_extra_body
             if extra_path.exists():
                 extra_content = extra_path.read_text(encoding="utf-8")
                 lines.append(extra_content)
@@ -14262,7 +14337,7 @@ anchor-sections: true
         lines.append("")
 
         # Write the skill.md file
-        skill_path = self.project_path / "skill.md"
+        skill_path = self.build_dir / "skill.md"
         with open(skill_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
 
@@ -14414,7 +14489,7 @@ anchor-sections: true
                 github_owner_repo = gh_match.group(1)
 
         # Detect site URL
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
         site_url = ""
         if quarto_yml.exists():
             with open(quarto_yml, "r") as f:
@@ -14639,7 +14714,7 @@ anchor-sections: true
             lines.append("```")
             lines.append("")
 
-        skills_page = self.project_path / "skills.qmd"
+        skills_page = self.build_dir / "skills.qmd"
         with open(skills_page, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
 
@@ -14808,14 +14883,14 @@ anchor-sections: true
                 )  # pragma: no cover
                 continue  # pragma: no cover
 
-            src = package_root / file_path
+            src = self.layout.source_dir / file_path
             if not src.exists():  # pragma: no cover
                 print(f"Warning: skill file '{src}' not found, skipping")  # pragma: no cover
                 continue  # pragma: no cover
 
             # First skill becomes the primary skill.md
             if i == 0:
-                dest = self.project_path / "skill.md"
+                dest = self.build_dir / "skill.md"
                 shutil.copy2(src, dest)
                 print(f"Copied primary skill '{name}' from {src}")
                 placed_skills.append((dest, src.parent))
@@ -14883,7 +14958,7 @@ anchor-sections: true
                 skill_description = skill_description.strip()
 
             # --- Preferred: .well-known/agent-skills/{name}/SKILL.md ---
-            agent_skills_dir = self.project_path / ".well-known" / "agent-skills" / skill_name
+            agent_skills_dir = self.build_dir / ".well-known" / "agent-skills" / skill_name
             agent_skills_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy2(skill_path, agent_skills_dir / "SKILL.md")
 
@@ -14909,7 +14984,7 @@ anchor-sections: true
         # --- Combined index.json for all skills ---
         if index_skills:
             index_data = {"skills": index_skills}
-            index_path = self.project_path / ".well-known" / "agent-skills" / "index.json"
+            index_path = self.build_dir / ".well-known" / "agent-skills" / "index.json"
             with open(index_path, "w", encoding="utf-8") as f:
                 json.dump(index_data, f, indent=2)
                 f.write("\n")
@@ -14917,7 +14992,7 @@ anchor-sections: true
         # --- Legacy: .well-known/skills/default/SKILL.md (first skill only) ---
         if skill_entries:
             first_skill_path = skill_entries[0][0]
-            well_known_dir = self.project_path / ".well-known" / "skills" / "default"
+            well_known_dir = self.build_dir / ".well-known" / "skills" / "default"
             well_known_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy2(first_skill_path, well_known_dir / "SKILL.md")
 
@@ -14989,7 +15064,7 @@ anchor-sections: true
         if not self._config.sitemap_enabled:
             return  # pragma: no cover
 
-        site_dir = self.project_path / "_site"
+        site_dir = self.layout.site_dir
         if not site_dir.exists():
             print("   ⚠️  _site directory not found, skipping sitemap generation")
             return
@@ -15070,7 +15145,7 @@ anchor-sections: true
         if not self._config.robots_enabled:
             return  # pragma: no cover
 
-        site_dir = self.project_path / "_site"
+        site_dir = self.layout.site_dir
         if not site_dir.exists():
             print("   ⚠️  _site directory not found, skipping robots.txt generation")
             return
@@ -15149,26 +15224,27 @@ anchor-sections: true
             return None
 
         # If already a URL, return as-is
-        if image_path.startswith(("http://", "https://")):  # pragma: no cover
+        if urlsplit(image_path).scheme or image_path.startswith("//"):  # pragma: no cover
             return image_path  # pragma: no cover
 
         # Resolve relative to project root
-        source = self.project_root / image_path  # pragma: no cover
+        image_url = urlsplit(image_path)
+        source = self.layout.source_dir / unquote(image_url.path)  # pragma: no cover
         if not source.is_file():  # pragma: no cover
             print(f"   ⚠️  Social card image not found: {image_path}")  # pragma: no cover
             return None  # pragma: no cover
 
         # Copy to build directory root (so it's served at site root)
-        dest = self.project_path / source.name  # pragma: no cover
-        shutil.copy2(source, dest)  # pragma: no cover
+        dest = self.build_dir / source.name  # pragma: no cover
+        self._copy_source_asset(source, dest)  # pragma: no cover
 
         # Build absolute URL if canonical base is available
         base_url = self._get_canonical_base_url()  # pragma: no cover
         if base_url:  # pragma: no cover
-            return base_url + source.name  # pragma: no cover
+            return urlunsplit(("", "", base_url + source.name, image_url.query, image_url.fragment))
 
         # Fallback to site-relative path (works for most crawlers)
-        return source.name  # pragma: no cover
+        return urlunsplit(("", "", source.name, image_url.query, image_url.fragment))
 
     def _get_site_name(self) -> str:
         """
@@ -15183,7 +15259,7 @@ anchor-sections: true
         :
             The site name, or an empty string if none is available.
         """
-        quarto_yml = self.project_path / "_quarto.yml"
+        quarto_yml = self.build_dir / "_quarto.yml"
         if quarto_yml.exists():
             try:
                 with open(quarto_yml, "r") as f:
@@ -15274,7 +15350,7 @@ anchor-sections: true
             lambda _match: title_line,
             (self.assets_path / "metadata.html").read_text(encoding="utf-8"),
         )
-        (self.project_path / "metadata.html").write_text(partial, encoding="utf-8")
+        (self.build_dir / "metadata.html").write_text(partial, encoding="utf-8")
 
         partials = html_config.get("template-partials", [])
         if isinstance(partials, str):
@@ -15333,10 +15409,10 @@ anchor-sections: true
         # Find all .termshow files in the project root (they live outside
         # great-docs/ since that directory is ephemeral)
         termshow_files = []
-        for f in self.project_root.rglob("*.termshow"):
-            rel = f.relative_to(self.project_root)
+        for f in self.layout.source_dir.rglob("*.termshow"):
+            rel = f.relative_to(self.layout.source_dir)
             # Skip files inside great-docs/ or _site/
-            if rel.parts[0] in ("great-docs", "_site"):
+            if rel.parts[0] in ("great-docs", "_site", "_quarto"):
                 continue
             termshow_files.append(f)
         if not termshow_files:
@@ -15356,7 +15432,7 @@ anchor-sections: true
         for ts_file in termshow_files:
             basename = ts_file.stem
             # Output into the great-docs project directory (Quarto project)
-            output_dir = self.project_path / "termshow" / basename
+            output_dir = self.build_dir / "termshow" / basename
 
             try:
                 recording = parse_termshow(str(ts_file))
@@ -15412,7 +15488,7 @@ anchor-sections: true
         import json
         from datetime import datetime, timezone
 
-        site_dir = self.project_path / "_site"
+        site_dir = self.layout.site_dir
         if not site_dir.exists():
             return None  # pragma: no cover
 
@@ -15420,7 +15496,7 @@ anchor-sections: true
         # Check both the project root (where users persist _freeze/) and the
         # build/project path (where it's restored during rendering).
         frozen_stems: set[str] = set()
-        for freeze_dir in (self.project_root / "_freeze", self.project_path / "_freeze"):
+        for freeze_dir in (self.layout.freeze_dir, self.build_dir / "_freeze"):
             if freeze_dir.is_dir():
                 for html_json in freeze_dir.rglob("execute-results/html.json"):
                     # _freeze/user-guide/benchmarks/execute-results/html.json
@@ -15639,38 +15715,37 @@ anchor-sections: true
         """
         print("Uninstalling great-docs from your project...")
 
+        validate_layout_outputs(self.layout)
+        builds = [self.layout.build_dir, *recognised_build_dirs(self.layout)]
+        for build_dir in builds:
+            validate_build_dir(build_dir)
+
         # Remove the great-docs.yml configuration file
-        config_path = self.project_root / "great-docs.yml"
+        config_path = self.layout.config_path
         if config_path.exists():
             config_path.unlink()
             print(f"Removed {config_path.relative_to(self.project_root)}")
 
-        # Great Docs owns the configured build path.
-        if self.project_path.exists():
-            shutil.rmtree(self.project_path)
-            print(f"Removed {self.project_path.relative_to(self.project_root)}/ directory")
-
-        # Only a generated header proves ownership of a historical directory.
-        # Symlinks can point outside the project root.
-        for build_dir in sorted(self.project_root.glob(f"{self.docs_dir.name}-*")):
-            if (
-                not build_dir.is_dir()
-                or build_dir.is_symlink()
-                or not is_great_docs_build_dir(build_dir)
-            ):
-                continue
-            shutil.rmtree(build_dir)
-            print(f"Removed {build_dir.relative_to(self.project_root)}/ directory")
+        for build_dir in builds:
+            if build_dir.exists():
+                shutil.rmtree(build_dir)
+                print(f"Removed {build_dir.relative_to(self.project_root)}/ directory")
+        if self.layout.source_dir != self.project_root:
+            if self.layout.site_dir.exists():
+                shutil.rmtree(self.layout.site_dir)
+            container = self.layout.build_dir.parent
+            if container.exists() and not any(container.iterdir()):
+                container.rmdir()
 
         print("✅ Great-docs uninstalled successfully!")
 
     def _persist_freeze_cache(self) -> int | None:
         """
-        Copy every build's freeze cache to the project root
+        Merge every build's freeze cache beside the selected configuration
 
         The latest version and a non-versioned build store their cache in
-        `great-docs/_freeze`. Historical versions store caches in sibling
-        `great-docs-<tag>/_freeze` directories. Merge individual files so a
+        their build directory. Historical versions store caches in sibling
+        build directories. Merge individual files so a
         page from one version cannot replace different pages in the same
         section. When versions cache the same path, the latest version wins.
 
@@ -15681,7 +15756,14 @@ anchor-sections: true
         freeze_sources: list[Path] = []
 
         # Merge historical caches first so the latest version wins collisions.
-        for ver_dir in sorted(self.project_root.glob(f"{self.docs_dir.name}-*")):
+        pattern = (
+            f"{self.layout.build_dir.name}-*"
+            if self.layout.source_dir == self.project_root
+            else "*"
+        )
+        for ver_dir in sorted(self.layout.build_dir.parent.glob(pattern)):
+            if ver_dir == self.layout.build_dir:
+                continue
             if not ver_dir.is_dir() or ver_dir.is_symlink() or not is_great_docs_build_dir(ver_dir):
                 continue
             candidate = ver_dir / "_freeze"
@@ -15689,17 +15771,20 @@ anchor-sections: true
                 freeze_sources.append(candidate)
 
         # The latest version and a non-versioned build share this location.
-        single = self.project_path / "_freeze"
+        single = self.build_dir / "_freeze"
         if single.is_dir():
             freeze_sources.append(single)
 
         if not freeze_sources:
             return None
 
-        freeze_dst = self.project_root / "_freeze"
+        freeze_dst = self.layout.freeze_dir
+        validate_tree_symlinks(freeze_dst)
+        for src in freeze_sources:
+            validate_tree_symlinks(src)
         if freeze_dst.exists():  # pragma: no cover
             shutil.rmtree(freeze_dst)  # pragma: no cover
-        freeze_dst.mkdir()
+        freeze_dst.mkdir(parents=True)
 
         # Copy files individually. Replacing a top-level cache directory would
         # discard pages contributed by earlier sources.
@@ -15737,7 +15822,7 @@ anchor-sections: true
         # Change to build directory for subsequent steps
         original_dir = os.getcwd()
         try:
-            os.chdir(self.project_path)
+            os.chdir(self.build_dir)
 
             # Steps 2-13: Process user guide, sections, pages, tags, etc.
             # These can modify .qmd files (add breadcrumbs, expand tags, etc.)
@@ -15797,7 +15882,7 @@ anchor-sections: true
                 from quartodoc import Builder
 
                 with redirect_stdout(devnull):
-                    quarto_yml = self.project_path / "_quarto.yml"
+                    quarto_yml = self.build_dir / "_quarto.yml"
                     if quarto_yml.exists():
                         builder = Builder.from_quarto_config(str(quarto_yml))
                         builder.build()
@@ -15810,7 +15895,7 @@ anchor-sections: true
             # Expand source-code: mock cells
             from great_docs._mock_code import process_directory as _expand_mock
 
-            _expand_mock(self.project_path)
+            _expand_mock(self.build_dir)
 
             # Update quarto config (ensures _quarto.yml has pre-render, freeze, etc.)
             with redirect_stdout(devnull):
@@ -15819,6 +15904,14 @@ anchor-sections: true
         finally:
             os.chdir(original_dir)
             devnull.close()
+
+    def _print_layout_notice(self) -> None:
+        """Recommend migration at the start of a root-layout build or preview"""
+        if self.layout.source_dir == self.layout.package_root:
+            print(
+                "Keep documentation in docs/ with the new layout.\n"
+                "Run great-docs migrate-layout --dry-run to preview the migration."
+            )
 
     def build(  # pragma: no cover
         self,
@@ -15877,13 +15970,15 @@ anchor-sections: true
         ```
         """
         # Require an explicit config file; init must have been run first
-        config_path = self.project_root / "great-docs.yml"
+        self._validate_build_outputs()
+        config_path = self.layout.config_path
         if not config_path.exists():
             raise FileNotFoundError(
                 "great-docs.yml not found. Run 'great-docs init' first to "
                 "generate a configuration file."
             )
 
+        self._print_layout_notice()
         _ensure_quarto_installed()
 
         import re as _re_build
@@ -15984,7 +16079,7 @@ anchor-sections: true
         n_api_items = 0
         n_total_pages = 0
         n_code_cells = 0
-        obj_types_path = self.project_path / "_object_types.json"
+        obj_types_path = self.build_dir / "_object_types.json"
         if obj_types_path.exists():
             try:
                 with open(obj_types_path) as f:
@@ -16187,7 +16282,7 @@ anchor-sections: true
         # Change to build directory
         original_dir = os.getcwd()
         try:
-            os.chdir(self.project_path)
+            os.chdir(self.build_dir)
 
             # ── Step 2: Configure API reference ────────────────────────
             step += 1
@@ -16223,7 +16318,7 @@ anchor-sections: true
                 _meta_urls = self._get_package_metadata().get("urls", {})
                 _has_site_url = bool(self._config.site_url or _meta_urls.get("Documentation", ""))
                 if not _has_site_url:
-                    _qy = self.project_path / "_quarto.yml"
+                    _qy = self.build_dir / "_quarto.yml"
                     if _qy.exists():
                         with open(_qy, "r") as _f:
                             _qc = read_yaml(_f) or {}
@@ -16514,7 +16609,7 @@ anchor-sections: true
                     if p and p not in sys.path:
                         sys.path.insert(0, p)  # pragma: no cover
 
-                quarto_yml = self.project_path / "_quarto.yml"
+                quarto_yml = self.build_dir / "_quarto.yml"
                 ref = None
                 try:
                     from great_docs._apiref.api_reference import APIReference
@@ -16564,7 +16659,7 @@ anchor-sections: true
             from great_docs._interlinks import AliasClaims, build_project_index
 
             index, interlinks_notes = build_project_index(
-                self.project_path,
+                self.build_dir,
                 self._config,
                 self._detect_package_name() or "",
                 AliasClaims.make(ref.items) if ref is not None else AliasClaims(),
@@ -16583,7 +16678,7 @@ anchor-sections: true
 
             # Normalize page-level freeze shorthand before Quarto render
             frozen_pages = self._normalize_freeze_shorthand()
-            has_freeze_cache = (self.project_root / "_freeze").is_dir()
+            has_freeze_cache = self.layout.freeze_dir.is_dir()
 
             if frozen_pages or has_freeze_cache:
                 if frozen_pages:
@@ -16599,7 +16694,7 @@ anchor-sections: true
             # Expand source-code: mock cells before Quarto sees them
             from great_docs._mock_code import process_directory as _expand_mock_cells
 
-            mock_modified = _expand_mock_cells(self.project_path)
+            mock_modified = _expand_mock_cells(self.build_dir)
             if mock_modified:
                 log.detail(
                     f"Expanded {len(mock_modified)} mock-code cell(s): " + ", ".join(mock_modified)
@@ -16609,8 +16704,8 @@ anchor-sections: true
             # (Mermaid is rendered by Quarto client-side; d2 has no native support.)
             from great_docs._d2 import process_directory as _render_d2
 
-            d2_cache = self.project_root / ".great-docs-cache" / "d2"
-            d2_modified = _render_d2(self.project_path, cache_dir=d2_cache)
+            d2_cache = self.layout.cache_dir / "d2"
+            d2_modified = _render_d2(self.build_dir, cache_dir=d2_cache)
             if d2_modified:
                 log.detail(
                     f"Rendered d2 diagrams in {len(d2_modified)} page(s): " + ", ".join(d2_modified)
@@ -16666,7 +16761,7 @@ anchor-sections: true
                     mbar.finish()
 
                 vb_result = run_versioned_build(
-                    source_dir=self.project_path,
+                    source_dir=self.build_dir,
                     project_root=self.project_root,
                     versions_config=self._config.versions,
                     quarto_env=quarto_env,
@@ -16677,6 +16772,7 @@ anchor-sections: true
                     on_renders_done=_on_renders_done,
                     badge_expiry_raw=self._config["new_is_old"],
                     config=self._config,
+                    layout=self.layout,
                 )
 
                 for warning in vb_result.get("warnings", []):
@@ -16740,11 +16836,13 @@ anchor-sections: true
                 except Exception as e:
                     log.warn(f"Snapshot auto-save failed: {e}")
 
-                site_path = self.project_path / "_site" / "index.html"
+                if self.layout.site_dir != self.build_dir / "_site":
+                    record_site_ownership(self.layout.site_dir)
+                site_path = self.layout.site_dir / "index.html"
                 if site_path.exists():
                     log.footer(site_path=str(site_path))
                 else:
-                    log.footer(site_path=str(self.project_path / "_site"))
+                    log.footer(site_path=str(self.layout.site_dir))
             else:
                 bar = log.progress("Rendering pages", 1)
 
@@ -16829,6 +16927,13 @@ anchor-sections: true
                         )  # pragma: no cover
 
                     # ── Step 18: Generate SEO files ────────────────────
+                    if self.layout.site_dir != self.build_dir / "_site":
+                        from ._versioned_build import assemble_site
+
+                        assemble_site(
+                            self.build_dir, [], "", self.layout.site_dir, layout=self.layout
+                        )
+
                     step += 1  # pragma: no cover
                     log.step_start(step, "Generate SEO files")  # pragma: no cover
                     try:  # pragma: no cover
@@ -16858,12 +16963,15 @@ anchor-sections: true
                         except Exception as e:  # pragma: no cover
                             log.warn(f"Snapshot auto-save failed: {e}")  # pragma: no cover
 
-                    site_path = self.project_path / "_site" / "index.html"  # pragma: no cover
+                    if self.layout.site_dir != self.build_dir / "_site":
+                        record_site_ownership(self.layout.site_dir)
+
+                    site_path = self.layout.site_dir / "index.html"  # pragma: no cover
                     if site_path.exists():  # pragma: no cover
                         log.footer(site_path=str(site_path))  # pragma: no cover
                     else:  # pragma: no cover
                         log.footer(  # pragma: no cover
-                            site_path=str(self.project_path / "_site")
+                            site_path=str(self.layout.site_dir)
                         )
 
         finally:
@@ -16876,13 +16984,14 @@ anchor-sections: true
         *,
         branch: str | None = None,
         output_dir: str | None = None,
+        config_path: str | None = None,
         refresh: bool = True,
         version_tags: list[str] | None = None,
         latest_only: bool = False,
         shallow: bool = False,
     ) -> Path:
         """
-        Clone a remote repository and build its documentation site.
+        Clone a remote repository and build its documentation site
 
         This is a convenience method for building documentation from a separate repository. It
         handles cloning, creating a temporary virtual environment, installing the package, building
@@ -16906,8 +17015,11 @@ anchor-sections: true
         branch
             Branch, tag, or commit to check out. If `None`, uses the repository's default branch.
         output_dir
-            Directory to copy the built site into. If `None`, defaults to `./great-docs/_site` in
-            the current working directory.
+            Directory to copy the built site into. If omitted, use the checkout's
+            deployment path relative to the current working directory.
+        config_path
+            Configuration path relative to the checkout. Paths outside the checkout
+            are rejected.
         refresh
             If `True` (default), re-discover package exports before building.
         version_tags
@@ -16943,10 +17055,8 @@ anchor-sections: true
         import tempfile
         import venv
 
-        if output_dir is None:
-            output_path = Path.cwd() / "great-docs" / "_site"
-        else:
-            output_path = Path(output_dir).resolve()
+        if config_path is not None and Path(config_path).is_absolute():
+            raise LayoutError("Remote configuration must be a relative path inside the checkout")
 
         tmpdir = tempfile.mkdtemp(prefix="great-docs-remote-")
         clone_dir = Path(tmpdir) / "repo"
@@ -16965,9 +17075,21 @@ anchor-sections: true
                     f"git clone failed (exit {result.returncode}):\n{result.stderr.strip()}"
                 )
 
+            selected_config = (clone_dir / config_path).resolve() if config_path else None
+            if selected_config is not None and not selected_config.is_relative_to(
+                clone_dir.resolve()
+            ):
+                raise LayoutError("Remote configuration must remain inside the checkout")
+            layout = Layout.make(clone_dir, selected_config)
+            output_path = (
+                Path(output_dir).resolve()
+                if output_dir
+                else Path.cwd() / layout.site_dir.relative_to(clone_dir.resolve())
+            )
+
             # ── 1b. Inspect great-docs.yml and deepen history if needed ─
             if not shallow:
-                needs = cls._inspect_repo_git_needs(clone_dir)
+                needs = cls._inspect_repo_git_needs(clone_dir, config_path=layout.config_path)
                 if needs == "full":
                     print("   Fetching full history (versioned docs / page dates)...")
                     subprocess.run(
@@ -17052,6 +17174,8 @@ anchor-sections: true
                 gd_cli = venv_dir / "bin" / "great-docs"
 
             build_cmd = [str(gd_cli), "build", "--project-path", str(clone_dir)]
+            if config_path is not None:
+                build_cmd.extend(["--config", str(layout.config_path)])
             if not refresh:
                 build_cmd.append("--no-refresh")
             if version_tags:
@@ -17077,7 +17201,7 @@ anchor-sections: true
                 raise RuntimeError(f"great-docs build failed (exit {result.returncode})")
 
             # ── 6. Copy built site to output directory ─────────────────
-            site_dir = clone_dir / "great-docs" / "_site"
+            site_dir = layout.site_dir
             if not site_dir.exists():
                 raise RuntimeError(f"Build completed but _site/ directory not found at {site_dir}")
 
@@ -17223,8 +17347,9 @@ anchor-sections: true
         return ",".join(found)
 
     @staticmethod
-    def _inspect_repo_git_needs(clone_dir: Path) -> str:
-        """Inspect a cloned repo's `great-docs.yml` to determine git depth needs.
+    def _inspect_repo_git_needs(clone_dir: Path, *, config_path: Path | None = None) -> str:
+        """
+        Inspect the selected configuration to determine Git history requirements
 
         Returns one of three strings indicating how much git history is
         required for the features declared in the config:
@@ -17237,13 +17362,15 @@ anchor-sections: true
         ----------
         clone_dir
             Path to the cloned repository root.
+        config_path
+            Selected configuration file within the checkout.
 
         Returns
         -------
         str
             One of `"full"`, `"tags"`, or `"none"`.
         """
-        config_path = clone_dir / "great-docs.yml"
+        config_path = Layout.make(clone_dir, config_path).config_path
         if not config_path.exists():
             return "none"
 
@@ -17320,12 +17447,14 @@ anchor-sections: true
         print("Previewing documentation...")
 
         # Check if site has been built
-        site_path = self.project_path / "_site"
+        site_path = self.layout.site_dir
         index_html = site_path / "index.html"
 
         if not index_html.exists():
             print("Site not found, building first...")
             self.build()
+        else:
+            self._print_layout_notice()
 
         if not index_html.exists():
             print("❌ Could not find built site")
@@ -17496,15 +17625,15 @@ anchor-sections: true
             # Priority: if user_guide/ exists, scan that (it's the source)
             # Otherwise, scan the docs directory directly
 
-            user_guide_dir = self.project_root / "user_guide"
+            user_guide_dir = self.layout.source_dir / "user_guide"
             if user_guide_dir.exists():
                 # Scan user_guide source directory instead of generated docs/
                 files_to_scan.extend(user_guide_dir.rglob("*.qmd"))
                 files_to_scan.extend(user_guide_dir.rglob("*.md"))
-            elif self.project_path.exists():  # pragma: no cover
+            elif self.build_dir.exists():  # pragma: no cover
                 # No user_guide/, scan docs directory directly
-                files_to_scan.extend(self.project_path.rglob("*.qmd"))  # pragma: no cover
-                files_to_scan.extend(self.project_path.rglob("*.md"))  # pragma: no cover
+                files_to_scan.extend(self.build_dir.rglob("*.qmd"))  # pragma: no cover
+                files_to_scan.extend(self.build_dir.rglob("*.md"))  # pragma: no cover
 
             # Also check README in project root
             readme = self.project_root / "README.md"
@@ -17814,7 +17943,7 @@ anchor-sections: true
 
         if include_docs:
             # Scan user_guide directory if it exists
-            user_guide_dir = self.project_root / "user_guide"
+            user_guide_dir = self.layout.source_dir / "user_guide"
             if user_guide_dir.exists():
                 files_to_check.extend(user_guide_dir.rglob("*.qmd"))
                 files_to_check.extend(user_guide_dir.rglob("*.md"))

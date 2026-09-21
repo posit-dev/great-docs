@@ -72,7 +72,7 @@ SPEC = {
                 """
                 return f"Serving {dish.get('dish', 'unknown')}"
         ''',
-        "recipes/quick-setup.qmd": (
+        "docs/recipes/quick-setup.qmd": (
             "---\n"
             "title: Quick Setup\n"
             "---\n"
@@ -81,7 +81,7 @@ SPEC = {
             "\n"
             "A recipe for quickly setting up the project.\n"
         ),
-        "recipes/data-pipeline.qmd": (
+        "docs/recipes/data-pipeline.qmd": (
             "---\n"
             "title: Data Pipeline\n"
             "---\n"

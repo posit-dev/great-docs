@@ -174,7 +174,7 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 - Detects NumPy, Google, and Sphinx docstring formats
 - 13 object types with smart categorization
 - Click CLI documentation
-- User Guide pages from `user_guide/` directory
+- User Guide pages from `docs/user_guide/` directory
 - Custom sections (recipes, blog, tutorials, etc.)
 - Custom HTML pages with passthrough or raw layouts
 - Multi-version documentation with version selector
@@ -295,7 +295,9 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 
 ## Configuration
 
-All configuration lives in a single `great-docs.yml` file in your project root. The `init` command generates it for you, but you can customize everything:
+All configuration lives in `docs/great-docs.yml`. The `init` command generates it for you.
+Source paths such as `assets/logo.svg` are relative to `docs/`; package metadata,
+Python sources, and the README stay at the project root. You can customise everything:
 
 ```yaml
 # Theming
@@ -360,6 +362,11 @@ navbar: true
 
 Use `layout: passthrough` to wrap the HTML body with the normal Great Docs shell, or `layout: raw` to copy the HTML file through unchanged.
 Set `navbar: true` to add the page to the site navbar using its title, or use `navbar: {text: Showcase, after: Guide}` for explicit navbar label and placement.
+
+Build with `great-docs build` and deploy `docs/_site/`. Generated Quarto projects
+live in `docs/_quarto/default/`, with historical versions in `docs/_quarto/<tag>/`.
+For a custom source directory, run
+`great-docs build --config website/great-docs.yml`; its output is `website/_site/`.
 
 See the [Configuration Guide](https://posit-dev.github.io/great-docs/user-guide/configuration.html) for the full reference.
 

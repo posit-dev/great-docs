@@ -62,65 +62,73 @@ _IMAGES = {
 
 # Images co-located with user guide pages (these get copied alongside .qmd files)
 _UG_IMAGES = {
-    "user_guide/images/screenshot.svg": _svg(600, 400, "#4a90d9", "App Screenshot"),
-    "user_guide/images/diagram.svg": _svg(800, 500, "#2c3e50", "Architecture Diagram"),
-    "user_guide/images/chart.svg": _svg(500, 350, "#8e44ad", "Revenue Chart"),
+    "docs/user_guide/images/screenshot.svg": _svg(600, 400, "#4a90d9", "App Screenshot"),
+    "docs/user_guide/images/diagram.svg": _svg(800, 500, "#2c3e50", "Architecture Diagram"),
+    "docs/user_guide/images/chart.svg": _svg(500, 350, "#8e44ad", "Revenue Chart"),
     # Dark-mode variant pair (naming convention: .light. / .dark.)
-    "user_guide/images/dashboard.light.svg": _svg(700, 450, "#f8f9fa", "Dashboard (Light)", "#333"),
-    "user_guide/images/dashboard.dark.svg": _svg(700, 450, "#1a1a2e", "Dashboard (Dark)"),
+    "docs/user_guide/images/dashboard.light.svg": _svg(
+        700, 450, "#f8f9fa", "Dashboard (Light)", "#333"
+    ),
+    "docs/user_guide/images/dashboard.dark.svg": _svg(700, 450, "#1a1a2e", "Dashboard (Dark)"),
     # Explicit dark variant (non-convention naming)
-    "user_guide/images/ui-preview.svg": _svg(600, 380, "#ffffff", "UI Preview (Light)", "#333"),
-    "user_guide/images/ui-preview-night.svg": _svg(600, 380, "#16213e", "UI Preview (Dark)"),
+    "docs/user_guide/images/ui-preview.svg": _svg(
+        600, 380, "#ffffff", "UI Preview (Light)", "#333"
+    ),
+    "docs/user_guide/images/ui-preview-night.svg": _svg(600, 380, "#16213e", "UI Preview (Dark)"),
     # Gallery images (steps in a tutorial)
-    "user_guide/images/step1.svg": _svg(500, 320, "#e74c3c", "Step 1: Install"),
-    "user_guide/images/step2.svg": _svg(500, 320, "#f39c12", "Step 2: Configure"),
-    "user_guide/images/step3.svg": _svg(500, 320, "#27ae60", "Step 3: Build"),
-    "user_guide/images/step4.svg": _svg(500, 320, "#3498db", "Step 4: Deploy"),
+    "docs/user_guide/images/step1.svg": _svg(500, 320, "#e74c3c", "Step 1: Install"),
+    "docs/user_guide/images/step2.svg": _svg(500, 320, "#f39c12", "Step 2: Configure"),
+    "docs/user_guide/images/step3.svg": _svg(500, 320, "#27ae60", "Step 3: Build"),
+    "docs/user_guide/images/step4.svg": _svg(500, 320, "#3498db", "Step 4: Deploy"),
     # Before/after pair for comparison demo
-    "user_guide/images/before.svg": _svg(600, 400, "#bdc3c7", "Before (v0.8)", "#333"),
-    "user_guide/images/after.svg": _svg(600, 400, "#2ecc71", "After (v0.9)"),
+    "docs/user_guide/images/before.svg": _svg(600, 400, "#bdc3c7", "Before (v0.8)", "#333"),
+    "docs/user_guide/images/after.svg": _svg(600, 400, "#2ecc71", "After (v0.9)"),
     # Mosaic gallery images (varying dimensions)
-    "user_guide/images/mosaic-a.svg": _svg(400, 300, "#1abc9c", "Gallery A"),
-    "user_guide/images/mosaic-b.svg": _svg(400, 500, "#e67e22", "Gallery B (Tall)"),
-    "user_guide/images/mosaic-c.svg": _svg(600, 300, "#9b59b6", "Gallery C (Wide)"),
-    "user_guide/images/mosaic-d.svg": _svg(400, 400, "#34495e", "Gallery D"),
+    "docs/user_guide/images/mosaic-a.svg": _svg(400, 300, "#1abc9c", "Gallery A"),
+    "docs/user_guide/images/mosaic-b.svg": _svg(400, 500, "#e67e22", "Gallery B (Tall)"),
+    "docs/user_guide/images/mosaic-c.svg": _svg(600, 300, "#9b59b6", "Gallery C (Wide)"),
+    "docs/user_guide/images/mosaic-d.svg": _svg(400, 400, "#34495e", "Gallery D"),
     # Large image for zoom-target testing
-    "user_guide/images/full-page.svg": _svg(1200, 800, "#2c3e50", "Full Page Screenshot"),
+    "docs/user_guide/images/full-page.svg": _svg(1200, 800, "#2c3e50", "Full Page Screenshot"),
     # Small inline image (should NOT get lightbox in auto mode)
-    "user_guide/images/icon-small.svg": _svg(24, 24, "#666", "•"),
+    "docs/user_guide/images/icon-small.svg": _svg(24, 24, "#666", "•"),
     # Responsive srcset variants (simulate different resolutions)
-    "user_guide/images/chart-400.svg": _svg(400, 280, "#8e44ad", "Chart 400w"),
-    "user_guide/images/chart-800.svg": _svg(800, 560, "#8e44ad", "Chart 800w"),
-    "user_guide/images/chart-1600.svg": _svg(1600, 1120, "#8e44ad", "Chart 1600w (Full)"),
-    "user_guide/images/diagram-2400.svg": _svg(2400, 1500, "#2c3e50", "Diagram 2400w (Full Res)"),
+    "docs/user_guide/images/chart-400.svg": _svg(400, 280, "#8e44ad", "Chart 400w"),
+    "docs/user_guide/images/chart-800.svg": _svg(800, 560, "#8e44ad", "Chart 800w"),
+    "docs/user_guide/images/chart-1600.svg": _svg(1600, 1120, "#8e44ad", "Chart 1600w (Full)"),
+    "docs/user_guide/images/diagram-2400.svg": _svg(
+        2400, 1500, "#2c3e50", "Diagram 2400w (Full Res)"
+    ),
     # Multi-panel UI screenshots (for annotation demos)
-    "user_guide/images/app-layout.svg": _svg_panels(
+    "docs/user_guide/images/app-layout.svg": _svg_panels(
         900, 500, ["#2c3e50", "#34495e", "#3d566e", "#ecf0f1"], "App Layout"
     ),
-    "user_guide/images/app-layout.dark.svg": _svg_panels(
+    "docs/user_guide/images/app-layout.dark.svg": _svg_panels(
         900, 500, ["#1a1a2e", "#16213e", "#0f3460", "#1a1a2e"], "App Layout (Dark)"
     ),
     # Gradient images for visual variety
-    "user_guide/images/hero-gradient.svg": _svg_gradient(
+    "docs/user_guide/images/hero-gradient.svg": _svg_gradient(
         800, 400, "#667eea", "#764ba2", "Hero Section"
     ),
-    "user_guide/images/hero-gradient.dark.svg": _svg_gradient(
+    "docs/user_guide/images/hero-gradient.dark.svg": _svg_gradient(
         800, 400, "#2d1b69", "#1a0533", "Hero Section (Dark)"
     ),
     # Version comparison images (more realistic before/after)
-    "user_guide/images/v1-table.svg": _svg(600, 350, "#95a5a6", "Table v1 — Plain", "#fff"),
-    "user_guide/images/v2-table.svg": _svg_gradient(
+    "docs/user_guide/images/v1-table.svg": _svg(600, 350, "#95a5a6", "Table v1 — Plain", "#fff"),
+    "docs/user_guide/images/v2-table.svg": _svg_gradient(
         600, 350, "#3498db", "#2980b9", "Table v2 — Styled"
     ),
-    "user_guide/images/v1-sidebar.svg": _svg(300, 500, "#bdc3c7", "Sidebar v1", "#333"),
-    "user_guide/images/v2-sidebar.svg": _svg_gradient(300, 500, "#2ecc71", "#27ae60", "Sidebar v2"),
+    "docs/user_guide/images/v1-sidebar.svg": _svg(300, 500, "#bdc3c7", "Sidebar v1", "#333"),
+    "docs/user_guide/images/v2-sidebar.svg": _svg_gradient(
+        300, 500, "#2ecc71", "#27ae60", "Sidebar v2"
+    ),
     # Pipeline/flow diagram for multi-annotation demo
-    "user_guide/images/pipeline.svg": _svg(
+    "docs/user_guide/images/pipeline.svg": _svg(
         1000, 300, "#2c3e50", "Data Pipeline: Ingest → Process → Store → Serve"
     ),
     # Toolbar demo images (named clearly for the toolbar page)
-    "user_guide/images/api-reference.svg": _svg(700, 450, "#1e3a5f", "API Reference Page"),
-    "user_guide/images/config-panel.svg": _svg(600, 400, "#4a1e5f", "Configuration Panel"),
+    "docs/user_guide/images/api-reference.svg": _svg(700, 450, "#1e3a5f", "API Reference Page"),
+    "docs/user_guide/images/config-panel.svg": _svg(600, 400, "#4a1e5f", "Configuration Panel"),
 }
 
 
@@ -197,7 +205,7 @@ SPEC = {
             ![Architecture Diagram](images/diagram.svg){.lightbox caption="System architecture overview" credit="Engineering Team"}
         """,
         # ── User Guide: Lightbox Features ────────────────────────────
-        "user_guide/01-basic-lightbox.qmd": """\
+        "docs/user_guide/01-basic-lightbox.qmd": """\
             ---
             title: "Basic Lightbox"
             ---
@@ -222,7 +230,7 @@ SPEC = {
 
             Here is an inline icon ![icon](images/icon-small.svg) within text.
         """,
-        "user_guide/02-auto-mode.qmd": """\
+        "docs/user_guide/02-auto-mode.qmd": """\
             ---
             title: "Auto Mode"
             lightbox: true
@@ -246,7 +254,7 @@ SPEC = {
 
             ![This image is excluded](images/screenshot.svg){.nolightbox}
         """,
-        "user_guide/03-dark-mode.qmd": """\
+        "docs/user_guide/03-dark-mode.qmd": """\
             ---
             title: "Dark Mode Variants"
             ---
@@ -267,7 +275,7 @@ SPEC = {
 
             ![UI Preview](images/ui-preview.svg){.lightbox dark="images/ui-preview-night.svg"}
         """,
-        "user_guide/04-galleries.qmd": """\
+        "docs/user_guide/04-galleries.qmd": """\
             ---
             title: "Galleries"
             ---
@@ -335,7 +343,7 @@ SPEC = {
 
             ![Full Page](images/full-page.svg){.lightbox}
         """,
-        "user_guide/05-responsive-srcset.qmd": """\
+        "docs/user_guide/05-responsive-srcset.qmd": """\
             ---
             title: "Responsive Images"
             ---
@@ -362,7 +370,7 @@ SPEC = {
 
             ![Dashboard](images/dashboard.light.svg){.lightbox srcset="images/dashboard.light.svg 700w" dark="images/dashboard.dark.svg"}
         """,
-        "user_guide/06-comparison.qmd": """\
+        "docs/user_guide/06-comparison.qmd": """\
             ---
             title: "Image Comparison"
             ---
@@ -403,7 +411,7 @@ SPEC = {
             ![New Design](images/mosaic-c.svg)
             :::
         """,
-        "user_guide/07-annotations.qmd": """\
+        "docs/user_guide/07-annotations.qmd": """\
             ---
             title: "Image Annotations"
             ---
@@ -446,7 +454,7 @@ SPEC = {
 
             ![UI Preview](images/ui-preview.svg){.lightbox dark="images/ui-preview-night.svg" annotations='[{"x": 50, "y": 25, "label": "H", "text": "Header with navigation"}, {"x": 50, "y": 75, "label": "F", "text": "Footer with links"}]'}
         """,
-        "user_guide/08-toolbar-links.qmd": """\
+        "docs/user_guide/08-toolbar-links.qmd": """\
             ---
             title: "Toolbar & Deep Links"
             ---
@@ -507,7 +515,7 @@ SPEC = {
 
             - [Open gallery at Step 3](#lightbox=gd-lb-7)
         """,
-        "user_guide/09-showcase.qmd": """\
+        "docs/user_guide/09-showcase.qmd": """\
             ---
             title: "Full Showcase"
             lightbox: true

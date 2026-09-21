@@ -70,7 +70,8 @@ my-package/
 ├── CONTRIBUTING.md
 ├── CODE_OF_CONDUCT.md
 ├── ROADMAP.md
-├── great-docs.yml
+├── docs/
+│   └── great-docs.yml
 └── pyproject.toml
 ```
 
@@ -288,7 +289,7 @@ Dependencies are presented in tables with one group per optional dependency set 
 
 The Package Info page is enabled by default. To disable it, add to `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 package_info_page: false
 ```
 

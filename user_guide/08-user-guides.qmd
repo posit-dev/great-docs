@@ -12,7 +12,7 @@ tutorials that walk them through real tasks, guides that explain concepts in con
 explanations that connect the pieces together. Without this kind of content, users are left to
 figure out the bigger picture on their own.
 
-Great Docs treats user guides as first-class content. When you add a `user_guide/` directory to
+Great Docs treats user guides as first-class content. When you add a `docs/user_guide/` directory to
 your project, Great Docs automatically generates sidebar navigation, adds a navbar link, applies
 narrative-optimized styling, and keeps everything in sync across builds. You write Quarto Markdown
 files and Great Docs handles the rest.
@@ -21,19 +21,19 @@ files and Great Docs handles the rest.
 
 Getting started takes just three steps:
 
-1. create a `user_guide/` directory in your project root
+1. create a `docs/user_guide/` directory beside `docs/great-docs.yml`
 2. add `.qmd` files for each page
 3. run `great-docs build`
 
 Great Docs automatically:
 
-- copies files to `great-docs/user-guide/`
+- copies files to `docs/_quarto/default/user-guide/`
 - generates sidebar navigation
 - adds a "User Guide" link to the navbar
 - organizes pages into sections
 
 No additional configuration is required. As soon as Great Docs finds `.qmd` files in the
-`user_guide/` directory, the User Guide section appears in your site.
+`docs/user_guide/` directory, the User Guide section appears in your site.
 
 ## Directory Structure
 
@@ -41,23 +41,23 @@ A typical project with a User Guide looks like this:
 
 ```{.default filename="Project structure"}
 your-project/
-├── great-docs/              # Build directory (ephemeral, gitignored)
-│   ├── user-guide/          # Copied from user_guide/
+├── docs/_quarto/default/              # Build directory (ephemeral, gitignored)
+│   ├── user-guide/          # Copied from docs/user_guide/
 │   └── ...
-├── user_guide/              # Your source files (committed to git)
+├── docs/user_guide/              # Your source files (committed to git)
 │   ├── 00-introduction.qmd
 │   ├── 01-installation.qmd
 │   ├── 02-quickstart.qmd
 │   ├── 03-configuration.qmd
 │   └── images/              # Asset directories are copied too
 │       └── screenshot.png
-├── great-docs.yml
+├── docs/great-docs.yml
 ├── pyproject.toml
 └── your_package/
 ```
 
-The `user_guide/` directory is the default location. You can use a
-[custom directory](#custom-user-guide-directory) by setting `user_guide` in `great-docs.yml`.
+The `docs/user_guide/` directory is the default location. You can use a
+[custom directory](#custom-user-guide-directory) by setting `user_guide` in `docs/great-docs.yml`.
 
 ## Page Ordering
 
@@ -65,8 +65,8 @@ The order of pages in the sidebar matters for guiding readers through your conte
 sequence. Files are sorted alphabetically by filename, so numeric prefixes give you full control
 over the ordering:
 
-```{.default filename="user_guide/"}
-user_guide/
+```{.default filename="docs/user_guide/"}
+docs/user_guide/
 ├── 00-introduction.qmd    # First
 ├── 01-installation.qmd    # Second
 ├── 02-getting-started.qmd # Third
@@ -107,15 +107,15 @@ User Guide
 ```
 
 This grouping is purely visual in the sidebar. The pages themselves remain as flat files in the
-`user_guide/` directory.
+`docs/user_guide/` directory.
 
 ### Section Order
 
 Sections appear in the order they're first encountered (based on file sort order). To control
 section order, ensure the first file in each section has the appropriate prefix:
 
-```{.default filename="user_guide/"}
-user_guide/
+```{.default filename="docs/user_guide/"}
+docs/user_guide/
 ├── 00-introduction.qmd      # guide-section: "Getting Started"
 ├── 01-installation.qmd      # guide-section: "Getting Started"
 ├── 10-configuration.qmd     # guide-section: "Core Concepts"
@@ -130,8 +130,8 @@ frontmatter. Each
 subdirectory becomes a section in the sidebar, with the section title derived from the
 subdirectory's `index.qmd` title (or the directory name if there is no `index.qmd`):
 
-```{.default filename="user_guide/"}
-user_guide/
+```{.default filename="docs/user_guide/"}
+docs/user_guide/
 ├── index.qmd                        # Root page (appears first in sidebar)
 ├── getting-started/
 │   ├── index.qmd                    # Section title: "Getting Started"
@@ -164,8 +164,8 @@ Subdirectories are sorted alphabetically by directory name. To control the order
 pages within them, use numeric prefixes. They are stripped from both directory names and filenames
 in URLs and navigation:
 
-```{.default filename="user_guide/"}
-user_guide/
+```{.default filename="docs/user_guide/"}
+docs/user_guide/
 ├── index.qmd
 ├── 01-getting-started/
 │   ├── index.qmd                    # Section title: "Getting Started"
@@ -198,8 +198,8 @@ You can mix root-level files with subdirectory sections in the same user guide. 
 sort them together so the nav order follows the prefix regardless of whether an item is a file or a
 directory:
 
-```{.default filename="user_guide/"}
-user_guide/
+```{.default filename="docs/user_guide/"}
+docs/user_guide/
 ├── 01-overview.qmd              # Page: Overview
 ├── 02-concepts/
 │   ├── index.qmd                # Section title: "Concepts"
@@ -324,8 +324,8 @@ issues, and tips offer helpful suggestions.
 Visual content like screenshots, diagrams, and architecture charts can greatly improve
 documentation. Store images in a subdirectory to keep your User Guide organized:
 
-```{.default filename="user_guide/"}
-user_guide/
+```{.default filename="docs/user_guide/"}
+docs/user_guide/
 ├── 01-getting-started.qmd
 └── images/
     └── screenshot.png
@@ -360,13 +360,13 @@ These links are validated during the build, so you'll catch broken references ea
 User guide pages often need supporting files like images, diagrams, or sample data. Any
 subdirectory that doesn't contain `.qmd` files is treated as an asset directory and copied as-is:
 
-```{.default filename="user_guide/"}
-user_guide/
+```{.default filename="docs/user_guide/"}
+docs/user_guide/
 ├── 01-guide.qmd
-├── images/          # Copied to great-docs/user-guide/images/
+├── images/          # Copied to docs/_quarto/default/user-guide/images/
 │   ├── logo.png
 │   └── diagram.svg
-└── data/            # Copied to great-docs/user-guide/data/
+└── data/            # Copied to docs/_quarto/default/user-guide/data/
     └── example.json
 ```
 
@@ -391,8 +391,8 @@ the narrative-optimized layout.
 The User Guide you're reading right now is built with Great Docs, using the same features described
 on this page. Here's a representative sample of its structure:
 
-```{.default filename="user_guide/"}
-user_guide/
+```{.default filename="docs/user_guide/"}
+docs/user_guide/
 ├── 00-introduction.qmd           # Getting Started
 ├── 01-installation.qmd           # Getting Started
 ├── 02-quickstart.qmd             # Getting Started
@@ -412,28 +412,28 @@ Content, Build & Deploy, and Quality & Maintenance. Numeric prefixes control pag
 
 ## Custom User Guide Directory
 
-By default, Great Docs looks for a `user_guide/` directory in your project root. If you need your
-User Guide source files in a different location (e.g., inside a `docs/` folder or a monorepo
-subdirectory), you can specify a custom path in `great-docs.yml`:
+By default, Great Docs looks for `docs/user_guide/`. If you need your
+User Guide source files in a different location (e.g., another directory under `docs/` or a monorepo
+subdirectory), you can specify a custom path in `docs/great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
-user_guide: docs/guides
+```{.yaml filename="docs/great-docs.yml"}
+user_guide: guides
 ```
 
-The path is relative to the project root. Any directory structure works, including nested paths:
+The path is relative to the configuration directory. Any directory structure works, including nested paths:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 user_guide: content/user-docs
 ```
 
 ### Precedence Rules
 
-If both a `user_guide` config option **and** a conventional `user_guide/` directory exist, the
-config option takes precedence and the `user_guide/` directory is ignored. Great Docs will print a
+If both a `user_guide` config option **and** a conventional `docs/user_guide/` directory exist, the
+config option takes precedence and the `docs/user_guide/` directory is ignored. Great Docs will print a
 warning to let you know:
 
 ```
-⚠️  Both 'user_guide' config option ('docs/guides') and 'user_guide/' directory exist; using
+⚠️  Both 'user_guide' config option ('guides') and 'user_guide/' directory exist; using
 configured path
 ```
 
@@ -453,8 +453,8 @@ These tips cover common patterns and best practices for maintaining user guides 
 
 ### Keep Source Separate from Output
 
-Whether you use the default `user_guide/` directory or a custom path, Great Docs copies files to
-`great-docs/user-guide/` during each build, keeping your source separate from generated output.
+Whether you use the default `docs/user_guide/` directory or a custom path, Great Docs copies files to
+`docs/_quarto/default/user-guide/` during each build, keeping your source separate from generated output.
 
 ### Use Descriptive Titles
 

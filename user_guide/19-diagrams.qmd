@@ -222,7 +222,7 @@ sequenceDiagram
     Core->>Quarto: quarto render
     Quarto-->>Core: HTML output
     Core-->>CLI: Build complete
-    CLI-->>User: Site ready in great-docs/_site/
+    CLI-->>User: Site ready in docs/_site/
 ```
 
 The `participant` declarations control the column order. Solid arrows (`->>`) represent calls, and

@@ -21,14 +21,14 @@ Status badges appear as colored indicators in two places:
 Status badges are disabled by default. To enable them, add a `page_status` section to
 `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 page_status:
   enabled: true
 ```
 
 Or use the shorthand:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 page_status: true
 ```
 
@@ -131,7 +131,7 @@ non-English language (see [Internationalization](internationalization.qmd)).
 The five built-in statuses cover common lifecycle stages, but your team may have its own workflow.
 You can add your own statuses or override built-in ones via the `statuses` map in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 page_status:
   enabled: true
   statuses:
@@ -173,7 +173,7 @@ status: draft
 To change a built-in status (for example, switching the icon or color for `deprecated`), redefine
 it in `statuses`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 page_status:
   enabled: true
   statuses:
@@ -194,7 +194,7 @@ prefer a subtler approach.
 
 ### Sidebar Only
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 page_status:
   enabled: true
   show_on_pages: false   # No badge below the title
@@ -203,7 +203,7 @@ page_status:
 
 ### Page Title Only
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 page_status:
   enabled: true
   show_on_pages: true    # Badge below the title (default)
@@ -252,7 +252,7 @@ content pages where lifecycle status is meaningful.
 
 Here is the complete `page_status` configuration with all options and their defaults:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 page_status:
   enabled: false           # Master switch (default: false)
   show_in_sidebar: true    # Show icon in sidebar links (default: true)

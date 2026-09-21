@@ -23,6 +23,8 @@ import warnings
 from pathlib import Path
 from typing import Callable, Iterable
 
+from great_docs._layout import Layout
+
 # These packages cover both citation backlink forms. The first has three
 # definitions and one reference, which produces a caret backlink. The second
 # has one definition and two references, which produces lettered backlinks.
@@ -56,7 +58,7 @@ _LIVE_HOLDER_STALE_SECONDS = 900.0
 
 def site_dir(rendered_dir: Path, name: str) -> Path:
     """
-    Return the rendered site directory for a Gauntlet package
+    Return a Gauntlet package's rendered site directory
 
     Parameters
     ----------
@@ -67,9 +69,17 @@ def site_dir(rendered_dir: Path, name: str) -> Path:
 
     Returns
     -------
-        The package's `_site` directory.
+    Path
+        The package's `_site` directory, resolved from whichever layout the
+        package's `great-docs.yml` actually uses. An unbuilt package uses the
+        root-layout default inside `rendered_dir`.
     """
-    return rendered_dir / name / "great-docs" / "_site"
+    package_dir = rendered_dir / name
+    if not package_dir.is_dir():
+        # Do not let `Layout.make` search above the fixture root for an absent
+        # package; use the root-layout default inside the fixture tree.
+        return package_dir / "great-docs" / "_site"
+    return Layout.make(package_dir).site_dir
 
 
 def sentinel_path(rendered_dir: Path, name: str) -> Path:
@@ -358,15 +368,15 @@ def build_site(rendered_dir: Path, name: str) -> Path:
         # stage from the generated documentation project.
         original_dir = Path.cwd()
         try:
-            os.chdir(docs.project_path)
+            os.chdir(docs.build_dir)
             with contextlib.redirect_stdout(io.StringIO()):
-                APIReference(str(docs.project_path / "_quarto.yml")).build()
+                APIReference(str(docs.build_dir / "_quarto.yml")).build()
         finally:
             os.chdir(original_dir)
 
         result = subprocess.run(
             ["quarto", "render"],
-            cwd=docs.project_path,
+            cwd=docs.build_dir,
             env=docs._get_quarto_env(),
             capture_output=True,
             text=True,
@@ -379,6 +389,14 @@ def build_site(rendered_dir: Path, name: str) -> Path:
             raise subprocess.SubprocessError(
                 f"Quarto could not render {name} (exit code {result.returncode}):\n{tail}"
             )
+
+        # The docs layout renders Quarto's default `_site` inside the build
+        # directory, separate from the public site. Mirror `GreatDocs.build()`
+        # because this builder runs the render stages directly.
+        if docs.layout.site_dir != docs.build_dir / "_site":
+            from great_docs._versioned_build import assemble_site
+
+            assemble_site(docs.build_dir, [], "", docs.layout.site_dir, layout=docs.layout)
 
         published = rendered_dir / name
         _clear_package_dir(rendered_dir, name)

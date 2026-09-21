@@ -63,7 +63,7 @@ SPEC = {
                 """
                 return value * 2
         ''',
-        "assets/logo.svg": _LOGO_SVG,
+        "docs/assets/logo.svg": _LOGO_SVG,
         "README.md": """\
             # gdtest-hero-custom
 

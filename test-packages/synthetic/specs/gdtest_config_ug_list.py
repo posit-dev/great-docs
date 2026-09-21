@@ -62,13 +62,13 @@ SPEC = {
                 """
                 return f"{task} complete"
         ''',
-        "user_guide/install.qmd": (
+        "docs/user_guide/install.qmd": (
             "---\ntitle: Installation\n---\n\n# Installation\n\nHow to install the package.\n"
         ),
-        "user_guide/quickstart.qmd": (
+        "docs/user_guide/quickstart.qmd": (
             "---\ntitle: Quickstart\n---\n\n# Quickstart\n\nGet started quickly with this guide.\n"
         ),
-        "user_guide/customization.qmd": (
+        "docs/user_guide/customization.qmd": (
             "---\ntitle: Customization\n---\n\n# Customization\n\nAdvanced customization options.\n"
         ),
     },

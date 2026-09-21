@@ -56,7 +56,7 @@ SPEC = {
                 """
                 return f"Hello, {name}!"
         ''',
-        "assets/logo.svg": _LOGO_SVG,
+        "docs/assets/logo.svg": _LOGO_SVG,
         "README.md": """\
             # gdtest-hero-basic
 

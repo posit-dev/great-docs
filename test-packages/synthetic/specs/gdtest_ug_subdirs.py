@@ -54,7 +54,7 @@ SPEC = {
                 """
                 pass
         ''',
-        "user_guide/basics/01-intro.qmd": (
+        "docs/user_guide/basics/01-intro.qmd": (
             "---\n"
             "title: Introduction\n"
             "---\n"
@@ -63,10 +63,10 @@ SPEC = {
             "\n"
             "An introduction to the basics of the library.\n"
         ),
-        "user_guide/basics/02-setup.qmd": (
+        "docs/user_guide/basics/02-setup.qmd": (
             "---\ntitle: Setup\n---\n\n# Setup\n\nHow to set up your environment.\n"
         ),
-        "user_guide/advanced/01-customization.qmd": (
+        "docs/user_guide/advanced/01-customization.qmd": (
             "---\n"
             "title: Customization\n"
             "---\n"
@@ -75,7 +75,7 @@ SPEC = {
             "\n"
             "Customize the library to fit your workflow.\n"
         ),
-        "user_guide/advanced/02-plugins.qmd": (
+        "docs/user_guide/advanced/02-plugins.qmd": (
             "---\ntitle: Plugins\n---\n\n# Plugins\n\nExtend functionality with plugins.\n"
         ),
     },

@@ -27,7 +27,7 @@ The changelog is enabled by default. If your project has a GitHub repository URL
 
 To change the maximum number of releases shown or to disable the changelog entirely, add a `changelog` section to `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 changelog:
   max_releases: 20    # Show only the 20 most recent releases
 ```
@@ -36,7 +36,7 @@ Releases are sorted newest-first, so older releases are the ones omitted when yo
 
 To disable the changelog:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 changelog:
   enabled: false
 ```

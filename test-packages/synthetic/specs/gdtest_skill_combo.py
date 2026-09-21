@@ -353,7 +353,7 @@ SPEC = {
             - [llms-full.txt](llms-full.txt) — Full documentation for LLMs
         """,
         # User guide
-        "user_guide/01-getting-started.qmd": """\
+        "docs/user_guide/01-getting-started.qmd": """\
             ---
             title: Getting Started
             ---

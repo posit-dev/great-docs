@@ -45,7 +45,7 @@ SPEC = {
         "funding": {"name": "Fondation pour la Recherche"},
         # Project-level bibliography; the auto-generated references heading must
         # be localized to French ("R\u00e9f\u00e9rences") via reference-section-title.
-        "bibliography": "docs/references.bib",
+        "bibliography": "references.bib",
     },
     "files": {
         "gdtest_i18n_french/__init__.py": '''\
@@ -197,7 +197,7 @@ SPEC = {
                     "nombre": len(valeurs),
                 }
         ''',
-        "user_guide/01-demarrage-rapide.qmd": """\
+        "docs/user_guide/01-demarrage-rapide.qmd": """\
             ---
             title: "D\u00e9marrage rapide"
             guide-section: "Fondamentaux"
@@ -243,7 +243,7 @@ SPEC = {
             à la main : Great Docs génère automatiquement la section, dont le
             titre est traduit en français.
         """,
-        "user_guide/02-configuration.qmd": """\
+        "docs/user_guide/02-configuration.qmd": """\
             ---
             title: "Configuration"
             guide-section: "Fondamentaux"
@@ -276,7 +276,7 @@ SPEC = {
             print(stats)
             ```
         """,
-        "user_guide/03-table-explorer.qmd": """\
+        "docs/user_guide/03-table-explorer.qmd": """\
             ---
             title: "Exploration de tableau"
             guide-section: "Fondamentaux"

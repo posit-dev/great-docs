@@ -1,9 +1,9 @@
+import json
 import shutil
 from pathlib import Path
 
-# Quarto runs this hook from `great-docs/` or a historical
-# `great-docs-<tag>/` sibling. Start there so either layout finds the project
-# root through `great-docs.yml`.
+# Version projects share a depth, so the relative cache path also applies to
+# historical copies. Older generated projects use ancestor discovery.
 build_dir = Path.cwd()
 
 
@@ -39,6 +39,11 @@ def _find_project_root(start: Path) -> Path:
 
 project_root = _find_project_root(build_dir)
 freeze_source = project_root / "_freeze"
+options_path = build_dir / "_gd_options.json"
+if options_path.is_file():
+    options = json.loads(options_path.read_text(encoding="utf-8"))
+    if options.get("freeze_dir"):
+        freeze_source = (build_dir / options["freeze_dir"]).resolve()
 
 if freeze_source.is_dir():
     freeze_dest = build_dir / "_freeze"

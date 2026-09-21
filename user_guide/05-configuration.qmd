@@ -8,7 +8,7 @@ tags: [Configuration]
 # Configuration
 
 Great Docs is designed to work with zero configuration, but you can customize its behavior through a
-`great-docs.yml` file. This page covers the functional settings: API discovery, docstring parsing,
+`docs/great-docs.yml` file. This page covers the functional settings: API discovery, docstring parsing,
 GitHub integration, sidebar behavior, content features, and more. For visual customization (logos,
 gradients, banners, hero sections, dark mode), see [Theming & Appearance](theming.qmd).
 
@@ -19,12 +19,18 @@ feature is configured with `custom_pages` and still falls back to `custom/` when
 
 ## Configuration Location
 
-All Great Docs settings go in a `great-docs.yml` file in your project root directory. This dedicated
-configuration file keeps your documentation settings separate and easy to manage:
+Put Great Docs settings in `docs/great-docs.yml`. Resolve narrative sources, assets,
+bibliography, CSS, and render hooks from that directory. Keep package metadata,
+Python sources, and the README at the package root:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 # Your settings here
 ```
+
+For a custom documentation directory, use
+`great-docs build --config website/great-docs.yml`. The configuration path is relative
+to your current working directory; its source paths are relative to `website/`.
+Build projects live in `website/_quarto/` and deployment output in `website/_site/`.
 
 To generate a starter configuration file with all options documented:
 
@@ -42,7 +48,7 @@ presentation name.
 
 Use the `display_name` field to specify how your package name appears in the site:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 display_name: My Package
 ```
 
@@ -79,7 +85,7 @@ This ensures predictable behavior and respects your package's actual naming.
 By default, Great Docs assumes a Python project. Set `project_type` to tell Great Docs about the
 primary language of your project:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 project_type: rust
 ```
 
@@ -93,7 +99,7 @@ Valid values:
 
 For projects that combine languages (e.g., a Rust binary with Python bindings), use a list:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 project_type: [python, rust]
 ```
 
@@ -106,7 +112,7 @@ language's CLI documentation.
 
 To exclude specific items from documentation during `init` and `scan`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 exclude:
   - InternalClass
   - helper_function
@@ -134,7 +140,7 @@ Some packages intentionally export names that match the auto-exclude list (e.g.,
 `logging` module that is part of the public API). Use `auto_include` to force specific names back
 into discovery:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 auto_include:
   - config
   - logging
@@ -147,7 +153,7 @@ auto-excluded names remain filtered as usual.
 
 If the auto-exclude list doesn't suit your package at all, you can bypass it completely:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 no_auto_exclude: true
 ```
 
@@ -176,14 +182,14 @@ When you run `great-docs init`, Great Docs analyzes your package's docstrings to
 - **Google style** is identifiable by section headers with colons (e.g., `Args:`, `Returns:`)
 - **Sphinx style** is identifiable by field markers (e.g., `:param:`, `:returns:`, `:rtype:`)
 
-The detected style is saved to `great-docs.yml` and forwarded to the API reference renderer during
+The detected style is saved to `docs/great-docs.yml` and forwarded to the API reference renderer during
 builds.
 
 ### Manual Configuration
 
 If auto-detection doesn't work for your project, or you want to override it:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 parser: google  # Options: numpy (default), google, sphinx
 ```
 
@@ -334,7 +340,7 @@ Great Docs uses its built-in renderer to generate API reference pages. By defaul
 **dynamic introspection** (importing your package at runtime), which produces the most accurate
 documentation for complex packages with re-exports and aliases.
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 dynamic: true   # Default: true
 ```
 
@@ -349,7 +355,7 @@ You'll see a message like:
 
 To skip the retry and always use static analysis, set it explicitly:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 dynamic: false
 ```
 
@@ -372,11 +378,11 @@ Several Great Docs features require knowing your GitHub repository URL:
 
 Great Docs looks for your GitHub repository in this order:
 
-1. **`repo:` in great-docs.yml**: explicit override, takes precedence
+1. **`repo:` in docs/great-docs.yml**: explicit override, takes precedence
 2. **`[project.urls]` in pyproject.toml**: looks for `Repository`, `Source`, `GitHub`, or `Homepage`
 keys containing a GitHub URL
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 repo: https://github.com/your-org/your-package
 ```
 
@@ -393,7 +399,7 @@ Repository = "https://github.com/your-org/your-package"
 During `great-docs build`, you may see messages about GitHub integration:
 
 - **"No GitHub repository info available"**: no repository URL was found. Check that `repo:` is set
-in great-docs.yml or `[project.urls]` is configured in pyproject.toml.
+in docs/great-docs.yml or `[project.urls]` is configured in pyproject.toml.
 - **"No GitHub releases found"**: the repository was detected, but has no published GitHub Releases.
 The version badge feature requires at least one published release.
 :::
@@ -402,7 +408,7 @@ The version badge feature requires at least one published release.
 
 Choose how the GitHub link appears in the navbar:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 # Shows stars count (default)
 github_style: widget
 
@@ -427,21 +433,21 @@ No configuration is needed (the badge appears automatically when these condition
 
 Great Docs automatically creates "source" links to GitHub. Configure the branch:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 source:
   branch: main  # Default: auto-detected from git
 ```
 
 To disable source links entirely:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 source:
   enabled: false
 ```
 
 Full source link configuration:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 source:
   enabled: true        # Enable/disable source links (default: true)
   branch: main         # Git branch/tag to link to (default: auto-detect)
@@ -454,12 +460,12 @@ source:
 The homepage metadata sidebar includes a "View on PyPI" link, auto-detected from your package name
 in `pyproject.toml`. You can disable it or point it to a custom package index:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 # Disable the PyPI link entirely
 pypi: false
 ```
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 # Use a custom package index URL (e.g., a private registry)
 pypi: "https://packages.example.com/simple/my-package"
 ```
@@ -483,7 +489,7 @@ This value is used in several places:
 Without it, the Skills page renders literal `<site-url>` placeholders instead of working
 install commands, and subdirectory-hosted sites will have broken asset paths.
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 # Site URL: the canonical address of the deployed documentation site.
 # Used for skills page install commands, .well-known/ discovery, and sitemaps.
 site_url: "https://your-org.github.io/your-package/"
@@ -498,7 +504,7 @@ Documentation = "https://your-org.github.io/your-package/"
 
 Great Docs checks these sources in order:
 
-1. `site_url` in `great-docs.yml`
+1. `site_url` in `docs/great-docs.yml`
 2. `Documentation` URL in `[project.urls]` (pyproject.toml)
 3. `website.site-url` already present in `_quarto.yml`
 
@@ -506,7 +512,7 @@ If none are found, the build emits a warning:
 
 ```
 ⚠ No site URL found — skills page will show <site-url> placeholders.
-  Set site_url in great-docs.yml or add a Documentation URL to
+  Set site_url in docs/great-docs.yml or add a Documentation URL to
   [project.urls] in pyproject.toml.
 ```
 
@@ -519,7 +525,7 @@ generated install commands will already be correct.
 
 The API reference sidebar includes a search filter for large APIs. Configure it:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 sidebar_filter:
   enabled: true   # Enable/disable filter (default: true)
   min_items: 20   # Minimum items before showing filter (default: 20)
@@ -529,7 +535,7 @@ sidebar_filter:
 
 Control whether class methods get their own pages or stay inline on the class page:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 inline_methods: 5      # Split above 5 methods (default)
 inline_methods: 10     # Split above 10 methods
 inline_methods: true   # Always inline (never split)
@@ -545,19 +551,19 @@ Every HTML page gets a companion `.md` file generated automatically. A small wid
 top-right corner of each page allowing visitors to **copy** the page content as Markdown or **view**
 the raw `.md` file. This is enabled by default:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 markdown_pages: true   # Enable/disable (default: true)
 ```
 
 To disable both the `.md` generation and the copy/view widget:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 markdown_pages: false
 ```
 
 To generate `.md` pages but hide the widget:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 markdown_pages:
   widget: false
 ```
@@ -576,31 +582,31 @@ See [Theming & Appearance](theming.qmd) for full details on all visual customiza
 Great Docs forwards `site.html-math-method` to Quarto's HTML configuration. It defaults to
 KaTeX, which renders mathematical notation without a browser-side MathJax dependency:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 site:
   html-math-method: katex
 ```
 
 To use MathJax instead, set the method explicitly:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 site:
   html-math-method: mathjax
 ```
 
 Other Quarto-supported HTML math methods can also be selected with this setting. Configure it in
-`great-docs.yml`; Great Docs writes the corresponding value into its generated `_quarto.yml`.
+`docs/great-docs.yml`; Great Docs writes the corresponding value into its generated `_quarto.yml`.
 
 ## User Guide Directory
 
-By default, Great Docs looks for a `user_guide/` directory in your project root. To use a different
+By default, Great Docs looks for `docs/user_guide/`. To use a different
 location:
 
-```{.yaml filename="great-docs.yml"}
-user_guide: docs/guides
+```{.yaml filename="docs/great-docs.yml"}
+user_guide: guides
 ```
 
-The path is relative to the project root. If both the config option and a `user_guide/` directory
+The path is relative to the configuration directory. If both the config option and a `user_guide/` directory
 exist, the config option takes precedence.
 
 See [User Guides](user-guides.qmd) for details on writing and organizing User Guide content.
@@ -613,7 +619,7 @@ use a different layout where the first User Guide page _is_ the landing page.
 
 The `homepage` setting controls which layout to use:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 homepage: user_guide
 ```
 
@@ -647,18 +653,18 @@ and GitHub.
 A project with this structure:
 
 ```
-my_package/
+my_package/docs/
 ├── user_guide/
 │   ├── 00-getting-started.qmd   # ← becomes the homepage
 │   ├── 01-installation.qmd
 │   └── 02-configuration.qmd
 ├── great-docs.yml
-└── pyproject.toml
+└── assets/
 ```
 
 And this config:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 homepage: user_guide
 ```
 
@@ -682,14 +688,14 @@ its own configuration key.
 
 Enable automatic CLI documentation for Click-based CLIs:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 cli:
   enabled: true
 ```
 
 With optional explicit configuration:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 cli:
   enabled: true
   module: my_package.cli   # Module containing Click commands
@@ -700,7 +706,7 @@ cli:
 
 For Go projects using Cobra, urfave/cli, or similar frameworks. Requires `go` on your `PATH`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 project_type: go
 go_cli:
   enabled: true
@@ -711,7 +717,7 @@ go_cli:
 For Rust projects using clap, structopt, argh, or similar frameworks. Requires `cargo` on your
 `PATH`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 project_type: rust
 rust_cli:
   enabled: true
@@ -727,7 +733,7 @@ your `pyproject.toml` has a GitHub repository URL, a changelog page will appear 
 
 To customize:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 changelog:
   enabled: true        # Enable/disable changelog (default: true)
   max_releases: 50     # Max releases to include (default: 50)
@@ -735,7 +741,7 @@ changelog:
 
 To disable it entirely:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 changelog:
   enabled: false
 ```
@@ -747,7 +753,7 @@ See [Changelog](changelog.qmd) for full details on authentication, CLI usage, an
 Add custom page groups (examples, tutorials, blog, etc.) to your site. Each section gets a navbar
 link and an auto-generated index page:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 sections:
   - title: Examples          # Navbar link text
     dir: examples            # Source directory
@@ -770,7 +776,7 @@ See [Custom Sections](custom-sections.qmd) and [Blog](blog.qmd) for full details
 By default, navbar items appear in the order they are added during the build (Reference, Changelog,
 User Guide, custom sections). Use `navbar_order` to set an explicit ordering:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 navbar_order:
   - User Guide
   - Reference
@@ -805,7 +811,7 @@ whichever section is first.
 
 Customize author display in the landing page sidebar:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 authors:
   - name: Your Name
     email: you@example.com
@@ -818,7 +824,7 @@ authors:
 
 Multiple authors are supported:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 authors:
   - name: First Author
     role: Lead Developer
@@ -845,7 +851,7 @@ authors:
 
 Control how your API documentation is organized with the `reference` config:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 reference:
   - title: Core Classes
     desc: Main classes for working with the package
@@ -867,7 +873,7 @@ If no `reference` config is provided, Great Docs auto-generates sections from di
 
 You can set a custom heading and introductory paragraph for the API reference index page:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 reference:
   title: "API Docs"
   desc: >-
@@ -882,7 +888,7 @@ heading defaults to "Reference" with no introductory text.
 These keys can be combined with explicit `sections` for full control over both the page heading and
 the section structure:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 reference:
   title: "API Docs"
   desc: "All public symbols documented below."
@@ -901,7 +907,7 @@ During the build, a `SKILL.md` is generated (or copied from your hand-written ve
 at `.well-known/agent-skills/<name>/SKILL.md` for discovery. Users can then install it with
 `npx skills add` or `great-docs skill install`.
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 skill:
   enabled: true          # Set to false to disable skill.md entirely
   file: null             # Path to a SKILL.md (overrides curated and generated)
@@ -924,7 +930,7 @@ sense of content freshness.
 
 ### Enabling Page Metadata
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 site:
   show_dates: true
 ```
@@ -1028,7 +1034,7 @@ edited.
 
 ### Configuration Options
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 site:
   show_dates: true       # Enable/disable page metadata (default: false)
   show_author: true      # Show author attribution when enabled (default: true)
@@ -1056,7 +1062,7 @@ author:
 ---
 ```
 
-Great Docs automatically looks up author details from the `authors` list in `great-docs.yml`, so you
+Great Docs automatically looks up author details from the `authors` list in `docs/great-docs.yml`, so you
 can often just specify the name:
 
 ```{.yaml filename="guide.qmd"}
@@ -1066,14 +1072,14 @@ author: "Jane Developer"
 ---
 ```
 
-If the author is listed in `great-docs.yml` with a `github` field, their GitHub avatar is used
+If the author is listed in `docs/great-docs.yml` with a `github` field, their GitHub avatar is used
 automatically.
 
 ## Complete Example
 
 Here's a comprehensive configuration demonstrating all available options:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 # Display Name
 display_name: My Package  # Custom display name for navbar/title
 
@@ -1115,7 +1121,7 @@ site:
 markdown_pages: true
 
 # User Guide Directory
-# user_guide: docs/guides
+# user_guide: guides
 
 # Homepage Mode
 # homepage: user_guide  # First UG page becomes the landing page
@@ -1209,7 +1215,7 @@ configuration (or none at all) is sufficient.
 
 ## Generating a Configuration File
 
-To create a starter `great-docs.yml` with all options documented:
+To create a starter `docs/great-docs.yml` with all options documented:
 
 ```bash
 great-docs config
@@ -1220,20 +1226,20 @@ you need.
 
 ## Quarto Configuration
 
-Great Docs generates and maintains a `_quarto.yml` file in the `great-docs/` output directory. This
+Great Docs generates and maintains a `_quarto.yml` file in the `docs/_quarto/default/` output directory. This
 is an internal file that controls how Quarto renders your site, including navigation, theming, and
 the API reference configuration. It is regenerated on every `great-docs build`.
 
 **Should you edit it?** No. Any manual edits will be overwritten on the next build. All
-customization should go through `great-docs.yml`, which is the single source of truth for your
+customization should go through `docs/great-docs.yml`, which is the single source of truth for your
 documentation configuration.
 
-**Should you commit it?** No. The entire `great-docs/` output directory is ephemeral and should
+**Should you commit it?** No. The entire `docs/_quarto/default/` output directory is ephemeral and should
 be gitignored (which `great-docs init` offers to set up for you).
 
 ## Next Steps
 
-With `great-docs.yml` you control everything from API discovery and docstring parsing to sidebar
+With `docs/great-docs.yml` you control everything from API discovery and docstring parsing to sidebar
 layout and GitHub integration. Most projects only need a handful of settings, but the full range is
 here when you need it.
 

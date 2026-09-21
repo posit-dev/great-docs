@@ -88,7 +88,7 @@ SPEC = {
                 return f"Results: {data}"
         ''',
         # Subdirectories with numeric prefixes — tests prefix stripping
-        "demos/01-getting-started/installation.qmd": (
+        "docs/demos/01-getting-started/installation.qmd": (
             "---\n"
             "title: Installation\n"
             "description: How to install the package.\n"
@@ -102,7 +102,7 @@ SPEC = {
             "pip install gdtest-sec-dir-titles\n"
             "```\n"
         ),
-        "demos/01-getting-started/first-steps.qmd": (
+        "docs/demos/01-getting-started/first-steps.qmd": (
             "---\n"
             "title: First Steps\n"
             "description: Your first steps with the package.\n"
@@ -113,7 +113,7 @@ SPEC = {
             "Start by importing the package and running a basic demo.\n"
         ),
         # dir_titles maps this to "Results/Reporting" instead of "Results And Reporting"
-        "demos/02-results-and-reporting/basic-report.qmd": (
+        "docs/demos/02-results-and-reporting/basic-report.qmd": (
             "---\n"
             "title: Basic Report\n"
             "description: Generate a basic results report.\n"
@@ -123,7 +123,7 @@ SPEC = {
             "\n"
             "Use `show_results()` to display output.\n"
         ),
-        "demos/02-results-and-reporting/custom-output.qmd": (
+        "docs/demos/02-results-and-reporting/custom-output.qmd": (
             "---\n"
             "title: Custom Output\n"
             "description: Customize the output format.\n"
@@ -134,7 +134,7 @@ SPEC = {
             "Override the default formatting.\n"
         ),
         # dir_titles maps this to "Advanced Topics"
-        "demos/03-advanced-topics/tips-and-tricks.qmd": (
+        "docs/demos/03-advanced-topics/tips-and-tricks.qmd": (
             "---\n"
             "title: Tips and Tricks\n"
             "description: Advanced tips for power users.\n"

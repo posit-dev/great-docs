@@ -79,8 +79,9 @@ SPEC = {
         },
     },
     "binary_files": {
-        # Seed the cache so the build resolves this source without network access.
-        f".great-docs-cache/interlinks/{_EXTDEMO_CACHE_NAME}": _EXTERNAL_INVENTORY,
+        # Seed the cache so the build resolves this source without network
+        # access. Docs-layout projects store it under `docs/.cache/`.
+        f"docs/.cache/interlinks/{_EXTDEMO_CACHE_NAME}": _EXTERNAL_INVENTORY,
     },
     "files": {
         "gdtest_interlinks/__init__.py": '''\
@@ -174,7 +175,7 @@ SPEC = {
                 return []
         ''',
         # ── User guide pages with interlinks ────────────────────────────
-        "user_guide/01-getting-started.qmd": """\
+        "docs/user_guide/01-getting-started.qmd": """\
             ---
             title: Getting Started
             ---
@@ -208,7 +209,7 @@ SPEC = {
 
             See the [API Reference](../reference/index.qmd) for full details.
         """,
-        "user_guide/02-advanced.qmd": """\
+        "docs/user_guide/02-advanced.qmd": """\
             ---
             title: Advanced Usage
             ---
@@ -233,7 +234,7 @@ SPEC = {
             Inline code like `BaseStore` and `DuckDBStore` and `query()`
             is automatically linked to reference pages.
         """,
-        "user_guide/03-external.qmd": """\
+        "docs/user_guide/03-external.qmd": """\
             ---
             title: External Links
             ---

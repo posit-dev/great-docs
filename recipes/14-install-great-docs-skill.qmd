@@ -49,7 +49,7 @@ The Great Docs skill file covers the following areas:
 - **Configuration reference.** Every key in `great-docs.yml` with example values, so the agent can modify settings without guessing at syntax.
 - **Build pipeline.** The 11-step build sequence, so the agent understands what happens when you run `great-docs build` and where to look when something goes wrong.
 - **Common tasks.** Step-by-step instructions for adding user guide pages, enabling CLI documentation, overriding the homepage, and more.
-- **Gotchas.** Warnings about running from the project root, `module` vs. package name, circular imports, user guide ordering, and the `great-docs/` directory being regenerated on every build.
+- **Gotchas.** Warnings about running from the project root, `module` vs. package name, circular imports, user guide ordering, and the `docs/_quarto/` directory being regenerated on every build.
 
 With the skill installed, you can give your agent high-level instructions like "add a user guide page about authentication" or "enable CLI docs for my package" and it will carry out the steps correctly.
 

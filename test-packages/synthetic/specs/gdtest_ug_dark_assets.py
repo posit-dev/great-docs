@@ -58,7 +58,7 @@ SPEC = {
         ''',
         "README.md": "# gdtest-ug-dark-assets\n\nTest dark-mode asset copying.\n",
         # ── User guide pages ─────────────────────────────────────────
-        "user_guide/01-naming-convention.qmd": """\
+        "docs/user_guide/01-naming-convention.qmd": """\
             ---
             title: "Naming Convention Dark Mode"
             ---
@@ -76,7 +76,7 @@ SPEC = {
 
             ![Dashboard overview](assets/charts/dashboard.light.svg){.lightbox}
         """,
-        "user_guide/02-explicit-dark.qmd": """\
+        "docs/user_guide/02-explicit-dark.qmd": """\
             ---
             title: "Explicit Dark Attribute"
             ---
@@ -97,7 +97,7 @@ SPEC = {
 
             ![Dashboard overview](assets/charts/dashboard.light.svg){.lightbox dark="assets/charts/dashboard-custom-dark.svg"}
         """,
-        "user_guide/03-in-images-dir.qmd": """\
+        "docs/user_guide/03-in-images-dir.qmd": """\
             ---
             title: "Images in Standard Directory"
             ---
@@ -109,38 +109,40 @@ SPEC = {
             ![Status panel](images/status.light.svg){.lightbox}
         """,
         # ── Asset files: assets/orientation/ ──────────────────────────
-        "user_guide/assets/orientation/sweep-generator.light.svg": _svg(
+        "docs/user_guide/assets/orientation/sweep-generator.light.svg": _svg(
             600, 400, "#f0f4f8", "Sweep Generator (Light)", "#333"
         ),
-        "user_guide/assets/orientation/sweep-generator.dark.svg": _svg(
+        "docs/user_guide/assets/orientation/sweep-generator.dark.svg": _svg(
             600, 400, "#1a1a2e", "Sweep Generator (Dark)"
         ),
         # ── Asset files: assets/charts/ ──────────────────────────────
-        "user_guide/assets/charts/dashboard.light.svg": _svg(
+        "docs/user_guide/assets/charts/dashboard.light.svg": _svg(
             700, 450, "#ffffff", "Dashboard (Light)", "#333"
         ),
-        "user_guide/assets/charts/dashboard.dark.svg": _svg(
+        "docs/user_guide/assets/charts/dashboard.dark.svg": _svg(
             700, 450, "#16213e", "Dashboard (Dark)"
         ),
-        "user_guide/assets/charts/dashboard-custom-dark.svg": _svg(
+        "docs/user_guide/assets/charts/dashboard-custom-dark.svg": _svg(
             700, 450, "#0d1117", "Dashboard (Custom Dark)"
         ),
         # ── Asset files: assets/diagrams/ ────────────────────────────
-        "user_guide/assets/diagrams/component-day.svg": _svg(
+        "docs/user_guide/assets/diagrams/component-day.svg": _svg(
             600, 380, "#fafafa", "Component Diagram (Day)", "#333"
         ),
-        "user_guide/assets/diagrams/component-night.svg": _svg(
+        "docs/user_guide/assets/diagrams/component-night.svg": _svg(
             600, 380, "#0f3460", "Component Diagram (Night)"
         ),
-        "user_guide/assets/diagrams/flow.light.svg": _svg(
+        "docs/user_guide/assets/diagrams/flow.light.svg": _svg(
             500, 350, "#f5f5f5", "Flow Chart (Light)", "#333"
         ),
-        "user_guide/assets/diagrams/flow.dark.svg": _svg(500, 350, "#1e1e2f", "Flow Chart (Dark)"),
+        "docs/user_guide/assets/diagrams/flow.dark.svg": _svg(
+            500, 350, "#1e1e2f", "Flow Chart (Dark)"
+        ),
         # ── Asset files: images/ (standard dir, for comparison) ──────
-        "user_guide/images/status.light.svg": _svg(
+        "docs/user_guide/images/status.light.svg": _svg(
             500, 300, "#e8f0fe", "Status Panel (Light)", "#333"
         ),
-        "user_guide/images/status.dark.svg": _svg(500, 300, "#1a1a2e", "Status Panel (Dark)"),
+        "docs/user_guide/images/status.dark.svg": _svg(500, 300, "#1a1a2e", "Status Panel (Dark)"),
     },
     "expected": {
         "detected_name": "gdtest-ug-dark-assets",

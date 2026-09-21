@@ -47,7 +47,7 @@ SPEC = {
                 """
                 return f"rendered: {topic}"
         ''',
-        "apps/start.html": """
+        "docs/apps/start.html": """
             ---
             title: Python Apps
             layout: passthrough
@@ -58,7 +58,7 @@ SPEC = {
               <p>Custom page published under a nested output prefix.</p>
             </section>
         """,
-        "apps/assets/widget.js": "window.GDTEST_NESTED_OUTPUT = true;\n",
+        "docs/apps/assets/widget.js": "window.GDTEST_NESTED_OUTPUT = true;\n",
         "README.md": (
             "# gdtest-custom-nested-output\n\n"
             "Synthetic package for nested custom page output prefix coverage.\n"

@@ -131,7 +131,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: great-docs/_site
+          path: docs/_site
           include-hidden-files: true
 
   publish-docs:
@@ -162,12 +162,12 @@ great-docs build
 
 ### Upload the Built Site
 
-The built site is in `great-docs/_site/`. Upload this directory to your hosting service:
+The built site is in `docs/_site/`. Upload this directory to your hosting service:
 
-- **Netlify**: Drag and drop `great-docs/_site/` folder
-- **Vercel**: Point to `great-docs/_site` as output directory
-- **AWS S3**: Sync the `great-docs/_site/` folder to your bucket
-- **Any static host**: Copy contents of `great-docs/_site/`
+- **Netlify**: Drag and drop `docs/_site/` folder
+- **Vercel**: Point to `docs/_site` as output directory
+- **AWS S3**: Sync the `docs/_site/` folder to your bucket
+- **Any static host**: Copy contents of `docs/_site/`
 
 ## Subdirectory Deployments
 
@@ -177,7 +177,7 @@ generates correct root-relative paths for CSS, JS, and navigation links.
 
 Set `site_url` in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 site_url: "https://internal.example.com/docs/mypackage/"
 ```
 
@@ -255,7 +255,7 @@ Pull request previews need a few things to be in place. The workflow must comple
 Run `great-docs build` locally before pushing to catch errors early:
 
 ```bash
-great-docs build && open great-docs/_site/index.html
+great-docs build && open docs/_site/index.html
 ```
 
 ### Use Pull Request Previews

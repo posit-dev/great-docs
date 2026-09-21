@@ -45,7 +45,7 @@ SPEC = {
                 """
                 return f"Hi, {name}!"
         ''',
-        "index.md": """\
+        "docs/index.md": """\
             # Custom Index
 
             This is index.md and should take priority over README.md.

@@ -402,7 +402,7 @@ colors.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `file` | string | — | Path to a YAML file with color definitions (relative to project root) |
+| `file` | string | — | Path to a YAML file with color definitions (relative to the generated Quarto project) |
 | `palette` | string | — | Preset name: `sky`, `peach`, `prism`, `lilac`, `slate`, `honey`, `dusk`, `mint`, or `all` |
 | `mode` | string | `"circles"` | Display mode: `circles` or `rectangles` |
 | `size` | string | `"56px"` | Circle swatch diameter (CSS length) |

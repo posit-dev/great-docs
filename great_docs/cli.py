@@ -3,13 +3,51 @@ from __future__ import annotations
 import os
 import re
 import sys
+from functools import wraps
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable
 
 import click
 
 from . import __version__
+from ._layout import Layout, _find_package_root
 from ._subprocess import TEXT_MODE_KWARGS
 from .core import GreatDocs
+
+if TYPE_CHECKING:
+    from ._layout_migration import Migration, Move, Note
+
+
+def _config_option(function: Callable[..., Any]) -> Callable[..., Any]:
+    """Select and validate project configuration after the subcommand"""
+
+    @click.option(
+        "--config",
+        "config_path",
+        type=str if function.__name__ == "migrate_layout" else click.Path(dir_okay=False),
+        help="Path to the project configuration file",
+    )
+    @wraps(function)
+    def selected(*args: Any, **kwargs: Any) -> Any:
+        standalone_preview = function.__name__ == "preview" and any(
+            kwargs.get(option) for option in ("site_dir", "pr", "run", "branch", "clear_cache")
+        )
+        if (
+            function.__name__ != "migrate_layout"
+            and not kwargs.get("from_repo")
+            and not standalone_preview
+        ):
+            try:
+                Layout.make(
+                    Path(kwargs.get("project_path") or Path.cwd()),
+                    Path(kwargs["config_path"]) if kwargs.get("config_path") else None,
+                    create=function.__name__ in {"init", "config"},
+                )
+            except ValueError as error:
+                raise click.ClickException(str(error)) from error
+        return function(*args, **kwargs)
+
+    return selected
 
 
 def _detect_python_version_from_pyproject(project_root: Path) -> str | None:
@@ -153,20 +191,22 @@ def cli():
     is_flag=True,
     help="Delete existing great-docs.yml and generate a fresh default config",
 )
-def init(project_path: str | None, force: bool) -> None:
-    """Initialize great-docs in your project (one-time bootstrap).
+@_config_option
+def init(project_path: str | None, force: bool, config_path: str | None = None) -> None:
+    """
+    Initialise documentation in your project
 
-    Creates a fresh 'great-docs.yml' configuration file with discovered
+    Creates a fresh 'docs/great-docs.yml' configuration file with discovered
     package exports and sensible defaults. Refuses to run if
-    'great-docs.yml' already exists (use '--force' to reset).
+    the selected configuration already exists (use '--force' to reset).
 
     \b
-    • Creates 'great-docs.yml' with discovered API exports
+    • Creates 'docs/great-docs.yml' with discovered API exports
     • Auto-detects your package name and public API
     • Updates .gitignore to exclude the build directory
     • Detects docstring style (numpy, google, sphinx)
 
-    After init, customize 'great-docs.yml' then use 'great-docs build'
+    After init, customise 'docs/great-docs.yml' then use 'great-docs build'
     for all subsequent builds. You should never need to run
     'great-docs init' again unless you want to completely reset your
     configuration.
@@ -178,7 +218,7 @@ def init(project_path: str | None, force: bool) -> None:
       great-docs init --project-path ../pkg # Initialize in another project
     """
     try:
-        docs = GreatDocs(project_path=project_path)
+        docs = GreatDocs(project_path=project_path, config_path=config_path, create=True)
         docs.install(force=force)
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
@@ -230,7 +270,7 @@ def init(project_path: str | None, force: bool) -> None:
     "--output-dir",
     type=click.Path(file_okay=False, dir_okay=True),
     default=None,
-    help="Where to copy the built site when using --from-repo (default: ./great-docs/_site)",
+    help="Where to copy --from-repo output (default: the checkout deployment path, e.g. docs/_site)",
 )
 @click.option(
     "--shallow",
@@ -243,6 +283,7 @@ def init(project_path: str | None, force: bool) -> None:
     is_flag=True,
     help="Start a preview server after building with --from-repo",
 )
+@_config_option
 def build(
     project_path: str | None,
     watch: bool,
@@ -254,15 +295,18 @@ def build(
     output_dir: str | None,
     shallow: bool,
     preview_after: bool,
+    config_path: str | None = None,
 ) -> None:
-    """Build your documentation site.
+    """
+    Build your documentation site
 
-    Requires 'great-docs.yml' to exist (run 'great-docs init' first).
+    Requires a configuration such as 'docs/great-docs.yml' (run 'great-docs init' first).
     This is the only command you need day-to-day and in CI.
 
-    Creates the 'great-docs/' build directory, copies all assets,
-    and builds the documentation site. The build directory is ephemeral and
-    should not be committed to version control.
+    Creates the 'docs/_quarto/default/' Quarto project, copies assets,
+    and publishes the site to 'docs/_site/'. Historical projects use
+    'docs/_quarto/<tag>/'. These generated directories should not be committed.
+    Use '--config website/great-docs.yml' for a custom source directory.
 
     Use '--project-path' to point to a project in a different directory.
     Use '--watch' to automatically rebuild when source files change.
@@ -277,7 +321,8 @@ def build(
     Use '--from-repo' to build documentation from a remote Git repository.
     This clones the repo into a temporary directory, creates an isolated
     virtual environment, installs the package and great-docs, builds the
-    site, and copies the output to '--output-dir' (or './great-docs/_site').
+    site, and copies the output to '--output-dir'. By default it preserves the
+    checkout's deployment path under the current directory, such as 'docs/_site/'.
 
     Add '--preview' to automatically start a local server after a
     '--from-repo' build completes, opening the site in your browser.
@@ -310,7 +355,7 @@ def build(
             version_tags = None
             if version_filter:
                 version_tags = [v.strip() for v in version_filter.split(",") if v.strip()]
-            GreatDocs.build_from_repo(
+            built_site = GreatDocs.build_from_repo(
                 from_repo,
                 branch=branch,
                 output_dir=output_dir,
@@ -318,9 +363,10 @@ def build(
                 version_tags=version_tags,
                 latest_only=latest_only,
                 shallow=shallow,
+                config_path=config_path,
             )
             if preview_after:
-                site_path = output_dir or str(Path.cwd() / "great-docs" / "_site")
+                site_path = str(built_site)
                 GreatDocs.preview_site(site_path)
         else:
             if branch:
@@ -331,7 +377,7 @@ def build(
                 click.echo("Warning: --output-dir is ignored without --from-repo", err=True)
             if preview_after:
                 click.echo("Warning: --preview is ignored without --from-repo", err=True)
-            docs = GreatDocs(project_path=project_path)
+            docs = GreatDocs(project_path=project_path, config_path=config_path)
             # Parse version filter if provided
             version_tags = None
             if version_filter:
@@ -355,23 +401,25 @@ def build(
     type=click.Path(exists=True, file_okay=False, dir_okay=True),
     help="Path to your project root directory (default: current directory)",
 )
-def uninstall(project_path: str | None) -> None:
-    """Remove great-docs from your project.
+@_config_option
+def uninstall(project_path: str | None, config_path: str | None = None) -> None:
+    """
+    Remove documentation configuration and generated output
 
     This command removes the great-docs configuration and build directory:
 
     \b
-    • Deletes the 'great-docs.yml' configuration file
-    • Removes the 'great-docs/' build directory
+    • Deletes the selected configuration, normally 'docs/great-docs.yml'
+    • Removes its generated Quarto projects and deployment output
 
-    Your source files ('user_guide/', 'README.md', etc.) are preserved.
+    Your source files ('docs/user_guide/', 'README.md', etc.) are preserved.
 
     \b
     Examples:
       great-docs uninstall                  # Remove from current project
     """
     try:
-        docs = GreatDocs(project_path=project_path)
+        docs = GreatDocs(project_path=project_path, config_path=config_path)
         docs.uninstall()
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
@@ -435,6 +483,7 @@ def uninstall(project_path: str | None) -> None:
     default=None,
     help="Load a .env for GITHUB_TOKEN/GH_TOKEN (default: auto-detect .env).",
 )
+@_config_option
 def preview(
     project_path: str | None,
     port: int,
@@ -450,14 +499,16 @@ def preview(
     clear_cache: bool,
     use_gh: bool,
     env_file: str | None,
+    config_path: str | None = None,
 ) -> None:
-    """Preview your documentation locally.
+    """
+    Preview your documentation locally
 
     Starts a local HTTP server and opens the built documentation site in your
     default browser. If the site hasn't been built yet, it will build it first.
 
-    The site is served from 'great-docs/_site/'. Use 'great-docs build' to
-    rebuild if you've made changes.
+    The default site is served from 'docs/_site/'. Use '--config' to select a
+    custom documentation directory. Run 'great-docs build' after source changes.
 
     Use '--site-dir' to preview a site from any directory (e.g. output from
     a '--from-repo' build).
@@ -531,7 +582,7 @@ def preview(
                 site_dir, port=port, open_path=open_path, open_browser=not no_open
             )
         else:
-            docs = GreatDocs(project_path=project_path)
+            docs = GreatDocs(project_path=project_path, config_path=config_path)
             docs.preview(port=port)
     except KeyboardInterrupt:
         click.echo("\n👋 Server stopped")
@@ -553,15 +604,17 @@ def preview(
     is_flag=True,
     help="Overwrite existing great-docs.yml without prompting",
 )
-def config(project_path: str | None, force: bool) -> None:
-    """Generate a great-docs.yml configuration file.
+@_config_option
+def config(project_path: str | None, force: bool, config_path: str | None = None) -> None:
+    """
+    Generate a documentation configuration file
 
-    Creates a 'great-docs.yml' file with all available options documented.
+    Creates 'docs/great-docs.yml' with all available options documented.
     The generated file contains commented examples for each setting.
 
     \b
     Examples:
-      great-docs config                     # Generate in current directory
+      great-docs config                     # Generate docs/great-docs.yml
       great-docs config --force             # Overwrite existing file
       great-docs config --project-path ../pkg
     """
@@ -571,7 +624,8 @@ def config(project_path: str | None, force: bool) -> None:
 
     try:
         project_root = Path(project_path) if project_path else Path.cwd()
-        config_path = project_root / "great-docs.yml"
+        layout = Layout.make(project_root, Path(config_path) if config_path else None, create=True)
+        config_path = layout.config_path
 
         if config_path.exists() and not force:
             if not click.confirm(
@@ -581,7 +635,11 @@ def config(project_path: str | None, force: bool) -> None:
                 return
 
         config_content = create_default_config()
+        config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_text(config_content, encoding="utf-8")
+        GreatDocs(
+            project_path=str(layout.package_root), config_path=str(config_path)
+        )._update_project_gitignore(force=True)
         click.echo(f"✓ Created {config_path}")
         click.echo("\nEdit this file to customize your documentation settings.")
         click.echo("See https://posit-dev.github.io/great-docs/user-guide/configuration.html")
@@ -658,6 +716,306 @@ cli.add_command(config)
 cli.add_command(ci)
 
 
+def _count_phrase(count: int, singular: str, plural: str) -> str:
+    """Render a noun phrase followed by its count in parentheses"""
+    return f"{singular if count == 1 else plural} ({count})"
+
+
+def _print_migration(migration: Migration) -> None:
+    """Show every proposed move, file edit, needs-review item, and blocker"""
+    import difflib
+
+    root = migration.package_root
+    if migration.moves:
+        click.echo(
+            click.style(
+                _count_phrase(
+                    len(migration.moves),
+                    "File / Folder to Move",
+                    "Files / Folders to Move",
+                ),
+                bold=True,
+            )
+        )
+        for move in migration.moves:
+            source = move.source.relative_to(root)
+            destination = move.destination.relative_to(root)
+            click.echo(f"  {source} {click.style('->', dim=True)} {destination}")
+        click.echo()
+    if migration.edits:
+        click.echo(
+            click.style(
+                _count_phrase(
+                    len(migration.edits),
+                    "File to be Edited",
+                    "Files to be Edited",
+                ),
+                bold=True,
+            )
+        )
+        for edit in migration.edits:
+            path = str(edit.path.relative_to(root))
+            click.echo(f"  {'Create' if edit.before is None else 'Update'} {path}")
+            try:
+                before = (edit.before or b"").decode("utf-8")
+                after = edit.after.decode("utf-8")
+            except UnicodeError:
+                click.echo(
+                    f"    Write {len(edit.after)} bytes; preserve the original for recovery."
+                )
+            else:
+                for line in difflib.unified_diff(
+                    before.splitlines(), after.splitlines(), fromfile=path, tofile=path, lineterm=""
+                ):
+                    if line.startswith("+++") or line.startswith("---"):
+                        click.echo(line)
+                    elif line.startswith("+"):
+                        click.echo(click.style(line, fg="green"))
+                    elif line.startswith("-"):
+                        click.echo(click.style(line, fg="red"))
+                    else:
+                        click.echo(line)
+        click.echo()
+    _print_notes(
+        _count_phrase(
+            len(migration.follow_up),
+            "File to Review",
+            "Files to Review",
+        ),
+        migration.follow_up,
+        "yellow",
+        root=root,
+    )
+    _print_notes(
+        _count_phrase(
+            len(migration.blockers),
+            "Blocking Problem",
+            "Blocking Problems",
+        ),
+        migration.blockers,
+        "red",
+        root=root,
+        err=True,
+    )
+
+
+# Categories backed by exactly one message template, where nothing but the
+# path (and any fixed trailing detail) varies between notes. Their category
+# name already reads as the shared action sentence, so items show only the
+# part that actually varies (see `_subject`) instead of repeating it.
+_SUBJECT_ONLY_CATEGORIES = frozenset(
+    {
+        "Scripts and Notebooks to Verify",
+        "reStructuredText Files to Check",
+        "Terminal Recordings to Check",
+        "Package Files Mixed Into Docs",
+        "Already Migrated",
+        "Relocation Not Supported",
+        "References Outside the Move",
+        "Assets With Unclear Ownership",
+        "Old Output Paths to Update",
+        "References to Edit Before Migrating",
+    }
+)
+
+# Categories whose notes carry a line and snippet, but where the snippet is
+# always some boilerplate variant (e.g. "```{python}") that adds nothing
+# beyond "there's a code block here" — show the location without it.
+_SNIPPET_SUPPRESSED_CATEGORIES = frozenset({"Code Blocks to Verify"})
+
+
+def _subject(note: "Note", root: Path) -> str:
+    """The relative path (in red) plus any fixed detail that followed it in the message"""
+    assert note.path is not None
+    path_text = str(note.path)
+    offset = note.rfind(path_text)
+    suffix = note[offset + len(path_text) :] if offset != -1 else ""
+    return click.style(os.path.relpath(note.path, root), fg="red") + suffix
+
+
+def _highlight_path(note: "Note", root: Path) -> str:
+    """The note's message with its path swapped for a red, relative version"""
+    assert note.path is not None
+    path_text = str(note.path)
+    offset = note.rfind(path_text)
+    if offset == -1:
+        return str(note)
+    display_path = click.style(os.path.relpath(note.path, root), fg="red")
+    return note[:offset] + display_path + note[offset + len(path_text) :]
+
+
+def _relocate_note(note: "Note", moves: "tuple[Move, ...]") -> "Note":
+    """Point a note at its file's post-move location, once a migration has applied"""
+    from ._layout_migration.model import Note, moved_path
+
+    if note.path is None:
+        return note
+    moved = moved_path(note.path, moves)
+    if moved == note.path:
+        return note
+    old_text = str(note.path)
+    message = note.replace(old_text, str(moved)) if old_text in note else str(note)
+    return Note(message, category=note.category, path=moved, line=note.line, snippet=note.snippet)
+
+
+def _print_notes(
+    label: str, notes: "tuple[Note, ...]", color: str, *, root: Path, err: bool = False
+) -> None:
+    """Print a category-grouped section of migration notes under a pre-formatted count header"""
+    if not notes:
+        return
+    click.echo(click.style(label, bold=True, fg=color), err=err)
+    categories: dict[str, list[Note]] = {}
+    for note in notes:
+        categories.setdefault(note.category, []).append(note)
+    for category, items in categories.items():
+        click.echo(click.style(f"  {category} ({len(items)})", bold=True), err=err)
+        for note in items:
+            if note.path is not None and note.line is not None and note.snippet is not None:
+                display_path = click.style(os.path.relpath(note.path, root), fg="red")
+                if category in _SNIPPET_SUPPRESSED_CATEGORIES:
+                    click.echo(f"    {display_path}:{note.line}", err=err)
+                else:
+                    click.echo(f"    {display_path}:{note.line}: {note.snippet}", err=err)
+            elif note.path is not None and category in _SUBJECT_ONLY_CATEGORIES:
+                click.echo(f"    {_subject(note, root)}", err=err)
+            elif note.path is not None:
+                click.echo(f"    {_highlight_path(note, root)}", err=err)
+            else:
+                click.echo(f"    {note}", err=err)
+        click.echo(err=err)
+
+
+@click.command(name="migrate-layout", hidden=True)
+@click.option(
+    "--project-path",
+    type=click.Path(exists=True, file_okay=False),
+    help="Path to the project root directory",
+)
+@click.option(
+    "--to",
+    "destination",
+    default="docs",
+    show_default=True,
+    help="Documentation directory relative to the package root",
+)
+@click.option("--dry-run", is_flag=True, help="Preview all changes without writing files")
+@click.option(
+    "--yes", is_flag=True, help="Apply the reviewed changes without an interactive confirmation"
+)
+@_config_option
+@click.pass_context
+def migrate_layout(
+    ctx: click.Context,
+    project_path: str | None,
+    destination: str,
+    dry_run: bool,
+    yes: bool,
+    config_path: str | None = None,
+) -> None:
+    """
+    Move root-layout documentation into docs/ or a custom directory
+
+    Preview source moves, configuration and ignore-file edits, cache treatment,
+    and manual follow-up before applying changes. Keep generated build trees.
+    Refuse conflicts and changed inputs even with --yes. Use --dry-run to inspect
+    the proposal without writes; it takes precedence over --yes.
+
+    Require affirmative terminal confirmation unless --yes is supplied. If a
+    previous migration was interrupted, show its recovery instructions and
+    refuse another migration until recovery is complete. A repeated invocation
+    with a matching --to or explicit --config reports that no migration is needed.
+    """
+    import shlex
+
+    from . import _layout_migration as migration_api
+    from ._layout_migration.content import read_config
+    from ._layout_migration.model import absolute_path, check_symlinks, moved_path
+
+    try:
+        root = _find_package_root(absolute_path(Path(project_path or Path.cwd())))
+        recovery = migration_api.recovery_instructions(root)
+        if recovery:
+            for instruction in recovery:
+                click.echo(instruction)
+            raise click.ClickException(
+                "Pending migration recovery must be completed before another migration."
+            )
+
+        if config_path:
+            check_symlinks(Path(config_path))
+        else:
+            for candidate in (root / "great-docs.yml", root / "docs/great-docs.yml"):
+                if candidate.is_file():
+                    check_symlinks(candidate)
+        layout = Layout.make(root, Path(config_path) if config_path else None)
+        target = root / destination
+        if (
+            layout.source_dir != root
+            and ctx.get_parameter_source("destination") == click.core.ParameterSource.DEFAULT
+        ):
+            target = layout.source_dir
+        check_symlinks(target)
+        target = absolute_path(target)
+        if target == root or not target.is_relative_to(root):
+            raise ValueError(f"The destination must be a descendant of the package root: {target}")
+
+        if not config_path and not layout.config_path.is_file():
+            candidate = target / "great-docs.yml"
+            check_symlinks(candidate)
+            layout = Layout.make(root, candidate)
+        read_config(layout.config_path.read_bytes().decode("utf-8"))
+
+        migration = migration_api.analyse(layout, target)
+        _print_migration(migration)
+        if migration.blockers:
+            raise click.ClickException("Migration has blocking conflicts.")
+        if not migration.moves and not migration.edits:
+            click.echo("No migration is needed.")
+            return
+        if dry_run:
+            click.echo("Dry run complete; no files changed.")
+            return
+        if not yes:
+            if not sys.stdin.isatty():
+                raise click.ClickException(
+                    "An interactive terminal is required for confirmation. Use --yes to apply the previewed changes unattended."
+                )
+            if not click.confirm("Apply these changes?", default=False):
+                click.echo("Migration declined; no files changed.")
+                return
+
+        migration_api.apply(migration)
+        selected = moved_path(migration.config_path, migration.moves)
+        completed = Layout.make(root, selected)
+        click.echo(f"Selected configuration: {selected.relative_to(root)}")
+        click.echo(f"Deployment directory: {completed.site_dir.relative_to(root)}")
+        at_root = Path.cwd().resolve() == root
+        selection = [] if at_root else ["--project-path", str(root)]
+        if selected != root / "docs/great-docs.yml":
+            selection += ["--config", str(selected.relative_to(root) if at_root else selected)]
+        click.echo("Build or preview the migrated documentation:")
+        click.echo("  " + shlex.join(["great-docs", "build", *selection]))
+        click.echo("  " + shlex.join(["great-docs", "preview", *selection]))
+        if migration.follow_up:
+            click.echo()
+            _print_notes(
+                _count_phrase(
+                    len(migration.follow_up),
+                    "File to Review",
+                    "Files to Review",
+                ),
+                tuple(_relocate_note(note, migration.moves) for note in migration.follow_up),
+                "yellow",
+                root=root,
+            )
+    except (OSError, ValueError) as error:
+        raise click.ClickException(str(error)) from error
+
+
+cli.add_command(migrate_layout)
+
+
 @click.command()
 @click.option(
     "--project-path",
@@ -675,7 +1033,10 @@ cli.add_command(ci)
     is_flag=True,
     help="Show method names for each class",
 )
-def scan(project_path: str | None, docs_dir: str | None, verbose: bool) -> None:
+@_config_option
+def scan(
+    project_path: str | None, docs_dir: str | None, verbose: bool, config_path: str | None = None
+) -> None:
     """Discover package exports and preview what can be documented.
 
     This command analyzes your package to find public classes, functions,
@@ -690,7 +1051,7 @@ def scan(project_path: str | None, docs_dir: str | None, verbose: bool) -> None:
     """
 
     try:
-        docs = GreatDocs(project_path=project_path)
+        docs = GreatDocs(project_path=project_path, config_path=config_path)
 
         # Detect package name
         package_name = docs._detect_package_name()
@@ -832,7 +1193,7 @@ def scan(project_path: str | None, docs_dir: str | None, verbose: bool) -> None:
 cli.add_command(scan)
 
 
-def _freeze_info(project_root: Path, persist_dir: Path) -> None:
+def _freeze_info(project_root: Path, persist_dir: Path, layout: Layout | None = None) -> None:
     """Display freeze status: project-level setting and all cached pages."""
     import json
     import re as _re
@@ -840,7 +1201,8 @@ def _freeze_info(project_root: Path, persist_dir: Path) -> None:
 
     from great_docs.config import Config
 
-    cfg = Config(project_root)
+    layout = layout or Layout.make(project_root)
+    cfg = Config(layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir)
     project_mode = cfg.freeze
 
     click.echo()
@@ -849,7 +1211,7 @@ def _freeze_info(project_root: Path, persist_dir: Path) -> None:
         click.echo(f"  Project freeze: {label} (all executable pages)")
     else:
         click.echo("  Project freeze: disabled")
-    click.echo(f"  Freeze cache:   {persist_dir.relative_to(project_root)}/")
+    click.echo(f"  Freeze cache:   {os.path.relpath(persist_dir, project_root)}/")
     click.echo()
 
     # Scan source .qmd files for per-page freeze declarations
@@ -867,7 +1229,7 @@ def _freeze_info(project_root: Path, persist_dir: Path) -> None:
     per_page_modes: dict[str, str] = {}
     source_dirs = ["recipes", "user_guide"]
     for src_dir in source_dirs:
-        src_path = project_root / src_dir
+        src_path = layout.source_dir / src_dir
         if not src_path.is_dir():
             continue
         for qmd_file in sorted(src_path.rglob("*.qmd")):
@@ -936,7 +1298,7 @@ def _freeze_info(project_root: Path, persist_dir: Path) -> None:
     "--freeze-dir",
     type=str,
     default=None,
-    help="Where to persist _freeze/ (default: project root '_freeze/')",
+    help="Where to persist execution results (default: '_freeze/' beside the selected configuration)",
 )
 @click.option(
     "--clean",
@@ -950,21 +1312,24 @@ def _freeze_info(project_root: Path, persist_dir: Path) -> None:
     default=False,
     help="Show freeze status for all pages (which are frozen, cached, stale).",
 )
+@_config_option
 def freeze(
     pages: tuple[str, ...],
     project_path: str | None,
     freeze_dir: str | None,
     clean: bool,
     info: bool,
+    config_path: str | None = None,
 ) -> None:
-    """Execute specific pages and persist their freeze cache.
+    """
+    Execute specific pages and persist their freeze cache
 
     Renders one or more QMD pages (always executing their code), then copies
     the resulting '_freeze/' entries back to a persistent location so they
     survive future builds.
 
     PAGES are paths to .qmd files relative to your project root (e.g.,
-    'user_guide/benchmarks.qmd'). Quarto always executes code when rendering
+    'docs/user_guide/benchmarks.qmd'). Quarto always executes code when rendering
     individual files, even with freeze enabled (this is how you update
     frozen outputs).
 
@@ -978,42 +1343,55 @@ def freeze(
 
     \b
     Examples:
-      great-docs freeze user_guide/benchmarks.qmd
-      great-docs freeze user_guide/benchmarks.qmd user_guide/mcmc-demo.qmd
-      great-docs freeze user_guide/benchmarks.qmd --freeze-dir docs/_freeze
-      great-docs freeze user_guide/benchmarks.qmd --clean
+      great-docs freeze docs/user_guide/benchmarks.qmd
+      great-docs freeze docs/user_guide/benchmarks.qmd docs/user_guide/mcmc-demo.qmd
+      great-docs freeze docs/user_guide/benchmarks.qmd --freeze-dir cached-results
+      great-docs freeze docs/user_guide/benchmarks.qmd --clean
       great-docs freeze --info
     """
     import shutil
     import subprocess
 
     project_root = Path(project_path) if project_path else Path.cwd()
-    build_dir = project_root / "great-docs"
-    persist_dir = Path(freeze_dir) if freeze_dir else project_root / "_freeze"
+    layout = Layout.make(project_root, Path(config_path) if config_path else None)
+    project_root = layout.package_root
+    build_dir = layout.build_dir
+    persist_dir = Path(freeze_dir) if freeze_dir else layout.freeze_dir
 
     if info:
-        _freeze_info(project_root, persist_dir)
+        _freeze_info(project_root, persist_dir, layout)
         return
 
     if not pages:
         click.echo("Error: Specify at least one PAGE, or use --info.", err=True)
         sys.exit(1)
 
-    # --clean: wipe existing cache
+    missing = [p for p in pages if not (project_root / p).is_file()]
+    if missing:
+        for page in missing:
+            click.echo(f"Error: Page not found: {page}", err=True)
+        sys.exit(1)
+
     if clean:
+        from ._utils import validate_layout_outputs, validate_tree_symlinks
+
+        try:
+            validate_layout_outputs(layout)
+            if ".." in persist_dir.parts:
+                raise ValueError(f"Freeze cache path contains parent traversal: {persist_dir}")
+            persist_dir = Path(os.path.abspath(persist_dir))
+            for cache in (persist_dir, build_dir / "_freeze"):
+                if any(parent.is_symlink() for parent in cache.parents):
+                    raise ValueError(f"Freeze cache has a symlink parent: {cache}")
+                validate_tree_symlinks(cache)
+        except ValueError as error:
+            raise click.ClickException(str(error)) from error
         if persist_dir.exists():
             shutil.rmtree(persist_dir)
-            click.echo(f"Cleaned {persist_dir.relative_to(project_root)}/")
+            click.echo(f"Cleaned {os.path.relpath(persist_dir, project_root)}/")
         build_freeze = build_dir / "_freeze"
         if build_freeze.exists():
             shutil.rmtree(build_freeze)
-
-    # Validate pages exist
-    missing = [p for p in pages if not (project_root / p).is_file()]
-    if missing:
-        for m in missing:
-            click.echo(f"Error: Page not found: {m}", err=True)
-        sys.exit(1)
 
     # Always re-prepare the build directory so file hashes match what a full
     # build would produce (frontmatter normalization, tag expansion, etc.).
@@ -1021,7 +1399,7 @@ def freeze(
     # will be valid for subsequent full builds.
     click.echo("Preparing build directory...")
     try:
-        docs = GreatDocs(project_path=project_path)
+        docs = GreatDocs(project_path=project_path, config_path=config_path)
         docs._prepare_for_freeze()
     except SystemExit:
         pass  # Build prep may exit but that's OK
@@ -1040,7 +1418,7 @@ def freeze(
 
     for page in pages:
         # Find the page's location in the build directory
-        # Pages from user_guide/ are copied into great-docs/user-guide/
+        # Match authored pages to their generated user-guide paths.
         # Numeric prefixes are stripped (e.g., 24-freeze-demo.qmd -> freeze-demo.qmd)
         page_path = Path(page)
         qmd_name = page_path.name
@@ -1155,15 +1533,18 @@ def _format_seconds(s: float) -> str:
     return f"{m}m {sec:.1f}s"
 
 
-def _find_build_timing(project_path: Path, output_dir: Path | None = None) -> Path | None:
+def _find_build_timing(
+    project_path: Path, output_dir: Path | None = None, config_path: str | None = None
+) -> Path | None:
     """Locate build-timings.json in the site output directory."""
     # Explicit output-dir takes priority
     if output_dir is not None:
         candidate = output_dir / "build-timings.json"
         if candidate.exists():
             return candidate
-    # Multi-version: built into great-docs/_site/
-    candidate = project_path / "great-docs" / "_site" / "build-timings.json"
+    # Prefer the selected layout's assembled deployment output.
+    layout = Layout.make(project_path, Path(config_path) if config_path else None)
+    candidate = layout.site_dir / "build-timings.json"
     if candidate.exists():
         return candidate
     # Single-version or build dir fallback
@@ -1284,7 +1665,15 @@ def _print_page_table(pages: list[dict]) -> None:
     default=None,
     help="Path to the build output directory (if different from default _site).",
 )
-def timings(project_path, top, version_filter, output_json, output_dir):
+@_config_option
+def timings(
+    project_path: str | None,
+    top: int | None,
+    version_filter: str | None,
+    output_json: bool,
+    output_dir: str | None,
+    config_path: str | None = None,
+) -> None:
     """Show page-level build timings from the last build.
 
     Reads the build-timings.json artifact generated during 'great-docs build' and
@@ -1305,7 +1694,7 @@ def timings(project_path, top, version_filter, output_json, output_dir):
 
     project_root = Path(project_path) if project_path else Path.cwd()
     out_dir = Path(output_dir) if output_dir else None
-    timing_path = _find_build_timing(project_root, output_dir=out_dir)
+    timing_path = _find_build_timing(project_root, output_dir=out_dir, config_path=config_path)
 
     if not timing_path:
         click.echo("No build-timings.json found.", err=True)
@@ -1358,6 +1747,7 @@ cli.add_command(timings)
     is_flag=True,
     help="Install Great Docs from GitHub main branch instead of PyPI release",
 )
+@_config_option
 def setup_github_pages(
     project_path: str | None,
     main_branch: str,
@@ -1365,6 +1755,7 @@ def setup_github_pages(
     package_manager: str,
     force: bool,
     install_from_main: bool,
+    config_path: str | None = None,
 ) -> None:
     """Set up automatic deployment to GitHub Pages.
 
@@ -1401,8 +1792,10 @@ def setup_github_pages(
     """
 
     try:
-        # Determine project root
-        project_root = Path(project_path) if project_path else Path.cwd()
+        layout = Layout.make(
+            Path(project_path or Path.cwd()), Path(config_path) if config_path else None
+        )
+        project_root = layout.package_root
 
         # Auto-detect Python version if not specified
         # Great Docs requires Python 3.11+, so we enforce that as the floor
@@ -1472,6 +1865,13 @@ def setup_github_pages(
           python -m pip install {great_docs_install}"""
             build_command = "great-docs build"
 
+        if config_path:
+            import shlex
+
+            build_command += " --config " + shlex.quote(
+                str(layout.config_path.relative_to(project_root))
+            )
+
         # Create .github/workflows directory
         workflow_dir = project_root / ".github" / "workflows"
         workflow_file = workflow_dir / "docs.yml"
@@ -1510,6 +1910,11 @@ def setup_github_pages(
         workflow_content = workflow_content.replace("{python_version}", python_version)
         workflow_content = workflow_content.replace("{install_commands}", install_commands)
         workflow_content = workflow_content.replace("{build_command}", build_command)
+        workflow_content = re.sub(
+            r"(?<![\w/-])(?:great-docs|docs)/_site",
+            lambda match: layout.site_dir.relative_to(project_root).as_posix(),
+            workflow_content,
+        )
 
         # Write workflow file
         workflow_file.write_text(workflow_content)
@@ -1577,6 +1982,7 @@ cli.add_command(setup_github_pages)
     is_flag=True,
     help="Output results as JSON",
 )
+@_config_option
 def check_links(
     project_path: str | None,
     source_only: bool,
@@ -1585,6 +1991,7 @@ def check_links(
     ignore: tuple[str, ...],
     verbose: bool,
     json_output: bool,
+    config_path: str | None = None,
 ) -> None:
     """Check for broken links in source code and documentation.
 
@@ -1611,7 +2018,7 @@ def check_links(
     import json as json_module
 
     try:
-        docs = GreatDocs(project_path=project_path)
+        docs = GreatDocs(project_path=project_path, config_path=config_path)
 
         # Determine what to scan
         include_source = not docs_only
@@ -1726,7 +2133,10 @@ cli.add_command(check_links)
     default=None,
     help="Maximum number of releases to include (default: from config or 50)",
 )
-def changelog(project_path: str | None, max_releases: int | None) -> None:
+@_config_option
+def changelog(
+    project_path: str | None, max_releases: int | None, config_path: str | None = None
+) -> None:
     """Generate a Changelog page from GitHub Releases.
 
     Fetches published releases from the GitHub API and renders them as a
@@ -1738,7 +2148,7 @@ def changelog(project_path: str | None, max_releases: int | None) -> None:
     Set 'GITHUB_TOKEN' or 'GH_TOKEN' to avoid API rate limits.
     """
     try:
-        docs = GreatDocs(project_path=project_path)
+        docs = GreatDocs(project_path=project_path, config_path=config_path)
 
         # Override max_releases in config if provided
         if max_releases is not None:
@@ -1757,7 +2167,7 @@ def changelog(project_path: str | None, max_releases: int | None) -> None:
         result = docs._generate_changelog_page()
         if result:
             docs._add_changelog_to_navbar()
-            click.echo(f"✅ Changelog generated: {docs.project_path / result}")
+            click.echo(f"✅ Changelog generated: {docs.build_dir / result}")
         else:
             click.echo("No published releases found on GitHub.")
 
@@ -1858,6 +2268,7 @@ cli.add_command(changelog)
     help="Don't add built-in technical terms to dictionary",
 )
 @click.argument("files", nargs=-1, type=click.Path(exists=True))
+@_config_option
 def proofread(
     project_path,
     docs_dir,
@@ -1876,6 +2287,7 @@ def proofread(
     strict,
     no_builtin_dictionary,
     files,
+    config_path: str | None = None,
 ):
     """Check spelling and grammar in documentation files using Harper.
 
@@ -1931,7 +2343,7 @@ def proofread(
                 click.echo("Using smart defaults for technical docs. Use --strict to disable.\n")
 
         # Determine files to check
-        docs = GreatDocs(project_path=project_path)
+        docs = GreatDocs(project_path=project_path, config_path=config_path)
         files_to_check: list[Path] = []
 
         if files:
@@ -1939,7 +2351,7 @@ def proofread(
             files_to_check = [Path(f) for f in files]
         else:
             # Auto-discover documentation files
-            user_guide_dir = docs.project_root / "user_guide"
+            user_guide_dir = Path(docs_dir) if docs_dir else docs.layout.source_dir / "user_guide"
             if user_guide_dir.exists():
                 files_to_check.extend(user_guide_dir.rglob("*.qmd"))
                 files_to_check.extend(user_guide_dir.rglob("*.md"))
@@ -1950,7 +2362,7 @@ def proofread(
                 files_to_check.append(readme)
 
             # Check recipes if they exist
-            recipes_dir = docs.project_root / "recipes"
+            recipes_dir = docs.layout.source_dir / "recipes"
             if recipes_dir.exists():
                 files_to_check.extend(recipes_dir.rglob("*.qmd"))
                 files_to_check.extend(recipes_dir.rglob("*.md"))
@@ -2256,7 +2668,10 @@ cli.add_command(proofread)
     is_flag=True,
     help="Output results as JSON for CI integration",
 )
-def seo(project_path: str | None, fix: bool, json_output: bool) -> None:
+@_config_option
+def seo(
+    project_path: str | None, fix: bool, json_output: bool, config_path: str | None = None
+) -> None:
     """Audit SEO health of your documentation site.
 
     Checks for common SEO issues and provides recommendations for improvement.
@@ -2284,12 +2699,25 @@ def seo(project_path: str | None, fix: bool, json_output: bool) -> None:
     import xml.etree.ElementTree as ET
 
     try:
-        docs = GreatDocs(project_path=project_path)
-        site_dir = docs.project_path / "_site"
+        docs = GreatDocs(project_path=project_path, config_path=config_path)
+        site_dir = docs.layout.site_dir
 
         if not site_dir.exists():
             click.echo("Error: Site not built. Run 'great-docs build' first.", err=True)
             sys.exit(1)
+
+        separate_site = docs.layout.source_dir != docs.layout.package_root
+        if fix and separate_site:
+            from ._utils import validate_site_dir
+
+            validate_site_dir(site_dir)
+            ownership_path = site_dir / ".great-docs-site.json"
+            ownership = json.loads(ownership_path.read_text(encoding="utf-8"))
+
+        def record_generated_file(name: str) -> None:
+            if separate_site and (site_dir / name).is_file():
+                ownership["paths"] = sorted(set(ownership["paths"]) | {name})
+                ownership_path.write_text(json.dumps(ownership, indent=2) + "\n", encoding="utf-8")
 
         issues = []
         warnings = []
@@ -2314,6 +2742,7 @@ def seo(project_path: str | None, fix: bool, json_output: bool) -> None:
             issues.append("❌ sitemap.xml not found")
             if fix:
                 docs._generate_sitemap_xml()
+                record_generated_file("sitemap.xml")
                 info.append("   → Generated sitemap.xml")
 
         # ── Check robots.txt ─────────────────────────────────────────────
@@ -2330,6 +2759,7 @@ def seo(project_path: str | None, fix: bool, json_output: bool) -> None:
             issues.append("❌ robots.txt not found")
             if fix:
                 docs._generate_robots_txt()
+                record_generated_file("robots.txt")
                 info.append("   → Generated robots.txt")
 
         # ── Check HTML pages ─────────────────────────────────────────────
@@ -2483,7 +2913,13 @@ cli.add_command(seo)
     is_flag=True,
     help="Output results as JSON for CI integration",
 )
-def lint(project_path: str | None, checks: tuple[str, ...], json_output: bool) -> None:
+@_config_option
+def lint(
+    project_path: str | None,
+    checks: tuple[str, ...],
+    json_output: bool,
+    config_path: str | None = None,
+) -> None:
     """Lint documentation quality for your package.
 
     Analyzes your package's public API for documentation issues including
@@ -2520,7 +2956,9 @@ def lint(project_path: str | None, checks: tuple[str, ...], json_output: bool) -
         project_root = Path(project_path) if project_path else Path.cwd()
         check_set = set(checks) if checks else None
 
-        result = run_lint(project_root, checks=check_set, quiet=json_output)
+        result = run_lint(
+            project_root, checks=check_set, quiet=json_output, config_path=config_path
+        )
 
         if json_output:
             click.echo(json.dumps(result.to_dict(), indent=2))
@@ -2645,6 +3083,7 @@ cli.add_command(lint)
     is_flag=True,
     help="With --symbol --table, output HTML (with disclosure wrapper)",
 )
+@_config_option
 def api_diff_cmd(
     old_version: str,
     new_version: str,
@@ -2657,6 +3096,7 @@ def api_diff_cmd(
     changes_only: bool,
     table: bool,
     html: bool,
+    config_path: str | None = None,
 ) -> None:
     """Compare the public API between two versions.
 
@@ -2804,9 +3244,9 @@ def api_diff_cmd(
             from great_docs.core import GreatDocs
 
             documented = (
-                GreatDocs(project_path=str(project_root)).documented_symbol_names(
-                    result.package_name
-                )
+                GreatDocs(
+                    project_path=str(project_root), config_path=config_path
+                ).documented_symbol_names(result.package_name)
                 or None
             )
             # Build graph for the new version
@@ -2927,7 +3367,8 @@ cli.add_command(api_diff_cmd)
     is_flag=True,
     help="Validate version configuration and exit with non-zero on errors",
 )
-def versions(project_path: str | None, check: bool) -> None:
+@_config_option
+def versions(project_path: str | None, check: bool, config_path: str | None = None) -> None:
     """List configured documentation versions.
 
     Shows the multi-version documentation configuration from 'great-docs.yml',
@@ -2943,7 +3384,9 @@ def versions(project_path: str | None, check: bool) -> None:
 
     try:
         project_root = Path(project_path or ".").resolve()
-        cfg = Config(project_root)
+        layout = Layout.make(project_root, Path(config_path) if config_path else None)
+        project_root = layout.package_root
+        cfg = Config(project_root, config_path=layout.config_path, cache_dir=layout.cache_dir)
 
         if not cfg.has_versions:
             click.echo("No versions configured in great-docs.yml.")
@@ -3024,6 +3467,7 @@ cli.add_command(versions)
     is_flag=True,
     help="Overwrite existing snapshot files",
 )
+@_config_option
 def api_snapshot_cmd(
     version_tag: str | None,
     project_path: str | None,
@@ -3031,6 +3475,7 @@ def api_snapshot_cmd(
     output: str | None,
     all_tags: bool,
     force: bool,
+    config_path: str | None = None,
 ) -> None:
     """Capture a JSON snapshot of a package's public API.
 
@@ -3074,7 +3519,12 @@ def api_snapshot_cmd(
 
     from great_docs.core import GreatDocs
 
-    documented = GreatDocs(project_path=str(project_root)).documented_symbol_names(pkg_name) or None
+    documented = (
+        GreatDocs(project_path=str(project_root), config_path=config_path).documented_symbol_names(
+            pkg_name
+        )
+        or None
+    )
 
     # Default snapshot directory
     snap_dir = project_root / ".great-docs" / "snapshots"

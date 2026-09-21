@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from click.testing import CliRunner
 
 from great_docs.cli import (
@@ -19,6 +20,514 @@ from great_docs.cli import (
     _print_timing_table,
     cli,
 )
+
+
+@pytest.mark.parametrize(
+    "unsafe", ["container", "build", "persistent", "parent", "child", "unowned"]
+)
+def test_freeze_clean_rejects_unsafe_paths_before_removing_cache(
+    tmp_path: Path, unsafe: str
+) -> None:
+    from great_docs._utils import QUARTO_YML_HEADER
+
+    source = tmp_path / "docs"
+    source.mkdir()
+    (source / "great-docs.yml").write_text("display_name: Demo\n")
+    (source / "page.qmd").write_text("# Page\n")
+    unrelated = tmp_path / "unrelated"
+    unrelated.mkdir()
+    keep = unrelated / "keep.txt"
+    keep.write_bytes(b"unrelated cache\x00")
+    persistent = source / "_freeze"
+    persistent.mkdir()
+    persistent_keep = persistent / "keep.txt"
+    persistent_keep.write_bytes(b"persistent cache\x00")
+    build = source / "_quarto/default"
+    build.mkdir(parents=True)
+    (build / "_quarto.yml").write_text(QUARTO_YML_HEADER)
+    build_cache = build / "_freeze"
+    build_cache.mkdir()
+    (build_cache / "keep.txt").write_bytes(b"build cache\x00")
+    args = ["freeze", "docs/page.qmd", "--clean", "--project-path", str(tmp_path)]
+    if unsafe == "container":
+        build.parent.rename(unrelated / "projects")
+        (source / "_quarto").symlink_to(unrelated / "projects", target_is_directory=True)
+    elif unsafe == "build":
+        build.rename(unrelated / "project")
+        build.symlink_to(unrelated / "project", target_is_directory=True)
+    elif unsafe == "persistent":
+        persistent.rename(unrelated / "cache")
+        persistent.symlink_to(unrelated / "cache", target_is_directory=True)
+    elif unsafe == "parent":
+        (unrelated / "cache").mkdir()
+        (unrelated / "cache/keep.txt").write_bytes(b"external cache\x00")
+        (source / "cache-link").symlink_to(unrelated, target_is_directory=True)
+        args.extend(["--freeze-dir", str(source / "cache-link/cache")])
+    elif unsafe == "child":
+        (persistent / "linked").symlink_to(unrelated, target_is_directory=True)
+    else:
+        (build / "_quarto.yml").write_text("project:\n  type: website\n")
+    before = {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+
+    result = CliRunner().invoke(cli, args)
+
+    assert result.exit_code != 0
+    assert keep.read_bytes() == b"unrelated cache\x00"
+    assert all(path.is_file() and path.read_bytes() == content for path, content in before.items())
+
+
+def test_preview_does_not_move_config(tmp_path: Path) -> None:
+    config = tmp_path / "great-docs.yml"
+    config.write_text("display_name: Demo\n")
+    result = CliRunner().invoke(
+        cli,
+        ["migrate-layout", "--project-path", str(tmp_path), "--dry-run"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "docs/great-docs.yml" in result.output
+    assert config.read_text() == "display_name: Demo\n"
+    assert not (tmp_path / "docs").exists()
+
+
+def test_freeze_clean_preserves_cache_when_page_is_missing(tmp_path: Path) -> None:
+    cache = tmp_path / "_freeze"
+    cache.mkdir()
+    saved = cache / "result.json"
+    saved.write_bytes(b"cache\x00")
+
+    result = CliRunner().invoke(
+        cli, ["freeze", "missing.qmd", "--clean", "--project-path", str(tmp_path)]
+    )
+
+    assert result.exit_code != 0
+    assert "Page not found" in result.output
+    assert saved.read_bytes() == b"cache\x00"
+
+
+def test_freeze_clean_rejects_parent_traversal_before_normalisation(tmp_path: Path) -> None:
+    source = tmp_path / "docs"
+    source.mkdir()
+    (source / "great-docs.yml").write_text("display_name: Demo\n")
+    (source / "page.qmd").write_text("# Page\n")
+    external = tmp_path / "external"
+    (external / "inner").mkdir(parents=True)
+    (external / "cache").mkdir()
+    saved = external / "cache/keep.txt"
+    saved.write_bytes(b"external cache\x00")
+    (source / "link").symlink_to(external / "inner", target_is_directory=True)
+    override = source / "link/../cache"
+
+    with patch("great_docs.cli.GreatDocs._prepare_for_freeze"):
+        result = CliRunner().invoke(
+            cli,
+            [
+                "freeze",
+                "docs/page.qmd",
+                "--clean",
+                "--project-path",
+                str(tmp_path),
+                "--freeze-dir",
+                str(override),
+            ],
+        )
+
+    assert result.exit_code != 0
+    assert saved.read_bytes() == b"external cache\x00"
+
+
+def test_freeze_clean_accepts_ordinary_relative_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "page.qmd").write_text("# Page\n")
+    cache = tmp_path / "cached-results"
+    cache.mkdir()
+    (cache / "result.json").write_bytes(b"cache\x00")
+    with patch("great_docs.cli.GreatDocs._prepare_for_freeze") as prepare:
+        CliRunner().invoke(cli, ["freeze", "page.qmd", "--clean", "--freeze-dir", "cached-results"])
+    prepare.assert_called_once()
+    assert not cache.exists()
+
+
+@pytest.mark.parametrize("directory", [".", "docs"])
+@pytest.mark.parametrize("mode", ["single", "versions", "watch", "preview", "preview-build"])
+def test_layout_notice_once_per_build_or_preview_session(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    directory: str,
+    mode: str,
+) -> None:
+    from great_docs import GreatDocs
+
+    source = tmp_path / directory
+    source.mkdir(exist_ok=True)
+    config = "reference: false\nchangelog:\n  enabled: false\nskill:\n  enabled: false\n"
+    if mode == "versions":
+        config += 'versions: ["0.3", "0.2", "0.1"]\n'
+    (source / "great-docs.yml").write_text(config)
+    (source / "index.qmd").write_text("# A small documentation site\n")
+    docs = GreatDocs(str(tmp_path))
+    run = subprocess.run
+    popen = subprocess.Popen
+    rendered: list[Path] = []
+
+    def render(build_dir: Path) -> None:
+        site = build_dir / "_site"
+        site.mkdir(parents=True, exist_ok=True)
+        (site / "index.html").write_text("<html>Documentation</html>")
+        rendered.append(build_dir)
+
+    def run_quarto(
+        command: list[str], *args: object, **kwargs: object
+    ) -> subprocess.CompletedProcess:
+        if command[:2] == ["quarto", "preview"]:
+            for _ in range(3):
+                render(Path.cwd())
+            return subprocess.CompletedProcess(command, 0)
+        return run(command, *args, **kwargs)
+
+    def start_quarto(command: list[str], *args: object, **kwargs: object) -> object:
+        if command[:2] == ["quarto", "render"]:
+            render(Path.cwd())
+            return MagicMock(stdout=iter([]), stderr=iter([]), returncode=0)
+        return popen(command, *args, **kwargs)
+
+    def render_versions(
+        build_dirs: list[Path], **kwargs: object
+    ) -> list[tuple[str, int, str, str, list[dict]]]:
+        for build_dir in build_dirs:
+            render(build_dir)
+        return [(str(build_dir), 0, "", "", []) for build_dir in build_dirs]
+
+    monkeypatch.setattr("great_docs.core._ensure_quarto_installed", lambda: None)
+    monkeypatch.setattr(subprocess, "run", run_quarto)
+    monkeypatch.setattr(subprocess, "Popen", start_quarto)
+    monkeypatch.setattr("great_docs._versioned_build.render_versions_parallel", render_versions)
+    monkeypatch.setattr("http.server.ThreadingHTTPServer", MagicMock())
+    monkeypatch.setattr("threading.Timer", MagicMock())
+    if mode == "preview":
+        docs.layout.site_dir.mkdir(parents=True)
+        (docs.layout.site_dir / "index.html").write_text("<html>Existing site</html>")
+    if mode.startswith("preview"):
+        docs.preview()
+    else:
+        docs.build(watch=mode == "watch", refresh=False)
+    output = capsys.readouterr().out
+    notice = "Keep documentation in docs/ with the new layout.\nRun great-docs migrate-layout --dry-run to preview the migration.\n"
+    assert output.count(notice) == (1 if directory == "." else 0)
+    assert len(rendered) == (3 if mode in {"versions", "watch"} else 0 if mode == "preview" else 1)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "build",
+        "preview",
+        "uninstall",
+        "scan",
+        "freeze",
+        "timings",
+        "setup-github-pages",
+        "check-links",
+        "changelog",
+        "proofread",
+        "seo",
+        "lint",
+        "versions",
+    ],
+)
+def test_project_commands_reject_missing_selected_config(tmp_path: Path, command: str) -> None:
+    result = CliRunner().invoke(
+        cli, [command, "--project-path", str(tmp_path), "--config", str(tmp_path / "missing.yml")]
+    )
+    assert result.exit_code != 0
+    assert "Configuration file does not exist" in result.output
+
+
+@pytest.mark.parametrize("command", ["init", "config"])
+@pytest.mark.parametrize("selection", [None, "website/settings.yml"])
+def test_creation_selects_docs_or_custom_config(
+    tmp_path: Path, command: str, selection: str | None
+) -> None:
+    args = [command, "--project-path", str(tmp_path), "--force"]
+    if selection:
+        args += ["--config", str(tmp_path / selection)]
+    result = CliRunner().invoke(cli, args)
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / (selection or "docs/great-docs.yml")).is_file()
+    assert not (tmp_path / "great-docs.yml").exists()
+
+
+def test_creation_refuses_second_conventional_config(tmp_path: Path) -> None:
+    (tmp_path / "great-docs.yml").write_text("name: existing\n")
+    result = CliRunner().invoke(
+        cli,
+        [
+            "config",
+            "--project-path",
+            str(tmp_path),
+            "--config",
+            str(tmp_path / "docs/great-docs.yml"),
+            "--force",
+        ],
+    )
+    assert result.exit_code != 0
+    assert not (tmp_path / "docs/great-docs.yml").exists()
+
+
+def test_timings_reads_selected_deployment(tmp_path: Path) -> None:
+    (tmp_path / "website/_site").mkdir(parents=True)
+    (tmp_path / "website/settings.yml").write_text("{}\n")
+    (tmp_path / "website/_site/build-timings.json").write_text('{"pages": []}')
+    result = CliRunner().invoke(
+        cli,
+        [
+            "timings",
+            "--project-path",
+            str(tmp_path),
+            "--config",
+            str(tmp_path / "website/settings.yml"),
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output) == {"pages": []}
+
+
+def test_versions_reads_selected_config(tmp_path: Path) -> None:
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs/great-docs.yml").write_text("versions:\n  - tag: dev\n    latest: true\n")
+    result = CliRunner().invoke(cli, ["versions", "--project-path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "dev" in result.output
+    assert "No versions" not in result.output
+
+
+@pytest.mark.parametrize("selection", [None, "website/settings.yml"])
+def test_remote_build_uses_checkout_layout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, selection: str | None
+) -> None:
+    from great_docs import GreatDocs
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    source = "website" if selection else "docs"
+    (repo / source).mkdir()
+    (repo / (selection or "docs/great-docs.yml")).write_text("{}\n")
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.org",
+            "commit",
+            "-m",
+            "Initial configuration",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    destination = tmp_path / "destination"
+    destination.mkdir()
+    monkeypatch.chdir(destination)
+    run = subprocess.run
+
+    def run_build(command: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+        if command[0] == "git":
+            return run(command, **kwargs)
+        if "build" in command:
+            checkout = Path(command[command.index("--project-path") + 1])
+            if selection:
+                assert (
+                    Path(command[command.index("--config") + 1]) == (checkout / selection).resolve()
+                )
+            site = checkout / source / "_site"
+            site.mkdir()
+            (site / "index.html").write_text("remote documentation")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", run_build)
+    monkeypatch.setattr("venv.create", lambda *args, **kwargs: None)
+    built = GreatDocs.build_from_repo(str(repo), config_path=selection, shallow=True)
+    assert built == destination / source / "_site"
+    assert (built / "index.html").read_text() == "remote documentation"
+
+
+@pytest.mark.parametrize("selection", ["../outside.yml", "/tmp/outside.yml"])
+def test_remote_config_cannot_escape_checkout(tmp_path: Path, selection: str) -> None:
+    from great_docs import GreatDocs
+    from great_docs._layout import LayoutError
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "great-docs.yml").write_text("{}\n")
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.org",
+            "commit",
+            "-m",
+            "Initial configuration",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    with pytest.raises(LayoutError, match="checkout"):
+        GreatDocs.build_from_repo(str(repo), config_path=selection, shallow=True)
+
+
+def test_config_generation_ignores_only_selected_output(tmp_path: Path) -> None:
+    result = CliRunner().invoke(cli, ["config", "--project-path", str(tmp_path), "--force"])
+    assert result.exit_code == 0, result.output
+    ignores = (tmp_path / ".gitignore").read_text()
+    assert "/docs/_quarto/" in ignores
+    assert "/docs/_site/" in ignores
+    assert "/great-docs/" not in ignores
+    assert "_freeze" not in ignores
+
+
+def test_freeze_info_reads_selected_sources_and_cache(tmp_path: Path) -> None:
+    (tmp_path / "website/user_guide").mkdir(parents=True)
+    (tmp_path / "website/settings.yml").write_text("freeze: auto\n")
+    (tmp_path / "website/user_guide/demo.qmd").write_text("---\nfreeze: true\n---\n")
+    result = CliRunner().invoke(
+        cli,
+        [
+            "freeze",
+            "--project-path",
+            str(tmp_path),
+            "--config",
+            str(tmp_path / "website/settings.yml"),
+            "--info",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "website/_freeze" in result.output
+    assert "demo.qmd" in result.output
+    assert "auto" in result.output
+
+
+def test_build_command_uses_selected_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from great_docs import GreatDocs
+
+    (tmp_path / "website").mkdir()
+    config = tmp_path / "website/settings.yml"
+    config.write_text("name: selected\n")
+
+    def build_selected(docs: GreatDocs, **kwargs: object) -> None:
+        docs.build_dir.mkdir(parents=True)
+        (docs.build_dir / "selection.txt").write_text(docs._config["name"])
+
+    monkeypatch.setattr(GreatDocs, "build", build_selected)
+    result = CliRunner().invoke(
+        cli, ["build", "--project-path", str(tmp_path), "--config", str(config)]
+    )
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "website/_quarto/default/selection.txt").read_text() == "selected"
+
+
+def test_preview_serves_selected_deployment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import http.server
+
+    (tmp_path / "website/_site").mkdir(parents=True)
+    config = tmp_path / "website/settings.yml"
+    config.write_text("{}\n")
+    (tmp_path / "website/_site/index.html").write_text("preview documentation")
+    served: list[str] = []
+
+    def server(address: object, handler: object) -> MagicMock:
+        served.append(Path(handler.keywords["directory"]).joinpath("index.html").read_text())
+        return MagicMock()
+
+    monkeypatch.setattr(http.server, "ThreadingHTTPServer", server)
+    monkeypatch.setattr("threading.Timer", MagicMock())
+    result = CliRunner().invoke(
+        cli, ["preview", "--project-path", str(tmp_path), "--config", str(config)]
+    )
+    assert result.exit_code == 0, result.output
+    assert served == ["preview documentation"]
+
+
+def test_preview_override_ignores_ambiguous_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from great_docs import GreatDocs
+
+    (tmp_path / "great-docs.yml").write_text("{}\n")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs/great-docs.yml").write_text("{}\n")
+    site = tmp_path / "published"
+    site.mkdir()
+    (site / "index.html").write_text("published documentation")
+    monkeypatch.setattr(
+        GreatDocs,
+        "preview_site",
+        lambda path, **kwargs: print(Path(path).joinpath("index.html").read_text()),
+    )
+    result = CliRunner().invoke(
+        cli, ["preview", "--project-path", str(tmp_path), "--site-dir", str(site)]
+    )
+    assert result.exit_code == 0, result.output
+    assert "published documentation" in result.output
+
+
+def test_uninstall_removes_only_selected_project(tmp_path: Path) -> None:
+    from great_docs import GreatDocs
+    from great_docs._utils import QUARTO_YML_HEADER
+
+    (tmp_path / "great-docs.yml").write_text("name: preserved\n")
+    (tmp_path / "website").mkdir()
+    config = tmp_path / "website/settings.yml"
+    config.write_text("{}\n")
+    docs = GreatDocs(str(tmp_path), config_path=str(config))
+    docs.build_dir.mkdir(parents=True)
+    (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
+    result = CliRunner().invoke(
+        cli, ["uninstall", "--project-path", str(tmp_path), "--config", str(config)]
+    )
+    assert result.exit_code == 0, result.output
+    assert not config.exists()
+    assert not (tmp_path / "website/_quarto").exists()
+    assert (tmp_path / "great-docs.yml").read_text() == "name: preserved\n"
+
+
+@pytest.mark.parametrize(
+    "selected", ["great-docs.yml", "docs/great-docs.yml", "website/settings.yml"]
+)
+def test_workflow_uses_selected_deployment(tmp_path: Path, selected: str) -> None:
+    config = tmp_path / selected
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text("{}\n")
+    result = CliRunner().invoke(
+        cli,
+        ["setup-github-pages", "--project-path", str(tmp_path), "--config", str(config), "--force"],
+    )
+    assert result.exit_code == 0, result.output
+    workflow = (tmp_path / ".github/workflows/docs.yml").read_text()
+    expected_site = (
+        "great-docs/_site"
+        if selected == "great-docs.yml"
+        else selected.rsplit("/", 1)[0] + "/_site"
+    )
+    assert f"--config {selected}" in workflow
+    assert f"path: {expected_site}" in workflow
 
 
 def test_detect_python_version_ge():
@@ -221,6 +730,34 @@ def test_seo_missing_alt_text(tmp_path, monkeypatch):
     )
     result = runner.invoke(cli, ["seo", "--project-path", "."])
     assert "alt" in result.output.lower() or "warning" in result.output.lower()
+
+
+@pytest.mark.parametrize("unknown", [False, True])
+def test_seo_fix_preserves_deployment_ownership(tmp_path: Path, unknown: bool) -> None:
+    from great_docs._utils import record_site_ownership, validate_site_dir
+
+    source = tmp_path / "docs"
+    source.mkdir()
+    (source / "great-docs.yml").write_text(
+        "seo:\n  sitemap: true\n  canonical:\n    base_url: https://example.com/\n"
+    )
+    site = source / "_site"
+    site.mkdir()
+    (site / "index.html").write_text("<html><head><title>Demo</title></head></html>")
+    record_site_ownership(site)
+    if unknown:
+        (site / "notes.txt").write_bytes(b"user notes\x00")
+    before = {path: path.read_bytes() for path in site.iterdir()}
+
+    result = CliRunner().invoke(cli, ["seo", "--fix", "--project-path", str(tmp_path)])
+
+    if unknown:
+        assert result.exit_code != 0
+        assert {path: path.read_bytes() for path in site.iterdir()} == before
+    else:
+        assert (site / "robots.txt").is_file()
+        assert (site / "sitemap.xml").is_file()
+        validate_site_dir(site)
 
 
 def test_seo_fix_missing_files(tmp_path, monkeypatch):

@@ -178,7 +178,7 @@ SPEC = {
         # ── User guide: Page 1 — Global config targeting ─────────────────
         # This page has #wide_gt and #custom_html which match the global
         # scale_to_fit config. It also has #narrow_gt which does NOT match.
-        "user_guide/01-global-targeting.qmd": (
+        "docs/user_guide/01-global-targeting.qmd": (
             "---\n"
             "title: Global Config Targeting\n"
             "---\n"
@@ -243,7 +243,7 @@ SPEC = {
         # ── User guide: Page 2 — Page-level override ─────────────────────
         # This page uses frontmatter `scale-to-fit: ["#page_gt"]` to override
         # the global config. Only #page_gt should be scaled; not #wide_gt_2.
-        "user_guide/02-page-override.qmd": (
+        "docs/user_guide/02-page-override.qmd": (
             "---\n"
             "title: Page-Level Override\n"
             "scale-to-fit:\n"
@@ -300,7 +300,7 @@ SPEC = {
         # ── User guide: Page 3 — Manual div wrapping ─────────────────────
         # This page uses the manual :::{.scale-to-fit} approach; no config
         # or frontmatter involved.
-        "user_guide/03-manual-div.qmd": (
+        "docs/user_guide/03-manual-div.qmd": (
             "---\n"
             "title: Manual Div Wrapping\n"
             "---\n"
@@ -355,7 +355,7 @@ SPEC = {
         # ── User guide: Page 4 — Per-div data-min-scale ──────────────────
         # This page uses :::{.scale-to-fit data-min-scale="..."} to set
         # per-container min-scale thresholds, overriding the global one.
-        "user_guide/04-per-div-min-scale.qmd": (
+        "docs/user_guide/04-per-div-min-scale.qmd": (
             "---\n"
             "title: Per-Div Min Scale\n"
             "---\n"
@@ -440,7 +440,7 @@ SPEC = {
         # ── User guide: Page 5 — Multiple widths comparison ──────────────
         # Shows tables of 4, 8, 12, and 16 columns side-by-side with a
         # shared class selector for testing class-based targeting.
-        "user_guide/05-width-comparison.qmd": (
+        "docs/user_guide/05-width-comparison.qmd": (
             "---\n"
             "title: Width Comparison\n"
             "---\n"

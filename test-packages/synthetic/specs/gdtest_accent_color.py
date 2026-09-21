@@ -65,7 +65,7 @@ SPEC = {
             '    return f"{len(items)} items"\n'
         ),
         # ── User guide: accent color with string value ───────────────────
-        "user_guide/01-string-accent.qmd": (
+        "docs/user_guide/01-string-accent.qmd": (
             "---\n"
             "title: String Accent Color\n"
             "---\n"
@@ -126,7 +126,7 @@ SPEC = {
             '{{< hr color="#e11d48" >}}\n'
         ),
         # ── User guide: per-mode accent colors ───────────────────────────
-        "user_guide/02-per-mode-accent.qmd": (
+        "docs/user_guide/02-per-mode-accent.qmd": (
             "---\n"
             "title: Per-Mode Accent Colors\n"
             "---\n"
@@ -164,7 +164,7 @@ SPEC = {
             '{{< hr text="Large" text-size="lg" >}}\n'
         ),
         # ── User guide: accent + palette color interaction ───────────────
-        "user_guide/03-palette-vs-accent.qmd": (
+        "docs/user_guide/03-palette-vs-accent.qmd": (
             "---\n"
             "title: Palette vs Accent\n"
             "---\n"

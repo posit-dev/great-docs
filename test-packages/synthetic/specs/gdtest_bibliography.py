@@ -134,7 +134,7 @@ SPEC = {
         """,
         # Top-level user-guide page citing two keys with no per-page
         # `bibliography:` frontmatter — relying entirely on the project-level key.
-        "user_guide/01-citations.qmd": """\
+        "docs/user_guide/01-citations.qmd": """\
             ---
             title: Citations
             ---
@@ -157,7 +157,7 @@ SPEC = {
         # issue required paths that depended on this nesting depth. It reuses
         # knuth1984 (shared with the homepage and the top-level page) and adds a
         # page-local key, parnas1972.
-        "user_guide/02-advanced/01-decomposition.qmd": """\
+        "docs/user_guide/02-advanced/01-decomposition.qmd": """\
             ---
             title: Modular Decomposition
             ---
@@ -178,7 +178,7 @@ SPEC = {
     },
     # ── great-docs.yml ────────────────────────────────────────────────
     "config": {
-        "bibliography": "docs/references.bib",
+        "bibliography": "references.bib",
     },
     # ── Expected outcomes ─────────────────────────────────────────────
     "expected": {

@@ -43,7 +43,7 @@ The workflow typically looks like this: the agent reads `llms.txt` to see what c
 
 ## Generation is automatic
 
-You do not need to configure anything to get these files. Great Docs generates them as part of the standard build pipeline (step 4 in the build sequence). The files are placed in the `great-docs/` output directory and deployed alongside the rest of your site.
+You do not need to configure anything to get these files. Great Docs generates them during the build in `docs/_quarto/default/` and deploys them in `docs/_site/` alongside the rest of your site.
 
 The content is derived from the same docstrings and type annotations that produce your HTML reference pages. If a function appears in your API reference, it will appear in both `llms.txt` and `llms-full.txt`.
 

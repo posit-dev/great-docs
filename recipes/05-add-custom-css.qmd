@@ -12,13 +12,13 @@ Great Docs ships a default SCSS theme file (`great-docs.scss`) that works well o
 
 Create a CSS file in your project and reference it in the site settings:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 site:
   css:
     - my-custom-styles.css # Add your overrides
 ```
 
-Place `my-custom-styles.css` in the same directory as `great-docs.yml` (your project root). It will be copied to the build directory during `great-docs build`.
+Place `my-custom-styles.css` beside `docs/great-docs.yml`, in `docs/`. It will be copied to the build directory during `great-docs build`.
 
 ## Common Customizations
 

@@ -72,10 +72,10 @@ SPEC = {
                 """
                 return f"Serving {dish.get('name', 'dish')}"
         ''',
-        "cookbook/recipe1.qmd": (
+        "docs/cookbook/recipe1.qmd": (
             "---\ntitle: Recipe One\n---\n\n# Recipe One\n\nThe first recipe in the cookbook.\n"
         ),
-        "cookbook/recipe2.qmd": (
+        "docs/cookbook/recipe2.qmd": (
             "---\ntitle: Recipe Two\n---\n\n# Recipe Two\n\nThe second recipe in the cookbook.\n"
         ),
         "README.md": ("# gdtest-sec-navbar-after\n\nTest custom section with navbar_after.\n"),

@@ -65,7 +65,7 @@ SPEC = {
                 """
                 pass
         ''',
-        "user_guide/visual-guide.qmd": (
+        "docs/user_guide/visual-guide.qmd": (
             "---\n"
             "title: Visual Guide\n"
             "---\n"
@@ -86,7 +86,7 @@ SPEC = {
             "\n"
             "Data moves from ingestion through processing to storage.\n"
         ),
-        "assets/architecture.svg": (
+        "docs/assets/architecture.svg": (
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120">\n'
             '  <rect x="10" y="40" width="100" height="40" rx="6" fill="#4A90D9" stroke="#2C5F8A" stroke-width="2"/>\n'
             '  <text x="60" y="65" text-anchor="middle" fill="white" font-size="14">Component A</text>\n'
@@ -101,7 +101,7 @@ SPEC = {
             "  </marker></defs>\n"
             "</svg>\n"
         ),
-        "assets/data-flow.svg": (
+        "docs/assets/data-flow.svg": (
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 160">\n'
             '  <rect x="150" y="5" width="100" height="30" rx="4" fill="#F0AD4E" stroke="#C68E2C" stroke-width="2"/>\n'
             '  <text x="200" y="25" text-anchor="middle" fill="white" font-size="12">Ingestion</text>\n'

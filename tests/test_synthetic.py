@@ -289,7 +289,7 @@ def test_L2_init_creates_config(pkg_name: str, tmp_path: Path):
     docs = GreatDocs(project_path=str(pkg_dir))
     docs.install(force=True)
 
-    config_path = pkg_dir / "great-docs.yml"
+    config_path = docs.layout.config_path
     assert config_path.exists(), "great-docs.yml was not created"
 
     # Config should be parseable YAML
@@ -316,7 +316,7 @@ def test_L2_init_detects_correct_exports(pkg_name: str, tmp_path: Path):
     # Read the generated config and check reference sections
     from yaml12 import format_yaml, parse_yaml, read_yaml
 
-    config_path = pkg_dir / "great-docs.yml"
+    config_path = docs.layout.config_path
     with open(config_path, encoding="utf-8") as f:
         config_data = read_yaml(f)
 
@@ -359,7 +359,9 @@ def test_L2_user_guide_detection(pkg_name: str, tmp_path: Path):
     if "has_user_guide" not in expected:
         pytest.skip("No 'has_user_guide' in spec")
 
-    has_guide = (pkg_dir / "user_guide").is_dir() or (pkg_dir / "user-guide").is_dir()
+    has_guide = (pkg_dir / "docs" / "user_guide").is_dir() or (
+        pkg_dir / "docs" / "user-guide"
+    ).is_dir()
 
     assert has_guide == expected["has_user_guide"], (
         f"Expected has_user_guide={expected['has_user_guide']}, "
@@ -375,9 +377,9 @@ def test_L2_user_guide_files(pkg_name: str, tmp_path: Path):
     if "user_guide_files" not in expected:
         pytest.skip("No 'user_guide_files' in spec")
 
-    guide_dir = pkg_dir / "user_guide"
+    guide_dir = pkg_dir / "docs" / "user_guide"
     if not guide_dir.exists():
-        guide_dir = pkg_dir / "user-guide"
+        guide_dir = pkg_dir / "docs" / "user-guide"
 
     assert guide_dir.exists(), "No user guide directory found"
 
@@ -421,7 +423,7 @@ def test_L2_supporting_pages(pkg_name: str, tmp_path: Path):
 
     if "has_assets" in expected:
         performed = True
-        assert (pkg_dir / "assets").is_dir() == expected["has_assets"]
+        assert (pkg_dir / "docs" / "assets").is_dir() == expected["has_assets"]
 
     if not performed:
         pytest.skip("No supporting page expectations in spec")
@@ -492,7 +494,7 @@ def test_L2_explicit_reference_survives_init(pkg_name: str, tmp_path: Path):
     docs.install(force=True)
 
     # Re-read the generated config
-    config_path = pkg_dir / "great-docs.yml"
+    config_path = docs.layout.config_path
     with open(config_path, encoding="utf-8") as f:
         config_data = read_yaml(f)
 
@@ -580,7 +582,7 @@ def test_generator_with_config_override(tmp_path: Path):
     )
     pkg_dir = generate_package(spec, tmp_path, config_override=config_path)
 
-    config_file = pkg_dir / "great-docs.yml"
+    config_file = pkg_dir / "docs" / "great-docs.yml"
     assert config_file.exists()
     content = config_file.read_text()
     assert "google" in content
@@ -706,9 +708,9 @@ def test_L3_cli_sidebar_no_wrong_level_paths(pkg_name: str, tmp_path: Path):
     all_paths = _collect_paths(sidebar_items)
 
     # Every path must point to an actual file on disk.
-    # _generate_cli_reference_pages writes files under docs.project_path
+    # _generate_cli_reference_pages writes files under docs.build_dir
     # (i.e. <pkg_dir>/great-docs/).
-    docs_dir = docs.project_path
+    docs_dir = docs.build_dir
     for path in all_paths:
         full = docs_dir / path
         assert full.exists(), f"Sidebar path {path!r} does not exist on disk at {full}"
@@ -764,7 +766,7 @@ def test_L3_cli_navbar_link(pkg_name: str, tmp_path: Path):
 
     docs._update_sidebar_with_cli(cli_files)
 
-    quarto_yml = docs.project_path / "_quarto.yml"
+    quarto_yml = docs.build_dir / "_quarto.yml"
     assert quarto_yml.exists(), "_quarto.yml was not created"
 
     with open(quarto_yml, encoding="utf-8") as f:
@@ -816,7 +818,7 @@ def test_L3_cli_and_user_guide_navbar(pkg_name: str, tmp_path: Path):
     # Process user guide
     docs._process_user_guide()
 
-    quarto_yml = docs.project_path / "_quarto.yml"
+    quarto_yml = docs.build_dir / "_quarto.yml"
     with open(quarto_yml, encoding="utf-8") as f:
         config = read_yaml(f)
 
@@ -849,7 +851,7 @@ def test_L2_cli_config_preserved(pkg_name: str, tmp_path: Path):
 
     from yaml12 import format_yaml, parse_yaml, read_yaml
 
-    config_path = pkg_dir / "great-docs.yml"
+    config_path = docs.layout.config_path
     assert config_path.exists(), "great-docs.yml was not created"
 
     with open(config_path, encoding="utf-8") as f:
@@ -936,13 +938,17 @@ def _setup_blended_homepage(pkg_dir: Path, spec: dict) -> GreatDocs:
 
     # Re-apply spec config entries that install() doesn't preserve
     if "config" in spec:
-        config_path = docs._find_package_root() / "great-docs.yml"
+        config_path = docs.layout.config_path
         with open(config_path, "r", encoding="utf-8") as f:
             existing = read_yaml(f) or {}
         existing.update(spec["config"])
         with open(config_path, "w", encoding="utf-8") as f:
             write_yaml(existing, f)
-        docs._config = Config(docs._find_package_root())
+        docs._config = Config(
+            docs.layout.package_root,
+            config_path=docs.layout.config_path,
+            cache_dir=docs.layout.cache_dir,
+        )
 
     docs._prepare_build_directory()
     docs._process_user_guide()
@@ -968,12 +974,12 @@ def test_L3_bibliography_wired_into_quarto_config(pkg_name: str, tmp_path: Path)
     bib_file = expected["bibliography_file"]
 
     # The .bib file is copied into the build directory by basename.
-    assert (docs.project_path / bib_file).exists(), (
-        f"{bib_file!r} should be copied into the build dir {docs.project_path}"
+    assert (docs.build_dir / bib_file).exists(), (
+        f"{bib_file!r} should be copied into the build dir {docs.build_dir}"
     )
 
     # _quarto.yml references the bibliography by basename.
-    quarto_yml = docs.project_path / "_quarto.yml"
+    quarto_yml = docs.build_dir / "_quarto.yml"
 
     assert quarto_yml.exists(), "_quarto.yml was not created"
 
@@ -1004,12 +1010,12 @@ def test_L3_custom_css_wired_into_quarto_config(pkg_name: str, tmp_path: Path):
     css_file = expected["custom_css_file"]
 
     # The .css file is copied into the build directory by basename.
-    assert (docs.project_path / css_file).exists(), (
-        f"{css_file!r} should be copied into the build dir {docs.project_path}"
+    assert (docs.build_dir / css_file).exists(), (
+        f"{css_file!r} should be copied into the build dir {docs.build_dir}"
     )
 
     # _quarto.yml references the CSS by basename.
-    quarto_yml = docs.project_path / "_quarto.yml"
+    quarto_yml = docs.build_dir / "_quarto.yml"
 
     assert quarto_yml.exists(), "_quarto.yml was not created"
 
@@ -1032,7 +1038,7 @@ def test_L3_blended_homepage_index_content(pkg_name: str, tmp_path: Path):
 
     docs = _setup_blended_homepage(pkg_dir, spec)
 
-    index_qmd = docs.project_path / "index.qmd"
+    index_qmd = docs.build_dir / "index.qmd"
     assert index_qmd.exists(), "index.qmd was not created in blended mode"
 
     content = index_qmd.read_text(encoding="utf-8")
@@ -1055,7 +1061,7 @@ def test_L3_blended_homepage_no_duplicate(pkg_name: str, tmp_path: Path):
     docs = _setup_blended_homepage(pkg_dir, spec)
 
     for rel_path in expected.get("index_not_exists", []):
-        full_path = docs.project_path / rel_path
+        full_path = docs.build_dir / rel_path
         assert not full_path.exists(), f"Duplicate UG page should be removed: {rel_path}"
 
 
@@ -1070,7 +1076,7 @@ def test_L3_blended_homepage_remaining_pages(pkg_name: str, tmp_path: Path):
     docs = _setup_blended_homepage(pkg_dir, spec)
 
     for rel_path in expected.get("ug_pages_exist", []):
-        full_path = docs.project_path / rel_path
+        full_path = docs.build_dir / rel_path
         assert full_path.exists(), f"Remaining UG page should exist: {rel_path}"
 
 
@@ -1086,7 +1092,7 @@ def test_L3_blended_homepage_no_navbar_user_guide(pkg_name: str, tmp_path: Path)
 
     docs = _setup_blended_homepage(pkg_dir, spec)
 
-    quarto_yml = docs.project_path / "_quarto.yml"
+    quarto_yml = docs.build_dir / "_quarto.yml"
     assert quarto_yml.exists(), "_quarto.yml was not created"
 
     with open(quarto_yml, encoding="utf-8") as f:
@@ -1113,7 +1119,7 @@ def test_L3_blended_homepage_sidebar_first_entry(pkg_name: str, tmp_path: Path):
 
     docs = _setup_blended_homepage(pkg_dir, spec)
 
-    quarto_yml = docs.project_path / "_quarto.yml"
+    quarto_yml = docs.build_dir / "_quarto.yml"
     with open(quarto_yml, encoding="utf-8") as f:
         config = read_yaml(f)
 
@@ -1150,6 +1156,7 @@ def test_L3_code_include_expansion(tmp_path: Path):
     """gdtest_code_include: include shortcodes for code files are expanded in user guide."""
     pkg_dir, spec = _make_package("gdtest_code_include", tmp_path)
     docs = GreatDocs(project_path=str(pkg_dir))
+    docs.install(force=True)
     docs._prepare_build_directory()
 
     ug_info = docs._discover_user_guide()
@@ -1157,7 +1164,7 @@ def test_L3_code_include_expansion(tmp_path: Path):
 
     docs._copy_user_guide_to_docs(ug_info)
 
-    built = docs.project_path / "user-guide" / "includes.qmd"
+    built = docs.build_dir / "user-guide" / "includes.qmd"
     assert built.exists(), "includes.qmd not found in build dir"
 
     content = built.read_text(encoding="utf-8")

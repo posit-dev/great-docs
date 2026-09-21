@@ -100,7 +100,7 @@ SPEC = {
                 return f"Hello, {name}!"
         ''',
         # ── User guide pages ──────────────────────────────────────────
-        "user_guide/01-basic-mock.qmd": """\
+        "docs/user_guide/01-basic-mock.qmd": """\
             ---
             title: Basic Mock Cell
             ---
@@ -120,7 +120,7 @@ SPEC = {
             The reader sees `gdtest_mock_code.add(10, 20)` but the cell
             actually runs `from gdtest_mock_code import add; add(10, 20)`.
         """,
-        "user_guide/02-mock-output-title.qmd": """\
+        "docs/user_guide/02-mock-output-title.qmd": """\
             ---
             title: Mock with Output Title
             ---
@@ -139,7 +139,7 @@ SPEC = {
             The output should appear inside a titled container
             labelled "Addition Result".
         """,
-        "user_guide/03-standalone-output-title.qmd": """\
+        "docs/user_guide/03-standalone-output-title.qmd": """\
             ---
             title: Standalone Output Title
             ---
@@ -155,7 +155,7 @@ SPEC = {
             The output should appear inside a titled container
             labelled "Greeting Output".
         """,
-        "user_guide/04-no-delimiter.qmd": """\
+        "docs/user_guide/04-no-delimiter.qmd": """\
             ---
             title: No Delimiter Mock
             ---
@@ -170,7 +170,7 @@ SPEC = {
 
             There is no eval cell emitted, so no output appears.
         """,
-        "user_guide/05-multiple-mocks.qmd": """\
+        "docs/user_guide/05-multiple-mocks.qmd": """\
             ---
             title: Multiple Mock Cells
             ---
@@ -209,7 +209,7 @@ SPEC = {
             greet("GDG")
             ```
         """,
-        "user_guide/06-html-repr-output-title.qmd": """\
+        "docs/user_guide/06-html-repr-output-title.qmd": """\
             ---
             title: HTML Repr with Output Title
             ---
@@ -261,7 +261,7 @@ SPEC = {
             render identically to any other GT table.  The text output
             should keep its frame.
         """,
-        "user_guide/07-output-frame.qmd": """\
+        "docs/user_guide/07-output-frame.qmd": """\
             ---
             title: Output Frame (No Title)
             ---

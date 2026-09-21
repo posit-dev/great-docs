@@ -4,6 +4,9 @@
 # Every option appears below at its default value, with the values it accepts
 # documented above it. Set only what you want to change: an option you leave
 # out or commented out keeps its default.
+# Save this file as docs/great-docs.yml. Resolve documentation source paths
+# from its directory, including assets, bibliography, CSS, and render hooks.
+# Keep package metadata and Python source paths relative to the package root.
 
 # Module Name
 # -----------
@@ -296,7 +299,7 @@ changelog:
 #
 # sections:
 #   - title: Examples            # Navbar link text
-#     dir: examples              # Source directory (relative to project root)
+#     dir: examples              # Source directory (relative to this configuration)
 #     index: true                # Generate card-based index page (default: false)
 #     index_columns: 2           # Columns for image cards: 1 or 2 (default: 2)
 #     navbar_after: "User Guide" # Place after this navbar item (optional)
@@ -317,7 +320,7 @@ sections: []
 # : type(str) - a single directory, e.g. marketing
 # : type(list) - one entry per directory:
 # custom_pages:
-#   - dir: marketing             # Source directory (relative to project root)
+#   - dir: marketing             # Source directory (relative to this configuration)
 #     output: py                 # URL/output prefix (optional; defaults to dir basename)
 #   - dir: playgrounds
 #     output: demos
@@ -332,8 +335,8 @@ homepage: index
 # User Guide
 # ----------
 # Where the User Guide .qmd files live, and optionally how they are ordered.
-# : null - (default) look for user_guide/ in the project root
-# : type(str) - a custom directory (relative to project root), e.g. docs/guides
+# : null - (default) look for user_guide/ beside this configuration
+# : type(str) - a custom directory (relative to this configuration), e.g. guides
 # : type(list) - explicit section ordering and grouping:
 # user_guide:
 #   - section: "Get Started"
@@ -354,16 +357,16 @@ user_guide: null
 # Bibliography & Citations
 # ------------------------
 # Project-level bibliography for [@citation-key] syntax. Paths are relative to
-# the project root; the file(s) are copied into the build directory and wired
+# this configuration; the file(s) are copied into the build directory and wired
 # into _quarto.yml so every page can cite without per-page frontmatter.
 # : [] - (default) no bibliography
-# : type(str) - a single file, e.g. docs/references.bib
+# : type(str) - a single file, e.g. references.bib
 # : type(list) - several files:
 # bibliography:
-#   - docs/references.bib
-#   - docs/software.bib
+#   - references.bib
+#   - ../shared/software.bib
 bibliography: []
-# csl: docs/nature.csl                    # optional citation style
+# csl: nature.csl                         # optional citation style
 csl: null
 
 # API Reference Structure
@@ -612,7 +615,7 @@ freeze:
 # ------------------
 # Quarto's native pre-render hook (alternative to freeze.pre_render). Copied
 # into the build directory and wired into _quarto.yml. Paths are relative to
-# root.
+# the configuration directory.
 # : [] - (default) no scripts
 # : type(str) - a single script, e.g. scripts/before-render.py
 # : type(list) - several, e.g. [scripts/before-render.py, scripts/other.py]

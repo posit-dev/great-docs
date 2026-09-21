@@ -15,7 +15,7 @@ Getting started with versioned documentation takes just two lines of configurati
 
 Add a `versions` key to your `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 versions:
   - "0.3"
   - "0.2"
@@ -48,7 +48,7 @@ Versions are declared as an ordered list, newest first. The first non-prerelease
 
 **Minimal form** with just strings:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 versions:
   - "0.3"
   - "0.2"
@@ -57,7 +57,7 @@ versions:
 
 **Full form** with metadata:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 versions:
   - label: "0.4.0 (dev)"
     tag: dev
@@ -94,7 +94,7 @@ When strings are used instead of dicts, `tag` and `label` both default to the st
 
 The version selector widget is enabled automatically when `versions` is non-empty. These settings let you fine-tune its behavior and placement:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 version_selector:
   enabled: true
   placement: navbar-right   # "navbar-right" | "navbar-left" | "sidebar-top"
@@ -228,7 +228,7 @@ For coarser control, you can scope an entire section directory to specific versi
 
 Scope sections in your configuration:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 sections:
   - title: Recipes
     dir: recipes
@@ -272,7 +272,7 @@ Badges are compact enough to use liberally throughout your API reference and use
 
 When a version is marked `prerelease: true` in your config, any `[version-badge new]` that references it automatically renders as "Upcoming" instead of "New". This lets you document features before they ship without special syntax:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 versions:
   - label: "0.8.0"
     tag: "0.8"
@@ -343,7 +343,7 @@ As your project matures, "new" badges from several releases ago become noise rat
 
 Add `new_is_old` to your `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 new_is_old: 3 releases
 ```
 
@@ -371,7 +371,7 @@ Most projects should start with `"3 releases"` or `"2 minor releases"`. The rele
 
 The `days` mode requires `released` dates in your version configuration so that Great Docs can compute elapsed time:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 new_is_old: 180 days
 
 versions:
@@ -445,7 +445,7 @@ great-docs api-snapshot --output api-snapshots/v0.3.json
 
 Then reference the snapshot in your config:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 versions:
   - label: "0.3.0"
     tag: "0.3"
@@ -463,7 +463,7 @@ This is the **recommended approach** for most projects because it's fast, reprod
 
 For projects that want fully automatic API versioning without manually managing snapshot files, Great Docs can check out a Git tag and introspect the package at that point in time:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 versions:
   - label: "0.3.0"
     tag: "0.3"
@@ -472,7 +472,7 @@ versions:
     git_ref: v0.2.0
 ```
 
-Only Git **tags** are accepted (not branches or arbitrary SHAs). This is a security restriction: tags are immutable references to reviewed, released code. Results are cached in `.great-docs-cache/snapshots/` so subsequent builds don't repeat the introspection. This strategy is slower on the first build but fully hands-off after that.
+Only Git **tags** are accepted, not branches or arbitrary SHAs. This security restriction ensures that introspection uses immutable references to reviewed, released code. Great Docs caches the results in `docs/.cache/snapshots/`, so later builds do not repeat the introspection. The first build is slower; later builds run without further configuration.
 
 ### Strategy C: Automatic Snapshots
 
@@ -592,7 +592,7 @@ Understanding the build pipeline is optional for most users, but it helps when d
 
 2. **Render**: Run `quarto render` for each version in parallel (up to 4 concurrent renders by default).
 
-3. **Assemble**: Merge the per-version `_site/` outputs into the final site: latest version at the root, historical versions under `/v/<tag>/`. Generate the version map, aliases, and redirect files.
+3. **Assemble**: Merge the per-version `_site/` outputs into the final site: latest version at the root, historical versions under `/v/<version>/` with a leading `v` removed from the tag. Generate the version map, aliases, and redirect files.
 
 The version map (`_version_map.json`) is a JSON manifest listing all versions, their metadata, and which pages exist in each version. The version selector widget reads this at runtime to enable smart navigation and fallback behavior.
 
@@ -602,28 +602,33 @@ Because each version is rendered independently, the build is embarrassingly para
 
 Versioned builds work in these directories:
 
-- **`great-docs/`** stores the temporary Quarto project for the latest version and the assembled site in `great-docs/_site/`. Great Docs recreates the directory at the start of every build.
-- **`great-docs-<tag>/`** stores one temporary, self-contained Quarto project for each historical version. Great Docs removes existing marked sibling directories before a versioned build and recreates only those selected for that build.
-- **`.great-docs-cache/`** caches one API snapshot for each version that uses Strategy B (`git_ref`). Delete the directory to repeat API introspection during the next build.
+- Store the latest Quarto project in `docs/_quarto/default/`, regardless of its tag. Great Docs recreates it at the start of each build.
+- Store each historical Quarto project in `docs/_quarto/<tag>/`, retaining its own `_site/` output. Great Docs recreates only marked projects selected for the build.
+- Deploy the assembled site from `docs/_site/`, with the latest version at its root and historical versions under `v/<version>/`.
+- Cache Git-introspected API snapshots in `docs/.cache/`, or beside a custom configuration file.
 
-Every version's Quarto project therefore sits one level below your project root, whether or not you configure `versions:`. A relative path in page content resolves to the same file either way.
+Every Quarto project sits two levels below the configuration directory, whether or not you configure `versions:`. Non-versioned builds also use `docs/_quarto/default/`.
 
-A project configured with a single version, marked `latest: true`, creates no `great-docs-<tag>/` directories at all.
+A latest tag of `2.0.0` still uses `docs/_quarto/default/`, not `docs/_quarto/2.0.0/`.
+Historical tag `v1.5.0` uses `docs/_quarto/v1.5.0/`, but publishes at
+`docs/_site/v/1.5.0/`, never `v/v1.5.0/`. Tag `1.5.0` has the same published URL.
+Selectors and Git lookups retain the configured tag, including its `v` prefix.
+
+For a custom layout, run `great-docs build --config website/great-docs.yml`.
+The same structure then lives under `website/`.
 
 Add these to your `.gitignore`. Great Docs does this automatically when you run `great-docs init`, but if you set up versioning on an existing project you can add them manually:
 
 ```{.text filename=".gitignore"}
-/great-docs/
-/great-docs-*/
-.great-docs-build/
-.great-docs-cache/
+/docs/_quarto/
+/docs/_site/
+/docs/.cache/
 .great-docs/
 ```
 
-The generated ignore block also retains `.great-docs-build/` for older build layouts.
 `.great-docs/` stores snapshots created by `great-docs api-snapshot`.
 
-Great Docs deletes only build directories whose `_quarto.yml` contains its generated marker. It preserves other `great-docs-*/` directories and prints a warning. If an unmarked directory would receive a configured version, the build stops and asks you to move or delete it.
+Great Docs deletes only Quarto project directories whose `_quarto.yml` contains its generated marker. It preserves unmarked directories. If one would receive a configured version, the build stops and asks you to resolve the conflict.
 
 ## Next Steps
 

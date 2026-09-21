@@ -16,7 +16,7 @@ Version fences let you include or exclude blocks of content per version without 
 
 Wrap content in a `.version-only` fence with a version expression:
 
-```{.markdown filename="user_guide/configuration.qmd"}
+```{.markdown filename="docs/user_guide/configuration.qmd"}
 ::: {.version-only versions=">=0.3"}
 ## Environment Variable Support
 
@@ -34,7 +34,7 @@ This block only appears in version 0.3 and later.
 
 Use `.version-except` to hide content from specific versions:
 
-```{.markdown filename="user_guide/install.qmd"}
+```{.markdown filename="docs/user_guide/install.qmd"}
 ::: {.version-except versions="0.1"}
 Install with pip:
 
@@ -107,7 +107,7 @@ You can place multiple badges on the same line:
 
 For longer version notes, use callout blocks:
 
-```{.markdown filename="user_guide/api-guide.qmd"}
+```{.markdown filename="docs/user_guide/api-guide.qmd"}
 ::: {.version-note version="0.3"}
 The `format` parameter was renamed from `fmt` in this version.
 Update your code to use the new name.
@@ -130,7 +130,7 @@ If you omit the `version` attribute, the current version's label is used.
 
 To restrict an entire page to specific versions, use frontmatter instead of fences:
 
-```{.yaml filename="user_guide/migration-02-to-03.qmd"}
+```{.yaml filename="docs/user_guide/migration-02-to-03.qmd"}
 ---
 title: "Migrating from 0.2 to 0.3"
 versions: ["0.3", "dev"]

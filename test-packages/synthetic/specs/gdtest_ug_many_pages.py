@@ -67,7 +67,7 @@ SPEC = {
                 """
                 return []
         ''',
-        "user_guide/01-overview.qmd": (
+        "docs/user_guide/01-overview.qmd": (
             "---\n"
             "title: Overview\n"
             "---\n"
@@ -76,7 +76,7 @@ SPEC = {
             "\n"
             "A high-level overview of the entire project.\n"
         ),
-        "user_guide/02-installation.qmd": (
+        "docs/user_guide/02-installation.qmd": (
             "---\n"
             "title: Installation\n"
             "---\n"
@@ -85,10 +85,10 @@ SPEC = {
             "\n"
             "Step-by-step installation instructions.\n"
         ),
-        "user_guide/03-quickstart.qmd": (
+        "docs/user_guide/03-quickstart.qmd": (
             "---\ntitle: Quickstart\n---\n\n# Quickstart\n\nGet up and running in minutes.\n"
         ),
-        "user_guide/04-configuration.qmd": (
+        "docs/user_guide/04-configuration.qmd": (
             "---\n"
             "title: Configuration\n"
             "---\n"
@@ -97,10 +97,10 @@ SPEC = {
             "\n"
             "All available configuration options.\n"
         ),
-        "user_guide/05-basic-usage.qmd": (
+        "docs/user_guide/05-basic-usage.qmd": (
             "---\ntitle: Basic Usage\n---\n\n# Basic Usage\n\nCommon patterns for everyday use.\n"
         ),
-        "user_guide/06-advanced-usage.qmd": (
+        "docs/user_guide/06-advanced-usage.qmd": (
             "---\n"
             "title: Advanced Usage\n"
             "---\n"
@@ -109,13 +109,13 @@ SPEC = {
             "\n"
             "Power-user techniques and advanced patterns.\n"
         ),
-        "user_guide/07-plugins.qmd": (
+        "docs/user_guide/07-plugins.qmd": (
             "---\ntitle: Plugins\n---\n\n# Plugins\n\nHow to use and create plugins.\n"
         ),
-        "user_guide/08-testing.qmd": (
+        "docs/user_guide/08-testing.qmd": (
             "---\ntitle: Testing\n---\n\n# Testing\n\nBest practices for testing your project.\n"
         ),
-        "user_guide/09-deployment.qmd": (
+        "docs/user_guide/09-deployment.qmd": (
             "---\n"
             "title: Deployment\n"
             "---\n"
@@ -124,7 +124,7 @@ SPEC = {
             "\n"
             "Deploying your application to production.\n"
         ),
-        "user_guide/10-troubleshooting.qmd": (
+        "docs/user_guide/10-troubleshooting.qmd": (
             "---\n"
             "title: Troubleshooting\n"
             "---\n"
@@ -133,10 +133,10 @@ SPEC = {
             "\n"
             "Solutions to common problems and issues.\n"
         ),
-        "user_guide/11-faq.qmd": (
+        "docs/user_guide/11-faq.qmd": (
             "---\ntitle: FAQ\n---\n\n# FAQ\n\nFrequently asked questions and answers.\n"
         ),
-        "user_guide/12-appendix.qmd": (
+        "docs/user_guide/12-appendix.qmd": (
             "---\n"
             "title: Appendix\n"
             "---\n"

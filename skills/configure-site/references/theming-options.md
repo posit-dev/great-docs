@@ -67,7 +67,8 @@ include_in_header:
       <link rel="stylesheet" href="custom.css">
 ```
 
-Place `custom.css` in the project root or `assets/` directory.
+Place `custom.css` in `docs/` or `docs/assets/`. Configure its path relative
+to `docs/great-docs.yml`, for example `assets/custom.css`.
 Override Great Docs CSS variables for targeted changes:
 
 ```css

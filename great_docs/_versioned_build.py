@@ -13,7 +13,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from great_docs._subprocess import TEXT_MODE_KWARGS
-from great_docs._utils import QUARTO_YML_HEADER, is_great_docs_build_dir
+from great_docs._utils import (
+    QUARTO_YML_HEADER,
+    is_great_docs_build_dir,
+    record_site_ownership,
+    validate_build_dir,
+    validate_layout_outputs,
+    validate_site_dir,
+    validate_tree_symlinks,
+)
 from great_docs._versioning import (
     VersionEntry,
     build_version_map,
@@ -23,12 +31,14 @@ from great_docs._versioning import (
     page_matches_version,
     parse_versions_config,
     process_version_fences,
+    version_url_segment,
 )
 
 if TYPE_CHECKING:
     from great_docs._api_diff import ApiSnapshot
     from great_docs._interlinks import AliasClaims
     from great_docs._interlinks.sphinx_inventory import InventoryEntry
+    from great_docs._layout import Layout
     from great_docs.config import Config
 
 # ---------------------------------------------------------------------------
@@ -44,7 +54,9 @@ def _safe_tag_dirname(tag: str) -> str:
     return _UNSAFE_TAG_CHARS.sub("-", tag)
 
 
-def _version_build_dir(source_dir: Path, entry: VersionEntry, latest_tag: str) -> Path:
+def _version_build_dir(
+    source_dir: Path, entry: VersionEntry, latest_tag: str, layout: Layout | None = None
+) -> Path:
     """
     Return the Quarto project directory for a version
 
@@ -66,6 +78,8 @@ def _version_build_dir(source_dir: Path, entry: VersionEntry, latest_tag: str) -
     -------
     Quarto project directory for the version.
     """
+    if layout is not None:
+        return layout.build_dir_for(entry.tag, latest_tag)
     if entry.tag == latest_tag:
         return source_dir
     return source_dir.parent / f"{source_dir.name}-{_safe_tag_dirname(entry.tag)}"
@@ -75,9 +89,10 @@ def _check_build_dir_collisions(
     source_dir: Path,
     targets: list[VersionEntry],
     latest_tag: str,
+    layout: Layout | None = None,
 ) -> None:
     """
-    Reject version tags that map to the same build directory
+    Reject version tags with conflicting build directories or published URLs
 
     Sanitising directory names can map distinct tags, such as `release/1.0`
     and `release-1.0`, to one directory. Building both would publish one
@@ -95,11 +110,21 @@ def _check_build_dir_collisions(
     Raises
     ------
     ValueError
-        If two tags map to the same build directory.
+        If tags have conflicting or unsafe build or URL paths.
     """
     seen: dict[Path, str] = {}
+    segments: dict[str, str] = {}
     for entry in targets:
-        ver_dir = _version_build_dir(source_dir, entry, latest_tag)
+        segment = version_url_segment(entry.tag)
+        if segment in segments:
+            raise ValueError(
+                f"Version tags {segments[segment]!r} and {entry.tag!r} both map to "
+                f"URL segment {segment!r}. Rename one of the tags."
+            )
+        if not segment or any(part in {"", ".", ".."} for part in segment.split("/")):
+            raise ValueError(f"Version tag {entry.tag!r} has an unsafe URL path")
+        segments[segment] = entry.tag
+        ver_dir = _version_build_dir(source_dir, entry, latest_tag, layout)
         if ver_dir in seen:
             raise ValueError(
                 f"Version tags {seen[ver_dir]!r} and {entry.tag!r} both map to "
@@ -108,7 +133,7 @@ def _check_build_dir_collisions(
         seen[ver_dir] = entry.tag
 
 
-def _clean_stale_version_dirs(source_dir: Path) -> list[str]:
+def _clean_stale_version_dirs(source_dir: Path, layout: Layout | None = None) -> list[str]:
     """
     Remove version build directories left behind by earlier builds
 
@@ -126,10 +151,14 @@ def _clean_stale_version_dirs(source_dir: Path) -> list[str]:
     Warnings for matching directories retained because they lacked the marker.
     """
     warnings: list[str] = []
-    for candidate in sorted(source_dir.parent.glob(f"{source_dir.name}-*")):
+    pattern = "*" if layout and layout.source_dir != layout.package_root else f"{source_dir.name}-*"
+    for candidate in sorted(source_dir.parent.glob(pattern)):
+        if candidate == source_dir:
+            continue
         if not candidate.is_dir() or candidate.is_symlink():
             continue
         if is_great_docs_build_dir(candidate):
+            validate_tree_symlinks(candidate)
             shutil.rmtree(candidate)
         else:
             warnings.append(
@@ -458,13 +487,30 @@ def _prune_sidebar_contents(contents: list, dest_dir: Path) -> list:
     return result
 
 
-def _prune_cli_pages_for_version(dest_dir: Path, project_root: Path, entry: VersionEntry) -> None:
-    """Load the cached snapshot for a version and prune stale CLI pages."""
+def _prune_cli_pages_for_version(
+    dest_dir: Path, project_root: Path, entry: VersionEntry, config: Config | None = None
+) -> None:
+    """
+    Load a version's cached snapshot and remove obsolete CLI pages
+
+    Parameters
+    ----------
+    dest_dir
+        The version's build directory.
+    project_root
+        Project root (git repo root).
+    entry
+        The version entry with `git_ref` set.
+    config
+        Optional project configuration. Selects the snapshot cache location;
+        defaults to `project_root / ".great-docs-cache"` when omitted.
+    """
     git_ref = entry.git_ref
     if not git_ref:
         return
 
-    cache_path = _snapshot_cache_path(project_root, git_ref)
+    cache_dir = config.cache_dir if config is not None else project_root / ".great-docs-cache"
+    cache_path = _snapshot_cache_path(cache_dir, git_ref)
     if not cache_path.exists():
         return
 
@@ -602,7 +648,7 @@ def preprocess_version(
 
     # 5. Prune CLI pages that don't exist at this version
     if entry.git_ref and project_root:
-        _prune_cli_pages_for_version(dest_dir, project_root, entry)
+        _prune_cli_pages_for_version(dest_dir, project_root, entry, config)
 
     # 6. Expand inline [version-badge] markers and version callouts
     for qmd_file in _collect_qmd_files(dest_dir):
@@ -625,7 +671,12 @@ def preprocess_version(
     if upcoming_pages:
         _update_page_status_json(dest_dir, upcoming_pages)
 
-    return included_pages
+    # Historical API rebuilding can remove pages collected before introspection.
+    return [
+        page
+        for page in dict.fromkeys(included_pages)
+        if any((dest_dir / page).with_suffix(suffix).is_file() for suffix in (".qmd", ".md"))
+    ]
 
 
 def _compute_excluded_section_dirs(
@@ -1324,9 +1375,9 @@ def _validate_git_ref_is_tag(project_root: Path, git_ref: str) -> bool:
         return False
 
 
-def _snapshot_cache_path(project_root: Path, git_ref: str) -> Path:
+def _snapshot_cache_path(cache_dir: Path, git_ref: str) -> Path:
     """Return the cache file path for a git-ref snapshot."""
-    return project_root / ".great-docs-cache" / "snapshots" / f"{git_ref}.json"
+    return cache_dir / "snapshots" / f"{git_ref}.json"
 
 
 def _rebuild_api_from_git_ref(
@@ -1350,8 +1401,10 @@ def _rebuild_api_from_git_ref(
     entry
         The version entry with `git_ref` set.
     config
-        Project configuration, forwarded to `_rebuild_api_from_snapshot` for
-        rebuilding the inventory and interlinks index. Skipped when omitted.
+        Optional project configuration. Selects the snapshot cache location
+        and is forwarded to `_rebuild_api_from_snapshot` when rebuilding the
+        inventory and interlinks index. Defaults to
+        `project_root / ".great-docs-cache"` when omitted.
 
     Returns
     -------
@@ -1380,7 +1433,8 @@ def _rebuild_api_from_git_ref(
         return []
 
     # Check cache first
-    cache_path = _snapshot_cache_path(project_root, git_ref)
+    cache_dir = config.cache_dir if config is not None else project_root / ".great-docs-cache"
+    cache_path = _snapshot_cache_path(cache_dir, git_ref)
     if cache_path.exists():
         snap = ApiSnapshot.load(cache_path)
     else:
@@ -1390,7 +1444,10 @@ def _rebuild_api_from_git_ref(
 
         from great_docs.core import GreatDocs
 
-        documented = GreatDocs(project_path=str(project_root)).documented_symbol_names(pkg_name)
+        documented = GreatDocs(
+            project_path=str(project_root),
+            config_path=str(config.config_path) if config is not None else None,
+        ).documented_symbol_names(pkg_name)
 
         snap = snapshot_at_tag(project_root, git_ref, pkg_name, documented_names=documented or None)
         if snap is None:
@@ -1615,7 +1672,7 @@ def _rewrite_quarto_yml_for_version(
     existing_site_url = config.get("website", {}).get("site-url")
     if entry.tag != latest_tag and not entry.latest and existing_site_url:
         base = existing_site_url.rstrip("/")
-        config.setdefault("website", {})["site-url"] = f"{base}/v/{entry.tag}/"
+        config.setdefault("website", {})["site-url"] = f"{base}/v/{version_url_segment(entry.tag)}/"
 
     # Set a version-specific title suffix
     if entry.tag != latest_tag and not entry.latest:
@@ -1633,7 +1690,7 @@ def _rewrite_quarto_yml_for_version(
             'document.addEventListener("DOMContentLoaded",function(){'
             f'var base="{base}";'
             "var path=window.location.pathname;"
-            f'var prefix="/v/{entry.tag}/";'
+            f'var prefix="/v/{version_url_segment(entry.tag)}/";'
             "if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}"
             'var link=document.createElement("link");'
             'link.rel="canonical";'
@@ -1896,12 +1953,14 @@ def assemble_site(
     versions: list[VersionEntry],
     latest_tag: str,
     output_dir: Path,
+    *,
+    layout: Layout | None = None,
 ) -> None:
     """
     Merge per-version rendered sites into the final output directory
 
     Preserve the latest version when it has rendered directly into
-    `output_dir`. Merge historical versions under `v/<tag>/`. If the latest
+    `output_dir`. Merge historical versions under their normalised `v/` URLs. If the latest
     version rendered elsewhere, replace `output_dir` before merging all sites.
 
     Parameters
@@ -1914,17 +1973,31 @@ def assemble_site(
         The tag of the latest version, which becomes the site root.
     output_dir
         Final output directory, normally `great-docs/_site/`.
+    layout
+        Resolved project paths. Required for separate deployment output.
     """
+    _check_build_dir_collisions(source_dir, versions, latest_tag, layout)
+    if layout is not None:
+        validate_layout_outputs(layout)
+    validate_tree_symlinks(source_dir / "_site")
+    for entry in versions:
+        validate_tree_symlinks(_version_build_dir(source_dir, entry, latest_tag, layout) / "_site")
+
     # The latest version may have rendered directly into `output_dir`. Preserve
     # it because build setup removed stale output before rendering began.
     in_place = (source_dir / "_site").resolve() == output_dir.resolve()
 
+    if not in_place and layout is not None:
+        validate_site_dir(output_dir)
     if not in_place and output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    if not versions and not in_place and (source_dir / "_site").is_dir():
+        _merge_tree(source_dir / "_site", output_dir)
+
     for entry in versions:
-        site_dir = _version_build_dir(source_dir, entry, latest_tag) / "_site"
+        site_dir = _version_build_dir(source_dir, entry, latest_tag, layout) / "_site"
 
         if not site_dir.exists():
             continue
@@ -1934,9 +2007,12 @@ def assemble_site(
                 continue
             _merge_tree(site_dir, output_dir)
         else:
-            dest = output_dir / "v" / entry.tag
+            dest = output_dir / "v" / version_url_segment(entry.tag)
             dest.mkdir(parents=True, exist_ok=True)
             _merge_tree(site_dir, dest)
+
+    if not in_place and layout is not None:
+        record_site_ownership(output_dir)
 
 
 def _merge_tree(src: Path, dst: Path) -> None:
@@ -1990,13 +2066,13 @@ def create_version_aliases(
             continue
 
         # Don't create alias if it matches an actual version tag
-        if any(v.tag == alias_name for v in versions):
+        if any(version_url_segment(v.tag) == alias_name for v in versions):
             continue
 
         if entry.tag == latest_tag:
             target_prefix = "/"
         else:
-            target_prefix = f"/v/{entry.tag}/"
+            target_prefix = f"/v/{version_url_segment(entry.tag)}/"
 
         alias_dir = output_dir / "v" / alias_name
         alias_dir.mkdir(parents=True, exist_ok=True)
@@ -2054,6 +2130,7 @@ def run_versioned_build(  # pragma: no cover
     on_renders_done: Callable[[], None] | None = None,
     badge_expiry_raw: str | None = None,
     config: Config | None = None,
+    layout: Layout | None = None,
 ) -> dict[str, Any]:
     """
     Build and assemble the configured documentation versions
@@ -2095,6 +2172,9 @@ def run_versioned_build(  # pragma: no cover
     versions = parse_versions_config(versions_config)
     latest = get_latest_version(versions)
     latest_tag = latest.tag if latest else versions[0].tag
+    _check_build_dir_collisions(source_dir, versions, latest_tag, layout)
+    if layout is not None:
+        validate_layout_outputs(layout)
 
     # Parse badge expiry config
     from great_docs._versioning import parse_badge_expiry
@@ -2119,13 +2199,13 @@ def run_versioned_build(  # pragma: no cover
             "errors": ["No matching versions to build"],
         }
 
-    _check_build_dir_collisions(source_dir, targets, latest_tag)
-
     # Unmarked directories may contain user files. Check them before cleanup so
     # an aborted build also preserves existing, marked version output.
     for entry in targets:
-        ver_dir = _version_build_dir(source_dir, entry, latest_tag)
-        if ver_dir == source_dir:
+        ver_dir = _version_build_dir(source_dir, entry, latest_tag, layout)
+        if layout is not None:
+            validate_build_dir(ver_dir)
+        elif ver_dir == source_dir:
             continue
         if ver_dir.is_symlink():
             raise ValueError(
@@ -2140,7 +2220,7 @@ def run_versioned_build(  # pragma: no cover
                 f"the directory before building."
             )
 
-    warnings = _clean_stale_version_dirs(source_dir)
+    warnings = _clean_stale_version_dirs(source_dir, layout)
 
     # --- Stage 1: Preprocess each version ---
     pages_by_version: dict[str, list[str]] = {}
@@ -2153,7 +2233,7 @@ def run_versioned_build(  # pragma: no cover
 
     dir_by_tag: dict[str, Path] = {}
     for entry in ordered_targets:
-        ver_dir = _version_build_dir(source_dir, entry, latest_tag)
+        ver_dir = _version_build_dir(source_dir, entry, latest_tag, layout)
         pages = preprocess_version(
             source_dir,
             ver_dir,
@@ -2278,8 +2358,8 @@ def run_versioned_build(  # pragma: no cover
         }
 
     # --- Stage 3: Assemble ---
-    output_dir = source_dir / "_site"
-    assemble_site(source_dir, targets, latest_tag, output_dir)
+    output_dir = layout.site_dir if layout is not None else source_dir / "_site"
+    assemble_site(source_dir, targets, latest_tag, output_dir, layout=layout)
 
     # Write version map
     write_version_map(output_dir, versions, pages_by_version)
@@ -2289,6 +2369,8 @@ def run_versioned_build(  # pragma: no cover
 
     # Generate platform redirect files (Netlify _redirects, Vercel vercel.json)
     generate_redirect_files(output_dir, versions, latest_tag)
+    if layout is not None and layout.site_dir != source_dir / "_site":
+        record_site_ownership(output_dir)
 
     return {
         "success": len(errors) == 0,
@@ -2335,15 +2417,15 @@ def generate_redirect_files(
 
     aliases: dict[str, str] = {}
     if latest:
-        target = "/" if latest.tag == latest_tag else f"/v/{latest.tag}/"
+        target = "/" if latest.tag == latest_tag else f"/v/{version_url_segment(latest.tag)}/"
         aliases["latest"] = target
         aliases["stable"] = target
     if dev:
-        target = "/" if dev.tag == latest_tag else f"/v/{dev.tag}/"
+        target = "/" if dev.tag == latest_tag else f"/v/{version_url_segment(dev.tag)}/"
         aliases["dev"] = target
 
     # Skip aliases that collide with real version tags
-    tag_set = {v.tag for v in versions}
+    tag_set = {version_url_segment(v.tag) for v in versions}
     aliases = {k: v for k, v in aliases.items() if k not in tag_set}
 
     if not aliases:

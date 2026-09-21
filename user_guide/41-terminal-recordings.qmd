@@ -38,11 +38,11 @@ renders gold markers on the timeline at each boundary.
 
 ### 1. Record a session
 
-Save recordings in your project's `assets/` directory, which is automatically
+Save recordings in your project's `docs/assets/` directory, which is automatically
 available to the `{{< termshow >}}` shortcode at build time.
 
 ```bash
-great-docs termshow record assets/install-guide.termshow
+great-docs termshow record docs/assets/install-guide.termshow
 ```
 
 This launches a recording session in your terminal. Everything you type and see is captured with
@@ -60,19 +60,19 @@ viewers never see recorder diagnostics in the final output.
 
 The command creates two files:
 
-- `assets/install-guide.termshow`: the raw recording
-- `assets/install-guide.termshow.yml`: a script template with commented sections
+- `docs/assets/install-guide.termshow`: the raw recording
+- `docs/assets/install-guide.termshow.yml`: a script template with commented sections
 
 With the raw recording saved and the script template in place, you're ready to shape the
 presentation.
 
 ### 2. Edit the script file
 
-Open `assets/install-guide.termshow.yml` and uncomment/fill in the sections you need (or use the
-Termshow Editor with `great-docs termshow edit assets/install-guide.termshow`):
+Open `docs/assets/install-guide.termshow.yml` and uncomment/fill in the sections you need (or use the
+Termshow Editor with `great-docs termshow edit docs/assets/install-guide.termshow`):
 
 ```yaml
-source: assets/install-guide.termshow
+source: docs/assets/install-guide.termshow
 
 settings:
   window_chrome: colorful
@@ -158,7 +158,7 @@ The companion YAML file controls how the recording is presented. It adds chapter
 cuts, highlights, and visual settings:
 
 ```yaml
-source: assets/my-recording.termshow
+source: docs/assets/my-recording.termshow
 
 settings:
   window_chrome: colorful     # Window decoration style
@@ -818,7 +818,7 @@ Already have terminal recordings from asciinema? Import them:
 
 ```bash
 # From asciinema (.cast files)
-great-docs termshow import-cast recording.cast assets/my-demo
+great-docs termshow import-cast recording.cast docs/assets/my-demo
 ```
 
 The import preserves timing and terminal dimensions. Create a `.termshow.yml` script afterward to
@@ -834,7 +834,7 @@ You can preview and render recordings outside of a full site build using these C
 ### Preview in terminal
 
 ```bash
-great-docs termshow play assets/my-demo.termshow
+great-docs termshow play docs/assets/my-demo.termshow
 ```
 
 Plays the recording directly in your terminal for quick review.
@@ -842,7 +842,7 @@ Plays the recording directly in your terminal for quick review.
 ### Render SVG frames manually
 
 ```bash
-great-docs termshow render assets/my-demo.termshow
+great-docs termshow render docs/assets/my-demo.termshow
 ```
 
 Generates the SVG keyframes and `manifest.json` without a full site build. Useful for inspecting
@@ -862,7 +862,7 @@ These guidelines help produce recordings that are clear, fast-loading, and pleas
   lines or tables. The Termshow Editor auto-scales the preview to fit any terminal size, so
   larger dimensions won't overflow the viewport.
 - **Test at different speeds**: Make sure annotations are readable at 1.5× and 2×.
-- **Place recordings in `assets/`**: Keep them in a dedicated directory at your project root.
+- **Place recordings in `docs/assets/`**: Keep them under the selected configuration directory.
   The build system discovers them automatically.
 
 Following these guidelines ensures your recordings feel polished and load quickly, even on slower
@@ -874,7 +874,7 @@ The Termshow pipeline has two phases:
 
 **Build time** (automatic during `great-docs build`):
 
-1. Discovers all `.termshow` files in the project root
+1. Discovers all `.termshow` files under the selected configuration directory
 2. Parses each recording + its YAML script
 3. Renders SVG keyframes at each visual change point
 4. Generates `manifest.json` with timing, chapters, and annotations
@@ -898,7 +898,7 @@ by hand.
 ### Launching the Termshow Editor
 
 ```bash
-great-docs termshow edit assets/my-demo.termshow
+great-docs termshow edit docs/assets/my-demo.termshow
 ```
 
 This opens a local web app at `http://127.0.0.1:8765`. The Termshow Editor loads the recording
@@ -1142,17 +1142,17 @@ Press {{< keys "Escape" >}} or click outside the modal to close it.
 
 ### Recommended Workflow
 
-1. **Record** the terminal session into `assets/` with `great-docs termshow record assets/demo.termshow`.
+1. **Record** the terminal session into `docs/assets/` with `great-docs termshow record docs/assets/demo.termshow`.
    This creates a paired set of files:
-   - `assets/demo.termshow`: the raw recording (timing + terminal output)
-   - `assets/demo.termshow.yml`: the script file (chapters, annotations, cuts, settings)
+   - `docs/assets/demo.termshow`: the raw recording (timing + terminal output)
+   - `docs/assets/demo.termshow.yml`: the script file (chapters, annotations, cuts, settings)
 
    Both files are always required. The `termshow record` command creates both automatically. The
    `.yml` file is generated with commented template sections you can uncomment and fill in.
-   The `assets/` directory is recommended because it is automatically available to the
+   The `docs/assets/` directory is recommended because it is automatically available to the
    `{{< termshow >}}` shortcode at build time.
 
-2. **Open the Termshow Editor** with `great-docs termshow edit assets/demo.termshow` to visually
+2. **Open the Termshow Editor** with `great-docs termshow edit docs/assets/demo.termshow` to visually
 edit the script.
 3. **Play through once** to get familiar with the recording's content and timing. Click the
 **Timeline Ruler** (the graduated strip above the tracks) to scrub to any point.

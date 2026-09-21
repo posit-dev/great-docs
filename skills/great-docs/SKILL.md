@@ -32,8 +32,8 @@ pip install great-docs
 # Quarto must also be installed: https://quarto.org/docs/get-started/
 
 cd my-package/        # directory with pyproject.toml
-great-docs init       # create great-docs.yml, discover API
-great-docs build      # full build -> great-docs/_site/
+great-docs init       # create docs/great-docs.yml, discover API
+great-docs build      # full build -> docs/_site/
 great-docs preview    # local server on port 3000
 ```
 
@@ -68,17 +68,20 @@ skills/great-docs/
 | Add CLI reference         | `cli: {enabled: true, module: pkg.cli}` |
 | Add a gradient navbar     | `navbar_style: sky`                     |
 | Exclude internal symbols  | `exclude: [_InternalClass]`             |
-| Add user guide pages      | Create `user_guide/05-topic.qmd`        |
-| Add recipes               | Create `recipes/07-topic.qmd`           |
+| Add user guide pages      | Create `docs/user_guide/05-topic.qmd`   |
+| Add recipes               | Create `docs/recipes/07-topic.qmd`      |
 | Set up GitHub Pages CI    | `great-docs setup-github-pages`         |
 | Use static analysis       | `dynamic: false` (for tricky imports)   |
 | Generate agent skill file | `skill: {enabled: true}`                |
 
 ## Core concepts
 
-### Configuration (`great-docs.yml`)
+### Configuration (`docs/great-docs.yml`)
 
-Single YAML file at the project root controls everything. All keys
+One YAML file in `docs/` controls the site. Source paths are relative to
+that file; package metadata and Python sources remain at the project root.
+Select a custom directory with `great-docs build --config website/great-docs.yml`.
+All keys
 are optional — sensible defaults are auto-detected from
 `pyproject.toml` and package structure.
 
@@ -89,8 +92,8 @@ are optional — sensible defaults are auto-detected from
 The `build` command runs 13 steps in order:
 
 1. Prepare build directory (copy assets, JS, SCSS)
-2. Copy user guide from `user_guide/`
-3. Copy project `assets/`
+2. Copy user guide from `docs/user_guide/`
+3. Copy documentation assets from `docs/assets/`
 4. Refresh API reference (introspect package)
 5. Generate `llms.txt` and `llms-full.txt`
 6. Generate `skill.md` (if enabled)
@@ -102,8 +105,9 @@ The `build` command runs 13 steps in order:
 12. Render API reference (`.qmd` files)
 13. Run `quarto render` -> `_site/` HTML output
 
-The `great-docs/` directory is **ephemeral** — regenerated on every
-build. Never edit files inside it directly.
+The `docs/_quarto/default/` directory is regenerated on every build.
+Historical versions use `docs/_quarto/<tag>/`; deploy `docs/_site/`.
+Never edit files inside these generated directories directly.
 
 ### Two rendering modes
 
@@ -149,9 +153,9 @@ Task Progress:
 target package must be importable (`pip install -e .`).
 
 **Step 2**: Run `great-docs init` from the project root (where
-`pyproject.toml` lives). This creates `great-docs.yml`.
+`pyproject.toml` lives). This creates `docs/great-docs.yml`.
 
-**Step 3**: Edit `great-docs.yml` to customize. See
+**Step 3**: Edit `docs/great-docs.yml` to customize. See
 [references/config-reference.md](references/config-reference.md) or
 [assets/config-template.yaml](assets/config-template.yaml) for all
 options.
@@ -196,13 +200,14 @@ time-consuming.
 
 ### Adding content
 
-**User guide page**: Create `user_guide/NN-title.qmd` with a
+**User guide page**: Create `docs/user_guide/NN-title.qmd` with a
 2-digit numeric prefix. Auto-discovered on next build.
 
-**Recipe**: Create `recipes/NN-title.qmd`. Same numeric prefix
+**Recipe**: Create `docs/recipes/NN-title.qmd`. Same numeric prefix
 convention.
 
-**Custom section**: Add to `great-docs.yml`:
+**Custom section**: Add to `docs/great-docs.yml`; `dir: examples` selects
+`docs/examples/`:
 
 ```yaml
 sections:
@@ -213,7 +218,7 @@ sections:
 ### Customizing appearance
 
 ```yaml
-# great-docs.yml
+# docs/great-docs.yml
 navbar_style: sky # gradient: sky, peach, lilac, mint, etc.
 content_style: lilac # content area glow
 dark_mode_toggle: true # toggle switch in navbar
@@ -287,19 +292,19 @@ Build with validation:
 #!/usr/bin/env bash
 set -euo pipefail
 great-docs build
-echo "Build complete. Site at great-docs/_site/"
-ls great-docs/_site/index.html && echo "OK: index.html exists"
+echo "Build complete. Site at docs/_site/"
+ls docs/_site/index.html && echo "OK: index.html exists"
 ```
 
 ## Configuration template
 
 The `assets/config-template.yaml` provides a starter config with
-annotated options. Copy it as `great-docs.yml` and customize.
+annotated options. Copy it to `docs/great-docs.yml` and customise.
 
 ## Gotchas
 
-1. **Run from project root.** All commands must run from the
-   directory containing `great-docs.yml` (and `pyproject.toml`).
+1. **Run from project root.** Run these examples from the directory
+   containing `pyproject.toml`; configuration lives in `docs/great-docs.yml`.
 2. **`module` vs package name.** The `module` key is the Python
    importable name, not the PyPI name. For `py-shiny`, set
    `module: shiny`.
@@ -307,7 +312,7 @@ annotated options. Copy it as `great-docs.yml` and customize.
    lazy loading or circular aliases.
 4. **User guide ordering.** Files need numeric prefixes
    (`00-intro.qmd`, `01-install.qmd`) for deterministic order.
-5. **Don't edit `great-docs/` directly.** It's regenerated on every
+5. **Don't edit `docs/_quarto/` directly.** It's regenerated on every
    build. Edit source files instead.
 6. **Quarto required.** If `quarto` is not on `PATH`, the build
    fails at step 13.
@@ -323,8 +328,8 @@ annotated options. Copy it as `great-docs.yml` and customize.
 **What agents can configure:**
 
 - All `great-docs.yml` settings
-- User guide `.qmd` pages in `user_guide/`
-- Recipe `.qmd` pages in `recipes/`
+- User guide `.qmd` pages in `docs/user_guide/`
+- Recipe `.qmd` pages in `docs/recipes/`
 - Custom section `.qmd` pages
 - Logo, favicon, and other assets
 - Custom CSS/SCSS overrides
@@ -345,7 +350,7 @@ guidance on specific tasks, use these companion skills:
 
 | Task                        | Skill               | When to use                                                   |
 | --------------------------- | ------------------- | ------------------------------------------------------------- |
-| Write user guide pages      | `write-user-guide`  | Creating or editing `.qmd` pages in `user_guide/`             |
+| Write user guide pages      | `write-user-guide`  | Creating or editing `.qmd` pages in `docs/user_guide/`        |
 | Improve docstrings          | `revise-docstrings` | Auditing or rewriting Python docstrings for the API reference |
 | Configure the site          | `configure-site`    | Customizing `great-docs.yml` theming, features, and layout    |
 | Create or distribute skills | `author-skills`     | Writing SKILL.md files, setting up multi-skill distribution   |

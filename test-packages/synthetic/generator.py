@@ -30,9 +30,8 @@ def generate_package(
     target_dir
         Parent directory in which to create the package folder.
     config_override
-        Optional path to a YAML file to copy as ``great-docs.yml`` inside the
-        generated package.  Overrides any ``great-docs.yml`` that the spec
-        itself supplies in its ``"files"`` dict.
+        Optional path to a YAML file whose contents replace
+        `docs/great-docs.yml` in the generated package.
 
     Returns
     -------
@@ -70,20 +69,21 @@ def generate_package(
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_bytes(blob)
 
-    # --- great-docs.yml (config) -----------------------------------------
+    # --- docs/great-docs.yml (config) ------------------------------------
+    config_path = pkg_dir / "docs" / "great-docs.yml"
     if "config" in spec:
-        _write_yaml(pkg_dir / "great-docs.yml", spec["config"])
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_yaml(config_path, spec["config"])
 
     # --- Config override (takes precedence) ------------------------------
     if config_override is not None:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
         override_path = Path(config_override)
         if override_path.exists():
-            (pkg_dir / "great-docs.yml").write_text(
-                override_path.read_text(encoding="utf-8"), encoding="utf-8"
-            )
+            config_path.write_text(override_path.read_text(encoding="utf-8"), encoding="utf-8")
         else:
             # Treat as raw YAML string
-            (pkg_dir / "great-docs.yml").write_text(str(config_override), encoding="utf-8")
+            config_path.write_text(str(config_override), encoding="utf-8")
 
     return pkg_dir
 

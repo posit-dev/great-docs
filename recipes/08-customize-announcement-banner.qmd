@@ -12,7 +12,7 @@ The announcement banner appears in the fixed header on every page of your site â
 
 The quickest way to add a banner is with a single string. This creates a blue info-style banner that visitors can dismiss:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 announcement: "Version 2.0 is now available!"
 ```
 
@@ -20,7 +20,7 @@ announcement: "Version 2.0 is now available!"
 
 For more control, use the dictionary form. You can choose a color type, add a link, and control whether visitors can dismiss the banner:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 announcement:
   content: "We've moved to a new domain. Please update your bookmarks!"
   type: warning
@@ -43,7 +43,7 @@ When `url` is set, the entire banner text becomes a clickable link.
 
 You can replace the solid-color background with an animated gradient by adding a `style` key. The value should be one of the gradient preset names (`sky`, `peach`, `prism`, `lilac`, `slate`, `honey`, `dusk`, or `mint`):
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 announcement:
   content: "Check out our new tutorials section!"
   style: mint
@@ -56,7 +56,7 @@ When `style` is set, the gradient overrides the `type` background color.
 
 By default the banner sits above the navbar. Set `position` to `below-navbar` to place it after the navbar instead. Either way the banner stays in the fixed header at the top of the page:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 announcement:
   content: "Scheduled maintenance this weekend."
   type: warning
@@ -74,7 +74,7 @@ By default, banners are dismissable: visitors can click the close button to hide
 
 To make a banner that cannot be dismissed (useful for critical notices), set `dismissable` to `false`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 announcement:
   content: "This package is deprecated. Use new-package instead."
   type: danger
@@ -85,7 +85,7 @@ announcement:
 
 To remove a previously configured banner, either set the key to `false` or delete it from the file:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 announcement: false
 ```
 

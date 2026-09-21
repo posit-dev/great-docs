@@ -54,10 +54,10 @@ SPEC = {
                 """
                 pass
         ''',
-        "user_guide/basics.qmd": (
+        "docs/user_guide/basics.qmd": (
             "---\ntitle: Basics\n---\n\n# Basics\n\nLearn the basic concepts of the library.\n"
         ),
-        "user_guide/configuration.qmd": (
+        "docs/user_guide/configuration.qmd": (
             "---\n"
             "title: Configuration\n"
             "---\n"
@@ -66,7 +66,7 @@ SPEC = {
             "\n"
             "How to configure the library for your needs.\n"
         ),
-        "user_guide/deployment.qmd": (
+        "docs/user_guide/deployment.qmd": (
             "---\ntitle: Deployment\n---\n\n# Deployment\n\nSteps to deploy your application.\n"
         ),
     },

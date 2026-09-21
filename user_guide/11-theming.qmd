@@ -24,11 +24,11 @@ toggle is enabled by default.
 
 To disable the toggle, set `dark_mode_toggle` to `false` in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 dark_mode_toggle: true   # Enabled by default
 ```
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 dark_mode_toggle: false  # Disable the toggle
 ```
 
@@ -41,11 +41,11 @@ transition animation.
 Great Docs automatically adds a GitHub link to the navbar when it detects your repository URL. The
 `github_style` option controls how that link is displayed:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 github_style: widget   # Default: interactive widget with stats dropdown
 ```
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 github_style: icon     # Simple GitHub icon linking to the repo
 ```
 
@@ -61,7 +61,7 @@ looking for. It is enabled by default and appears automatically when the sidebar
 
 To configure the filter in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 sidebar_filter:
   enabled: true     # Default: true
   min_items: 20     # Default: show filter when sidebar has 20+ items
@@ -76,7 +76,7 @@ By default, Great Docs uses your package name (from `pyproject.toml`) in the nav
 If your package name uses underscores or hyphens (e.g., `great_docs` or `great-docs`), you can set a
 friendlier display name:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 display_name: "Great Docs"
 ```
 
@@ -90,11 +90,11 @@ providing a one-click way to return to the top. The button uses smooth scrolling
 shifts upward when it would overlap with the prev/next page navigation links. It is enabled by
 default.
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 back_to_top: true    # Enabled by default
 ```
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 back_to_top: false   # Disable the button
 ```
 
@@ -156,7 +156,7 @@ Access help and dismiss any open overlay.
 
 Keyboard navigation is enabled by default. To disable it:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 keyboard_nav: false
 ```
 
@@ -177,7 +177,7 @@ alerts. The banner appears on every page and can optionally be dismissed by the 
 The simplest way to add a banner is with a string value. This creates a blue, info-styled banner
 that visitors can dismiss:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 announcement: "Version 2.0 is now available!"
 ```
 
@@ -186,7 +186,7 @@ announcement: "Version 2.0 is now available!"
 For more control over the banner's appearance and behavior, use a dictionary with `content`, `type`,
 `dismissable`, and `url` keys:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 announcement:
   content: "We've moved to a new domain. Please update your bookmarks!"
   type: warning        # info (default), warning, success, or danger
@@ -215,7 +215,7 @@ message will appear even for visitors who dismissed the previous one.
 To remove a previously configured banner, either set the key to `false` or remove it from the file
 entirely:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 announcement: false
 ```
 
@@ -283,7 +283,7 @@ left and the dark-mode gradient on the right:
 Add a `style` key to the announcement config to apply a gradient background instead of the solid
 color:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 announcement:
   content: "Version 2.0 is now available!"
   style: sky
@@ -298,7 +298,7 @@ gradient is active.
 Use the top-level `navbar_style` key to apply the animated gradient to the site's top navigation
 bar:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 navbar_style: peach
 ```
 
@@ -309,7 +309,7 @@ In dark mode, text and icons are automatically adjusted to white for readability
 Use the top-level `content_style` key to add a subtle radial glow at the top of the main content
 area:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 content_style: lilac
 ```
 
@@ -319,7 +319,7 @@ same preset names as the banner and navbar gradients.
 By default the glow appears on all pages. To restrict it to the homepage only, use the dictionary
 form with a `pages` key:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 content_style:
   preset: lilac
   pages: homepage    # "all" (default) or "homepage"
@@ -330,7 +330,7 @@ content_style:
 You can use the same preset or different presets for the banner, navbar, and content area. Here is
 an example that mixes two presets:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 announcement:
   content: "New release!"
   style: sky
@@ -349,13 +349,13 @@ which you can also reference in custom stylesheets.
 
 A single string applies the same color in both light and dark mode:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 accent_color: "#6366f1"
 ```
 
 For per-mode colors, use a dictionary:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 accent_color:
   light: "#6366f1"
   dark: "#818cf8"
@@ -375,7 +375,7 @@ whether white or black text provides maximum readability against your chosen bac
 A plain string applies the same navbar color in both light and dark mode. Any CSS named color (e.g.,
 `navy`, `tomato`, `teal`) or hex value works:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 navbar_color: steelblue
 ```
 
@@ -384,7 +384,7 @@ navbar_color: steelblue
 Use a dictionary with `light` and `dark` keys to set different navbar colors for each mode. You can
 also set only one mode, and the other keeps the default navbar styling:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 navbar_color:
   light: "#2c3e50"
   dark: "#1a237e"
@@ -401,7 +401,7 @@ backgrounds get white text; light backgrounds get black text.
 If both `navbar_style` (animated gradient) and `navbar_color` are set, the gradient takes precedence
 and `navbar_color` is ignored. To use a solid color, remove or comment out `navbar_style`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 # navbar_style: peach      # commented out, so navbar_color takes effect
 navbar_color: "#2c3e50"
 ```
@@ -414,14 +414,14 @@ needs to load before the page renders.
 
 A single string is treated as inline HTML:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 include_in_header: '<link rel="stylesheet" href="https://example.com/custom.css">'
 ```
 
 For multiple entries, use a list. Each item can be a string (inline HTML) or a dictionary with a
 `text` or `file` key:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 include_in_header:
   - text: |
       <script>
@@ -445,7 +445,7 @@ If you place logo files in your project using common naming conventions, Great D
 use them automatically with no configuration needed:
 
 ```
-my-package/
+my-package/docs/
 ├── logo.svg              # Primary logo
 ├── assets/
 │   ├── logo.svg          # Also auto-detected
@@ -454,10 +454,9 @@ my-package/
 
 Auto-detection checks these paths in priority order:
 
-1. `logo.svg` / `logo.png` (project root)
-2. `assets/logo.svg` / `assets/logo.png`
-3. `docs/assets/logo.svg` / `docs/assets/logo.png`
-4. `{package_name}_logo.svg` / `{package_name}_logo.png`
+1. Look for `logo.svg` / `logo.png` beside `docs/great-docs.yml`
+2. Look for `assets/logo.svg` / `assets/logo.png` relative to that configuration
+3. Look for `{package_name}_logo.svg` / `{package_name}_logo.png` beside the configuration
 
 If a file named `logo-dark.svg` (or `{stem}-dark.{ext}`) exists alongside the primary logo, it is
 automatically used for dark mode.
@@ -466,7 +465,7 @@ automatically used for dark mode.
 
 For full control, configure the logo in `great-docs.yml`:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 logo:
   light: assets/logo.svg
   dark: assets/logo-dark.svg
@@ -474,7 +473,7 @@ logo:
 
 You can also set additional options:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 logo:
   light: assets/logo.svg
   dark: assets/logo-dark.svg
@@ -519,7 +518,7 @@ page's `<head>`.
 If you want a different image for your favicon (for example, a simplified icon rather than the full
 logo), set the `favicon` option:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 favicon: assets/favicon.svg
 ```
 
@@ -553,7 +552,7 @@ configuration is needed: if you have a logo, you get a hero. The hero displays:
 To disable the hero entirely (for example, if you prefer your `index.qmd` or `README.md` rendered
 as-is):
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 hero: false
 ```
 
@@ -563,7 +562,7 @@ Each hero component can be overridden or suppressed individually. These examples
 `enabled: true` since they have no logo configured — if you already have a logo (and
 therefore an auto-enabled hero), you can omit it:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 hero:
   enabled: true                         # Needed here since no logo is configured
   name: "My Package"                    # Override the auto-detected name
@@ -574,7 +573,7 @@ hero:
 
 Set any component to `false` to suppress it:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 hero:
   enabled: true
   name: false              # Hide the name (logo and tagline only)
@@ -588,7 +587,7 @@ hero, for example a detailed wordmark instead of a compact lettermark.
 
 Set a separate hero logo with light/dark variants:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 # Navbar: compact lettermark
 logo:
   light: assets/logo-lettermark.svg
@@ -604,7 +603,7 @@ hero:
 
 Or use a simple string for a single hero logo image:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 hero:
   logo: assets/hero-logo.svg
 ```
@@ -615,7 +614,7 @@ Great Docs can also auto-detect hero-specific logo files from conventional file 
 configuration needed. Place files using these naming conventions:
 
 ```
-my-package/
+my-package/docs/
 ├── assets/
 │   ├── logo-hero.svg          # Hero logo (single image)
 │   ├── logo-hero-light.svg    # Hero logo (light variant)
@@ -624,10 +623,10 @@ my-package/
 
 Auto-detection checks these paths in priority order:
 
-1. `logo-hero.svg` / `logo-hero.png` (project root)
-2. `assets/logo-hero.svg` / `assets/logo-hero.png`
-3. `logo-hero-light.svg` / `logo-hero-light.png` (project root)
-4. `assets/logo-hero-light.svg` / `assets/logo-hero-light.png`
+1. Look for `logo-hero.svg` / `logo-hero.png` beside `docs/great-docs.yml`
+2. Look for `assets/logo-hero.svg` / `assets/logo-hero.png` relative to that configuration
+3. Look for `logo-hero-light.svg` / `logo-hero-light.png` beside the configuration
+4. Look for `assets/logo-hero-light.svg` / `assets/logo-hero-light.png` relative to it
 
 If a file named `logo-hero-dark.svg` (or `logo-hero-dark.png`) exists alongside the primary hero
 logo, it is automatically used for dark mode.
@@ -646,7 +645,7 @@ The full logo fallback chain for the hero is:
 
 By default, badges are auto-extracted from the README. You can provide an explicit list instead:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 hero:
   badges:
     - alt: PyPI version
@@ -679,7 +678,7 @@ to lightweight inline SVGs at build time.
 Map navigation labels to Lucide icon names under `nav_icons`. Use `navbar` for the top navigation
 bar and `sidebar` for left-sidebar items:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 nav_icons:
   navbar:
     User Guide: book-open
@@ -696,7 +695,7 @@ is any [Lucide icon name](https://lucide.dev/icons/) (lowercase, hyphenated).
 
 Icons in the navbar appear next to the top-level links (User Guide, Reference, Recipes, etc.):
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 nav_icons:
   navbar:
     User Guide: book-open
@@ -709,7 +708,7 @@ nav_icons:
 Sidebar icons appear next to items and section headers in the left navigation panel. These work for
 User Guide pages, custom sections, and Reference section headings:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 nav_icons:
   sidebar:
     # User Guide pages
@@ -822,7 +821,7 @@ Use icons sparingly to draw attention to key information without cluttering the 
 By default, Great Docs adds a small "Site created with Great Docs" attribution line in the page
 footer. To hide it:
 
-```{.yaml filename="great-docs.yml"}
+```{.yaml filename="docs/great-docs.yml"}
 attribution: false
 ```
 

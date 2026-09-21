@@ -11,7 +11,9 @@
 - uninstall
 - setup-github-pages
 
-All commands accept `--project-path PATH` to target a different directory.
+Project commands accept `--project-path PATH` to target a different directory
+and `--config PATH` to select a configuration relative to the current directory.
+For example, run `great-docs build --config website/great-docs.yml`.
 
 ## Global options
 
@@ -27,7 +29,7 @@ great-docs [OPTIONS] COMMAND [ARGS]
 
 ## init
 
-One-time setup: create `great-docs.yml` and auto-discover API.
+One-time setup: create `docs/great-docs.yml` and auto-discover API.
 
 ```bash
 great-docs init
@@ -38,7 +40,7 @@ great-docs init --force   # reset existing config
 | --------- | ----------------------------------- |
 | `--force` | Overwrite existing `great-docs.yml` |
 
-Creates `great-docs.yml` with detected package name, module, parser
+Creates `docs/great-docs.yml` with detected package name, module, parser
 style, and API sections. Safe to run multiple times (no-op if config
 exists unless `--force`).
 
@@ -57,7 +59,8 @@ great-docs build --watch        # rebuild on file changes
 | `--watch`      | Watch for changes and rebuild incrementally  |
 | `--no-refresh` | Skip API reference rediscovery (uses cached) |
 
-Output goes to `great-docs/_site/`. Build streams progress in
+Output goes to `docs/_site/`. Quarto projects use `docs/_quarto/default/`
+and `docs/_quarto/<tag>/` for historical versions. Build streams progress in
 real-time.
 
 ## preview
@@ -73,7 +76,7 @@ great-docs preview --port 8080
 | -------- | ------- | ----------- |
 | `--port` | `3000`  | Server port |
 
-Serves `great-docs/_site/` with live reload. Run `build` first if
+Serves `docs/_site/` with live reload. Run `build` first if
 the site doesn't exist yet.
 
 ## scan
@@ -94,7 +97,7 @@ committing to a build.
 
 ## config
 
-Generate a template `great-docs.yml`.
+Generate a template for `docs/great-docs.yml`.
 
 ```bash
 great-docs config
@@ -110,13 +113,13 @@ running any discovery or setup.
 
 ## uninstall
 
-Remove `great-docs.yml` and the `great-docs/` build directory.
+Remove `docs/great-docs.yml` and its generated build and deployment directories.
 
 ```bash
 great-docs uninstall
 ```
 
-Preserves source files (`user_guide/`, `recipes/`, `assets/`).
+Preserves source files (`docs/user_guide/`, `docs/recipes/`, `docs/assets/`).
 
 ## setup-github-pages
 

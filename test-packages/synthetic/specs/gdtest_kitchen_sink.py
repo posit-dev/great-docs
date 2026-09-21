@@ -345,14 +345,14 @@ SPEC = {
                 pass
         ''',
         # ---- User guide ----
-        "user_guide/01-introduction.qmd": """\
+        "docs/user_guide/01-introduction.qmd": """\
             ---
             title: Introduction
             ---
 
             Welcome to Kitchen Sink! This is a comprehensive test package.
         """,
-        "user_guide/02-quickstart.qmd": """\
+        "docs/user_guide/02-quickstart.qmd": """\
             ---
             title: Quick Start
             ---
@@ -366,7 +366,7 @@ SPEC = {
             result = p.run()
             ```
         """,
-        "user_guide/03-advanced.qmd": """\
+        "docs/user_guide/03-advanced.qmd": """\
             ---
             title: Advanced Usage
             ---
@@ -422,7 +422,7 @@ SPEC = {
 
             Be kind. Be respectful. Be constructive.
         """,
-        "assets/logo.txt": """\
+        "docs/assets/logo.txt": """\
             ┌─────────────┐
             │ Kitchen Sink │
             └─────────────┘

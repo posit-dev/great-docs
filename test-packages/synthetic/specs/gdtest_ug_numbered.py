@@ -62,7 +62,7 @@ SPEC = {
                 """
                 return {"build": "idle"}
         ''',
-        "user_guide/01-intro.qmd": (
+        "docs/user_guide/01-intro.qmd": (
             "---\n"
             "title: Introduction\n"
             "---\n"
@@ -71,13 +71,13 @@ SPEC = {
             "\n"
             "Welcome to the introduction guide.\n"
         ),
-        "user_guide/02-install.qmd": (
+        "docs/user_guide/02-install.qmd": (
             "---\ntitle: Installation\n---\n\n# Installation\n\nHow to install the package.\n"
         ),
-        "user_guide/03-usage.qmd": (
+        "docs/user_guide/03-usage.qmd": (
             "---\ntitle: Usage\n---\n\n# Usage\n\nHow to use the package effectively.\n"
         ),
-        "user_guide/04-advanced.qmd": (
+        "docs/user_guide/04-advanced.qmd": (
             "---\ntitle: Advanced\n---\n\n# Advanced\n\nAdvanced usage patterns and techniques.\n"
         ),
     },

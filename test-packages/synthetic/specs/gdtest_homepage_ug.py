@@ -67,7 +67,7 @@ SPEC = {
                 """
                 return f"Goodbye, {name}!"
         ''',
-        "user_guide/00-getting-started.qmd": """\
+        "docs/user_guide/00-getting-started.qmd": """\
             ---
             title: Getting Started
             ---
@@ -85,7 +85,7 @@ SPEC = {
             pip install gdtest-homepage-ug
             ```
         """,
-        "user_guide/01-configuration.qmd": """\
+        "docs/user_guide/01-configuration.qmd": """\
             ---
             title: Configuration
             ---
@@ -98,7 +98,7 @@ SPEC = {
 
             Create a config file and set your options.
         """,
-        "user_guide/02-advanced.qmd": """\
+        "docs/user_guide/02-advanced.qmd": """\
             ---
             title: Advanced Usage
             ---

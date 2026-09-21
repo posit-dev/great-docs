@@ -196,7 +196,7 @@ keeps them version-controlled, easy to reference from any `.qmd` page, and separ
 other static assets:
 
 ```
-my-package/
+docs/_quarto/default/
 ├── assets/
 │   └── data/
 │       ├── students.csv
@@ -206,7 +206,7 @@ my-package/
 ```
 
 Both `tbl_explorer()` and `tbl_preview()` resolve file paths relative to the working directory,
-which is typically the project root during a Quarto build.
+which is the generated Quarto project directory during a build.
 :::
 
 ## From a DataFrame
