@@ -1,5 +1,6 @@
 import tempfile
 from pathlib import Path
+from threading import Event
 from unittest.mock import Mock, patch
 
 from great_docs import GreatDocs
@@ -834,6 +835,53 @@ Real link: http://real-example.com
 
 class TestHTTPStatus:
     """Tests for HTTP status handling."""
+
+    def test_checks_concurrently_and_reports_in_discovery_order(self, tmp_path, capsys):
+        docs_dir = tmp_path / "user_guide"
+        docs_dir.mkdir()
+        (docs_dir / "test.md").write_text(
+            "https://test.example/first\n"
+            "https://test.example/skip\n"
+            "https://test.example/second\n"
+            "https://test.example/broken\n"
+            "https://test.example/first\n"
+        )
+        first_started = Event()
+        second_finished = Event()
+
+        def head(url, **_kwargs):
+            if url.endswith("/first"):
+                first_started.set()
+                assert second_finished.wait(5)
+            elif url.endswith("/second"):
+                assert first_started.wait(5)
+                second_finished.set()
+            response = Mock()
+            response.status_code = 404 if url.endswith("/broken") else 200
+            return response
+
+        with patch("requests.head", side_effect=head) as mock_head:
+            results = GreatDocs(project_path=tmp_path).check_links(
+                include_source=False,
+                ignore_patterns=["/skip"],
+                verbose=True,
+            )
+
+        assert results["total"] == 4
+        assert results["ok"] == ["https://test.example/first", "https://test.example/second"]
+        assert results["skipped"] == ["https://test.example/skip"]
+        assert results["broken"] == [
+            {
+                "url": "https://test.example/broken",
+                "status": 404,
+                "error": "HTTP 404",
+                "files": ["user_guide/test.md"],
+            }
+        ]
+        assert results["by_file"]["user_guide/test.md"].count("https://test.example/first") == 2
+        assert mock_head.call_count == 3
+        output = capsys.readouterr().out
+        assert output.index("first") < output.index("Skipped") < output.index("second")
 
     @patch("requests.head")
     def test_categorizes_200_as_ok(self, mock_head):
