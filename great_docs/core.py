@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from importlib import resources
 from pathlib import Path
@@ -17597,22 +17598,10 @@ anchor-sections: true
         if verbose:
             print(f"\n🔍 Found {len(url_to_files)} unique URLs to check\n")
 
-        for url in url_to_files:
-            # Check if URL matches any ignore pattern
-            should_skip = False
-            for pattern in ignore_regexes:
-                if pattern.search(url):
-                    should_skip = True
-                    break
-
-            if should_skip:
-                results["skipped"].append(url)
-                if verbose:
-                    print(f"⏭️  Skipped: {url}")
-                continue
-
+        def check_url(
+            url: str,
+        ) -> tuple[str, int | None, str | None, str | None, str]:
             try:
-                # Use HEAD request first (faster), fall back to GET if needed
                 response = requests.head(
                     url,
                     timeout=timeout,
@@ -17620,25 +17609,50 @@ anchor-sections: true
                     headers={"User-Agent": "great-docs-link-checker/1.0"},
                 )
 
-                # Some servers don't support HEAD, try GET
                 if response.status_code == 405:
                     response = requests.get(
                         url,
                         timeout=timeout,
                         allow_redirects=False,
                         headers={"User-Agent": "great-docs-link-checker/1.0"},
-                        stream=True,  # Don't download body
+                        stream=True,
                     )
                     response.close()
 
                 status = response.status_code
-
                 if 200 <= status < 300:
-                    results["ok"].append(url)
-                    if verbose:
-                        print(f"✅ {status} {url}")
-                elif 300 <= status < 400:  # pragma: no cover
+                    return "ok", status, None, None, f"✅ {status} {url}"
+                if 300 <= status < 400:
                     location = response.headers.get("Location", "Unknown")
+                    return "redirects", status, location, None, f"↪️  {status} {url} -> {location}"
+                return "broken", status, None, f"HTTP {status}", f"❌ {status} {url}"
+            except requests.exceptions.Timeout:
+                return "broken", None, None, "Timeout", f"⏱️  Timeout: {url}"
+            except requests.exceptions.SSLError as e:
+                return "broken", None, None, f"SSL Error: {str(e)[:50]}", f"🔐 SSL Error: {url}"
+            except requests.exceptions.ConnectionError:
+                return "broken", None, None, "Connection failed", f"🔌 Connection failed: {url}"
+            except Exception as e:
+                return "broken", None, None, str(e)[:100], f"⚠️  Error: {url} - {e}"
+
+        skipped_urls = {
+            url for url in url_to_files if any(pattern.search(url) for pattern in ignore_regexes)
+        }
+        urls_to_check = [url for url in url_to_files if url not in skipped_urls]
+
+        with ThreadPoolExecutor(max_workers=16) as executor:
+            checked = iter(executor.map(check_url, urls_to_check))
+            for url in url_to_files:
+                if url in skipped_urls:
+                    results["skipped"].append(url)
+                    if verbose:
+                        print(f"⏭️  Skipped: {url}")
+                    continue
+
+                kind, status, location, error, message = next(checked)
+                if kind == "ok":
+                    results["ok"].append(url)
+                elif kind == "redirects":
                     results["redirects"].append(
                         {
                             "url": url,
@@ -17647,64 +17661,12 @@ anchor-sections: true
                             "files": url_to_files[url],
                         }
                     )
-                    if verbose:
-                        print(f"↪️  {status} {url} -> {location}")
-                else:  # pragma: no cover
+                else:
                     results["broken"].append(
-                        {
-                            "url": url,
-                            "status": status,
-                            "error": f"HTTP {status}",
-                            "files": url_to_files[url],
-                        }
+                        {"url": url, "status": status, "error": error, "files": url_to_files[url]}
                     )
-                    if verbose:
-                        print(f"❌ {status} {url}")
-
-            except requests.exceptions.Timeout:  # pragma: no cover
-                results["broken"].append(
-                    {
-                        "url": url,
-                        "status": None,
-                        "error": "Timeout",
-                        "files": url_to_files[url],
-                    }
-                )
                 if verbose:
-                    print(f"⏱️  Timeout: {url}")
-            except requests.exceptions.SSLError as e:  # pragma: no cover
-                results["broken"].append(
-                    {
-                        "url": url,
-                        "status": None,
-                        "error": f"SSL Error: {str(e)[:50]}",
-                        "files": url_to_files[url],
-                    }
-                )
-                if verbose:
-                    print(f"🔐 SSL Error: {url}")
-            except requests.exceptions.ConnectionError:  # pragma: no cover
-                results["broken"].append(
-                    {
-                        "url": url,
-                        "status": None,
-                        "error": "Connection failed",
-                        "files": url_to_files[url],
-                    }
-                )
-                if verbose:
-                    print(f"🔌 Connection failed: {url}")
-            except Exception as e:  # pragma: no cover
-                results["broken"].append(
-                    {
-                        "url": url,
-                        "status": None,
-                        "error": str(e)[:100],
-                        "files": url_to_files[url],
-                    }
-                )
-                if verbose:
-                    print(f"⚠️  Error: {url} - {e}")
+                    print(message)
 
         return results
 
