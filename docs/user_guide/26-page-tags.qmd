@@ -1,0 +1,389 @@
+---
+title: "Page Tags"
+guide-section: "Site Content"
+bread-crumbs: false
+tags: [Content, Configuration]
+versions: ">=0.6"
+---
+
+# Page Tags
+
+As a documentation site grows, the sidebar and search bar are not always enough to help readers find
+what they need. Tags offer a second axis of navigation, organized by topic rather than page order. A
+reader looking for everything related to "Testing" can find it in one place, even if those pages are
+spread across the User Guide, Recipes, and custom sections.
+
+Great Docs lets you categorize pages with tags for improved discoverability. Add tags to any user
+guide, recipe, or custom section page via frontmatter, and Great Docs will generate a tags index
+page, render tag pills above page titles, and support hierarchical tag organization.
+
+<style>
+.gd-demo-tag-pill, .gd-demo-tag-index, .gd-demo-tag-page-mock {
+  font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.gd-demo-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #6b7280;
+  background-color: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 1rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.gd-demo-tag-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  margin-bottom: 0.8rem;
+}
+.gd-demo-tag-page-mock {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+  background: transparent;
+}
+body.quarto-dark .gd-demo-tag-page-mock { border-color: #374151; }
+body.quarto-dark .gd-demo-tag-pill {
+  color: #9ca3af;
+  background-color: rgba(107,114,128,0.15);
+  border-color: rgba(107,114,128,0.3);
+}
+.gd-demo-tag-index {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+  background: transparent;
+}
+body.quarto-dark .gd-demo-tag-index { border-color: #374151; }
+.gd-demo-section-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #6b7280;
+  background-color: #f3f4f6;
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.25rem;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
+body.quarto-dark .gd-demo-section-badge { color: #9ca3af; background-color: #1f2937; }
+.gd-demo-tag-seg {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border-radius: 1rem;
+  overflow: hidden;
+  border: 1px solid #d1d5db;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #6b7280;
+  white-space: nowrap;
+}
+body.quarto-dark .gd-demo-tag-seg { color: #9ca3af; border-color: rgba(107,114,128,0.3); }
+.gd-demo-tag-seg-parent {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  background-color: #f3f4f6;
+}
+body.quarto-dark .gd-demo-tag-seg-parent { background-color: rgba(107,114,128,0.15); }
+.gd-demo-tag-seg-child {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  background-color: #f9fafb;
+}
+body.quarto-dark .gd-demo-tag-seg-child { background-color: rgba(107,114,128,0.08); }
+.gd-demo-tag-seg-sep {
+  display: inline-block;
+  width: 1px;
+  align-self: stretch;
+  background-color: #9ca3af;
+}
+body.quarto-dark .gd-demo-tag-seg-sep { background-color: rgba(107,114,128,0.4); }
+</style>
+
+Tags are disabled by default. To enable them, add a `tags` section to `great-docs.yml`:
+
+```{.yaml filename="docs/great-docs.yml"}
+tags:
+  enabled: true
+```
+
+Or use the shorthand:
+
+```{.yaml filename="docs/great-docs.yml"}
+tags: true
+```
+
+## Adding Tags to Pages
+
+Add tags to any `.qmd` page using the `tags` key in YAML frontmatter:
+
+```{.yaml filename="user_guide/03-configuration.qmd"}
+---
+title: "Configuration"
+tags: [Python, Configuration, Getting Started]
+---
+```
+
+Tags can be any string. They are case-sensitive, so `Python` and `python` are treated as different
+tags.
+
+## Tags Index Page
+
+When tags are enabled, Great Docs automatically generates a `tags/index.qmd` page that lists every
+tag and the pages associated with it. A "Tags" link is added to the site's top navigation bar
+(positioned before "Reference").
+
+Each tag becomes a heading on the index page, with links to all pages that use that tag. Section
+badges (e.g., "User Guide", "Recipes") appear next to each page link so readers can see where the
+page lives:
+
+<div class="gd-demo-tag-index">
+<div style="font-size:1.1rem; font-weight:600; margin-bottom:0.5rem;"><span class="gd-demo-tag-pill">Configuration</span></div>
+<div style="padding-left:1.25rem; padding:0.15rem 0 0.15rem 1.25rem;"><a style="color:inherit; text-decoration:underline;">Configuration</a> <span class="gd-demo-section-badge">User Guide</span></div>
+<div style="padding-left:1.25rem; padding:0.15rem 0 0.15rem 1.25rem;"><a style="color:inherit; text-decoration:underline;">Advanced Configuration</a> <span class="gd-demo-section-badge">Recipes</span></div>
+<div style="font-size:1.1rem; font-weight:600; margin-top:1rem; margin-bottom:0.5rem;"><span class="gd-demo-tag-pill">Getting Started</span></div>
+<div style="padding-left:1.25rem; padding:0.15rem 0 0.15rem 1.25rem;"><a style="color:inherit; text-decoration:underline;">Installation</a> <span class="gd-demo-section-badge">User Guide</span></div>
+<div style="padding-left:1.25rem; padding:0.15rem 0 0.15rem 1.25rem;"><a style="color:inherit; text-decoration:underline;">Quickstart</a> <span class="gd-demo-section-badge">User Guide</span></div>
+</div>
+
+### Disabling the Index Page
+
+If you want tag pills on pages but don't want a dedicated index page:
+
+```{.yaml filename="docs/great-docs.yml"}
+tags:
+  enabled: true
+  index_page: false
+```
+
+## Tag Pills on Pages
+
+By default, tagged pages display small pill-shaped links below the page title. Each pill links to
+the corresponding tag's section on the tags index page, helping readers discover related content:
+
+<div class="gd-demo-tag-page-mock">
+<div style="font-size:1.5rem; font-weight:700;">Configuration</div>
+<div class="gd-demo-tag-pills"><span class="gd-demo-tag-pill">Python</span> <span class="gd-demo-tag-pill">Configuration</span> <span class="gd-demo-tag-pill">Getting Started</span></div>
+</div>
+
+To disable the pills while keeping the tags index page:
+
+```{.yaml filename="docs/great-docs.yml"}
+tags:
+  enabled: true
+  show_on_pages: false
+```
+
+## Tag Location
+
+By default, tag pills appear at the **top** of the page, just below the title (and subtitle, if
+present). You can move them to the **bottom** of the page instead, where they appear after the page
+metadata block (dates and author info) or under a horizontal rule if no metadata is present.
+
+Set the default location globally in `great-docs.yml`:
+
+```{.yaml filename="docs/great-docs.yml"}
+tags:
+  enabled: true
+  location: bottom
+```
+
+Valid values are `top` (default) and `bottom`.
+
+### Per-Page Overrides
+
+Individual pages can override the global setting using `tag-location` in their YAML frontmatter:
+
+```{.yaml filename="user_guide/05-tips.qmd"}
+---
+title: "Tips and Tricks"
+tags: [Python, Setup]
+tag-location: top
+---
+```
+
+This is useful when most pages use bottom placement but a few key pages benefit from prominent top
+placement (or vice versa).
+
+::: {.callout-tip}
+When tags are placed at the bottom, they are rendered *after* the page metadata
+(creation/modification dates and author info). If page metadata is not enabled, tags appear at the
+end of the main content under a horizontal rule.
+:::
+
+## Hierarchical Tags
+
+Tags support a hierarchy using the `/` separator. For example, `Python/Testing` creates a parent
+"Python" group with a "Testing" child. On the tags index page, hierarchical tags are rendered with
+nested headings:
+
+```yaml
+---
+title: "Unit Testing Guide"
+tags: [Python/Testing, Python/pytest, Best Practices]
+---
+```
+
+This produces an index page structure like:
+
+```
+## Best Practices
+  - Unit Testing Guide
+
+## Python
+  ### Testing
+    - Unit Testing Guide
+  ### pytest
+    - Unit Testing Guide
+```
+
+On the page itself, hierarchical tag pills display as segmented pills with the parent and leaf
+separated by a vertical divider. The full path is shown as a tooltip on hover:
+
+<div class="gd-demo-tag-pills" style="margin:1rem 0;">
+<span class="gd-demo-tag-seg"><span class="gd-demo-tag-seg-parent">Python</span><span class="gd-demo-tag-seg-sep">&nbsp;</span><span class="gd-demo-tag-seg-child">Testing</span></span>
+<span class="gd-demo-tag-seg"><span class="gd-demo-tag-seg-parent">Python</span><span class="gd-demo-tag-seg-sep">&nbsp;</span><span class="gd-demo-tag-seg-child">pytest</span></span>
+<span class="gd-demo-tag-pill">Best Practices</span>
+</div>
+
+### Literal Slashes in Tag Names
+
+If a tag name contains a literal `/` that should **not** be treated as a hierarchy separator, escape
+it with a backslash: `\/`. For example, `AI\/LLM` displays as "AI/LLM" without creating a hierarchy.
+
+```yaml
+---
+title: "Working with LLMs"
+tags: [AI\/LLM, Getting Started]
+---
+```
+
+::: {.callout-note}
+In YAML, leave the tag unquoted (e.g., `AI\/LLM`) so the backslash is preserved. Double-quoted YAML
+strings will consume the backslash as an escape character.
+:::
+
+To disable hierarchical tag support entirely and treat all `/` characters as literal:
+
+```{.yaml filename="docs/great-docs.yml"}
+tags:
+  enabled: true
+  hierarchical: false
+```
+
+## Shadow Tags
+
+Not all tags are meant for readers. Shadow tags let you use the tagging system for internal
+organization without exposing those labels publicly. Pages with shadow tags are still indexed
+internally, but the tags themselves are not rendered as pills on pages or shown on the tags index
+page.
+
+This is useful for editorial workflows. For example, you can tag pages as `needs-review` or `draft`
+without exposing those labels to readers.
+
+```{.yaml filename="docs/great-docs.yml"}
+tags:
+  enabled: true
+  shadow:
+    - needs-review
+    - draft
+    - internal
+```
+
+A page can have both visible and shadow tags:
+
+```yaml
+---
+title: "Advanced Configuration"
+tags: [Configuration, API, needs-review]
+---
+```
+
+In this example, "Configuration" and "API" appear as pills and on the index page, while
+"needs-review" is silently ignored in the public output.
+
+## Tag Icons
+
+You can associate tags with icons from the [Lucide](https://lucide.dev/icons/) icon set (the same
+icon set used by `nav_icons`). Icons appear inside the tag pill and next to the tag heading on the
+index page.
+
+```{.yaml filename="docs/great-docs.yml"}
+tags:
+  enabled: true
+  icons:
+    Python: code
+    Tutorial: book-open
+    API: file-code
+    Testing: flask-conical
+```
+
+The icon names are Lucide icon names (lowercase, hyphenated). Browse the full catalogue at
+[lucide.dev/icons](https://lucide.dev/icons/).
+
+## Full Configuration Reference
+
+Here is the complete `tags` configuration with all options and their defaults:
+
+```{.yaml filename="docs/great-docs.yml"}
+tags:
+  enabled: false          # Master switch (default: false)
+  index_page: true        # Generate a tags index page (default: true)
+  show_on_pages: true     # Show tag pills above page titles (default: true)
+  location: top           # Pill placement: "top" or "bottom" (default: "top")
+  hierarchical: true      # Support "/" as tag hierarchy separator (default: true)
+  icons: {}               # Tag → icon name mapping (default: empty)
+  shadow: []              # Tags hidden from public view (default: empty)
+  scoped: false           # Scoped tag listings per section (default: false)
+```
+
+Individual pages can override `location` via `tag-location` in their YAML frontmatter.
+
+## Which Pages Are Scanned?
+
+Great Docs scans for tags in `.qmd` files found in:
+
+- **User guide** pages (`user-guide/`)
+- **Recipes** pages (`recipes/`)
+- **Custom sections** (any section defined in `sections:` config)
+
+Index pages (`index.qmd`) in these directories are skipped. API reference pages and the changelog
+are not scanned for tags.
+
+## Tips
+
+A few guidelines help keep your tag system useful as your documentation grows.
+
+- **Start simple**: begin with a flat list of 5-10 tags and add hierarchy later as your
+documentation grows.
+- **Be consistent**: establish a tag naming convention early (e.g., always use title case).
+- **Use shadow tags for workflow**: tags like `needs-update` or `v2-migration` help you track
+editorial tasks without cluttering the reader experience.
+- **Combine with search**: tags improve discoverability today, and will integrate with enhanced
+search in a future release.
+
+## Next Steps
+
+Tags give readers a second way to navigate your documentation, organized by topic rather than page
+order. Start with a small set of well-chosen tags and expand as your content grows.
+
+- [Page Status Badges](page-status-badges.qmd) adds lifecycle indicators (new, updated, deprecated)
+to pages
+- [Custom Sections](custom-sections.qmd) covers organizing pages into named groups with sidebar
+navigation
+- [Internationalization](internationalization.qmd) covers language support for tag-related UI
+elements
+- [Configuration](configuration.qmd) covers all tag settings in `great-docs.yml`

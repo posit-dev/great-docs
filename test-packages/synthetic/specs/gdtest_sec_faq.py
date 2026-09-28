@@ -72,7 +72,7 @@ SPEC = {
                 """
                 return "Use pip install to get started."
         ''',
-        "faq/installation.qmd": (
+        "docs/faq/installation.qmd": (
             "---\n"
             "title: Installation FAQ\n"
             "---\n"
@@ -81,7 +81,7 @@ SPEC = {
             "\n"
             "Frequently asked questions about installing the package.\n"
         ),
-        "faq/configuration.qmd": (
+        "docs/faq/configuration.qmd": (
             "---\n"
             "title: Configuration FAQ\n"
             "---\n"
@@ -90,7 +90,7 @@ SPEC = {
             "\n"
             "Frequently asked questions about configuring the package.\n"
         ),
-        "faq/troubleshooting.qmd": (
+        "docs/faq/troubleshooting.qmd": (
             "---\n"
             "title: Troubleshooting FAQ\n"
             "---\n"

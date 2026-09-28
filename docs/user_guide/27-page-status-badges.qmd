@@ -1,0 +1,309 @@
+---
+title: "Page Status Badges"
+guide-section: "Site Content"
+bread-crumbs: false
+tags: [Content, Configuration]
+versions: ">=0.6"
+---
+
+# Page Status Badges
+
+Documentation pages have a lifecycle. Some pages describe brand-new features, others cover APIs that
+are experimental and subject to change, and some document capabilities that are being phased out.
+Communicating this status helps readers set expectations before they invest time in a page.
+
+Great Docs lets you mark pages with a lifecycle status such as "New", "Beta", or "Deprecated".
+Status badges appear as colored indicators in two places:
+
+1. **Below the page title**: a full badge with icon, label, and description
+2. **In sidebar navigation**: a compact icon next to the link, with a tooltip on hover
+
+Status badges are disabled by default. To enable them, add a `page_status` section to
+`great-docs.yml`:
+
+```{.yaml filename="docs/great-docs.yml"}
+page_status:
+  enabled: true
+```
+
+Or use the shorthand:
+
+```{.yaml filename="docs/great-docs.yml"}
+page_status: true
+```
+
+## Adding a Status to a Page
+
+Set the `status` key in the YAML frontmatter of any user guide, recipe, or custom section page:
+
+```{.yaml filename="user_guide/03-migration.qmd"}
+---
+title: "Migration Guide"
+status: deprecated
+---
+```
+
+The value must match one of the defined status keys (see below). Pages without a `status` key
+display no badge.
+
+## Built-in Statuses
+
+Great Docs ships with five built-in statuses, each with a [Lucide](https://lucide.dev/icons/) icon,
+color, and description:
+
+| Key            | Label          | Icon                | Color   | Description                         |
+|----------------|----------------|---------------------|---------|-------------------------------------|
+| `new`          | New            | `sparkles`          | Green   | Recently added                      |
+| `updated`      | Updated        | `refresh-cw`        | Blue    | Recently updated                    |
+| `beta`         | Beta           | `flask-conical`     | Amber   | Beta feature                        |
+| `deprecated`   | Deprecated     | `triangle-alert`    | Red     | May be removed in a future release  |
+| `experimental` | Experimental   | `beaker`            | Purple  | API may change without notice       |
+
+Here is how these five statuses look as page-level badges:
+
+<style>
+.gd-demo-badge, .gd-demo-sidebar-item, .gd-demo-sidebar-pill, .gd-demo-page-mock {
+  font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.gd-demo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  border-radius: 0.35rem;
+}
+.gd-demo-badge .gd-demo-lbl { font-weight: 600; }
+.gd-demo-badge .gd-demo-dsc { font-weight: 400; opacity: 0.8; }
+.gd-demo-sidebar-item {
+  display: flex;
+  align-items: center;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.875rem;
+  color: #374151;
+}
+body.quarto-dark .gd-demo-sidebar-item { color: #d1d5db; }
+.gd-demo-sidebar-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  line-height: 1.3;
+  border-radius: 0.75rem;
+  white-space: nowrap;
+}
+.gd-demo-sidebar-list {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 0.4rem 0;
+  max-width: 300px;
+  margin: 1rem 0;
+  background: transparent;
+}
+body.quarto-dark .gd-demo-sidebar-list { border-color: #374151; }
+.gd-demo-page-mock {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+  background: transparent;
+}
+body.quarto-dark .gd-demo-page-mock { border-color: #374151; }
+</style>
+
+<div style="display:flex; flex-direction:column; align-items:flex-start; gap:0.35rem; margin:1rem 0;">
+<div class="gd-demo-badge" style="color:#10b981; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25);"><span class="gd-demo-lbl">✦ New</span> <span class="gd-demo-dsc">&mdash; Recently added</span></div>
+<div class="gd-demo-badge" style="color:#3b82f6; background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.25);"><span class="gd-demo-lbl">↻ Updated</span> <span class="gd-demo-dsc">&mdash; Recently updated</span></div>
+<div class="gd-demo-badge" style="color:#f59e0b; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.25);"><span class="gd-demo-lbl">⚗ Beta</span> <span class="gd-demo-dsc">&mdash; Beta feature</span></div>
+<div class="gd-demo-badge" style="color:#ef4444; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.25);"><span class="gd-demo-lbl">⚠ Deprecated</span> <span class="gd-demo-dsc">&mdash; May be removed in a future release</span></div>
+<div class="gd-demo-badge" style="color:#8b5cf6; background:rgba(139,92,246,0.08); border:1px solid rgba(139,92,246,0.25);"><span class="gd-demo-lbl"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 3h15"></path><path d="M6 3v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V3"></path><path d="M6 14h12"></path></svg> Experimental</span> <span class="gd-demo-dsc">&mdash; API may change without notice</span></div>
+</div>
+
+All built-in status labels and descriptions are automatically translated when the site uses a
+non-English language (see [Internationalization](internationalization.qmd)).
+
+## Custom Statuses
+
+The five built-in statuses cover common lifecycle stages, but your team may have its own workflow.
+You can add your own statuses or override built-in ones via the `statuses` map in `great-docs.yml`:
+
+```{.yaml filename="docs/great-docs.yml"}
+page_status:
+  enabled: true
+  statuses:
+    draft:
+      label: "Draft"
+      icon: pencil
+      color: "#6b7280"
+      description: "Work in progress"
+    review:
+      label: "In Review"
+      icon: eye
+      color: "#0ea5e9"
+      description: "Awaiting technical review"
+```
+
+Each custom status definition accepts:
+
+| Key           | Type   | Required | Description                                               |
+|---------------|--------|----------|-----------------------------------------------------------|
+| `label`       | string | No       | Display text (defaults to the key in title case)           |
+| `icon`        | string | No       | Lucide icon name (e.g., `pencil`, `eye`)                   |
+| `color`       | string | No       | CSS color for the badge (defaults to `#6b7280`)            |
+| `description` | string | No       | Short explanation shown on the page badge and as a tooltip |
+
+Custom statuses use their literal `label` and `description` values in all languages. Only the five
+built-in statuses are translated automatically.
+
+Use the custom key in frontmatter just like a built-in status:
+
+```{.yaml filename="user_guide/10-new-api.qmd"}
+---
+title: "New API Design"
+status: draft
+---
+```
+
+## Overriding Built-in Statuses
+
+To change a built-in status (for example, switching the icon or color for `deprecated`), redefine
+it in `statuses`:
+
+```{.yaml filename="docs/great-docs.yml"}
+page_status:
+  enabled: true
+  statuses:
+    deprecated:
+      label: "Legacy"
+      icon: archive
+      color: "#9ca3af"
+      description: "Superseded by a newer approach"
+```
+
+Your definition fully replaces the built-in default for that key. Any fields you omit fall back to
+their defaults (gray color, title-cased label, no icon).
+
+## Controlling Where Badges Appear
+
+By default, badges are shown in both locations. You can disable either one independently if you
+prefer a subtler approach.
+
+### Sidebar Only
+
+```{.yaml filename="docs/great-docs.yml"}
+page_status:
+  enabled: true
+  show_on_pages: false   # No badge below the title
+  show_in_sidebar: true  # Icon in sidebar (default)
+```
+
+### Page Title Only
+
+```{.yaml filename="docs/great-docs.yml"}
+page_status:
+  enabled: true
+  show_on_pages: true    # Badge below the title (default)
+  show_in_sidebar: false # No icon in sidebar
+```
+
+## How It Looks
+
+### On the Page
+
+The page-level badge appears directly below the title (and subtitle, if present). It displays the
+status icon, label, and description in the status color:
+
+<div class="gd-demo-page-mock">
+<div style="font-size:1.5rem; font-weight:700; margin-bottom:0.15rem;">Getting Started</div>
+<div style="font-size:0.95rem; color:#6b7280; margin-bottom:0.5rem;">A quick introduction to the package</div>
+<div class="gd-demo-badge" style="color:#10b981; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25);"><span class="gd-demo-lbl">✦ New</span> <span class="gd-demo-dsc">&mdash; Recently added</span></div>
+</div>
+
+### In the Sidebar
+
+Sidebar links for pages with a status show a small colored pill after the link text. Hovering over
+the pill displays a tooltip with the full label and description:
+
+<div class="gd-demo-sidebar-list">
+<div class="gd-demo-sidebar-item">Getting Started <span class="gd-demo-sidebar-pill" style="color:#10b981; background:rgba(16,185,129,0.1);" title="New — Recently added">✦</span></div>
+<div class="gd-demo-sidebar-item">Migration Guide <span class="gd-demo-sidebar-pill" style="color:#ef4444; background:rgba(239,68,68,0.1);" title="Deprecated — May be removed in a future release">⚠</span></div>
+<div class="gd-demo-sidebar-item" style="opacity:0.7;">Configuration</div>
+<div class="gd-demo-sidebar-item">New API Design <span class="gd-demo-sidebar-pill" style="color:#8b5cf6; background:rgba(139,92,246,0.1);" title="Experimental — API may change without notice"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 3h15"></path><path d="M6 3v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V3"></path><path d="M6 14h12"></path></svg></span></div>
+</div>
+
+Pages without a status display no indicator, keeping the sidebar clean.
+
+## Which Pages Are Scanned?
+
+Great Docs scans for `status` frontmatter in `.qmd` files found in:
+
+- **User guide** pages (`user-guide/`)
+- **Recipes** pages (`recipes/`)
+- **Custom sections** (any section defined in `sections:` config)
+
+API reference pages, the changelog, and index pages are not scanned. This keeps badges focused on
+content pages where lifecycle status is meaningful.
+
+## Full Configuration Reference
+
+Here is the complete `page_status` configuration with all options and their defaults:
+
+```{.yaml filename="docs/great-docs.yml"}
+page_status:
+  enabled: false           # Master switch (default: false)
+  show_in_sidebar: true    # Show icon in sidebar links (default: true)
+  show_on_pages: true      # Show badge below page titles (default: true)
+  statuses:                # Status definitions (built-ins shown below)
+    new:
+      label: "New"
+      icon: sparkles
+      color: "#10b981"
+      description: "Recently added"
+    updated:
+      label: "Updated"
+      icon: refresh-cw
+      color: "#3b82f6"
+      description: "Recently updated"
+    beta:
+      label: "Beta"
+      icon: flask-conical
+      color: "#f59e0b"
+      description: "Beta feature"
+    deprecated:
+      label: "Deprecated"
+      icon: triangle-alert
+      color: "#ef4444"
+      description: "May be removed in a future release"
+    experimental:
+      label: "Experimental"
+      icon: beaker
+      color: "#8b5cf6"
+      description: "API may change without notice"
+```
+
+## Tips
+
+A few guidelines help keep status badges effective across your documentation.
+
+- **Use statuses sparingly**: a page should carry a status only when it communicates something
+actionable. If every page is "New", the badge loses its value.
+- **Remove stale statuses**: revisit `status: new` and `status: updated` periodically and remove
+them once the content is no longer recent.
+- **Combine with tags**: statuses and tags serve different purposes. Tags categorize content by
+topic; statuses communicate lifecycle. A page can have both.
+- **Custom statuses for workflows**: define statuses like `draft` or `review` to track editorial
+progress while keeping the documentation published.
+
+## Next Steps
+
+Status badges communicate lifecycle information at a glance. They work best when used selectively
+for pages that are genuinely new, recently updated, or approaching deprecation.
+
+- [Page Tags](page-tags.qmd) categorizes pages by topic with filterable tag listings
+- [API Evolution](api-evolution.qmd) tracks changes across releases at the API level
+- [Internationalization](internationalization.qmd) covers how built-in badge labels are translated
+- [Configuration](configuration.qmd) covers all status badge settings in `great-docs.yml`

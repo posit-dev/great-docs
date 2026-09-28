@@ -1,0 +1,281 @@
+---
+title: "Custom Static Pages"
+guide-section: "Site Content"
+bread-crumbs: false
+tags: [Content, Customization]
+versions: ">=0.6"
+---
+
+# Custom Static Pages
+
+Great Docs can auto-discover hand-written HTML pages and add them to your site with either minimal transformation or no transformation at all. This is useful for product landing pages, interactive demos, playgrounds, embedded widgets, and other content that does not fit naturally into a standard `.qmd` workflow.
+
+## Configuring Source Directories
+
+Custom static pages are configured with `custom_pages` in `great-docs.yml`.
+
+### Zero-config fallback
+
+If you do not set `custom_pages`, Great Docs uses `custom/` beside the configuration:
+
+```{.default filename="project layout"}
+my-package/docs/
+├── custom/
+│   ├── py.html
+│   ├── playground.html
+│   └── assets/
+│       └── chart.js
+├── great-docs.yml
+└── ...
+```
+
+That is only the default on-ramp. You can override it.
+
+### One custom page directory
+
+```{.yaml filename="docs/great-docs.yml"}
+custom_pages: marketing
+```
+
+This reads pages from `docs/marketing/` and publishes them under `marketing/` in the built site.
+
+### One directory with a custom URL prefix
+
+```{.yaml filename="docs/great-docs.yml"}
+custom_pages:
+  dir: marketing
+  output: py
+```
+
+This reads files from `docs/marketing/` but publishes them under `py/`, so the source directory and URL can have different names.
+
+### Multiple custom page directories
+
+```{.yaml filename="docs/great-docs.yml"}
+custom_pages:
+  - dir: marketing
+    output: py
+  - dir: playgrounds
+    output: demos
+```
+
+This lets a larger site keep different HTML surfaces in separate source trees while still controlling their deployed paths.
+
+### Disable custom pages entirely
+
+```{.yaml filename="docs/great-docs.yml"}
+custom_pages: false
+```
+
+This disables the fallback `custom/` directory too.
+
+## Two Layout Modes
+
+Custom HTML pages support two layout modes through YAML frontmatter.
+
+### `layout: passthrough`
+
+Use passthrough mode when you want to keep your HTML body mostly intact but still render it inside the normal Great Docs shell.
+
+```{.html filename="marketing/index.html"}
+---
+title: Comet Apps for Python
+layout: passthrough
+navbar: true
+---
+<section class="hero-banner">
+  <h1>Reactive Python apps</h1>
+  <p>Build interactive apps with a custom landing page.</p>
+</section>
+```
+
+In passthrough mode, Great Docs will:
+
+- parse the frontmatter
+- generate an intermediate `.qmd` file in the build directory
+- keep your HTML body as the page content
+- render the page with the normal navbar, footer, search, theme, and scripts
+
+This is the right choice for pages like:
+
+- product landing pages
+- marketing-style homepages for a sub-area of your docs
+- richly designed pages that should still feel like part of the main documentation site
+
+### `layout: raw`
+
+Use raw mode when the HTML should be served unchanged.
+
+```{.html filename="playgrounds/playground.html"}
+---
+layout: raw
+navbar:
+  text: Playground
+  after: User Guide
+---
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Playground</title>
+  </head>
+  <body>
+    <main id="playground-root">Raw playground content</main>
+  </body>
+</html>
+```
+
+In raw mode, Great Docs will:
+
+- strip the frontmatter
+- copy the HTML file through to the final site output unchanged
+- exclude that file from Quarto rendering
+
+This is the right choice for pages like:
+
+- standalone widget hosts
+- JavaScript demos with their own document structure
+- third-party embeds that depend on exact HTML markup
+
+## Navbar Integration
+
+Custom pages do not have to appear in the navbar, but they can opt in using frontmatter.
+
+### Use the page title
+
+```{.yaml filename="frontmatter"}
+navbar: true
+```
+
+This adds the page to the navbar using its `title`.
+
+### Use custom text
+
+```{.yaml filename="frontmatter"}
+navbar: Widget Lab
+```
+
+This adds the page to the navbar using the provided text.
+
+### Control placement
+
+```{.yaml filename="frontmatter"}
+navbar:
+  text: Playground
+  after: User Guide
+```
+
+This uses explicit link text and inserts the link after an existing navbar item.
+
+If no placement is specified, the link is inserted before `Reference`, which matches the current behavior for custom sections.
+
+## Assets and Relative Paths
+
+Files under each configured custom-page directory that are not HTML are copied as project resources.
+
+For example:
+
+```{.default filename="playgrounds/"}
+playgrounds/
+├── widget.html
+└── assets/
+    ├── chart.js
+    └── styles.css
+```
+
+From `playgrounds/widget.html`, you can reference those files with relative paths:
+
+```{.html filename="playgrounds/widget.html"}
+<link rel="stylesheet" href="assets/styles.css">
+<script src="assets/chart.js"></script>
+```
+
+If `playgrounds/` is configured with `output: demos`, those files are copied into the built site under `demos/assets/`.
+
+## Coexisting with User Guides and Sections
+
+Custom static pages are meant for a different job than User Guide pages or configured sections.
+
+Use **User Guide pages** when:
+
+- the content is standard documentation prose
+- you want Quarto-native Markdown authoring
+- you want the usual sectioned sidebar behavior
+
+Use **Custom Sections** when:
+
+- you want a group of related pages with shared navigation
+- you want a navbar item plus a section sidebar
+- the content is still mostly `.qmd` or `.md`
+
+Use **Custom Static Pages** when:
+
+- the page is already HTML
+- the layout is highly bespoke
+- the page should behave like a landing page or demo surface
+- you need raw HTML delivery without Quarto transformation
+
+It is normal for one site to use all three together.
+
+## What Happens During Build
+
+When `great-docs build` runs, Great Docs scans each configured custom-page directory after processing configured sections and before copying top-level `assets/`.
+
+The custom page pipeline:
+
+1. walks each configured custom-page directory recursively
+2. copies non-HTML files as resources
+3. reads frontmatter from `.html` and `.htm` files
+4. converts passthrough pages into generated `.qmd` files
+5. copies raw pages through unchanged and excludes them from Quarto rendering
+6. injects any opted-in custom pages into the navbar
+
+## Example: Shiny-Style Landing Page
+
+If you want a page similar in spirit to `https://shiny.posit.co/py/`, passthrough mode is usually the better fit.
+
+```{.html filename="marketing/index.html"}
+---
+title: Comet Apps for Python
+layout: passthrough
+navbar: true
+---
+<section class="hero-banner">
+  <h1>Reactive data apps in pure Python</h1>
+  <p>Elegant, efficient, and ready for production.</p>
+</section>
+
+<section class="feature-grid">
+  <article>
+    <h2>Reactive</h2>
+    <p>Automatic execution flow without callback boilerplate.</p>
+  </article>
+  <article>
+    <h2>Efficient</h2>
+    <p>Render outputs only when upstream inputs change.</p>
+  </article>
+  <article>
+    <h2>Robust</h2>
+    <p>Build on top of the modern Python web stack.</p>
+  </article>
+</section>
+```
+
+That gives you a custom layout while still preserving the site shell around it.
+
+## Current Limitations
+
+This feature is intentionally narrow in its first version.
+
+- custom pages are HTML-based; Great Docs is not currently transforming arbitrary non-HTML page types here
+- there is no dedicated custom-page sidebar model yet
+- navbar integration is per-page frontmatter, not a separate config block
+
+These constraints keep the feature predictable while it matures.
+
+## Next Steps
+
+Custom pages give you an escape hatch for content that doesn't fit the standard page model. Use them sparingly for landing pages, dashboards, or anything that needs full control over HTML and layout.
+
+- [Custom Sections](custom-sections.qmd) covers multi-page section navigation
+- [Configuration](configuration.qmd) covers the broader `great-docs.yml` model
+- [Building & Previewing](building.qmd) explains where custom pages fit in the build pipeline

@@ -13,6 +13,7 @@ help: ## Show this help message
 test: ## Run core tests (fast, no package builds)
 	@$(PYTHON) -m pytest tests/ \
 		-n auto \
+		-o faulthandler_timeout=60 \
 		--cov=great_docs \
 		--cov-report=term-missing \
 		--ignore=tests/test_integration.py \

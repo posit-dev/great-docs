@@ -67,21 +67,21 @@ SPEC = {
                 """
                 pass
         ''',
-        "user_guide/intro.qmd": """\
+        "docs/user_guide/intro.qmd": """\
             ---
             title: Introduction
             ---
 
             Welcome to the project!
         """,
-        "user_guide/quickstart.qmd": """\
+        "docs/user_guide/quickstart.qmd": """\
             ---
             title: Quick Start
             ---
 
             Get started quickly.
         """,
-        "user_guide/advanced.qmd": """\
+        "docs/user_guide/advanced.qmd": """\
             ---
             title: Advanced Usage
             ---

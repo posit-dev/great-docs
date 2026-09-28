@@ -82,7 +82,7 @@ SPEC = {
                 return {"count": len(data), "sum": sum(data)}
         ''',
         # ── User guide: root index + numbered subdirectories ──────────────
-        "user_guide/index.qmd": (
+        "docs/user_guide/index.qmd": (
             "---\n"
             "title: Welcome\n"
             "---\n"
@@ -96,7 +96,7 @@ SPEC = {
             "\n"
             "This project provides data processing and analysis utilities.\n"
         ),
-        "user_guide/00-getting-started/index.qmd": (
+        "docs/user_guide/00-getting-started/index.qmd": (
             "---\n"
             "title: Getting Started\n"
             "---\n"
@@ -105,7 +105,7 @@ SPEC = {
             "\n"
             "This section covers installation and basic setup.\n"
         ),
-        "user_guide/00-getting-started/01-quickstart.qmd": (
+        "docs/user_guide/00-getting-started/01-quickstart.qmd": (
             "---\n"
             "title: Quickstart\n"
             "---\n"
@@ -119,7 +119,7 @@ SPEC = {
             "result = process([1, 2, 3])\n"
             "```\n"
         ),
-        "user_guide/01-advanced/01-analysis.qmd": (
+        "docs/user_guide/01-advanced/01-analysis.qmd": (
             "---\n"
             "title: Analysis\n"
             "---\n"
@@ -129,7 +129,7 @@ SPEC = {
             "Learn how to use the analyze function for data insights.\n"
         ),
         # ── Custom section with asset subdirectories ──────────────────────
-        "examples/01-basic-usage.qmd": (
+        "docs/examples/01-basic-usage.qmd": (
             "---\n"
             "title: Basic Usage\n"
             "---\n"
@@ -140,7 +140,7 @@ SPEC = {
             "\n"
             "The data file is located at `../data/sample.csv`.\n"
         ),
-        "examples/02-advanced-patterns.qmd": (
+        "docs/examples/02-advanced-patterns.qmd": (
             "---\n"
             "title: Advanced Patterns\n"
             "---\n"
@@ -152,8 +152,8 @@ SPEC = {
             "![Diagram](../img/diagram.txt)\n"
         ),
         # Asset subdirectories (no .qmd files) — must be copied to build dir
-        "examples/data/sample.csv": "name,value\nalpha,1\nbeta,2\ngamma,3\n",
-        "examples/img/diagram.txt": "placeholder-diagram-content\n",
+        "docs/examples/data/sample.csv": "name,value\nalpha,1\nbeta,2\ngamma,3\n",
+        "docs/examples/img/diagram.txt": "placeholder-diagram-content\n",
         # ── README ────────────────────────────────────────────────────────
         "README.md": (
             "# gdtest-homepage-ug-subdirs\n"

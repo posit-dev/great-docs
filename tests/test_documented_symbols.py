@@ -50,6 +50,22 @@ def test_flattens_config_into_dotted_stems(tmp_path: Path):
     assert names == ["TopClass", "sub.Widget", "sub.Widget.fit"]
 
 
+def test_documented_objects_returns_the_manifest_items(tmp_path: Path):
+    """
+    Read the same objects as `documented_symbol_names`, as items rather than stems
+
+    Each item carries its full name and the short names it claims.
+    """
+    _write_pkg(tmp_path)
+    gd = GreatDocs(project_path=str(tmp_path))
+
+    by_name = {item.name: item for item in gd.documented_objects("mypkg")}
+
+    assert "TopClass" in by_name["mypkg.TopClass"].aliases
+    assert "Widget" in by_name["mypkg.sub.Widget"].aliases
+    assert "fit" in by_name["mypkg.sub.Widget.fit"].aliases
+
+
 def test_does_not_write_build_artifacts(tmp_path: Path):
     """`documented_symbol_names` is a read-only query: it must leave no files behind.
 
@@ -261,3 +277,30 @@ def test_dynamic_import_failure_returns_empty(tmp_path: Path) -> None:
     gd = GreatDocs(project_path=str(tmp_path))
 
     assert gd.documented_symbol_names("mypkg") == []
+
+
+def _write_pkg_under_another_name(root: Path) -> None:
+    """Create a project whose import name differs from its distribution name"""
+    (root / "pyproject.toml").write_text('[project]\nname = "my-dist"\nversion = "0.1.0"\n')
+    pkg = root / "actual_module"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text(
+        textwrap.dedent(
+            """
+            from actual_module.core import Cache
+            __all__ = ["Cache"]
+            """
+        )
+    )
+    (pkg / "core.py").write_text('class Cache:\n    """A cache."""\n')
+    (root / "great-docs.yml").write_text("module: actual_module\n")
+
+
+def test_a_project_documents_the_module_it_imports_as(tmp_path: Path) -> None:
+    """Find documented objects through a configured import name"""
+    _write_pkg_under_another_name(tmp_path)
+    gd = GreatDocs(project_path=str(tmp_path))
+
+    # Callers use the distribution name, not the configured import name.
+    assert gd.documented_symbol_names("my-dist") == ["Cache"]
+    assert "actual_module.Cache" in {item.name for item in gd.documented_objects("my-dist")}

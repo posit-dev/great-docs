@@ -1,0 +1,372 @@
+---
+title: "Scale-to-Fit"
+guide-section: "Config & Theming"
+bread-crumbs: false
+tags: [Theming, Tables, Customization]
+versions: ">=0.7"
+---
+
+# Scale-to-Fit
+
+Wide content like tables created with [Great Tables](https://github.com/posit-dev/great-tables), DataFrames, and custom `_repr_html_` objects often overflow the content area on smaller screens. When a table is just slightly wider than the container, the reader has to scroll horizontally to see a small sliver of remaining content, which is a frustrating experience. Shrinking the element by a few percent makes it fit cleanly and nobody notices the difference. On the other hand, when an element is dramatically wider than the container, scaling it down would make the text unreadably small. In that case, horizontal scrolling is the better option.
+
+Great Docs includes a **scale-to-fit** system that handles both situations. It automatically shrinks targeted elements so they fit within the container width, and falls back to horizontal scrolling when the element would need to shrink beyond a configurable threshold.
+
+## See It in Action
+
+The examples below use `:::{.scale-to-fit}` divs to demonstrate the scaling behavior, but this is just one of three ways to enable scale-to-fit. You can also target elements globally through `great-docs.yml` or per-page through frontmatter (both covered in later sections). Try resizing your browser window to see elements shrink. The third example uses a per-div `data-min-scale` attribute to show the scrolling fallback.
+
+### A Table That Fits Normally
+
+This table is narrow enough to fit the content area without any scaling. It renders at its natural size.
+
+````markdown
+:::{.scale-to-fit}
+```{=html}
+<table style="width: 400px; ...">
+  ...
+```
+:::
+````
+
+:::{.scale-to-fit}
+```{=html}
+<table style="width: 400px; border-collapse: collapse; font-size: 14px;">
+  <thead>
+    <tr style="background: var(--bs-tertiary-bg, #f0f0f0);">
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Name</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Value</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Alpha</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">42</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Active</td></tr>
+    <tr><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Beta</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">87</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Pending</td></tr>
+  </tbody>
+</table>
+```
+:::
+
+At 400px, this table fits comfortably within the content area. No scaling is applied and no scrollbar appears.
+
+### A Wide Table That Scales Down
+
+This table is 1600px wide, wider than most content areas. Scale-to-fit shrinks it proportionally so it fits without overflow.
+
+````markdown
+:::{.scale-to-fit}
+```{=html}
+<table style="width: 1600px; ...">
+  ...
+```
+:::
+````
+
+:::{.scale-to-fit}
+```{=html}
+<table style="width: 1600px; border-collapse: collapse; font-size: 14px;">
+  <thead>
+    <tr style="background: var(--bs-tertiary-bg, #f0f0f0);">
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">ID</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Name</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Category</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Region</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Q1 Revenue</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Q2 Revenue</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Q3 Revenue</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Q4 Revenue</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Total</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">001</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Acme Corp</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Enterprise</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">North America</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">$1,245,000</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">$1,389,000</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">$1,102,000</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">$1,567,000</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">$5,303,000</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Active</td></tr>
+    <tr><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">002</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Globex Inc</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Mid-Market</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Europe</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">$892,000</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">$1,045,000</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">$978,000</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">$1,123,000</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">$4,038,000</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Active</td></tr>
+    <tr><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">003</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Initech</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Startup</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Asia Pacific</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">$234,000</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">$312,000</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">$289,000</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">$401,000</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">$1,236,000</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Review</td></tr>
+  </tbody>
+</table>
+```
+:::
+
+Notice that the text is slightly smaller than in the first table. The system shrank the 1600px table to fit the content area, and the reduction is modest enough that everything stays readable.
+
+### A Very Wide Element (Scrolling Fallback)
+
+This element is 2400px wide. It has `data-min-scale="0.65"` set directly on the div, so when the computed scale factor drops below 0.65 the system falls back to horizontal scrolling instead of shrinking the content to an unreadable size.
+
+````markdown
+:::{.scale-to-fit data-min-scale="0.65"}
+```{=html}
+<table style="width: 2400px; ...">
+  ...
+```
+:::
+````
+
+:::{.scale-to-fit data-min-scale="0.65"}
+```{=html}
+<table style="width: 2400px; border-collapse: collapse; font-size: 14px;">
+  <thead>
+    <tr style="background: var(--bs-tertiary-bg, #f0f0f0);">
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">ID</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Product</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">SKU</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Category</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Supplier</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Region</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Warehouse</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Stock</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Unit Price</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Q1 Sales</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Q2 Sales</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Q3 Sales</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Q4 Sales</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Annual Total</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">YoY Growth</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Margin</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Rating</th>
+      <th style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">P-001</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Widget Pro Max</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">WPM-2024-A</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Hardware</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">TechSource Ltd</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">North America</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Dallas-TX</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">12,450</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">$149.99</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">3,200</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">4,150</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">3,890</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">5,100</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">16,340</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">+18.2%</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">34.5%</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">4.7/5</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Active</td></tr>
+    <tr><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">P-002</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Gadget Elite</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">GE-2024-B</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Electronics</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">CircuitWorks</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Europe</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Munich-DE</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">8,320</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">$249.50</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">1,800</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">2,450</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">2,100</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">3,200</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">9,550</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">+12.7%</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">28.3%</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">4.5/5</td><td style="padding: 8px 12px; border: 1px solid var(--bs-border-color, #ddd);">Active</td></tr>
+  </tbody>
+</table>
+```
+:::
+
+This table is so wide that scaling it down would make the text unreadable. Because `data-min-scale="0.65"` is set on the div, the system switches to horizontal scrolling instead. Scroll right to see the rest of the columns.
+
+## How It Works
+
+The scale-to-fit system operates as a three-level cascade:
+
+1. **Global config**: target specific CSS selectors across the entire site
+2. **Page frontmatter**: override the selectors and threshold on individual pages
+3. **Manual div**: wrap any content block in a `:::{.scale-to-fit}` div for one-off scaling
+
+When an element matches a targeted selector, the system:
+
+- Measures the element's natural width against the available container width
+- Computes a scale factor (`container width / element width`)
+- Applies a CSS `transform: scale()` to shrink the element proportionally
+- If the scale factor falls below the minimum threshold, the element is shown at full size with horizontal scrolling instead
+
+The scaling is applied on page load and recalculated on window resize. Together, these three levels give you fine-grained control over which elements scale, how far they can shrink, and when they should scroll instead.
+
+## Global Configuration
+
+To enable scale-to-fit for specific elements across your entire site, add `scale_to_fit` to your `great-docs.yml` with a list of CSS selectors. Any element that matches one of these selectors will be automatically scaled.
+
+```{.yaml filename="docs/great-docs.yml"}
+scale_to_fit:
+  - "#my_wide_table"
+  - ".wide-output"
+```
+
+A single selector also works:
+
+```{.yaml filename="docs/great-docs.yml"}
+scale_to_fit:
+  - "#gt_table_1"
+```
+
+### Minimum Scale Threshold
+
+By default there is no minimum scale: elements will shrink as much as needed to fit. You can set a threshold below which the system falls back to horizontal scrolling instead:
+
+```{.yaml filename="docs/great-docs.yml"}
+scale_to_fit:
+  - "#my_wide_table"
+scale_to_fit_min_scale: tablet
+```
+
+The threshold can be a **viewport keyword** or a **numeric fraction**.
+
+#### Viewport Keywords
+
+Viewport keywords switch to scrolling when the viewport is at or below the named breakpoint, regardless of the computed scale factor.
+
+| Keyword | Max Width | When It Scrolls |
+|---------|-----------|-----------------|
+| `mobile` | 576 px | Phones in portrait |
+| `tablet` | 768 px | Tablets in portrait |
+| `desktop` | 992 px | Small laptops and below |
+
+```{.yaml filename="docs/great-docs.yml"}
+scale_to_fit_min_scale: mobile   # Only scroll on phones
+```
+
+```{.yaml filename="docs/great-docs.yml"}
+scale_to_fit_min_scale: desktop  # Scroll on anything below a large desktop
+```
+
+Viewport keywords are the simplest way to set a threshold: pick the device class where scaling should stop and scrolling should begin.
+
+#### Numeric Fraction
+
+A decimal value between 0 and 1 sets a minimum scale factor. If the computed scale drops below this value, the element scrolls instead.
+
+```{.yaml filename="docs/great-docs.yml"}
+scale_to_fit_min_scale: 0.5  # Scroll if element would shrink below 50%
+```
+
+```{.yaml filename="docs/great-docs.yml"}
+scale_to_fit_min_scale: 0.35  # Allow more aggressive shrinking
+```
+
+Choose a numeric fraction when you want precise control over the shrink limit, independent of any particular viewport size.
+
+### Disabling
+
+To disable scale-to-fit entirely, remove the `scale_to_fit` key from your config or set it explicitly:
+
+```{.yaml filename="docs/great-docs.yml"}
+scale_to_fit: false
+```
+
+With `scale_to_fit` and `scale_to_fit_min_scale`, the global configuration covers most sites. Every page inherits the same selectors and threshold, so you only need to set it once. For pages that need different behavior, use page-level overrides.
+
+## Page-Level Overrides
+
+Individual pages can override both the targeted selectors and the minimum scale threshold using frontmatter keys. This is useful when a particular page needs different behavior than the site-wide default.
+
+### Overriding Selectors
+
+Use `scale-to-fit` in the page's YAML frontmatter to target different elements on that page:
+```yaml
+---
+title: My Page
+scale-to-fit:
+  - "#special_table"
+  - "#dashboard_widget"
+---
+```
+
+The page-level selectors **replace** (not merge with) the global selectors for that page. If you want to keep the global selectors and add more, list them all in the page frontmatter.
+
+### Overriding the Threshold
+
+Use `scale-to-fit-min-scale` in frontmatter to set a different threshold for the page:
+
+```yaml
+---
+title: My Page
+scale-to-fit:
+  - "#wide_output"
+scale-to-fit-min-scale: mobile
+---
+```
+
+If a page specifies `scale-to-fit` selectors but omits `scale-to-fit-min-scale`, the global `scale_to_fit_min_scale` value is used as a fallback. This lets you change which elements are targeted on a page without having to repeat the threshold.
+
+### Combined Example
+
+Consider a site that globally targets `#main_table` with a `tablet` threshold:
+
+```{.yaml filename="docs/great-docs.yml"}
+scale_to_fit:
+  - "#main_table"
+scale_to_fit_min_scale: tablet
+```
+
+A specific page can override both:
+
+```yaml
+---
+title: Dashboard
+scale-to-fit:
+  - "#main_table"
+  - "#summary_card"
+scale-to-fit-min-scale: 0.4
+---
+```
+
+On this page, `#main_table` and `#summary_card` are both scaled, and the threshold is a 40 % minimum scale factor instead of the global `tablet` keyword. Page-level overrides give you full flexibility to tailor the scaling behavior for individual pages without changing the site-wide defaults.
+
+## Manual Div Wrapping
+
+For one-off cases where you want to scale a single block of content without adding it to the global config, wrap it in a `:::{.scale-to-fit}` fenced div in your `.qmd` page:
+
+````markdown
+:::{.scale-to-fit}
+```{{python}}
+#| echo: false
+my_wide_widget()
+```
+:::
+````
+
+The `.scale-to-fit` class provides the same scaling behavior: content is measured, scaled to fit, and scrolled if it would exceed the minimum threshold. This approach requires no configuration at all; the elements inside the div are always considered for scaling. Use manual wrapping for isolated wide outputs that don't warrant a global selector.
+
+### Per-Div Minimum Scale
+
+You can set a minimum scale threshold directly on an individual div using the `data-min-scale` attribute. This accepts the same values as the global and page-level settings: a viewport keyword (`mobile`, `tablet`, `desktop`) or a numeric fraction between 0 and 1.
+
+````markdown
+:::{.scale-to-fit data-min-scale="0.5"}
+```{{python}}
+#| echo: false
+my_extremely_wide_table()
+```
+:::
+````
+
+The per-div threshold takes precedence over any page-level or global threshold. This is useful when a single element on a page needs a different scrolling cutoff than the rest.
+
+## Typical Selectors
+
+The selectors you provide are standard CSS selectors. These examples show common patterns:
+
+| Selector | Matches |
+|----------|---------|
+| `#my_table` | An element with `id="my_table"` |
+| `.gt_table` | Any element with class `gt_table` |
+| `table.dataframe` | A `<table>` element with class `dataframe` |
+
+For GT tables, the `id` parameter controls the HTML `id`:
+
+```python
+GT(df, id="my_table")
+```
+
+For objects with `_repr_html_`, include the `id` attribute in your returned HTML:
+
+```python
+class MyWidget:
+    def _repr_html_(self):
+        return '<div id="my_widget" style="width:1400px;">...</div>'
+```
+
+As long as your output element has a stable `id` or class name, it can be targeted by scale-to-fit: the system works with any HTML content, not just tables.
+
+## Configuration Reference
+
+### Global (great-docs.yml)
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `scale_to_fit` | list of strings | `None` | CSS selectors to target for auto-scaling |
+| `scale_to_fit_min_scale` | string or float | `None` | Minimum threshold: `"mobile"`, `"tablet"`, `"desktop"`, or a float (0–1) |
+
+### Page Frontmatter
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `scale-to-fit` | list of strings | Overrides global selectors for this page |
+| `scale-to-fit-min-scale` | string or float | Overrides global threshold for this page |
+
+Note the key naming: global config uses **underscores** (`scale_to_fit`) to match Python property names, while page frontmatter uses **hyphens** (`scale-to-fit`) to match Quarto's built-in key style. Between these two tables you have the full set of options available for controlling scale-to-fit behavior at both the site and page level.
+
+## Putting It All Together
+
+For most projects, a single `scale_to_fit` entry in `great-docs.yml` is all you need. Pick the selectors that match your wide outputs, choose a minimum scale threshold that feels right, and every page on your site benefits automatically. When a particular page calls for something different, override the selectors or threshold in that page's frontmatter. And for the occasional one-off table or widget that just needs to fit, wrap it in a `:::{.scale-to-fit}` div and move on. The three levels work together so you can start simple and add precision only where it matters.
+
+## Next Steps
+
+Scale-to-fit keeps wide content readable on any screen size without horizontal scrolling. The three-level cascade (global, page, div) lets you start with a single config line and add precision only where needed.
+
+- [Table Previews](table-previews.qmd) covers the `tbl_preview()` function for rendering data tables
+- [Table Explorer](table-explorer.qmd) adds interactive filtering, sorting, and pagination to tables
+- [Configuration](configuration.qmd) covers all `great-docs.yml` options including scale-to-fit settings

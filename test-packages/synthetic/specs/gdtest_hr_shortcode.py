@@ -65,7 +65,7 @@ SPEC = {
             "    return data\n"
         ),
         # ── User guide page 1: Line styles ───────────────────────────────
-        "user_guide/01-line-styles.qmd": (
+        "docs/user_guide/01-line-styles.qmd": (
             "---\n"
             "title: Line Styles\n"
             "---\n"
@@ -126,7 +126,7 @@ SPEC = {
             '{{< hr style="double" >}}\n'
         ),
         # ── User guide page 2: Colors ────────────────────────────────────
-        "user_guide/02-colors.qmd": (
+        "docs/user_guide/02-colors.qmd": (
             "---\n"
             "title: Colors\n"
             "---\n"
@@ -207,7 +207,7 @@ SPEC = {
             '{{< hr style="double" color="#16a34a" >}}\n'
         ),
         # ── User guide page 3: Sizing and alignment ──────────────────────
-        "user_guide/03-sizing-alignment.qmd": (
+        "docs/user_guide/03-sizing-alignment.qmd": (
             "---\n"
             "title: Sizing & Alignment\n"
             "---\n"
@@ -289,7 +289,7 @@ SPEC = {
             '{{< hr thickness="3px" width="80%" color="#e11d48" >}}\n'
         ),
         # ── User guide page 4: Embedded text ─────────────────────────────
-        "user_guide/04-embedded-text.qmd": (
+        "docs/user_guide/04-embedded-text.qmd": (
             "---\n"
             "title: Embedded Text\n"
             "---\n"
@@ -357,7 +357,7 @@ SPEC = {
             '{{< hr text="Right" width="60%" align="right" >}}\n'
         ),
         # ── User guide page 5: Presets ───────────────────────────────────
-        "user_guide/05-presets.qmd": (
+        "docs/user_guide/05-presets.qmd": (
             "---\n"
             "title: Presets\n"
             "---\n"
@@ -435,7 +435,7 @@ SPEC = {
             '{{< hr preset="double-line" >}}\n'
         ),
         # ── User guide page 6: Combinations ──────────────────────────────
-        "user_guide/06-combinations.qmd": (
+        "docs/user_guide/06-combinations.qmd": (
             "---\n"
             "title: Combinations\n"
             "---\n"

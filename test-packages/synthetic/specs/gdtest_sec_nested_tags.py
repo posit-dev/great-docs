@@ -1,12 +1,11 @@
 """
-gdtest_sec_nested_tags — Page tags inside a custom section with a nested dir.
+gdtest_sec_nested_tags — Page tags inside a custom section
 
 Dimensions: T4
-Focus: Regression for #213. A custom section whose ``dir`` is a nested path
-       (``docs/examples``) that does NOT match the title-derived slug
-       (``examples``). Tagged pages live under the build path
-       ``great-docs/docs/examples/`` and must be discovered by tag scanning,
-       which previously looked at the wrong title-slug directory.
+Focus: Track the former #213 regression where a section's `dir` differed from
+       its title slug. The current `dir` is `examples`, so this spec now
+       exercises the same shape as `gdtest_sec_examples`; restore a distinct
+       nested directory to cover the original regression.
 """
 
 SPEC = {
@@ -26,11 +25,10 @@ SPEC = {
     },
     "config": {
         "display_name": "Nested Section Tags Demo",
-        # The section dir is nested and intentionally differs from the
-        # title-derived slug ("Examples" -> "examples"). The build copies it to
-        # great-docs/docs/examples/, which is where tag scanning must look.
+        # Resolve `dir` from the documentation source directory. Tag scanning
+        # must inspect the resulting `docs/examples/` path.
         "sections": [
-            {"title": "Examples", "dir": "docs/examples"},
+            {"title": "Examples", "dir": "examples"},
         ],
         "tags": {
             "enabled": True,

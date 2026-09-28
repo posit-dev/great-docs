@@ -63,7 +63,7 @@ SPEC = {
             "    return data\n"
         ),
         # ── User guide page: icons in many contexts ──────────────────────
-        "user_guide/01-icon-showcase.qmd": (
+        "docs/user_guide/01-icon-showcase.qmd": (
             "---\n"
             "title: Icon Showcase\n"
             "---\n"
@@ -151,7 +151,7 @@ SPEC = {
             ":   Represents speed or energy.\n"
         ),
         # ── User guide page: icon gallery ────────────────────────────────
-        "user_guide/02-icon-gallery.qmd": (
+        "docs/user_guide/02-icon-gallery.qmd": (
             "---\n"
             "title: Icon Gallery\n"
             "---\n"

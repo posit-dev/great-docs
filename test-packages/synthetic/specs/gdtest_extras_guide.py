@@ -50,14 +50,14 @@ SPEC = {
                 """
                 pass
         ''',
-        "user_guide/01-intro.qmd": """\
+        "docs/user_guide/01-intro.qmd": """\
             ---
             title: Introduction
             ---
 
             Welcome to the extras-guide package.
         """,
-        "user_guide/02-config.qmd": """\
+        "docs/user_guide/02-config.qmd": """\
             ---
             title: Configuration
             ---

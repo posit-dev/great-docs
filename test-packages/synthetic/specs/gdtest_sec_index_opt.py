@@ -81,7 +81,7 @@ SPEC = {
                 return value.upper() if upper else value.lower()
         ''',
         # -- Examples section (will get an auto-generated card index) --
-        "examples/basic-usage.qmd": (
+        "docs/examples/basic-usage.qmd": (
             "---\n"
             "title: Basic Usage\n"
             "description: Learn the fundamentals of the package.\n"
@@ -97,7 +97,7 @@ SPEC = {
             "print(result)\n"
             "```\n"
         ),
-        "examples/advanced-patterns.qmd": (
+        "docs/examples/advanced-patterns.qmd": (
             "---\n"
             "title: Advanced Patterns\n"
             "description: Explore advanced usage patterns and techniques.\n"
@@ -112,7 +112,7 @@ SPEC = {
             "result = transform('hello world', upper=True)\n"
             "```\n"
         ),
-        "examples/real-world.qmd": (
+        "docs/examples/real-world.qmd": (
             "---\n"
             "title: Real-World Scenario\n"
             "description: A complete real-world example with data analysis.\n"
@@ -123,7 +123,7 @@ SPEC = {
             "Putting it all together in a real-world scenario.\n"
         ),
         # -- Tutorials section (no index — navbar links to first page) --
-        "tutorials/getting-started.qmd": (
+        "docs/tutorials/getting-started.qmd": (
             "---\n"
             "title: Getting Started\n"
             "description: Your first steps with the package.\n"
@@ -133,7 +133,7 @@ SPEC = {
             "\n"
             "Welcome! This tutorial walks you through your first steps.\n"
         ),
-        "tutorials/data-processing.qmd": (
+        "docs/tutorials/data-processing.qmd": (
             "---\n"
             "title: Data Processing\n"
             "description: Learn how to process data efficiently.\n"
@@ -143,7 +143,7 @@ SPEC = {
             "\n"
             "In this tutorial you will learn to process data.\n"
         ),
-        "tutorials/best-practices.qmd": (
+        "docs/tutorials/best-practices.qmd": (
             "---\n"
             "title: Best Practices\n"
             "description: Tips and best practices for production use.\n"

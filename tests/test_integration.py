@@ -170,3 +170,27 @@ def test_can_list_test_packages():
         print(f"\nREADME.md exists in test-packages/")
 
     print(f"\nTest packages that will be tested: {TEST_PACKAGES}")
+
+
+def test_skill_install_from_url_live(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Install a skill from the published Great Docs site
+    """
+    from click.testing import CliRunner
+
+    from great_docs.cli import cli
+
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(
+        cli,
+        [
+            "skill",
+            "install",
+            "https://posit-dev.github.io/great-docs/",
+            "--agent",
+            "claude",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert Path(".claude/skills/great-docs/SKILL.md").exists()

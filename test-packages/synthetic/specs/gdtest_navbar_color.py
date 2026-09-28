@@ -318,7 +318,7 @@ SPEC = {
                 """
                 return "#FFFFFF"
         ''',
-        "user_guide/01-contrast-showcase.qmd": _GUIDE_CONTENT,
+        "docs/user_guide/01-contrast-showcase.qmd": _GUIDE_CONTENT,
         "README.md": """\
             # Navbar Color Showcase
 

@@ -52,7 +52,7 @@ SPEC = {
                 """
                 return f"rendered: {topic}"
         ''',
-        "playgrounds/widget.html": """
+        "docs/playgrounds/widget.html": """
             ---
             layout: raw
             navbar: Widget Lab

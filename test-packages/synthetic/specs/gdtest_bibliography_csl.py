@@ -94,7 +94,7 @@ SPEC = {
             </style>
         """,
         # A page citing both entries; no per-page frontmatter.
-        "user_guide/01-citations.qmd": """\
+        "docs/user_guide/01-citations.qmd": """\
             ---
             title: Numbered Citations
             ---
@@ -118,8 +118,8 @@ SPEC = {
     },
     # ── great-docs.yml ────────────────────────────────────────────────
     "config": {
-        "bibliography": "docs/references.bib",
-        "csl": "docs/numeric.csl",
+        "bibliography": "references.bib",
+        "csl": "numeric.csl",
     },
     # ── Expected outcomes ─────────────────────────────────────────────
     "expected": {

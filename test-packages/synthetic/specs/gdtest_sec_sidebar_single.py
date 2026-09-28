@@ -72,7 +72,7 @@ SPEC = {
             '    return f"Goodbye, {name}!"\n'
         ),
         # ── Guides section: 2 pages (sidebar should be visible) ───────────
-        "guides/getting-started.qmd": (
+        "docs/guides/getting-started.qmd": (
             "---\n"
             "title: Getting Started\n"
             "---\n"
@@ -94,7 +94,7 @@ SPEC = {
             'hello("world")\n'
             "```\n"
         ),
-        "guides/advanced.qmd": (
+        "docs/guides/advanced.qmd": (
             "---\n"
             "title: Advanced Usage\n"
             "---\n"
@@ -112,7 +112,7 @@ SPEC = {
             "Integrate with other tools using the standard API.\n"
         ),
         # ── FAQ section: 1 page (sidebar should be hidden) ────────────────
-        "faq/questions.qmd": (
+        "docs/faq/questions.qmd": (
             "---\n"
             "title: Frequently Asked Questions\n"
             "---\n"

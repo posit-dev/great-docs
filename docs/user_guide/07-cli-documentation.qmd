@@ -1,0 +1,485 @@
+---
+title: "CLI Documentation"
+guide-section: "Site Content"
+bread-crumbs: false
+tags: [CLI, Content]
+---
+
+# CLI Documentation
+
+Great Docs can generate reference pages for command-line interfaces automatically. Each command and
+subcommand gets its own structured page showing the usage signature, description, typed options, and
+examples, all using the same layout as API reference pages.
+
+Three CLI ecosystems are supported:
+
+- **Python** (Click): introspects Click commands at import time
+- **Go** (Cobra, urfave/cli): compiles the Go binary and extracts `--help` output
+- **Rust** (clap, structopt, argh): compiles via `cargo build` and extracts `--help` output
+
+The Go and Rust pipelines work the same way: build the binary, run it with `--help` recursively on
+every subcommand, parse the output, and generate the same structured pages as the Python pipeline.
+This means your CLI documentation stays perfectly in sync with your code regardless of language.
+
+This page covers each ecosystem in turn: how to enable it, how discovery works, and how to write
+help text that produces clear reference pages.
+
+## Python CLI (Click) {#python-cli}
+
+### Enabling Python CLI Documentation
+
+Add the following to your `great-docs.yml`:
+
+```{.yaml filename="docs/great-docs.yml"}
+cli:
+  enabled: true
+```
+
+With this single setting, Great Docs handles the rest: it finds your Click commands, captures their
+help output, and generates reference pages during every build. No additional configuration is needed
+for standard project layouts.
+
+### How It Works
+
+When CLI documentation is enabled, Great Docs runs a pipeline that mirrors how it handles API
+documentation: discover, extract, generate, and integrate. Here's what happens during each build:
+
+1. **Finds your CLI**: looks for Click commands in common locations
+2. **Discovers entry point**: reads `[project.scripts]` from `pyproject.toml`
+3. **Extracts metadata**: introspects each command for its description, options, arguments,
+   subcommands, and examples
+4. **Generates structured pages**: creates `.qmd` files in `reference/cli/` with the same layout
+   as API reference pages
+5. **Updates navigation**: adds a CLI section to the sidebar
+
+The pipeline runs as part of `great-docs build`, so CLI pages are always regenerated from the
+current state of your code. You never need to update them manually.
+
+### Auto-Discovery
+
+Most Click-based packages follow a handful of common patterns for where the CLI entry point lives.
+Great Docs checks these locations automatically, so you rarely need to tell it where to look:
+
+1. `your_package.cli`: the most common location
+2. `your_package.__main__`: for `python -m your_package` support
+3. `your_package.main`: alternative location
+4. entry point module from `[project.scripts]`
+
+Great Docs tries each location in order and uses the first one that contains a Click command.
+
+If you have a `[project.scripts]` section:
+
+```{.toml filename="pyproject.toml"}
+[project.scripts]
+my-cli = "my_package.cli:main"
+```
+
+Great Docs uses `my-cli` as the command name in documentation.
+
+### Explicit Configuration
+
+If your CLI lives in a non-standard location, or if auto-discovery picks up the wrong command
+object, you can specify the module and command name explicitly in `great-docs.yml`:
+
+```{.yaml filename="docs/great-docs.yml"}
+cli:
+  enabled: true
+  module: my_package.commands   # Module containing Click commands
+  name: app                      # Name of the Click command object
+```
+
+The `module` value should be the dotted import path to the Python module containing your Click group
+or command. The `name` value is the variable name of the Click command object within that module.
+With explicit configuration, Great Docs skips auto-discovery entirely and goes straight to the
+specified location.
+
+### Writing Good Click Help
+
+The quality of your CLI documentation depends on the help text you write in your Click decorators
+and docstrings. Great Docs parses your docstrings into structured sections, so following a few
+conventions produces the best results.
+
+Every Click command should have a docstring that explains what it does. The first paragraph becomes
+the **subject** (displayed prominently at the top of the page), and remaining paragraphs form the
+**extended description**:
+
+```{.python filename="cli.py"}
+@click.command()
+@click.argument("path")
+@click.option("--output", "-o", help="Output directory for generated files")
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
+def build(path, output, verbose):
+    """Build the project at PATH.
+
+    This command compiles all source files and generates output
+    in the specified directory. Use --verbose to see detailed
+    progress information.
+    """
+    ...
+```
+
+The first paragraph is especially important because it also appears as the short description in
+the parent group's **Commands** list and in search results.
+
+**Document all options.** Every `@click.option()` should include a `help=` string. Options without
+help text appear in the reference page but give readers no indication of what they do. Use single
+quotes around file names or values to have them rendered as inline code:
+
+```{.python filename="cli.py"}
+@click.option(
+    "--format",
+    type=click.Choice(["json", "yaml", "toml"]),
+    default="json",
+    help="Output format (default: json)"
+)
+@click.option(
+    "--config",
+    help="Path to config file (default: 'pyproject.toml')"
+)
+```
+
+In the generated page, `'pyproject.toml'` in the second option's help text becomes inline code
+automatically, so the rendered description reads "Path to config file (default: `pyproject.toml`)".
+
+**Use Click groups for subcommands.** If your CLI has multiple commands, use a `@click.group()` to
+organize them. Great Docs generates a separate page for each subcommand and links them together in
+the sidebar:
+
+```{.python filename="cli.py"}
+@click.group()
+def cli():
+    """My CLI application for managing projects."""
+    pass
+
+@cli.command()
+def init():
+    """Initialize a new project."""
+    ...
+
+@cli.command()
+def build():
+    """Build the project."""
+    ...
+```
+
+Well-structured Click groups produce the clearest documentation. Each subcommand becomes its own
+page, and the group's docstring serves as the overview for the CLI section.
+
+**Include examples.** If your docstring contains a paragraph starting with `Examples:`, Great Docs
+extracts it into a dedicated **Examples** section rendered as a `bash` code block. Use Click's `\b`
+marker to prevent paragraph rewrapping:
+
+```{.python filename="cli.py"}
+@click.command()
+def deploy():
+    """Deploy the built site.
+
+    Uploads the contents of _site/ to your configured host.
+
+    \b
+    Examples:
+      my-cli deploy                  # Deploy to production
+      my-cli deploy --dry-run        # Preview what would happen
+      my-cli deploy --target staging # Deploy to staging
+    """
+    ...
+```
+
+Without the `\b` marker, Click joins continuation lines into a single paragraph, which would
+collapse the example lines together. Always place `\b` on its own line before `Examples:` to
+preserve the formatting.
+
+### Example: Great Docs CLI
+
+Great Docs uses this feature to document its own CLI. Here's what the generated page for
+`great-docs build` looks like (simplified):
+
+**Subject and usage:**
+
+> Build your documentation site.
+
+```bash
+great-docs build [OPTIONS]
+```
+
+**Extended description (formatted as prose):**
+
+> Requires `great-docs.yml` to exist (run `great-docs init` first). This is the only command you
+> need day-to-day and in CI.
+
+**Collapsible `--help` output:**
+
+The full raw terminal output is available inside a disclosure widget labeled "Full --help output".
+Readers can expand it when they want the complete reference, but it doesn't dominate the page.
+
+**Options (structured definition list):**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `--watch` | flag | Watch for changes and rebuild automatically |
+| `--no-refresh` | flag | Skip re-discovering package exports |
+| `--versions` | TEXT | Build only specific versions (comma-separated) |
+| `--from-repo` | TEXT | Clone a remote Git repository and build its docs |
+
+**Examples (bash code block):**
+
+```bash
+great-docs build                      # Full build with API refresh
+great-docs build --no-refresh         # Fast rebuild (skip API discovery)
+great-docs build --watch              # Rebuild on file changes
+```
+
+The main group page (`great-docs`) additionally includes a **Commands** section that links to each
+subcommand's dedicated page. You can see these pages live in the Great Docs reference section.
+All of these sections are generated from the same Click decorators and docstrings shown earlier
+in this guide.
+
+## Go CLI (Cobra) {#go-cli}
+
+Great Docs can document Go CLI projects that use [Cobra](https://github.com/spf13/cobra),
+[urfave/cli](https://github.com/urfave/cli), or any framework whose `--help` output follows the
+standard Cobra convention. The process is fully automatic: Great Docs compiles the Go binary, runs
+it with `--help`, and parses the output into structured reference pages.
+
+### Enabling Go CLI Documentation
+
+Set `project_type` to `go` (or include `go` in a list for mixed projects) and enable `go_cli`:
+
+```{.yaml filename="docs/great-docs.yml"}
+project_type: go
+go_cli:
+  enabled: true
+```
+
+This requires `go` to be on your `PATH`. Great Docs compiles the binary to a temporary directory
+during each build, so the project tree is never modified.
+
+### Project Detection
+
+Great Docs recognizes a Go CLI project when it finds:
+
+1. A `go.mod` file at the project root
+2. At least one main package in a standard layout:
+   - `cmd/<name>/main.go` (multi-binary layout, most common)
+   - `cmd/main.go` (single binary under `cmd/`)
+   - `main.go` (flat layout)
+
+The binary name is inferred from the directory name (for `cmd/<name>/`) or from the module path
+(for flat layouts).
+
+### How It Works
+
+During each build:
+
+1. **Detects the project**: reads `go.mod` for the module path, locates the main package
+2. **Compiles the binary**: runs `go build` to a temporary directory
+3. **Extracts the command tree**: runs `<binary> --help` and parses subcommands recursively
+4. **Generates pages**: creates the same structured `.qmd` pages as the Python CLI pipeline
+5. **Updates navigation**: adds a CLI section to the sidebar
+
+Cobra's help format uses `Available Commands:` and `Flags:` sections. Great Docs parses these
+automatically, including custom command groups defined with `AddGroup()`.
+
+## Rust CLI (clap) {#rust-cli}
+
+Great Docs can document Rust CLI projects that use [clap](https://docs.rs/clap/),
+[structopt](https://docs.rs/structopt/), [argh](https://docs.rs/argh/), or any framework whose
+`--help` output follows standard conventions. Like the Go pipeline, the process is fully automatic:
+Great Docs compiles the Rust binary via `cargo build`, runs it with `--help`, and parses the output
+into structured reference pages.
+
+### Enabling Rust CLI Documentation
+
+Set `project_type` to `rust` and enable `rust_cli`:
+
+```{.yaml filename="docs/great-docs.yml"}
+project_type: rust
+rust_cli:
+  enabled: true
+```
+
+This requires `cargo` to be on your `PATH`. Great Docs compiles a release binary to a temporary
+directory during each build, so the project tree is never modified.
+
+### Project Detection
+
+Great Docs recognizes a Rust CLI project when it finds:
+
+1. A `Cargo.toml` at the project root with a `[package]` section
+2. At least one binary target:
+   - Explicit `[[bin]]` sections in `Cargo.toml`
+   - `src/main.rs` (Cargo's default binary target, named after the package)
+
+For projects that produce multiple binaries (like separate `ir` and `rx` binaries), Great Docs
+documents the first binary listed.
+
+### How It Works
+
+During each build:
+
+1. **Detects the project**: reads `Cargo.toml` for the package name and binary targets
+2. **Compiles the binary**: runs `cargo build --release` with a temporary `--target-dir`
+3. **Extracts the command tree**: runs `<binary> --help` and parses subcommands recursively
+4. **Generates pages**: creates the same structured `.qmd` pages as the Python and Go pipelines
+5. **Updates navigation**: adds a CLI section to the sidebar
+
+clap's help format uses `Commands:` and `Options:` sections. Great Docs parses these automatically,
+including nested subcommand groups (e.g., `yamark git-filter clean`), positional arguments, default
+values in `[default: ...]` brackets, and flags with no description text.
+
+### Writing Good `--help` Text
+
+The quality of generated documentation depends directly on your `--help` output. For clap-based
+projects using the derive API:
+
+- **Add `about` or `long_about`** to every command and subcommand via the `#[command(...)]`
+attribute or doc comments. The description text becomes the page's subject and extended description.
+- **Add `help` to every argument and option** via `#[arg(help = "...")]` or doc comments. Options
+without help text still appear on the page but give readers no context.
+- **Use `after_help`** for examples. clap renders this after the options list, and Great Docs
+captures it in the full `--help` output shown in the collapsible disclosure widget.
+
+```{.rust filename="src/cli.rs"}
+/// Format YAML and Markdown files.
+///
+/// Reads files from the given paths and writes formatted output.
+/// When no paths are given, reads from standard input.
+#[derive(Parser)]
+struct Cli {
+    /// Enable check mode (exit 1 if files would change)
+    #[arg(long)]
+    check: bool,
+
+    /// Output width for prose wrapping
+    #[arg(long, default_value_t = 72)]
+    wrap: usize,
+
+    /// Files to format
+    paths: Vec<PathBuf>,
+}
+```
+
+### Mixed Projects
+
+For projects that include both a Rust CLI and a Python package (e.g., a Rust binary with Python
+bindings), use a list for `project_type`:
+
+```{.yaml filename="docs/great-docs.yml"}
+project_type: [python, rust]
+rust_cli:
+  enabled: true
+```
+
+This enables both the Python API reference and the Rust CLI reference. The generated site shows
+both sections in the Reference sidebar.
+
+## Generated Output
+
+Regardless of which ecosystem your CLI uses, Great Docs generates the same structured pages.
+
+### Sidebar Structure
+
+CLI commands appear in the Reference sidebar:
+
+```
+Reference
+├── API
+│   └── (your classes and functions)
+└── CLI
+    ├── my-cli (main command)
+    ├── my-cli build
+    ├── my-cli deploy
+    └── my-cli config
+```
+
+### Page Format
+
+Each CLI page uses the same structured layout as API reference pages, making the site feel cohesive.
+A generated page contains these sections in order:
+
+1. **Title** with a colored label badge (`cli` or `cli-group`)
+2. **Subject**: the first paragraph of the description (the short description)
+3. **Usage signature**: a `bash` code block showing the invocation pattern
+4. **Extended description**: remaining paragraphs, formatted as prose
+5. **Collapsible `--help` output**: the full raw `--help` text, tucked inside a disclosure widget
+6. **Arguments**: if the command takes positional arguments
+7. **Options**: a definition list with name, type, default, and help text
+8. **Subcommands**: for groups, each subcommand links to its own page
+9. **Examples**: if the help text includes an `Examples:` section
+
+This structured layout gives readers quick access to what they need (usage, options, examples) while
+preserving the full `--help` output for those who want the raw reference.
+
+### Text Enhancements
+
+Within the description and option help text, Great Docs automatically applies two enhancements:
+
+- **Single-quoted text -> code**: `'great-docs build'` in your help text renders as
+`great-docs build` in inline code
+- **Option names -> code**: references to options like `--watch` or `--from-repo` are rendered as
+inline code automatically
+
+These enhancements are applied automatically during page generation. You don't need to use backticks
+or any special markup in your help strings.
+
+## Styling
+
+CLI reference pages share the same visual system as API reference pages:
+
+- **Colored label badges**: `cli` (blue) and `cli-group` (teal) distinguish commands from groups
+- **Structured definition lists**: options are displayed with the same parameter styling used for
+  function signatures in API docs
+- **Consistent layout**: subject, signature, description, and parameters mirror the API page
+  structure
+- **Responsive design**: pages adapt to mobile and desktop viewports
+- **Collapsible details**: the raw `--help` output is available but doesn't clutter the page
+
+This shared design language means readers moving between API docs and CLI docs see the same
+patterns: a short subject at the top, a signature block, extended prose, and a structured parameter
+list.
+
+## Troubleshooting
+
+### Python CLI Not Detected
+
+If your Click CLI isn't found:
+
+1. verify Click is installed
+2. check the module path is correct
+3. ensure the Click command is importable
+4. use explicit configuration:
+
+```{.yaml filename="docs/great-docs.yml"}
+cli:
+  enabled: true
+  module: your_package.cli
+  name: cli   # The Click command object name
+```
+
+### Go or Rust CLI Not Detected
+
+If your Go or Rust CLI isn't found:
+
+1. verify the compiler is on `PATH` (`go` or `cargo`)
+2. check that `go.mod` or `Cargo.toml` exists at the project root
+3. ensure there is a binary entry point (`main.go` or `src/main.rs`)
+4. check the build log for compilation errors
+
+### Help Text Missing
+
+If commands show minimal help:
+
+- **Python**: add docstrings to Click functions and `help=` to all options
+- **Go**: add descriptions to Cobra commands via `Short` and `Long` fields
+- **Rust**: add doc comments or `#[arg(help = "...")]` to clap structs
+
+The generated page will still show the command's usage signature and options, but the description
+sections will be empty without help text.
+
+## Next Steps
+
+CLI documentation works best when your commands have good help text. Great Docs takes what you've
+written and turns it into browsable, searchable reference pages that stay in sync with your code.
+
+- [User Guides](08-user-guides.qmd) explains how to add narrative documentation
+- [Deployment](14-deployment.qmd) covers publishing to GitHub Pages

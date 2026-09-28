@@ -59,7 +59,7 @@ SPEC = {
               --gdtest-custom-css: applied;
             }
         """,
-        "user_guide/01-page.qmd": """\
+        "docs/user_guide/01-page.qmd": """\
             ---
             title: Page
             ---
@@ -71,7 +71,7 @@ SPEC = {
     # ── great-docs.yml ────────────────────────────────────────────────
     "config": {
         "site": {
-            "css": ["docs/custom.css"],
+            "css": ["custom.css"],
         },
     },
     # ── Expected outcomes ─────────────────────────────────────────────

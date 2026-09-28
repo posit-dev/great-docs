@@ -5,8 +5,34 @@ from pathlib import Path
 import pytest
 from mcp.types import CompletionArgument, ResourceTemplateReference
 
-from great_docs._utils import QUARTO_YML_HEADER
+from great_docs._layout import Layout
+from great_docs._utils import QUARTO_YML_HEADER, is_in_great_docs_build_dir
 from great_docs.mcp import _sibling_build_dirs, handle_completion
+
+
+@pytest.mark.parametrize("conflict", ["versions", "ownership"])
+def test_clean_build_validates_before_removing_historical_output(
+    tmp_path: Path, conflict: str
+) -> None:
+    from great_docs.mcp import _handle_build
+
+    source = tmp_path / "docs"
+    source.mkdir()
+    versions = "versions: ['2.0', 'v1.5.0', '1.5.0']\n" if conflict == "versions" else ""
+    (source / "great-docs.yml").write_text(versions)
+    historical = source / "_quarto/v1.5.0"
+    historical.mkdir(parents=True)
+    (historical / "_quarto.yml").write_text(QUARTO_YML_HEADER)
+    (historical / "index.qmd").write_bytes(b"old generated page\x00")
+    if conflict == "ownership":
+        (source / "_site").mkdir()
+        (source / "_site/notes.txt").write_bytes(b"user notes\x00")
+    before = {path: path.read_bytes() for path in source.rglob("*") if path.is_file()}
+
+    with pytest.raises(ValueError):
+        asyncio.run(_handle_build({"project_path": str(tmp_path), "clean": True}))
+
+    assert all(path.is_file() and path.read_bytes() == content for path, content in before.items())
 
 
 class TestSiblingBuildDirs:
@@ -38,6 +64,26 @@ class TestSiblingBuildDirs:
         result = _sibling_build_dirs(tmp_path)
 
         assert result == []
+
+    @pytest.mark.parametrize("directory", ["docs", "website"])
+    def test_selected_layout(self, tmp_path: Path, directory: str) -> None:
+        source = tmp_path / directory
+        source.mkdir()
+        config = source / "great-docs.yml"
+        config.write_text("module: sample\n")
+        layout = Layout.make(tmp_path, config)
+        historical = source / "_quarto/v1.5.0"
+        self._make_build_dir(historical)
+        assert _sibling_build_dirs(tmp_path, layout=layout) == [historical]
+        assert is_in_great_docs_build_dir(
+            (directory, "_quarto", "v1.5.0", "index.qmd"), tmp_path, layout
+        )
+        assert not is_in_great_docs_build_dir(
+            (directory, "examples", "_quarto", "v1.5.0", "index.qmd"), tmp_path, layout
+        )
+        assert not is_in_great_docs_build_dir(
+            (directory, "_quarto", "notes", "index.qmd"), tmp_path, layout
+        )
 
 
 class TestCleanRemovesSiblings:

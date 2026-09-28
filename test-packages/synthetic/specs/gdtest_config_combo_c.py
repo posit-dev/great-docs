@@ -151,10 +151,10 @@ SPEC = {
                 """
                 return {"service": service, "status": "healthy", "interval": interval}
         ''',
-        "examples/demo.qmd": (
+        "docs/examples/demo.qmd": (
             "---\ntitle: Demo Example\n---\n\n# Demo\n\nA demonstration of the package in action.\n"
         ),
-        "tutorials/step1.qmd": (
+        "docs/tutorials/step1.qmd": (
             "---\n"
             "title: Step 1 - Getting Started\n"
             "---\n"
@@ -163,10 +163,10 @@ SPEC = {
             "\n"
             "The first step in the tutorial.\n"
         ),
-        "user_guide/intro.qmd": (
+        "docs/user_guide/intro.qmd": (
             "---\ntitle: Introduction\n---\n\n# Introduction\n\nWelcome to the user guide.\n"
         ),
-        "user_guide/advanced.qmd": (
+        "docs/user_guide/advanced.qmd": (
             "---\n"
             "title: Advanced Topics\n"
             "---\n"

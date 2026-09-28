@@ -1,0 +1,364 @@
+---
+title: "Docs Linting"
+guide-section: "Quality & Maintenance"
+tags: [Quality, API]
+versions: ">=0.3"
+---
+
+# Docs Linting
+
+Documentation problems tend to be invisible until someone encounters them: a function with no
+docstring, a cross-reference pointing to a symbol that was renamed, or a directive that's
+misspelled. These issues don't produce build errors, so they can persist across many releases.
+
+Great Docs includes a built-in linter that analyzes your package's public API for documentation
+quality issues. It catches missing docstrings, broken cross-references, inconsistent formatting, and
+malformed directives before your users ever see them.
+
+## Basic Usage
+
+Run the linter from your project directory:
+
+```{.bash filename="Terminal"}
+great-docs lint
+```
+
+This produces a report like:
+
+```
+════════════════════════════════════════════════════════════
+📋 Documentation Lint Results
+════════════════════════════════════════════════════════════
+
+Package: my_package
+Exports checked: 42
+
+✅ All documentation checks passed!
+```
+
+When issues are found, they are grouped by check type with clear indicators:
+
+```
+────────────────────────────────────────────────────────────
+  missing-docstring  [2 error(s), 3 warning(s)]
+────────────────────────────────────────────────────────────
+  ❌  calculate_total: Public export 'calculate_total'
+                       has no docstring.
+  ❌  DataProcessor: Public export 'DataProcessor' has
+                     no docstring.
+  ⚠️   Widget.render: Public method 'Widget.render'
+                       has no docstring.
+  ⚠️   Widget.update: Public method 'Widget.update'
+                       has no docstring.
+  ⚠️   Widget.__repr__: Public method 'Widget.__repr__'
+                         has no docstring.
+
+────────────────────────────────────────────────────────────
+  style-mismatch  [1 warning(s)]
+────────────────────────────────────────────────────────────
+  ⚠️   parse_config: Docstring appears to use 'google'
+                      style but project is configured
+                      for 'numpy'.
+
+────────────────────────────────────────────────────────────
+❌ 2 error(s), 4 warning(s)
+```
+
+Errors represent problems that will produce gaps or broken content on the rendered site. Warnings
+flag inconsistencies that are worth investigating but won't break anything.
+
+## Checks Performed
+
+The linter runs four categories of checks, each targeting a different class of documentation
+problem. All four run by default, and each can be run individually using `--check` (described
+below).
+
+### Missing Docstrings
+
+Finds public exports and class methods that lack docstrings.
+
+| Finding | Severity | Description |
+|---------|----------|-------------|
+| `missing-docstring` | Error | A public export in `__all__` has no docstring |
+| `missing-docstring` | Warning | A public method on a documented class has no docstring |
+
+Private methods (names starting with `_`) and constructor dunders (`__init__`, `__new__`) are
+skipped automatically. The linter only flags symbols that would appear (or be expected to appear) in
+the rendered documentation.
+
+### Broken Cross-References
+
+Cross-references to undocumented symbols produce dead links on the rendered site. The linter
+checks that each `%seealso` target names an object this project documents or a linked project
+publishes. The linter checks only docstrings that render in the reference. A `%seealso` in a
+hidden member, such as one from a class configured `members: false`, has no rendered page and
+produces no finding.
+
+| Finding | Severity | Description |
+|---------|----------|-------------|
+| `broken-xref` | Error | A reference names no object documented by this project or a linked source |
+| `ambiguous-xref` | Error | A reference names a short form claimed by two documented objects |
+| `unread-source` | Info | A linked source inventory could not be read, so `%seealso` was not checked |
+
+For example, this would flag an error:
+
+```python
+def process(data):
+    """
+    Process the input data.
+
+    %seealso validate_input, transform_data
+    """
+    ...
+```
+
+If `validate_input` is documented but `transform_data` is not, the linter reports
+`transform_data` as a broken cross-reference. This is especially useful after renaming or removing
+functions.
+
+A reference can also be ambiguous. If both `StoreCache` and `NetCache` document a `flush`
+method, neither claims the short name `flush`, so a reference to it renders unlinked:
+
+```
+'flush' is claimed by demo.NetCache.flush and demo.StoreCache.flush, so the reference stays
+unlinked. Qualify it.
+```
+
+Writing `` [](`StoreCache.flush`) `` resolves it. The linter judges `%seealso` entries and inline
+references identically because the build resolves both through one index. It scans docstrings and
+documentation pages.
+
+References to linked projects use the same index. `%seealso numpy.ndarray` passes whenever
+the built page resolves it, by full name or source alias. Great Docs uses a fresh cached
+inventory or downloads one when needed. If it cannot read a source, its names are unavailable,
+so the linter reports `unread-source` and does not classify `%seealso` references as broken
+for that run.
+
+### Style Consistency
+
+Detects docstrings that don't match your project's configured parser style. The `parser` setting in
+`great-docs.yml` determines which style is expected:
+
+```{.yaml filename="docs/great-docs.yml"}
+parser: numpy    # or "google" or "sphinx"
+```
+
+| Finding | Severity | Description |
+|---------|----------|-------------|
+| `style-mismatch` | Warning | Docstring uses a different style than configured |
+
+The linter detects style by looking for characteristic patterns:
+
+- **NumPy**: Section headers with dashed underlines (`Parameters\n----------`)
+- **Google**: Section headers with colons (`Args:`, `Returns:`)
+- **Sphinx**: Field markers (`:param x:`, `:returns:`)
+
+Short docstrings without structured sections are not flagged, since they don't contain enough signal
+to determine a style.
+
+### Directive Consistency
+
+Great Docs uses `%`-prefixed directives in docstrings for features like cross-references and
+documentation exclusion. This check catches misspelled or unrecognized directives that would
+otherwise be silently ignored.
+
+| Finding | Severity | Description |
+|---------|----------|-------------|
+| `unknown-directive` | Warning | A `%`-prefixed directive is not recognized |
+
+Great Docs recognizes these parser-independent directives:
+
+- Cross-reference and exclusion: `%seealso` (see
+  [Cross-Referencing](cross-referencing.qmd)) and `%nodoc` (see
+  [Writing Docstrings](writing-docstrings.qmd#nodoc-exclude-an-item-from-documentation))
+- Callouts: `%note`, `%warning`, `%caution`, `%danger`, `%important`, `%tip`, and `%hint`
+- Version notices: `%versionadded`, `%versionchanged`, and `%deprecated`
+
+Numbered `.. [1]` citation markers work with every parser. Use `parser: sphinx` for
+reStructuredText directives and inline cross-reference roles such as
+`` :py:exc:`ValueError` ``.
+
+Any other `%`-prefixed token, such as `%internal`, is flagged as unknown. If you see a false
+positive, check for typos in the directive name.
+
+## Running Specific Checks
+
+When diagnosing a particular class of issue, you can run a subset of checks instead of the full
+suite. Use `--check` to select only the checks you need (this option can be repeated):
+
+```{.bash filename="Terminal"}
+# Only check for missing docstrings
+great-docs lint --check docstrings
+
+# Check cross-references and style together
+great-docs lint --check cross-refs --check style
+
+# Only check directive usage
+great-docs lint --check directives
+```
+
+Available check names:
+
+| Name | What it checks |
+|------|----------------|
+| `docstrings` | Missing docstrings on public exports and methods |
+| `cross-refs` | Broken `%seealso` references and ambiguous interlinks |
+| `style` | Docstring style consistency with configured parser |
+| `directives` | Unknown or malformed `%` directives |
+
+When no `--check` flags are given, all four categories run.
+
+## JSON Output
+
+For CI/CD integration or programmatic analysis, use `--json` to get machine-readable output:
+
+```{.bash filename="Terminal"}
+great-docs lint --json
+```
+
+This produces structured JSON:
+
+```json
+{
+  "status": "fail",
+  "package": "my_package",
+  "exports_checked": 42,
+  "summary": {
+    "errors": 2,
+    "warnings": 4,
+    "info": 0
+  },
+  "issues": [
+    {
+      "check": "missing-docstring",
+      "severity": "error",
+      "symbol": "calculate_total",
+      "message": "Public export 'calculate_total' has no docstring."
+    },
+    {
+      "check": "style-mismatch",
+      "severity": "warning",
+      "symbol": "parse_config",
+      "message": "Docstring appears to use 'google' style but project is configured for 'numpy'."
+    }
+  ]
+}
+```
+
+The `status` field is one of:
+
+| Status | Meaning |
+|--------|---------|
+| `pass` | No errors or warnings |
+| `warn` | Warnings only (exit code 0) |
+| `fail` | At least one error (exit code 1) |
+
+You can filter the JSON output with `jq`:
+
+```{.bash filename="Terminal"}
+# Show only errors
+great-docs lint --json | jq '.issues[] | select(.severity == "error")'
+
+# Count issues by check type
+great-docs lint --json | jq '.issues | group_by(.check) | map({check: .[0].check, count: length})'
+```
+
+The JSON format is stable across releases, so you can build tooling around it.
+
+## Exit Codes
+
+The linter uses exit codes to indicate whether action is needed:
+
+| Code | Meaning |
+|------|---------|
+| `0` | No errors (warnings are allowed) |
+| `1` | At least one error was found |
+
+This means you can use `great-docs lint` directly in CI pipelines and it will fail the build only
+when there are errors. Warnings appear in the output but do not block the pipeline.
+
+## CI/CD Integration
+
+Running the linter in CI ensures that documentation quality is enforced on every pull request, not
+just when someone remembers to check.
+
+### GitHub Actions
+
+Add documentation linting to your CI workflow:
+
+```{.yaml filename=".github/workflows/docs.yml"}
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -e .
+          pip install great-docs
+
+      - name: Lint documentation
+        run: great-docs lint
+```
+
+### Pre-commit Hook
+
+Add linting as a pre-commit hook:
+
+```{.yaml filename=".pre-commit-config.yaml"}
+repos:
+  - repo: local
+    hooks:
+      - id: lint-docs
+        name: Lint Documentation
+        entry: great-docs lint
+        language: system
+        pass_filenames: false
+        always_run: true
+```
+
+### Combining with Other Quality Checks
+
+Run linting alongside other Great Docs quality tools in CI:
+
+```{.yaml filename=".github/workflows/docs.yml"}
+      - name: Lint documentation
+        run: great-docs lint
+
+      - name: Check links
+        run: great-docs check-links
+
+      - name: Proofread
+        run: great-docs proofread
+
+      - name: Audit SEO
+        run: great-docs seo
+```
+
+Running all four together gives you a comprehensive pre-deployment quality gate.
+
+## Next Steps
+
+The linter catches structural problems early: missing docstrings, malformed directives, broken
+cross-references, and style inconsistencies that would otherwise surface as confusing gaps in the
+rendered site. Run it in CI to enforce documentation quality alongside code quality.
+
+- [Link Checker](link-checker.qmd) validates that all links in the built site resolve correctly
+- [Proofreading](proofreading.qmd) checks spelling, grammar, and style in your prose
+- [Writing Docstrings](writing-docstrings.qmd) covers the docstring format and directives that the
+linter validates
+- [SEO Optimization](seo.qmd) audits generated metadata that complements documentation quality

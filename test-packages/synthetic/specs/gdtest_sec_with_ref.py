@@ -112,7 +112,7 @@ SPEC = {
                 """
                 return ", ".join(f"{k}={v}" for k, v in result.items())
         ''',
-        "tutorials/step1.qmd": (
+        "docs/tutorials/step1.qmd": (
             "---\n"
             "title: Step 1 - Getting Started\n"
             "---\n"
@@ -121,7 +121,7 @@ SPEC = {
             "\n"
             "The first step in the tutorial series.\n"
         ),
-        "tutorials/step2.qmd": (
+        "docs/tutorials/step2.qmd": (
             "---\n"
             "title: Step 2 - Going Further\n"
             "---\n"

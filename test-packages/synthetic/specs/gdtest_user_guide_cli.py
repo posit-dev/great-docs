@@ -96,7 +96,7 @@ SPEC = {
                 """Show statistics for the input file."""
                 click.echo(f"Stats for {input_file}")
         ''',
-        "user_guide/01-getting-started.qmd": """\
+        "docs/user_guide/01-getting-started.qmd": """\
             ---
             title: Getting Started
             ---
@@ -111,7 +111,7 @@ SPEC = {
             pip install gdtest-user-guide-cli
             ```
         """,
-        "user_guide/02-advanced.qmd": """\
+        "docs/user_guide/02-advanced.qmd": """\
             ---
             title: Advanced Usage
             ---

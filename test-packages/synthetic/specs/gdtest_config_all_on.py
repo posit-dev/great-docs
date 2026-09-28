@@ -98,7 +98,7 @@ SPEC = {
                     """
                     return bool(self.name)
         ''',
-        "user_guide/getting-started.qmd": """\
+        "docs/user_guide/getting-started.qmd": """\
             ---
             title: Getting Started
             ---

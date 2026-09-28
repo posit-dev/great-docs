@@ -113,7 +113,7 @@ SPEC = {
                 """
                 return Widget(name, size)
         ''',
-        "user_guide/01-intro.qmd": """\
+        "docs/user_guide/01-intro.qmd": """\
             ---
             title: Introduction
             tags: [Tutorial, Getting Started]
@@ -123,7 +123,7 @@ SPEC = {
 
             This guide covers the basics of widget creation.
         """,
-        "user_guide/02-configuration.qmd": """\
+        "docs/user_guide/02-configuration.qmd": """\
             ---
             title: Configuration
             tags: [Python, Python/Configuration, Tutorial]
@@ -141,7 +141,7 @@ SPEC = {
             w = create_widget("my-widget")
             ```
         """,
-        "user_guide/03-advanced.qmd": """\
+        "docs/user_guide/03-advanced.qmd": """\
             ---
             title: Advanced Usage
             tags: [Python/Advanced, API, needs-review]
@@ -153,7 +153,7 @@ SPEC = {
 
             Override the default render method for custom output.
         """,
-        "user_guide/04-errors.qmd": """\
+        "docs/user_guide/04-errors.qmd": """\
             ---
             title: Error Handling
             tags: [Python/Advanced, API, internal]
@@ -166,7 +166,7 @@ SPEC = {
             The `WidgetError` exception is raised when an invalid operation
             is attempted.
         """,
-        "user_guide/05-rendering.qmd": """\
+        "docs/user_guide/05-rendering.qmd": """\
             ---
             title: Rendering Widgets
             subtitle: A deep dive into the rendering pipeline
@@ -180,7 +180,7 @@ SPEC = {
             Widgets go through a multi-step rendering pipeline before
             producing their final HTML output.
         """,
-        "user_guide/06-faq.qmd": """\
+        "docs/user_guide/06-faq.qmd": """\
             ---
             title: Frequently Asked Questions
             ---
@@ -192,7 +192,7 @@ SPEC = {
             Widgets provide a reusable, configurable abstraction for
             building HTML components.
         """,
-        "user_guide/07-tips.qmd": """\
+        "docs/user_guide/07-tips.qmd": """\
             ---
             title: Tips and Tricks
             description: Handy shortcuts and lesser-known features.
@@ -205,7 +205,7 @@ SPEC = {
 
             Use Ctrl+W to close the current widget.
         """,
-        "user_guide/08-best-practices.qmd": """\
+        "docs/user_guide/08-best-practices.qmd": """\
             ---
             title: Best Practices
             subtitle: Patterns for production-quality widgets

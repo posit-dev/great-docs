@@ -16,6 +16,8 @@ FROZEN_DEFAULT_CONFIG: dict[str, Any] = {
     "display_name": None,
     "project_type": "python",
     "parser": "numpy",
+    # Added after the snapshot: the projects this one links out to.
+    "interlinks": {"sources": {}, "add_function_parentheses": True},
     "callable_signatures": {"style": "highlighted", "wrap": "per_parameter"},
     "dynamic": True,
     "jupyter": "python3",
@@ -95,6 +97,7 @@ FROZEN_DEFAULT_CONFIG: dict[str, Any] = {
     "navbar_style": None,
     "navbar_color": None,
     "navbar_order": None,
+    "ref_section_order": [],
     "content_style": {"preset": None, "pages": "all"},
     "scale_to_fit": None,
     "scale_to_fit_min_scale": None,

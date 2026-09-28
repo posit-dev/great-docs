@@ -73,7 +73,7 @@ SPEC = {
                 mid = len(data) // 2
                 return (data[:mid], data[mid:])
         ''',
-        "user_guide/intro.qmd": (
+        "docs/user_guide/intro.qmd": (
             "---\n"
             "title: Introduction\n"
             "---\n"
@@ -82,7 +82,7 @@ SPEC = {
             "\n"
             "This is the introduction written in Quarto format.\n"
         ),
-        "user_guide/setup.md": (
+        "docs/user_guide/setup.md": (
             "---\n"
             "title: Setup\n"
             "---\n"
@@ -91,7 +91,7 @@ SPEC = {
             "\n"
             "This is the setup guide written in plain Markdown.\n"
         ),
-        "user_guide/advanced.qmd": (
+        "docs/user_guide/advanced.qmd": (
             "---\ntitle: Advanced\n---\n\n# Advanced\n\nAdvanced topics written in Quarto format.\n"
         ),
     },

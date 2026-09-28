@@ -64,7 +64,7 @@ SPEC = {
                 """
                 return Widget(label)
         ''',
-        "user_guide/01-welcome.qmd": """\
+        "docs/user_guide/01-welcome.qmd": """\
             ---
             title: Welcome
             guide-section: Getting Started
@@ -72,7 +72,7 @@ SPEC = {
 
             Welcome to the project!
         """,
-        "user_guide/02-install.qmd": """\
+        "docs/user_guide/02-install.qmd": """\
             ---
             title: Installation
             guide-section: Getting Started
@@ -80,7 +80,7 @@ SPEC = {
 
             How to install the package.
         """,
-        "user_guide/03-customization.qmd": """\
+        "docs/user_guide/03-customization.qmd": """\
             ---
             title: Customization
             guide-section: Advanced
@@ -88,7 +88,7 @@ SPEC = {
 
             Advanced customization options.
         """,
-        "user_guide/04-plugins.qmd": """\
+        "docs/user_guide/04-plugins.qmd": """\
             ---
             title: Plugins
             guide-section: Advanced

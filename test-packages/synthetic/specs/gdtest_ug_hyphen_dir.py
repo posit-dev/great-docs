@@ -53,10 +53,10 @@ SPEC = {
                 """
                 pass
         ''',
-        "user-guide/01-intro.qmd": (
+        "docs/user-guide/01-intro.qmd": (
             "---\ntitle: Introduction\n---\n\n# Introduction\n\nWelcome to the application guide.\n"
         ),
-        "user-guide/02-setup.qmd": (
+        "docs/user-guide/02-setup.qmd": (
             "---\ntitle: Setup\n---\n\n# Setup\n\nHow to set up the application.\n"
         ),
         "README.md": (

@@ -29,6 +29,8 @@ from pathlib import Path
 
 import pytest
 
+from great_docs._layout import Layout
+
 # ── Setup ────────────────────────────────────────────────────────────────────
 
 _TEST_PACKAGES_DIR = Path(__file__).resolve().parent.parent / "test-packages"
@@ -53,9 +55,26 @@ requires_bs4 = pytest.mark.skipif(not HAS_BS4, reason="beautifulsoup4 not instal
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
+# Guard both path helpers before calling `Layout.make`. It searches upwards for
+# a project manifest, and the enclosing repository has its own `great-docs.yml`.
+
+
 def _site_dir(pkg_name: str) -> Path:
     """Return the _site/ directory for a rendered GDG package."""
-    return _RENDERED_DIR / pkg_name / "great-docs" / "_site"
+    package_dir = _RENDERED_DIR / pkg_name
+    if not package_dir.is_dir():
+        # Keep absent-package lookups inside the fixture tree instead of
+        # allowing `Layout.make` to find the enclosing repository.
+        return package_dir / "great-docs" / "_site"
+    return Layout.make(package_dir).site_dir
+
+
+def _config_path(pkg_name: str) -> Path:
+    """Return the great-docs.yml of a rendered GDG package."""
+    package_dir = _RENDERED_DIR / pkg_name
+    if not package_dir.is_dir():
+        return package_dir / "great-docs.yml"
+    return Layout.make(package_dir).config_path
 
 
 def _deployed_css(pkg_name: str) -> str:
@@ -781,7 +800,7 @@ def test_subtitle_only_section_heading_in_llms_outputs():
     `format_label` entry must appear below that heading, not below the preceding
     Utilities heading, in `llms.txt`, `llms-full.txt` and `skill.md`.
     """
-    site = _RENDERED_DIR / "gdtest_ref_sectioned" / "great-docs" / "_site"
+    site = _site_dir("gdtest_ref_sectioned")
     llms_txt = site / "llms.txt"
     llms_full = site / "llms-full.txt"
     skill_md = site / "skill.md"
@@ -2057,21 +2076,23 @@ def test_logo_replaces_title():
     # Alt text should fall back to display_name
     assert navbar.get("logo-alt") == "Logo Test", "logo-alt should be the display_name"
 
-    # Favicon should be auto-generated from logo.svg and referenced in config
+    # Generate the favicon from logo.svg and reference it in the site config.
+    # Without cairosvg or native cairo, generation falls back to favicon.svg.
     favicon = cfg.get("website", {}).get("favicon")
-    assert favicon in ("favicon.ico", "logo.svg"), (
-        f"favicon should be favicon.ico or logo.svg, got {favicon}"
+    assert favicon in ("favicon.ico", "favicon.svg", "logo.svg"), (
+        f"Expected favicon.ico, favicon.svg, or logo.svg; got {favicon}"
     )
 
     # Logo files should exist in the build directory
-    build_dir = _RENDERED_DIR / pkg / "great-docs"
+    build_dir = Layout.make(_RENDERED_DIR / pkg).build_dir
     assert (build_dir / "logo.svg").exists(), "logo.svg should be copied to build dir"
     assert (build_dir / "logo-dark.svg").exists(), "logo-dark.svg should be copied to build dir"
 
-    # Check for generated favicon files
+    # favicon.svg is always copied; raster variants require cairosvg.
+    assert (build_dir / "favicon.svg").exists(), "Expected favicon.svg"
+
     if favicon == "favicon.ico":
         assert (build_dir / "favicon.ico").exists(), "favicon.ico should exist"
-        assert (build_dir / "favicon.svg").exists(), "favicon.svg should exist"
         assert (build_dir / "favicon-32x32.png").exists(), "favicon-32x32.png should exist"
         assert (build_dir / "favicon-16x16.png").exists(), "favicon-16x16.png should exist"
         assert (build_dir / "apple-touch-icon.png").exists(), "apple-touch-icon.png should exist"
@@ -2379,7 +2400,7 @@ def test_cli_sidebar_structure_flat():
 
     from yaml12 import parse_yaml, read_yaml
 
-    quarto_yml = _RENDERED_DIR / pkg / "great-docs" / "_quarto.yml"
+    quarto_yml = Layout.make(_RENDERED_DIR / pkg).build_dir / "_quarto.yml"
     with open(quarto_yml) as f:
         config = read_yaml(f)
 
@@ -2406,7 +2427,7 @@ def test_cli_sidebar_structure_nested():
 
     from yaml12 import parse_yaml, read_yaml
 
-    quarto_yml = _RENDERED_DIR / pkg / "great-docs" / "_quarto.yml"
+    quarto_yml = Layout.make(_RENDERED_DIR / pkg).build_dir / "_quarto.yml"
     with open(quarto_yml) as f:
         config = read_yaml(f)
 
@@ -2471,7 +2492,7 @@ def test_cli_sidebar_no_raw_qmd_paths_in_nested():
 
     from yaml12 import parse_yaml, read_yaml
 
-    quarto_yml = _RENDERED_DIR / pkg / "great-docs" / "_quarto.yml"
+    quarto_yml = Layout.make(_RENDERED_DIR / pkg).build_dir / "_quarto.yml"
     with open(quarto_yml) as f:
         config = read_yaml(f)
 
@@ -2963,7 +2984,7 @@ def _load_quarto_yml(pkg_name: str) -> dict:
     """Load and parse the _quarto.yml for a rendered package."""
     from yaml12 import parse_yaml, read_yaml
 
-    qpath = _RENDERED_DIR / pkg_name / "great-docs" / "_quarto.yml"
+    qpath = Layout.make(_RENDERED_DIR / pkg_name).build_dir / "_quarto.yml"
     with open(qpath) as f:
         return read_yaml(f)
 
@@ -3025,7 +3046,7 @@ def test_source_disabled_no_links_file():
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
 
-    source_links = _RENDERED_DIR / pkg / "great-docs" / "_source_links.json"
+    source_links = Layout.make(_RENDERED_DIR / pkg).build_dir / "_source_links.json"
     assert not source_links.exists(), (
         f"_source_links.json should not exist when source is disabled: {source_links}"
     )
@@ -3396,7 +3417,7 @@ def test_changelog_config_propagated():
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
 
-    gd_yml = _RENDERED_DIR / pkg / "great-docs.yml"
+    gd_yml = _config_path(pkg)
     assert gd_yml.exists(), "great-docs.yml should exist"
 
     cfg = parse_yaml(gd_yml.read_text())
@@ -3462,7 +3483,7 @@ def test_config_combo_b_opt_out_flags():
     )
 
     # source.enabled=false → no _source_links.json
-    source_links = _RENDERED_DIR / pkg / "great-docs" / "_source_links.json"
+    source_links = Layout.make(_RENDERED_DIR / pkg).build_dir / "_source_links.json"
     assert not source_links.exists(), "_source_links.json should not exist when source is disabled"
 
 
@@ -3480,7 +3501,7 @@ def test_config_ug_list_sections_in_yml():
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
 
-    gd_yml = _RENDERED_DIR / pkg / "great-docs.yml"
+    gd_yml = _config_path(pkg)
     assert gd_yml.exists(), "great-docs.yml should exist"
 
     cfg = parse_yaml(gd_yml.read_text())
@@ -3714,7 +3735,7 @@ def test_ug_explicit_order_config_sections():
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
 
-    gd_yml = _RENDERED_DIR / pkg / "great-docs.yml"
+    gd_yml = _config_path(pkg)
     assert gd_yml.exists(), "great-docs.yml should exist"
 
     cfg = parse_yaml(gd_yml.read_text())
@@ -5012,7 +5033,7 @@ def test_md_disabled_no_copy_page_script():
 def test_md_disabled_config_written():
     """gdtest_md_disabled: great-docs.yml has markdown_pages: false."""
     pkg = "gdtest_md_disabled"
-    gd_yml = _RENDERED_DIR / pkg / "great-docs.yml"
+    gd_yml = _config_path(pkg)
     if not gd_yml.exists():
         pytest.skip("great-docs.yml not found")
 
@@ -5026,7 +5047,7 @@ def test_md_disabled_config_written():
 def test_md_disabled_gd_options():
     """gdtest_md_disabled: _gd_options.json has markdown_pages: false."""
     pkg = "gdtest_md_disabled"
-    opts_path = _RENDERED_DIR / pkg / "great-docs" / "_gd_options.json"
+    opts_path = Layout.make(_RENDERED_DIR / pkg).build_dir / "_gd_options.json"
     if not opts_path.exists():
         pytest.skip("_gd_options.json not found")
 
@@ -5104,7 +5125,7 @@ def test_md_no_widget_no_copy_page_script():
 def test_md_no_widget_config_written():
     """gdtest_md_no_widget: great-docs.yml has markdown_pages dict form."""
     pkg = "gdtest_md_no_widget"
-    gd_yml = _RENDERED_DIR / pkg / "great-docs.yml"
+    gd_yml = _config_path(pkg)
     if not gd_yml.exists():
         pytest.skip("great-docs.yml not found")
 
@@ -5123,7 +5144,7 @@ def test_md_no_widget_gd_options():
     so markdown_pages should be true in the options file.
     """
     pkg = "gdtest_md_no_widget"
-    opts_path = _RENDERED_DIR / pkg / "great-docs" / "_gd_options.json"
+    opts_path = Layout.make(_RENDERED_DIR / pkg).build_dir / "_gd_options.json"
     if not opts_path.exists():
         pytest.skip("_gd_options.json not found")
 
@@ -5845,7 +5866,7 @@ def test_DED_config_minimal_source_disabled():
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
 
-    source_links = _RENDERED_DIR / pkg / "great-docs" / "_source_links.json"
+    source_links = Layout.make(_RENDERED_DIR / pkg).build_dir / "_source_links.json"
     assert not source_links.exists(), "_source_links.json should not exist when source disabled"
 
 
@@ -5909,7 +5930,7 @@ def test_DED_source_branch_no_links():
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
 
-    source_links = _RENDERED_DIR / pkg / "great-docs" / "_source_links.json"
+    source_links = Layout.make(_RENDERED_DIR / pkg).build_dir / "_source_links.json"
     # Synthetic packages don't have a real repo, so _source_links.json may not exist
     ref = _ref_dir(pkg)
     assert (ref / "read_data.html").exists(), "read_data page missing"
@@ -7192,7 +7213,7 @@ _INDEX_FM_PKG = "gdtest_index_frontmatter"
 
 def _generated_index_qmd(pkg: str) -> Path:
     """Return the homepage index.qmd that Great Docs generated for *pkg*."""
-    return _RENDERED_DIR / pkg / "great-docs" / "index.qmd"
+    return Layout.make(_RENDERED_DIR / pkg).build_dir / "index.qmd"
 
 
 @pytest.mark.dedicated
@@ -7722,13 +7743,13 @@ def test_DED_numpy_seealso_desc_descriptions_render():
             )
 
 
-# ── gdtest_interlinks_prose tests ─────────────────────────────────────────────
+# ── gdtest_interlinks tests ────────────────────────────────────────────────
 
 
 @pytest.mark.dedicated
 def test_DED_interlinks_prose_pages_exist():
-    """gdtest_interlinks_prose: all exports have reference pages."""
-    pkg = "gdtest_interlinks_prose"
+    """gdtest_interlinks: reference pages exist for every export."""
+    pkg = "gdtest_interlinks"
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
 
@@ -7740,8 +7761,8 @@ def test_DED_interlinks_prose_pages_exist():
 @pytest.mark.dedicated
 @requires_bs4
 def test_DED_interlinks_prose_links_resolved():
-    """gdtest_interlinks_prose: interlinks in prose are resolved to <a> tags."""
-    pkg = "gdtest_interlinks_prose"
+    """gdtest_interlinks: docstring interlinks become <a> tags."""
+    pkg = "gdtest_interlinks"
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
 
@@ -7767,8 +7788,8 @@ def test_DED_interlinks_prose_links_resolved():
 @pytest.mark.dedicated
 @requires_bs4
 def test_DED_interlinks_prose_hrefs_valid():
-    """gdtest_interlinks_prose: interlink hrefs point to valid reference pages."""
-    pkg = "gdtest_interlinks_prose"
+    """gdtest_interlinks: interlink hrefs point to reference pages."""
+    pkg = "gdtest_interlinks"
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
 
@@ -7790,6 +7811,159 @@ def test_DED_interlinks_prose_hrefs_valid():
             assert ".html" in href, (
                 f"{obj_name}.html: href {href!r} for {target!r} is not a valid page link"
             )
+
+
+@pytest.mark.dedicated
+def test_DED_interlinks_prose_publishes_its_inventory():
+    """gdtest_interlinks: the site publishes objects.inv at its root."""
+    from great_docs._interlinks.sphinx_inventory import decode
+
+    pkg = "gdtest_interlinks"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    inv_path = _site_dir(pkg) / "objects.inv"
+    assert inv_path.exists(), "objects.inv is not published at the site root"
+
+    inv = decode(inv_path.read_bytes())
+    names = {e.name for e in inv.entries}
+    assert f"{pkg}.DuckDBStore" in names, f"documented objects missing from {sorted(names)[:5]}"
+    assert all(e.uri for e in inv.entries), "an entry has no uri to link to"
+
+
+def _ilu_skip():
+    pkg = "gdtest_interlinks"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+
+def _ilu_site():
+    return _site_dir("gdtest_interlinks")
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_interlinks_userguide_ug_pages_exist():
+    """gdtest_interlinks: user-guide pages exist."""
+    _ilu_skip()
+    ug = _ilu_site() / "user-guide"
+    assert (ug / "getting-started.html").exists(), "Getting Started page missing"
+    assert (ug / "advanced.html").exists(), "Advanced page missing"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_interlinks_userguide_external_links_resolve():
+    """gdtest_interlinks: a configured source and its alias resolve."""
+    _ilu_skip()
+    soup = _load_html(_ilu_site() / "user-guide" / "external.html")
+
+    hrefs = [a.get("href", "") for a in soup.find_all("a", class_="gdls-link")]
+    external = [h for h in hrefs if h == "https://extdemo.example/docs/Widget.html"]
+    assert len(external) == 2, f"expected the full name and the alias to resolve, got {hrefs}"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_interlinks_userguide_shortened_links():
+    """gdtest_interlinks: [](`~pkg.Name`) in user-guide resolves to links."""
+    _ilu_skip()
+    ug = _ilu_site() / "user-guide"
+    page = ug / "getting-started.html"
+    if not page.exists():
+        pytest.skip("getting-started.html not found")
+
+    soup = _load_html(page)
+    gdls_links = soup.find_all("a", class_="gdls-link")
+    link_texts = [a.get_text(strip=True) for a in gdls_links]
+
+    # Shortened references use short display names.
+    for expected in ("DuckDBStore", "BaseStore", "query()"):
+        assert expected in link_texts, (
+            f"Getting Started: shortened interlink {expected!r} not found. Found: {link_texts}"
+        )
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_interlinks_userguide_hrefs_relative():
+    """gdtest_interlinks: user-guide links use ../reference/ paths."""
+    _ilu_skip()
+    ug = _ilu_site() / "user-guide"
+    page = ug / "getting-started.html"
+    if not page.exists():
+        pytest.skip("getting-started.html not found")
+
+    soup = _load_html(page)
+    gdls_links = soup.find_all("a", class_="gdls-link")
+    for link in gdls_links:
+        href = link.get("href", "")
+        # From user-guide/*.html, href should start with ../reference/
+        assert href.startswith("../reference/"), (
+            f"User-guide interlink href {href!r} should be relative to ../reference/"
+        )
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_interlinks_userguide_full_qualified():
+    """gdtest_interlinks: [](`pkg.Name`) renders the fully qualified name."""
+    _ilu_skip()
+    ug = _ilu_site() / "user-guide"
+    page = ug / "advanced.html"
+    if not page.exists():
+        pytest.skip("advanced.html not found")
+
+    soup = _load_html(page)
+    gdls_links = soup.find_all("a", class_="gdls-link")
+    link_texts = [a.get_text(strip=True) for a in gdls_links]
+
+    assert "gdtest_interlinks.BaseStore" in link_texts, (
+        f"Advanced: full qualified 'gdtest_interlinks.BaseStore' not found. Found: {link_texts}"
+    )
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_interlinks_userguide_custom_text():
+    """gdtest_interlinks: custom link text remains unchanged."""
+    _ilu_skip()
+    ug = _ilu_site() / "user-guide"
+    page = ug / "advanced.html"
+    if not page.exists():
+        pytest.skip("advanced.html not found")
+
+    soup = _load_html(page)
+    gdls_links = soup.find_all("a", class_="gdls-link")
+    link_texts = [a.get_text(strip=True) for a in gdls_links]
+
+    assert "custom link text" in link_texts, (
+        f"Advanced: custom text 'custom link text' not found. Found: {link_texts}"
+    )
+    assert "custom text with tilde" in link_texts, (
+        f"Advanced: custom text 'custom text with tilde' not found. Found: {link_texts}"
+    )
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_interlinks_userguide_autolinked_code():
+    """gdtest_interlinks: inline code autolinks in user-guide pages."""
+    _ilu_skip()
+    ug = _ilu_site() / "user-guide"
+    page = ug / "advanced.html"
+    if not page.exists():
+        pytest.skip("advanced.html not found")
+
+    soup = _load_html(page)
+    # Autolinked code uses both the gdls-link and gdls-code classes.
+    code_links = soup.find_all("a", class_="gdls-code")
+    link_texts = [a.get_text(strip=True) for a in code_links]
+
+    for expected in ("BaseStore", "DuckDBStore", "query()"):
+        assert expected in link_texts, (
+            f"Advanced: autolinked code {expected!r} not found. Found: {link_texts}"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -8360,7 +8534,7 @@ def test_DED_tag_location_tags_json_has_default_location():
 
     import json
 
-    tags_json = _RENDERED_DIR / _TAG_LOC_PKG / "great-docs" / "_tags.json"
+    tags_json = Layout.make(_RENDERED_DIR / _TAG_LOC_PKG).build_dir / "_tags.json"
     assert tags_json.exists(), "_tags.json not generated"
     data = json.loads(tags_json.read_text(encoding="utf-8"))
     assert data["default_location"] == "bottom", "Global default_location should be 'bottom'"
@@ -8375,7 +8549,7 @@ def test_DED_tag_location_tags_json_has_page_overrides():
 
     import json
 
-    tags_json = _RENDERED_DIR / _TAG_LOC_PKG / "great-docs" / "_tags.json"
+    tags_json = Layout.make(_RENDERED_DIR / _TAG_LOC_PKG).build_dir / "_tags.json"
     data = json.loads(tags_json.read_text(encoding="utf-8"))
     locs = data.get("page_tag_locations", {})
 
@@ -8808,7 +8982,7 @@ def test_HOMEPAGE_SUBDIRS_section_asset_dirs_copied():
     if not _has_rendered_site(_HOMEPAGE_UG_SUBDIRS_PKG):
         pytest.skip(f"{_HOMEPAGE_UG_SUBDIRS_PKG} not rendered")
 
-    build_dir = _RENDERED_DIR / _HOMEPAGE_UG_SUBDIRS_PKG / "great-docs"
+    build_dir = Layout.make(_RENDERED_DIR / _HOMEPAGE_UG_SUBDIRS_PKG).build_dir
 
     # Asset directories should exist in the build dir
     assert (build_dir / "examples" / "data").is_dir(), (
@@ -9743,145 +9917,6 @@ def test_SCALE_MIN_SCALE_float_page_selectors():
     selectors = meta.get("data-selectors", "")
     for sel in ("#stf_wide", "#stf_styled", "#summary_card"):
         assert sel in selectors, f"Missing {sel} in float-override page selectors"
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# DED: GDLS on non-reference pages (gdtest_interlinks_userguide)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-def _ilu_skip():
-    pkg = "gdtest_interlinks_userguide"
-    if not _has_rendered_site(pkg):
-        pytest.skip(f"{pkg} not rendered")
-
-
-def _ilu_site():
-    return _site_dir("gdtest_interlinks_userguide")
-
-
-@pytest.mark.dedicated
-@requires_bs4
-def test_DED_interlinks_userguide_ref_pages_exist():
-    """gdtest_interlinks_userguide: all exports have reference pages."""
-    _ilu_skip()
-    ref = _ref_dir("gdtest_interlinks_userguide")
-    for name in ("Engine", "Connection", "execute"):
-        assert (ref / f"{name}.html").exists(), f"Ref page {name}.html missing"
-
-
-@pytest.mark.dedicated
-@requires_bs4
-def test_DED_interlinks_userguide_ug_pages_exist():
-    """gdtest_interlinks_userguide: user-guide pages exist."""
-    _ilu_skip()
-    ug = _ilu_site() / "user-guide"
-    assert (ug / "getting-started.html").exists(), "Getting Started page missing"
-    assert (ug / "advanced.html").exists(), "Advanced page missing"
-
-
-@pytest.mark.dedicated
-@requires_bs4
-def test_DED_interlinks_userguide_shortened_links():
-    """gdtest_interlinks_userguide: [](`~pkg.Name`) in user-guide resolves to links."""
-    _ilu_skip()
-    ug = _ilu_site() / "user-guide"
-    page = ug / "getting-started.html"
-    if not page.exists():
-        pytest.skip("getting-started.html not found")
-
-    soup = _load_html(page)
-    gdls_links = soup.find_all("a", class_="gdls-link")
-    link_texts = [a.get_text(strip=True) for a in gdls_links]
-
-    # Shortened references should produce short display names
-    for expected in ("Engine", "Connection", "execute()"):
-        assert expected in link_texts, (
-            f"Getting Started: shortened interlink {expected!r} not found. Found: {link_texts}"
-        )
-
-
-@pytest.mark.dedicated
-@requires_bs4
-def test_DED_interlinks_userguide_hrefs_relative():
-    """gdtest_interlinks_userguide: user-guide interlink hrefs use ../reference/ paths."""
-    _ilu_skip()
-    ug = _ilu_site() / "user-guide"
-    page = ug / "getting-started.html"
-    if not page.exists():
-        pytest.skip("getting-started.html not found")
-
-    soup = _load_html(page)
-    gdls_links = soup.find_all("a", class_="gdls-link")
-    for link in gdls_links:
-        href = link.get("href", "")
-        # From user-guide/*.html, href should start with ../reference/
-        assert href.startswith("../reference/"), (
-            f"User-guide interlink href {href!r} should be relative to ../reference/"
-        )
-
-
-@pytest.mark.dedicated
-@requires_bs4
-def test_DED_interlinks_userguide_full_qualified():
-    """gdtest_interlinks_userguide: [](`pkg.Name`) renders full qualified name."""
-    _ilu_skip()
-    ug = _ilu_site() / "user-guide"
-    page = ug / "advanced.html"
-    if not page.exists():
-        pytest.skip("advanced.html not found")
-
-    soup = _load_html(page)
-    gdls_links = soup.find_all("a", class_="gdls-link")
-    link_texts = [a.get_text(strip=True) for a in gdls_links]
-
-    assert "gdtest_interlinks_userguide.Engine" in link_texts, (
-        f"Advanced: full qualified 'gdtest_interlinks_userguide.Engine' not found. "
-        f"Found: {link_texts}"
-    )
-
-
-@pytest.mark.dedicated
-@requires_bs4
-def test_DED_interlinks_userguide_custom_text():
-    """gdtest_interlinks_userguide: [custom text](`pkg.Name`) preserves display text."""
-    _ilu_skip()
-    ug = _ilu_site() / "user-guide"
-    page = ug / "advanced.html"
-    if not page.exists():
-        pytest.skip("advanced.html not found")
-
-    soup = _load_html(page)
-    gdls_links = soup.find_all("a", class_="gdls-link")
-    link_texts = [a.get_text(strip=True) for a in gdls_links]
-
-    assert "custom link text" in link_texts, (
-        f"Advanced: custom text 'custom link text' not found. Found: {link_texts}"
-    )
-    assert "custom text with tilde" in link_texts, (
-        f"Advanced: custom text 'custom text with tilde' not found. Found: {link_texts}"
-    )
-
-
-@pytest.mark.dedicated
-@requires_bs4
-def test_DED_interlinks_userguide_autolinked_code():
-    """gdtest_interlinks_userguide: `Engine`, `execute()` autolinked in user-guide."""
-    _ilu_skip()
-    ug = _ilu_site() / "user-guide"
-    page = ug / "advanced.html"
-    if not page.exists():
-        pytest.skip("advanced.html not found")
-
-    soup = _load_html(page)
-    # Look for gdls-link gdls-code links (autolinked code produces this class combo)
-    code_links = soup.find_all("a", class_="gdls-code")
-    link_texts = [a.get_text(strip=True) for a in code_links]
-
-    for expected in ("Engine", "Connection", "execute()"):
-        assert expected in link_texts, (
-            f"Advanced: autolinked code {expected!r} not found. Found: {link_texts}"
-        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -11182,8 +11217,7 @@ def test_DED_bibliography_file_copied_into_build_dir():
     pkg = _BIBLIOGRAPHY_PKG
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
-    # _site_dir(pkg).parent is the great-docs/ build directory.
-    build_dir = _site_dir(pkg).parent
+    build_dir = Layout.make(_RENDERED_DIR / pkg).build_dir
     assert (build_dir / "references.bib").exists(), (
         "references.bib should be copied into the build directory by basename"
     )
@@ -11197,7 +11231,7 @@ def test_DED_bibliography_wired_into_quarto_yml():
         pytest.skip(f"{pkg} not rendered")
     from yaml12 import read_yaml
 
-    quarto_yml = _site_dir(pkg).parent / "_quarto.yml"
+    quarto_yml = Layout.make(_RENDERED_DIR / pkg).build_dir / "_quarto.yml"
     assert quarto_yml.exists(), "_quarto.yml should exist in the build directory"
     with open(quarto_yml, encoding="utf-8") as f:
         config = read_yaml(f)
@@ -11427,7 +11461,7 @@ def test_DED_bibliography_csl_file_copied_and_wired():
         pytest.skip(f"{pkg} not rendered")
     from yaml12 import read_yaml
 
-    build_dir = _site_dir(pkg).parent
+    build_dir = Layout.make(_RENDERED_DIR / pkg).build_dir
     assert (build_dir / "numeric.csl").exists(), (
         "the .csl file should be copied into the build directory by basename"
     )
@@ -11591,3 +11625,36 @@ def test_DED_d2_block_replaced_not_left_as_code():
     html = page.read_text(encoding="utf-8")
     _skip_if_no_diagrams(html)
     assert "Decision" not in html, "d2 source leaked into HTML — block was not pre-rendered"
+
+
+# ── ref_section_order ───────────────────────────────────────────────────────
+
+
+@pytest.mark.dedicated
+def test_DED_ref_section_order_cli_first():
+    """gdtest_ref_section_order: data-gd-ref-sections has cli before api."""
+    pkg = "gdtest_ref_section_order"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    quarto_yml = Layout.make(_RENDERED_DIR / pkg).build_dir / "_quarto.yml"
+    assert quarto_yml.exists(), "_quarto.yml missing"
+    content = quarto_yml.read_text(encoding="utf-8")
+    assert "data-gd-ref-sections','cli,api'" in content, (
+        "Expected cli,api order in data-gd-ref-sections but got something else"
+    )
+
+
+@pytest.mark.dedicated
+def test_DED_ref_section_order_navbar_links_to_first_section():
+    """gdtest_ref_section_order: navbar Reference link points to CLI index."""
+    pkg = "gdtest_ref_section_order"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    quarto_yml = Layout.make(_RENDERED_DIR / pkg).build_dir / "_quarto.yml"
+    assert quarto_yml.exists(), "_quarto.yml missing"
+    content = quarto_yml.read_text(encoding="utf-8")
+    assert "href: reference/cli/index.qmd" in content, (
+        "Navbar Reference link should point to reference/cli/index.qmd when CLI is first"
+    )

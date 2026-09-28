@@ -22,7 +22,7 @@ SPEC = {
         },
     },
     "config": {
-        "user_guide": "docs/guides",
+        "user_guide": "guides",
     },
     "files": {
         "gdtest_user_guide_custom_dir/__init__.py": '''\

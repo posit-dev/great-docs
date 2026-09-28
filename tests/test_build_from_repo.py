@@ -185,6 +185,7 @@ def test_build_from_repo_cli_passes_flags():
             version_tags=None,
             latest_only=True,
             shallow=False,
+            config_path=None,
         )
 
 
@@ -210,6 +211,7 @@ def test_build_from_repo_cli_version_tags():
             version_tags=["0.3", "0.2"],
             latest_only=False,
             shallow=False,
+            config_path=None,
         )
 
 
@@ -294,6 +296,7 @@ def test_build_shallow_cli_flag():
             version_tags=None,
             latest_only=False,
             shallow=True,
+            config_path=None,
         )
 
 
@@ -318,6 +321,7 @@ def test_build_preview_calls_preview_site():
         patch.object(GreatDocs, "build_from_repo") as mock_bfr,
         patch.object(GreatDocs, "preview_site") as mock_preview,
     ):
+        mock_bfr.return_value = Path("/tmp/out")
         result = runner.invoke(
             cli,
             [
@@ -341,6 +345,7 @@ def test_build_preview_default_output_dir():
         patch.object(GreatDocs, "build_from_repo") as mock_bfr,
         patch.object(GreatDocs, "preview_site") as mock_preview,
     ):
+        mock_bfr.return_value = Path.cwd() / "docs/_site"
         result = runner.invoke(
             cli,
             ["build", "--from-repo", "https://github.com/x/y.git", "--preview"],
@@ -348,7 +353,7 @@ def test_build_preview_default_output_dir():
         assert result.exit_code == 0
         mock_preview.assert_called_once()
         site_arg = mock_preview.call_args[0][0]
-        assert site_arg.endswith("great-docs/_site")
+        assert site_arg == str(mock_bfr.return_value)
 
 
 def test_build_preview_ignored_without_from_repo(tmp_path, monkeypatch):

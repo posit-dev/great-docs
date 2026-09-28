@@ -60,8 +60,8 @@ SPEC = {
                 """
                 pass
         ''',
-        "user_guide/intro.qmd": ("# Introduction\n\nWelcome to the project.\n"),
-        "user_guide/usage.qmd": ("# Usage Guide\n\nHow to use.\n"),
+        "docs/user_guide/intro.qmd": ("# Introduction\n\nWelcome to the project.\n"),
+        "docs/user_guide/usage.qmd": ("# Usage Guide\n\nHow to use.\n"),
         "README.md": (
             "# gdtest-ug-no-frontmatter\n\nTest user guide pages without YAML frontmatter.\n"
         ),

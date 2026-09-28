@@ -7,12 +7,21 @@ import re as _re
 import shutil
 import subprocess
 import threading
+from collections.abc import Iterable
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from great_docs._subprocess import TEXT_MODE_KWARGS
-from great_docs._utils import QUARTO_YML_HEADER, is_great_docs_build_dir
+from great_docs._utils import (
+    QUARTO_YML_HEADER,
+    is_great_docs_build_dir,
+    record_site_ownership,
+    validate_build_dir,
+    validate_layout_outputs,
+    validate_site_dir,
+    validate_tree_symlinks,
+)
 from great_docs._versioning import (
     VersionEntry,
     build_version_map,
@@ -22,7 +31,15 @@ from great_docs._versioning import (
     page_matches_version,
     parse_versions_config,
     process_version_fences,
+    version_url_segment,
 )
+
+if TYPE_CHECKING:
+    from great_docs._api_diff import ApiSnapshot
+    from great_docs._interlinks import AliasClaims
+    from great_docs._interlinks.sphinx_inventory import InventoryEntry
+    from great_docs._layout import Layout
+    from great_docs.config import Config
 
 # ---------------------------------------------------------------------------
 # Stage 1: Preprocess — create version-specific build directories
@@ -37,7 +54,9 @@ def _safe_tag_dirname(tag: str) -> str:
     return _UNSAFE_TAG_CHARS.sub("-", tag)
 
 
-def _version_build_dir(source_dir: Path, entry: VersionEntry, latest_tag: str) -> Path:
+def _version_build_dir(
+    source_dir: Path, entry: VersionEntry, latest_tag: str, layout: Layout | None = None
+) -> Path:
     """
     Return the Quarto project directory for a version
 
@@ -59,6 +78,8 @@ def _version_build_dir(source_dir: Path, entry: VersionEntry, latest_tag: str) -
     -------
     Quarto project directory for the version.
     """
+    if layout is not None:
+        return layout.build_dir_for(entry.tag, latest_tag)
     if entry.tag == latest_tag:
         return source_dir
     return source_dir.parent / f"{source_dir.name}-{_safe_tag_dirname(entry.tag)}"
@@ -68,9 +89,10 @@ def _check_build_dir_collisions(
     source_dir: Path,
     targets: list[VersionEntry],
     latest_tag: str,
+    layout: Layout | None = None,
 ) -> None:
     """
-    Reject version tags that map to the same build directory
+    Reject version tags with conflicting build directories or published URLs
 
     Sanitising directory names can map distinct tags, such as `release/1.0`
     and `release-1.0`, to one directory. Building both would publish one
@@ -88,11 +110,21 @@ def _check_build_dir_collisions(
     Raises
     ------
     ValueError
-        If two tags map to the same build directory.
+        If tags have conflicting or unsafe build or URL paths.
     """
     seen: dict[Path, str] = {}
+    segments: dict[str, str] = {}
     for entry in targets:
-        ver_dir = _version_build_dir(source_dir, entry, latest_tag)
+        segment = version_url_segment(entry.tag)
+        if segment in segments:
+            raise ValueError(
+                f"Version tags {segments[segment]!r} and {entry.tag!r} both map to "
+                f"URL segment {segment!r}. Rename one of the tags."
+            )
+        if not segment or any(part in {"", ".", ".."} for part in segment.split("/")):
+            raise ValueError(f"Version tag {entry.tag!r} has an unsafe URL path")
+        segments[segment] = entry.tag
+        ver_dir = _version_build_dir(source_dir, entry, latest_tag, layout)
         if ver_dir in seen:
             raise ValueError(
                 f"Version tags {seen[ver_dir]!r} and {entry.tag!r} both map to "
@@ -101,7 +133,7 @@ def _check_build_dir_collisions(
         seen[ver_dir] = entry.tag
 
 
-def _clean_stale_version_dirs(source_dir: Path) -> list[str]:
+def _clean_stale_version_dirs(source_dir: Path, layout: Layout | None = None) -> list[str]:
     """
     Remove version build directories left behind by earlier builds
 
@@ -119,10 +151,14 @@ def _clean_stale_version_dirs(source_dir: Path) -> list[str]:
     Warnings for matching directories retained because they lacked the marker.
     """
     warnings: list[str] = []
-    for candidate in sorted(source_dir.parent.glob(f"{source_dir.name}-*")):
+    pattern = "*" if layout and layout.source_dir != layout.package_root else f"{source_dir.name}-*"
+    for candidate in sorted(source_dir.parent.glob(pattern)):
+        if candidate == source_dir:
+            continue
         if not candidate.is_dir() or candidate.is_symlink():
             continue
         if is_great_docs_build_dir(candidate):
+            validate_tree_symlinks(candidate)
             shutil.rmtree(candidate)
         else:
             warnings.append(
@@ -451,13 +487,30 @@ def _prune_sidebar_contents(contents: list, dest_dir: Path) -> list:
     return result
 
 
-def _prune_cli_pages_for_version(dest_dir: Path, project_root: Path, entry: VersionEntry) -> None:
-    """Load the cached snapshot for a version and prune stale CLI pages."""
+def _prune_cli_pages_for_version(
+    dest_dir: Path, project_root: Path, entry: VersionEntry, config: Config | None = None
+) -> None:
+    """
+    Load a version's cached snapshot and remove obsolete CLI pages
+
+    Parameters
+    ----------
+    dest_dir
+        The version's build directory.
+    project_root
+        Project root (git repo root).
+    entry
+        The version entry with `git_ref` set.
+    config
+        Optional project configuration. Selects the snapshot cache location;
+        defaults to `project_root / ".great-docs-cache"` when omitted.
+    """
     git_ref = entry.git_ref
     if not git_ref:
         return
 
-    cache_path = _snapshot_cache_path(project_root, git_ref)
+    cache_dir = config.cache_dir if config is not None else project_root / ".great-docs-cache"
+    cache_path = _snapshot_cache_path(cache_dir, git_ref)
     if not cache_path.exists():
         return
 
@@ -478,6 +531,7 @@ def preprocess_version(
     project_root: Path | None = None,
     section_configs: list[dict] | None = None,
     badge_expiry: "BadgeExpiry | None" = None,
+    config: Config | None = None,
 ) -> list[str]:
     """
     Prepare the documentation source for one version
@@ -488,8 +542,10 @@ def preprocess_version(
     2. Remove sections whose configuration excludes the version.
     3. Process version fences in the remaining `.qmd` files.
     4. Expand version badges and callouts.
-    5. Generate API reference pages from a configured snapshot.
-    6. Generate API reference pages from a configured Git tag.
+    5. Generate API reference pages from a configured snapshot, and rebuild
+       the inventory and interlinks index to match them.
+    6. Generate API reference pages from a configured Git tag, and rebuild
+       the inventory and interlinks index to match them.
 
     Parameters
     ----------
@@ -508,6 +564,10 @@ def preprocess_version(
         Section configuration entries from `great-docs.yml`.
     badge_expiry
         Default expiry policy for `new` badges.
+    config
+        Project configuration, forwarded to steps 5 and 6 for rebuilding the
+        inventory and interlinks index. Skipped for a version that keeps the
+        live inventory when omitted.
 
     Returns
     -------
@@ -578,17 +638,17 @@ def preprocess_version(
     if entry.api_snapshot and project_root:
         snap_path = project_root / entry.api_snapshot
         if snap_path.exists():
-            api_pages = _rebuild_api_from_snapshot(dest_dir, snap_path, entry)
+            api_pages = _rebuild_api_from_snapshot(dest_dir, snap_path, entry, config)
             included_pages.extend(api_pages)
 
     # 4. Strategy B: git-ref introspection with caching
     elif entry.git_ref and project_root:
-        api_pages = _rebuild_api_from_git_ref(dest_dir, project_root, entry)
+        api_pages = _rebuild_api_from_git_ref(dest_dir, project_root, entry, config)
         included_pages.extend(api_pages)
 
     # 5. Prune CLI pages that don't exist at this version
     if entry.git_ref and project_root:
-        _prune_cli_pages_for_version(dest_dir, project_root, entry)
+        _prune_cli_pages_for_version(dest_dir, project_root, entry, config)
 
     # 6. Expand inline [version-badge] markers and version callouts
     for qmd_file in _collect_qmd_files(dest_dir):
@@ -611,7 +671,12 @@ def preprocess_version(
     if upcoming_pages:
         _update_page_status_json(dest_dir, upcoming_pages)
 
-    return included_pages
+    # Historical API rebuilding can remove pages collected before introspection.
+    return [
+        page
+        for page in dict.fromkeys(included_pages)
+        if any((dest_dir / page).with_suffix(suffix).is_file() for suffix in (".qmd", ".md"))
+    ]
 
 
 def _compute_excluded_section_dirs(
@@ -664,6 +729,7 @@ def _rebuild_api_from_snapshot(
     dest_dir: Path,
     snapshot_path: Path,
     entry: VersionEntry,
+    config: Config | None = None,
 ) -> list[str]:
     """
     Rebuild API reference pages from a snapshot, pruning pages not in the snapshot.
@@ -671,6 +737,8 @@ def _rebuild_api_from_snapshot(
     When the source tree already contains reference pages (e.g. from the main build), pages for
     symbols in the snapshot are regenerated from the snapshot data and pages for symbols *not* in
     the snapshot are removed. When no reference directory exists, pages are generated from scratch.
+    When *config* is given, the version's inventory and interlinks index are rebuilt from the same
+    snapshot afterwards, so they describe the pages this call just produced.
 
     Parameters
     ----------
@@ -680,6 +748,9 @@ def _rebuild_api_from_snapshot(
         Path to the snapshot JSON file.
     entry
         The version being built.
+    config
+        Project configuration, for rebuilding the inventory and interlinks
+        index. Skipped when omitted.
 
     Returns
     -------
@@ -808,7 +879,230 @@ def _rebuild_api_from_snapshot(
     # --- Update _quarto.yml sidebar to remove missing reference entries ---
     _prune_quarto_sidebar(dest_dir, "reference", snapshot_symbols)
 
+    if config is not None:
+        _write_snapshot_inventory(dest_dir, snap, config)
+
     return generated
+
+
+def _published_claims(snap: ApiSnapshot, stems: Iterable[str]) -> AliasClaims:
+    """
+    Build short-name claims for a version inventory
+
+    The live build reads claims from its resolved API reference.
+    A historical version cannot run that resolution. Derive claims from its
+    inventory stems. Each stem claims its bare name. A member of a recorded
+    class also claims its class-qualified name.
+
+    Parameters
+    ----------
+    snap
+        The snapshot that identifies class owners.
+    stems
+        Dotted names of all objects in the version's
+        inventory.
+
+    Returns
+    -------
+    :
+        Claims accepted by
+        `build_project_index`.
+    """
+    from ._interlinks import AliasClaims
+
+    claimed: list[tuple[str, str]] = []
+    published: list[str] = []
+    for stem in stems:
+        full = f"{snap.package_name}.{stem}"
+        published.append(full)
+        claimed.append((stem, full))
+        owner, _, bare = stem.rpartition(".")
+        if not owner:
+            continue
+        claimed.append((bare, full))
+        owner_bare = owner.rpartition(".")[2]
+        owner_sym = snap.symbols.get(owner)
+        if owner_bare != owner and owner_sym is not None and owner_sym.kind == "class":
+            claimed.append((f"{owner_bare}.{bare}", full))
+    return AliasClaims(claimed=tuple(claimed), published=frozenset(published))
+
+
+def _retained_entries(dest_dir: Path, snap: ApiSnapshot) -> tuple[InventoryEntry, ...]:
+    """
+    Return inventory entries for reference pages retained by pruning
+
+    A shallow snapshot can name only top-level exports. Pruning can then retain
+    a member page such as `Cache.flush.qmd`, which the snapshot cannot assess.
+    Rebuilding from the snapshot alone would omit that page's inventory entry
+    and make its references unlinked. The live build's outgoing inventory
+    records the retained page's target.
+
+    Keep an entry only if its target page exists directly in
+    `dest_dir / "reference"`. This also preserves a member published as an
+    anchor on its class page. Snapshot pruning reviews only that directory.
+    Pages in a custom `api-reference:` directory are not reviewed. Existing
+    pages there are not evidence that the historical version retained
+    them.
+
+    Parameters
+    ----------
+    dest_dir
+        The build directory containing the outgoing inventory and the pages
+        pruning has already processed.
+    snap
+        The snapshot used to rebuild the version's
+        reference pages.
+
+    Returns
+    -------
+    :
+        Entries for retained pages that are absent from the
+        snapshot.
+    """
+    import zlib
+
+    from ._interlinks.sphinx_inventory import INVENTORY_FILENAME, decode
+
+    try:
+        published = decode((dest_dir / INVENTORY_FILENAME).read_bytes())
+    except (OSError, ValueError, zlib.error):
+        return ()
+
+    prefix = f"{snap.package_name}."
+    retained: list[InventoryEntry] = []
+    for entry in published.entries:
+        if entry.domain != "py" or not entry.uri or not entry.name.startswith(prefix):
+            continue
+        if entry.name[len(prefix) :] in snap.symbols:
+            continue
+        page = dest_dir / Path(entry.uri.split("#", 1)[0])
+        if page.parent != dest_dir / "reference":
+            continue
+        if page.with_suffix(".qmd").exists() or page.with_suffix(".md").exists():
+            retained.append(entry)
+    return tuple(retained)
+
+
+def _snapshot_exceptions(snap: ApiSnapshot) -> set[str]:
+    """
+    Find the stems of the classes a snapshot records as exceptions
+
+    A snapshot records each class's bases as they were written, so a class
+    deriving straight from one of Python's exceptions is recognised by name,
+    and one deriving from another class the snapshot holds by following that
+    class's own bases. The live build publishes an exception as
+    `py:exception`, and a version's own inventory has to say the same or an
+    `:exc:` reference to it resolves nowhere.
+
+    Parameters
+    ----------
+    snap
+        The snapshot the version's reference pages were rebuilt from.
+
+    Returns
+    -------
+    :
+        Stems of the exception classes.
+    """
+    from ._interlinks.sphinx_inventory import is_builtin_exception
+
+    # A base is written as it was spelled at the point of use, which is
+    # rarely the stem the snapshot files the class under.
+    by_bare_name = {stem.rpartition(".")[2]: stem for stem in snap.symbols}
+
+    def derives_from_an_exception(stem: str, seen: set[str]) -> bool:
+        sym = snap.symbols.get(stem)
+        if sym is None or sym.kind != "class" or stem in seen:
+            return False
+        seen.add(stem)
+        for base in sym.bases:
+            if is_builtin_exception(base):
+                return True
+            owner = by_bare_name.get(base.rpartition(".")[2])
+            if owner is not None and derives_from_an_exception(owner, seen):
+                return True
+        return False
+
+    return {stem for stem in snap.symbols if derives_from_an_exception(stem, set())}
+
+
+def _write_snapshot_inventory(dest_dir: Path, snap: ApiSnapshot, config: Config) -> None:
+    """
+    Publish this version's own inventory and interlinks index
+
+    The inventory and interlinks index copied into `dest_dir` describe the
+    live checkout's API, not this version's. Since `_rebuild_api_from_snapshot`
+    has just pruned and regenerated `dest_dir`'s reference pages to match
+    *snap*, rebuild both from the same snapshot so they describe what this
+    version actually publishes rather than what the live build did.
+
+    The claims come from the snapshot's own stems rather than from a resolved
+    API reference, which a historical version has no way to run. A stem yields
+    the bare name, and a member yields the class-qualified one, so the two
+    paths claim the same spellings for the same object. Out of reach is any
+    claim that depends on the object behind the stem: a name written into an
+    `api-reference:` config that differs from the object's path, and an object
+    documented under a name other than its own.
+
+    Entries for pages pruning retains come from the live inventory. Include
+    their claims too, so the inventory and index describe the same reference
+    pages.
+
+    Parameters
+    ----------
+    dest_dir
+        The version's build directory.
+    snap
+        The snapshot the version's reference pages were rebuilt from.
+    config
+        Project configuration, for the interlinks sources and cache.
+    """
+    from ._apiref.inventory import reference_uri
+    from ._interlinks import build_project_index
+    from ._interlinks.sphinx_inventory import (
+        INVENTORY_FILENAME,
+        Inventory,
+        InventoryEntry,
+        encode,
+        role_for_kind,
+    )
+
+    classes = {name for name, sym in snap.symbols.items() if sym.kind == "class"}
+    exceptions = _snapshot_exceptions(snap)
+
+    entries = [
+        InventoryEntry(
+            name=f"{snap.package_name}.{name}",
+            domain="py",
+            role=role_for_kind(
+                sym.kind,
+                in_class=name.rpartition(".")[0] in classes,
+                is_exception=name in exceptions,
+            ),
+            priority=1,
+            uri=reference_uri("reference", name),
+            dispname=f"{snap.package_name}.{name}",
+        )
+        for name, sym in snap.symbols.items()
+    ]
+    # Read the live inventory before replacing it with the historical
+    # inventory.
+    entries.extend(_retained_entries(dest_dir, snap))
+    inv = Inventory(project=snap.package_name, version=snap.version, entries=tuple(entries))
+    (dest_dir / INVENTORY_FILENAME).write_bytes(encode(inv))
+
+    # Derive claims from the final inventory so the index names the same
+    # pages. A second entry with another display name identifies a canonical
+    # path for a re-exported object. It shares the public page target.
+    # It must not claim short names: the public and canonical entries would
+    # otherwise make each short name ambiguous.
+    prefix = f"{snap.package_name}."
+    stems = [
+        e.name[len(prefix) :]
+        for e in inv.entries
+        if e.name.startswith(prefix) and e.dispname == e.name
+    ]
+    build_project_index(dest_dir, config, snap.package_name, _published_claims(snap, stems))
 
 
 def _format_signature(name: str, sym) -> str:
@@ -1081,15 +1375,16 @@ def _validate_git_ref_is_tag(project_root: Path, git_ref: str) -> bool:
         return False
 
 
-def _snapshot_cache_path(project_root: Path, git_ref: str) -> Path:
+def _snapshot_cache_path(cache_dir: Path, git_ref: str) -> Path:
     """Return the cache file path for a git-ref snapshot."""
-    return project_root / ".great-docs-cache" / "snapshots" / f"{git_ref}.json"
+    return cache_dir / "snapshots" / f"{git_ref}.json"
 
 
 def _rebuild_api_from_git_ref(
     dest_dir: Path,
     project_root: Path,
     entry: VersionEntry,
+    config: Config | None = None,
 ) -> list[str]:
     """
     Introspect a package at a git tag and generate API reference pages.
@@ -1105,6 +1400,11 @@ def _rebuild_api_from_git_ref(
         Project root (git repo root).
     entry
         The version entry with `git_ref` set.
+    config
+        Optional project configuration. Selects the snapshot cache location
+        and is forwarded to `_rebuild_api_from_snapshot` when rebuilding the
+        inventory and interlinks index. Defaults to
+        `project_root / ".great-docs-cache"` when omitted.
 
     Returns
     -------
@@ -1133,7 +1433,8 @@ def _rebuild_api_from_git_ref(
         return []
 
     # Check cache first
-    cache_path = _snapshot_cache_path(project_root, git_ref)
+    cache_dir = config.cache_dir if config is not None else project_root / ".great-docs-cache"
+    cache_path = _snapshot_cache_path(cache_dir, git_ref)
     if cache_path.exists():
         snap = ApiSnapshot.load(cache_path)
     else:
@@ -1143,7 +1444,10 @@ def _rebuild_api_from_git_ref(
 
         from great_docs.core import GreatDocs
 
-        documented = GreatDocs(project_path=str(project_root)).documented_symbol_names(pkg_name)
+        documented = GreatDocs(
+            project_path=str(project_root),
+            config_path=str(config.config_path) if config is not None else None,
+        ).documented_symbol_names(pkg_name)
 
         snap = snapshot_at_tag(project_root, git_ref, pkg_name, documented_names=documented or None)
         if snap is None:
@@ -1153,7 +1457,7 @@ def _rebuild_api_from_git_ref(
         snap.save(cache_path)
 
     # Reuse the snapshot-based builder
-    return _rebuild_api_from_snapshot(dest_dir, cache_path, entry)
+    return _rebuild_api_from_snapshot(dest_dir, cache_path, entry, config)
 
 
 # ---------------------------------------------------------------------------
@@ -1368,7 +1672,7 @@ def _rewrite_quarto_yml_for_version(
     existing_site_url = config.get("website", {}).get("site-url")
     if entry.tag != latest_tag and not entry.latest and existing_site_url:
         base = existing_site_url.rstrip("/")
-        config.setdefault("website", {})["site-url"] = f"{base}/v/{entry.tag}/"
+        config.setdefault("website", {})["site-url"] = f"{base}/v/{version_url_segment(entry.tag)}/"
 
     # Set a version-specific title suffix
     if entry.tag != latest_tag and not entry.latest:
@@ -1386,7 +1690,7 @@ def _rewrite_quarto_yml_for_version(
             'document.addEventListener("DOMContentLoaded",function(){'
             f'var base="{base}";'
             "var path=window.location.pathname;"
-            f'var prefix="/v/{entry.tag}/";'
+            f'var prefix="/v/{version_url_segment(entry.tag)}/";'
             "if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}"
             'var link=document.createElement("link");'
             'link.rel="canonical";'
@@ -1649,12 +1953,14 @@ def assemble_site(
     versions: list[VersionEntry],
     latest_tag: str,
     output_dir: Path,
+    *,
+    layout: Layout | None = None,
 ) -> None:
     """
     Merge per-version rendered sites into the final output directory
 
     Preserve the latest version when it has rendered directly into
-    `output_dir`. Merge historical versions under `v/<tag>/`. If the latest
+    `output_dir`. Merge historical versions under their normalised `v/` URLs. If the latest
     version rendered elsewhere, replace `output_dir` before merging all sites.
 
     Parameters
@@ -1667,17 +1973,31 @@ def assemble_site(
         The tag of the latest version, which becomes the site root.
     output_dir
         Final output directory, normally `great-docs/_site/`.
+    layout
+        Resolved project paths. Required for separate deployment output.
     """
+    _check_build_dir_collisions(source_dir, versions, latest_tag, layout)
+    if layout is not None:
+        validate_layout_outputs(layout)
+    validate_tree_symlinks(source_dir / "_site")
+    for entry in versions:
+        validate_tree_symlinks(_version_build_dir(source_dir, entry, latest_tag, layout) / "_site")
+
     # The latest version may have rendered directly into `output_dir`. Preserve
     # it because build setup removed stale output before rendering began.
     in_place = (source_dir / "_site").resolve() == output_dir.resolve()
 
+    if not in_place and layout is not None:
+        validate_site_dir(output_dir)
     if not in_place and output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    if not versions and not in_place and (source_dir / "_site").is_dir():
+        _merge_tree(source_dir / "_site", output_dir)
+
     for entry in versions:
-        site_dir = _version_build_dir(source_dir, entry, latest_tag) / "_site"
+        site_dir = _version_build_dir(source_dir, entry, latest_tag, layout) / "_site"
 
         if not site_dir.exists():
             continue
@@ -1687,9 +2007,12 @@ def assemble_site(
                 continue
             _merge_tree(site_dir, output_dir)
         else:
-            dest = output_dir / "v" / entry.tag
+            dest = output_dir / "v" / version_url_segment(entry.tag)
             dest.mkdir(parents=True, exist_ok=True)
             _merge_tree(site_dir, dest)
+
+    if not in_place and layout is not None:
+        record_site_ownership(output_dir)
 
 
 def _merge_tree(src: Path, dst: Path) -> None:
@@ -1743,13 +2066,13 @@ def create_version_aliases(
             continue
 
         # Don't create alias if it matches an actual version tag
-        if any(v.tag == alias_name for v in versions):
+        if any(version_url_segment(v.tag) == alias_name for v in versions):
             continue
 
         if entry.tag == latest_tag:
             target_prefix = "/"
         else:
-            target_prefix = f"/v/{entry.tag}/"
+            target_prefix = f"/v/{version_url_segment(entry.tag)}/"
 
         alias_dir = output_dir / "v" / alias_name
         alias_dir.mkdir(parents=True, exist_ok=True)
@@ -1806,6 +2129,8 @@ def run_versioned_build(  # pragma: no cover
     progress_callback: Callable[[int, int, int], None] | None = None,
     on_renders_done: Callable[[], None] | None = None,
     badge_expiry_raw: str | None = None,
+    config: Config | None = None,
+    layout: Layout | None = None,
 ) -> dict[str, Any]:
     """
     Build and assemble the configured documentation versions
@@ -1834,6 +2159,10 @@ def run_versioned_build(  # pragma: no cover
         Callback invoked after rendering and before site assembly.
     badge_expiry_raw
         Global `new_is_old` configuration value.
+    config
+        Project configuration. A historical version built from a snapshot or
+        git tag uses it to rebuild its own inventory and interlinks index;
+        omitting it leaves such a version publishing the live checkout's.
 
     Returns
     -------
@@ -1843,6 +2172,9 @@ def run_versioned_build(  # pragma: no cover
     versions = parse_versions_config(versions_config)
     latest = get_latest_version(versions)
     latest_tag = latest.tag if latest else versions[0].tag
+    _check_build_dir_collisions(source_dir, versions, latest_tag, layout)
+    if layout is not None:
+        validate_layout_outputs(layout)
 
     # Parse badge expiry config
     from great_docs._versioning import parse_badge_expiry
@@ -1867,13 +2199,13 @@ def run_versioned_build(  # pragma: no cover
             "errors": ["No matching versions to build"],
         }
 
-    _check_build_dir_collisions(source_dir, targets, latest_tag)
-
     # Unmarked directories may contain user files. Check them before cleanup so
     # an aborted build also preserves existing, marked version output.
     for entry in targets:
-        ver_dir = _version_build_dir(source_dir, entry, latest_tag)
-        if ver_dir == source_dir:
+        ver_dir = _version_build_dir(source_dir, entry, latest_tag, layout)
+        if layout is not None:
+            validate_build_dir(ver_dir)
+        elif ver_dir == source_dir:
             continue
         if ver_dir.is_symlink():
             raise ValueError(
@@ -1888,7 +2220,7 @@ def run_versioned_build(  # pragma: no cover
                 f"the directory before building."
             )
 
-    warnings = _clean_stale_version_dirs(source_dir)
+    warnings = _clean_stale_version_dirs(source_dir, layout)
 
     # --- Stage 1: Preprocess each version ---
     pages_by_version: dict[str, list[str]] = {}
@@ -1901,7 +2233,7 @@ def run_versioned_build(  # pragma: no cover
 
     dir_by_tag: dict[str, Path] = {}
     for entry in ordered_targets:
-        ver_dir = _version_build_dir(source_dir, entry, latest_tag)
+        ver_dir = _version_build_dir(source_dir, entry, latest_tag, layout)
         pages = preprocess_version(
             source_dir,
             ver_dir,
@@ -1909,6 +2241,7 @@ def run_versioned_build(  # pragma: no cover
             versions,
             project_root=project_root,
             badge_expiry=badge_expiry,
+            config=config,
         )
         _prune_missing_sidebar_pages(ver_dir)
         _rewrite_quarto_yml_for_version(ver_dir, entry, latest_tag, site_url=site_url)
@@ -2025,8 +2358,8 @@ def run_versioned_build(  # pragma: no cover
         }
 
     # --- Stage 3: Assemble ---
-    output_dir = source_dir / "_site"
-    assemble_site(source_dir, targets, latest_tag, output_dir)
+    output_dir = layout.site_dir if layout is not None else source_dir / "_site"
+    assemble_site(source_dir, targets, latest_tag, output_dir, layout=layout)
 
     # Write version map
     write_version_map(output_dir, versions, pages_by_version)
@@ -2036,6 +2369,8 @@ def run_versioned_build(  # pragma: no cover
 
     # Generate platform redirect files (Netlify _redirects, Vercel vercel.json)
     generate_redirect_files(output_dir, versions, latest_tag)
+    if layout is not None and layout.site_dir != source_dir / "_site":
+        record_site_ownership(output_dir)
 
     return {
         "success": len(errors) == 0,
@@ -2082,15 +2417,15 @@ def generate_redirect_files(
 
     aliases: dict[str, str] = {}
     if latest:
-        target = "/" if latest.tag == latest_tag else f"/v/{latest.tag}/"
+        target = "/" if latest.tag == latest_tag else f"/v/{version_url_segment(latest.tag)}/"
         aliases["latest"] = target
         aliases["stable"] = target
     if dev:
-        target = "/" if dev.tag == latest_tag else f"/v/{dev.tag}/"
+        target = "/" if dev.tag == latest_tag else f"/v/{version_url_segment(dev.tag)}/"
         aliases["dev"] = target
 
     # Skip aliases that collide with real version tags
-    tag_set = {v.tag for v in versions}
+    tag_set = {version_url_segment(v.tag) for v in versions}
     aliases = {k: v for k, v in aliases.items() if k not in tag_set}
 
     if not aliases:

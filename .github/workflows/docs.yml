@@ -22,8 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[mcp,marimo]"
-          python -m pip install jupyter polars pandas pyarrow plotnine 'great-tables<0.22'
+          python -m pip install -e ".[docs]"
 
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
@@ -41,7 +40,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: docs-html
-          path: great-docs/_site
+          path: docs/_site
           include-hidden-files: true
 
       - name: How to preview this build locally
@@ -52,7 +51,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: build-timings
-          path: great-docs/_site/build-timings.json
+          path: docs/_site/build-timings.json
 
   publish-docs:
     name: "Publish Docs"
@@ -69,12 +68,12 @@ jobs:
       - uses: actions/download-artifact@v7
         with:
           name: docs-html
-          path: great-docs/_site
+          path: docs/_site
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: great-docs/_site
+          path: docs/_site
           include-hidden-files: true
 
       - name: Deploy to GitHub Pages

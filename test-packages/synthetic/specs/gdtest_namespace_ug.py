@@ -74,21 +74,21 @@ SPEC = {
                 """
                 pass
         ''',
-        "user-guide/index.qmd": """\
+        "docs/user-guide/index.qmd": """\
             ---
             title: User Guide
             ---
 
             Welcome to the gdtest-namespace-ug user guide.
         """,
-        "user-guide/getting-started/index.qmd": """\
+        "docs/user-guide/getting-started/index.qmd": """\
             ---
             title: Getting Started
             ---
 
             Welcome to the getting started guide.
         """,
-        "user-guide/getting-started/installation.qmd": """\
+        "docs/user-guide/getting-started/installation.qmd": """\
             ---
             title: Installation
             ---
@@ -99,7 +99,7 @@ SPEC = {
             pip install gdtest-namespace-ug
             ```
         """,
-        "user-guide/getting-started/quickstart.qmd": """\
+        "docs/user-guide/getting-started/quickstart.qmd": """\
             ---
             title: Quickstart
             ---
@@ -111,14 +111,14 @@ SPEC = {
             initialize()
             ```
         """,
-        "user-guide/advanced/index.qmd": """\
+        "docs/user-guide/advanced/index.qmd": """\
             ---
             title: Advanced Usage
             ---
 
             Advanced topics for power users.
         """,
-        "user-guide/advanced/configuration.qmd": """\
+        "docs/user-guide/advanced/configuration.qmd": """\
             ---
             title: Configuration
             ---
@@ -127,7 +127,7 @@ SPEC = {
 
             Pass a config dict to `initialize()`.
         """,
-        "user-guide/advanced/deployment.qmd": """\
+        "docs/user-guide/advanced/deployment.qmd": """\
             ---
             title: Deployment
             ---

@@ -72,7 +72,7 @@ SPEC = {
                 """
                 return ", ".join(str(i) for i in items)
         ''',
-        "examples/basic-example.qmd": (
+        "docs/examples/basic-example.qmd": (
             "---\n"
             "title: Basic Example\n"
             "---\n"
@@ -81,7 +81,7 @@ SPEC = {
             "\n"
             "A simple example showing how to get started.\n"
         ),
-        "examples/advanced-example.qmd": (
+        "docs/examples/advanced-example.qmd": (
             "---\n"
             "title: Advanced Example\n"
             "---\n"
@@ -90,7 +90,7 @@ SPEC = {
             "\n"
             "An advanced example demonstrating complex usage patterns.\n"
         ),
-        "examples/edge-cases.qmd": (
+        "docs/examples/edge-cases.qmd": (
             "---\n"
             "title: Edge Cases\n"
             "---\n"

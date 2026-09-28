@@ -1,0 +1,640 @@
+---
+title: "Versioned Docs"
+guide-section: "Build & Deploy"
+tags: [Build, Configuration, Versioning]
+versions: ">=0.7"
+---
+
+# Versioned Docs
+
+Libraries evolve, but users on older releases need documentation that matches the version they have installed. Great Docs makes multi-version documentation a first-class authoring experience: declare your versions, annotate your content, and let the build system produce a coherent, version-aware site.
+
+## Quick Start
+
+Getting started with versioned documentation takes just two lines of configuration. Here's the fastest path to a working multi-version site.
+
+Add a `versions` key to your `great-docs.yml`:
+
+```{.yaml filename="docs/great-docs.yml"}
+versions:
+  - "0.3"
+  - "0.2"
+  - "0.1"
+```
+
+Then build as usual:
+
+```{.bash filename="Terminal"}
+great-docs build
+```
+
+This builds three independent copies of your site:
+
+- `/`: the latest version (0.3), served at the root for clean URLs
+- `/v/0.2/`: version 0.2
+- `/v/0.1/`: version 0.1
+
+A version selector dropdown appears in the navbar, letting visitors switch between versions.
+
+That's all you need for basic versioning. The sections below cover the full range of configuration options and authoring tools available.
+
+## Configuration
+
+The `versions` key in `great-docs.yml` controls which versions are built and how they appear in the version selector. You can also configure the selector widget itself and set up floating URL aliases.
+
+### Version List
+
+Versions are declared as an ordered list, newest first. The first non-prerelease entry is treated as "latest" by default.
+
+**Minimal form** with just strings:
+
+```{.yaml filename="docs/great-docs.yml"}
+versions:
+  - "0.3"
+  - "0.2"
+  - "0.1"
+```
+
+**Full form** with metadata:
+
+```{.yaml filename="docs/great-docs.yml"}
+versions:
+  - label: "0.4.0 (dev)"
+    tag: dev
+    version: "0.4"
+    prerelease: true
+  - label: "0.3.0"
+    tag: "0.3"
+    latest: true
+  - label: "0.2.0"
+    tag: "0.2"
+    api_snapshot: api-snapshots/0.2.json
+  - label: "0.1.0"
+    tag: "0.1"
+    eol: true
+```
+
+### Version Object Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `label` | `str` | Same as `tag` | Display name in the version selector |
+| `tag` | `str` | Required | Short identifier for URL paths and fences |
+| `latest` | `bool` | Auto-detected | Mark as the canonical latest version |
+| `prerelease` | `bool` | `false` | Show a pre-release badge in the selector |
+| `eol` | `bool` | `false` | Show an end-of-life warning banner |
+| `api_snapshot` | `str` | `None` | Path to a pre-generated API snapshot JSON |
+| `git_ref` | `str` | `None` | Git tag for API introspection (tags only) |
+| `released` | `str` | `None` | ISO date (e.g. `"2025-03-15"`) when this version was released. Used by the `days` badge expiry mode |
+| `version` | `str` | `None` | Semantic version this tag represents (e.g. `"0.8"` for a `dev` tag). Enables version expressions like `>=0.8` to match non-numeric tags |
+
+When strings are used instead of dicts, `tag` and `label` both default to the string value. Most projects only need `tag`, `label`, and occasionally `api_snapshot`. The other fields are useful when you have pre-release or end-of-life versions to distinguish.
+
+### Version Selector Settings
+
+The version selector widget is enabled automatically when `versions` is non-empty. These settings let you fine-tune its behavior and placement:
+
+```{.yaml filename="docs/great-docs.yml"}
+version_selector:
+  enabled: true
+  placement: navbar-right   # "navbar-right" | "navbar-left" | "sidebar-top"
+  warning_banner: true      # Show banner on non-latest versions
+```
+
+### Floating Aliases
+
+Floating aliases give you stable, version-independent URLs that always resolve to the right version. Great Docs creates these bookmarkable URL aliases:
+
+- `/v/latest/`: redirects to the version marked `latest`
+- `/v/stable/`: same as `latest`
+- `/v/dev/`: redirects to the version marked `prerelease`
+
+These are useful for sharing stable links that always point to the right version. For example, a README badge linking to `/v/latest/` will always reach the current stable docs without hard-coding a version number.
+
+## Version Fences
+
+Version fences let you show or hide blocks of content per version. They work in any `.qmd` file: user guide pages, recipes, reference pages, and custom sections.
+
+### Show Content for Specific Versions
+
+The most common fence type is `.version-only`, which includes a block only in matching versions:
+
+```{.markdown filename="guide.qmd"}
+This content appears in all versions.
+
+::: {.version-only versions=">=0.3"}
+This paragraph only appears in version 0.3 and later.
+:::
+
+::: {.version-only versions="0.1,0.2"}
+This paragraph only appears in versions 0.1 and 0.2.
+:::
+```
+
+### Hide Content from Specific Versions
+
+Sometimes it's easier to say "show this everywhere except version X". Use `.version-except` for that:
+
+```{.markdown filename="guide.qmd"}
+::: {.version-except versions="0.1"}
+This content appears in every version except 0.1.
+:::
+```
+
+### Version Expressions
+
+Both `.version-only` and `.version-except` accept version expressions: flexible patterns that target one or more versions. Here's the full set of supported expressions:
+
+| Expression | Meaning |
+|---|---|
+| `"0.3"` | Exactly version 0.3 |
+| `"0.2,0.3"` | Versions 0.2 or 0.3 |
+| `">=0.2"` | Version 0.2 and all newer versions |
+| `"<=0.2"` | Version 0.2 and all older versions |
+| `">0.1,<0.4"` | Strictly between 0.1 and 0.4 |
+| `"*"` | All versions |
+
+When an expression contains only bare tags (no operators), they are evaluated with **OR logic**: the target matches if it equals any listed tag. When operators are present, all constraints are evaluated with **AND logic** so every constraint must be satisfied. This lets you express both "any of these versions" and "within this range" naturally.
+
+### Nesting Fences
+
+Fences can be nested. An inner fence is only evaluated if its outer fence includes the current version:
+
+```{.markdown filename="guide.qmd"}
+::: {.version-only versions=">=0.2"}
+Available since 0.2.
+
+::: {.version-only versions=">=0.3"}
+This extra detail only appears in 0.3 and later.
+:::
+
+:::
+```
+
+In version 0.2, only the outer content appears. In version 0.3+, both blocks are visible. In version 0.1, neither appears. This is useful for progressive disclosure, adding detail in newer versions without duplicating the surrounding context.
+
+## Page-Level Version Scoping
+
+When an entire page only applies to certain versions (like a migration guide or a feature that didn't exist in older releases), you can scope it at the page level rather than wrapping every paragraph in a fence.
+
+Restrict an entire page to specific versions by adding `versions` to its YAML frontmatter:
+
+```{.yaml filename="migration-guide.qmd"}
+---
+title: "Migration Guide: 0.2 → 0.3"
+versions: ["0.3"]
+---
+```
+
+```{.yaml filename="legacy-config.qmd"}
+---
+title: "Legacy Configuration"
+versions: ["0.1", "0.2"]
+---
+```
+
+### Version Expressions in Frontmatter
+
+Instead of listing every matching version explicitly, you can use the same version expression syntax that fences support. This is especially useful for pages that apply to a version "and everything newer" so you don't need to update the frontmatter each time a new version is released:
+
+```{.yaml filename="new-feature.qmd"}
+---
+title: "Social Cards"
+versions: ">=0.5"
+---
+```
+
+This page will appear in version 0.5, 0.6, 0.7, dev, and any future version, without needing a change when a new release is tagged.
+
+All expression types work:
+
+| Frontmatter | Meaning |
+|---|---|
+| `versions: ">=0.5"` | Version 0.5 and all newer versions |
+| `versions: "<=0.3"` | Version 0.3 and all older versions |
+| `versions: ["0.3", "dev"]` | Exactly versions 0.3 and dev |
+| `versions: ["0.3"]` | Exactly version 0.3 |
+
+::: {.callout-tip}
+## Prefer expressions for forward-looking pages
+Use `versions: ">=0.5"` instead of `versions: ["0.5", "0.6", "0.7", "dev"]`. The expression form automatically includes future versions so you never need to update frontmatter when a new version is released.
+:::
+
+Pages with no `versions` key appear in **all** versions. Scoped pages are excluded from the sidebar, search index, and build output for non-matching versions. This keeps the navigation clean and users never see links to pages that don't exist in their version.
+
+## Section-Level Version Scoping
+
+For coarser control, you can scope an entire section directory to specific versions. This is useful when a whole group of pages (like migration guides or a new tutorial series) only makes sense for certain releases.
+
+Scope sections in your configuration:
+
+```{.yaml filename="docs/great-docs.yml"}
+sections:
+  - title: Recipes
+    dir: recipes
+
+  - title: Migration Guides
+    dir: migrations
+    versions: ["0.2", "0.3", "dev"]
+```
+
+The `migrations/` section only appears in versions 0.2, 0.3, and dev. It is completely absent from the sidebar and build output for version 0.1. Combined with page-level scoping, this gives you fine-grained control over what each version's readers see.
+
+## Inline Version Badges
+
+Inline badges are small visual markers that indicate when a feature was added, changed, or deprecated. They're ideal for annotating individual headings, parameters, or methods without wrapping content in a fence.
+
+Mark individual features with inline badges:
+
+```{.markdown filename="reference.qmd"}
+## Widget [version-badge new]
+
+The widget class.
+
+## render() [version-badge changed 0.2]
+
+The render function was refactored.
+
+## legacy_mode [version-badge deprecated 0.1]
+
+Use `new_mode()` instead.
+```
+
+These expand into styled `<span>` badges:
+
+- `[version-badge new]` → **New in 0.3** (uses the current version's label)
+- `[version-badge changed 0.2]` → **Changed in 0.2** (uses the explicit version)
+- `[version-badge deprecated 0.1]` → **Deprecated in 0.1**
+
+Badges are compact enough to use liberally throughout your API reference and user guide pages. They give readers an at-a-glance sense of what's new without interrupting the flow of the documentation.
+
+### Upcoming Feature Badges
+
+When a version is marked `prerelease: true` in your config, any `[version-badge new]` that references it automatically renders as "Upcoming" instead of "New". This lets you document features before they ship without special syntax:
+
+```{.yaml filename="docs/great-docs.yml"}
+versions:
+  - label: "0.8.0"
+    tag: "0.8"
+    prerelease: true
+  - label: "0.7.0"
+    tag: "0.7"
+    latest: true
+```
+
+```{.markdown filename="guide.qmd"}
+## Widget [version-badge new 0.8]
+```
+
+While 0.8 is prerelease, this badge renders differently depending on which version is being built:
+
+- **Building 0.7** (stable): **Upcoming in 0.8** with `gd-badge-upcoming` style
+- **Building 0.8** (prerelease): **New in 0.8** with `gd-badge-new` style
+
+When you release 0.8 (remove `prerelease: true` or change it to `false`), it becomes **New in 0.8** on all builds — no source edits needed.
+
+Only `new` badges are affected. `changed` and `deprecated` badges always render with their normal labels regardless of prerelease status.
+
+::: {.callout-tip}
+## Use the version number as the tag
+If your prerelease tag is the actual version number (e.g. `tag: "0.8"` with `prerelease: true`), the transition from "Upcoming" to "New" is zero-maintenance: just flip the `prerelease` flag at release time. If you use a rolling tag like `dev`, you'll need to rename badge references from `dev` to the release number when you ship.
+:::
+
+### Upcoming Pages
+
+When a page documents a feature that hasn't shipped yet, you want it visible in current docs (so readers know it's coming) but clearly marked as "Upcoming". Great Docs supports two mechanisms for this.
+
+#### The `upcoming` frontmatter key
+
+The most explicit approach — add `upcoming:` to a page's frontmatter with the version where the feature will ship:
+
+```{.yaml filename="new-feature.qmd"}
+---
+title: "Versioned Docs"
+upcoming: "0.8"
+versions: ">=0.7"
+---
+```
+
+This page is included starting from version 0.7, but when building 0.7 (or any version older than 0.8), it automatically receives `status: upcoming` — adding an "Upcoming" badge in the sidebar and at the top of the page. When building 0.8 or later, the page renders normally with no badge.
+
+The `upcoming` key works with both the `version` field (e.g. referencing `"0.8"` which maps to a `dev` tag) and direct tags. Once 0.8 ships, the key becomes inert — no cleanup needed.
+
+#### Automatic detection from version scoping
+
+If a page is scoped exclusively to prerelease versions, Great Docs detects this automatically:
+
+```{.yaml filename="prerelease-only.qmd"}
+---
+title: "New Feature"
+versions: ["dev"]
+---
+```
+
+Because `dev` is the only version listed and it's marked `prerelease: true`, the page automatically gets the "Upcoming" status badge — no `upcoming:` key needed. This also works with expressions like `versions: ">0.7"` when only prerelease entries are newer than 0.7.
+
+::: {.callout-note}
+Neither mechanism overrides an existing `status:` in frontmatter. If you've manually set `status: experimental`, that takes precedence over automatic upcoming injection.
+:::
+
+### Badge Expiry
+
+As your project matures, "new" badges from several releases ago become noise rather than signal. The `new_is_old` option lets you automatically suppress old `new` badges so they stop rendering after a configurable threshold. Only `new` badges are affected while `changed` and `deprecated` badges always render.
+
+Add `new_is_old` to your `great-docs.yml`:
+
+```{.yaml filename="docs/great-docs.yml"}
+new_is_old: 3 releases
+```
+
+With this setting, a `[version-badge new 0.3]` badge will render in versions 0.3 through 0.5 (three releases) and then silently disappear from version 0.6 onward. The badge is simply omitted from the output (no placeholder or residual markup is left behind).
+
+#### Expiry Modes
+
+| Value | Meaning |
+|---|---|
+| `"never"` | Badges never expire (the default) |
+| `"3 releases"` | Expire after 3 releases, counting all versions including prerelease |
+| `"2 minor releases"` | Expire after 2 releases, counting only non-prerelease versions |
+| `"0.6"` | Expire starting at version 0.6 (all `new` badges from before 0.6 are suppressed) |
+| `"2026-06-01"` | Expire after an absolute calendar date |
+| `"180 days"` | Expire 180 days after the badge's version was released (requires `released` dates in the version config) |
+
+The `releases` and `minor releases` modes measure the distance between the badge's version and the version currently being built. For example, `3 releases` means "show this badge as long as the version being built is fewer than 3 releases newer than the badge's version." The `minor releases` variant is identical except that it skips prerelease entries when counting, so a `dev` prerelease doesn't consume a slot in the window.
+
+::: {.callout-tip}
+## Choosing a mode
+Most projects should start with `"3 releases"` or `"2 minor releases"`. The release-counting modes are simple, predictable, and don't require any extra configuration. Use `days` only if your releases are irregular and you want time-based expiry.
+:::
+
+#### Days Mode and Release Dates
+
+The `days` mode requires `released` dates in your version configuration so that Great Docs can compute elapsed time:
+
+```{.yaml filename="docs/great-docs.yml"}
+new_is_old: 180 days
+
+versions:
+  - label: "0.7.0"
+    tag: "0.7"
+    latest: true
+    released: "2026-01-15"
+  - label: "0.6.0"
+    tag: "0.6"
+    released: "2025-09-01"
+  - label: "0.5.0"
+    tag: "0.5"
+    released: "2025-03-15"
+```
+
+A badge for a version without a `released` date is never expired (fail-open), so you can add dates incrementally.
+
+#### Per-Page Override
+
+You can override the global `new_is_old` setting on individual pages by adding `new-is-old` to the page's YAML frontmatter:
+
+```{.yaml filename="important-feature.qmd"}
+---
+title: "Core Feature"
+new-is-old: never
+---
+```
+
+This keeps all `new` badges visible on that page regardless of the global setting. The per-page value uses the same syntax as the global option (any expiry mode works).
+
+#### Interaction with Fences
+
+Badge expiry only affects **rendering** (whether the badge `<span>` appears in the HTML output). It does not change version fence behavior. A heading like `## Widget [version-badge new 0.3]` inside a `::: {.version-only versions=">=0.3"}` fence will still be included in matching versions even if the badge itself is suppressed. The fence controls structural inclusion; the badge is purely visual.
+
+## Version Callouts
+
+When a version change needs more explanation than a badge can provide, use a version callout. These render as styled admonition boxes that draw the reader's attention to important changes.
+
+```{.markdown filename="guide.qmd"}
+::: {.version-note version="0.3"}
+The `format` parameter was renamed from `fmt` in this version.
+:::
+
+::: {.version-deprecated version="0.1"}
+The `legacy_mode` parameter is deprecated. Use `new_mode()` instead.
+:::
+```
+
+These render as styled callout boxes:
+
+- `.version-note` → a blue info callout titled "Added in 0.3"
+- `.version-deprecated` → an orange warning callout titled "Deprecated since 0.1"
+
+If you omit the `version=` attribute, the current version's label is used automatically.
+
+Use callouts for migration notes, deprecation notices, or any change that benefits from a sentence or two of explanation. For shorter annotations, prefer inline badges instead.
+
+## API Reference Versioning
+
+The API reference is the most complex part of versioned documentation because the public API surface (classes, functions, parameters, and signatures) changes between releases. Great Docs supports three strategies for keeping each version's reference accurate, from the most hands-on to the most automated.
+
+### Strategy A: Pre-Written Snapshots
+
+The recommended approach for most projects. You run a CLI command to capture the current API surface before each release, and the build uses that snapshot to generate accurate reference pages for older versions.
+
+Snapshot the current API before tagging a release:
+
+```{.bash filename="Terminal"}
+great-docs api-snapshot --output api-snapshots/v0.3.json
+```
+
+Then reference the snapshot in your config:
+
+```{.yaml filename="docs/great-docs.yml"}
+versions:
+  - label: "0.3.0"
+    tag: "0.3"
+    latest: true
+  - label: "0.2.0"
+    tag: "0.2"
+    api_snapshot: api-snapshots/0.2.json
+```
+
+The latest version uses live introspection. Older versions generate their API reference pages from the snapshot (capturing all classes, functions, signatures, and parameters as they existed at that release).
+
+This is the **recommended approach** for most projects because it's fast, reproducible, and doesn't require checking out old code.
+
+### Strategy B: Git-Tag Introspection
+
+For projects that want fully automatic API versioning without manually managing snapshot files, Great Docs can check out a Git tag and introspect the package at that point in time:
+
+```{.yaml filename="docs/great-docs.yml"}
+versions:
+  - label: "0.3.0"
+    tag: "0.3"
+  - label: "0.2.0"
+    tag: "0.2"
+    git_ref: v0.2.0
+```
+
+Only Git **tags** are accepted, not branches or arbitrary SHAs. This security restriction ensures that introspection uses immutable references to reviewed, released code. Great Docs caches the results in `docs/.cache/snapshots/`, so later builds do not repeat the introspection. The first build is slower; later builds run without further configuration.
+
+### Strategy C: Automatic Snapshots
+
+A hybrid of the other two approaches: Great Docs automatically saves an API snapshot after every successful build. This creates a rolling archive so that by the time you tag a release, the snapshot already exists. You can also use the `--all-tags` flag to generate snapshots for all existing Git tags in one pass:
+
+```{.bash filename="Terminal"}
+great-docs api-snapshot --all-tags
+```
+
+Whichever strategy you choose, the end result is the same: each version's API reference pages accurately reflect the API surface as it existed at that release.
+
+## CLI Commands
+
+Great Docs adds several CLI commands and flags for working with versioned documentation.
+
+### Building with Versions
+
+The `build` command gains two new flags for controlling which versions are built:
+
+```{.bash filename="Terminal"}
+# Build all versions
+great-docs build
+
+# Build only specific versions
+great-docs build --versions 0.3,0.2
+
+# Build only the latest version (fast iteration)
+great-docs build --latest-only
+```
+
+### Listing Versions
+
+To see which versions are configured and their current status:
+
+```{.bash filename="Terminal"}
+great-docs versions
+```
+
+This displays the configured versions with their tags, labels, and status (latest, prerelease, eol).
+
+### Managing API Snapshots
+
+The `api-snapshot` command captures the current API surface for use with Strategy A:
+
+```{.bash filename="Terminal"}
+# Snapshot the current API
+great-docs api-snapshot --output api-snapshots/v0.3.json
+
+# Snapshot a specific package
+great-docs api-snapshot --package my_package --output snapshot.json
+
+# Snapshot all Git tags at once
+great-docs api-snapshot --all-tags
+
+# Overwrite existing snapshots
+great-docs api-snapshot --all-tags --force
+```
+
+All snapshot files are plain JSON, so they can be committed to your repository and reviewed in pull requests.
+
+## URL Structure
+
+Versioned sites follow a predictable URL scheme that keeps the latest version at the root for clean canonical URLs, with older versions nested under `/v/`.
+
+| URL | Content |
+|---|---|
+| `/` | Latest version homepage (no redirect) |
+| `/v/0.2/` | Version 0.2 homepage |
+| `/v/0.2/user-guide/` | Version 0.2 user guide |
+| `/v/dev/` | Pre-release version homepage |
+| `/v/latest/` | Alias → latest stable (redirect) |
+| `/v/stable/` | Alias → latest stable (redirect) |
+
+The unversioned root (`/`) serves the latest version directly for clean canonical URLs. Older versions get `<link rel="canonical">` tags pointing to the latest version, so search engines prefer the current docs. The `/v/` prefix is fixed (not configurable) to avoid collisions with pages whose names happen to match version numbers.
+
+## Version Selector Widget
+
+The version selector is the primary way visitors navigate between versions. It appears as a dropdown in the navbar and shows:
+
+- the current version
+- any pre-release versions (with a dot indicator)
+- any end-of-life versions (with a warning indicator)
+
+The selected version is persisted in `localStorage`, so returning visitors see their last-used version. The widget is also keyboard-accessible (arrow keys, Enter, Escape) and works entirely client-side with no server round-trips.
+
+## Warning Banners
+
+Visitors browsing older or pre-release documentation should know they're not looking at the current stable version. Warning banners handle this automatically. Non-latest versions display a dismissable banner at the top of every page:
+
+- **Older versions**: "You are viewing documentation for version 0.2. The latest version is 0.3."
+- **Pre-release versions**: "You are viewing documentation for a pre-release version (0.4.0-dev). It may contain unreleased features."
+- **End-of-life versions**: "Version 0.1 is no longer supported. You should upgrade to the latest version."
+
+Each banner includes a link to switch to the latest stable version. Banners can be disabled globally by setting `warning_banner: false` in the `version_selector` configuration.
+
+## Deployment
+
+Versioned sites work on any static hosting platform. Great Docs generates the necessary redirect rules for floating aliases so that URLs like `/v/latest/` resolve correctly regardless of your host.
+
+### Netlify
+
+Great Docs automatically generates a `_redirects` file with rewrite rules for floating aliases (`/v/latest/*`, `/v/stable/*`, `/v/dev/*`).
+
+### Vercel
+
+A `vercel.json` file is generated with equivalent rewrite rules.
+
+### GitHub Pages
+
+Static redirect HTML files are generated for each alias, so aliases work on any static hosting platform without server-side configuration. No matter which platform you deploy to, the core versioned site works out of the box. These redirect mechanisms only affect the floating alias URLs.
+
+## Build Architecture
+
+Understanding the build pipeline is optional for most users, but it helps when debugging or optimizing large versioned sites. The multi-version build runs in three stages:
+
+1. **Preprocess**: For each version, copy the source tree, apply page/section scoping, resolve version fences, expand badges and callouts, and generate API reference pages from snapshots.
+
+2. **Render**: Run `quarto render` for each version in parallel (up to 4 concurrent renders by default).
+
+3. **Assemble**: Merge the per-version `_site/` outputs into the final site: latest version at the root, historical versions under `/v/<version>/` with a leading `v` removed from the tag. Generate the version map, aliases, and redirect files.
+
+The version map (`_version_map.json`) is a JSON manifest listing all versions, their metadata, and which pages exist in each version. The version selector widget reads this at runtime to enable smart navigation and fallback behavior.
+
+Because each version is rendered independently, the build is embarrassingly parallel (there are no cross-version dependencies during rendering). A project with five versions takes only slightly longer than a single-version build on a multi-core machine.
+
+## Build directories
+
+Versioned builds work in these directories:
+
+- Store the latest Quarto project in `docs/_quarto/default/`, regardless of its tag. Great Docs recreates it at the start of each build.
+- Store each historical Quarto project in `docs/_quarto/<tag>/`, retaining its own `_site/` output. Great Docs recreates only marked projects selected for the build.
+- Deploy the assembled site from `docs/_site/`, with the latest version at its root and historical versions under `v/<version>/`.
+- Cache Git-introspected API snapshots in `docs/.cache/`, or beside a custom configuration file.
+
+Every Quarto project sits two levels below the configuration directory, whether or not you configure `versions:`. Non-versioned builds also use `docs/_quarto/default/`.
+
+A latest tag of `2.0.0` still uses `docs/_quarto/default/`, not `docs/_quarto/2.0.0/`.
+Historical tag `v1.5.0` uses `docs/_quarto/v1.5.0/`, but publishes at
+`docs/_site/v/1.5.0/`, never `v/v1.5.0/`. Tag `1.5.0` has the same published URL.
+Selectors and Git lookups retain the configured tag, including its `v` prefix.
+
+For a custom layout, run `great-docs build --config website/great-docs.yml`.
+The same structure then lives under `website/`.
+
+Add these to your `.gitignore`. Great Docs does this automatically when you run `great-docs init`, but if you set up versioning on an existing project you can add them manually:
+
+```{.text filename=".gitignore"}
+/docs/_quarto/
+/docs/_site/
+/docs/.cache/
+.great-docs/
+```
+
+`.great-docs/` stores snapshots created by `great-docs api-snapshot`.
+
+Great Docs deletes only Quarto project directories whose `_quarto.yml` contains its generated marker. It preserves unmarked directories. If one would receive a configured version, the build stops and asks you to resolve the conflict.
+
+## Next Steps
+
+With versioned documentation configured, your readers can always find docs that match the release they're using. Add a `versions` list to your `great-docs.yml` and run `great-docs build` to get started.
+
+- [Enable Multi-Version Documentation](../recipes/enable-multi-version-docs.qmd) is a hands-on recipe for setting up versioning
+- [Use Version Fences and Badges](../recipes/use-version-fences-and-badges.qmd) covers annotating content with version-specific callouts
+- [Deployment](deployment.qmd) covers publishing versioned sites to GitHub Pages
+- [Configuration](configuration.qmd) covers all `great-docs.yml` options including version settings

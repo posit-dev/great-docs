@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from yaml12 import read_yaml
 
+from .._interlinks.sphinx_inventory import INVENTORY_FILENAME
 from ._settings import Settings, active_settings
 from .content import Link, Page
 from .inventory import create_inventory, write_inventory
@@ -25,6 +26,7 @@ from .write import (
 )
 
 if TYPE_CHECKING:
+    from .collect import Manifest
     from .content import Section
     from .inventory import InventoryItem
 
@@ -48,7 +50,6 @@ class APIReference:
     sections: list[SpecSection]
     options: SpecOptions | None
     settings: Settings
-    items: list[InventoryItem]
     site_toc_depth: int
 
     def __init__(self, config: dict[str, Any] | str | Path) -> None:
@@ -69,7 +70,6 @@ class APIReference:
         self.sections = [
             s if isinstance(s, SpecSection) else SpecSection(**s) for s in raw_sections
         ]
-        self.items = []
 
         self._resolver = _Resolver(self.settings)
         self._resolver.current_package = self.package
@@ -185,6 +185,18 @@ class APIReference:
                         visit(doc, entry.path)
         return list(dict.fromkeys(stems))
 
+    @cached_property
+    def manifest(self) -> Manifest:
+        """The pages to write and the objects to index, computed once per instance"""
+        from .collect import build_manifest
+
+        return build_manifest(self.resolved, dir=self.settings.dir)
+
+    @property
+    def items(self) -> list[InventoryItem]:
+        """The objects this reference publishes, each with the page it lands on"""
+        return self.manifest.items
+
     def build(self, page_filter: str = "*") -> None:
         """Write reference pages, index, inventory, and (optionally) sidebar to disk"""
         s = self.settings
@@ -209,14 +221,11 @@ class APIReference:
         if s.source_dir:
             sys.path.append(str(Path(s.source_dir).absolute()))
 
-        from .collect import build_manifest
-
         _log.info("Resolving sections.")
         resolved = self.resolved
 
         _log.info("Collecting pages and inventory items.")
-        manifest = build_manifest(resolved, dir=s.dir)
-        pages, self.items = manifest.pages, manifest.items
+        pages = self.manifest.pages
 
         _log.info("Writing index")
         _ = write_index(
@@ -237,7 +246,7 @@ class APIReference:
 
         _log.info("Creating inventory file")
         version = "0.0.9999" if s.version is None else s.version
-        write_inventory(create_inventory(self.package, version, self.items), s.out_inventory)
+        write_inventory(create_inventory(self.package, version, self.items), INVENTORY_FILENAME)
 
         if s.sidebar:
             _log.info(f"Writing sidebar yaml to {s.sidebar['file']}")

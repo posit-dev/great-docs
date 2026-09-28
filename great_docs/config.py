@@ -72,17 +72,32 @@ class Config:
     with sensible defaults.
     """
 
-    def __init__(self, project_root: Path):
+    def __init__(
+        self,
+        project_root: Path,
+        *,
+        config_path: Path | None = None,
+        cache_dir: Path | None = None,
+    ):
         """
-        Initialize configuration from great-docs.yml.
+        Initialise configuration from `great-docs.yml`
 
         Parameters
         ----------
         project_root
-            Path to the project root directory where great-docs.yml is located.
+            Package root used for repository-scoped caches.
+        config_path
+            Configuration file to load. Defaults to `great-docs.yml` at the
+            package root.
+        cache_dir
+            Persistent cache location. Defaults to `.great-docs-cache` under
+            `project_root` when no resolved `Layout` supplies one.
         """
         self.project_root = project_root
-        self.config_path = project_root / "great-docs.yml"
+        self.config_path = (
+            config_path if config_path is not None else project_root / "great-docs.yml"
+        )
+        self.cache_dir = cache_dir if cache_dir is not None else project_root / ".great-docs-cache"
         self._config = self._load_config()
 
     def _load_config(self) -> dict[str, Any]:
@@ -975,6 +990,16 @@ class Config:
         return self["jupyter"]
 
     @property
+    def interlinks_sources(self) -> dict[str, Any]:
+        """Get the external documentation projects to link to."""
+        return cast("dict[str, Any]", self["interlinks.sources"])
+
+    @property
+    def interlinks_add_function_parentheses(self) -> bool:
+        """Whether function and method links display a trailing `()`."""
+        return bool(self["interlinks.add_function_parentheses"])
+
+    @property
     def logo(self) -> dict[str, Any] | None:
         """The logo config, or None when no logo is set"""
         if not (self["logo.light"] or self["logo.dark"]):
@@ -1325,6 +1350,18 @@ class Config:
             return None
         if isinstance(raw, list) and all(isinstance(item, str) for item in raw):
             return raw
+        return None
+
+    @property
+    def ref_section_order(self) -> list[str] | None:
+        """Custom display order for reference subsection tabs (api, cli, mcp)."""
+        try:
+            raw = self["ref_section_order"]
+        except KeyError:
+            return None
+        if isinstance(raw, list) and all(isinstance(item, str) for item in raw):
+            valid = [s for s in raw if s in ("api", "cli", "mcp")]
+            return valid if valid else None
         return None
 
     @property

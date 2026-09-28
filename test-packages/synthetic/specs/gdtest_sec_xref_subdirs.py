@@ -81,7 +81,7 @@ SPEC = {
         ''',
         # Section page in a prefixed subdir that links to a sibling page in a
         # DIFFERENT prefixed subdir. The link uses the authored (prefixed) path.
-        "examples/01-topic-a/intro.qmd": """\
+        "docs/examples/01-topic-a/intro.qmd": """\
             ---
             title: Intro
             description: Introduction to topic A.
@@ -92,7 +92,7 @@ SPEC = {
             This is topic A. For a hands-on demo, see the
             [widget demo](../02-topic-b/widget_demo.qmd) in topic B.
         """,
-        "examples/02-topic-b/widget_demo.qmd": """\
+        "docs/examples/02-topic-b/widget_demo.qmd": """\
             ---
             title: Widget Demo
             description: A hands-on widget demonstration.
@@ -106,7 +106,7 @@ SPEC = {
         # User-guide page (auto-discovery) that links INTO the prefixed section
         # subdir. Numeric prefixes are stripped from the user-guide filename and
         # the link is rewritten to the unprefixed section path.
-        "user_guide/10-concepts.qmd": """\
+        "docs/user_guide/10-concepts.qmd": """\
             ---
             title: Concepts
             ---

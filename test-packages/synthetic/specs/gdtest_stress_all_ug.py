@@ -62,7 +62,7 @@ SPEC = {
                 """
                 pass
         ''',
-        "user_guide/basics/01-intro.qmd": (
+        "docs/user_guide/basics/01-intro.qmd": (
             "---\n"
             "title: Introduction\n"
             "guide-section: Foundation\n"
@@ -72,7 +72,7 @@ SPEC = {
             "\n"
             "Welcome to the project. This guide covers the fundamentals.\n"
         ),
-        "user_guide/basics/02-install.md": (
+        "docs/user_guide/basics/02-install.md": (
             "---\n"
             "title: Installation\n"
             "guide-section: Foundation\n"
@@ -86,7 +86,7 @@ SPEC = {
             "pip install gdtest-stress-all-ug\n"
             "```\n"
         ),
-        "user_guide/basics/03-quickstart.qmd": (
+        "docs/user_guide/basics/03-quickstart.qmd": (
             "---\n"
             "title: Quickstart\n"
             "guide-section: Foundation\n"
@@ -96,7 +96,7 @@ SPEC = {
             "\n"
             "Get up and running quickly with this guide.\n"
         ),
-        "user_guide/advanced/01-architecture.qmd": (
+        "docs/user_guide/advanced/01-architecture.qmd": (
             "---\n"
             "title: Architecture\n"
             "guide-section: Deep Dive\n"
@@ -106,7 +106,7 @@ SPEC = {
             "\n"
             "An overview of the system architecture and design decisions.\n"
         ),
-        "user_guide/advanced/02-patterns.md": (
+        "docs/user_guide/advanced/02-patterns.md": (
             "---\n"
             "title: Patterns\n"
             "guide-section: Deep Dive\n"
@@ -116,7 +116,7 @@ SPEC = {
             "\n"
             "Common design patterns used throughout the codebase.\n"
         ),
-        "user_guide/advanced/03-optimization.qmd": (
+        "docs/user_guide/advanced/03-optimization.qmd": (
             "---\n"
             "title: Optimization\n"
             "guide-section: Deep Dive\n"
@@ -126,7 +126,7 @@ SPEC = {
             "\n"
             "Techniques for optimizing performance and memory usage.\n"
         ),
-        "user_guide/appendix/01-faq.qmd": (
+        "docs/user_guide/appendix/01-faq.qmd": (
             "---\n"
             "title: FAQ\n"
             "guide-section: Appendix\n"
@@ -136,7 +136,7 @@ SPEC = {
             "\n"
             "Answers to commonly asked questions.\n"
         ),
-        "user_guide/appendix/02-glossary.md": (
+        "docs/user_guide/appendix/02-glossary.md": (
             "---\n"
             "title: Glossary\n"
             "guide-section: Appendix\n"

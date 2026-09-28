@@ -112,7 +112,7 @@ SPEC = {
                 debug: true
                 log_level: info
         """,
-        "user_guide/01-includes.qmd": """\
+        "docs/user_guide/01-includes.qmd": """\
             ---
             title: Code Includes
             guide-section: Tutorials

@@ -342,7 +342,7 @@ SPEC = {
                 """
                 pass
         ''',
-        "user_guide/01-getting-started.qmd": """\
+        "docs/user_guide/01-getting-started.qmd": """\
             ---
             title: Getting Started
             ---
@@ -374,7 +374,7 @@ SPEC = {
             - Explore the [Visualization](visualization.qmd) guide
             - Dive into [Advanced Topics](advanced-topics.qmd)
         """,
-        "user_guide/02-configuration.qmd": """\
+        "docs/user_guide/02-configuration.qmd": """\
             ---
             title: Configuration
             ---
@@ -405,7 +405,7 @@ SPEC = {
             data = load_csv("data.tsv", delimiter="\\t")
             ```
         """,
-        "user_guide/03-visualization.qmd": """\
+        "docs/user_guide/03-visualization.qmd": """\
             ---
             title: Visualization
             ---
@@ -446,7 +446,7 @@ SPEC = {
             print(output)
             ```
         """,
-        "user_guide/04-advanced-topics.qmd": """\
+        "docs/user_guide/04-advanced-topics.qmd": """\
             ---
             title: Advanced Topics
             ---
@@ -571,7 +571,7 @@ SPEC = {
             ```
         """,
         # ── Tutorials section: 6 pages in 2 subsection groups ──
-        "tutorials/basics/01-fundamentals.qmd": """\
+        "docs/tutorials/basics/01-fundamentals.qmd": """\
             ---
             title: Fundamentals
             ---
@@ -594,7 +594,7 @@ SPEC = {
 
             Results are always plain Python dicts or strings — no custom types.
         """,
-        "tutorials/basics/02-data-loading.qmd": """\
+        "docs/tutorials/basics/02-data-loading.qmd": """\
             ---
             title: Data Loading
             ---
@@ -618,7 +618,7 @@ SPEC = {
             rows = load_csv("data.tsv", delimiter="\\t")
             ```
         """,
-        "tutorials/basics/03-pipelines.qmd": """\
+        "docs/tutorials/basics/03-pipelines.qmd": """\
             ---
             title: Pipelines
             ---
@@ -643,7 +643,7 @@ SPEC = {
             repr(pipe)  # Pipeline('clean', stages=2)
             ```
         """,
-        "tutorials/advanced/01-chart-basics.qmd": """\
+        "docs/tutorials/advanced/01-chart-basics.qmd": """\
             ---
             title: Chart Basics
             ---
@@ -673,7 +673,7 @@ SPEC = {
             print(lc.render())
             ```
         """,
-        "tutorials/advanced/02-exporting.qmd": """\
+        "docs/tutorials/advanced/02-exporting.qmd": """\
             ---
             title: Exporting
             ---
@@ -698,7 +698,7 @@ SPEC = {
             export_json([{"metric": "accuracy", "value": 0.92}], "metrics.json")
             ```
         """,
-        "tutorials/advanced/03-summary-reports.qmd": """\
+        "docs/tutorials/advanced/03-summary-reports.qmd": """\
             ---
             title: Summary Reports
             ---

@@ -220,7 +220,7 @@ SPEC = {
                     .replace(">", "&gt;")
                 )
         ''',
-        "user_guide/01-overview.qmd": """\
+        "docs/user_guide/01-overview.qmd": """\
             ---
             title: "\u0646\u0638\u0631\u0629 \u0639\u0627\u0645\u0629"
             guide-section: "\u0627\u0644\u0623\u0633\u0627\u0633\u064a\u0627\u062a"
@@ -247,7 +247,7 @@ SPEC = {
             print(result)
             ```
         """,
-        "user_guide/02-templates.qmd": """\
+        "docs/user_guide/02-templates.qmd": """\
             ---
             title: "\u0627\u0644\u0642\u0648\u0627\u0644\u0628"
             guide-section: "\u0627\u0644\u0623\u0633\u0627\u0633\u064a\u0627\u062a"
@@ -275,7 +275,7 @@ SPEC = {
             print(safe)
             ```
         """,
-        "user_guide/03-table-explorer.qmd": """\
+        "docs/user_guide/03-table-explorer.qmd": """\
             ---
             title: "\u0645\u0633\u062a\u0643\u0634\u0641 \u0627\u0644\u062c\u062f\u0648\u0644"
             guide-section: "\u0627\u0644\u0623\u0633\u0627\u0633\u064a\u0627\u062a"

@@ -1,4 +1,3 @@
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -6,163 +5,92 @@ import pytest
 from great_docs import GreatDocs
 
 
-def test_copy_readme_images_basic():
-    """Test that images referenced in README are copied correctly."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
-
-        # Create project structure
-        images_dir = tmpdir / "images"
-        images_dir.mkdir()
-
-        # Create a test image
-        test_img = images_dir / "screenshot.png"
-        test_img.write_bytes(b"fake png data")
-
-        # Create README.md with image references
-        readme = tmpdir / "README.md"
-        readme.write_text("""
-# My Project
-
-![Screenshot](images/screenshot.png)
-
-External images should be skipped:
-![External](https://example.com/img.png)
-
-Assets should be skipped (handled elsewhere):
-![Logo](assets/logo.svg)
-""")
-
-        # Create great-docs directory
-        gd_dir = tmpdir / "great-docs"
-        gd_dir.mkdir()
-
-        # Initialize GreatDocs and test the method
-        gd = GreatDocs(str(tmpdir))
-
-        # Call the method directly
-        copied = gd._copy_readme_images(readme)
-
-        # Verify
-        assert copied == 1, f"Expected 1 image copied, got {copied}"
-
-        dest_img = gd_dir / "images" / "screenshot.png"
-        assert dest_img.exists(), f"Image not copied to {dest_img}"
-        assert dest_img.read_bytes() == b"fake png data", "Image content mismatch"
+@pytest.fixture(params=[".", "docs"])
+def docs(tmp_path: Path, request: pytest.FixtureRequest) -> GreatDocs:
+    source = tmp_path / request.param
+    source.mkdir(parents=True, exist_ok=True)
+    (source / "great-docs.yml").write_text("display_name: Sample\n")
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "sample"\nversion = "1"\n')
+    result = GreatDocs(str(tmp_path))
+    result.build_dir.mkdir(parents=True)
+    return result
 
 
-def test_copy_readme_images_html_tags():
-    """Test that HTML img tags are also detected."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
-
-        # Create project structure
-        docs_dir = tmpdir / "docs"
-        docs_dir.mkdir()
-        test_img = docs_dir / "diagram.svg"
-        test_img.write_bytes(b"<svg></svg>")
-
-        # Create README.md with HTML image
-        readme = tmpdir / "README.md"
-        readme.write_text("""
-# My Project
-
-<img src="docs/diagram.svg" alt="Architecture">
-""")
-
-        # Create great-docs directory
-        gd_dir = tmpdir / "great-docs"
-        gd_dir.mkdir()
-
-        gd = GreatDocs(str(tmpdir))
-        copied = gd._copy_readme_images(readme)
-
-        assert copied == 1
-        assert (gd_dir / "docs" / "diagram.svg").exists()
+def stage(docs: GreatDocs, content: str | None) -> str:
+    if content is not None:
+        (docs.project_root / "README.md").write_text(content)
+    docs._create_index_from_readme()
+    return (docs.build_dir / "index.qmd").read_text()
 
 
-def test_copy_readme_images_skips_urls():
-    """Test that external URLs are not copied."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
-
-        readme = tmpdir / "README.md"
-        readme.write_text("""
-# My Project
-
-![External 1](https://example.com/img.png)
-![External 2](http://example.com/img.png)
-![External 3](//example.com/img.png)
-![Data URI](data:image/png;base64,abc123)
-""")
-
-        gd_dir = tmpdir / "great-docs"
-        gd_dir.mkdir()
-
-        gd = GreatDocs(str(tmpdir))
-        copied = gd._copy_readme_images(readme)
-
-        assert copied == 0
+def destination(docs: GreatDocs, relative: str) -> Path:
+    prefix = "_shared" if docs.layout.source_dir != docs.project_root else "."
+    return docs.build_dir / prefix / relative
 
 
-def test_copy_readme_images_skips_assets():
-    """Test that assets/ paths are skipped (handled by _copy_assets)."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
+def test_copy_readme_images_basic(docs: GreatDocs) -> None:
+    source = docs.project_root / "images/screenshot.png"
+    source.parent.mkdir()
+    source.write_bytes(b"fake png data")
 
-        # Create assets directory with an image
-        assets_dir = tmpdir / "assets"
-        assets_dir.mkdir()
-        (assets_dir / "logo.svg").write_bytes(b"<svg></svg>")
+    page = stage(docs, "# Sample\n\n![Screenshot](images/screenshot.png)\n")
 
-        readme = tmpdir / "README.md"
-        readme.write_text("""
-# My Project
-
-![Logo](assets/logo.svg)
-""")
-
-        gd_dir = tmpdir / "great-docs"
-        gd_dir.mkdir()
-
-        gd = GreatDocs(str(tmpdir))
-        copied = gd._copy_readme_images(readme)
-
-        # Should be 0 because assets/ is handled separately
-        assert copied == 0
+    copied = destination(docs, "images/screenshot.png")
+    assert copied.read_bytes() == source.read_bytes()
+    assert copied.relative_to(docs.build_dir).as_posix() in page
 
 
-def test_copy_readme_images_none_source():
-    """Test that None source file returns 0."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
+def test_copy_readme_images_html_tags(docs: GreatDocs) -> None:
+    source = docs.project_root / "diagrams/architecture.svg"
+    source.parent.mkdir()
+    source.write_bytes(b"<svg></svg>")
 
-        gd_dir = tmpdir / "great-docs"
-        gd_dir.mkdir()
+    page = stage(docs, '<img src="diagrams/architecture.svg" alt="Architecture">\n')
 
-        gd = GreatDocs(str(tmpdir))
-        copied = gd._copy_readme_images(None)
-
-        assert copied == 0
+    copied = destination(docs, "diagrams/architecture.svg")
+    assert copied.read_bytes() == source.read_bytes()
+    assert f'src="{copied.relative_to(docs.build_dir).as_posix()}"' in page
 
 
-def test_copy_readme_images_missing_file():
-    """Test that references to missing files are skipped."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
+def test_copy_readme_images_skips_urls(docs: GreatDocs) -> None:
+    urls = [
+        "https://example.com/img.png",
+        "http://example.com/img.png",
+        "//example.com/img.png",
+        "data:image/png;base64,abc123",
+    ]
 
-        readme = tmpdir / "README.md"
-        readme.write_text("""
-# My Project
+    page = stage(docs, "\n".join(f"![External]({url})" for url in urls))
 
-![Missing](images/nonexistent.png)
-""")
+    assert all(url in page for url in urls)
+    assert not list(docs.build_dir.rglob("*.png"))
+    assert not (docs.build_dir / "_shared").exists()
 
-        gd_dir = tmpdir / "great-docs"
-        gd_dir.mkdir()
 
-        gd = GreatDocs(str(tmpdir))
-        copied = gd._copy_readme_images(readme)
+def test_copy_readme_images_reuses_assets(docs: GreatDocs) -> None:
+    source = docs.project_root / "assets/logo.svg"
+    source.parent.mkdir()
+    source.write_bytes(b"<svg></svg>")
+    docs._copy_assets()
 
-        # File doesn't exist, so nothing is copied
-        assert copied == 0
+    page = stage(docs, "![Logo](assets/logo.svg)\n")
+
+    copied = destination(docs, "assets/logo.svg")
+    assert copied.read_bytes() == source.read_bytes()
+    assert copied.relative_to(docs.build_dir).as_posix() in page
+    assert list(docs.build_dir.rglob("logo.svg")) == [copied]
+
+
+def test_copy_readme_images_none_source(docs: GreatDocs) -> None:
+    page = stage(docs, None)
+
+    assert "sample" in page
+    assert not list(docs.build_dir.rglob("*.png"))
+    assert not (docs.build_dir / "_shared").exists()
+
+
+def test_copy_readme_images_missing_file(docs: GreatDocs) -> None:
+    page = stage(docs, "![Missing](images/nonexistent.png)\n")
+
+    assert "images/nonexistent.png" in page
+    assert not destination(docs, "images/nonexistent.png").exists()

@@ -60,7 +60,7 @@ SPEC = {
                 """
                 return bool(value)
         ''',
-        "assets/logo.svg": _LOGO_SVG,
+        "docs/assets/logo.svg": _LOGO_SVG,
         "README.md": """\
             # gdtest-hero-no-logo
 

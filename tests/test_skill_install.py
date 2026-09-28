@@ -637,28 +637,6 @@ class TestSkillCLI:
         assert result.exit_code == 0
         assert "No installed skills found" in result.output
 
-    def test_skill_install_from_url_live(self, tmp_path, monkeypatch):
-        """Integration test: install from the live Great Docs site."""
-        from click.testing import CliRunner
-
-        from great_docs.cli import cli
-
-        runner = CliRunner()
-        monkeypatch.chdir(tmp_path)
-        result = runner.invoke(
-            cli,
-            [
-                "skill",
-                "install",
-                "https://posit-dev.github.io/great-docs/",
-                "--agent",
-                "claude",
-            ],
-        )
-
-        assert result.exit_code == 0
-        assert Path(".claude/skills/great-docs/SKILL.md").exists()
-
 
 # ---------------------------------------------------------------------------
 # Config property tests

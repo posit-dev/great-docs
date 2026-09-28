@@ -54,7 +54,7 @@ def test_removed_and_dropped_keys_are_ignored():
 
 
 def test_version_is_not_wired_through():
-    # Parity: config `version` never reaches Settings; objects.json stays "0.0.9999".
+    # Parity: config `version` never reaches Settings; objects.inv stays "0.0.9999".
     ref = APIReference({"api-reference": {"package": "pkg", "version": "1.2.3"}})
     assert ref.settings.version is None
 
@@ -88,5 +88,28 @@ def test_toc_depth_reads_source_config():
 def test_settings_defaults():
     s = Settings()
     assert s.dir == "reference"
-    assert s.out_inventory == "objects.json"
     assert s.parser == "numpy"
+
+
+def test_the_manifest_is_available_without_building(tmp_path, monkeypatch):
+    """Reading the claims must not write pages, an index or an inventory."""
+    from great_docs._apiref.api_reference import APIReference
+
+    (tmp_path / "mypkg").mkdir()
+    (tmp_path / "mypkg" / "__init__.py").write_text(
+        '"""A package."""\n\n\nclass Cache:\n    """A cache."""\n\n'
+        "    def flush(self):\n"
+        '        """Flush buffered writes."""\n',
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+
+    ref = APIReference(
+        {"api-reference": {"package": "mypkg", "sections": [{"contents": ["Cache"]}]}}
+    )
+    names = [item.name for item in ref.items]
+
+    assert "mypkg.Cache" in names
+    assert list(tmp_path.glob("objects.inv")) == []
+    assert not (tmp_path / "reference").exists()

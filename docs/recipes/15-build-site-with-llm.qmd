@@ -1,0 +1,76 @@
+---
+title: "Build a Docs Site with an LLM"
+description: "Use an AI coding agent to go from zero to a published Great Docs site in a single session."
+tags: [AI\/LLM, Getting Started]
+---
+
+# Build a Docs Site with an LLM
+
+An AI coding agent with the Great Docs skill can handle almost every step of setting up your documentation site. This recipe walks through the end-to-end workflow: what to tell the agent, what it can do on its own, and where you still need to step in.
+
+## Prerequisites
+
+Before you start, make sure the following are in place:
+
+1. **Python 3.10+** and **Quarto** are installed on your machine.
+2. **Great Docs** is installed (`pip install great-docs`).
+3. **The Great Docs skill** is installed in your agent (see [Install the Great Docs Skill](install-great-docs-skill.html)).
+4. Your Python package is importable in the current environment.
+
+Once these are set, the agent can take over.
+
+## Step 1: Initialize the site
+
+Tell your agent:
+
+> Initialize Great Docs for this project.
+
+The agent will run `great-docs init`, which scans your package's public API and creates a `great-docs.yml` configuration file with sensible defaults. Review the generated file to make sure the `module` name and `title` look correct.
+
+## Step 2: Build and preview
+
+Next, ask the agent to build and preview:
+
+> Build the documentation and start the preview server.
+
+The agent will run `great-docs build` followed by `great-docs preview`. The build generates all reference pages, processes user guides, and renders the site to `docs/_site/`. The preview server opens a local URL (usually `http://localhost:8765`) where you can browse the result.
+
+## Step 3: Add configuration
+
+With the default site running, you can start customizing. Here are some example prompts:
+
+- "Set the navbar gradient to `sky` and enable the dark mode toggle."
+- "Add an announcement banner that says 'Beta release: feedback welcome'."
+- "Set the GitHub style to `widget` so visitors see the star count."
+
+Each of these translates to a small edit in `great-docs.yml`. The agent knows which keys to set because the skill file includes a full configuration decision table. After each change, rebuild with `great-docs build` to see the results.
+
+## Step 4: Write user guide pages
+
+You can ask the agent to scaffold user guide content:
+
+> Create a user guide page about authentication. It should explain API keys, OAuth tokens, and session management.
+
+The agent will create a numbered `.qmd` file in `docs/user_guide/` with the right frontmatter and section structure. Great Docs discovers new files automatically on the next build, so no additional configuration is needed.
+
+## Step 5: Deploy
+
+When you are happy with the local preview, ask the agent to set up deployment:
+
+> Set up GitHub Actions to deploy this site to GitHub Pages.
+
+The agent can create the workflow file following the pattern in [GitHub Pages CI](github-pages-ci.html). You will need to configure the GitHub Pages settings in your repository manually (Settings, then Pages, then set the source to "GitHub Actions"), since that requires repository access the agent does not have.
+
+## What the agent can and cannot do
+
+The skill file explicitly lists capabilities and boundaries. In short:
+
+The agent *can* edit `great-docs.yml`, create user guide and recipe pages, add custom CSS, configure logos and theming, and run build commands.
+
+The agent *cannot* install Python or Quarto, publish your package to PyPI, configure DNS for a custom domain, or push code to GitHub. These steps require your direct involvement.
+
+## Tips for effective prompts
+
+Be specific about what you want rather than asking for "a good documentation site". A prompt like "add a user guide page about caching that explains TTL, LRU, and invalidation strategies" gives the agent enough context to produce useful content on the first try. If the result needs adjustment, follow up with targeted corrections like "move the LRU section before TTL" rather than asking the agent to start over.
+
+When making multiple changes, ask for one change at a time and rebuild between each step. This makes it easy to spot which change caused an issue if something goes wrong.

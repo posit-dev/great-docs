@@ -1,0 +1,426 @@
+---
+title: "Cross-Referencing"
+guide-section: "Config & Theming"
+bread-crumbs: false
+tags: [Content, Configuration, Citations]
+---
+
+# Cross-Referencing
+
+Documentation becomes much more useful when readers can follow connections between related items.
+Without links, someone reading the `encode()` page has no easy way to discover that `decode()`
+exists, or that a higher-level `Pipeline` class ties everything together. Cross-references turn
+isolated pages into a connected web. This page covers that internal linking, and ends with
+citations: linking your prose outward to the papers, specifications, and books your work builds
+on.
+
+Great Docs provides a linking system called GDLS (Great Docs Linking System) that automatically
+creates clickable navigation between your API reference pages. GDLS operates at three levels, each
+adding a different kind of connectivity to your documentation.
+
+The first level is the `%seealso` directive, which adds structured "See Also" sections that link
+related items together. The second level is inline interlinks, which let you create Markdown-style
+links to API symbols anywhere in your prose. The third level is code autolinks, which automatically
+turn inline code references like `` `MyClass` `` into clickable links when they match a documented
+symbol.
+
+All three mechanisms resolve against the same inventory that Great Docs generates during the
+build, and they resolve while the page is being rendered. To preview which symbols are available
+for linking before you build, run:
+
+```bash
+great-docs scan
+```
+
+This is useful for confirming the exact names you can reference in your docstrings.
+
+Your site publishes that inventory as `objects.inv` at its root, the format Sphinx and Quarto
+projects both read, so other projects can link into your documentation the same way you link
+into theirs.
+
+## Linking to Another Project
+
+Configure the projects you want to reach under `interlinks.sources`, naming each one and the URL
+its documentation is served from:
+
+```yaml
+interlinks:
+  sources:
+    numpy:
+      url: https://numpy.org/doc/stable/
+      aliases: [np]
+```
+
+An external reference is then written exactly like an internal one:
+
+```markdown
+See [](`numpy.ndarray`) for the array type, or [](`np.ndarray`) using the alias.
+```
+
+Code autolinks stay inside your own project. A bare `` `array` `` in your prose is left alone
+rather than linked into another project's documentation.
+
+See [Configuration](05-configuration.qmd) for the full set of fields a source accepts.
+
+## When a Short Name Is Ambiguous
+
+You can reference an object by a short name, writing `` [](`Cache`) `` rather than
+`` [](`mypkg.store.Cache`) ``. If two documented objects would answer to the same short name,
+neither claims it: the reference renders unlinked rather than pointing at whichever object came
+first. Qualify the reference to fix it.
+
+The build reports each ambiguous name it drops, and `great-docs lint` reports each reference
+that hits one, so you do not have to find them by reading the built pages.
+
+Only your own objects compete for a short name. If a linked project publishes the same
+spelling, an unambiguous local name still wins and the external object remains reachable
+by its full name. An ambiguous local name stays unlinked even when an external object has
+that spelling. Qualify the source to link to the external object.
+
+A version built from an API snapshot or a git tag resolves references against that version's
+own API, so a name added since then stays unlinked in the older version's pages rather than
+pointing at a page it does not have.
+
+## The `%seealso` Directive
+
+The most common cross-referencing need is connecting items that serve complementary roles: an
+encoder and a decoder, a reader and a writer, or a class and its factory function. The `%seealso`
+directive handles this by adding a "See Also" section at the bottom of a reference page. Place it
+anywhere in a docstring with a comma-separated list of related names:
+
+```python
+def encode(data: bytes, encoding: str = "utf-8") -> str:
+    """Encode bytes to a string.
+
+    %seealso decode, transcode
+    """
+    ...
+```
+
+Great Docs strips the directive from the rendered output and generates a "See Also" section with
+clickable links at the bottom of the page.
+
+Names can reference any exported symbol, including class methods using dotted notation:
+
+```python
+class Validator:
+    def check(self, data):
+        """Run all validation checks.
+
+        %seealso Validator.reset, Report
+        """
+        ...
+```
+
+### Adding Descriptions
+
+You can add a short description after each name, separated by a colon. When descriptions are
+present, the See Also section renders as a list with each link followed by its description. Without
+descriptions, the links appear as a compact comma-separated line.
+
+```python
+def load(path: str) -> dict:
+    """Load data from a file.
+
+    %seealso save : Write data back to a file, validate : Check data integrity
+    """
+    ...
+```
+
+You can mix entries with and without descriptions freely:
+
+```python
+def transform(data: dict) -> dict:
+    """Transform data before processing.
+
+    %seealso validate : Check data integrity first, load, save
+    """
+    ...
+```
+
+### NumPy-style See Also Sections
+
+If your docstrings use the NumPy docstring format, you can write a standard See Also section instead
+of (or in addition to) the `%seealso` directive. Great Docs recognizes this format, preserves the
+descriptions, and merges it with any `%seealso` entries on the same page. Duplicate references are
+deduplicated automatically.
+
+```python
+def connect(host: str, port: int = 5432):
+    """Open a connection to the server.
+
+    Parameters
+    ----------
+    host
+        The server hostname.
+    port
+        The port number.
+
+    See Also
+    --------
+    disconnect : Close an open connection.
+    send : Transmit data over the connection.
+    """
+    ...
+```
+
+Both formats produce the same rendered output. If a page has both a `%seealso` directive and a NumPy
+See Also section, the entries are merged and any duplicates are removed.
+
+## Inline Interlinks
+
+Sometimes you need to mention another API item in the middle of a prose explanation rather than in a
+structured "See Also" section. Inline interlinks let you create Markdown-style links to API symbols
+anywhere in your docstring text. This is especially useful in class hierarchies and overview
+docstrings where you want to point readers to related pages. There are several forms:
+
+- write `` [](`~mypackage.MyClass`) `` to display just `MyClass`. The `~` prefix strips the package
+path and shows only the short name
+- write `` [](`mypackage.MyClass`) `` to display the full path `mypackage.MyClass`
+- write `` [see this class](`mypackage.MyClass`) `` to display `see this class` as the link text
+- write `` [see this class](`~mypackage.MyClass`) `` to also display `see this class`; when you
+supply custom link text in the brackets, it is always used as-is regardless of the `~` prefix
+
+Here is an example showing interlinks in practice:
+
+```python
+class BaseStore:
+    """Base class for all stores.
+
+    Available implementations:
+
+    - [](`~mypackage.DuckDBStore`): local storage with embedded search.
+    - [](`~mypackage.ChromaDBStore`): vector storage using ChromaDB.
+
+    See [](`mypackage.BaseStore`) for the full API, or
+    [the DuckDB guide](`~mypackage.DuckDBStore`) for a walkthrough.
+    """
+    ...
+```
+
+Interlinks work in any part of a docstring: the summary line, extended description, parameter
+descriptions, notes, or any other section. If a reference cannot be resolved (for example, a typo in
+the symbol name), the link text still renders but without a clickable link.
+
+## Code Autolinks
+
+The first two levels (`%seealso` and interlinks) require you to opt in by writing specific syntax.
+Code autolinks take a different approach: they work automatically with no markup at all. When Great
+Docs encounters inline code in a docstring that matches a documented API symbol, it turns that code
+into a clickable link:
+
+```python
+class Engine:
+    """Core processing engine.
+
+    Use `Pipeline` to chain multiple engines together.
+    Call `run_pipeline()` to execute a full pipeline.
+    """
+    ...
+```
+
+In the rendered output, `` `Pipeline` `` and `` `run_pipeline()` `` become clickable links to their
+respective reference pages.
+
+### Shortening Prefixes
+
+For qualified names, you can control the display text with `~~` prefixes. The double tilde strips
+everything before the last component of the dotted path:
+
+| What you write | What renders | What it links to |
+|---|---|---|
+| `` `mypackage.MyClass` `` | `mypackage.MyClass` | MyClass page |
+| `` `mypackage.my_func()` `` | `mypackage.my_func()` | my_func page |
+| `` `~~mypackage.MyClass` `` | `MyClass` | MyClass page |
+| `` `~~mypackage.my_func()` `` | `my_func()` | my_func page |
+| `` `~~.mypackage.MyClass` `` | `.MyClass` | MyClass page |
+
+If the name does not match any documented symbol (e.g., `` `~~unknown_func()` ``), it renders as
+plain code with no link.
+
+### What Gets Autolinked
+
+Any inline code that looks like an identifier or dotted path is a candidate for autolinking.
+Parentheses at the end are allowed. Code that contains arguments, spaces, or operators is not
+linked.
+
+Examples that will be linked (if the name exists in the API):
+
+- `` `MyClass` ``
+- `` `my_func()` ``
+- `` `mypackage.MyClass` ``
+
+Examples that will not be linked:
+
+- `` `my_func(x=1)` `` (contains arguments)
+- `` `a + b` `` (contains operators)
+- `` `-MyClass` `` (starts with an operator)
+
+When in doubt, write the name as you normally would in a docstring. If it resolves, it becomes a
+link; if not, it renders as plain code.
+
+## Parentheses in Cross-References
+
+The three cross-referencing levels handle parentheses differently, so it helps to know the rules:
+
+**`%seealso`**: Write bare names without parentheses. Great Docs automatically appends `()` to
+functions and methods in the rendered "See Also" section based on each symbol's type. Writing
+`%seealso decode, MyClass` produces `decode()` and `MyClass` in the output, with the parentheses
+added only where appropriate. Set `interlinks.add_function_parentheses` to `false` if you would
+rather link the bare name.
+
+**Inline interlinks**: The target inside backticks should be the qualified name without parentheses.
+Write `` [](`~mypackage.my_func`) ``, not `` [](`~mypackage.my_func()`) ``.
+
+**Code autolinks**: Trailing `()` are optional and purely cosmetic. Both `` `my_func` `` and
+`` `my_func()` `` resolve to the same page. The parentheses are preserved in the display text but
+stripped during lookup. Use `()` when you want to signal to readers that something is callable:
+
+```python
+class Pipeline:
+    """Chain multiple engines together.
+
+    Call `run()` to execute the pipeline, or inspect `config` for current settings.
+    """
+    ...
+```
+
+In the rendered output, `run()` links to the `run` method page (with parentheses displayed) and
+`config` links to the `config` attribute page (without parentheses).
+
+### Disabling Autolinks
+
+To prevent a specific piece of inline code from being autolinked, add the `{.gd-no-link}` class
+after the backtick span:
+
+```markdown
+The `Config`{.gd-no-link} parameter is a plain dictionary, not the Config class.
+```
+
+This is useful when a word happens to match a documented symbol but you are referring to something
+else in context. You only need this occasionally; most autolinks are helpful and should be left in
+place.
+
+## Best Practices for Linking
+
+Cross-references make documentation much more navigable, but a few guidelines help keep them useful
+rather than distracting.
+
+Use `%seealso` to connect items that serve complementary roles. If `encode()` and `decode()` are a
+natural pair, linking them together helps readers discover both. For larger groupings, a brief
+description after each name (using the colon syntax) gives context about why the link is relevant.
+
+Use inline interlinks when you mention another symbol in the middle of a prose explanation. This
+keeps reading flow natural while still giving readers a path to the referenced page. The shortened
+form (with `~`) is usually the best choice because fully qualified paths can be long and interrupt
+the sentence visually.
+
+Code autolinks require no effort on your part, since they happen automatically. But be aware that
+common words like `Config` or `Data` might match a symbol unexpectedly. If you notice unwanted links
+in the rendered output, add `{.gd-no-link}` to the specific code span.
+
+## Citations & Bibliography
+
+Cross-references connect the pages *within* your documentation; citations connect your prose to the
+work it builds on (e.g., a paper, a specification, a book, etc.). Great Docs supports academic
+citations and a generated **References** section, driven by a single project-level bibliography.
+
+Point `bibliography:` at a `.bib` file relative to `docs/great-docs.yml`:
+
+```{.yaml filename="docs/great-docs.yml"}
+bibliography: references.bib
+```
+
+Then cite by key anywhere (no per-page frontmatter required):
+
+```markdown
+Literate programming was introduced by Knuth [@knuth1984].
+```
+
+That renders as "…by Knuth (Knuth 1984)", linked to a References section. At build time Great Docs
+copies the `.bib` into the build directory and wires it into the generated `_quarto.yml`, so the
+bibliography is available to *every* page: User Guide pages, custom sections, the homepage, and even
+the docstrings that become your API reference.
+
+### Writing citations
+
+Citations use standard [Pandoc citation
+syntax](https://quarto.org/docs/authoring/citations.html#sec-citations). The citation key is the
+identifier from your `.bib` entry (`knuth1984` above), prefixed with `@`.
+
+| You write | Renders as |
+|-----------|------------|
+| `[@knuth1984]` | (Knuth 1984) |
+| `@knuth1984` | Knuth (1984) |
+| `[@knuth1984; @lamport1994]` | (Knuth 1984; Lamport 1994) |
+| `[see @knuth1984, pp. 33-35]` | (see Knuth 1984, 33–35) |
+| `[-@knuth1984]` | (1984) |
+
+Wrap a key in square brackets for a parenthetical citation, drop them for an in-text citation where
+the author becomes part of the sentence, separate multiple keys with semicolons, and add a prefix,
+locator, or leading `-` to suppress the author.
+
+### The references section
+
+When a page contains at least one citation, Great Docs renders a **References** section listing
+every work cited. By default it appears at the end of the page. To place it somewhere specific, add
+an empty `#refs` div where you want it:
+
+```markdown
+## References
+
+::: {#refs}
+:::
+```
+
+Quarto fills that div with the reference list instead of appending one at the end, and uses your
+heading as-is (it won't add a second one).
+
+### Multiple bibliography files
+
+Pass a list to combine several `.bib` files; all entries become citable from any page:
+
+```{.yaml filename="docs/great-docs.yml"}
+bibliography:
+  - references.bib
+  - software.bib
+```
+
+### Citation style
+
+By default citations follow the Chicago author-date style. To use a different
+[CSL](https://citationstyles.org) style, point `csl:` at a `.csl` file relative to the configuration
+directory; Great Docs copies it into the build alongside the bibliography. Find styles in the
+[Zotero Style Repository](https://www.zotero.org/styles).
+
+```{.yaml filename="docs/great-docs.yml"}
+bibliography: references.bib
+csl: nature.csl
+```
+
+### Localized headings
+
+If your site sets a [language](internationalization.qmd), the auto-generated references heading is
+localized automatically. So a French site (`site.language: fr`) renders **Les références**, with the
+entries themselves formatted for that language too.
+
+::: {.callout-note}
+If citations render as literal `[@key]` text with no References section, the key doesn't match a
+`.bib` entry or the bibliography wasn't found. So check the key spelling and that `bibliography:`
+resolves from the configuration directory. A missing file warns (`"Bibliography file not found"`) and the build
+continues without it.
+:::
+
+## Next Steps
+
+Cross-references turn a collection of standalone reference pages into a connected web of
+documentation. Use `%seealso` for structured navigation, interlinks for inline mentions, code
+autolinks for the rest, and a project-level `bibliography:` to cite external work.
+
+- [Writing Docstrings](writing-docstrings.qmd) covers how to write effective docstrings that work
+well with cross-referencing
+- [API Documentation](api-documentation.qmd) covers how API discovery and page organization work
+- [User Guides](user-guides.qmd) explains how to link from User Guide pages to API reference pages
+- [Internationalization](internationalization.qmd) localizes the References heading and the rest of
+the UI
+- [Linting](linting.qmd) can catch broken cross-references during the build

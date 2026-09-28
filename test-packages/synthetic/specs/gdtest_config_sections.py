@@ -66,7 +66,7 @@ SPEC = {
                 """
                 return True
         ''',
-        "examples/basic-usage.qmd": """\
+        "docs/examples/basic-usage.qmd": """\
             ---
             title: Basic Usage
             ---
@@ -75,7 +75,7 @@ SPEC = {
 
             This example shows basic usage of the library.
         """,
-        "examples/advanced-patterns.qmd": """\
+        "docs/examples/advanced-patterns.qmd": """\
             ---
             title: Advanced Patterns
             ---

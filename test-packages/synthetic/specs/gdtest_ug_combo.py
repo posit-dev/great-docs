@@ -65,7 +65,7 @@ SPEC = {
                 """
                 return f"Deployed to {target}"
         ''',
-        "user_guide/basics/01-intro.qmd": (
+        "docs/user_guide/basics/01-intro.qmd": (
             "---\n"
             "title: Introduction\n"
             "guide-section: Basics\n"
@@ -75,7 +75,7 @@ SPEC = {
             "\n"
             "An introduction to the basics of the project.\n"
         ),
-        "user_guide/basics/02-install.md": (
+        "docs/user_guide/basics/02-install.md": (
             "---\n"
             "title: Installation\n"
             "guide-section: Basics\n"
@@ -85,7 +85,7 @@ SPEC = {
             "\n"
             "How to install the project using pip.\n"
         ),
-        "user_guide/advanced/01-config.qmd": (
+        "docs/user_guide/advanced/01-config.qmd": (
             "---\n"
             "title: Configuration\n"
             "guide-section: Advanced\n"
@@ -95,7 +95,7 @@ SPEC = {
             "\n"
             "Advanced configuration options for the project.\n"
         ),
-        "user_guide/advanced/02-extend.qmd": (
+        "docs/user_guide/advanced/02-extend.qmd": (
             "---\n"
             "title: Extending\n"
             "guide-section: Advanced\n"

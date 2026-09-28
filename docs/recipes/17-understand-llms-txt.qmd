@@ -1,0 +1,65 @@
+---
+title: "llms.txt and llms-full.txt"
+description: "Learn what the auto-generated llms.txt and llms-full.txt files are, how agents use them, and how to customize them."
+tags: [AI\/LLM, SEO]
+---
+
+# llms.txt and llms-full.txt
+
+Every time you run `great-docs build`, two special files are generated alongside your documentation site: `llms.txt` and `llms-full.txt`. These files give AI coding agents a compact, text-based view of your package's API so they can answer questions about your library without scraping HTML pages.
+
+## What is llms.txt?
+
+The `llms.txt` file is a concise index of your package's public API. It lists every documented class, method, and function with a one-line summary and a link to the full reference page. Here is a shortened example of what the file looks like:
+
+```
+# great_docs
+
+> An easy-to-use documentation site generator for Python packages
+
+## Docs
+
+### API Reference
+
+#### Classes
+> Core classes and types
+
+- [GreatDocs](https://example.com/reference/GreatDocs.html): GreatDocs class for creating documentation sites
+```
+
+An agent can read this file to quickly discover what your package offers, then follow the links to get full details on specific items.
+
+## What is llms-full.txt?
+
+The `llms-full.txt` file contains the complete rendered documentation for every public API member: parameter descriptions, return types, examples, and notes. It is much longer than `llms.txt` but gives an agent everything it needs to work with your API without making additional requests.
+
+This file is especially useful for agents that operate in offline or rate-limited environments, since all the information is available in a single download.
+
+## How agents use these files
+
+When an agent has access to your documentation URL (for example, `https://example.com/`), it can fetch `https://example.com/llms.txt` to get the index or `https://example.com/llms-full.txt` for full details. Many agents (including those with the Great Docs skill installed) know to look for these files automatically.
+
+The workflow typically looks like this: the agent reads `llms.txt` to see what classes and functions are available, identifies the relevant items, and then either follows the links or reads the corresponding sections of `llms-full.txt` for complete documentation.
+
+## Generation is automatic
+
+You do not need to configure anything to get these files. Great Docs generates them during the build in `docs/_quarto/default/` and deploys them in `docs/_site/` alongside the rest of your site.
+
+The content is derived from the same docstrings and type annotations that produce your HTML reference pages. If a function appears in your API reference, it will appear in both `llms.txt` and `llms-full.txt`.
+
+## Linking to the files
+
+You might want to mention these files in your project README or in a "For AI Agents" section of your documentation. The URLs follow a predictable pattern:
+
+```
+https://<your-site>/llms.txt
+https://<your-site>/llms-full.txt
+```
+
+Some AI agent frameworks also look for these files at well-known paths, so simply having them in your site root is often enough for automatic discovery.
+
+## Keeping them accurate
+
+Since the files are regenerated on every build, they stay in sync with your actual API. If you add a new function or update a docstring, the next build will reflect those changes in both files. There is nothing extra to maintain.
+
+If you notice that a function is missing from the output, check whether it is excluded via the `exclude` list in `great-docs.yml` or whether its name starts with an underscore (private members are excluded by default). Adjusting the `exclude` configuration or adding the item to the public API will make it appear on the next build.

@@ -1,0 +1,1250 @@
+---
+title: "Configuration"
+guide-section: "Config & Theming"
+bread-crumbs: false
+tags: [Configuration]
+---
+
+# Configuration
+
+Great Docs is designed to work with zero configuration, but you can customize its behavior through a
+`docs/great-docs.yml` file. This page covers the functional settings: API discovery, docstring parsing,
+GitHub integration, sidebar behavior, content features, and more. For visual customization (logos,
+gradients, banners, hero sections, dark mode), see [Theming & Appearance](theming.qmd).
+
+::: {.version-only versions=">=0.6"}
+For HTML-based landing pages and demo surfaces, see [Custom Static Pages](custom-pages.qmd). That
+feature is configured with `custom_pages` and still falls back to `custom/` when omitted.
+:::
+
+## Configuration Location
+
+Put Great Docs settings in `docs/great-docs.yml`. Resolve narrative sources, assets,
+bibliography, CSS, and render hooks from that directory. Keep package metadata,
+Python sources, and the README at the package root:
+
+```{.yaml filename="docs/great-docs.yml"}
+# Your settings here
+```
+
+For a custom documentation directory, use
+`great-docs build --config website/great-docs.yml`. The configuration path is relative
+to your current working directory; its source paths are relative to `website/`.
+Build projects live in `website/_quarto/` and deployment output in `website/_site/`.
+
+To generate a starter configuration file with all options documented:
+
+```bash
+great-docs config
+```
+
+## Display Name
+
+By default, Great Docs uses your package name exactly as-is for the site title and navbar. For
+packages with technical names like `my_package` or `my-package`, you might want a more polished
+presentation name.
+
+### Setting a Display Name
+
+Use the `display_name` field to specify how your package name appears in the site:
+
+```{.yaml filename="docs/great-docs.yml"}
+display_name: My Package
+```
+
+This will display `My Package` in the navbar instead of the actual package name.
+
+### When to Use It
+
+Common use cases for `display_name`:
+
+- **Branding**: Convert technical names to marketing names
+  - `weathervault` -> `WeatherVault`
+  - `great_docs` -> `Great Docs`
+
+- **Readability**: Add spaces and capitalization
+  - `my_awesome_lib` -> `My Awesome Lib`
+  - `data-processor` -> `Data Processor`
+
+- **Product names**: Use your product's official name
+  - `ml_toolkit` -> `ML Toolkit Pro`
+
+### Default Behavior
+
+If you don't specify `display_name`:
+
+- the site title will be your actual package name
+- no automatic title-casing or transformation is applied
+- `great_docs` stays as `great_docs`, not `Great Docs`
+- `my-package` stays as `my-package`, not `My Package`
+
+This ensures predictable behavior and respects your package's actual naming.
+
+## Project Type
+
+By default, Great Docs assumes a Python project. Set `project_type` to tell Great Docs about the
+primary language of your project:
+
+```{.yaml filename="docs/great-docs.yml"}
+project_type: rust
+```
+
+Valid values:
+
+| Value | Effect |
+|-------|--------|
+| `python` | (default) Enables Python API reference, PyPI link, and Click CLI support |
+| `go` | Enables Go CLI support; disables Python-specific features (PyPI link, package info page) |
+| `rust` | Enables Rust CLI support; disables Python-specific features (PyPI link, package info page) |
+
+For projects that combine languages (e.g., a Rust binary with Python bindings), use a list:
+
+```{.yaml filename="docs/great-docs.yml"}
+project_type: [python, rust]
+```
+
+When `python` is included in the list, Python-specific features remain active alongside the other
+language's CLI documentation.
+
+## API Discovery Settings
+
+### Excluding Items
+
+To exclude specific items from documentation during `init` and `scan`:
+
+```{.yaml filename="docs/great-docs.yml"}
+exclude:
+  - InternalClass
+  - helper_function
+```
+
+Note: The `exclude` setting affects what appears when running `great-docs init` (which
+auto-generates your `reference` config) and `great-docs scan` (which shows discovered exports). Once
+you have a `reference` config, you control exactly what's documented by listing items there.
+
+### Auto-Excluded Names
+
+Great Docs automatically excludes these common internal names during discovery:
+
+| Category | Names |
+|----------|-------|
+| CLI/Entry points | `main`, `cli` |
+| Version/Metadata | `version`, `VERSION`, `VERSION_INFO` |
+| Module re-exports | `core`, `utils`, `helpers`, `constants`, `config`, `settings` |
+| Standard library | `PackageNotFoundError`, `typing`, `annotations`, `TYPE_CHECKING` |
+| Logging | `logger`, `log`, `logging` |
+
+### Force-Including Auto-Excluded Names
+
+Some packages intentionally export names that match the auto-exclude list (e.g., a `config` or
+`logging` module that is part of the public API). Use `auto_include` to force specific names back
+into discovery:
+
+```{.yaml filename="docs/great-docs.yml"}
+auto_include:
+  - config
+  - logging
+```
+
+Names listed in `auto_include` are removed from the auto-exclude filter while all other
+auto-excluded names remain filtered as usual.
+
+### Disabling Auto-Exclude Entirely
+
+If the auto-exclude list doesn't suit your package at all, you can bypass it completely:
+
+```{.yaml filename="docs/great-docs.yml"}
+no_auto_exclude: true
+```
+
+With this setting, no names are automatically excluded. You can still use `exclude` to manually
+remove specific items.
+
+## Docstring Parser
+
+Different projects use different docstring conventions, so Great Docs automatically detects your
+docstring style during initialization. For a full guide on structuring docstrings (sections,
+executable examples, directives), see [Writing Docstrings](writing-docstrings.qmd).
+
+### Supported Styles
+
+| Style | Description | Example |
+|-------|-------------|--------|
+| `numpy` | NumPy-style with section underlines | `Parameters\n----------` |
+| `google` | Google-style with indented sections | `Args:\n    x: The value` |
+| `sphinx` | Sphinx-style with field markers | `:param x: The value` |
+
+### Automatic Detection
+
+When you run `great-docs init`, Great Docs analyzes your package's docstrings to detect the style:
+
+- **NumPy style** is identifiable by section headers with `---` underlines (e.g., `Parameters\n----------`)
+- **Google style** is identifiable by section headers with colons (e.g., `Args:`, `Returns:`)
+- **Sphinx style** is identifiable by field markers (e.g., `:param:`, `:returns:`, `:rtype:`)
+
+The detected style is saved to `docs/great-docs.yml` and forwarded to the API reference renderer during
+builds.
+
+### Manual Configuration
+
+If auto-detection doesn't work for your project, or you want to override it:
+
+```{.yaml filename="docs/great-docs.yml"}
+parser: google  # Options: numpy (default), google, sphinx
+```
+
+### When to Change the Parser
+
+You might need to manually set the parser if:
+
+- your package has few or no docstrings (detection defaults to `numpy`)
+- you use a mix of styles and want to standardize on one
+- auto-detection chose the wrong style
+
+### Example Docstrings
+
+::: {.panel-tabset}
+
+#### NumPy Style
+
+```python
+def my_function(x, y):
+    """
+    Add two numbers together.
+
+    Parameters
+    ----------
+    x
+      The first number.
+    y
+      The second number.
+
+    Returns
+    -------
+    int
+      The sum of x and y.
+    """
+    return x + y
+```
+
+#### Google Style
+
+```python
+def my_function(x, y):
+    """Add two numbers together.
+
+    Args:
+      x: The first number.
+      y: The second number.
+
+    Returns:
+      The sum of x and y.
+    """
+    return x + y
+```
+
+#### Sphinx Style
+
+```python
+def my_function(x, y):
+    """Add two numbers together.
+
+    :param x: The first number.
+    :type x: int
+    :param y: The second number.
+    :type y: int
+    :returns: The sum of x and y.
+    :rtype: int
+    """
+    return x + y
+```
+
+:::
+
+## Interlinks
+
+Your prose can link to another project's documentation the same way it links to your own.
+Name each project you want to reach, and the URL its documentation is served from:
+
+```yaml
+interlinks:
+  sources:
+    numpy:
+      url: https://numpy.org/doc/stable/
+      aliases: [np]
+    pandas:
+      url: https://pandas.pydata.org/pandas-docs/stable/
+```
+
+With that in place, `` [](`numpy.ndarray`) `` resolves to numpy's page for `ndarray`, exactly
+as a reference to one of your own objects resolves to yours.
+
+Each source takes two fields:
+
+- `url` is where the project's documentation lives. Its inventory is read from
+  `<url>/objects.inv`, where every project publishes one, and every link into the project is
+  written against `<url>`.
+- `aliases` lists the module names your prose uses for the project. With `aliases: [np]`, a
+  reference to `` [](`np.ndarray`) `` resolves as `numpy.ndarray`.
+
+A `url` may name a directory on disk rather than a served site. Great Docs reads the
+inventory from that directory and writes links against the same path, so this reaches a
+project you build alongside this one only when its path on disk is also its path on the
+site. Where the two differ, point `url` at the published site and let the build fetch the
+inventory over the network.
+
+Give a `url` that means the same thing from every page. One prefix is written into the
+index and used from pages at every depth, so a relative `url` such as `../sibling` resolves
+from wherever the reading page sits and cannot suit them all. Great Docs reports a relative
+`url` in the build log and writes the links as configured. A source with no `url` at all is
+skipped, and the build log says that too.
+
+Add Python's standard library as a source in the same way:
+
+```yaml
+interlinks:
+  sources:
+    python:
+      url: https://docs.python.org/3/
+```
+
+Do not add `aliases` here. The standard library has no single root. An alias rewrites a prefix
+to a project's root module, which works when a project puts every name under one package, as
+numpy and pandas do.
+
+Inventories are downloaded during the build and cached, so repeated builds do no network work,
+and a build that cannot reach a project falls back to the copy it already has. A project it has
+never reached is reported and skipped, leaving those references unlinked rather than failing
+the build.
+
+Your own site publishes `objects.inv` at its root, so other projects can point a source at
+your documentation in the same way.
+
+### Parentheses on Function Links
+
+A function or method link displays a trailing `()`, so `[](`decode`)` renders as `decode()`. Class
+links never display parentheses. Set `add_function_parentheses: false` to display the bare name:
+
+```yaml
+interlinks:
+  add_function_parentheses: false
+```
+
+This setting applies to links whose targets you write, including links generated by `%seealso`. It
+does not affect inline-code autolinks. Their display text remains exactly as written: `decode()`
+keeps its parentheses, while `decode` never gains them.
+
+## Dynamic Introspection
+
+Great Docs uses its built-in renderer to generate API reference pages. By default, it uses
+**dynamic introspection** (importing your package at runtime), which produces the most accurate
+documentation for complex packages with re-exports and aliases.
+
+```{.yaml filename="docs/great-docs.yml"}
+dynamic: true   # Default: true
+```
+
+Some packages have internal attributes that cause errors during dynamic introspection. If this
+happens, Great Docs will **automatically retry the build with static analysis** (`dynamic: false`).
+You'll see a message like:
+
+```
+⚠️  API reference build failed with dynamic introspection.
+   Retrying with static analysis (dynamic: false)...
+```
+
+To skip the retry and always use static analysis, set it explicitly:
+
+```{.yaml filename="docs/great-docs.yml"}
+dynamic: false
+```
+
+### When to Set `dynamic: false`
+
+- your package has cyclic aliases or complex re-export patterns
+- the build fails with `AttributeError` during introspection
+- you're documenting a compiled extension (PyO3/Rust/Cython)
+
+## GitHub Integration
+
+Several Great Docs features require knowing your GitHub repository URL:
+
+- **GitHub widget/icon** in the navbar (with star count)
+- **Source links** on API reference pages
+- **Version badge** next to the package name (from GitHub Releases)
+- **Changelog** page (from GitHub Releases)
+
+### Repository URL Detection
+
+Great Docs looks for your GitHub repository in this order:
+
+1. **`repo:` in docs/great-docs.yml**: explicit override, takes precedence
+2. **`[project.urls]` in pyproject.toml**: looks for `Repository`, `Source`, `GitHub`, or `Homepage`
+keys containing a GitHub URL
+
+```{.yaml filename="docs/great-docs.yml"}
+repo: https://github.com/your-org/your-package
+```
+
+Or via pyproject.toml:
+
+```{.toml filename="pyproject.toml"}
+[project.urls]
+Repository = "https://github.com/your-org/your-package"
+```
+
+::: {.callout-note}
+## Build Messages
+
+During `great-docs build`, you may see messages about GitHub integration:
+
+- **"No GitHub repository info available"**: no repository URL was found. Check that `repo:` is set
+in docs/great-docs.yml or `[project.urls]` is configured in pyproject.toml.
+- **"No GitHub releases found"**: the repository was detected, but has no published GitHub Releases.
+The version badge feature requires at least one published release.
+:::
+
+### GitHub Link Style
+
+Choose how the GitHub link appears in the navbar:
+
+```{.yaml filename="docs/great-docs.yml"}
+# Shows stars count (default)
+github_style: widget
+
+# Or use a simple GitHub icon
+github_style: icon
+```
+
+### Version Badge
+
+When your repository has published GitHub Releases, Great Docs automatically displays a version
+badge next to your package name in the navbar. The badge shows the latest release version and
+updates automatically on each build.
+
+This feature requires:
+
+1. a detected GitHub repository URL (see above)
+2. at least one published [GitHub Release](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
+
+No configuration is needed (the badge appears automatically when these conditions are met).
+
+### Source Links
+
+Great Docs automatically creates "source" links to GitHub. Configure the branch:
+
+```{.yaml filename="docs/great-docs.yml"}
+source:
+  branch: main  # Default: auto-detected from git
+```
+
+To disable source links entirely:
+
+```{.yaml filename="docs/great-docs.yml"}
+source:
+  enabled: false
+```
+
+Full source link configuration:
+
+```{.yaml filename="docs/great-docs.yml"}
+source:
+  enabled: true        # Enable/disable source links (default: true)
+  branch: main         # Git branch/tag to link to (default: auto-detect)
+  path: src/package    # Custom source path for monorepos (default: auto-detect)
+  placement: usage     # Where to place the link: "usage" (default) or "title"
+```
+
+## PyPI Link
+
+The homepage metadata sidebar includes a "View on PyPI" link, auto-detected from your package name
+in `pyproject.toml`. You can disable it or point it to a custom package index:
+
+```{.yaml filename="docs/great-docs.yml"}
+# Disable the PyPI link entirely
+pypi: false
+```
+
+```{.yaml filename="docs/great-docs.yml"}
+# Use a custom package index URL (e.g., a private registry)
+pypi: "https://packages.example.com/simple/my-package"
+```
+
+By default (`pypi: null`) the link is generated for Python projects and omitted for everything
+else, so a Go-only project gets no PyPI link without your having to say so. Setting `pypi: true`
+forces the link on regardless of `project_type`; it is auto-generated as
+`https://pypi.org/project/{package_name}/`.
+
+## Site URL
+
+Set `site_url` to the canonical URL where your documentation site is (or will be) hosted.
+This value is used in several places:
+
+- **Skills page** install instructions (e.g., `npx skills add <url>`)
+- **`.well-known/` discovery** endpoints for agent skills
+- **Quarto's `website.site-url`** (canonical links, sitemaps)
+- **Subdirectory deployments** where the site lives at a path other than `/`
+  (e.g., `https://internal.example.com/docs/mypackage/`)
+
+Without it, the Skills page renders literal `<site-url>` placeholders instead of working
+install commands, and subdirectory-hosted sites will have broken asset paths.
+
+```{.yaml filename="docs/great-docs.yml"}
+# Site URL: the canonical address of the deployed documentation site.
+# Used for skills page install commands, .well-known/ discovery, and sitemaps.
+site_url: "https://your-org.github.io/your-package/"
+```
+
+Alternatively, you can set a `Documentation` entry in `pyproject.toml`:
+
+```{.toml filename="pyproject.toml"}
+[project.urls]
+Documentation = "https://your-org.github.io/your-package/"
+```
+
+Great Docs checks these sources in order:
+
+1. `site_url` in `docs/great-docs.yml`
+2. `Documentation` URL in `[project.urls]` (pyproject.toml)
+3. `website.site-url` already present in `_quarto.yml`
+
+If none are found, the build emits a warning:
+
+```
+⚠ No site URL found — skills page will show <site-url> placeholders.
+  Set site_url in docs/great-docs.yml or add a Documentation URL to
+  [project.urls] in pyproject.toml.
+```
+
+::: {.callout-tip}
+Set `site_url` even before your site is deployed. Once the site goes live at that address, all
+generated install commands will already be correct.
+:::
+
+## Sidebar Filter
+
+The API reference sidebar includes a search filter for large APIs. Configure it:
+
+```{.yaml filename="docs/great-docs.yml"}
+sidebar_filter:
+  enabled: true   # Enable/disable filter (default: true)
+  min_items: 20   # Minimum items before showing filter (default: 20)
+```
+
+## Method Page Splitting
+
+Control whether class methods get their own pages or stay inline on the class page:
+
+```{.yaml filename="docs/great-docs.yml"}
+inline_methods: 5      # Split above 5 methods (default)
+inline_methods: 10     # Split above 10 methods
+inline_methods: true   # Always inline (never split)
+inline_methods: false  # Always split to separate pages
+```
+
+See [API Documentation: Smart Method Handling](06-api-documentation.qmd#smart-method-handling) for
+detailed examples.
+
+## Markdown Pages
+
+Every HTML page gets a companion `.md` file generated automatically. A small widget appears in the
+top-right corner of each page allowing visitors to **copy** the page content as Markdown or **view**
+the raw `.md` file. This is enabled by default:
+
+```{.yaml filename="docs/great-docs.yml"}
+markdown_pages: true   # Enable/disable (default: true)
+```
+
+To disable both the `.md` generation and the copy/view widget:
+
+```{.yaml filename="docs/great-docs.yml"}
+markdown_pages: false
+```
+
+To generate `.md` pages but hide the widget:
+
+```{.yaml filename="docs/great-docs.yml"}
+markdown_pages:
+  widget: false
+```
+
+## Theming & Visual Options
+
+Great Docs offers extensive visual customization: announcement banners, animated gradient presets
+for the navbar and content area, solid navbar colors, custom head injections, logos with light/dark
+variants, automatic favicon generation, and hero sections on the landing page. These options are
+covered in their own dedicated page.
+
+See [Theming & Appearance](theming.qmd) for full details on all visual customization options.
+
+## HTML Math Renderer
+
+Great Docs forwards `site.html-math-method` to Quarto's HTML configuration. It defaults to
+KaTeX, which renders mathematical notation without a browser-side MathJax dependency:
+
+```{.yaml filename="docs/great-docs.yml"}
+site:
+  html-math-method: katex
+```
+
+To use MathJax instead, set the method explicitly:
+
+```{.yaml filename="docs/great-docs.yml"}
+site:
+  html-math-method: mathjax
+```
+
+Other Quarto-supported HTML math methods can also be selected with this setting. Configure it in
+`docs/great-docs.yml`; Great Docs writes the corresponding value into its generated `_quarto.yml`.
+
+## User Guide Directory
+
+By default, Great Docs looks for `docs/user_guide/`. To use a different
+location:
+
+```{.yaml filename="docs/great-docs.yml"}
+user_guide: guides
+```
+
+The path is relative to the configuration directory. If both the config option and a `user_guide/` directory
+exist, the config option takes precedence.
+
+See [User Guides](user-guides.qmd) for details on writing and organizing User Guide content.
+
+## Homepage Mode
+
+By default, Great Docs generates a separate homepage from your project's README (or
+`index.qmd`/`index.md`), with a "User Guide" link in the top navbar. Many Python documentation sites
+use a different layout where the first User Guide page _is_ the landing page.
+
+The `homepage` setting controls which layout to use:
+
+```{.yaml filename="docs/great-docs.yml"}
+homepage: user_guide
+```
+
+### Available Modes
+
+| Value | Behaviour |
+|-------|-----------|
+| `index` (default) | Separate homepage from README / `index.qmd`. "User Guide" appears as a navbar link. |
+| `user_guide` | First User Guide page becomes the landing page. Left sidebar shows the UG table of contents. Right sidebar shows project metadata. No separate "User Guide" navbar link. |
+
+### How `user_guide` Mode Works
+
+When `homepage: user_guide` is set:
+
+1. **Landing page**: the first User Guide page (determined by filename sort order or explicit
+config) becomes `index.qmd` at the site root. Its content is preserved verbatim, with the project
+metadata sidebar (links, license, authors, etc.) appended in the right margin.
+
+2. **Left sidebar**: the User Guide table of contents appears in the left sidebar on every UG page,
+including the homepage. The first entry links to the site root.
+
+3. **Navbar**: the "User Guide" link is omitted from the top navbar since clicking the site title
+already takes you to the User Guide landing page. All other navbar items (Reference, custom
+sections, etc.) are unchanged.
+
+4. **README**: your `README.md` is not used for the homepage. It still serves its purpose on PyPI
+and GitHub.
+
+### Example
+
+A project with this structure:
+
+```
+my_package/docs/
+├── user_guide/
+│   ├── 00-getting-started.qmd   # ← becomes the homepage
+│   ├── 01-installation.qmd
+│   └── 02-configuration.qmd
+├── great-docs.yml
+└── assets/
+```
+
+And this config:
+
+```{.yaml filename="docs/great-docs.yml"}
+homepage: user_guide
+```
+
+Will produce a site where:
+
+- the homepage shows the "Getting Started" content with a project metadata sidebar
+- the left sidebar lists all three User Guide pages
+- the navbar has no "User Guide" link (the site title links home)
+
+### Fallback Behavior
+
+If `homepage: user_guide` is set but no User Guide pages exist, Great Docs will warn and fall back
+to the default `index` mode (generating a homepage from your README).
+
+## CLI Documentation
+
+Great Docs can generate CLI reference pages for Python, Go, and Rust projects. Each ecosystem has
+its own configuration key.
+
+### Python CLI (Click)
+
+Enable automatic CLI documentation for Click-based CLIs:
+
+```{.yaml filename="docs/great-docs.yml"}
+cli:
+  enabled: true
+```
+
+With optional explicit configuration:
+
+```{.yaml filename="docs/great-docs.yml"}
+cli:
+  enabled: true
+  module: my_package.cli   # Module containing Click commands
+  name: cli                # Name of the Click command object
+```
+
+### Go CLI (Cobra)
+
+For Go projects using Cobra, urfave/cli, or similar frameworks. Requires `go` on your `PATH`:
+
+```{.yaml filename="docs/great-docs.yml"}
+project_type: go
+go_cli:
+  enabled: true
+```
+
+### Rust CLI (clap)
+
+For Rust projects using clap, structopt, argh, or similar frameworks. Requires `cargo` on your
+`PATH`:
+
+```{.yaml filename="docs/great-docs.yml"}
+project_type: rust
+rust_cli:
+  enabled: true
+```
+
+See [CLI Documentation](cli-documentation.qmd) for full details on each ecosystem, including project
+detection, help-text formatting tips, and troubleshooting.
+
+## Changelog
+
+Great Docs auto-generates a Changelog page from your GitHub Releases. It's enabled by default so if
+your `pyproject.toml` has a GitHub repository URL, a changelog page will appear automatically.
+
+To customize:
+
+```{.yaml filename="docs/great-docs.yml"}
+changelog:
+  enabled: true        # Enable/disable changelog (default: true)
+  max_releases: 50     # Max releases to include (default: 50)
+```
+
+To disable it entirely:
+
+```{.yaml filename="docs/great-docs.yml"}
+changelog:
+  enabled: false
+```
+
+See [Changelog](changelog.qmd) for full details on authentication, CLI usage, and edge cases.
+
+## Custom Sections
+
+Add custom page groups (examples, tutorials, blog, etc.) to your site. Each section gets a navbar
+link and an auto-generated index page:
+
+```{.yaml filename="docs/great-docs.yml"}
+sections:
+  - title: Examples          # Navbar link text
+    dir: examples            # Source directory
+    navbar_after: User Guide  # Position in navbar (optional)
+  - title: Tutorials
+    dir: tutorials
+  - title: Blog              # Blog with Quarto's listing directive
+    dir: blog
+    type: blog               # "blog" for listing page; omit for card grid
+```
+
+Default sections get a card-grid index and sidebar navigation. Blog-type sections use Quarto's
+native `listing:` directive. Posts are sorted by date and displayed with author, categories, and
+descriptions.
+
+See [Custom Sections](custom-sections.qmd) and [Blog](blog.qmd) for full details.
+
+## Navbar Order
+
+By default, navbar items appear in the order they are added during the build (Reference, Changelog,
+User Guide, custom sections). Use `navbar_order` to set an explicit ordering:
+
+```{.yaml filename="docs/great-docs.yml"}
+navbar_order:
+  - User Guide
+  - Reference
+  - Demos
+  - Changelog
+```
+
+Items are matched by their display text. Any navbar items not listed are appended at the end in
+their original order. This is useful when you want a specific item (like the User Guide) to appear
+first.
+
+## Reference Section Order
+
+When your site includes multiple reference sections (Python API, CLI, MCP Server), the default
+ordering of sections is: Python API, CLI, MCP Server. You may prefer a different order and we can
+use `ref_section_order` to change this. For example, a CLI-first tool might want this particular
+ordering of reference pages:
+
+```{.yaml filename="great-docs.yml"}
+ref_section_order:
+  - cli
+  - api
+  - mcp
+```
+
+Valid values are `api`, `cli`, and `mcp`. Sections listed here that don't exist in your project are
+silently ignored, so it's safe to include `mcp` even if your package has no MCP server. Sections not
+listed are appended at the end in the default order. The navbar "Reference" link will point to
+whichever section is first.
+
+## Author Information
+
+Customize author display in the landing page sidebar:
+
+```{.yaml filename="docs/great-docs.yml"}
+authors:
+  - name: Your Name
+    email: you@example.com
+    role: Lead Developer
+    affiliation: Organization
+    github: yourusername
+    homepage: https://yoursite.com
+    orcid: 0000-0002-1234-5678
+```
+
+Multiple authors are supported:
+
+```{.yaml filename="docs/great-docs.yml"}
+authors:
+  - name: First Author
+    role: Lead Developer
+    github: firstauthor
+
+  - name: Second Author
+    role: Contributor
+    github: secondauthor
+```
+
+### Supported Author Fields
+
+| Field | Description |
+|-------|-------------|
+| `name` | **Required.** Author's full name |
+| `email` | Email address (clickable icon) |
+| `role` | Role in the project (e.g., "Lead Developer") |
+| `affiliation` | Organization or institution |
+| `github` | GitHub username (clickable icon) |
+| `homepage` | Personal website URL (clickable icon) |
+| `orcid` | ORCID identifier (clickable icon) |
+
+## API Reference Structure
+
+Control how your API documentation is organized with the `reference` config:
+
+```{.yaml filename="docs/great-docs.yml"}
+reference:
+  - title: Core Classes
+    desc: Main classes for working with the package
+    contents:
+      - name: MyClass
+        members: false       # Don't document methods here
+      - SimpleClass          # Methods documented inline (default)
+
+  - title: Utility Functions
+    desc: Helper functions for common tasks
+    contents:
+      - helper_func
+      - another_func
+```
+
+If no `reference` config is provided, Great Docs auto-generates sections from discovered exports.
+
+### Page Title and Description
+
+You can set a custom heading and introductory paragraph for the API reference index page:
+
+```{.yaml filename="docs/great-docs.yml"}
+reference:
+  title: "API Docs"
+  desc: >-
+    Complete reference for all public classes and functions
+    available in this package.
+```
+
+The `title` replaces the default "Reference" text in both the page heading and the navbar. The
+`desc` appears as a paragraph below the heading, before the section listings. If omitted, the
+heading defaults to "Reference" with no introductory text.
+
+These keys can be combined with explicit `sections` for full control over both the page heading and
+the section structure:
+
+```{.yaml filename="docs/great-docs.yml"}
+reference:
+  title: "API Docs"
+  desc: "All public symbols documented below."
+  sections:
+    - title: Core
+      contents:
+        - MyClass
+```
+
+## Agent Skills (skill.md)
+
+Great Docs supports the [Agent Skills](https://agentskills.io/) open standard, which gives AI
+coding agents structured context about your package so they can write better code when using it.
+
+During the build, a `SKILL.md` is generated (or copied from your hand-written version) and served
+at `.well-known/agent-skills/<name>/SKILL.md` for discovery. Users can then install it with
+`npx skills add` or `great-docs skill install`.
+
+```{.yaml filename="docs/great-docs.yml"}
+skill:
+  enabled: true          # Set to false to disable skill.md entirely
+  file: null             # Path to a SKILL.md (overrides curated and generated)
+  well_known: true       # Serve at /.well-known/ discovery endpoints
+  gotchas: []            # Gotcha strings (for auto-generated skill only)
+  best_practices: []     # Best-practice strings (for auto-generated skill only)
+  decision_table: []     # Rows: [{need: "...", use: "..."}]
+  extra_body: null       # Path to extra Markdown to append (auto-generated only)
+  skills: []             # Multi-skill mode: [{name: "...", file: "..."}]
+```
+
+For the full guide — including how to write a skill, the resolution order, multi-skill mode,
+the `great-docs skill` CLI, freshness checking, and the Python API — see
+[Agent Skills](38-agent-skills.qmd).
+
+## Page Metadata [version-badge new 0.2]
+
+Display page creation and modification dates at the bottom of documentation pages, giving readers a
+sense of content freshness.
+
+### Enabling Page Metadata
+
+```{.yaml filename="docs/great-docs.yml"}
+site:
+  show_dates: true
+```
+
+When enabled, pages display timestamps in a compact horizontal format:
+
+```
+✏️ 4 months ago   📄 2 years ago
+```
+
+- **✏️ (pencil icon)**: Last modification date
+- **📄 (file icon)**: Creation date
+
+Hovering over a timestamp shows the full date (e.g., "March 24, 2026").
+
+### How Dates Are Determined
+
+Great Docs determines dates from Git history when available:
+
+| Date Type | Source |
+|-----------|--------|
+| **Created** | Date of the first Git commit that added the file |
+| **Modified** | Date of the most recent Git commit that changed the file |
+
+If Git history is unavailable (e.g., shallow clones in CI), the file system timestamps are used as a
+fallback.
+
+### Overriding Dates in Frontmatter
+
+You can override Git-derived dates using frontmatter, which is useful when:
+
+- you want to set a specific "last updated" date
+- git history is unavailable or incorrect (shallow clones, file renames)
+- you're migrating content from another system
+
+```{.yaml filename="guide.qmd"}
+---
+title: "Getting Started"
+last_update:
+  date: "2026-01-15"
+  author: "Jane Developer"
+date_created: "2024-06-01"
+---
+```
+
+The `last_update` field follows this format:
+
+- `date`: ISO date string (with or without time/timezone)
+- `author`: optional author name override
+
+Frontmatter values take precedence over Git history. If only `last_update.date` is provided, the
+creation date still comes from Git.
+
+### CI/CD Considerations
+
+In CI environments like GitHub Actions, the default checkout only fetches the latest commit (shallow
+clone). This means all pages would show identical timestamps.
+
+The `great-docs setup-github-pages` command generates a workflow with full Git history enabled:
+
+```yaml
+- uses: actions/checkout@v6
+  with:
+    fetch-depth: 0  # Full history for accurate timestamps
+```
+
+For large repositories, you can use sparse checkout to speed up builds while still getting full
+history for documentation files:
+
+```yaml
+- uses: actions/checkout@v6
+  with:
+    fetch-depth: 0
+    sparse-checkout: |
+      user_guide
+      recipes
+```
+
+### Auto-Generated Pages
+
+Pages that Great Docs generates automatically (API reference, changelog, CLI reference) show a
+"Refreshed" timestamp instead:
+
+```
+🔄 Refreshed 2 hours ago
+```
+
+This indicates when the page content was last regenerated during a build, not when source code was
+edited.
+
+### Which Pages Show Metadata
+
+| Page Type | Shows Metadata |
+|-----------|----------------|
+| User Guide pages | ✓ Yes |
+| Recipes | ✓ Yes |
+| Roadmap, Contributing, etc. | ✓ Yes |
+| API Reference pages | ✓ Yes (as "Refreshed") |
+| Changelog | ✓ Yes (as "Refreshed") |
+| Homepage | ✗ No |
+
+### Configuration Options
+
+```{.yaml filename="docs/great-docs.yml"}
+site:
+  show_dates: true       # Enable/disable page metadata (default: false)
+  show_author: true      # Show author attribution when enabled (default: true)
+  show_security: true    # Show security policy page from SECURITY.md (default: true)
+```
+
+### Author Attribution
+
+When `show_author` is enabled and a page has author information in its frontmatter, author avatars
+appear alongside the timestamps:
+
+```
+✏️ 4 months ago   📄 2 years ago   —   ○ ○
+```
+
+To add author information to a page, include it in the YAML frontmatter:
+
+```{.yaml filename="guide.qmd"}
+---
+title: "Getting Started"
+author:
+  name: "Jane Developer"
+  image: "https://github.com/janedev.png"
+  url: "https://github.com/janedev"
+---
+```
+
+Great Docs automatically looks up author details from the `authors` list in `docs/great-docs.yml`, so you
+can often just specify the name:
+
+```{.yaml filename="guide.qmd"}
+---
+title: "Getting Started"
+author: "Jane Developer"
+---
+```
+
+If the author is listed in `docs/great-docs.yml` with a `github` field, their GitHub avatar is used
+automatically.
+
+## Complete Example
+
+Here's a comprehensive configuration demonstrating all available options:
+
+```{.yaml filename="docs/great-docs.yml"}
+# Display Name
+display_name: My Package  # Custom display name for navbar/title
+
+# Docstring Parser
+parser: numpy  # Auto-detected: numpy, google, or sphinx
+
+# API Discovery
+exclude:
+  - _InternalClass
+
+# GitHub Integration
+repo: https://github.com/your-org/your-package  # Override auto-detect
+github_style: widget
+
+# Site URL — canonical address of the deployed documentation site.
+# Used for skills page install commands, .well-known/ discovery, and sitemaps.
+# site_url: "https://your-org.github.io/your-package/"
+
+# Source Links
+source:
+  enabled: true
+  branch: main
+  placement: usage
+
+# PyPI Link
+pypi: null  # null (default) links for Python projects; true forces, false disables, or a URL string
+
+# Sidebar
+sidebar_filter:
+  enabled: true
+  min_items: 15
+
+# Site Settings
+site:
+  show_dates: true       # Show page timestamps
+  show_author: true      # Show author avatars
+
+# Markdown Pages
+markdown_pages: true
+
+# User Guide Directory
+# user_guide: guides
+
+# Homepage Mode
+# homepage: user_guide  # First UG page becomes the landing page
+
+# CLI Documentation
+cli:
+  enabled: true
+
+# Changelog (GitHub Releases)
+changelog:
+  enabled: true
+  max_releases: 50
+
+# Custom Sections
+sections:
+  - title: Examples
+    dir: examples
+  - title: Tutorials
+    dir: tutorials
+    navbar_after: Examples
+  - title: Blog
+    dir: blog
+    type: blog
+
+# Navbar Order
+navbar_order:
+  - User Guide
+  - Reference
+  - Examples
+  - Tutorials
+  - Changelog
+
+# Reference Section Order (within the Reference area)
+ref_section_order:
+  - cli
+  - api
+  - mcp
+
+# API Reference Structure
+reference:
+  title: "API Reference"
+  desc: "Complete reference for the library's public API."
+  sections:
+    - title: Core Classes
+      desc: Main classes for the library
+      contents:
+        - name: MainClass
+          members: false
+        - HelperClass
+
+    - title: MainClass Methods
+      desc: Methods for the MainClass
+      contents:
+        - MainClass.process
+        - MainClass.validate
+
+    - title: Utility Functions
+      desc: Helper functions
+      contents:
+        - utility_func
+        - helper_func
+
+# Authors
+authors:
+  - name: Jane Developer
+    email: jane@example.com
+    role: Lead Developer
+    github: janedev
+    orcid: 0000-0001-2345-6789
+
+  - name: John Contributor
+    role: Contributor
+    github: johncontrib
+
+# Agent Skills (skill.md)
+skill:
+  gotchas:
+    - "Always call init() before using other functions"
+  best_practices:
+    - "Use context managers for resource cleanup"
+  decision_table:
+    - need: "Create a widget"
+      use: "Widget()"
+    - need: "Process data"
+      use: "MainClass.process()"
+```
+
+You don't need all of these settings. Start with just the options you need and add more as your
+project grows. The defaults work well for most packages, so you may find that a minimal
+configuration (or none at all) is sufficient.
+
+## Generating a Configuration File
+
+To create a starter `docs/great-docs.yml` with all options documented:
+
+```bash
+great-docs config
+```
+
+This creates a file with all available options as comments, making it easy to enable the features
+you need.
+
+## Quarto Configuration
+
+Great Docs generates and maintains a `_quarto.yml` file in the `docs/_quarto/default/` output directory. This
+is an internal file that controls how Quarto renders your site, including navigation, theming, and
+the API reference configuration. It is regenerated on every `great-docs build`.
+
+**Should you edit it?** No. Any manual edits will be overwritten on the next build. All
+customization should go through `docs/great-docs.yml`, which is the single source of truth for your
+documentation configuration.
+
+**Should you commit it?** No. The entire `docs/_quarto/default/` output directory is ephemeral and should
+be gitignored (which `great-docs init` offers to set up for you).
+
+## Next Steps
+
+With `docs/great-docs.yml` you control everything from API discovery and docstring parsing to sidebar
+layout and GitHub integration. Most projects only need a handful of settings, but the full range is
+here when you need it.
+
+- [Theming & Appearance](theming.qmd) covers logos, gradients, banners, dark mode, hero sections,
+and other visual options
+- [API Documentation](api-documentation.qmd) explains how API discovery and organization works
+- [CLI Documentation](cli-documentation.qmd) covers Click CLI documentation
+- [Cross-Referencing](cross-referencing.qmd) covers the Great Docs Linking System (GDLS)

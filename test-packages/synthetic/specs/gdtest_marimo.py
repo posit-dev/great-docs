@@ -138,9 +138,9 @@ SPEC = {
             '    return f"Hello, {name}!"\n'
         ),
         # ── The marimo notebook the shortcode embeds ─────────────────────
-        "notebooks/demo.py": _DEMO_NOTEBOOK,
+        "docs/notebooks/demo.py": _DEMO_NOTEBOOK,
         # ── User guide: island mode (default) ────────────────────────────
-        "user_guide/01-islands.qmd": (
+        "docs/user_guide/01-islands.qmd": (
             "---\n"
             "title: Marimo Islands\n"
             "---\n"
@@ -153,7 +153,7 @@ SPEC = {
             '{{< marimo file="notebooks/demo.py" >}}\n'
         ),
         # ── User guide: hide code (outputs only) ─────────────────────────
-        "user_guide/02-nocode.qmd": (
+        "docs/user_guide/02-nocode.qmd": (
             "---\n"
             "title: Outputs Only\n"
             "---\n"
@@ -166,7 +166,7 @@ SPEC = {
             '{{< marimo file="notebooks/demo.py" show-code="false" >}}\n'
         ),
         # ── User guide: iframe mode (full notebook, self-hosted WASM) ─────
-        "user_guide/03-iframe.qmd": (
+        "docs/user_guide/03-iframe.qmd": (
             "---\n"
             "title: Iframe Mode\n"
             "---\n"

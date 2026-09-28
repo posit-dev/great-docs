@@ -1,0 +1,170 @@
+---
+title: "Write Effective Docstrings"
+description: "Write docstrings that render clearly in Great Docs, with examples for NumPy and Google styles."
+tags: [API, Content]
+---
+
+# Write Effective Docstrings
+
+The quality of your API reference depends directly on the docstrings in your source code. Great Docs renders them as-is, so what you write is what your users see. This recipe covers practical tips for writing docstrings that look good in the rendered documentation.
+
+## Choose a Style and Be Consistent
+
+Great Docs supports three docstring styles. Pick one for your entire package and stick with it. Mixing styles within a project leads to inconsistent rendering.
+
+NumPy style uses section headers with underlines. It reads well in both the source code and the rendered docs:
+
+```python
+def connect(host: str, port: int = 5432) -> Connection:
+    """Open a connection to the database server.
+
+    Establishes a TCP connection and performs the initial handshake.
+    The connection must be closed explicitly or used as a context manager.
+
+    Parameters
+    ----------
+    host
+        The server hostname or IP address.
+    port
+        The port number. Defaults to 5432 for PostgreSQL.
+
+    Returns
+    -------
+    Connection
+        An open connection ready for queries.
+
+    Raises
+    ------
+    ConnectionError
+        If the server is unreachable or the handshake fails.
+    """
+    ...
+```
+
+Google style uses indented sections with colons. It is more compact:
+
+```python
+def connect(host: str, port: int = 5432) -> Connection:
+    """Open a connection to the database server.
+
+    Establishes a TCP connection and performs the initial handshake.
+    The connection must be closed explicitly or used as a context manager.
+
+    Args:
+        host: The server hostname or IP address.
+        port: The port number. Defaults to 5432 for PostgreSQL.
+
+    Returns:
+        An open connection ready for queries.
+
+    Raises:
+        ConnectionError: If the server is unreachable or the handshake fails.
+    """
+    ...
+```
+
+Great Docs auto-detects your style during `great-docs init`. You can also set it manually in `great-docs.yml`:
+
+```{.yaml filename="docs/great-docs.yml"}
+parser: numpy   # or: google, sphinx
+```
+
+## Write a Good Summary Line
+
+The first line of every docstring is the summary. It appears in the API reference sidebar tooltips and in search results. Keep it short (one line) and action-oriented:
+
+```python
+# Good: starts with a verb, one line
+def save(data: dict, path: str) -> None:
+    """Write data to a JSON file."""
+
+# Less useful: vague or overly long
+def save(data: dict, path: str) -> None:
+    """This function is used for saving data objects to disk in JSON format with pretty-printing."""
+```
+
+## Add an Extended Description
+
+After the summary, add a blank line and then one or more paragraphs of explanation. This is where you describe behavior, edge cases, and usage context:
+
+```python
+def retry(func, max_attempts: int = 3, delay: float = 1.0):
+    """Retry a function call on failure.
+
+    Calls the function up to `max_attempts` times. If the function raises
+    an exception, it waits `delay` seconds before retrying. The delay
+    doubles after each failed attempt (exponential backoff).
+
+    If all attempts fail, the last exception is re-raised.
+
+    Parameters
+    ----------
+    func
+        The callable to retry.
+    max_attempts
+        Maximum number of attempts before giving up.
+    delay
+        Initial delay in seconds between retries.
+    """
+    ...
+```
+
+## Document Parameters Meaningfully
+
+Avoid restating the parameter name or type as the description. Instead, explain what the parameter controls and mention default behavior or constraints:
+
+```python
+# Useful: explains what the parameter does
+"""
+Parameters
+----------
+timeout
+    Maximum seconds to wait for a response. Set to 0 to disable
+    the timeout entirely. Defaults to 30.
+"""
+
+# Less useful: just repeats the name
+"""
+Parameters
+----------
+timeout
+    The timeout value.
+"""
+```
+
+## Use Cross-References
+
+If your docstring mentions other symbols from your package, use the linking syntax so readers can navigate directly to the related page. The simplest form is inline code, which is auto-linked when it matches a documented symbol:
+
+```python
+class Store:
+    """Persistent key-value store.
+
+    Use `Connection` to open a store, or call `Store.close` to
+    release resources when done.
+    """
+    ...
+```
+
+For qualified names, use `~~` to shorten the display: `` `~~mypackage.Connection` `` renders as `Connection` with a link.
+
+See the [Cross-Referencing](../user-guide/cross-referencing.html) page for the full linking syntax.
+
+## Link Related Items with `%seealso`
+
+When two functions or classes are natural companions (like `encode`/`decode` or `open`/`close`), add `%seealso` directives so readers can discover both:
+
+```python
+def encode(data: bytes) -> str:
+    """Encode bytes to a base64 string.
+
+    %seealso decode : Convert a base64 string back to bytes
+    """
+    ...
+```
+
+## Docstrings That Do Not Render Well
+
+Some patterns render poorly. Keep summary lines short enough for the sidebar. Use
+`parser: sphinx` for reStructuredText field lists and roles such as `:param:` and
+`` :py:exc:`ValueError` ``. If you document one parameter, document them all.

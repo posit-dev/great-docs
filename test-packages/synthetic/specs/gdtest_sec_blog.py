@@ -75,7 +75,7 @@ SPEC = {
                 """
                 return []
         ''',
-        "blog/introducing-our-project/index.qmd": (
+        "docs/blog/introducing-our-project/index.qmd": (
             "---\n"
             "title: Introducing Our Project\n"
             "author: Jane Smith\n"
@@ -98,7 +98,7 @@ SPEC = {
             "\n"
             "Stay tuned for updates as we continue to develop new features.\n"
         ),
-        "blog/february-update/index.qmd": (
+        "docs/blog/february-update/index.qmd": (
             "---\n"
             "title: February Update\n"
             "author: John Doe\n"
@@ -119,7 +119,7 @@ SPEC = {
             "\n"
             "Thanks to everyone who contributed this month!\n"
         ),
-        "blog/v0.2-release/index.qmd": (
+        "docs/blog/v0.2-release/index.qmd": (
             "---\n"
             'title: "Version 0.2 Release Notes"\n'
             "author: Jane Smith\n"

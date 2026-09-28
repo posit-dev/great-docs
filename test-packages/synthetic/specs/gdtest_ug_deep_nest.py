@@ -67,7 +67,7 @@ SPEC = {
                 """
                 return ", ".join(str(x) for x in data)
         ''',
-        "user_guide/section1/topic1/details.qmd": (
+        "docs/user_guide/section1/topic1/details.qmd": (
             "---\n"
             "title: Topic 1 Details\n"
             "---\n"
@@ -76,7 +76,7 @@ SPEC = {
             "\n"
             "Detailed information about topic 1 in section 1.\n"
         ),
-        "user_guide/section1/topic2/overview.qmd": (
+        "docs/user_guide/section1/topic2/overview.qmd": (
             "---\n"
             "title: Topic 2 Overview\n"
             "---\n"
@@ -85,7 +85,7 @@ SPEC = {
             "\n"
             "An overview of topic 2 in section 1.\n"
         ),
-        "user_guide/section2/intro.qmd": (
+        "docs/user_guide/section2/intro.qmd": (
             "---\n"
             "title: Section 2 Introduction\n"
             "---\n"

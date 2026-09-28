@@ -82,14 +82,14 @@ SPEC = {
                 """
                 pass
         ''',
-        "user_guide/01-getting-started.qmd": """\
+        "docs/user_guide/01-getting-started.qmd": """\
             ---
             title: Getting Started
             ---
 
             Welcome to the project!
         """,
-        "user_guide/02-configuration.qmd": """\
+        "docs/user_guide/02-configuration.qmd": """\
             ---
             title: Configuration
             ---
@@ -134,7 +134,7 @@ SPEC = {
 
             Be kind. Be respectful. Be constructive.
         """,
-        "assets/logo.txt": """\
+        "docs/assets/logo.txt": """\
             ┌───────────────┐
             │ Full Extras   │
             └───────────────┘

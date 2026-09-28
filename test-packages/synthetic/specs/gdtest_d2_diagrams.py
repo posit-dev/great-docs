@@ -55,7 +55,7 @@ SPEC = {
             '    return f"Hello, {name}!"\n'
         ),
         # ── User guide: basic flowchart via the {d2} fence ───────────────
-        "user_guide/01-basic.qmd": (
+        "docs/user_guide/01-basic.qmd": (
             "---\n"
             "title: Basic Diagram\n"
             "---\n"
@@ -71,7 +71,7 @@ SPEC = {
             "```\n"
         ),
         # ── User guide: options (#| directives) + a sketch look ──────────
-        "user_guide/02-options.qmd": (
+        "docs/user_guide/02-options.qmd": (
             "---\n"
             "title: Diagram Options\n"
             "---\n"
@@ -89,7 +89,7 @@ SPEC = {
             "```\n"
         ),
         # ── User guide: a sequence diagram + a plain ```d2 fence ─────────
-        "user_guide/03-sequence.qmd": (
+        "docs/user_guide/03-sequence.qmd": (
             "---\n"
             "title: Sequence Diagram\n"
             "---\n"

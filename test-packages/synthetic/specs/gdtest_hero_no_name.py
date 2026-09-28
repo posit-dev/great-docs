@@ -72,8 +72,8 @@ SPEC = {
                 """
                 return value.strip().lower()
         ''',
-        "assets/lettermark.svg": _LETTERMARK_SVG,
-        "assets/hero-logo.svg": _HERO_LOGO_SVG,
+        "docs/assets/lettermark.svg": _LETTERMARK_SVG,
+        "docs/assets/hero-logo.svg": _HERO_LOGO_SVG,
         "README.md": """\
             # gdtest-hero-no-name
 

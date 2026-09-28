@@ -93,7 +93,7 @@ SPEC = {
                 return Gadget(label)
         ''',
         # Page 1: inherits global "bottom" — has page metadata dates
-        "user_guide/01-intro.qmd": """\
+        "docs/user_guide/01-intro.qmd": """\
             ---
             title: Introduction
             tags: [Setup, Python]
@@ -108,7 +108,7 @@ SPEC = {
             *after* the metadata block at the bottom.
         """,
         # Page 2: explicit override to "top" — also has dates
-        "user_guide/02-api-guide.qmd": """\
+        "docs/user_guide/02-api-guide.qmd": """\
             ---
             title: API Guide
             tags: [API, Python]
@@ -126,7 +126,7 @@ SPEC = {
             Import and use gadgets in your code.
         """,
         # Page 3: inherits global "bottom" — has dates + subtitle
-        "user_guide/03-advanced.qmd": """\
+        "docs/user_guide/03-advanced.qmd": """\
             ---
             title: Advanced Patterns
             subtitle: Power-user techniques
@@ -146,7 +146,7 @@ SPEC = {
             Combine multiple gadgets for complex tasks.
         """,
         # Page 4: explicit "bottom" — no dates (tags under <hr>)
-        "user_guide/04-setup.qmd": """\
+        "docs/user_guide/04-setup.qmd": """\
             ---
             title: Setup Guide
             tags: [Setup]
@@ -162,7 +162,7 @@ SPEC = {
             Install the package via pip.
         """,
         # Page 5: explicit override to "top"
-        "user_guide/05-tips.qmd": """\
+        "docs/user_guide/05-tips.qmd": """\
             ---
             title: Tips and Tricks
             description: Handy shortcuts and lesser-known features.
@@ -177,7 +177,7 @@ SPEC = {
             Use keyboard shortcuts for faster workflows.
         """,
         # Page 6: no tags at all
-        "user_guide/06-faq.qmd": """\
+        "docs/user_guide/06-faq.qmd": """\
             ---
             title: FAQ
             ---

@@ -85,7 +85,7 @@ SPEC = {
         ''',
         # User-provided blog index with a custom listing type (table)
         # and a co-located header image referenced via relative path
-        "blog/index.qmd": (
+        "docs/blog/index.qmd": (
             "---\n"
             "title: Blog\n"
             "listing:\n"
@@ -101,13 +101,13 @@ SPEC = {
             "Welcome to our blog.\n"
         ),
         # Co-located SVG image referenced by the blog index
-        "blog/blog-header.svg": (
+        "docs/blog/blog-header.svg": (
             '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="80">'
             '<rect width="400" height="80" fill="#4a90d9" rx="8"/>'
             '<text x="200" y="48" text-anchor="middle" fill="white" '
             'font-size="24" font-family="sans-serif">Blog</text></svg>\n'
         ),
-        "blog/first-post/index.qmd": (
+        "docs/blog/first-post/index.qmd": (
             "---\n"
             "title: First Post\n"
             "author: Alice\n"
@@ -126,13 +126,13 @@ SPEC = {
             "We're excited to share our work with you.\n"
         ),
         # Co-located image inside a blog post subdirectory
-        "blog/first-post/post-banner.svg": (
+        "docs/blog/first-post/post-banner.svg": (
             '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="60">'
             '<rect width="300" height="60" fill="#5cb85c" rx="6"/>'
             '<text x="150" y="38" text-anchor="middle" fill="white" '
             'font-size="18" font-family="sans-serif">First Post</text></svg>\n'
         ),
-        "blog/second-post/index.qmd": (
+        "docs/blog/second-post/index.qmd": (
             "---\n"
             "title: Second Post\n"
             "author: Bob\n"

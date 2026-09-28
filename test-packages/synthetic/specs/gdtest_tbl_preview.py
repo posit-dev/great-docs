@@ -253,7 +253,7 @@ SPEC = {
                 }
         ''',
         # ── User guide pages (flat layout) ───────────────────────────────
-        "user_guide/01-basic-preview.qmd": (
+        "docs/user_guide/01-basic-preview.qmd": (
             "---\n"
             "title: Basic Preview\n"
             "---\n"
@@ -294,7 +294,7 @@ SPEC = {
             ")\n"
             "```\n"
         ),
-        "user_guide/02-pandas-tables.qmd": (
+        "docs/user_guide/02-pandas-tables.qmd": (
             "---\n"
             "title: Pandas Tables\n"
             "---\n"
@@ -338,7 +338,7 @@ SPEC = {
             "tbl_preview(df, show_all=True)\n"
             "```\n"
         ),
-        "user_guide/03-polars-tables.qmd": (
+        "docs/user_guide/03-polars-tables.qmd": (
             "---\n"
             "title: Polars Tables\n"
             "---\n"
@@ -368,7 +368,7 @@ SPEC = {
             "tbl_preview(df, n_head=10, n_tail=0)\n"
             "```\n"
         ),
-        "user_guide/04-missing-values.qmd": (
+        "docs/user_guide/04-missing-values.qmd": (
             "---\n"
             "title: Missing Values\n"
             "---\n"
@@ -403,7 +403,7 @@ SPEC = {
             "tbl_preview(sample_types(), show_all=True)\n"
             "```\n"
         ),
-        "user_guide/05-column-options.qmd": (
+        "docs/user_guide/05-column-options.qmd": (
             "---\n"
             "title: Column Options\n"
             "---\n"
@@ -448,7 +448,7 @@ SPEC = {
             ")\n"
             "```\n"
         ),
-        "user_guide/06-all-options.qmd": (
+        "docs/user_guide/06-all-options.qmd": (
             "---\n"
             "title: All Options\n"
             "---\n"
@@ -516,7 +516,7 @@ SPEC = {
             "\n"
             ":::\n"
         ),
-        "user_guide/07-text-heavy-tables.qmd": (
+        "docs/user_guide/07-text-heavy-tables.qmd": (
             "---\n"
             "title: Text-Heavy Tables\n"
             "---\n"
@@ -606,7 +606,7 @@ SPEC = {
             "```\n"
         ),
         # ── File-format pages ─────────────────────────────────────────────
-        "user_guide/08-tsv-files.qmd": (
+        "docs/user_guide/08-tsv-files.qmd": (
             "---\n"
             "title: TSV Files\n"
             "---\n"
@@ -644,7 +644,7 @@ SPEC = {
             "The badge shows **TSV** and the header reports the correct\n"
             "row and column counts.\n"
         ),
-        "user_guide/09-jsonl-files.qmd": (
+        "docs/user_guide/09-jsonl-files.qmd": (
             "---\n"
             "title: JSONL Files\n"
             "---\n"
@@ -694,7 +694,7 @@ SPEC = {
             "tbl_preview('assets/server_logs.ndjson', show_all=True)\n"
             "```\n"
         ),
-        "user_guide/10-parquet-files.qmd": (
+        "docs/user_guide/10-parquet-files.qmd": (
             "---\n"
             "title: Parquet Files\n"
             "---\n"
@@ -730,7 +730,7 @@ SPEC = {
             "The badge shows **Parquet** and dtype labels are preserved\n"
             "from the original Polars schema.\n"
         ),
-        "user_guide/11-feather-arrow-files.qmd": (
+        "docs/user_guide/11-feather-arrow-files.qmd": (
             "---\n"
             "title: Feather & Arrow IPC Files\n"
             "---\n"
@@ -776,7 +776,7 @@ SPEC = {
             "tbl_preview('assets/employees.arrow', show_all=True)\n"
             "```\n"
         ),
-        "user_guide/12-arrow-tables.qmd": (
+        "docs/user_guide/12-arrow-tables.qmd": (
             "---\n"
             "title: PyArrow Tables\n"
             "---\n"

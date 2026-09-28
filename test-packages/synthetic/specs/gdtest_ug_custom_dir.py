@@ -21,7 +21,7 @@ SPEC = {
         },
     },
     "config": {
-        "user_guide": "docs",
+        "user_guide": "guide",
     },
     "files": {
         "gdtest_ug_custom_dir/__init__.py": '"""Test package for custom user guide directory."""\n',
@@ -64,7 +64,7 @@ SPEC = {
                 """
                 pass
         ''',
-        "docs/getting-started.qmd": (
+        "docs/guide/getting-started.qmd": (
             "---\n"
             "title: Getting Started\n"
             "---\n"
@@ -73,7 +73,7 @@ SPEC = {
             "\n"
             "A guide to getting started with the library.\n"
         ),
-        "docs/reference-guide.qmd": (
+        "docs/guide/reference-guide.qmd": (
             "---\n"
             "title: Reference Guide\n"
             "---\n"

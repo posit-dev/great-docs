@@ -1,0 +1,90 @@
+---
+title: "Choose a Gradient Theme"
+description: "Apply animated gradient backgrounds to the navbar, banner, and content area."
+tags: [Theming, Customization]
+---
+
+# Choose a Gradient Theme
+
+Great Docs ships with eight gradient presets that you can apply to the navbar, the announcement banner, and the content area. Each preset includes matched light-mode and dark-mode palettes, so the gradients look good regardless of the visitor's theme preference.
+
+## Available Presets
+
+| Preset | Description |
+|--------|-------------|
+| `sky` | Soft sky blues |
+| `peach` | Peach and blush |
+| `prism` | Mint, sky, and lavender |
+| `lilac` | Lilac and pink |
+| `slate` | Cool grays |
+| `honey` | Warm cream and apricot |
+| `dusk` | Soft lavender-blue |
+| `mint` | Pale aqua |
+
+The navbar and banner use an animated version of the gradient that shifts slowly across the element. The content area uses a soft, static radial glow at the top of the page.
+
+## Apply a Gradient to the Navbar
+
+Set the `navbar_style` key in `great-docs.yml` to one of the preset names:
+
+```{.yaml filename="docs/great-docs.yml"}
+navbar_style: sky
+```
+
+Text and icons in the navbar are automatically adjusted for contrast based on the gradient colors.
+
+## Apply a Gradient to the Content Area
+
+The `content_style` key adds a subtle glow at the top of the main content area:
+
+```{.yaml filename="docs/great-docs.yml"}
+content_style: lilac
+```
+
+By default the glow appears on every page. To restrict it to just the homepage, use the dictionary form:
+
+```{.yaml filename="docs/great-docs.yml"}
+content_style:
+  preset: lilac
+  pages: homepage
+```
+
+## Apply a Gradient to the Announcement Banner
+
+If you have an announcement banner configured, add a `style` key to give it a gradient background instead of the default solid color:
+
+```{.yaml filename="docs/great-docs.yml"}
+announcement:
+  content: "Version 2.0 is now available!"
+  style: mint
+```
+
+When `style` is set, the animated gradient replaces the solid-color `type` background.
+
+## Combine Multiple Gradients
+
+You can use the same preset everywhere for a unified look, or mix presets for variety. Here is an example that pairs a blue navbar with a lilac content glow:
+
+```{.yaml filename="docs/great-docs.yml"}
+navbar_style: sky
+
+content_style:
+  preset: lilac
+  pages: homepage
+
+announcement:
+  content: "New release!"
+  style: sky
+```
+
+## Use a Solid Navbar Color Instead
+
+If you prefer a flat color over an animated gradient, use `navbar_color` instead of `navbar_style`. Great Docs will automatically choose white or black text for maximum contrast:
+
+```{.yaml filename="docs/great-docs.yml"}
+navbar_color: "#2c3e50"
+```
+
+If both `navbar_style` and `navbar_color` are set, the gradient takes precedence. Remove or comment out `navbar_style` to use the solid color.
+
+For the full reference on all visual options, see the [Theming & Appearance](../user-guide/theming.html) page in the User Guide.

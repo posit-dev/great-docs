@@ -61,10 +61,12 @@ SPEC = {
                 """
                 pass
         ''',
-        "guides/intro.qmd": (
+        "docs/guides/intro.qmd": (
             "---\ntitle: Introduction\n---\n\n# Introduction\n\nWelcome to the guides.\n"
         ),
-        "guides/setup.qmd": ("---\ntitle: Setup\n---\n\n# Setup\n\nHow to set up the project.\n"),
+        "docs/guides/setup.qmd": (
+            "---\ntitle: Setup\n---\n\n# Setup\n\nHow to set up the project.\n"
+        ),
     },
     "expected": {
         "files_exist": [

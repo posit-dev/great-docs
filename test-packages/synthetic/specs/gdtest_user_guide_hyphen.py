@@ -52,7 +52,7 @@ SPEC = {
                 """
                 pass
         ''',
-        "user-guide/01-intro.qmd": """\
+        "docs/user-guide/01-intro.qmd": """\
             ---
             title: Introduction
             ---

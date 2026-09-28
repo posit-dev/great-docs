@@ -182,7 +182,7 @@ SPEC = {
                     )
         ''',
         # ── Page 1: No override (inherits global "desktop") ──────────────
-        "user_guide/01-no-override.qmd": (
+        "docs/user_guide/01-no-override.qmd": (
             "---\n"
             "title: No Override (Global Desktop)\n"
             "---\n"
@@ -215,7 +215,7 @@ SPEC = {
             "```\n"
         ),
         # ── Page 2: mobile keyword ───────────────────────────────────────
-        "user_guide/02-mobile.qmd": (
+        "docs/user_guide/02-mobile.qmd": (
             "---\n"
             "title: Mobile Keyword\n"
             "scale-to-fit:\n"
@@ -244,7 +244,7 @@ SPEC = {
             "```\n"
         ),
         # ── Page 3: tablet keyword ───────────────────────────────────────
-        "user_guide/03-tablet.qmd": (
+        "docs/user_guide/03-tablet.qmd": (
             "---\n"
             "title: Tablet Keyword\n"
             "scale-to-fit:\n"
@@ -273,7 +273,7 @@ SPEC = {
             "```\n"
         ),
         # ── Page 4: desktop keyword ──────────────────────────────────────
-        "user_guide/04-desktop.qmd": (
+        "docs/user_guide/04-desktop.qmd": (
             "---\n"
             "title: Desktop Keyword\n"
             "scale-to-fit:\n"
@@ -294,7 +294,7 @@ SPEC = {
             "```\n"
         ),
         # ── Page 5: float override ───────────────────────────────────────
-        "user_guide/05-float-override.qmd": (
+        "docs/user_guide/05-float-override.qmd": (
             "---\n"
             "title: Float Override\n"
             "scale-to-fit:\n"

@@ -1,0 +1,87 @@
+---
+title: "Freeze a Page to Cache Outputs"
+description: "A live demonstration of page-level freeze. The code cells below were executed once and cached — subsequent builds reuse the output without re-running."
+tags: [Build, CI\/CD]
+freeze: auto
+---
+
+# Freeze a Page to Cache Outputs
+
+This page demonstrates page-level freeze. The code cells below were executed once via `great-docs freeze`, and their outputs persist in `_freeze/` beside the selected configuration. Subsequent `great-docs build` commands reuse these cached outputs without re-executing the code.
+
+::: {.callout-note}
+## How to verify this works
+
+Look at the "Executed at" timestamp below. If it shows a date in the past (not today's date), that means the code was **not re-executed** during this build — the output was loaded from the freeze cache.
+:::
+
+## Cached Computation
+
+```{python}
+#| echo: true
+import datetime
+import hashlib
+import platform
+import time
+
+# Record when this cell actually executed
+executed_at = datetime.datetime.now()
+print(f"⏱️  Executed at: {executed_at.strftime('%Y-%m-%d %H:%M:%S')}")
+print(f"   Python {platform.python_version()} on {platform.system()} ({platform.machine()})")
+```
+
+The timestamp above is frozen. On a normal build, this cell is **skipped** — Quarto loads the cached output from `_freeze/` instead of running the code.
+
+## A "Slow" Computation
+
+To make the demo more convincing, here's a computation that simulates expensive work:
+
+```{python}
+#| echo: true
+
+# Simulate an expensive operation (e.g., MCMC sampling, model training)
+print("Running expensive computation...")
+start = time.time()
+
+# Compute SHA-256 hashes in a loop (simulates ~2 seconds of work)
+result = b"great-docs-freeze-demo"
+for i in range(500_000):
+    result = hashlib.sha256(result).digest()
+
+elapsed = time.time() - start
+final_hash = hashlib.sha256(result).hexdigest()[:16]
+
+print(f"✓ Completed in {elapsed:.2f}s")
+print(f"  Result hash: {final_hash}")
+print(f"  Iterations: 500,000")
+```
+
+Without freeze, this cell would add ~2 seconds to every build. With freeze enabled, the cached output is reused instantly.
+
+## How This Page Is Configured
+
+This page uses the simplified frontmatter syntax:
+
+```yaml
+---
+title: "Freeze a Page to Cache Outputs"
+freeze: auto
+---
+```
+
+During the build, Great Docs normalizes this to:
+
+```yaml
+---
+execute:
+  freeze: auto
+---
+```
+
+Great Docs enables `freeze: auto` by default, so the cache restore and persist happens automatically on every build. No extra configuration needed.
+
+## Reproducing This
+
+Follow the [freeze workflow](../user_guide/37-freeze.qmd) to refresh a page's cached
+outputs and commit the results beside its selected configuration. A refreshed timestamp
+shows that the cells executed again.

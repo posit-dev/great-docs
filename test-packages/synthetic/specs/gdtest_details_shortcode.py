@@ -66,7 +66,7 @@ SPEC = {
             "    return data\n"
         ),
         # ── User guide page 1: Basic usage ───────────────────────────────
-        "user_guide/01-basic-usage.qmd": (
+        "docs/user_guide/01-basic-usage.qmd": (
             "---\n"
             "title: Basic Usage\n"
             "---\n"
@@ -119,7 +119,7 @@ SPEC = {
             ":::\n"
         ),
         # ── User guide page 2: Callout types ─────────────────────────────
-        "user_guide/02-callout-types.qmd": (
+        "docs/user_guide/02-callout-types.qmd": (
             "---\n"
             "title: Callout Types\n"
             "---\n"
@@ -195,7 +195,7 @@ SPEC = {
             ":::\n"
         ),
         # ── User guide page 3: Icons ─────────────────────────────────────
-        "user_guide/03-icons.qmd": (
+        "docs/user_guide/03-icons.qmd": (
             "---\n"
             "title: Icons\n"
             "---\n"
@@ -245,7 +245,7 @@ SPEC = {
             ":::\n"
         ),
         # ── User guide page 4: Accordion groups ──────────────────────────
-        "user_guide/04-accordion-groups.qmd": (
+        "docs/user_guide/04-accordion-groups.qmd": (
             "---\n"
             "title: Accordion Groups\n"
             "---\n"
@@ -325,7 +325,7 @@ SPEC = {
             ":::\n"
         ),
         # ── User guide page 5: Nesting ───────────────────────────────────
-        "user_guide/05-nesting.qmd": (
+        "docs/user_guide/05-nesting.qmd": (
             "---\n"
             "title: Nesting\n"
             "---\n"
@@ -374,7 +374,7 @@ SPEC = {
             ":::::\n"
         ),
         # ── User guide page 6: Rich content ──────────────────────────────
-        "user_guide/06-rich-content.qmd": (
+        "docs/user_guide/06-rich-content.qmd": (
             "---\n"
             "title: Rich Content\n"
             "---\n"
@@ -473,7 +473,7 @@ SPEC = {
             ":::\n"
         ),
         # ── User guide page 7: Combinations ──────────────────────────────
-        "user_guide/07-combinations.qmd": (
+        "docs/user_guide/07-combinations.qmd": (
             "---\n"
             "title: Combinations\n"
             "---\n"
@@ -585,7 +585,7 @@ SPEC = {
             "::::\n"
         ),
         # ── User guide page 8: Gradient themes ───────────────────────────
-        "user_guide/08-gradient-themes.qmd": (
+        "docs/user_guide/08-gradient-themes.qmd": (
             "---\n"
             "title: Gradient Themes\n"
             "---\n"

@@ -39,7 +39,7 @@ SPEC = {
                 """
                 return "index.qmd"
         ''',
-        "index.qmd": """\
+        "docs/index.qmd": """\
             ---
             title: Index Wins
             ---

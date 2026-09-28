@@ -55,7 +55,7 @@ SPEC = {
                 """
                 pass
         ''',
-        "user_guide/01-welcome.qmd": (
+        "docs/user_guide/01-welcome.qmd": (
             "---\n"
             "title: Welcome\n"
             "guide-section: Getting Started\n"
@@ -65,7 +65,7 @@ SPEC = {
             "\n"
             "Welcome to the project. This guide will help you get started.\n"
         ),
-        "user_guide/02-install.qmd": (
+        "docs/user_guide/02-install.qmd": (
             "---\n"
             "title: Installation\n"
             "guide-section: Getting Started\n"
@@ -75,7 +75,7 @@ SPEC = {
             "\n"
             "Follow these steps to install the package.\n"
         ),
-        "user_guide/03-config.qmd": (
+        "docs/user_guide/03-config.qmd": (
             "---\n"
             "title: Configuration\n"
             "guide-section: Advanced Topics\n"
@@ -85,7 +85,7 @@ SPEC = {
             "\n"
             "Advanced configuration options for power users.\n"
         ),
-        "user_guide/04-extend.qmd": (
+        "docs/user_guide/04-extend.qmd": (
             "---\n"
             "title: Extending\n"
             "guide-section: Advanced Topics\n"
