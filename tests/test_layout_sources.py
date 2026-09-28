@@ -237,7 +237,10 @@ def test_documentation_sources(source_project: tuple[Path, Path], explicit: bool
         (source / name).write_text("---\ntitle: Start\n---\nHello\n")
     for name in ("references.bib", "citation.csl", "style.css", "hooks/prepare.py", "header.html"):
         (source / name).write_text("fixture")
-    (source / "assets/logo.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"/>')
+    # Give the SVG a size so favicon rasterization succeeds when cairosvg is installed
+    (source / "assets/logo.svg").write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"/>'
+    )
     (source / "README.md").write_text("# Local documentation\n![Logo](assets/logo.svg)\n")
     write_yaml(
         {
