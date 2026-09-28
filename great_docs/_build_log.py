@@ -364,6 +364,7 @@ class MultiProgressBar:
         self._finished_slots: set[int] = set()
         self._drawn = False
         self._all_finished = False
+        self._label_width = max((len(l) for l in labels), default=12)
         # CI mode: track last emitted percentage bucket per slot
         self._ci_buckets = [-1] * self._n
 
@@ -382,10 +383,11 @@ class MultiProgressBar:
         bar = f"{c.CYAN}{'█' * filled}{c.DIM}{'░' * empty}{c.RESET}"
         counter = f"{cur}/{tot}"
 
+        w = self._label_width
         if idx in self._finished_slots:
             check = f"{c.GREEN}✓{c.RESET}"
-            return f"   {check} {label:<12s}  {bar}  {counter}  {pct}%"
-        return f"   {c.CYAN}►{c.RESET} {label:<12s}  {bar}  {counter}  {pct}%"
+            return f"   {check} {label:<{w}s}  {bar}  {counter}  {pct}%"
+        return f"   {c.CYAN}►{c.RESET} {label:<{w}s}  {bar}  {counter}  {pct}%"
 
     # -- public API ---------------------------------------------------------
 
