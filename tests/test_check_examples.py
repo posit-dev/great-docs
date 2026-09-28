@@ -33,6 +33,7 @@ from great_docs._check_examples import (
     format_json,
     write_log_file,
 )
+from great_docs._layout import Layout
 from great_docs.cli import cli
 
 requires_quarto = pytest.mark.skipif(
@@ -307,7 +308,8 @@ class TestCellSelection:
     def test_quarto_receives_only_eligible_cells(self, mock_render, mock_quarto, tmp_path):
         mock_render.return_value = PageResult("page.qmd", "pass", cells_checked=3)
         page = tmp_path / "page.qmd"
-        page.write_text(textwrap.dedent("""\
+        page.write_text(
+            textwrap.dedent("""\
             ```{python}
             first = 1
             ```
@@ -329,7 +331,8 @@ class TestCellSelection:
             ```{python}
             third = 3
             ```
-        """))
+        """)
+        )
         check_examples(tmp_path, no_docstrings=True)
         assert mock_render.call_count == 1
         cells_sent = mock_render.call_args[0][2]
@@ -345,12 +348,15 @@ class TestCellSelection:
     @patch("great_docs._check_examples._render_page_with_quarto")
     def test_multiple_pages_get_correct_cells(self, mock_render, mock_quarto, tmp_path):
         mock_render.return_value = PageResult("", "pass", cells_checked=1)
-        (tmp_path / "a.qmd").write_text(textwrap.dedent("""\
+        (tmp_path / "a.qmd").write_text(
+            textwrap.dedent("""\
             ```{python}
             x_from_a = 10
             ```
-        """))
-        (tmp_path / "b.qmd").write_text(textwrap.dedent("""\
+        """)
+        )
+        (tmp_path / "b.qmd").write_text(
+            textwrap.dedent("""\
             ```{python}
             y_from_b = 20
             ```
@@ -358,7 +364,8 @@ class TestCellSelection:
             ```{python}
             z_from_b = 30
             ```
-        """))
+        """)
+        )
         check_examples(tmp_path, no_docstrings=True)
         assert mock_render.call_count == 2
         first_call_cells = mock_render.call_args_list[0][0][2]
@@ -373,7 +380,8 @@ class TestCellSelection:
     @patch("great_docs._check_examples._render_page_with_quarto")
     def test_opted_out_page_sends_no_cells(self, mock_render, mock_quarto, tmp_path):
         mock_render.return_value = PageResult("run.qmd", "pass", cells_checked=1)
-        (tmp_path / "skip.qmd").write_text(textwrap.dedent("""\
+        (tmp_path / "skip.qmd").write_text(
+            textwrap.dedent("""\
             ---
             check-examples: false
             ---
@@ -385,7 +393,8 @@ class TestCellSelection:
             ```{python}
             y = 2
             ```
-        """))
+        """)
+        )
         (tmp_path / "run.qmd").write_text("```{python}\nz = 3\n```\n")
         check_examples(tmp_path, no_docstrings=True)
         assert mock_render.call_count == 1
@@ -395,7 +404,8 @@ class TestCellSelection:
 
     @requires_quarto
     def test_cell_selection_e2e(self, tmp_path):
-        (tmp_path / "page.qmd").write_text(textwrap.dedent("""\
+        (tmp_path / "page.qmd").write_text(
+            textwrap.dedent("""\
             ```{python}
             executed_cells = []
             ```
@@ -418,7 +428,8 @@ class TestCellSelection:
             executed_cells.append("cell_4")
             assert executed_cells == ["cell_1", "cell_4"]
             ```
-        """))
+        """)
+        )
         result = check_examples(tmp_path, no_docstrings=True)
         assert result.cells_failed == 0
         assert result.cells_checked == 3
@@ -511,6 +522,52 @@ class TestDiscoverQmdFiles:
         files = discover_qmd_files(tmp_path)
         names = [f.name for f in files]
         assert names == sorted(names)
+
+
+class TestDiscoverQmdFilesLayout:
+    def _docs_layout(self, root: Path) -> Layout:
+        (root / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+        (root / "docs").mkdir()
+        (root / "docs" / "great-docs.yml").write_text("display_name: Test\n")
+        return Layout.make(root)
+
+    def test_docs_layout_scans_source_dir(self, tmp_path):
+        layout = self._docs_layout(tmp_path)
+        (tmp_path / "docs" / "user_guide").mkdir()
+        (tmp_path / "docs" / "user_guide" / "intro.qmd").write_text("")
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "tests" / "fixture.qmd").write_text("")
+        files = discover_qmd_files(tmp_path, layout=layout)
+        assert [f.relative_to(tmp_path).as_posix() for f in files] == ["docs/user_guide/intro.qmd"]
+
+    def test_docs_layout_excludes_generated_dirs(self, tmp_path):
+        layout = self._docs_layout(tmp_path)
+        docs = tmp_path / "docs"
+        for generated in ("_quarto/default/reference", "_quarto/1.0.0", "_site", "_freeze"):
+            (docs / generated).mkdir(parents=True)
+            (docs / generated / "page.qmd").write_text("")
+        (docs / "index.qmd").write_text("")
+        files = discover_qmd_files(tmp_path, layout=layout)
+        assert [f.name for f in files] == ["index.qmd"]
+
+    def test_docs_layout_excludes_generated_dirs_for_explicit_paths(self, tmp_path):
+        layout = self._docs_layout(tmp_path)
+        docs = tmp_path / "docs"
+        (docs / "_quarto" / "default").mkdir(parents=True)
+        (docs / "_quarto" / "default" / "copy.qmd").write_text("")
+        (docs / "index.qmd").write_text("")
+        files = discover_qmd_files(tmp_path, paths=("docs",), layout=layout)
+        assert [f.name for f in files] == ["index.qmd"]
+
+    def test_root_layout_excludes_historical_builds(self, tmp_path):
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+        (tmp_path / "great-docs.yml").write_text("display_name: Test\n")
+        layout = Layout.make(tmp_path)
+        (tmp_path / "great-docs-1.0.0").mkdir()
+        (tmp_path / "great-docs-1.0.0" / "old.qmd").write_text("")
+        (tmp_path / "real.qmd").write_text("")
+        files = discover_qmd_files(tmp_path, layout=layout)
+        assert [f.name for f in files] == ["real.qmd"]
 
 
 # ===================================================================
@@ -693,11 +750,11 @@ class TestPrepareQmdForCheck:
 class TestParseErrorsFromHtml:
     def _make_cell_html(self, source: str, error: str | None = None) -> str:
         src_html = f'<code class="sourceCode python">{source}</code>'
-        cell = f'<div class="cell" data-execution_count="1">\n'
+        cell = '<div class="cell" data-execution_count="1">\n'
         cell += f'<div class="sourceCode cell-code"><pre class="sourceCode python">{src_html}</pre></div>\n'
         if error:
             cell += f'<div class="cell-output cell-output-error"><pre>{error}</pre></div>\n'
-        cell += '</div>\n'
+        cell += "</div>\n"
         return cell
 
     def test_no_errors(self):
@@ -820,7 +877,7 @@ class TestRenderPageWithQuarto:
         qmd = tmp_path / "expected.qmd"
         qmd.write_text(
             '```{python}\n#| error: true\nraise ValueError("expected")\n```\n\n'
-            '```{python}\nx = 1\n```\n'
+            "```{python}\nx = 1\n```\n"
         )
         cells = extract_cells(qmd.read_text())
         result = _render_page_with_quarto(qmd, "expected.qmd", cells, 30)
@@ -829,10 +886,7 @@ class TestRenderPageWithQuarto:
 
     def test_sequential_state_shared(self, tmp_path):
         qmd = tmp_path / "state.qmd"
-        qmd.write_text(
-            "```{python}\nshared = 42\n```\n\n"
-            "```{python}\nassert shared == 42\n```\n"
-        )
+        qmd.write_text("```{python}\nshared = 42\n```\n\n```{python}\nassert shared == 42\n```\n")
         cells = [Cell(0, "shared = 42"), Cell(1, "assert shared == 42")]
         result = _render_page_with_quarto(qmd, "state.qmd", cells, 30)
         assert result.status == "pass"
@@ -1258,7 +1312,8 @@ class TestLogContent:
 
     @requires_quarto
     def test_log_e2e_real_error(self, tmp_path):
-        (tmp_path / "page.qmd").write_text(textwrap.dedent("""\
+        (tmp_path / "page.qmd").write_text(
+            textwrap.dedent("""\
             ```{python}
             data = {"key": "value"}
             ```
@@ -1266,7 +1321,8 @@ class TestLogContent:
             ```{python}
             result = data["nonexistent"]
             ```
-        """))
+        """)
+        )
         log_path = tmp_path / "check.log"
         result = check_examples(tmp_path, no_docstrings=True)
         write_log_file(result, log_path)
@@ -1302,7 +1358,9 @@ def _mock_render_pass(qmd_path, page_label, cells, timeout, project_root=None):
 
 def _mock_render_fail(qmd_path, page_label, cells, timeout, project_root=None):
     return PageResult(
-        page_label, "fail", cells_checked=len(cells),
+        page_label,
+        "fail",
+        cells_checked=len(cells),
         errors=[CellError(0, cells[0].source if cells else "bad", "Err", "msg", "tb")],
     )
 
@@ -1455,9 +1513,7 @@ class TestCheckExamplesOrchestrator:
     @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_build_dir_excluded(self, mock_render, mock_quarto, tmp_path):
         (tmp_path / "great-docs").mkdir()
-        self._write_qmd(
-            tmp_path / "great-docs" / "built.qmd", "```{python}\nx = 1\n```\n"
-        )
+        self._write_qmd(tmp_path / "great-docs" / "built.qmd", "```{python}\nx = 1\n```\n")
         self._write_qmd(tmp_path / "real.qmd", "```{python}\ny = 2\n```\n")
         result = check_examples(tmp_path, no_docstrings=True)
         assert result.pages_checked == 1
@@ -1488,9 +1544,7 @@ class TestCheckExamplesOrchestrator:
     @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
     def test_no_docstrings_skips_docstring_extraction(self, mock_render, mock_quarto, tmp_path):
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
-        with patch(
-            "great_docs._check_examples.extract_docstring_examples"
-        ) as mock_ds:
+        with patch("great_docs._check_examples.extract_docstring_examples") as mock_ds:
             result = check_examples(tmp_path, no_docstrings=True)
         mock_ds.assert_not_called()
 
@@ -1505,7 +1559,9 @@ class TestCheckExamplesOrchestrator:
                 return PageResult(page_label, "pass", cells_checked=len(cells))
             else:
                 return PageResult(
-                    page_label, "fail", cells_checked=len(cells),
+                    page_label,
+                    "fail",
+                    cells_checked=len(cells),
                     errors=[CellError(0, "z = 3", "Err", "msg", "tb")],
                 )
 
@@ -1543,9 +1599,7 @@ class TestCheckExamplesParallel:
     def test_parallel_runs_multiple_pages(self, tmp_path):
         self._write_qmd(tmp_path / "a.qmd", "```{python}\nx = 1\n```\n")
         self._write_qmd(tmp_path / "b.qmd", "```{python}\ny = 2\n```\n")
-        result = check_examples(
-            tmp_path, parallel=True, jobs=2, no_docstrings=True
-        )
+        result = check_examples(tmp_path, parallel=True, jobs=2, no_docstrings=True)
         assert result.pages_checked == 2
         assert result.pages_passed == 2
 
@@ -1555,29 +1609,21 @@ class TestCheckExamplesParallel:
             tmp_path / "bad.qmd",
             "```{python}\nraise ValueError('boom')\n```\n",
         )
-        result = check_examples(
-            tmp_path, parallel=True, jobs=2, no_docstrings=True
-        )
+        result = check_examples(tmp_path, parallel=True, jobs=2, no_docstrings=True)
         assert result.pages_passed == 1
         assert result.pages_failed == 1
 
     def test_jobs_gt_1_implies_parallel(self, tmp_path):
         self._write_qmd(tmp_path / "a.qmd", "```{python}\nx = 1\n```\n")
         self._write_qmd(tmp_path / "b.qmd", "```{python}\ny = 2\n```\n")
-        result = check_examples(
-            tmp_path, jobs=2, no_docstrings=True
-        )
+        result = check_examples(tmp_path, jobs=2, no_docstrings=True)
         assert result.pages_checked == 2
         assert result.pages_passed == 2
 
     def test_parallel_pages_isolated(self, tmp_path):
         self._write_qmd(tmp_path / "a.qmd", "```{python}\nparallel_var = 99\n```\n")
-        self._write_qmd(
-            tmp_path / "b.qmd", "```{python}\nprint(parallel_var)\n```\n"
-        )
-        result = check_examples(
-            tmp_path, parallel=True, jobs=2, no_docstrings=True
-        )
+        self._write_qmd(tmp_path / "b.qmd", "```{python}\nprint(parallel_var)\n```\n")
+        result = check_examples(tmp_path, parallel=True, jobs=2, no_docstrings=True)
         b_result = next(p for p in result.pages if p.path == "b.qmd")
         assert b_result.status == "fail"
         assert any("NameError" in e.error_type for e in b_result.errors)
@@ -1611,6 +1657,18 @@ class TestExtractDocstringExamples:
             result = extract_docstring_examples(tmp_path)
         assert result == []
 
+    def test_reads_config_from_docs_layout(self, tmp_path):
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "test"\n')
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "docs" / "great-docs.yml").write_text("display_name: Test\n")
+        layout = Layout.make(tmp_path)
+        mock_config = MagicMock()
+        mock_config.reference_enabled = False
+        with patch("great_docs.config.Config", return_value=mock_config) as config_cls:
+            result = extract_docstring_examples(tmp_path, layout=layout)
+        assert result == []
+        assert config_cls.call_args.kwargs["config_path"] == layout.config_path
+
 
 # ===================================================================
 # CLI — check-examples command
@@ -1631,6 +1689,25 @@ class TestCheckExamplesCLI:
         result = runner.invoke(cli, ["check-examples", "--no-docstrings"])
         assert result.exit_code == 0
         assert "1 passed" in result.output
+
+    @patch("great_docs._check_examples._check_quarto_available", return_value=None)
+    @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
+    def test_cli_docs_layout_from_source_dir(self, mock_render, mock_quarto, tmp_path, monkeypatch):
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+        docs = tmp_path / "docs"
+        self._write_qmd(docs / "great-docs.yml", "display_name: Test\n")
+        self._write_qmd(docs / "user_guide" / "intro.qmd", "```{python}\nx = 1\n```\n")
+        self._write_qmd(docs / "_quarto" / "default" / "copy.qmd", "```{python}\nx = 1\n```\n")
+        monkeypatch.chdir(docs)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["check-examples", "user_guide", "--no-docstrings", "--config", "great-docs.yml"]
+        )
+        assert result.exit_code == 0, result.output
+        assert "1 passed" in result.output
+        assert [call.args[1] for call in mock_render.call_args_list] == [
+            "docs/user_guide/intro.qmd"
+        ]
 
     @patch("great_docs._check_examples._check_quarto_available", return_value=None)
     @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_fail)
@@ -1702,7 +1779,9 @@ class TestCheckExamplesCLI:
 
         def render_fail(qmd_path, page_label, cells, timeout, project_root=None):
             return PageResult(
-                page_label, "fail", cells_checked=1,
+                page_label,
+                "fail",
+                cells_checked=1,
                 errors=[CellError(0, "x", "E", "m", "full tb")],
             )
 
@@ -1734,9 +1813,7 @@ class TestCheckExamplesCLI:
         self._write_qmd(tmp_path / "guide" / "intro.qmd", "```{python}\nx = 1\n```\n")
         self._write_qmd(tmp_path / "other.qmd", "```{python}\ny = 2\n```\n")
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["check-examples", "--no-docstrings", "--include", "guide/*"]
-        )
+        result = runner.invoke(cli, ["check-examples", "--no-docstrings", "--include", "guide/*"])
         assert result.exit_code == 0
         assert "intro.qmd" in result.output
         assert "other.qmd" not in result.output
@@ -1749,9 +1826,7 @@ class TestCheckExamplesCLI:
         self._write_qmd(tmp_path / "draft" / "wip.qmd", "```{python}\nx = 1\n```\n")
         self._write_qmd(tmp_path / "good.qmd", "```{python}\ny = 2\n```\n")
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["check-examples", "--no-docstrings", "--exclude", "draft/*"]
-        )
+        result = runner.invoke(cli, ["check-examples", "--no-docstrings", "--exclude", "draft/*"])
         assert result.exit_code == 0
         assert "good.qmd" in result.output
         assert "wip.qmd" not in result.output
@@ -1762,9 +1837,7 @@ class TestCheckExamplesCLI:
         monkeypatch.chdir(tmp_path)
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["check-examples", "--no-docstrings", "--timeout", "60"]
-        )
+        result = runner.invoke(cli, ["check-examples", "--no-docstrings", "--timeout", "60"])
         assert result.exit_code == 0
 
     @requires_quarto
@@ -1773,9 +1846,7 @@ class TestCheckExamplesCLI:
         self._write_qmd(tmp_path / "a.qmd", "```{python}\nx = 1\n```\n")
         self._write_qmd(tmp_path / "b.qmd", "```{python}\ny = 2\n```\n")
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["check-examples", "--no-docstrings", "--parallel"]
-        )
+        result = runner.invoke(cli, ["check-examples", "--no-docstrings", "--parallel"])
         assert result.exit_code == 0
         assert "2 passed" in result.output
 
@@ -1784,9 +1855,7 @@ class TestCheckExamplesCLI:
         monkeypatch.chdir(tmp_path)
         self._write_qmd(tmp_path / "a.qmd", "```{python}\nx = 1\n```\n")
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["check-examples", "--no-docstrings", "-j", "2"]
-        )
+        result = runner.invoke(cli, ["check-examples", "--no-docstrings", "-j", "2"])
         assert result.exit_code == 0
         assert "1 passed" in result.output
 
@@ -1796,9 +1865,7 @@ class TestCheckExamplesCLI:
         monkeypatch.chdir(tmp_path)
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
         runner = CliRunner()
-        with patch(
-            "great_docs._check_examples.extract_docstring_examples", return_value=[]
-        ):
+        with patch("great_docs._check_examples.extract_docstring_examples", return_value=[]):
             result = runner.invoke(cli, ["check-examples", "--docstrings-only"])
         assert result.exit_code == 0
         assert "page.qmd" not in result.output
@@ -1811,7 +1878,9 @@ class TestCheckExamplesCLI:
 
         def render_fail(qmd_path, page_label, cells, timeout, project_root=None):
             return PageResult(
-                page_label, "fail", cells_checked=1,
+                page_label,
+                "fail",
+                cells_checked=1,
                 errors=[CellError(0, "code", "Err", "msg", "tb")],
             )
 
@@ -1843,8 +1912,18 @@ class TestCheckExamplesCLI:
 
         def render_fail(qmd_path, page_label, cells, timeout, project_root=None):
             return PageResult(
-                page_label, "fail", cells_checked=1,
-                errors=[CellError(0, "bad_call()", "NameError", "bad_call not defined", "line 1 in <module>\nNameError: bad_call")],
+                page_label,
+                "fail",
+                cells_checked=1,
+                errors=[
+                    CellError(
+                        0,
+                        "bad_call()",
+                        "NameError",
+                        "bad_call not defined",
+                        "line 1 in <module>\nNameError: bad_call",
+                    )
+                ],
             )
 
         mock_render.side_effect = render_fail
@@ -1862,8 +1941,18 @@ class TestCheckExamplesCLI:
 
         def render_fail(qmd_path, page_label, cells, timeout, project_root=None):
             return PageResult(
-                page_label, "fail", cells_checked=1,
-                errors=[CellError(0, "bad_call()", "NameError", "bad_call not defined", "line 1 in <module>\nNameError: bad_call")],
+                page_label,
+                "fail",
+                cells_checked=1,
+                errors=[
+                    CellError(
+                        0,
+                        "bad_call()",
+                        "NameError",
+                        "bad_call not defined",
+                        "line 1 in <module>\nNameError: bad_call",
+                    )
+                ],
             )
 
         mock_render.side_effect = render_fail
@@ -1881,7 +1970,9 @@ class TestCheckExamplesCLI:
 
         def render_fail(qmd_path, page_label, cells, timeout, project_root=None):
             return PageResult(
-                page_label, "fail", cells_checked=1,
+                page_label,
+                "fail",
+                cells_checked=1,
                 errors=[CellError(0, "1/0", "ZeroDivisionError", "division by zero", "tb lines")],
             )
 
@@ -1956,7 +2047,9 @@ class TestCheckExamplesCLI:
 
         def render_fail(qmd_path, page_label, cells, timeout, project_root=None):
             return PageResult(
-                page_label, "fail", cells_checked=1,
+                page_label,
+                "fail",
+                cells_checked=1,
                 errors=[CellError(0, "x", "E", "m", "tb")],
             )
 
@@ -1982,8 +2075,10 @@ class TestCheckExamplesCLI:
                 "check-examples",
                 "--no-docstrings",
                 "--parallel",
-                "-j", "2",
-                "--timeout", "15",
+                "-j",
+                "2",
+                "--timeout",
+                "15",
                 "--verbose",
             ],
         )
@@ -1999,9 +2094,7 @@ class TestCheckExamplesCLI:
         (tmp_path / "guide").mkdir()
         (tmp_path / "guide" / "sub").mkdir()
         self._write_qmd(tmp_path / "guide" / "intro.qmd", "```{python}\nx = 1\n```\n")
-        self._write_qmd(
-            tmp_path / "guide" / "sub" / "deep.qmd", "```{python}\ny = 2\n```\n"
-        )
+        self._write_qmd(tmp_path / "guide" / "sub" / "deep.qmd", "```{python}\ny = 2\n```\n")
         self._write_qmd(tmp_path / "other.qmd", "```{python}\nz = 3\n```\n")
         runner = CliRunner()
         result = runner.invoke(
@@ -2009,8 +2102,10 @@ class TestCheckExamplesCLI:
             [
                 "check-examples",
                 "--no-docstrings",
-                "--include", "guide/*",
-                "--exclude", "guide/sub/*",
+                "--include",
+                "guide/*",
+                "--exclude",
+                "guide/sub/*",
                 "--json-output",
             ],
         )
@@ -2045,7 +2140,9 @@ class TestCheckExamplesCLI:
 
     @patch("great_docs._check_examples._check_quarto_available", return_value=None)
     @patch("great_docs._check_examples._render_page_with_quarto", side_effect=_mock_render_pass)
-    def test_cli_console_shows_checking_header(self, mock_render, mock_quarto, tmp_path, monkeypatch):
+    def test_cli_console_shows_checking_header(
+        self, mock_render, mock_quarto, tmp_path, monkeypatch
+    ):
         monkeypatch.chdir(tmp_path)
         self._write_qmd(tmp_path / "page.qmd", "```{python}\nx = 1\n```\n")
         runner = CliRunner()
@@ -2060,8 +2157,14 @@ class TestCheckExamplesCLI:
 
         def render_fail(qmd_path, page_label, cells, timeout, project_root=None):
             return PageResult(
-                page_label, "fail", cells_checked=1,
-                errors=[CellError(0, "bad()", "NameError", "name 'bad' is not defined", "traceback here")],
+                page_label,
+                "fail",
+                cells_checked=1,
+                errors=[
+                    CellError(
+                        0, "bad()", "NameError", "name 'bad' is not defined", "traceback here"
+                    )
+                ],
             )
 
         mock_render.side_effect = render_fail
@@ -2363,10 +2466,7 @@ class TestExecutionEdgeCases:
 
     def test_error_continuation(self, tmp_path):
         qmd = tmp_path / "page.qmd"
-        qmd.write_text(
-            "```{python}\nundefined_func()\n```\n\n"
-            "```{python}\nx = 42\n```\n"
-        )
+        qmd.write_text("```{python}\nundefined_func()\n```\n\n```{python}\nx = 42\n```\n")
         cells = extract_cells(qmd.read_text())
         result = _render_page_with_quarto(qmd, "page.qmd", cells, 30)
         assert result.status == "fail"
@@ -2429,9 +2529,7 @@ class TestOutputEdgeCases:
                     "page.qmd",
                     "fail",
                     cells_checked=1,
-                    errors=[
-                        CellError(0, "données = '🐍'", "Err", "erreur éè", "")
-                    ],
+                    errors=[CellError(0, "données = '🐍'", "Err", "erreur éè", "")],
                 )
             ],
         )
@@ -2475,9 +2573,7 @@ class TestOutputEdgeCases:
                     "page.qmd",
                     "fail",
                     cells_checked=1,
-                    errors=[
-                        CellError(0, "résumé = '🎉'", "Erreur", "données 💥", "tracé complet")
-                    ],
+                    errors=[CellError(0, "résumé = '🎉'", "Erreur", "données 💥", "tracé complet")],
                 )
             ]
         )
@@ -2550,7 +2646,9 @@ class TestOrchestratorEdgeCases:
                 return PageResult(page_label, "pass", cells_checked=len(cells))
             elif "b_fail" in page_label:
                 return PageResult(
-                    page_label, "fail", cells_checked=len(cells),
+                    page_label,
+                    "fail",
+                    cells_checked=len(cells),
                     errors=[CellError(0, "bad", "NameError", "bad", "tb")],
                 )
             else:
