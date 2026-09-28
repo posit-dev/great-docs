@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -10,7 +9,10 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
+
+if TYPE_CHECKING:
+    from ._layout import Layout
 
 # Reuse the fence/hashpipe regexes from _mock_code
 _EXEC_FENCE_RE = re.compile(r"^```\{python\}\s*$")
@@ -151,17 +153,23 @@ def extract_cells(text: str) -> list[Cell]:
 
 def extract_docstring_examples(
     project_root: Path,
+    layout: Layout | None = None,
 ) -> list[tuple[str, list[Cell]]]:
     try:
         from great_docs.config import Config
     except ImportError:
         return []
 
-    config_path = project_root / "great-docs.yml"
+    config_path = layout.config_path if layout is not None else project_root / "great-docs.yml"
     if not config_path.exists():
         return []
 
-    config = Config(project_root)
+    if layout is not None:
+        config = Config(
+            layout.package_root, config_path=layout.config_path, cache_dir=layout.cache_dir
+        )
+    else:
+        config = Config(project_root)
 
     if not config.reference_enabled:
         return []
@@ -170,7 +178,7 @@ def extract_docstring_examples(
     if not reference_sections:
         return []
 
-    package_name = _detect_package(project_root)
+    package_name = _detect_package(layout.package_root if layout is not None else project_root)
     if not package_name:
         return []
 
@@ -365,7 +373,7 @@ def _parse_errors_from_html(html: str, cells: list[Cell]) -> list[CellError]:
             continue
 
         error_text = _strip_html_tags(err_match.group(1)).strip()
-        error_lines = [l for l in error_text.splitlines() if l.strip()]
+        error_lines = [line for line in error_text.splitlines() if line.strip()]
 
         error_line = error_lines[-1] if error_lines else "UnknownError"
         if ": " in error_line:
@@ -516,11 +524,25 @@ def _run_page(
 # ---------------------------------------------------------------------------
 
 
+def _generated_dirs(layout: Layout) -> list[Path]:
+    # Build output, rendered site, freeze and cache directories hold generated
+    # copies of pages; checking them would duplicate (or fabricate) results
+    dirs = [layout.build_dir, layout.site_dir, layout.freeze_dir, layout.cache_dir]
+    if layout.source_dir == layout.package_root:
+        # Historical version builds sit beside `great-docs/` as `great-docs-<tag>/`
+        dirs.extend(layout.package_root.glob(f"{layout.build_dir.name}-*"))
+    else:
+        # `_quarto/` holds the default build and every historical version build
+        dirs.append(layout.build_dir.parent)
+    return [d.resolve() for d in dirs]
+
+
 def discover_qmd_files(
     project_root: Path,
     paths: tuple[str, ...] | None = None,
     include: str | None = None,
     exclude: str | None = None,
+    layout: Layout | None = None,
 ) -> list[Path]:
     if paths:
         targets: list[Path] = []
@@ -532,13 +554,18 @@ def discover_qmd_files(
                 targets.extend(sorted(target.rglob("*.qmd")))
         files = targets
     else:
-        files = sorted(project_root.rglob("*.qmd"))
+        scan_root = layout.source_dir if layout is not None else project_root
+        files = sorted(scan_root.rglob("*.qmd"))
 
-    # Exclude build directory and hidden directories
+    generated = _generated_dirs(layout) if layout is not None else []
+
+    # Exclude build directories and hidden directories
     filtered: list[Path] = []
     for f in files:
         rel = str(f.relative_to(project_root))
         if rel.startswith("great-docs/") or rel.startswith("."):
+            continue
+        if any(f.resolve().is_relative_to(d) for d in generated):
             continue
         if include and not fnmatch(rel, include):
             continue
@@ -585,6 +612,7 @@ def check_examples(
     jobs: int = 1,
     progress_callback: ProgressCallback | None = None,
     progress_setup: ProgressSetup | None = None,
+    layout: Layout | None = None,
 ) -> CheckResult:
     err = _check_quarto_available()
     if err:
@@ -594,7 +622,7 @@ def check_examples(
     page_cells: list[tuple[str, list[Cell], bool]] = []
 
     if not docstrings_only:
-        qmd_files = discover_qmd_files(project_root, paths, include, exclude)
+        qmd_files = discover_qmd_files(project_root, paths, include, exclude, layout=layout)
         for qmd_path in qmd_files:
             text = qmd_path.read_text(encoding="utf-8")
             if _page_opted_out(text):
@@ -605,7 +633,7 @@ def check_examples(
                 page_cells.append((rel, cells, False))
 
     if not no_docstrings and not paths:
-        docstring_pages = extract_docstring_examples(project_root)
+        docstring_pages = extract_docstring_examples(project_root, layout=layout)
         for page_path, cells in docstring_pages:
             page_cells.append((page_path, cells, True))
 
