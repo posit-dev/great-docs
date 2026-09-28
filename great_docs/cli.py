@@ -2223,6 +2223,7 @@ cli.add_command(check_links)
     default=None,
     help="Where to write full tracebacks (default: .great-docs/check-examples.log)",
 )
+@_config_option
 def check_examples(
     paths: tuple[str, ...],
     project_path: str | None,
@@ -2236,6 +2237,7 @@ def check_examples(
     parallel: bool,
     jobs: int,
     log_file: str | None,
+    config_path: str | None = None,
 ) -> None:
     """Check that Python code examples execute without errors.
 
@@ -2260,12 +2262,21 @@ def check_examples(
     from ._build_log import Colors, MultiProgressBar, ProgressBar
     from ._check_examples import (
         check_examples as run_check,
+    )
+    from ._check_examples import (
         format_console,
         format_json,
         write_log_file,
     )
 
-    project_root = Path(project_path) if project_path else Path.cwd()
+    layout = Layout.make(
+        Path(project_path) if project_path else Path.cwd(),
+        Path(config_path) if config_path else None,
+    )
+    project_root = layout.package_root
+    # Click validates PATHS against the working directory, which may differ
+    # from the package root (e.g. when run from inside `docs/`)
+    paths = tuple(str(Path(p).resolve()) for p in paths)
 
     if not json_output:
         click.echo("Checking examples...")
@@ -2293,9 +2304,7 @@ def check_examples(
                 section_indices[label] = i
                 progress_bar.set_total(i, section_totals[label])
 
-    def _progress_callback(
-        section: str, page_path: str, current: int, total: int
-    ) -> None:
+    def _progress_callback(section: str, page_path: str, current: int, total: int) -> None:
         if progress_bar is None:
             return
         idx = section_indices.get(section, 0)
@@ -2316,6 +2325,7 @@ def check_examples(
         jobs=jobs,
         progress_callback=_progress_callback if not json_output else None,
         progress_setup=_progress_setup if not json_output else None,
+        layout=layout,
     )
 
     if progress_bar is not None:
@@ -2334,7 +2344,9 @@ def check_examples(
         click.echo(format_console(result, verbose=verbose))
 
         # Write log file
-        resolved_log = Path(log_file) if log_file else project_root / ".great-docs" / "check-examples.log"
+        resolved_log = (
+            Path(log_file) if log_file else project_root / ".great-docs" / "check-examples.log"
+        )
         if write_log_file(result, resolved_log):
             click.echo(f"Full tracebacks: {resolved_log}")
 
