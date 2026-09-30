@@ -7478,6 +7478,21 @@ def test_resolve_members_skips_nodoc_member():
     assert doc.members == []
 
 
+def test_resolve_entry_sanitizes_colon_in_page_path():
+    """A `module:Item` entry must produce a colon-free page path."""
+    from great_docs._apiref.api_reference import Settings
+
+    cls, method = _make_class_with_method()
+    objects = {"mymod:MyClass": cls, "mymod:MyClass.my_method": method}
+    resolver = _Resolver(Settings(parser="numpy"))
+    resolver.get_object = lambda path, **kwargs: objects.get(path)
+
+    [section] = resolver.resolve_sections(
+        [SpecSection(title="T", contents=[SpecObject(name="mymod:MyClass")])]
+    )
+    assert section.contents[0].path == "mymod.MyClass"
+
+
 def test_resolve_members_skips_module_member():
     """member is a module -> continue"""
     import griffe as gf

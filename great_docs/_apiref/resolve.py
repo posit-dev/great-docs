@@ -274,7 +274,9 @@ class _Resolver:
             doc = self._resolve_object(el)
             if doc is None:
                 return None
-            return Page(contents=cast("list[Any]", [doc]), path=doc.name)
+            return Page(
+                contents=cast("list[Any]", [doc]), path=self._clean_member_path(doc.name)
+            )
         if isinstance(el, SpecText):
             return self._resolve_text(el)
         raise TypeError(f"Cannot resolve section entry of type: {type(el)}")
