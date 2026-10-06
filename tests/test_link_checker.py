@@ -236,9 +236,7 @@ https://example.com/three
             )
 
             assert "user_guide/test.md" in results["by_file"]
-            assert (
-                "https://example.com/page" in results["by_file"]["user_guide/test.md"]
-            )
+            assert "https://example.com/page" in results["by_file"]["user_guide/test.md"]
 
 
 # ============================================================================
@@ -783,9 +781,7 @@ title: "Test"
             docs_dir.mkdir()
 
             test_qmd = docs_dir / "test.qmd"
-            test_qmd.write_text(
-                "Visit http://fake.example.com{.gd-no-link} for more info"
-            )
+            test_qmd.write_text("Visit http://fake.example.com{.gd-no-link} for more info")
 
             quarto_yml = docs_dir / "_quarto.yml"
             quarto_yml.write_text("project:\n  type: website\n")
@@ -1120,9 +1116,7 @@ class TestErrorHandling:
         """Test handling of SSL certificate errors."""
         import requests
 
-        mock_head.side_effect = requests.exceptions.SSLError(
-            "Certificate verify failed"
-        )
+        mock_head.side_effect = requests.exceptions.SSLError("Certificate verify failed")
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             docs_dir = Path(tmp_dir) / "user_guide"
@@ -1300,9 +1294,7 @@ class TestResultStructure:
 
             test_md = docs_dir / "test.md"
             # Use a definitely broken URL
-            test_md.write_text(
-                "https://this-domain-definitely-does-not-exist-12345.com/page"
-            )
+            test_md.write_text("https://this-domain-definitely-does-not-exist-12345.com/page")
 
             quarto_yml = docs_dir / "_quarto.yml"
             quarto_yml.write_text("project:\n  type: website\n")
@@ -1375,9 +1367,7 @@ https://example.com/also-skip
             )
 
             # Total should equal checked + skipped
-            checked = (
-                len(results["ok"]) + len(results["redirects"]) + len(results["broken"])
-            )
+            checked = len(results["ok"]) + len(results["redirects"]) + len(results["broken"])
             assert results["total"] == checked + len(results["skipped"])
 
 

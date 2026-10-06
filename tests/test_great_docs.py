@@ -17613,9 +17613,7 @@ def test_prepare_build_directory_creates_structure():
 
 def test_prepare_build_directory_can_retry_after_missing_header_include(tmp_path):
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-    (tmp_path / "great-docs.yml").write_text(
-        "include_in_header:\n  - file: header.html\n"
-    )
+    (tmp_path / "great-docs.yml").write_text("include_in_header:\n  - file: header.html\n")
     docs = GreatDocs(project_path=str(tmp_path))
 
     with patch.object(docs, "_add_api_reference_config"):
@@ -17624,13 +17622,11 @@ def test_prepare_build_directory_can_retry_after_missing_header_include(tmp_path
                 with pytest.raises(FileNotFoundError, match="Header include file not found"):
                     docs._prepare_build_directory()
 
-                (tmp_path / "header.html").write_text("<meta name=\"retry\">\n")
+                (tmp_path / "header.html").write_text('<meta name="retry">\n')
                 docs._prepare_build_directory()
 
     assert (docs.build_dir / "_quarto.yml").exists()
-    assert (docs.build_dir / "_includes" / "header.html").read_text() == (
-        '<meta name="retry">\n'
-    )
+    assert (docs.build_dir / "_includes" / "header.html").read_text() == ('<meta name="retry">\n')
 
 
 def test_prepare_build_directory_writes_website_project(tmp_path):

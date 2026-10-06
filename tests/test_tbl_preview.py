@@ -1962,9 +1962,7 @@ class TestFromFeatherPandasFallback:
         from great_docs._tbl_preview import _from_feather
 
         mock_df = MagicMock()
-        mock_from_pandas = MagicMock(
-            return_value=(["col1"], ["int64"], [[1]], 1, "feather")
-        )
+        mock_from_pandas = MagicMock(return_value=(["col1"], ["int64"], [[1]], 1, "feather"))
         mock_pd = MagicMock()
         mock_pd.read_feather = MagicMock(return_value=mock_df)
 

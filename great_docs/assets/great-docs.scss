@@ -6646,13 +6646,26 @@ body.quarto-dark .tippy-box[data-theme~="quarto"] {
     width: 100%;
 }
 
-/* The figure element wrapping the diagram */
+/* Quarto wraps the figure in a div (e.g., `.quarto-float`, `.quarto-figure-default`);
+   as a flex item it would shrink to fit, squeezing the diagram, so let it span the column */
+.cell-output-display:has(.mermaid-js) > *,
+.cell-output-display:has(.mermaid) > * {
+    width: 100%;
+}
+
+/* The figure element wrapping the diagram: stack the diagram above its caption */
 .cell-output-display figure.figure:has(.mermaid-js),
 .cell-output-display figure.figure:has(.mermaid) {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: stretch;
     margin: 1.5rem auto;
     width: 100%;
+}
+
+.cell-output-display figure.figure:has(.mermaid-js) > figcaption,
+.cell-output-display figure.figure:has(.mermaid) > figcaption {
+    text-align: center;
 }
 
 /* The immediate parent div of the SVG */

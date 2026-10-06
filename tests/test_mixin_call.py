@@ -14,9 +14,7 @@ class TestMixinCallReceives:
         import great_docs._apiref._render.mixin_call as mod
 
         cls = vars(mod)["__RenderDocCallMixin"]
-        fake_self = types.SimpleNamespace(
-            render_definition_items=lambda el: "rendered"
-        )
+        fake_self = types.SimpleNamespace(render_definition_items=lambda el: "rendered")
         el = MagicMock(spec=gf.DocstringSectionReceives)
         result = cls.render_receives_section(fake_self, el)
         assert result == "rendered"

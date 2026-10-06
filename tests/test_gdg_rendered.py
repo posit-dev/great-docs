@@ -11627,6 +11627,94 @@ def test_DED_d2_block_replaced_not_left_as_code():
     assert "Decision" not in html, "d2 source leaked into HTML — block was not pre-rendered"
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: Mermaid diagrams (gdtest_mermaid) — captioned figure layout (issue #361)
+#
+# Mermaid is rendered client-side, so these tests check the static HTML that
+# Quarto emits plus the deployed CSS that lays it out. Captioned figures must
+# stack the caption under the diagram, and the wrapper div Quarto places inside
+# `.cell-output-display` (a flex row) must span the column so wide SVGs aren't
+# squeezed.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_MERMAID_PKG = "gdtest_mermaid"
+
+
+def _mermaid_css_rule(css: str, selector: str) -> str:
+    """Return the declarations of the first CSS rule whose selector list contains `selector`."""
+    for match in re.finditer(r"([^{}]+)\{([^{}]*)\}", css):
+        selectors = [re.sub(r"\s+", " ", s).strip() for s in match.group(1).split(",")]
+        selectors = [re.sub(r"\s*>\s*", ">", s) for s in selectors]
+        if re.sub(r"\s*>\s*", ">", selector) in selectors:
+            return re.sub(r"\s+", "", match.group(2))
+    return ""
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_mermaid_figure_structure():
+    """gdtest_mermaid: captions follow the diagram inside the figure, each in a wrapper div.
+
+    The labeled diagram gets a `.quarto-float` wrapper; every figure sits inside a
+    wrapper div that is a direct child of `.cell-output-display` (the element the
+    full-width rule targets). Only the uncaptioned diagram lacks a figcaption.
+    """
+    if not _has_rendered_site(_MERMAID_PKG):
+        pytest.skip(f"{_MERMAID_PKG} not rendered")
+    page = _site_dir(_MERMAID_PKG) / "user-guide" / "captions.html"
+    assert page.exists(), "captions.html not rendered"
+    soup = _load_html(page)
+
+    outputs = [d for d in soup.select("div.cell-output-display") if d.select_one("pre.mermaid")]
+    assert len(outputs) == 3, f"Expected 3 mermaid outputs, got {len(outputs)}"
+
+    for out in outputs:
+        figure = out.select_one("figure.figure")
+        assert figure is not None, "Mermaid output should be wrapped in figure.figure"
+        assert figure.parent is not out, "Quarto should wrap the figure in a div"
+        assert figure.parent.parent is out, "Wrapper div should be a direct child"
+
+    labeled, unlabeled, uncaptioned = outputs
+    assert "quarto-float" in labeled.find("div")["class"]
+    assert labeled.select_one("#fig-pipeline") is not None
+
+    for out, text in ((labeled, "Figure"), (unlabeled, "A tiny two-node diagram.")):
+        figure = out.select_one("figure.figure")
+        caption = figure.find("figcaption", recursive=False)
+        assert caption is not None and text in caption.get_text()
+        # Caption must come after the diagram in source order (rendered underneath)
+        children = [c for c in figure.find_all(recursive=False) if c.name in ("div", "figcaption")]
+        assert children[-1] is caption, "figcaption should follow the diagram"
+
+    assert uncaptioned.select_one("figcaption") is None
+
+
+@pytest.mark.dedicated
+def test_DED_mermaid_caption_layout_css():
+    """gdtest_mermaid: deployed CSS stacks captions under the diagram at full width (#361).
+
+    A row-direction flex figure placed the caption beside a shrunken SVG, and the
+    flex-row `.cell-output-display` shrank Quarto's wrapper div to fit content.
+    """
+    if not _has_rendered_site(_MERMAID_PKG):
+        pytest.skip(f"{_MERMAID_PKG} not rendered")
+    css = _deployed_css(_MERMAID_PKG)
+    assert css, "No CSS files found in _site"
+
+    figure = _mermaid_css_rule(css, ".cell-output-display figure.figure:has(.mermaid-js)")
+    assert "display:flex" in figure
+    assert "flex-direction:column" in figure, "Captioned figure must stack vertically"
+    assert "align-items:stretch" in figure
+
+    wrapper = _mermaid_css_rule(css, ".cell-output-display:has(.mermaid-js) > *")
+    assert "width:100%" in wrapper, "Figure wrapper must span the column"
+
+    caption = _mermaid_css_rule(
+        css, ".cell-output-display figure.figure:has(.mermaid-js) > figcaption"
+    )
+    assert "text-align:center" in caption
+
+
 # ── ref_section_order ───────────────────────────────────────────────────────
 
 

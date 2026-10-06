@@ -2082,7 +2082,6 @@ class TestInspectRepoGitNeeds:
 
 
 class TestGetPackageExportsCacheHit:
-
     def test_returns_cached_exports(self, tmp_path):
         gd = _make_gd(tmp_path)
         gd._cached_package_name = "mypkg"
@@ -2116,7 +2115,6 @@ class TestGetPackageExportsCacheHit:
 
 
 class TestAddTagsToNavbar:
-
     def test_no_quarto_yml_returns_early(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
         gd.build_dir.mkdir(parents=True, exist_ok=True)
@@ -2136,7 +2134,9 @@ class TestAddTagsToNavbar:
         gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "language", "en")
         quarto = gd.build_dir / "_quarto.yml"
-        quarto.write_text("website:\n  navbar:\n    right:\n      - icon: github\n", encoding="utf-8")
+        quarto.write_text(
+            "website:\n  navbar:\n    right:\n      - icon: github\n", encoding="utf-8"
+        )
         gd._add_tags_to_navbar()
 
     def test_already_present_skips(self, tmp_path, monkeypatch):
@@ -2172,7 +2172,6 @@ class TestAddTagsToNavbar:
 
 
 class TestUpdateNavbarGithubLink:
-
     @staticmethod
     def _wrap(navbar):
         return {"website": {"navbar": navbar}}
@@ -2186,14 +2185,20 @@ class TestUpdateNavbarGithubLink:
     def test_icon_style_appends(self, tmp_path):
         gd = _make_gd(tmp_path)
         navbar = {"right": []}
-        gd._update_navbar_github_link(self._wrap(navbar), "owner", "repo", "https://github.com/o/r", "icon")
+        gd._update_navbar_github_link(
+            self._wrap(navbar), "owner", "repo", "https://github.com/o/r", "icon"
+        )
         assert navbar["right"] == [{"icon": "github", "href": "https://github.com/o/r"}]
 
     def test_widget_style_with_stats(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        monkeypatch.setattr(gd, "_fetch_github_repo_stats", lambda o, r: {"stars": 100, "forks": 20})
+        monkeypatch.setattr(
+            gd, "_fetch_github_repo_stats", lambda o, r: {"stars": 100, "forks": 20}
+        )
         navbar = {"right": []}
-        gd._update_navbar_github_link(self._wrap(navbar), "owner", "repo", "https://github.com/o/r", "widget")
+        gd._update_navbar_github_link(
+            self._wrap(navbar), "owner", "repo", "https://github.com/o/r", "widget"
+        )
         assert len(navbar["right"]) == 1
         assert "github-widget" in str(navbar["right"][0])
         assert 'data-stars="100"' in str(navbar["right"][0])
@@ -2202,7 +2207,9 @@ class TestUpdateNavbarGithubLink:
         gd = _make_gd(tmp_path)
         monkeypatch.setattr(gd, "_fetch_github_repo_stats", lambda o, r: None)
         navbar = {"right": []}
-        gd._update_navbar_github_link(self._wrap(navbar), "owner", "repo", "https://github.com/o/r", "widget")
+        gd._update_navbar_github_link(
+            self._wrap(navbar), "owner", "repo", "https://github.com/o/r", "widget"
+        )
         assert "github-widget" in str(navbar["right"][0])
         assert "data-stars" not in str(navbar["right"][0])
 
@@ -2222,7 +2229,9 @@ class TestUpdateNavbarGithubLink:
     def test_creates_right_list_if_missing(self, tmp_path):
         gd = _make_gd(tmp_path)
         navbar = {}
-        gd._update_navbar_github_link(self._wrap(navbar), "o", "r", "https://github.com/o/r", "icon")
+        gd._update_navbar_github_link(
+            self._wrap(navbar), "o", "r", "https://github.com/o/r", "icon"
+        )
         assert "right" in navbar
         assert navbar["right"] == [{"icon": "github", "href": "https://github.com/o/r"}]
 
@@ -2233,7 +2242,6 @@ class TestUpdateNavbarGithubLink:
 
 
 class TestGenerateCliCommandPage:
-
     def _make_cli_info(self, **overrides):
         base = {
             "name": "mycli",
@@ -2263,7 +2271,12 @@ class TestGenerateCliCommandPage:
         cli_info = self._make_cli_info(
             options=[
                 {"name": "--verbose", "name_display": "--verbose", "hidden": True, "help": "debug"},
-                {"name": "--output", "name_display": "--output", "hidden": False, "help": "output file"},
+                {
+                    "name": "--output",
+                    "name_display": "--output",
+                    "hidden": False,
+                    "help": "output file",
+                },
             ]
         )
         result = gd._generate_cli_command_page(cli_info, is_main=True)
@@ -2275,14 +2288,16 @@ class TestGenerateCliCommandPage:
         gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "language", "en")
         cli_info = self._make_cli_info(
-            options=[{
-                "name": "--count",
-                "name_display": "--count",
-                "type": "INT",
-                "default": "5",
-                "is_flag": False,
-                "help": "Number of items",
-            }]
+            options=[
+                {
+                    "name": "--count",
+                    "name_display": "--count",
+                    "type": "INT",
+                    "default": "5",
+                    "is_flag": False,
+                    "help": "Number of items",
+                }
+            ]
         )
         result = gd._generate_cli_command_page(cli_info, is_main=True)
         assert "INT" in result
@@ -2293,12 +2308,14 @@ class TestGenerateCliCommandPage:
         gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "language", "en")
         cli_info = self._make_cli_info(
-            options=[{
-                "name": "--name",
-                "name_display": "--name",
-                "required": True,
-                "help": "Your name",
-            }]
+            options=[
+                {
+                    "name": "--name",
+                    "name_display": "--name",
+                    "required": True,
+                    "help": "Your name",
+                }
+            ]
         )
         result = gd._generate_cli_command_page(cli_info, is_main=True)
         assert "**Required.**" in result
@@ -2308,12 +2325,14 @@ class TestGenerateCliCommandPage:
         gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "language", "en")
         cli_info = self._make_cli_info(
-            options=[{
-                "name": "--token",
-                "name_display": "--token",
-                "envvar": "MY_TOKEN",
-                "help": "API token",
-            }]
+            options=[
+                {
+                    "name": "--token",
+                    "name_display": "--token",
+                    "envvar": "MY_TOKEN",
+                    "help": "API token",
+                }
+            ]
         )
         result = gd._generate_cli_command_page(cli_info, is_main=True)
         assert "`MY_TOKEN`" in result
@@ -2323,12 +2342,14 @@ class TestGenerateCliCommandPage:
         gd.build_dir.mkdir(parents=True, exist_ok=True)
         _patch_cfg(monkeypatch, gd, "language", "en")
         cli_info = self._make_cli_info(
-            options=[{
-                "name": "--token",
-                "name_display": "--token",
-                "envvar": ["TOKEN_A", "TOKEN_B"],
-                "help": "API token",
-            }]
+            options=[
+                {
+                    "name": "--token",
+                    "name_display": "--token",
+                    "envvar": ["TOKEN_A", "TOKEN_B"],
+                    "help": "API token",
+                }
+            ]
         )
         result = gd._generate_cli_command_page(cli_info, is_main=True)
         assert "TOKEN_A, TOKEN_B" in result
@@ -2340,7 +2361,6 @@ class TestGenerateCliCommandPage:
 
 
 class TestCountCliSidebarItems:
-
     def test_string_items_counted(self):
         assert GreatDocs._count_cli_sidebar_items(["a.qmd", "b.qmd"]) == 2
 
@@ -2359,7 +2379,6 @@ class TestCountCliSidebarItems:
 
 
 class TestWriteObjectTypesJson:
-
     def test_writes_object_types(self, tmp_path):
         gd = _make_gd(tmp_path)
         gd.build_dir.mkdir(parents=True, exist_ok=True)
@@ -2372,6 +2391,7 @@ class TestWriteObjectTypesJson:
         }
         gd._write_object_types_json(categories)
         import json
+
         types_path = gd.build_dir / "_object_types.json"
         assert types_path.exists()
         data = json.loads(types_path.read_text())
@@ -2390,6 +2410,7 @@ class TestWriteObjectTypesJson:
         }
         gd._write_object_types_json(categories)
         import json
+
         data = json.loads((gd.build_dir / "_object_types.json").read_text())
         assert data["Foo.bar"] == "property"
         assert data["Foo.baz"] == "attribute"
@@ -2406,6 +2427,7 @@ class TestWriteObjectTypesJson:
         }
         gd._write_object_types_json(categories)
         import json
+
         values_path = gd.build_dir / "_constant_values.json"
         assert values_path.exists()
         data = json.loads(values_path.read_text())
@@ -2414,7 +2436,9 @@ class TestWriteObjectTypesJson:
     def test_suppressed_writes_nothing(self, tmp_path):
         gd = _make_gd(tmp_path)
         gd._suppress_artifact_writes = True
-        gd._write_object_types_json({"classes": ["X"], "class_method_names": {}, "class_member_types": {}})
+        gd._write_object_types_json(
+            {"classes": ["X"], "class_method_names": {}, "class_member_types": {}}
+        )
         assert not (gd.build_dir / "_object_types.json").exists()
 
 
@@ -2424,7 +2448,6 @@ class TestWriteObjectTypesJson:
 
 
 class TestGeneratePackageInfoPage:
-
     def test_disabled_returns_none(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
         _patch_cfg(monkeypatch, gd, "package_info_page", False)
@@ -2502,7 +2525,6 @@ class TestGeneratePackageInfoPage:
 
 
 class TestGenerateRobotsTxt:
-
     def _setup_gd(self, tmp_path, monkeypatch, **config_overrides):
         gd = _make_gd(tmp_path)
         gd.build_dir.mkdir(parents=True, exist_ok=True)
@@ -2532,7 +2554,9 @@ class TestGenerateRobotsTxt:
         assert not (gd.build_dir / "_site" / "robots.txt").exists()
 
     def test_disallow_rules(self, tmp_path, monkeypatch):
-        gd, site_dir = self._setup_gd(tmp_path, monkeypatch, robots_disallow=["/private/", "/admin/"])
+        gd, site_dir = self._setup_gd(
+            tmp_path, monkeypatch, robots_disallow=["/private/", "/admin/"]
+        )
         monkeypatch.setattr(gd, "_get_canonical_base_url", lambda: None)
         gd._generate_robots_txt()
         content = (site_dir / "robots.txt").read_text()
@@ -2541,7 +2565,8 @@ class TestGenerateRobotsTxt:
 
     def test_extra_rules(self, tmp_path, monkeypatch):
         gd, site_dir = self._setup_gd(
-            tmp_path, monkeypatch,
+            tmp_path,
+            monkeypatch,
             robots_extra_rules=["User-agent: GPTBot", "Disallow: /"],
         )
         monkeypatch.setattr(gd, "_get_canonical_base_url", lambda: None)
@@ -2582,7 +2607,6 @@ class TestGenerateRobotsTxt:
 
 
 class TestInjectVersionSelector:
-
     def test_basic_injection(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
         gd.build_dir.mkdir(parents=True, exist_ok=True)
@@ -2681,7 +2705,7 @@ class TestInjectVersionSelector:
         gd.build_dir.mkdir(parents=True, exist_ok=True)
         quarto_yml = gd.build_dir / "_quarto.yml"
         quarto_yml.write_text(
-            'project:\n  resources: []\nformat:\n  html:\n    include-in-header: []\n    include-after-body:\n      - text: \'<script src="navbar-widgets.js"></script>\'\n',
+            "project:\n  resources: []\nformat:\n  html:\n    include-in-header: []\n    include-after-body:\n      - text: '<script src=\"navbar-widgets.js\"></script>'\n",
             encoding="utf-8",
         )
         mock_versions = [MagicMock(tag="v1.0")]
@@ -2727,7 +2751,6 @@ class TestInjectVersionSelector:
 
 
 class TestPersistFreezeCache:
-
     def test_no_freeze_sources_returns_none(self, tmp_path):
         gd = _make_gd(tmp_path)
         result = gd._persist_freeze_cache()
@@ -2781,7 +2804,6 @@ class TestPersistFreezeCache:
 
 
 class TestGenerateSourceLinksJson:
-
     def test_disabled_returns_early(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
         monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"source_link_enabled": False})
@@ -2798,7 +2820,9 @@ class TestGenerateSourceLinksJson:
     def test_no_exports_returns_early(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
         monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"source_link_enabled": True})
-        monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("owner", "repo", "https://github.com/o/r"))
+        monkeypatch.setattr(
+            gd, "_get_github_repo_info", lambda: ("owner", "repo", "https://github.com/o/r")
+        )
         monkeypatch.setattr(gd, "_get_package_exports", lambda p: None)
         gd._generate_source_links_json("mypkg")
         assert not (gd.build_dir / "_source_links.json").exists()
@@ -2807,7 +2831,9 @@ class TestGenerateSourceLinksJson:
         gd = _make_gd(tmp_path)
         gd.build_dir.mkdir(parents=True, exist_ok=True)
         monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"source_link_enabled": True})
-        monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("owner", "repo", "https://github.com/o/r"))
+        monkeypatch.setattr(
+            gd, "_get_github_repo_info", lambda: ("owner", "repo", "https://github.com/o/r")
+        )
         monkeypatch.setattr(gd, "_detect_git_ref", lambda: "main")
         monkeypatch.setattr(gd, "_get_package_exports", lambda p: ["MyFunc"])
         monkeypatch.setattr(gd, "_find_package_root", lambda: tmp_path / "src" / "mypkg")
@@ -2821,6 +2847,7 @@ class TestGenerateSourceLinksJson:
         monkeypatch.setattr(gd, "_get_griffe_package", lambda p: mock_pkg)
         gd._generate_source_links_json("mypkg")
         import json
+
         data = json.loads((gd.build_dir / "_source_links.json").read_text())
         assert "MyFunc" in data
         assert "#L10-L20" in data["MyFunc"]["url"]
@@ -2829,7 +2856,9 @@ class TestGenerateSourceLinksJson:
         gd = _make_gd(tmp_path)
         gd.build_dir.mkdir(parents=True, exist_ok=True)
         monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"source_link_enabled": True})
-        monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("o", "r", "https://github.com/o/r"))
+        monkeypatch.setattr(
+            gd, "_get_github_repo_info", lambda: ("o", "r", "https://github.com/o/r")
+        )
         monkeypatch.setattr(gd, "_detect_git_ref", lambda: "main")
         monkeypatch.setattr(gd, "_get_package_exports", lambda p: ["F"])
         monkeypatch.setattr(gd, "_find_package_root", lambda: tmp_path)
@@ -2843,6 +2872,7 @@ class TestGenerateSourceLinksJson:
         monkeypatch.setattr(gd, "_get_griffe_package", lambda p: mock_pkg)
         gd._generate_source_links_json("mypkg")
         import json
+
         data = json.loads((gd.build_dir / "_source_links.json").read_text())
         assert "#L5" in data["F"]["url"]
         assert "#L5-L" not in data["F"]["url"]
@@ -2851,10 +2881,13 @@ class TestGenerateSourceLinksJson:
         gd = _make_gd(tmp_path)
         gd.build_dir.mkdir(parents=True, exist_ok=True)
         monkeypatch.setattr(
-            gd, "_get_package_metadata",
+            gd,
+            "_get_package_metadata",
             lambda: {"source_link_enabled": True, "source_link_path": "src/mypkg"},
         )
-        monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("o", "r", "https://github.com/o/r"))
+        monkeypatch.setattr(
+            gd, "_get_github_repo_info", lambda: ("o", "r", "https://github.com/o/r")
+        )
         monkeypatch.setattr(gd, "_detect_git_ref", lambda: "main")
         monkeypatch.setattr(gd, "_get_package_exports", lambda p: ["F"])
         monkeypatch.setattr(gd, "_find_package_root", lambda: tmp_path)
@@ -2868,6 +2901,7 @@ class TestGenerateSourceLinksJson:
         monkeypatch.setattr(gd, "_get_griffe_package", lambda p: mock_pkg)
         gd._generate_source_links_json("mypkg")
         import json
+
         data = json.loads((gd.build_dir / "_source_links.json").read_text())
         assert "src/mypkg/module.py" in data["F"]["url"]
 
@@ -2877,7 +2911,9 @@ class TestGenerateSourceLinksJson:
         pkg_root = tmp_path / "src" / "mypkg"
         pkg_root.mkdir(parents=True)
         monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"source_link_enabled": True})
-        monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("o", "r", "https://github.com/o/r"))
+        monkeypatch.setattr(
+            gd, "_get_github_repo_info", lambda: ("o", "r", "https://github.com/o/r")
+        )
         monkeypatch.setattr(gd, "_detect_git_ref", lambda: "main")
         monkeypatch.setattr(gd, "_get_package_exports", lambda p: ["F"])
         monkeypatch.setattr(gd, "_find_package_root", lambda: pkg_root)
@@ -2891,6 +2927,7 @@ class TestGenerateSourceLinksJson:
         monkeypatch.setattr(gd, "_get_griffe_package", lambda p: mock_pkg)
         gd._generate_source_links_json("mypkg")
         import json
+
         data = json.loads((gd.build_dir / "_source_links.json").read_text())
         assert "core.py" in data["F"]["url"]
 
@@ -2898,7 +2935,9 @@ class TestGenerateSourceLinksJson:
         gd = _make_gd(tmp_path)
         gd.build_dir.mkdir(parents=True, exist_ok=True)
         monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"source_link_enabled": True})
-        monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("o", "r", "https://github.com/o/r"))
+        monkeypatch.setattr(
+            gd, "_get_github_repo_info", lambda: ("o", "r", "https://github.com/o/r")
+        )
         monkeypatch.setattr(gd, "_detect_git_ref", lambda: "main")
         monkeypatch.setattr(gd, "_get_package_exports", lambda p: ["F"])
         monkeypatch.setattr(gd, "_find_package_root", lambda: tmp_path)
@@ -2914,6 +2953,7 @@ class TestGenerateSourceLinksJson:
         monkeypatch.setattr(gd, "_get_griffe_package", raise_err)
         gd._generate_source_links_json("mypkg")
         import json
+
         data = json.loads((gd.build_dir / "_source_links.json").read_text())
         assert "F" in data
 
@@ -2921,7 +2961,9 @@ class TestGenerateSourceLinksJson:
         gd = _make_gd(tmp_path)
         gd.build_dir.mkdir(parents=True, exist_ok=True)
         monkeypatch.setattr(gd, "_get_package_metadata", lambda: {"source_link_enabled": True})
-        monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("o", "r", "https://github.com/o/r"))
+        monkeypatch.setattr(
+            gd, "_get_github_repo_info", lambda: ("o", "r", "https://github.com/o/r")
+        )
         monkeypatch.setattr(gd, "_detect_git_ref", lambda: "main")
         monkeypatch.setattr(gd, "_get_package_exports", lambda p: ["MyClass"])
         monkeypatch.setattr(gd, "_find_package_root", lambda: tmp_path)
@@ -2930,7 +2972,11 @@ class TestGenerateSourceLinksJson:
         cls_obj.kind.value = "class"
         method_member = MagicMock()
         method_member.kind.value = "method"
-        cls_obj.members = {"__init__": MagicMock(), "do_stuff": method_member, "_private": MagicMock()}
+        cls_obj.members = {
+            "__init__": MagicMock(),
+            "do_stuff": method_member,
+            "_private": MagicMock(),
+        }
         cls_obj.members["__init__"].kind.value = "function"
         cls_obj.members["_private"].kind.value = "function"
 
@@ -2942,11 +2988,16 @@ class TestGenerateSourceLinksJson:
 
         def fake_source_loc(pkg, name):
             call_count["n"] += 1
-            return {"file": "mod.py", "start_line": call_count["n"], "end_line": call_count["n"] + 5}
+            return {
+                "file": "mod.py",
+                "start_line": call_count["n"],
+                "end_line": call_count["n"] + 5,
+            }
 
         monkeypatch.setattr(gd, "_get_source_location", fake_source_loc)
         gd._generate_source_links_json("mypkg")
         import json
+
         data = json.loads((gd.build_dir / "_source_links.json").read_text())
         assert "MyClass" in data
         assert "MyClass.do_stuff" in data
@@ -2959,7 +3010,6 @@ class TestGenerateSourceLinksJson:
 
 
 class TestGenerateTagsJson:
-
     def _setup_gd(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
         gd.build_dir.mkdir(parents=True, exist_ok=True)
@@ -2976,6 +3026,7 @@ class TestGenerateTagsJson:
         tag_index = {"mytag": [{"title": "Page 1", "href": "page1.qmd", "section": "Guide"}]}
         gd._generate_tags_json(tag_index)
         import json
+
         data = json.loads((gd.build_dir / "_tags.json").read_text())
         assert "page_tags" in data
         assert "tag_meta" in data
@@ -2990,6 +3041,7 @@ class TestGenerateTagsJson:
         tag_index = {}
         gd._generate_tags_json(tag_index)
         import json
+
         data = json.loads((gd.build_dir / "_tags.json").read_text())
         assert "internal" in data["shadow"]
 
@@ -2998,10 +3050,13 @@ class TestGenerateTagsJson:
         ug_dir = gd.build_dir / "user-guide"
         ug_dir.mkdir()
         qmd = ug_dir / "page.qmd"
-        qmd.write_text("---\ntags:\n  - visible\ntag-location: top\ntitle: P\n---\nbody\n", encoding="utf-8")
+        qmd.write_text(
+            "---\ntags:\n  - visible\ntag-location: top\ntitle: P\n---\nbody\n", encoding="utf-8"
+        )
         tag_index = {"visible": [{"title": "P", "href": "user-guide/page.qmd", "section": "UG"}]}
         gd._generate_tags_json(tag_index)
         import json
+
         data = json.loads((gd.build_dir / "_tags.json").read_text())
         assert data["page_tag_locations"].get("user-guide/page.qmd") == "top"
 
@@ -3012,6 +3067,7 @@ class TestGenerateTagsJson:
         tag_index = {"mytag": [{"title": "P", "href": "p.qmd", "section": "S"}]}
         gd._generate_tags_json(tag_index)
         import json
+
         data = json.loads((gd.build_dir / "_tags.json").read_text())
         assert data["icons"]["mytag"] == "<svg>star</svg>"
 
@@ -3031,7 +3087,6 @@ class TestGenerateTagsJson:
 
 
 class TestCreateApiSectionsFromConfig:
-
     def test_no_reference_returns_none(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
         _patch_cfg(monkeypatch, gd, "reference", None)
@@ -3039,16 +3094,22 @@ class TestCreateApiSectionsFromConfig:
 
     def test_include_inherited_on_explicit_members(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        _patch_cfg(monkeypatch, gd, "reference", [
-            {
-                "title": "Classes",
-                "contents": [
-                    {"name": "MyClass", "members": ["method_a"], "include_inherited": True},
-                ],
-            }
-        ])
+        _patch_cfg(
+            monkeypatch,
+            gd,
+            "reference",
+            [
+                {
+                    "title": "Classes",
+                    "contents": [
+                        {"name": "MyClass", "members": ["method_a"], "include_inherited": True},
+                    ],
+                }
+            ],
+        )
         monkeypatch.setattr(
-            gd, "_categorize_referenced_objects",
+            gd,
+            "_categorize_referenced_objects",
             lambda pkg, ref: {"classes": [], "functions": []},
         )
         result = gd._create_api_sections_from_config("mypkg")
@@ -3063,16 +3124,22 @@ class TestCreateApiSectionsFromConfig:
 
     def test_include_inherited_on_default_entry(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        _patch_cfg(monkeypatch, gd, "reference", [
-            {
-                "title": "Classes",
-                "contents": [
-                    {"name": "MyClass", "include_inherited": True},
-                ],
-            }
-        ])
+        _patch_cfg(
+            monkeypatch,
+            gd,
+            "reference",
+            [
+                {
+                    "title": "Classes",
+                    "contents": [
+                        {"name": "MyClass", "include_inherited": True},
+                    ],
+                }
+            ],
+        )
         monkeypatch.setattr(
-            gd, "_categorize_referenced_objects",
+            gd,
+            "_categorize_referenced_objects",
             lambda pkg, ref: {"classes": [], "functions": []},
         )
         result = gd._create_api_sections_from_config("mypkg")
@@ -3085,16 +3152,22 @@ class TestCreateApiSectionsFromConfig:
 
     def test_plain_string_when_no_include_inherited(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
-        _patch_cfg(monkeypatch, gd, "reference", [
-            {
-                "title": "Funcs",
-                "contents": [
-                    {"name": "my_func"},
-                ],
-            }
-        ])
+        _patch_cfg(
+            monkeypatch,
+            gd,
+            "reference",
+            [
+                {
+                    "title": "Funcs",
+                    "contents": [
+                        {"name": "my_func"},
+                    ],
+                }
+            ],
+        )
         monkeypatch.setattr(
-            gd, "_categorize_referenced_objects",
+            gd,
+            "_categorize_referenced_objects",
             lambda pkg, ref: {"classes": [], "functions": []},
         )
         result = gd._create_api_sections_from_config("mypkg")
@@ -3111,7 +3184,6 @@ class TestCreateApiSectionsFromConfig:
 
 
 class TestRefreshApiReferenceConfig:
-
     def test_skips_when_already_done(self, tmp_path, monkeypatch):
         gd = _make_gd(tmp_path)
         gd._api_discovery_done = True
