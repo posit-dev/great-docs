@@ -19,12 +19,14 @@ from great_docs._check_examples import (
     _collect_object_names,
     _detect_package,
     _dict_to_page_result,
+    _page_label,
     _page_opted_out,
     _parse_errors_from_html,
     _prepare_qmd_for_check,
     _render_page_with_quarto,
     _resolve_member,
     _run_page,
+    _section_for_page,
     check_examples,
     discover_qmd_files,
     extract_cells,
@@ -569,6 +571,75 @@ class TestDiscoverQmdFilesLayout:
         files = discover_qmd_files(tmp_path, layout=layout)
         assert [f.name for f in files] == ["real.qmd"]
 
+    def test_docs_layout_excludes_nested_hidden_dirs(self, tmp_path):
+        layout = self._docs_layout(tmp_path)
+        docs = tmp_path / "docs"
+        (docs / ".quarto").mkdir()
+        (docs / ".quarto" / "copy.qmd").write_text("")
+        (docs / "user_guide" / ".ipynb_checkpoints").mkdir(parents=True)
+        (docs / "user_guide" / ".ipynb_checkpoints" / "intro.qmd").write_text("")
+        (docs / "user_guide" / "intro.qmd").write_text("")
+        files = discover_qmd_files(tmp_path, layout=layout)
+        assert [f.relative_to(docs).as_posix() for f in files] == ["user_guide/intro.qmd"]
+
+    def test_root_layout_skips_non_doc_dirs(self, tmp_path):
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+        (tmp_path / "great-docs.yml").write_text("display_name: Test\n")
+        layout = Layout.make(tmp_path)
+        for d in (
+            "tests/fixtures",
+            "node_modules/x",
+            "venv/lib/site-packages/x",
+            "pkg.egg-info",
+            "user_guide",
+        ):
+            (tmp_path / d).mkdir(parents=True)
+            (tmp_path / d / "page.qmd").write_text("")
+        (tmp_path / "myenv").mkdir()
+        (tmp_path / "myenv" / "pyvenv.cfg").write_text("")
+        (tmp_path / "myenv" / "page.qmd").write_text("")
+        expected = ["user_guide/page.qmd"]
+        files = discover_qmd_files(tmp_path, layout=layout)
+        assert [f.relative_to(tmp_path).as_posix() for f in files] == expected
+        # Pointing at the whole repo explicitly prunes the same directories
+        files = discover_qmd_files(tmp_path, paths=(str(tmp_path),), layout=layout)
+        assert [f.relative_to(tmp_path).as_posix() for f in files] == expected
+        # ...but an explicitly requested non-doc directory is still scanned
+        files = discover_qmd_files(tmp_path, paths=(str(tmp_path / "tests"),), layout=layout)
+        assert [f.relative_to(tmp_path).as_posix() for f in files] == ["tests/fixtures/page.qmd"]
+
+    @pytest.mark.parametrize("docs_layout", [False, True])
+    def test_labels_sections_and_globs_match_across_layouts(self, tmp_path, docs_layout):
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "pkg"\n')
+        source = tmp_path / "docs" if docs_layout else tmp_path
+        source.mkdir(exist_ok=True)
+        (source / "great-docs.yml").write_text("display_name: Test\n")
+        layout = Layout.make(tmp_path)
+        for rel in ("index.qmd", "user_guide/intro.qmd", "recipes/one.qmd"):
+            (source / rel).parent.mkdir(parents=True, exist_ok=True)
+            (source / rel).write_text("")
+
+        files = discover_qmd_files(tmp_path, layout=layout)
+        labels = [_page_label(f, tmp_path, layout) for f in files]
+        assert labels == ["index.qmd", "recipes/one.qmd", "user_guide/intro.qmd"]
+        assert [_section_for_page(label, False) for label in labels] == [
+            ".",
+            "recipes",
+            "user_guide",
+        ]
+
+        included = discover_qmd_files(tmp_path, include="user_guide/*", layout=layout)
+        assert [f.name for f in included] == ["intro.qmd"]
+        excluded = discover_qmd_files(tmp_path, exclude="recipes/*", layout=layout)
+        assert [f.name for f in excluded] == ["index.qmd", "intro.qmd"]
+
+    def test_docs_layout_label_outside_source_dir(self, tmp_path):
+        layout = self._docs_layout(tmp_path)
+        outside = tmp_path / "examples" / "demo.qmd"
+        outside.parent.mkdir()
+        outside.write_text("")
+        assert _page_label(outside, tmp_path, layout) == "examples/demo.qmd"
+
 
 # ===================================================================
 # _collect_object_names
@@ -710,7 +781,10 @@ class TestPrepareQmdForCheck:
         result = _prepare_qmd_for_check(text, 45)
         assert "error: true" in result
         assert "timeout: 45" in result
-        assert "echo: false" in result
+        assert "freeze: true" in result
+        # Hidden source can't be matched back to a cell, so echo is forced on
+        assert "echo: true" in result
+        assert "echo: false" not in result
 
     def test_check_false_rewritten_to_eval_false(self):
         text = "```{python}\n#| check: false\nraise ValueError\n```\n"
@@ -725,10 +799,17 @@ class TestPrepareQmdForCheck:
             assert "#| eval: false" in result
 
     def test_preserves_other_hashpipes(self):
-        text = "```{python}\n#| echo: false\n#| fig-width: 8\nx = 1\n```\n"
+        text = "```{python}\n#| label: setup\n#| fig-width: 8\nx = 1\n```\n"
         result = _prepare_qmd_for_check(text, 30)
-        assert "#| echo: false" in result
+        assert "#| label: setup" in result
         assert "#| fig-width: 8" in result
+
+    @pytest.mark.parametrize("option", ["echo", "include", "output"])
+    def test_hidden_cell_options_forced_visible(self, option):
+        text = f"```{{python}}\n#| {option}: false\nx = 1\n```\n"
+        result = _prepare_qmd_for_check(text, 30)
+        assert f"#| {option}: true" in result
+        assert f"#| {option}: false" not in result
 
     def test_custom_timeout(self):
         text = "Some content\n"
@@ -799,6 +880,19 @@ class TestParseErrorsFromHtml:
         cells = [Cell(0, "bad()")]
         errors = _parse_errors_from_html(html, cells)
         assert "Traceback" in errors[0].traceback
+
+    def test_html_entities_unescaped_for_matching(self):
+        html = self._make_cell_html(
+            "if 1 &lt; 2 &amp;&amp; x:\n    raise ValueError(&quot;ok&quot;)",
+            "ValueError: &#39;&lt;&#39; ok",
+        )
+        cells = [Cell(0, 'if 1 < 2 && x:\n    raise ValueError("ok")', options={"error": "true"})]
+        assert _parse_errors_from_html(html, cells) == []
+
+        cells = [Cell(3, 'if 1 < 2 && x:\n    raise ValueError("ok")')]
+        errors = _parse_errors_from_html(html, cells)
+        assert errors[0].cell_index == 3
+        assert errors[0].error_message == "'<' ok"
 
     def test_unmatched_source_gets_negative_index(self):
         html = self._make_cell_html("unknown_code()", "NameError: not found")
@@ -1705,8 +1799,10 @@ class TestCheckExamplesCLI:
         )
         assert result.exit_code == 0, result.output
         assert "1 passed" in result.output
-        assert [call.args[1] for call in mock_render.call_args_list] == [
-            "docs/user_guide/intro.qmd"
+        # Labels are relative to the docs source dir; the real path is passed alongside
+        assert [call.args[1] for call in mock_render.call_args_list] == ["user_guide/intro.qmd"]
+        assert [call.args[0] for call in mock_render.call_args_list] == [
+            (docs / "user_guide" / "intro.qmd").resolve()
         ]
 
     @patch("great_docs._check_examples._check_quarto_available", return_value=None)
@@ -2438,6 +2534,27 @@ class TestPageOptedOutEdgeCases:
 @requires_quarto
 class TestExecutionEdgeCases:
     """Edge cases for Quarto-based execution."""
+
+    def test_error_true_with_special_characters_ignored(self, tmp_path):
+        qmd = tmp_path / "page.qmd"
+        qmd.write_text(
+            "```{python}\n#| error: true\nif 1 < 2:\n    raise ValueError('intended')\n```\n"
+        )
+        cells = extract_cells(qmd.read_text())
+        result = _render_page_with_quarto(qmd, "page.qmd", cells, 30)
+        assert result.status == "pass"
+
+    def test_hidden_cells_matched(self, tmp_path):
+        qmd = tmp_path / "page.qmd"
+        qmd.write_text(
+            "---\nexecute:\n  echo: false\n---\n\n"
+            "```{python}\n#| error: true\nraise ValueError('intended')\n```\n\n"
+            "```{python}\n#| error: true\n#| include: false\nraise ValueError('intended')\n```\n\n"
+            "```{python}\n#| include: false\nraise ValueError('real')\n```\n"
+        )
+        cells = extract_cells(qmd.read_text())
+        result = _render_page_with_quarto(qmd, "page.qmd", cells, 30)
+        assert [(e.cell_index, e.error_message) for e in result.errors] == [(2, "real")]
 
     def test_cell_with_output_no_error(self, tmp_path):
         qmd = tmp_path / "page.qmd"
