@@ -2187,13 +2187,13 @@ cli.add_command(check_links)
     "--include",
     type=str,
     default=None,
-    help="Glob pattern to filter which files to check",
+    help="Glob pattern to filter which files to check (relative to the docs source directory)",
 )
 @click.option(
     "--exclude",
     type=str,
     default=None,
-    help="Glob pattern to exclude files from checking",
+    help="Glob pattern to exclude files from checking (relative to the docs source directory)",
 )
 @click.option(
     "--no-docstrings",
