@@ -421,6 +421,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_d2_diagrams",  # 209
     # 210: Custom reference section ordering (CLI before API)
     "gdtest_ref_section_order",  # 210
+    # 211: Mermaid diagrams with and without figure captions
+    "gdtest_mermaid",  # 211
 ]
 
 
@@ -2344,6 +2346,12 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "The reference switcher tabs should appear CLI-first (cli,api) instead "
         "of the default (api,cli). The data-gd-ref-sections body attribute "
         "should be 'cli,api' since there is no MCP server."
+    ),
+    "gdtest_mermaid": (
+        "User-guide page with `{mermaid}` diagrams: a wide flowchart with a "
+        "labeled `fig-cap`, a small one with an unlabeled `fig-cap`, and one with "
+        "no caption. Captions must sit under the diagram, and a wide diagram must "
+        "span the text column while a small one keeps its natural size (#361)."
     ),
 }
 
