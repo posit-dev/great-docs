@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -8,6 +9,7 @@ import tempfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from fnmatch import fnmatch
+from html import unescape
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -293,6 +295,9 @@ def _check_quarto_available() -> str | None:
 
 def _prepare_qmd_for_check(text: str, timeout: int = 30) -> str:
     check_false_re = re.compile(r"^(#\|\s*check:\s*)(?:false|no)\s*$", re.IGNORECASE)
+    # Hidden cells leave no source (or no error) in the HTML, so their errors
+    # can't be matched back to a cell; force them visible in the check copy
+    hidden_re = re.compile(r"^#\|\s*(echo|include|output):\s*(?:false|no)\s*$", re.IGNORECASE)
 
     lines = text.split("\n")
     result_lines: list[str] = []
@@ -300,12 +305,16 @@ def _prepare_qmd_for_check(text: str, timeout: int = 30) -> str:
         m = check_false_re.match(line)
         if m:
             result_lines.append("#| eval: false")
+            continue
+        m = hidden_re.match(line)
+        if m:
+            result_lines.append(f"#| {m.group(1)}: true")
         else:
             result_lines.append(line)
 
     text = "\n".join(result_lines)
 
-    execute_block = f"execute:\n  error: true\n  timeout: {timeout}"
+    execute_block = f"execute:\n  error: true\n  echo: true\n  timeout: {timeout}"
 
     fm = _FRONTMATTER_RE.match(text)
     if fm:
@@ -319,10 +328,11 @@ def _prepare_qmd_for_check(text: str, timeout: int = 30) -> str:
                     in_execute = True
                     new_fm_lines.append("execute:")
                     new_fm_lines.append("  error: true")
+                    new_fm_lines.append("  echo: true")
                     new_fm_lines.append(f"  timeout: {timeout}")
                 elif in_execute and line.startswith("  "):
                     key = line.strip().split(":")[0]
-                    if key not in ("error", "timeout"):
+                    if key not in ("error", "echo", "include", "output", "timeout"):
                         new_fm_lines.append(line)
                 else:
                     in_execute = False
@@ -338,7 +348,8 @@ def _prepare_qmd_for_check(text: str, timeout: int = 30) -> str:
 
 
 def _strip_html_tags(html: str) -> str:
-    return _HTML_TAG_RE.sub("", html)
+    # Unescape after stripping so `&lt;` in code doesn't become a tag
+    return unescape(_HTML_TAG_RE.sub("", html))
 
 
 def _parse_errors_from_html(html: str, cells: list[Cell]) -> list[CellError]:
@@ -493,6 +504,7 @@ def _run_page(
     timeout: int,
     project_root_str: str,
     is_docstring: bool = False,
+    qmd_path_str: str | None = None,
 ) -> str:
     cells_data = json.loads(cells_json)
     cells = [Cell(**c) for c in cells_data]
@@ -506,7 +518,7 @@ def _run_page(
                 tmp_qmd.write_text(qmd_content, encoding="utf-8")
                 result = _render_page_with_quarto(tmp_qmd, page_path, cells, timeout, project_root)
         else:
-            qmd_path = project_root / page_path
+            qmd_path = Path(qmd_path_str) if qmd_path_str else project_root / page_path
             result = _render_page_with_quarto(qmd_path, page_path, cells, timeout, project_root)
     except Exception as e:
         result = PageResult(
@@ -537,6 +549,46 @@ def _generated_dirs(layout: Layout) -> list[Path]:
     return [d.resolve() for d in dirs]
 
 
+def _page_label(path: Path, project_root: Path, layout: Layout | None = None) -> str:
+    # Labels are relative to the documentation source directory so that page
+    # paths, sections and include/exclude globs look the same in both layouts
+    # (`user_guide/intro.qmd`, not `docs/user_guide/intro.qmd`)
+    bases = [layout.source_dir, layout.package_root] if layout is not None else [project_root]
+    for base in bases:
+        if path.is_relative_to(base):
+            return path.relative_to(base).as_posix()
+    return path.as_posix()
+
+
+# Directories in a root-layout project that never hold documentation pages but
+# may hold `.qmd` files (virtualenvs, installed packages, test fixtures)
+_NON_DOC_DIRS = frozenset(
+    {"__pycache__", "node_modules", "site-packages", "build", "dist", "tests", "test"}
+)
+
+
+def _scan_qmd_files(scan_root: Path, prune_non_doc: bool) -> list[Path]:
+    found: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(scan_root):
+        current = Path(dirpath)
+        # Prune in place so os.walk never descends into these directories
+        dirnames[:] = [
+            d
+            for d in dirnames
+            if not d.startswith(".")
+            and not (
+                prune_non_doc
+                and (
+                    d in _NON_DOC_DIRS
+                    or d.endswith(".egg-info")
+                    or (current / d / "pyvenv.cfg").exists()
+                )
+            )
+        ]
+        found.extend(current / name for name in filenames if name.endswith(".qmd"))
+    return sorted(found)
+
+
 def discover_qmd_files(
     project_root: Path,
     paths: tuple[str, ...] | None = None,
@@ -544,6 +596,8 @@ def discover_qmd_files(
     exclude: str | None = None,
     layout: Layout | None = None,
 ) -> list[Path]:
+    # In the root layout the source directory is the whole repository
+    root_layout = layout is None or layout.source_dir == layout.package_root
     if paths:
         targets: list[Path] = []
         for p in paths:
@@ -551,19 +605,20 @@ def discover_qmd_files(
             if target.is_file() and target.suffix == ".qmd":
                 targets.append(target)
             elif target.is_dir():
-                targets.extend(sorted(target.rglob("*.qmd")))
+                targets.extend(_scan_qmd_files(target, prune_non_doc=root_layout))
         files = targets
     else:
         scan_root = layout.source_dir if layout is not None else project_root
-        files = sorted(scan_root.rglob("*.qmd"))
+        files = _scan_qmd_files(scan_root, prune_non_doc=root_layout)
 
-    generated = _generated_dirs(layout) if layout is not None else []
+    generated = _generated_dirs(layout) if layout is not None else [project_root / "great-docs"]
+    generated = [d.resolve() for d in generated]
 
     # Exclude build directories and hidden directories
     filtered: list[Path] = []
     for f in files:
-        rel = str(f.relative_to(project_root))
-        if rel.startswith("great-docs/") or rel.startswith("."):
+        rel = _page_label(f, project_root, layout)
+        if any(part.startswith(".") for part in Path(rel).parts):
             continue
         if any(f.resolve().is_relative_to(d) for d in generated):
             continue
@@ -619,7 +674,8 @@ def check_examples(
         return CheckResult(pages=[PageResult(path="(setup)", status="error", message=err)])
 
     # Collect pages to check
-    page_cells: list[tuple[str, list[Cell], bool]] = []
+    # (label, cells, is_docstring, absolute .qmd path or None for docstrings)
+    page_cells: list[tuple[str, list[Cell], bool, Path | None]] = []
 
     if not docstrings_only:
         qmd_files = discover_qmd_files(project_root, paths, include, exclude, layout=layout)
@@ -629,13 +685,13 @@ def check_examples(
                 continue
             cells = extract_cells(text)
             if cells:
-                rel = str(qmd_path.relative_to(project_root))
-                page_cells.append((rel, cells, False))
+                rel = _page_label(qmd_path, project_root, layout)
+                page_cells.append((rel, cells, False, qmd_path))
 
     if not no_docstrings and not paths:
         docstring_pages = extract_docstring_examples(project_root, layout=layout)
         for page_path, cells in docstring_pages:
-            page_cells.append((page_path, cells, True))
+            page_cells.append((page_path, cells, True, None))
 
     if not page_cells:
         return CheckResult()
@@ -643,7 +699,7 @@ def check_examples(
     # Build per-section totals for progress tracking (preserve insertion order)
     section_totals: dict[str, int] = {}
     section_done: dict[str, int] = {}
-    for page_path, _cells, is_docstring in page_cells:
+    for page_path, _cells, is_docstring, _qmd in page_cells:
         sec = _section_for_page(page_path, is_docstring)
         section_totals[sec] = section_totals.get(sec, 0) + 1
         section_done.setdefault(sec, 0)
@@ -668,7 +724,7 @@ def check_examples(
     if max_workers > 1:
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             futures = {}
-            for page_path, cells, is_docstring in page_cells:
+            for page_path, cells, is_docstring, qmd_path in page_cells:
                 cells_json = json.dumps([asdict(c) for c in cells])
                 future = executor.submit(
                     _run_page,
@@ -677,6 +733,7 @@ def check_examples(
                     timeout,
                     str(project_root),
                     is_docstring,
+                    str(qmd_path) if qmd_path is not None else None,
                 )
                 futures[future] = (page_path, is_docstring)
 
@@ -695,7 +752,7 @@ def check_examples(
                 result.pages.append(page_result)
                 _notify_progress(f_page_path, f_is_docstring)
     else:
-        for page_path, cells, is_docstring in page_cells:
+        for page_path, cells, is_docstring, qmd_path in page_cells:
             try:
                 if is_docstring:
                     qmd_content = _build_docstring_qmd(cells)
@@ -706,7 +763,7 @@ def check_examples(
                             tmp_qmd, page_path, cells, timeout, project_root
                         )
                 else:
-                    qmd_path = project_root / page_path
+                    assert qmd_path is not None
                     page_result = _render_page_with_quarto(
                         qmd_path, page_path, cells, timeout, project_root
                     )
