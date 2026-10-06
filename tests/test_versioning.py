@@ -745,7 +745,6 @@ class TestIsPageUpcoming:
 
         assert is_page_upcoming(content, versions) is False
 
-
     def test_all_prerelease_returns_true(self):
         """Page matching only prerelease versions is upcoming."""
         versions = [
@@ -755,7 +754,6 @@ class TestIsPageUpcoming:
         content = "---\nversions:\n  - dev\n---\n# Content\n"
 
         assert is_page_upcoming(content, versions) is True
-
 
     def test_mixed_versions_not_upcoming(self):
         """Page matching both release and prerelease is not upcoming."""
@@ -1066,7 +1064,6 @@ class TestIsBadgeExpired:
         # Badge version "unknown" won't resolve
         assert is_badge_expired("unknown", target, versions, expiry) is False
 
-
     def test_date_mode_invalid_date(self):
         """date mode with invalid date returns False."""
         versions = _versions("0.9")
@@ -1074,7 +1071,6 @@ class TestIsBadgeExpired:
         expiry = BadgeExpiry(mode="date", value="not-a-date")
 
         assert is_badge_expired("0.9", target, versions, expiry) is False
-
 
     def test_date_mode_future_date(self):
         """date mode with future date returns False."""
@@ -1084,7 +1080,6 @@ class TestIsBadgeExpired:
 
         assert is_badge_expired("0.9", target, versions, expiry) is False
 
-
     def test_date_mode_past_date(self):
         """date mode with past date returns True."""
         versions = _versions("0.9")
@@ -1092,7 +1087,6 @@ class TestIsBadgeExpired:
         expiry = BadgeExpiry(mode="date", value="2020-01-01")
 
         assert is_badge_expired("0.9", target, versions, expiry) is True
-
 
     def test_days_mode_invalid_release_date(self):
         """days mode with unparseable released date returns False."""
@@ -1102,7 +1096,6 @@ class TestIsBadgeExpired:
 
         assert is_badge_expired("0.9", target, versions, expiry) is False
 
-
     def test_days_mode_recently_released(self):
         """days mode returns False when badge released recently."""
         versions = [VersionEntry(tag="0.9", label="0.9", released="2099-01-01", _index=0)]
@@ -1110,7 +1103,6 @@ class TestIsBadgeExpired:
         expiry = BadgeExpiry(mode="days", value=30)
 
         assert is_badge_expired("0.9", target, versions, expiry) is False
-
 
     def test_days_mode_old_release(self):
         """days mode returns True when badge released long ago."""
@@ -1120,7 +1112,6 @@ class TestIsBadgeExpired:
 
         assert is_badge_expired("0.9", target, versions, expiry) is True
 
-
     def test_version_mode_threshold_not_found(self):
         """version mode returns False when threshold version not resolved."""
         versions = _versions("0.9", "0.8")
@@ -1128,7 +1119,6 @@ class TestIsBadgeExpired:
         expiry = BadgeExpiry(mode="version", value="nonexistent")
 
         assert is_badge_expired("0.9", target, versions, expiry) is False
-
 
     def test_unknown_mode_returns_false(self):
         """Unknown expiry mode falls through to return False."""

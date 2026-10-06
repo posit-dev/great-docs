@@ -530,8 +530,6 @@ class TestScreenState:
         assert state.cells[0][0].char == "H"
 
 
-
-
 # OSC sequences
 
 

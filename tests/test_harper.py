@@ -25,9 +25,7 @@ from great_docs.cli import cli
 from great_docs.core import GreatDocs
 
 _harper_available = find_harper_cli() is not None
-requires_harper = pytest.mark.skipif(
-    not _harper_available, reason="harper-cli not installed"
-)
+requires_harper = pytest.mark.skipif(not _harper_available, reason="harper-cli not installed")
 
 
 @requires_harper
@@ -229,9 +227,7 @@ The griffe library is useful.
             i for i in results_without["issues"] if "griffe" in i["matched_text"]
         ]
         results_with = gd.proofread(custom_dictionary=["griffe"])
-        griffe_issues_with = [
-            i for i in results_with["issues"] if "griffe" in i["matched_text"]
-        ]
+        griffe_issues_with = [i for i in results_with["issues"] if "griffe" in i["matched_text"]]
         assert len(griffe_issues_with) <= len(griffe_issues_without)
 
 
@@ -385,18 +381,14 @@ def test_get_default_ignore_rules():
 @patch("great_docs._harper.shutil.which")
 def test_find_harper_cli_from_path(mock_which):
     """Finds harper-cli on PATH."""
-    mock_which.side_effect = lambda name: (
-        "/usr/bin/harper-cli" if name == "harper-cli" else None
-    )
+    mock_which.side_effect = lambda name: "/usr/bin/harper-cli" if name == "harper-cli" else None
     assert find_harper_cli() == "/usr/bin/harper-cli"
 
 
 @patch("great_docs._harper.shutil.which")
 def test_find_harper_cli_alternative_name(mock_which):
     """Falls back to 'harper' if 'harper-cli' not found."""
-    mock_which.side_effect = lambda name: (
-        "/usr/bin/harper" if name == "harper" else None
-    )
+    mock_which.side_effect = lambda name: "/usr/bin/harper" if name == "harper" else None
     assert find_harper_cli() == "/usr/bin/harper"
 
 
@@ -539,9 +531,7 @@ def test_run_harper_invalid_json(mock_run):
 @patch("great_docs._harper.subprocess.run")
 def test_run_harper_stderr_error(mock_run):
     """Raises HarperError when stderr has real errors (not Note: lines)."""
-    mock_run.return_value = MagicMock(
-        returncode=1, stdout="", stderr="Error: file not found\n"
-    )
+    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="Error: file not found\n")
     with pytest.raises(HarperError, match="harper-cli error"):
         run_harper([Path("file.md")], harper_path="/usr/bin/harper-cli")
 

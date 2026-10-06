@@ -15,9 +15,7 @@ from great_docs.cli import cli
 # ---------------------------------------------------------------------------
 
 
-def _make_termshow_file(
-    tmp_path: Path, name: str = "test.termshow", duration: float = 3.0
-) -> Path:
+def _make_termshow_file(tmp_path: Path, name: str = "test.termshow", duration: float = 3.0) -> Path:
     """Create a minimal .termshow file for testing."""
     header = {
         "version": 1,
@@ -57,9 +55,7 @@ class TestTermRender:
         out_dir = tmp_path / "output"
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["termshow", "render", str(source), "-o", str(out_dir)]
-        )
+        result = runner.invoke(cli, ["termshow", "render", str(source), "-o", str(out_dir)])
 
         assert result.exit_code == 0
         assert "Rendered" in result.output
@@ -125,9 +121,7 @@ class TestTermRender:
         out_dir = tmp_path / "output"
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["termshow", "render", str(source), "-o", str(out_dir)]
-        )
+        result = runner.invoke(cli, ["termshow", "render", str(source), "-o", str(out_dir)])
 
         assert result.exit_code == 0
         assert "Chapters: 1" in result.output
@@ -145,9 +139,7 @@ class TestTermRender:
 
     def test_render_nonexistent_file(self, tmp_path: Path):
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["termshow", "render", str(tmp_path / "missing.termshow")]
-        )
+        result = runner.invoke(cli, ["termshow", "render", str(tmp_path / "missing.termshow")])
         assert result.exit_code != 0
 
 
@@ -162,9 +154,7 @@ class TestTermImportCast:
         output = tmp_path / "imported.termshow"
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["termshow", "import-cast", str(source), str(output)]
-        )
+        result = runner.invoke(cli, ["termshow", "import-cast", str(source), str(output)])
 
         assert result.exit_code == 0
         assert "Imported" in result.output
@@ -175,9 +165,7 @@ class TestTermImportCast:
         output = tmp_path / "imported"  # No .termshow extension
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["termshow", "import-cast", str(source), str(output)]
-        )
+        result = runner.invoke(cli, ["termshow", "import-cast", str(source), str(output)])
 
         assert result.exit_code == 0
         assert (tmp_path / "imported.termshow").exists()
@@ -187,9 +175,7 @@ class TestTermImportCast:
         output = tmp_path / "out.termshow"
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["termshow", "import-cast", str(source), str(output)]
-        )
+        result = runner.invoke(cli, ["termshow", "import-cast", str(source), str(output)])
 
         assert "Duration:" in result.output
         assert "Events:" in result.output
@@ -221,9 +207,7 @@ class TestStripRecorderMessages:
 
     def _build_events(self, event_tuples: list[tuple]) -> list[str]:
         """Build event list from (interval, code, data) tuples with a header."""
-        header = json.dumps(
-            {"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 24}}
-        )
+        header = json.dumps({"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 24}})
         return [header] + [json.dumps(list(t)) for t in event_tuples]
 
     def test_strips_recording_started(self):

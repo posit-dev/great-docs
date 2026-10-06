@@ -73,7 +73,9 @@ def test_lint_includes_shared_sources(
         expected.add("README.md")
     else:
         _check_stale_versions(project_root, result, layout)
-    assert {issue.symbol.split(":")[0] for issue in result.issues if issue.check == check} == expected
+    assert {
+        issue.symbol.split(":")[0] for issue in result.issues if issue.check == check
+    } == expected
 
 
 class TestLintIssue:
@@ -546,14 +548,16 @@ class TestSeealsoScannedObjects:
         """Skip a hidden member docstring"""
         method = _make_griffe_obj(kind="function", docstring="Flush it.\n\n%seealso helper")
         pkg = _make_pkg(
-            {"Cache": _make_griffe_obj(kind="class", docstring="A cache.", members={"flush": method})}
+            {
+                "Cache": _make_griffe_obj(
+                    kind="class", docstring="A cache.", members={"flush": method}
+                )
+            }
         )
         documented = [_make_documented_item("mypkg.Cache", ("Cache",), "A cache.")]
         result = LintResult()
 
-        _check_cross_references(
-            pkg, "mypkg", ["Cache"], documented, _index(documented), (), result
-        )
+        _check_cross_references(pkg, "mypkg", ["Cache"], documented, _index(documented), (), result)
 
         assert result.issues == []
 
@@ -561,7 +565,11 @@ class TestSeealsoScannedObjects:
         """Check a documented member docstring"""
         method = _make_griffe_obj(kind="function", docstring="Flush it.\n\n%seealso helper")
         pkg = _make_pkg(
-            {"Cache": _make_griffe_obj(kind="class", docstring="A cache.", members={"flush": method})}
+            {
+                "Cache": _make_griffe_obj(
+                    kind="class", docstring="A cache.", members={"flush": method}
+                )
+            }
         )
         documented = [
             _make_documented_item("mypkg.Cache", ("Cache",), "A cache."),
@@ -569,9 +577,7 @@ class TestSeealsoScannedObjects:
         ]
         result = LintResult()
 
-        _check_cross_references(
-            pkg, "mypkg", ["Cache"], documented, _index(documented), (), result
-        )
+        _check_cross_references(pkg, "mypkg", ["Cache"], documented, _index(documented), (), result)
 
         assert len(result.issues) == 1
         assert result.issues[0].check == "broken-xref"
@@ -647,6 +653,7 @@ class TestSeealsoAgainstArbitration:
 
         assert len(result.issues) == 1
         assert result.issues[0].check == "broken-xref"
+
 
 _NUMPY = (
     Source(name="numpy", url="https://numpy.org/doc/stable", aliases=("np",)),
