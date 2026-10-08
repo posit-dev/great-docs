@@ -9135,63 +9135,6 @@ def test_GT_TABLES_gt_fixed_preserves_colgroup():
 
 
 @requires_bs4
-def test_GT_TABLES_gt_colgroup_preserved_when_present():
-    """GT tables with cols_width (table-layout: fixed) should preserve colgroup.
-
-    Note: Quarto with data-quarto-disable-processing='false' may strip colgroup
-    before post-render runs. This test verifies our post-render.py logic doesn't
-    strip colgroup from GT tables by testing the strip function directly.
-    """
-    import re
-
-    # Test the strip_colgroup_tags logic in isolation with GT-like HTML
-    html_with_gt_colgroup = (
-        '<table style="table-layout: fixed;; width: 0px" class="gt_table" '
-        'data-quarto-disable-processing="true" data-quarto-bootstrap="false">\n'
-        "<colgroup>\n"
-        '  <col style="width:150px;"/>\n'
-        '  <col style="width:80px;"/>\n'
-        "</colgroup>\n"
-        "<thead><tr><th>A</th><th>B</th></tr></thead>\n"
-        "</table>"
-    )
-
-    html_with_plain_colgroup = (
-        '<table class="caption-top table">\n'
-        "<colgroup>\n"
-        '  <col style="width:50%"/>\n'
-        '  <col style="width:50%"/>\n'
-        "</colgroup>\n"
-        "<thead><tr><th>X</th><th>Y</th></tr></thead>\n"
-        "</table>"
-    )
-
-    colgroup_pattern = re.compile(r"<colgroup>.*?</colgroup>\s*", re.DOTALL)
-
-    def _strip_colgroup_tags(html_content):
-        def _replace_if_not_gt(match):
-            preceding = html_content[: match.start()]
-            last_table = preceding.rfind("<table")
-            if last_table >= 0:
-                table_end = preceding.find(">", last_table)
-                if table_end >= 0:
-                    table_tag = preceding[last_table : table_end + 1]
-                    if "gt_table" in table_tag:
-                        return match.group(0)
-            return ""
-
-        return colgroup_pattern.sub(_replace_if_not_gt, html_content)
-
-    # GT table colgroup should be preserved
-    result_gt = _strip_colgroup_tags(html_with_gt_colgroup)
-    assert "<colgroup>" in result_gt, "GT table colgroup was stripped"
-
-    # Plain table colgroup should be removed
-    result_plain = _strip_colgroup_tags(html_with_plain_colgroup)
-    assert "<colgroup>" not in result_plain, "Plain table colgroup was not stripped"
-
-
-@requires_bs4
 def test_GT_TABLES_markdown_no_colgroup():
     """Markdown tables should have their colgroup tags stripped."""
     if not _has_rendered_site(_GT_TABLES_PKG):
@@ -9201,9 +9144,42 @@ def test_GT_TABLES_markdown_no_colgroup():
     soup = _load_html(page)
 
     md_tables = [t for t in soup.select("table") if "gt_table" not in t.get("class", [])]
+    assert md_tables, "Expected Markdown tables on the page"
     for t in md_tables:
+        if "Column A" in t.get_text():
+            continue  # has an explicit tbl-colwidths attribute
         colgroups = t.select("colgroup")
         assert len(colgroups) == 0, "Markdown table should not have colgroup"
+
+
+@requires_bs4
+def test_GT_TABLES_long_line_table_no_colgroup():
+    """A pipe table with long lines gets no Pandoc dash-derived column widths."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "markdown-tables.html"
+    soup = _load_html(page)
+
+    tables = [t for t in soup.select("table") if "hero.logo" in t.get_text()]
+    assert len(tables) == 1, "Long-line table not found"
+    assert not tables[0].select("colgroup"), "Long-line table should not have colgroup"
+
+
+@requires_bs4
+def test_GT_TABLES_explicit_tbl_colwidths_preserved():
+    """A per-table `tbl-colwidths` attribute produces a colgroup with those widths."""
+    if not _has_rendered_site(_GT_TABLES_PKG):
+        pytest.skip(f"{_GT_TABLES_PKG} not rendered")
+
+    page = _site_dir(_GT_TABLES_PKG) / "user-guide" / "markdown-tables.html"
+    soup = _load_html(page)
+
+    tables = [t for t in soup.select("table") if "Column A" in t.get_text()]
+    assert len(tables) == 1, "Explicit-width table not found"
+    cols = tables[0].select("colgroup > col")
+    widths = [c.get("style", "").replace(" ", "") for c in cols]
+    assert widths == ["width:30%", "width:50%", "width:20%"], widths
 
 
 @requires_bs4
@@ -11746,3 +11722,83 @@ def test_DED_ref_section_order_navbar_links_to_first_section():
     assert "href: reference/cli/index.qmd" in content, (
         "Navbar Reference link should point to reference/cli/index.qmd when CLI is first"
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DED: Responsive tables (gdtest_responsive_tables) — column sizing (issue #363)
+#
+# Column widths for plain Markdown tables are computed client-side by
+# responsive-tables.js, so these tests check what reaches the browser: no
+# Pandoc dash-derived colgroups, explicit `tbl-colwidths` widths preserved, and
+# the sizing script and CSS deployed.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_RESP_TABLES_PKG = "gdtest_responsive_tables"
+
+
+def _resp_tables_page(name: str):
+    if not _has_rendered_site(_RESP_TABLES_PKG):
+        pytest.skip(f"{_RESP_TABLES_PKG} not rendered")
+    return _load_html(_site_dir(_RESP_TABLES_PKG) / "user-guide" / f"{name}.html")
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_resp_tables_default_no_colgroup():
+    """gdtest_responsive_tables: long-line pipe tables carry no Pandoc column widths."""
+    for page in ("default-sizing", "overflow"):
+        soup = _resp_tables_page(page)
+        tables = soup.select("main table")
+        assert tables, f"No tables on {page}"
+        for t in tables:
+            assert not t.select("colgroup"), f"Unexpected colgroup on {page}"
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_resp_tables_explicit_widths_preserved():
+    """gdtest_responsive_tables: `tbl-colwidths` and raw HTML colgroups survive post-render."""
+    soup = _resp_tables_page("explicit-widths")
+    widths = [
+        [c.get("style", "").replace(" ", "") for c in t.select("colgroup > col")]
+        for t in soup.select("main table")
+    ]
+    assert widths == [
+        ["width:25%", "width:15%", "width:60%"],
+        ["width:30%", "width:40%", "width:30%"],
+        ["width:50%", "width:50%"],  # [80,80] normalized by Quarto
+        ["width:20%", "width:80%"],  # raw HTML
+    ], widths
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_resp_tables_caption_kept_with_widths():
+    """gdtest_responsive_tables: a caption sharing a line with `tbl-colwidths` is rendered."""
+    soup = _resp_tables_page("explicit-widths")
+    captions = [c.get_text(strip=True) for c in soup.select("main table caption")]
+    assert "Three columns at 30/40/30" in captions
+    assert not any("tbl-colwidths" in c for c in captions)
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_DED_resp_tables_nowrap_div():
+    """gdtest_responsive_tables: the `.gd-table-nowrap` div wraps its table."""
+    soup = _resp_tables_page("overflow")
+    div = soup.select_one("div.gd-table-nowrap")
+    assert div is not None and div.select_one("table") is not None
+
+
+@pytest.mark.dedicated
+def test_DED_resp_tables_assets_deployed():
+    """gdtest_responsive_tables: sizing script and CSS ship with the site."""
+    if not _has_rendered_site(_RESP_TABLES_PKG):
+        pytest.skip(f"{_RESP_TABLES_PKG} not rendered")
+    js = (_site_dir(_RESP_TABLES_PKG) / "responsive-tables.js").read_text(encoding="utf-8")
+    assert "function autoSizeTable" in js
+    assert "gd-table-nowrap" in js
+
+    css = re.sub(r"\s+", "", _deployed_css(_RESP_TABLES_PKG))
+    assert ".gd-table-auto>.gd-table-scroll>table" in css
+    assert ".gd-table-explicit>.gd-table-scroll>table" in css

@@ -388,6 +388,44 @@ Which produces:
 For tables with long content, the pipes don't need to line up perfectly. Markdown is forgiving about
 column widths in the source.
 
+#### Column Widths
+
+Great Docs sizes table columns from their content. Short columns (names, types, default values) stay
+on one line, and columns of longer text wrap so the table fits the page width. Horizontal scrolling
+is only used when a table can't fit, for example when it has many columns on a narrow screen.
+
+To set column widths yourself, add a `tbl-colwidths` attribute in a caption line below the table.
+The values are percentages of the table width:
+
+```markdown
+| Option    | Type   | Description                                         |
+|-----------|--------|-----------------------------------------------------|
+| `title`   | `str`  | The page title, shown in the browser tab and navbar |
+| `subtitle`| `str`  | A line of text shown below the title                |
+
+: {tbl-colwidths="[25,15,60]"}
+```
+
+Which produces:
+
+| Option    | Type   | Description                                         |
+|-----------|--------|-----------------------------------------------------|
+| `title`   | `str`  | The page title, shown in the browser tab and navbar |
+| `subtitle`| `str`  | A line of text shown below the title                |
+
+: {tbl-colwidths="[25,15,60]"}
+
+To keep every cell on a single line instead (scrolling horizontally if the table is too wide), wrap
+the table in a `.gd-table-nowrap` div:
+
+```markdown
+::: {.gd-table-nowrap}
+| Column | Column | Column |
+|--------|--------|--------|
+| ...    | ...    | ...    |
+:::
+```
+
 Tables are the best way to present structured comparisons, option listings, and reference data.
 They're much easier to scan than the equivalent information written as prose.
 
