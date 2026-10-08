@@ -5,14 +5,16 @@ Dimensions: G7, M4, N1
 Focus: Exercises the full rendering pipeline for Great Tables (GT) output
        alongside conventional Markdown tables to verify:
 
-       1. GT tables preserve their ``<colgroup>`` tags (post-render.py
-          ``strip_colgroup_tags`` skips tables with class ``gt_table``).
+       1. GT tables preserve their ``<colgroup>`` tags.
        2. GT tables are NOT wrapped in ``gd-table-responsive`` (the
           responsive-tables.js ``wrapTable`` function skips ``gt_table``).
        3. GT tables are NOT affected by Bootstrap ``.table-bordered``
           (great-docs.scss uses ``table:not(.gt_table)``).
        4. Conventional Markdown tables still get responsive wrapping and
           Bootstrap-based styling as expected.
+       5. Pipe tables with long lines get no Pandoc-derived ``<colgroup>``
+          (Great Docs sets ``tbl-colwidths: false``), while a per-table
+          ``tbl-colwidths`` attribute still produces explicit column widths.
 """
 
 SPEC = {
@@ -169,6 +171,27 @@ SPEC = {
             "| Responsive  | Yes       |\n"
             "| Dark mode   | Yes       |\n"
             "| Scroll      | Yes       |\n"
+            "\n"
+            "## A Table With Long Lines\n"
+            "\n"
+            "Pandoc derives relative column widths from the separator dashes\n"
+            "when a pipe table has lines longer than 72 characters. Great Docs\n"
+            "turns that off, so this table should NOT have a `<colgroup>`.\n"
+            "\n"
+            "| Option | Type | Description |\n"
+            "|--------|------|-------------|\n"
+            "| `hero` | `bool` / `dict` | `false` to disable; `true` to force-enable;"
+            " dict to customize (auto-enables with a logo) |\n"
+            "| `hero.logo` | `str` / `dict` / `false` | Hero-specific logo (can have"
+            " `light`/`dark` keys); auto-detects `logo-hero.*` files |\n"
+            "\n"
+            "## A Table With Explicit Column Widths\n"
+            "\n"
+            "| Column A | Column B | Column C |\n"
+            "|----------|----------|----------|\n"
+            "| Short | A long sentence that wraps within its column | Another sentence |\n"
+            "\n"
+            ': {tbl-colwidths="[30,50,20]"}\n'
         ),
         # ── User guide: GT table with page-level Quarto opt-out ─────────
         "docs/user_guide/03-gt-page-level.qmd": (

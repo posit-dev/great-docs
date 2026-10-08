@@ -423,6 +423,8 @@ ALL_PACKAGES: list[str] = [
     "gdtest_ref_section_order",  # 210
     # 211: Mermaid diagrams with and without figure captions
     "gdtest_mermaid",  # 211
+    # 212: Markdown table column sizing (default, explicit widths, opt-out)
+    "gdtest_responsive_tables",  # 212
 ]
 
 
@@ -2352,6 +2354,13 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "labeled `fig-cap`, a small one with an unlabeled `fig-cap`, and one with "
         "no caption. Captions must sit under the diagram, and a wide diagram must "
         "span the text column while a small one keeps its natural size (#361)."
+    ),
+    "gdtest_responsive_tables": (
+        "Showcase of Markdown table column sizing (#363): plain tables with long "
+        "text fit the content width (short columns stay on one line, prose wraps), "
+        "`tbl-colwidths` sets explicit widths, many-column tables scroll, and a "
+        "`.gd-table-nowrap` div restores one-line cells. Also covers spanning rows, "
+        "long URLs, hidden tabs, and custom-class tables left alone."
     ),
 }
 
