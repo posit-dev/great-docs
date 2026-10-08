@@ -12173,6 +12173,14 @@ anchor-sections: true
         # pre-styled HTML tables) are not affected by Bootstrap striping/styles
         config["format"]["html"]["html-table-processing"] = "none"
 
+        # Don't let Pandoc derive column widths from the dashes in a pipe
+        # table's separator line (it does so for tables with long lines); the
+        # browser and responsive-tables.js size columns from their content.
+        # Per-table `tbl-colwidths="[...]"` attributes still apply, and a
+        # site-level `tbl-colwidths` setting takes precedence.
+        if "tbl-colwidths" not in self._config.site_quarto:
+            config["format"]["html"]["tbl-colwidths"] = False
+
         # Configure Mermaid diagrams - use 'default' (light) theme always
         # We provide a light background container in dark mode via CSS
         config["format"]["html"]["mermaid"] = {"theme": "default"}
