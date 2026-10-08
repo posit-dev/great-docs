@@ -39,27 +39,6 @@ from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import PythonLexer
 
-# Print the working directory
-print("Current working directory:", os.getcwd())
-
-# Get a list of all files in the working directory
-files = os.listdir(".")
-print("Files in working directory:", files)
-
-site_files = os.listdir("_site")
-print("Files in '_site' directory:", site_files)
-
-# Load source links if available
-source_links = {}
-source_links_path = "_source_links.json"
-if os.path.exists(source_links_path):
-    print(f"Loading source links from {source_links_path}")
-    with open(source_links_path, "r", encoding="utf-8") as f:
-        source_links = json.load(f)
-    print(f"Loaded {len(source_links)} source links")
-else:
-    print("No source links file found, skipping source link injection")
-
 # Load object type metadata for accurate classification
 # Keys are object names (e.g., "parser.ParserError"), values are type strings
 # ("class", "namedtuple", "typeddict", "protocol", "abc", "exception", "function", "method", "constant", "enum", "type_alias", "other")
@@ -81,18 +60,6 @@ if os.path.exists(constant_values_path):
     with open(constant_values_path, "r", encoding="utf-8") as f:
         constant_values = json.load(f)
     print(f"Loaded {len(constant_values)} constant value entries")
-
-# Load dataclass attributes metadata for fixing incomplete Attributes tables.
-# Written by great-docs core during build step 1.7.
-# Keys are fully qualified object paths (e.g., "pkg.Config"), values are
-# dicts mapping field name -> description.
-dataclass_attrs_metadata: dict[str, dict[str, str]] = {}
-dataclass_attrs_path = "_dataclass_attrs.json"
-if os.path.exists(dataclass_attrs_path):
-    with open(dataclass_attrs_path, "r", encoding="utf-8") as f:
-        dataclass_attrs_metadata = json.load(f)
-    if dataclass_attrs_metadata:
-        print(f"Loaded dataclass attribute metadata for {len(dataclass_attrs_metadata)} class(es)")
 
 # Load great-docs options (written by core.py during build)
 _gd_options: dict[str, object] = {}
@@ -560,14 +527,6 @@ def apply_seo_processing(html_content: str, page_path: str) -> str:
     return html_content
 
 
-def get_source_link_html(item_name):
-    """Generate HTML for a source link given an item name."""
-    if item_name in source_links:
-        url = source_links[item_name]["url"]
-        return f'<a href="{url}" class="source-link" target="_blank" rel="noopener">SOURCE</a>'
-    return ""
-
-
 # Pygments class to Quarto class mapping
 # Quarto uses different class names than Pygments default
 PYGMENTS_TO_QUARTO_CLASS = {
@@ -982,67 +941,6 @@ def translate_renderer_headings(html_content):
     return html_content
 
 
-def fix_dataclass_attributes(content_str):
-    """Rebuild the Attributes table for dataclass pages using *_dataclass_attrs.json* metadata.
-
-    The renderer may only discover a subset of dataclass fields. This function replaces the
-    `<tbody>` of the Attributes `<table>` with the complete set of fields recorded in the metadata
-    file.
-    """
-    if not dataclass_attrs_metadata:
-        return content_str
-
-    # Locate the Attributes <section> (Quarto wraps each ## heading in a section)
-    attrs_match = re.search(r'<section[^>]*\bid="attributes"[^>]*>', content_str)
-    if not attrs_match:
-        return content_str
-
-    # Determine the object path by inspecting existing <a href="#obj.field">
-    # anchors inside the Attributes table.
-    attrs_section_start = attrs_match.start()
-    attrs_section_end = content_str.find("</section>", attrs_section_start)
-    if attrs_section_end < 0:
-        return content_str
-
-    attrs_section = content_str[attrs_section_start : attrs_section_end + len("</section>")]
-
-    # Extract obj_path from an existing anchor (e.g., href="#pkg.Cls.field" -> "pkg.Cls")
-    anchor_re = re.search(r'href="#([^"]+)\.(\w+)"', attrs_section)
-    if not anchor_re:
-        return content_str
-
-    obj_path = anchor_re.group(1)
-
-    if obj_path not in dataclass_attrs_metadata:
-        return content_str
-
-    fields = dataclass_attrs_metadata[obj_path]
-
-    # Build new table rows
-    rows = []
-    for i, (fname, desc) in enumerate(fields.items()):
-        row_class = "odd" if i % 2 == 0 else "even"
-        anchor = f"{obj_path}.{fname}"
-        rows.append(
-            f'<tr class="{row_class}">\n'
-            f'<td><a href="#{anchor}">{fname}</a></td>\n'
-            f"<td>{desc}</td>\n"
-            f"</tr>"
-        )
-
-    new_tbody = "<tbody>\n" + "\n".join(rows) + "\n</tbody>"
-
-    # Replace the <tbody> inside the Attributes section
-    new_attrs_section = re.sub(r"<tbody>.*?</tbody>", new_tbody, attrs_section, flags=re.DOTALL)
-
-    content_str = (
-        content_str[:attrs_section_start]
-        + new_attrs_section
-        + content_str[attrs_section_end + len("</section>") :]
-    )
-    return content_str
-
-
 # Process all HTML files in the `_site/reference/` directory (except `index.html`)
 # and apply the specified transformations
 html_files = [f for f in glob.glob("_site/reference/*.html") if os.path.basename(f) != "index.html"]
@@ -1090,9 +988,6 @@ for html_file in html_files:
         bare_name_html = f"<p><code>{item_name_from_file}</code></p>"
         if bare_name_html in content_str:
             content_str = content_str.replace(bare_name_html, replacement_html, 1)
-
-    # Fix incomplete Attributes tables for dataclass pages
-    content_str = fix_dataclass_attributes(content_str)
 
     content = content_str.splitlines(keepends=True)
 
@@ -2175,9 +2070,9 @@ def inject_page_metadata():
 
                         try:
                             frontmatter = parse_yaml(parts[1]) or {}
-                        except Exception:
+                        except ValueError:
                             pass
-            except Exception:
+            except (OSError, ValueError):
                 pass
 
         if is_auto_generated:
@@ -2200,7 +2095,7 @@ def inject_page_metadata():
                         # Parse date-only and add time
                         dt = datetime.fromisoformat(date_str)
                         modified_date = dt.isoformat()
-                except Exception:
+                except ValueError:
                     pass
 
             # Check frontmatter for date_created override
@@ -2215,7 +2110,7 @@ def inject_page_metadata():
                     else:
                         dt = datetime.fromisoformat(date_str)
                         created_date = dt.isoformat()
-                except Exception:
+                except ValueError:
                     pass
 
             # Fall back to git dates if not in frontmatter
@@ -2255,7 +2150,7 @@ def inject_page_metadata():
                         if result.returncode == 0 and result.stdout.strip():
                             lines = result.stdout.strip().split("\n")
                             created_date = lines[-1].strip()
-                except Exception:
+                except (OSError, subprocess.SubprocessError):
                     pass
 
             # Fallback to mtime
@@ -2344,39 +2239,6 @@ def inject_page_metadata():
 
 inject_page_metadata()
 print("##GD:PASS:Page metadata injected", flush=True)
-
-
-# Fix page-metadata.js script paths for subdirectory pages
-# (This runs after injection because inject_page_metadata runs after fix_script_paths)
-def fix_page_metadata_script_paths():
-    """Fix page-metadata.js paths in subdirectory HTML files."""
-    fixed_count = 0
-
-    for html_file in all_html_files:
-        rel_path = os.path.relpath(html_file, "_site")
-        depth = rel_path.count(os.sep)
-
-        if depth == 0:
-            continue
-
-        with open(html_file, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        prefix = "../" * depth
-        old_script = '<script src="page-metadata.js"></script>'
-        new_script = f'<script src="{prefix}page-metadata.js"></script>'
-
-        if old_script in content:
-            content = content.replace(old_script, new_script)
-            with open(html_file, "w", encoding="utf-8") as f:
-                f.write(content)
-            fixed_count += 1
-
-    if fixed_count > 0:
-        print(f"Fixed page-metadata.js paths in {fixed_count} subdirectory pages")
-
-
-fix_page_metadata_script_paths()
 
 
 # ============================================================================
@@ -2551,7 +2413,7 @@ def _prepare_html_for_pandoc(html_file: str) -> tuple[str, str, str | None]:
     try:
         with open(html_file, "r", encoding="utf-8") as f:
             content = f.read()
-    except Exception:
+    except (OSError, ValueError):
         return html_file, rel, None
 
     main_match = re.search(
@@ -2823,7 +2685,7 @@ def _convert_one_page(args: tuple[str, str, str]) -> tuple[str, bool, str]:
 
     except subprocess.TimeoutExpired:
         return rel, False, "pandoc timeout"
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         return rel, False, str(e)
 
 
@@ -2909,7 +2771,7 @@ if _gd_options.get("markdown_pages", True):
                 with open(html_file, "w", encoding="utf-8") as f:
                     f.write(modified)
                 _md_alt_count += 1
-        except Exception as e:
+        except (OSError, ValueError) as e:
             print(f"  Error injecting md alternate for {html_file}: {e}")
 
     if _md_alt_count > 0:
@@ -2935,7 +2797,7 @@ for html_file in glob.glob("_site/**/*.html", recursive=True):
                 with open(html_file, "w", encoding="utf-8") as f:
                     f.write(modified)
                 colgroup_stripped += 1
-    except Exception as e:
+    except (OSError, ValueError) as e:
         print(f"  Error processing {html_file}: {e}")
 
 if colgroup_stripped > 0:
@@ -2971,7 +2833,7 @@ if _gd_options.get("seo_enabled", False):
                     f.write(modified_content)
                 seo_processed += 1
 
-        except Exception as e:
+        except (OSError, ValueError) as e:
             print(f"  SEO error for {html_file}: {e}")
             seo_errors += 1
 
@@ -3023,7 +2885,7 @@ if _i18n_bundle and _i18n_language != "en":
                 with open(html_file, "w", encoding="utf-8") as f:
                     f.write(modified)
                 _i18n_count += 1
-        except Exception as e:
+        except (OSError, ValueError) as e:
             print(f"  i18n error for {html_file}: {e}")
 
     print(f"   Injected i18n meta in {_i18n_count} page(s)")
@@ -3062,7 +2924,7 @@ for html_file in glob.glob("_site/**/*.html", recursive=True):
         from yaml12 import parse_yaml
 
         fm = parse_yaml(parts[1]) or {}
-    except Exception:
+    except (OSError, ValueError):
         continue
 
     stf = fm.get("scale-to-fit")
@@ -3111,7 +2973,7 @@ for html_file in glob.glob("_site/**/*.html", recursive=True):
             with open(html_file, "w", encoding="utf-8") as f:
                 f.write(modified)
             _stf_injected += 1
-    except Exception as e:
+    except (OSError, ValueError) as e:
         print(f"  scale-to-fit error for {html_file}: {e}")
 
 if _stf_injected > 0:
