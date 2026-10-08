@@ -6864,6 +6864,26 @@ html.quarto-dark .d2-diagram img {
     }
 }
 
+/* Plain Markdown tables and tables with author-specified column widths fill
+   the content width and wrap text. For plain tables, responsive-tables.js
+   then sets column widths so short columns stay on one line and prose
+   columns wrap (falling back to horizontal scroll only when needed). */
+.gd-table-auto > .gd-table-scroll > table,
+.gd-table-explicit > .gd-table-scroll > table {
+    width: 100%;
+}
+
+.gd-table-auto > .gd-table-scroll > table > :is(thead, tbody, tfoot) > tr > :is(th, td) {
+    overflow-wrap: break-word;
+}
+
+/* Horizontal rules inside table cells: tighter spacing and a visible minimum
+   length (an explicit `spacing=` on the shortcode still takes precedence) */
+:is(td, th) > .gd-hr {
+    --gd-hr-spacing: 0.75rem;
+    min-width: 4rem;
+}
+
 /* Scroll indicators - appear at edges when content is scrollable */
 .gd-table-scroll-indicator {
     position: absolute;
