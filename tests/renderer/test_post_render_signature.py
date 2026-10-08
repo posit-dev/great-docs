@@ -37,7 +37,7 @@ def _load_highlight_signature_with_pygments():
     dict_end = source.index("\n}\n", dict_start) + len("\n}\n")
 
     func_start = source.index("def highlight_signature_with_pygments(")
-    func_end = source.index("\ndef strip_colgroup_tags(", func_start)
+    func_end = source.index("\n_BREADCRUMB_NAV_RE = ", func_start)
 
     ns = {
         "re": re,
