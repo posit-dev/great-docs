@@ -689,35 +689,6 @@ def highlight_signature_with_pygments(html_content):
     return cb1_pattern.sub(replace_signature, html_content)
 
 
-def strip_colgroup_tags(html_content):
-    """
-    Remove `<colgroup>` tags from tables, preserving those inside GT tables.
-
-    Quarto/Pandoc adds `<colgroup>` with fixed column widths, but we want the browser to determine
-    column widths based on content. GT tables (Great Tables) rely on their `<colgroup>` for proper
-    layout with `table-layout: fixed`, so those are left intact.
-    """
-    # Match the entire colgroup element including its contents
-    colgroup_pattern = re.compile(
-        r"<colgroup>.*?</colgroup>\s*",
-        re.DOTALL,
-    )
-
-    def _replace_if_not_gt(match):
-        # Find the nearest preceding <table tag to check if it's a GT table
-        preceding = html_content[: match.start()]
-        last_table = preceding.rfind("<table")
-        if last_table >= 0:
-            table_end = preceding.find(">", last_table)
-            if table_end >= 0:
-                table_tag = preceding[last_table : table_end + 1]
-                if "gt_table" in table_tag:
-                    return match.group(0)  # Preserve GT table colgroups
-        return ""  # Strip non-GT colgroups
-
-    return colgroup_pattern.sub(_replace_if_not_gt, html_content)
-
-
 _BREADCRUMB_NAV_RE = re.compile(
     r'<nav class="quarto-page-breadcrumbs[^"]*"[^>]*>.*?</nav>', re.DOTALL
 )
@@ -2777,32 +2748,6 @@ if _gd_options.get("markdown_pages", True):
     if _md_alt_count > 0:
         print(f"   Injected alternate links in {_md_alt_count} page(s)")
 print("##GD:PASS:Markdown alternate links injected", flush=True)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# STRIP COLGROUP TAGS FROM TABLES
-# ══════════════════════════════════════════════════════════════════════════════
-# Remove <colgroup> tags so browsers determine column widths based on content.
-
-print("\nStripping <colgroup> tags from tables...")
-colgroup_stripped = 0
-for html_file in glob.glob("_site/**/*.html", recursive=True):
-    try:
-        with open(html_file, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        if "<colgroup>" in content:
-            modified = strip_colgroup_tags(content)
-            if modified != content:
-                with open(html_file, "w", encoding="utf-8") as f:
-                    f.write(modified)
-                colgroup_stripped += 1
-    except (OSError, ValueError) as e:
-        print(f"  Error processing {html_file}: {e}")
-
-if colgroup_stripped > 0:
-    print(f"   Stripped colgroup from {colgroup_stripped} file(s)")
-print("##GD:PASS:Colgroup tags stripped", flush=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
