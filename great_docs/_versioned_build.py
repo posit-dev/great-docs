@@ -33,6 +33,7 @@ from great_docs._versioning import (
     process_version_fences,
     version_url_segment,
 )
+from great_docs._website.seo import canonical
 
 if TYPE_CHECKING:
     from great_docs._api_diff import ApiSnapshot
@@ -1680,25 +1681,13 @@ def _rewrite_quarto_yml_for_version(
         if title and f"({entry.label})" not in title:
             config.setdefault("website", {})["title"] = f"{title} ({entry.label})"
 
-    # Canonical URL injection for non-latest versions
+    # Older versions use a script to link to the latest version's matching page.
+    # Remove the render-time filter to avoid duplicate canonical links.
+    if entry.tag != latest_tag and not entry.latest:
+        canonical.unregister(config)
+
     if entry.tag != latest_tag and not entry.latest and site_url:
-        # Inject a <link rel="canonical"> pointing to the latest version
-        # This tells search engines to prefer the root (latest) URL
-        base = site_url.rstrip("/")
-        canonical_script = (
-            "<script>"
-            'document.addEventListener("DOMContentLoaded",function(){'
-            f'var base="{base}";'
-            "var path=window.location.pathname;"
-            f'var prefix="/v/{version_url_segment(entry.tag)}/";'
-            "if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}"
-            'var link=document.createElement("link");'
-            'link.rel="canonical";'
-            "link.href=base+path;"
-            "document.head.appendChild(link)"
-            "});"
-            "</script>"
-        )
+        canonical_script = canonical.latest_version_script(site_url, version_url_segment(entry.tag))
         header_list = (
             config.setdefault("format", {})
             .setdefault("html", {})

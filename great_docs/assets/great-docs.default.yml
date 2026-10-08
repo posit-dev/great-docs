@@ -753,8 +753,9 @@ seo:
     extra_rules: [] # Extra raw lines, e.g. ["User-agent: GPTBot", "Disallow: /"]
   canonical:
     enabled: true # Add canonical URLs to pages
-    # Base URL (e.g. "https://example.github.io/pkg/"); auto-detected from
-    # GitHub Pages when null.
+    # Preferred site URL (e.g. "https://example.github.io/pkg/"). Override it
+    # when canonical links should point to a different address from `site_url`.
+    # When null, use `site_url`, or the GitHub Pages URL if `site_url` is unset.
     base_url: null
   # Requires {page_title}; {site_name} is optional. Omit {site_name} to remove the
   # site-name component from titled pages. Untitled pages, including the home

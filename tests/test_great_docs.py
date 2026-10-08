@@ -40768,7 +40768,6 @@ seo:
         options = docs._get_seo_options()
 
         assert options["seo_enabled"] is True
-        assert options["canonical_enabled"] is True
         assert options["canonical_base_url"] == "https://example.com/docs/"
         assert options["structured_data_enabled"] is True
         assert options["site_name"] == "Test Package"

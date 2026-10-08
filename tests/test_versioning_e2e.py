@@ -65,7 +65,7 @@ def test_layout_pipeline(tmp_path: Path, directory: str) -> None:
     assert "https://example.com/docs/v/1.5.0/" in historical_config
     parsed = read_yaml(layout.build_dir_for("v1.5.0", "2.0") / "_quarto.yml")
     scripts = parsed["format"]["html"]["include-in-header"]
-    assert any('var prefix="/v/1.5.0/"' in item["text"] for item in scripts)
+    assert any('var prefix="/docs/v/1.5.0/"' in item["text"] for item in scripts)
     manifest = json.loads((layout.site_dir / "_version_map.json").read_text())
     assert manifest["versions"][1]["path_prefix"] == "v/1.5.0"
 

@@ -28,6 +28,7 @@ from ._utils import (
     validate_layout_outputs,
     validate_tree_symlinks,
 )
+from ._website.seo import canonical
 from .config import Config, create_default_config
 
 if TYPE_CHECKING:
@@ -4158,6 +4159,7 @@ class GreatDocs:
         resources_to_add: list[str] = []
         raw_render_excludes: list[str] = []
         processed = 0
+        canonical_base_url = self._get_canonical_base_url()
 
         for source in sources:
             source_dir = source["source_dir"]
@@ -4193,6 +4195,9 @@ class GreatDocs:
                     layout = "passthrough"  # pragma: no cover
 
                 if layout == "raw":
+                    body = canonical.add_to_raw_page(
+                        body, self._config, canonical_base_url, output_rel_path.as_posix()
+                    )
                     dest_path.write_text(body, encoding="utf-8")
                     raw_resource = output_rel_path.as_posix()
                     resources_to_add.append(raw_resource)
@@ -13633,6 +13638,9 @@ anchor-sections: true
         # Compose each page's browser title during Quarto rendering.
         self._write_title_partial(config)
 
+        # Add each page's canonical link during Quarto rendering.
+        canonical.register(config, self._config, self._get_canonical_base_url())
+
         # Apply explicit navbar ordering from config (if set)
         self._reorder_navbar(config)
 
@@ -15103,27 +15111,19 @@ anchor-sections: true
 
     def _get_canonical_base_url(self) -> str | None:
         """
-        Get the canonical base URL for the site.
+        Resolve the preferred site URL for canonical links
 
-        Checks configuration first, then tries to auto-detect from GitHub Pages URL.
+        Use `seo.canonical.base_url` if set, otherwise `site_url`, otherwise the
+        GitHub Pages URL. The canonical override can point to a different address
+        from the one serving the site.
 
         Returns
         -------
         str | None
             The canonical base URL (with trailing slash) or None if not determined.
         """
-        # Check config first
-        base_url = self._config.canonical_base_url
-        if base_url:
-            return base_url.rstrip("/") + "/"
-
-        # Try to auto-detect from GitHub Pages
         owner, repo, _ = self._get_github_repo_info()
-        if owner and repo:
-            # Standard GitHub Pages URL pattern
-            return f"https://{owner}.github.io/{repo}/"  # pragma: no cover
-
-        return None
+        return canonical.resolve_base_url(self._config, owner, repo)
 
     def _categorize_page(self, html_path: str) -> str:
         """
@@ -15478,7 +15478,6 @@ anchor-sections: true
 
         return {
             "seo_enabled": self._config.seo_enabled,
-            "canonical_enabled": self._config.canonical_enabled,
             "canonical_base_url": self._get_canonical_base_url(),
             "structured_data_enabled": self._config.structured_data_enabled,
             "structured_data_type": self._config.structured_data_type,
