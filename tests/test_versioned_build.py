@@ -1263,6 +1263,119 @@ class TestCanonicalUrlInjection:
         assert "canonical" not in content
 
 
+def _canonical_href_from_script(tmp_path: Path, site_url: str, pathname: str) -> str:
+    """
+    Run an older version's canonical script with a simulated page path
+    """
+    import json
+    import re
+    import shutil
+    import subprocess
+
+    from yaml12 import read_yaml
+
+    from great_docs._versioned_build import _rewrite_quarto_yml_for_version
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is not installed")
+
+    dest = tmp_path / "v01"
+    dest.mkdir()
+    (dest / "_quarto.yml").write_text(
+        "project:\n  type: website\n  output-dir: _site\n"
+        f"format:\n  html: {{}}\nwebsite:\n  title: Test\n  site-url: {site_url}\n",
+        encoding="utf-8",
+    )
+    _rewrite_quarto_yml_for_version(dest, _make_entry("0.1"), "0.2", site_url=site_url)
+
+    with open(dest / "_quarto.yml") as f:
+        header = read_yaml(f)["format"]["html"]["include-in-header"]
+    script = re.search(r"<script>(.*)</script>", header[0]["text"], re.S).group(1)
+
+    harness = (
+        "const links = [];"
+        "const document = {addEventListener: (_, run) => run(),"
+        " createElement: () => ({}), head: {appendChild: (el) => links.push(el)}};"
+        f"const window = {{location: {{pathname: {json.dumps(pathname)}}}}};"
+        f"{script};"
+        "console.log(JSON.stringify(links));"
+    )
+    result = subprocess.run([node, "-e", harness], capture_output=True, text=True, check=True)
+    (link,) = json.loads(result.stdout)
+    assert link["rel"] == "canonical"
+    return link["href"]
+
+
+class TestCanonicalScriptUrl:
+    """
+    Canonical links from older pages to matching pages in the latest version
+    """
+
+    @pytest.mark.parametrize(
+        ("site_url", "pathname", "expected"),
+        [
+            (
+                "https://example.com",
+                "/v/0.1/guide/page.html",
+                "https://example.com/guide/page.html",
+            ),
+            ("https://example.com", "/v/0.1/guide/index.html", "https://example.com/guide/"),
+            ("https://example.com", "/v/0.1/", "https://example.com/"),
+            (
+                "https://example.com/pkg",
+                "/pkg/v/0.1/guide/page.html",
+                "https://example.com/pkg/guide/page.html",
+            ),
+            (
+                "https://example.com/pkg/",
+                "/pkg/v/0.1/guide/index.html",
+                "https://example.com/pkg/guide/",
+            ),
+            ("https://example.com/pkg", "/pkg/v/0.1/", "https://example.com/pkg/"),
+            (
+                "https://example.com/pkg",
+                "/pkg/v/0.1/reference/myindex.html",
+                "https://example.com/pkg/reference/myindex.html",
+            ),
+        ],
+    )
+    def test_links_to_matching_latest_page(
+        self, tmp_path: Path, site_url: str, pathname: str, expected: str
+    ):
+        assert _canonical_href_from_script(tmp_path, site_url, pathname) == expected
+
+    def test_only_latest_config_keeps_the_canonical_filter(self, tmp_path: Path):
+        from yaml12 import read_yaml, write_yaml
+
+        from great_docs._versioned_build import _rewrite_quarto_yml_for_version
+
+        def rewritten(entry, latest_tag: str) -> dict:
+            dest = tmp_path / entry.tag
+            dest.mkdir()
+            with open(dest / "_quarto.yml", "w") as f:
+                write_yaml(
+                    {
+                        "project": {"type": "website"},
+                        "filters": ["interlinks", "canonical"],
+                        "gd-canonical-base-url": "https://example.com/",
+                        "website": {"title": "Test"},
+                    },
+                    f,
+                )
+            _rewrite_quarto_yml_for_version(dest, entry, latest_tag, site_url="https://example.com")
+            with open(dest / "_quarto.yml") as f:
+                return read_yaml(f)
+
+        old = rewritten(_make_entry("0.1"), "0.2")
+        assert old["filters"] == ["interlinks"]
+        assert "gd-canonical-base-url" not in old
+
+        latest = rewritten(_make_entry("0.2", latest=True), "0.2")
+        assert latest["filters"] == ["interlinks", "canonical"]
+        assert latest["gd-canonical-base-url"] == "https://example.com/"
+
+
 # ---------------------------------------------------------------------------
 # site-url adjustment for versioned builds
 # ---------------------------------------------------------------------------

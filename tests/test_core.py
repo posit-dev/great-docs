@@ -2601,6 +2601,35 @@ class TestGenerateRobotsTxt:
         assert "llms-full.txt" not in content
 
 
+class TestCanonicalIntegration:
+    """`GreatDocs` supplies the repository and build directory to the canonical code."""
+
+    def test_base_url_falls_back_to_the_github_pages_address(self, tmp_path, monkeypatch):
+        gd = _make_gd(tmp_path)
+        monkeypatch.setattr(gd, "_get_github_repo_info", lambda: ("acme", "mypkg", None))
+        assert gd._get_canonical_base_url() == "https://acme.github.io/mypkg/"
+
+    def test_raw_custom_page_gets_a_canonical_link(self, tmp_path, monkeypatch):
+        gd = _make_gd(tmp_path)
+        gd.build_dir.mkdir(parents=True, exist_ok=True)
+        (gd.build_dir / "_quarto.yml").write_text(
+            "website:\n  sidebar: []\n  navbar:\n    left: []\n", encoding="utf-8"
+        )
+        monkeypatch.setattr(gd, "_get_canonical_base_url", lambda: "https://docs.example.com/pkg/")
+        custom = tmp_path / "custom"
+        custom.mkdir()
+        (custom / "widget.html").write_text(
+            "---\nlayout: raw\n---\n<html><head></head></html>", encoding="utf-8"
+        )
+
+        gd._process_custom_pages()
+
+        page = (gd.build_dir / "custom" / "widget.html").read_text(encoding="utf-8")
+        assert (
+            '<link rel="canonical" href="https://docs.example.com/pkg/custom/widget.html">' in page
+        )
+
+
 # ---------------------------------------------------------------------------
 # _inject_version_selector – full function coverage
 # ---------------------------------------------------------------------------

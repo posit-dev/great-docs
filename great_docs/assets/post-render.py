@@ -82,48 +82,6 @@ def _t(key: str, fallback: str | None = None) -> str:
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-def inject_canonical_url(html_content: str, page_path: str) -> str:
-    """
-    Inject a canonical URL link tag into the HTML head.
-
-    Parameters
-    ----------
-    html_content
-        The HTML content to modify.
-    page_path
-        The page path relative to the site root (e.g., "reference/MyClass.html").
-
-    Returns
-    -------
-    str
-        The modified HTML with canonical URL injected.
-    """
-    if not _gd_options.get("canonical_enabled", False):
-        return html_content
-
-    base_url = _gd_options.get("canonical_base_url")
-    if not base_url:
-        return html_content
-
-    # Build the canonical URL
-    if page_path == "index.html":
-        canonical_url = base_url
-    elif page_path.endswith("/index.html"):
-        canonical_url = base_url + page_path[:-10]  # Remove /index.html
-    else:
-        canonical_url = base_url + page_path
-
-    # Check if canonical already exists
-    if 'rel="canonical"' in html_content:
-        return html_content
-
-    # Inject canonical link before </head>
-    canonical_tag = f'<link rel="canonical" href="{canonical_url}">'
-    html_content = html_content.replace("</head>", f"  {canonical_tag}\n</head>", 1)
-
-    return html_content
-
-
 def inject_meta_description(html_content: str, page_path: str) -> str:
     """
     Inject or update meta description tag in the HTML head.
@@ -519,7 +477,6 @@ def apply_seo_processing(html_content: str, page_path: str) -> str:
     str
         The modified HTML with all SEO enhancements.
     """
-    html_content = inject_canonical_url(html_content, page_path)
     html_content = inject_meta_description(html_content, page_path)
     html_content = inject_json_ld(html_content, page_path)
     html_content = inject_noindex_meta(html_content, page_path)
@@ -2753,8 +2710,8 @@ print("##GD:PASS:Markdown alternate links injected", flush=True)
 # ══════════════════════════════════════════════════════════════════════════════
 # SEO PROCESSING
 # ══════════════════════════════════════════════════════════════════════════════
-# Apply SEO enhancements to all HTML files (canonical URLs, meta descriptions,
-# JSON-LD structured data, title templates, noindex for internal pages)
+# Update HTML pages with meta descriptions, JSON-LD structured data, and title
+# templates. Mark internal pages with noindex.
 
 if _gd_options.get("seo_enabled", False):
     print("\n🔍 Applying SEO enhancements to HTML files...")
