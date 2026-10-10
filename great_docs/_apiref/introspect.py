@@ -193,7 +193,7 @@ def _static_object(
 
     if isinstance(obj, gf.Alias):
         target_mod = obj.target_path.split(".")[0]
-        if target_mod != module_path:
+        if target_mod not in loader.modules_collection:
             _ = loader.load(target_mod)
 
     return obj
