@@ -29066,6 +29066,48 @@ def test_get_object_alias_loads_target_module():
     assert obj is not None
 
 
+def test_get_object_alias_does_not_reload_cached_package():
+    """An alias in an already-loaded package does not trigger further loads."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pkg = Path(tmp_dir) / "introtest_alias_reload"
+        (pkg / "sub").mkdir(parents=True)
+        (pkg / "__init__.py").write_text("", encoding="utf-8")
+        (pkg / "sub" / "__init__.py").write_text(
+            "from introtest_alias_reload.impl import Thing\n", encoding="utf-8"
+        )
+        (pkg / "impl.py").write_text(
+            'class Thing:\n    """A thing."""\n    def __init__(self) -> None:\n        pass\n',
+            encoding="utf-8",
+        )
+        sys.path.insert(0, tmp_dir)
+        try:
+            from great_docs._apiref.introspect import make_loader
+
+            loader = make_loader("numpy")
+            loaded: list[str] = []
+            original_load = gf.GriffeLoader.load
+
+            def counting_load(self, module, *args, **kwargs):
+                loaded.append(module)
+                return original_load(self, module, *args, **kwargs)
+
+            gf.GriffeLoader.load = counting_load
+            try:
+                for _ in range(3):
+                    get_object("introtest_alias_reload.sub:Thing", loader=loader)
+            finally:
+                gf.GriffeLoader.load = original_load
+
+            # One load for the initial package read; the alias target is the
+            # same package, so repeated lookups must not load it again.
+            assert loaded == ["introtest_alias_reload.sub"]
+        finally:
+            sys.path.remove(tmp_dir)
+            for name in list(sys.modules):
+                if name.startswith("introtest_alias_reload"):
+                    sys.modules.pop(name)
+
+
 def test_get_object_nested_path():
     """get_object can navigate nested class members."""
     with tempfile.TemporaryDirectory() as tmp_dir:
