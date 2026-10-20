@@ -49,6 +49,8 @@ First body.
 Second body.
 :::
 
+Press `<kbd>Esc</kbd>`{=html} to cancel.
+
 Term `<code>`{=html}[FAILURE]{.name}[=]{.op}[\"failure\"]{.value}`</code>`{=html} here.
 
 ```{=html}
@@ -180,6 +182,11 @@ def test_empty_callout_keeps_its_title(guide: str):
 
 def test_tabs_become_titled_sections(guide: str):
     assert "**First tab**\n\nFirst body.\n\n**Second tab**\n\nSecond body." in guide
+
+
+def test_raw_html_inline_keeps_its_text(guide):
+    # Shortcodes such as `keys` return a whole element as one raw inline
+    assert "Press Esc to cancel." in guide
 
 
 def test_raw_code_run_becomes_one_code_span(guide: str):

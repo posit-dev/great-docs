@@ -184,7 +184,29 @@ end
 
 local flatten = {}
 
-flatten.Inlines = collapse_code
+--- Read raw HTML inlines as Markdown inlines, which the writer would drop.
+---
+--- Shortcodes such as `keys` return a whole element as one raw inline.
+---@param inlines pandoc.Inlines
+---@return pandoc.Inlines
+local function read_raw_inlines(inlines)
+    local out = pandoc.Inlines({})
+    for _, el in ipairs(inlines) do
+        local ok, doc = false, nil
+        if el.t == "RawInline" and el.format == "html" then
+            ok, doc = pcall(pandoc.read, el.text, "html")
+        end
+        if ok then
+            out:extend(pandoc.utils.blocks_to_inlines(doc.blocks):walk(flatten))
+        else
+            out:insert(el)
+        end
+    end
+    return out
+end
+
+-- Collapse `<code>` runs first; reading their tags one by one loses the run
+flatten.Inlines = function(inlines) return read_raw_inlines(collapse_code(inlines)) end
 
 flatten.Span = function(span) return span.content end
 
