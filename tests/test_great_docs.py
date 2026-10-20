@@ -4514,8 +4514,8 @@ def test_landing_page_has_sidebar_metadata():
         index_qmd = docs.build_dir / "index.qmd"
         content = index_qmd.read_text()
 
-        # Should have sidebar with metadata
-        assert ".column-margin" in content
+        # Should have sidebar with metadata, marked so companions can drop it
+        assert "::: {.column-margin .gd-homepage-sidebar}" in content
         assert "View on PyPI" in content
         assert "Full license" in content
         assert ">=3.9" in content
@@ -15111,6 +15111,8 @@ def test_create_blended_index_basic():
         content = index_qmd.read_text(encoding="utf-8")
 
         assert "Welcome to the guide." in content
+        # Marked so companions can drop it
+        assert "::: {.gd-meta-sidebar .gd-homepage-sidebar}" in content
 
         # The first page should have been removed from user-guide/
         assert not first_page.exists()
@@ -17729,7 +17731,7 @@ def test_prepare_build_directory_creates_structure():
 
         options = json.loads(options_path.read_text())
 
-        assert "markdown_pages" in options
+        assert "freeze_dir" in options
 
 
 def test_prepare_build_directory_can_retry_after_missing_header_include(tmp_path):

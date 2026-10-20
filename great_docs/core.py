@@ -28,7 +28,7 @@ from ._utils import (
     validate_layout_outputs,
     validate_tree_symlinks,
 )
-from ._website import i18n, page_dates, page_metadata, page_url, social_cards
+from ._website import i18n, markdown_pages, page_dates, page_metadata, page_url, social_cards
 from ._website.navigation import label as nav_label
 from ._website.seo import description as seo_description
 from ._website.seo import noindex
@@ -656,7 +656,6 @@ class GreatDocs:
         # Write options JSON for the post-render script
         gd_options = {
             "freeze_dir": os.path.relpath(self.layout.freeze_dir, self.build_dir),
-            "markdown_pages": self._config.markdown_pages,
         }
         # Add i18n translations bundle
         from ._translations import get_translations_bundle
@@ -6834,7 +6833,7 @@ class GreatDocs:
         # pushing it below the metadata panel (links/developers/etc.). See
         # https://github.com/posit-dev/great-docs/issues/220.
         if margin_content:
-            blended_content = f"{frontmatter_block}\n{hero_block}{body}\n\n::: {{.gd-meta-sidebar}}\n{margin_content}\n:::\n"
+            blended_content = f"{frontmatter_block}\n{hero_block}{body}\n\n::: {{.gd-meta-sidebar .gd-homepage-sidebar}}\n{margin_content}\n:::\n"
         else:
             blended_content = f"{frontmatter_block}\n{hero_block}{body}"
 
@@ -11364,7 +11363,7 @@ toc: false
 body-classes: "gd-homepage"
 ---
 
-{first_heading_style}{hero_block}::: {{.column-margin}}
+{first_heading_style}{hero_block}::: {{.column-margin .gd-homepage-sidebar}}
 {margin_content}
 :::
 
@@ -13811,6 +13810,7 @@ anchor-sections: true
         social_cards.register(
             config, self._config, self._resolve_social_card_image_url(), quarto_yml.parent
         )
+        markdown_pages.register(config, self._config)
 
         # Apply explicit navbar ordering from config (if set)
         self._reorder_navbar(config)
