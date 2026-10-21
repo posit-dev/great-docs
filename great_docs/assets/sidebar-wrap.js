@@ -125,11 +125,15 @@
     }
 
     /**
-     * Disable sidebar section collapsing by stripping Bootstrap collapse
-     * data attributes and ensuring all sections stay expanded.
+     * Keep every section of the site sidebar permanently expanded.
+     *
+     * Remove Bootstrap collapse attributes from section headings and show
+     * every section list. Only `#quarto-sidebar` changes, because the navbar
+     * menu button and the small-screen sidebar toggle need their collapse
+     * attributes.
      */
     function disableSidebarCollapse() {
-        var sidebar = document.querySelector('.gd-ref-sidebar');
+        var sidebar = document.getElementById('quarto-sidebar');
         if (!sidebar) return;
 
         // Remove data-bs-toggle/target from all sidebar collapse triggers
