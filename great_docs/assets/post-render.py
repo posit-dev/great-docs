@@ -55,22 +55,6 @@ if os.path.exists(constant_values_path):
         constant_values = json.load(f)
     print(f"Loaded {len(constant_values)} constant value entries")
 
-# Load great-docs options (written by core.py during build)
-_gd_options: dict[str, object] = {}
-_gd_options_path = "_gd_options.json"
-if os.path.exists(_gd_options_path):
-    with open(_gd_options_path, "r", encoding="utf-8") as f:
-        _gd_options = json.load(f)
-
-# i18n helper — look up a translated string from _gd_options["i18n"]
-_i18n_bundle: dict[str, str] = _gd_options.get("i18n", {})
-
-
-def _t(key: str, fallback: str | None = None) -> str:
-    """Look up a translated string, falling back to English default."""
-    return _i18n_bundle.get(key, fallback if fallback is not None else key)
-
-
 # Pygments class to Quarto class mapping
 # Quarto uses different class names than Pygments default
 PYGMENTS_TO_QUARTO_CLASS = {
@@ -315,111 +299,6 @@ print("Finished processing all files")
 print("##GD:PASS:Reference pages processed", flush=True)
 
 all_html_files = glob.glob("_site/**/*.html", recursive=True)
-
-
-# ============================================================================
-# Version Badge Injection
-# ============================================================================
-# Insert a version badge into the navbar title from _package_meta.json
-
-
-def inject_version_badge():
-    """
-    Inject a version badge next to the package name in the navbar.
-
-    Reads package version (and optional release date) from `_package_meta.json` (written by the
-    build) and inserts a small badge span inside each `<span class="navbar-title">` element across
-    all rendered HTML files.  When a `published_at` date is present the badge receives a `title`
-    attribute so the release date appears as a native browser tooltip on hover.
-    """
-    meta_path = "_package_meta.json"
-    if not os.path.exists(meta_path):
-        print("No _package_meta.json found, skipping version badge injection")
-        return
-
-    with open(meta_path, "r", encoding="utf-8") as f:
-        meta = json.load(f)
-
-    version = meta.get("version", "")
-    if not version:
-        print("No version in _package_meta.json, skipping version badge injection")
-        return
-
-    # Build an optional title attribute with the release date
-    published_at = meta.get("published_at", "")
-    title_attr = ""
-    if published_at:
-        # published_at is ISO-8601 e.g. "2025-06-15T12:00:00Z"
-        date_str = published_at[:10]  # "2025-06-15"
-        title_attr = f' title="Released {date_str}"'
-
-    print(f"Injecting version badge v{version} into navbar...")
-
-    # Match <span class="navbar-title">PackageName</span>
-    navbar_title_pattern = re.compile(r'(<span class="navbar-title">)(.*?)(</span>)')
-
-    badge_html = f'<span class="version-badge"{title_attr}>v{version}</span>'
-
-    # Build a Tippy.js tooltip for the logo (used when navbar has a logo
-    # instead of a text title).  The tooltip shows version tag + release date.
-    # Uses HTML content: <code> for the version, <br> for the line break.
-    import html as _html_esc
-
-    version_html = f"<code>v{_html_esc.escape(version)}</code>"
-    if published_at:
-        date_str = published_at[:10]
-        released_line = _t("logo_tooltip_released", "Released {date}").replace(
-            "{date}", _html_esc.escape(date_str)
-        )
-        logo_tooltip_html = f"{version_html}<br>{_html_esc.escape(released_line)}"
-    else:
-        logo_tooltip_html = version_html
-
-    # Pattern to match the <a> navbar-brand-logo link wrapping logo images
-    logo_brand_pattern = re.compile(r'(<a\b[^>]*class="navbar-brand navbar-brand-logo"[^>]*)>')
-
-    badge_count = 0
-    logo_count = 0
-
-    for html_file in all_html_files:
-        with open(html_file, "r", encoding="utf-8") as file:
-            content = file.read()
-
-        modified = False
-
-        match = navbar_title_pattern.search(content)
-        if match:
-            # Only inject if badge not already present
-            if "version-badge" not in content:
-                replacement = f"{match.group(1)}{match.group(2)} {badge_html}{match.group(3)}"
-                content = navbar_title_pattern.sub(replacement, content)
-                modified = True
-                badge_count += 1
-
-        # When there's a logo but no text title, add a tooltip to the logo link
-        if not match:
-            logo_match = logo_brand_pattern.search(content)
-            if logo_match and 'data-tippy-content="' not in logo_match.group(0):
-                escaped_tooltip = logo_tooltip_html.replace('"', "&quot;")
-                replacement = f'{logo_match.group(1)} data-tippy-content="{escaped_tooltip}">'
-                content = logo_brand_pattern.sub(replacement, content, count=1)
-                modified = True
-                logo_count += 1
-
-        if modified:
-            with open(html_file, "w", encoding="utf-8") as file:
-                file.write(content)
-
-    if badge_count > 0:
-        print(f"Injected version badge into {badge_count} HTML files")
-    if logo_count > 0:
-        print(f"Added version tooltip to navbar logo in {logo_count} HTML files")
-    if badge_count == 0 and logo_count == 0:
-        print("No navbar titles or logos found for version badge injection")
-
-
-inject_version_badge()
-print("##GD:PASS:Version badge injected", flush=True)
 
 
 def disable_sidebar_collapse():

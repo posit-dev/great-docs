@@ -1715,6 +1715,13 @@ def _rewrite_quarto_yml_for_version(
         title = config.get("website", {}).get("title", "")
         if title and f"({entry.label})" not in title:
             config.setdefault("website", {})["title"] = f"{title} ({entry.label})"
+            # An explicit navbar title, such as one with a release badge,
+            # overrides the site title, so it needs the version suffix too
+            navbar_title = config["website"].get("navbar", {}).get("title")
+            if isinstance(navbar_title, str) and navbar_title.startswith(title):
+                config["website"]["navbar"]["title"] = (
+                    f"{title} ({entry.label}){navbar_title[len(title) :]}"
+                )
 
     with open(quarto_yml, "w") as f:
         f.write(QUARTO_YML_HEADER)

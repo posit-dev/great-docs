@@ -6233,8 +6233,8 @@ def test_navbar_home_removed_from_existing():
         assert "Reference" in texts
 
 
-def test_version_metadata_from_github_release():
-    """Test that _package_meta.json is written from the latest GitHub release."""
+def test_navbar_release_from_github_release():
+    """The navbar title shows the latest GitHub release"""
 
     fake_releases = [
         {
@@ -6271,19 +6271,16 @@ def test_version_metadata_from_github_release():
         with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
             docs._update_quarto_config()
 
-        meta_path = build_dir / "_package_meta.json"
+        navbar = read_yaml(quarto_yml)["website"]["navbar"]
 
-        assert meta_path.exists()
-
-        with open(meta_path) as f:
-            meta = json.load(f)
-
-        assert meta["version"] == "2.3.4"
-        assert meta["published_at"] == "2025-06-15T18:30:00Z"
+        assert navbar["title"] == (
+            "test-pkg "
+            '`<span class="version-badge" title="Released 2025-06-15">v2.3.4</span>`{=html}'
+        )
 
 
-def test_version_metadata_not_written_no_releases():
-    """Test graceful degradation when no GitHub releases exist."""
+def test_navbar_release_absent_without_releases():
+    """The navbar title is the plain site title when no GitHub release exists"""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
@@ -6309,13 +6306,45 @@ def test_version_metadata_not_written_no_releases():
         with patch.object(docs, "_fetch_github_releases", return_value=[]):
             docs._update_quarto_config()
 
-        meta_path = build_dir / "_package_meta.json"
-
-        assert not meta_path.exists()
+        assert "title" not in read_yaml(quarto_yml)["website"]["navbar"]
 
 
-def test_version_metadata_not_written_no_github():
-    """Test that _package_meta.json is not written when no GitHub repo info."""
+def test_navbar_release_absent_on_malformed_github_response():
+    """A release list GitHub returns as invalid JSON shows no release instead of failing"""
+    import requests
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        (project_path / "great-docs.yml").write_text("")
+        (project_path / "pyproject.toml").write_text(
+            "[project]\n"
+            'name = "test-pkg"\n'
+            'version = "0.0.1"\n'
+            "\n"
+            "[project.urls]\n"
+            'Repository = "https://github.com/test/pkg"\n'
+        )
+        build_dir = project_path / "great-docs"
+        build_dir.mkdir()
+        quarto_yml = build_dir / "_quarto.yml"
+        quarto_yml.write_text(
+            "project:\n  type: website\n"
+            "website:\n  title: test-pkg\nformat:\n  html:\n    theme: flatly\n"
+        )
+
+        response = MagicMock(status_code=200)
+        response.json.side_effect = requests.exceptions.JSONDecodeError("Expecting value", "", 0)
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        with patch("requests.get", return_value=response):
+            docs._update_quarto_config()
+
+        assert "title" not in read_yaml(quarto_yml)["website"]["navbar"]
+
+
+def test_navbar_release_absent_without_github_repo():
+    """No release is fetched or shown without a GitHub repository"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         project_path = Path(tmp_dir)
         (project_path / "great-docs.yml").write_text("")
@@ -6333,60 +6362,11 @@ def test_version_metadata_not_written_no_github():
         )
 
         docs = GreatDocs(project_path=tmp_dir)
-        docs._update_quarto_config()
-
-        meta_path = build_dir / "_package_meta.json"
-
-        assert not meta_path.exists()
-
-
-def test_version_metadata_strips_v_prefix():
-    """Test that 'v' prefix is stripped from tag_name for the version value."""
-
-    fake_releases = [
-        {
-            "tag_name": "v1.0.0",
-            "name": "v1.0.0",
-            "body": "",
-            "published_at": "2025-01-01T00:00:00Z",
-            "html_url": "",
-            "prerelease": False,
-        }
-    ]
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-        (project_path / "great-docs.yml").write_text("")
-        (project_path / "pyproject.toml").write_text(
-            "[project]\n"
-            'name = "test-pkg"\n'
-            'version = "1.0.0"\n'
-            "\n"
-            "[project.urls]\n"
-            'Repository = "https://github.com/test/pkg"\n'
-        )
-        build_dir = project_path / "great-docs"
-        build_dir.mkdir()
-        quarto_yml = build_dir / "_quarto.yml"
-        quarto_yml.write_text(
-            "project:\n  type: website\n"
-            "website:\n  title: test-pkg\nformat:\n  html:\n    theme: flatly\n"
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
+        with patch.object(docs, "_fetch_github_releases") as fetch:
             docs._update_quarto_config()
 
-        meta_path = build_dir / "_package_meta.json"
-
-        assert meta_path.exists()
-
-        with open(meta_path) as f:
-            meta = json.load(f)
-
-        # Should be "1.0.0" not "v1.0.0"
-        assert meta["version"] == "1.0.0"
+        fetch.assert_not_called()
+        assert "title" not in read_yaml(quarto_yml)["website"]["navbar"]
 
 
 def test_module_exports_categorized():
@@ -16679,82 +16659,6 @@ def test_update_quarto_config_attribution():
         footer_text = footer.get("center", "")
 
         assert "Great&nbsp;Docs" in footer_text
-
-
-def test_update_quarto_config_version_badge_metadata():
-    """Test _update_quarto_config writes _package_meta.json for version badge."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-
-        base_config = {
-            "project": {"type": "website"},
-            "website": {"navbar": {"left": []}, "sidebar": []},
-            "format": {"html": {}},
-        }
-
-        with open(quarto_yml, "w") as f:
-            write_yaml(base_config, f)
-
-        # Mock _fetch_github_releases to return a release
-        fake_releases = [{"tag_name": "v2.0.0", "published_at": "2024-01-15T00:00:00Z"}]
-        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
-            docs._update_quarto_config()
-
-        meta_path = docs.build_dir / "_package_meta.json"
-
-        assert meta_path.exists()
-
-        meta = json.loads(meta_path.read_text())
-
-        assert meta["version"] == "2.0.0"
-        assert "published_at" in meta
-
-
-def test_update_quarto_config_version_badge_no_releases():
-    """Test _update_quarto_config removes stale meta when no releases."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-
-        quarto_yml = docs.build_dir / "_quarto.yml"
-        quarto_yml.parent.mkdir(parents=True, exist_ok=True)
-
-        base_config = {
-            "project": {"type": "website"},
-            "website": {"navbar": {"left": []}, "sidebar": []},
-            "format": {"html": {}},
-        }
-
-        with open(quarto_yml, "w") as f:
-            write_yaml(base_config, f)
-
-        # Create a stale meta file
-        meta_path = docs.build_dir / "_package_meta.json"
-        meta_path.write_text(json.dumps({"version": "old"}))
-
-        with patch.object(docs, "_fetch_github_releases", return_value=[]):
-            docs._update_quarto_config()
-
-        # Should have been removed
-        assert not meta_path.exists()
 
 
 def test_update_quarto_config_site_url():
@@ -28862,74 +28766,6 @@ def test_update_quarto_config_logo_href():
 
         navbar = result["website"]["navbar"]
         assert navbar["logo-href"] == "https://example.com"
-
-
-def test_update_quarto_config_version_badge_metadata_v2():
-    """Test _update_quarto_config writes version badge metadata."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs, quarto_yml = _make_uqc_docs(tmp_dir)
-
-        releases = [{"tag_name": "v1.2.3", "published_at": "2024-01-01T00:00:00Z"}]
-
-        with (
-            patch.object(
-                docs,
-                "_get_github_repo_info",
-                return_value=("owner", "repo", "https://github.com/owner/repo"),
-            ),
-            patch.object(docs, "_fetch_github_releases", return_value=releases),
-        ):
-            docs._update_quarto_config()
-
-        meta_path = docs.build_dir / "_package_meta.json"
-        assert meta_path.exists()
-        with open(meta_path) as f:
-            meta = json.load(f)
-        assert meta["version"] == "1.2.3"
-
-
-def test_update_quarto_config_fetch_releases_exception():
-    """Test _update_quarto_config handles release fetch exception."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs, quarto_yml = _make_uqc_docs(tmp_dir)
-
-        with (
-            patch.object(
-                docs,
-                "_get_github_repo_info",
-                return_value=("owner", "repo", "https://github.com/owner/repo"),
-            ),
-            patch.object(
-                docs,
-                "_fetch_github_releases",
-                side_effect=RuntimeError("network error"),
-            ),
-        ):
-            docs._update_quarto_config()
-
-
-def test_update_quarto_config_no_releases():
-    """Test _update_quarto_config handles empty release list."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs, quarto_yml = _make_uqc_docs(tmp_dir)
-
-        meta_path = docs.build_dir / "_package_meta.json"
-        meta_path.write_text('{"version": "old"}', encoding="utf-8")
-
-        with (
-            patch.object(
-                docs,
-                "_get_github_repo_info",
-                return_value=("owner", "repo", "https://github.com/owner/repo"),
-            ),
-            patch.object(docs, "_fetch_github_releases", return_value=[]),
-        ):
-            docs._update_quarto_config()
-
-        assert not meta_path.exists()
 
 
 def test_get_parser_defaults_numpy():

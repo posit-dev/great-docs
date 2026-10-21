@@ -3327,6 +3327,39 @@ class TestRewriteQuartoYmlEdge:
 
         assert "(0.2)" in result["website"]["title"]
 
+    @pytest.mark.parametrize(
+        ("navbar_title", "expected"),
+        [
+            ("My Docs <badge>", "My Docs (0.2) <badge>"),
+            (False, False),
+        ],
+    )
+    def test_non_latest_navbar_title_gets_version_suffix(
+        self, tmp_path: Path, navbar_title, expected
+    ):
+        # An explicit navbar title overrides the site title. Both need
+        # the version suffix.
+        from yaml12 import read_yaml, write_yaml
+
+        from great_docs._versioned_build import _rewrite_quarto_yml_for_version
+
+        dest = tmp_path / "vdir"
+        dest.mkdir()
+        config = {
+            "project": {"type": "website", "output-dir": "_site"},
+            "format": {"html": {}},
+            "website": {"title": "My Docs", "navbar": {"title": navbar_title}},
+        }
+        with open(dest / "_quarto.yml", "w") as f:
+            write_yaml(config, f)
+
+        _rewrite_quarto_yml_for_version(dest, _make_entry("0.2"), "0.3")
+
+        with open(dest / "_quarto.yml", "r") as f:
+            result = read_yaml(f)
+
+        assert result["website"]["navbar"]["title"] == expected
+
 
 # ---------------------------------------------------------------------------
 # run_versioned_build — orchestrator with mocked render

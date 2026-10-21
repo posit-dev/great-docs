@@ -31,6 +31,7 @@ from ._utils import (
 from ._website import i18n, markdown_pages, page_dates, page_metadata, page_url, social_cards
 from ._website.navigation import github as nav_github
 from ._website.navigation import label as nav_label
+from ._website.navigation import release as nav_release
 from ._website.seo import description as seo_description
 from ._website.seo import noindex
 from ._website.seo import title as seo_title
@@ -2154,7 +2155,11 @@ class GreatDocs:
                 print(f"   ⚠️  GitHub API returned status {resp.status_code}")
                 break
 
-            data = resp.json()
+            try:
+                data = resp.json()
+            except requests.exceptions.JSONDecodeError:
+                print("   ⚠️  GitHub API returned a malformed release list")
+                break
             if not data:
                 break  # No more pages  # pragma: no cover
 
@@ -13661,44 +13666,12 @@ anchor-sections: true
             header_list[:] = [h for h in header_list if "gd-scale-to-fit" not in str(h)]
             header_list.append({"text": stf_meta_tag})
 
-        # Write package metadata JSON for post-render version badge injection.
-        # The version and release date come from the latest GitHub Release so
-        # the badge always reflects what has actually been published.
-        meta_path = self.build_dir / "_package_meta.json"
-
+        # Show the latest GitHub release beside the navbar title
+        release = None
         if owner and repo:
-            try:
-                releases = self._fetch_github_releases(owner, repo, max_releases=1)
-            except Exception:  # pragma: no cover
-                releases = []
-
-            if releases:
-                latest = releases[0]
-                tag = latest.get("tag_name", "")
-                published = latest.get("published_at", "")
-
-                # Strip leading 'v' for normalisation, then re-add for display
-                version_str = tag.lstrip("v") if tag else ""
-
-                if version_str:
-                    meta: dict[str, str] = {"version": version_str}
-                    if published:
-                        meta["published_at"] = published
-                    with open(meta_path, "w") as f:
-                        json.dump(meta, f)
-                    print(f"Wrote package metadata (version={version_str}) to {meta_path}")
-                else:
-                    # Tag with no version-like content — remove stale file
-                    meta_path.unlink(missing_ok=True)  # pragma: no cover
-            else:
-                print(
-                    "No GitHub releases found; skipping version badge metadata"
-                )  # pragma: no cover
-                # Remove stale metadata from a previous build
-                meta_path.unlink(missing_ok=True)  # pragma: no cover
-        else:
-            print("No GitHub repository info available; skipping version badge metadata")
-            meta_path.unlink(missing_ok=True)
+            latest = self._fetch_github_releases(owner, repo, max_releases=1)
+            release = nav_release.Release.make(latest[0]) if latest else None
+        nav_release.add_to_navbar(config, release, self._config.lang)
 
         # Register Quarto extension filters (output-title wraps cell
         # outputs in a titled container when #| output-title: is set)
