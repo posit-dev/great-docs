@@ -9528,81 +9528,6 @@ def test_add_frontmatter_option_bool_true_toc():
         assert "toc: true" in result
 
 
-def test_update_navbar_github_link_widget_style_basic():
-    """_update_navbar_github_link creates a widget entry."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        config = {"website": {"navbar": {"right": []}}}
-        docs._update_navbar_github_link(
-            config, "owner", "repo", "https://github.com/owner/repo", "widget"
-        )
-        right = config["website"]["navbar"]["right"]
-
-        assert len(right) == 1
-        assert "github-widget" in right[0]["text"]
-
-
-def test_update_navbar_github_link_icon_style_entry_check():
-    """_update_navbar_github_link creates an icon entry."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        config = {"website": {"navbar": {"right": []}}}
-        docs._update_navbar_github_link(
-            config, "owner", "repo", "https://github.com/owner/repo", "icon"
-        )
-        right = config["website"]["navbar"]["right"]
-
-        assert len(right) == 1
-        assert right[0]["icon"] == "github"
-
-
-def test_update_navbar_github_link_replaces_existing():
-    """_update_navbar_github_link replaces an existing GitHub icon entry."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        config = {
-            "website": {
-                "navbar": {
-                    "right": [
-                        {"icon": "github", "href": "https://github.com/old/old"},
-                        {"icon": "twitter", "href": "https://twitter.com"},
-                    ]
-                }
-            }
-        }
-        docs._update_navbar_github_link(
-            config, "new_owner", "new_repo", "https://github.com/new_owner/new_repo", "widget"
-        )
-        right = config["website"]["navbar"]["right"]
-
-        assert len(right) == 2
-        assert "github-widget" in right[0]["text"]
-        assert right[1]["icon"] == "twitter"
-
-
-def test_update_navbar_github_link_no_url():
-    """_update_navbar_github_link does nothing if repo_url is None."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        config = {"website": {"navbar": {"right": []}}}
-        docs._update_navbar_github_link(config, None, None, None, "icon")
-
-        assert config["website"]["navbar"]["right"] == []
-
-
-def test_update_navbar_github_link_creates_right_section_from_empty():
-    """_update_navbar_github_link creates 'right' list if missing."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        config = {"website": {"navbar": {}}}
-        docs._update_navbar_github_link(
-            config, "owner", "repo", "https://github.com/owner/repo", "icon"
-        )
-
-        assert "right" in config["website"]["navbar"]
-        assert len(config["website"]["navbar"]["right"]) == 1
-
-
 def test_find_index_source_file_readme_returns_tuple():
     """_find_index_source_file finds README.md."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -13393,137 +13318,6 @@ def test_format_authors_yaml_empty_v2():
         assert result == ""
 
 
-def test_update_navbar_github_link_widget_style():
-    """_update_navbar_github_link creates widget entry for widget style."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        config = {"website": {"navbar": {"right": []}}}
-        docs._update_navbar_github_link(
-            config,
-            owner="octocat",
-            repo="hello",
-            repo_url="https://github.com/octocat/hello",
-            github_style="widget",
-        )
-        right = config["website"]["navbar"]["right"]
-
-        assert len(right) == 1
-        assert "github-widget" in right[0]["text"]
-        assert 'data-owner="octocat"' in right[0]["text"]
-        assert 'data-repo="hello"' in right[0]["text"]
-
-
-def test_update_navbar_github_link_icon_style():
-    """_update_navbar_github_link creates icon entry for icon style."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        config = {"website": {"navbar": {"right": []}}}
-        docs._update_navbar_github_link(
-            config,
-            owner="octocat",
-            repo="hello",
-            repo_url="https://github.com/octocat/hello",
-            github_style="icon",
-        )
-        right = config["website"]["navbar"]["right"]
-
-        assert len(right) == 1
-        assert right[0] == {"icon": "github", "href": "https://github.com/octocat/hello"}
-
-
-def test_update_navbar_github_link_replaces_existing_icon():
-    """_update_navbar_github_link replaces an existing GitHub icon entry."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        existing = {"icon": "github", "href": "https://github.com/old/repo"}
-        config = {"website": {"navbar": {"right": [existing, {"text": "About"}]}}}
-        docs._update_navbar_github_link(
-            config,
-            owner="new",
-            repo="repo",
-            repo_url="https://github.com/new/repo",
-            github_style="widget",
-        )
-        right = config["website"]["navbar"]["right"]
-
-        assert len(right) == 2
-        assert "github-widget" in right[0]["text"]
-        assert right[1] == {"text": "About"}
-
-
-def test_update_navbar_github_link_replaces_existing_widget():
-    """_update_navbar_github_link replaces an existing widget entry."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        old_widget = {"text": '<div id="github-widget" data-owner="old" data-repo="old"></div>'}
-        config = {"website": {"navbar": {"right": [old_widget]}}}
-        docs._update_navbar_github_link(
-            config,
-            owner="new",
-            repo="new",
-            repo_url="https://github.com/new/new",
-            github_style="icon",
-        )
-        right = config["website"]["navbar"]["right"]
-
-        assert len(right) == 1
-        assert right[0] == {"icon": "github", "href": "https://github.com/new/new"}
-
-
-def test_update_navbar_github_link_no_repo_url():
-    """_update_navbar_github_link does nothing without repo_url."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        config = {"website": {"navbar": {"right": []}}}
-        docs._update_navbar_github_link(
-            config, owner=None, repo=None, repo_url=None, github_style="icon"
-        )
-
-        assert config["website"]["navbar"]["right"] == []
-
-
-def test_update_navbar_github_link_creates_right_section():
-    """_update_navbar_github_link creates 'right' key if missing."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        config = {"website": {"navbar": {}}}
-        docs._update_navbar_github_link(
-            config, owner="x", repo="y", repo_url="https://github.com/x/y", github_style="icon"
-        )
-
-        assert "right" in config["website"]["navbar"]
-        assert len(config["website"]["navbar"]["right"]) == 1
-
-
-def test_update_navbar_github_link_widget_without_owner_falls_back_to_icon():
-    """Widget style without owner/repo falls back to icon style."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        config = {"website": {"navbar": {"right": []}}}
-        docs._update_navbar_github_link(
-            config, owner=None, repo=None, repo_url="https://github.com/x/y", github_style="widget"
-        )
-        right = config["website"]["navbar"]["right"]
-
-        assert right[0] == {"icon": "github", "href": "https://github.com/x/y"}
-
-
-def test_update_navbar_github_link_preserves_non_github_items():
-    """Non-GitHub items in right section are preserved."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        config = {"website": {"navbar": {"right": [{"text": "About"}, "plain-string"]}}}
-        docs._update_navbar_github_link(
-            config, owner="o", repo="r", repo_url="https://github.com/o/r", github_style="icon"
-        )
-        right = config["website"]["navbar"]["right"]
-
-        assert len(right) == 3
-        assert right[0] == {"text": "About"}
-        assert right[1] == "plain-string"
-        assert right[2] == {"icon": "github", "href": "https://github.com/o/r"}
-
-
 def test_find_index_source_file_index_qmd_exact_warnings():
     """_find_index_source_file prefers index.qmd over others."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -15561,26 +15355,6 @@ def test_get_quarto_env_venv_alternative_name():
         env = docs._get_quarto_env()
 
         assert env["QUARTO_PYTHON"] == str(venv_python.resolve())
-
-
-def test_update_navbar_github_link_with_string_items():
-    """_update_navbar_github_link handles mix of string and dict items."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        config = {"website": {"navbar": {"right": ["text-only", {"text": "Other"}]}}}
-        docs._update_navbar_github_link(
-            config,
-            owner="user",
-            repo="repo",
-            repo_url="https://github.com/user/repo",
-            github_style="icon",
-        )
-        right = config["website"]["navbar"]["right"]
-
-        assert len(right) == 3
-        assert right[0] == "text-only"
-        assert right[1] == {"text": "Other"}
-        assert right[2] == {"icon": "github", "href": "https://github.com/user/repo"}
 
 
 def test_build_github_source_url_basic():
@@ -21894,25 +21668,6 @@ def test_strip_frontmatter_complex():
         result = docs._strip_frontmatter(content)
         assert "title:" not in result
         assert "Body here." in result
-
-
-def test_update_navbar_github_link():
-    """Test _update_navbar_github_link with widget style."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        config = {
-            "website": {
-                "navbar": {
-                    "left": [{"text": "Home", "href": "index.qmd"}],
-                    "right": [{"icon": "github", "href": "https://github.com/owner/repo"}],
-                }
-            }
-        }
-        docs._update_navbar_github_link(
-            config, "owner", "repo", "https://github.com/owner/repo", "widget"
-        )
-        # Should not crash; may update the right navbar items
-        assert "navbar" in config["website"]
 
 
 def test_build_metadata_margin_with_authors_b9():
