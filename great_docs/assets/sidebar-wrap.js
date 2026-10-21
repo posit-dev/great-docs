@@ -101,10 +101,15 @@
     }
 
     /**
-     * Process all <span class="menu-text"> elements inside the sidebar.
+     * Insert break opportunities into the sidebar entries of a reference page.
+     *
+     * Only `#quarto-sidebar` changes, because replacing a menu label's
+     * contents would remove navbar widgets. The mobile menu copies the
+     * sidebar markup when it opens, so it gets the breaks too.
      */
     function processSidebar() {
-        var sidebar = document.querySelector('body.doc-reference, body.doc-api-page');
+        if (!document.querySelector('body.doc-reference, body.doc-api-page')) return;
+        var sidebar = document.getElementById('quarto-sidebar');
         if (!sidebar) return;
 
         var spans = sidebar.querySelectorAll('.menu-text');
