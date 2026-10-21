@@ -209,38 +209,8 @@ for html_file in html_files:
     # Re-highlight the signature with Pygments for better syntax coloring
     content = highlight_signature_with_pygments(content)
 
-    # Convert back to lines for line-by-line processing
-    content = content.splitlines(keepends=True)
-
-    # Add separator lines between class details and individual members,
-    # and between individual member sections.
-    # - Thin solid line after the Methods/Attributes summary table (before first member section)
-    # - Dotted line between each individual member section
-    for i, line in enumerate(content):
-        # Individual members render as `level3` sections.
-        if "<section id=" in line and 'class="level3"' in line:
-            # Check if the previous non-blank line ends a table (</table> in </section>)
-            # or closes another member section
-            for j in range(i - 1, max(0, i - 5), -1):
-                prev = content[j].strip()
-                if not prev:
-                    continue
-                if "</table>" in prev:
-                    # First member section after a summary table — solid line
-                    content[i] = (
-                        '<hr style="border: none; border-top: 2px solid #c5c8cd; margin: 1.5rem 0 1rem 0;">\n'
-                        + content[i]
-                    )
-                elif "</section>" in prev:
-                    # Between member sections — dotted line
-                    content[i] = (
-                        '<hr style="border: none; border-top: 2px dotted #b0b4ba; margin: 1.5rem 0 1rem 0;">\n'
-                        + content[i]
-                    )
-                break
-
     with open(html_file, "w", encoding="utf-8") as file:
-        file.writelines(content)
+        file.write(content)
 
 
 print("Finished processing all files")

@@ -1085,9 +1085,11 @@ def test_member_separator_rules_present(pkg_name: str, page_name: str):
     """
     Verify class member separators
 
-    Class pages contain one solid rule after the member summary and one dotted
-    rule between each pair of `level3` members. Derive the expected count from
-    the rendered members so fixtures can add methods without changing the test.
+    The stylesheet draws one solid rule after the member summary and one dotted
+    rule between each pair of `level3` members. Select the members those rules
+    match, and check that the deployed stylesheet carries them. Derive the
+    expected count from the rendered members so fixtures can add methods
+    without changing the test.
     """
     page = _ref_dir(pkg_name) / page_name
     if not page.exists():
@@ -1100,9 +1102,16 @@ def test_member_separator_rules_present(pkg_name: str, page_name: str):
     if not members:
         pytest.skip(f"{page_name}: no member sections to check")
 
-    rules = soup.select("hr")
-    solid_rules = [r for r in rules if "solid" in (r.get("style") or "")]
-    dotted_rules = [r for r in rules if "dotted" in (r.get("style") or "")]
+    groups = (
+        "section:is(.doc-attributes, .doc-classes, .doc-type-aliases, .doc-methods,"
+        " .doc-functions):not(.doc-pages)"
+    )
+    solid_rules = soup.select(f"{groups} > :is(table, .gd-table-responsive) + section")
+    dotted_rules = soup.select(f"{groups} > section + section")
+
+    css = re.sub(r"\s+", "", _deployed_css(pkg_name))
+    assert ">:is(table,.gd-table-responsive)+section::before" in css
+    assert ">section+section::before" in css
 
     assert len(solid_rules) == 1, (
         f"{page_name}: expected exactly one solid rule after the members "
