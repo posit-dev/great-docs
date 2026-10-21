@@ -311,57 +311,10 @@ for html_file in html_files:
         file.writelines(content)
 
 
-all_html_files = glob.glob("_site/**/*.html", recursive=True)
-print(f"Found {len(all_html_files)} HTML files to check for the search title")
-
-for html_file in all_html_files:
-    with open(html_file, "r", encoding="utf-8") as file:
-        content = file.read()
-
-    # Remove the title attribute from #quarto-search to prevent a duplicate
-    # tooltip: Quarto sets title="<search-label>" on the parent div, but the
-    # autocomplete library also creates a child button with its own title.
-    # Stripping the parent avoids two tooltips stacking on hover.
-    _search_title_pat = r'(<div\s+id="quarto-search"\s+class="[^"]*")\s+title="[^"]*"'
-    new_content = re.sub(_search_title_pat, r"\1", content)
-    if new_content != content:
-        with open(html_file, "w", encoding="utf-8") as file:
-            file.write(new_content)
-
 print("Finished processing all files")
 print("##GD:PASS:Reference pages processed", flush=True)
 
-
-# ── Translate autocomplete search-button title ──────────────────────────────
-# The Algolia autocomplete library (autocomplete.umd.js) ships with a
-# hardcoded default  detachedSearchButtonTitle:"Search".  Quarto's search JS
-# passes  clearButtonTitle / submitButtonTitle / detachedCancelButtonText  to
-# the library but omits  detachedSearchButtonTitle, so the button always
-# shows "Search".  If the site language is not English, patch the bundled JS
-# to use the correct search-label translation instead.
-_autocomplete_js = glob.glob("_site/**/autocomplete.umd.js", recursive=True)
-if _autocomplete_js:
-    _search_label = None
-    # Read the search-label from any HTML page's search-options JSON
-    for _hf in all_html_files[:5]:
-        with open(_hf, "r", encoding="utf-8") as f:
-            _hcontent = f.read()
-        _sl_m = re.search(r'"search-label"\s*:\s*"([^"]+)"', _hcontent)
-        if _sl_m:
-            _search_label = _sl_m.group(1)
-            break
-    if _search_label and _search_label != "Search":
-        for _acjs in _autocomplete_js:
-            with open(_acjs, "r", encoding="utf-8") as f:
-                _ac_content = f.read()
-            _old = 'detachedSearchButtonTitle:"Search"'
-            if _old in _ac_content:
-                _ac_content = _ac_content.replace(
-                    _old, f'detachedSearchButtonTitle:"{_search_label}"'
-                )
-                with open(_acjs, "w", encoding="utf-8") as f:
-                    f.write(_ac_content)
-                print(f"Patched search button title to '{_search_label}' in {_acjs}")
+all_html_files = glob.glob("_site/**/*.html", recursive=True)
 
 
 # ============================================================================
