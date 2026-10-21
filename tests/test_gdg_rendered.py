@@ -11853,6 +11853,30 @@ def test_DED_mermaid_caption_layout_css():
     assert "text-align:center" in caption
 
 
+# ── sidebar sections ────────────────────────────────────────────────────────
+
+
+@pytest.mark.dedicated
+def test_DED_sidebar_sections_expanded_by_css():
+    """
+    Deployed CSS hides the sidebar chevrons and keeps sections open
+
+    The rendered HTML retains Quarto's collapse markup. Without JavaScript,
+    these CSS rules keep every sidebar section expanded.
+    """
+    pkg = "gdtest_user_guide_sections"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    css = _deployed_css(pkg)
+    assert css, "No CSS files found in _site"
+
+    toggle = _mermaid_css_rule(css, "a.sidebar-item-toggle.text-start")
+    assert "display:none" in toggle, "Section chevrons must be hidden"
+
+    section = _mermaid_css_rule(css, "#quarto-sidebar ul.collapse.sidebar-section")
+    assert "display:block" in section, "Collapsible sidebar sections must stay visible"
+
+
 # ── ref_section_order ───────────────────────────────────────────────────────
 
 
