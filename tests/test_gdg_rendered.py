@@ -1930,6 +1930,41 @@ def test_sidebar_lists_section_titles(pkg_name: str):
     assert len(all_menu_texts) > 0, f"{pkg_name}: sidebar has no menu items at all"
 
 
+_PKGS_WITH_REF_SIDEBAR = [
+    n
+    for n in ("gdtest_ref_section_order", "gdtest_mcp", "gdtest_cli_nested")
+    if n in _RENDERED_PACKAGES
+]
+
+
+@requires_bs4
+@pytest.mark.parametrize("pkg_name", _PKGS_WITH_REF_SIDEBAR)
+def test_reference_sidebar_styles_come_from_the_stylesheet(pkg_name: str):
+    """
+    Reference sidebar styles come from the existing body classes
+
+    API, CLI and MCP pages need no extra body class or inline sidebar styles.
+    """
+    pages = sorted(_ref_dir(pkg_name).rglob("*.html"))
+    assert pages, f"{pkg_name}: no reference pages"
+
+    for page in pages:
+        soup = _load_html(page)
+        body_classes = soup.body.get("class", []) if soup.body else []
+        assert {"doc-reference", "doc-api-page"} & set(body_classes), (
+            f"{page.name}: no reference body class in {body_classes}"
+        )
+        assert "gd-ref-sidebar" not in body_classes, f"{page.name}: gd-ref-sidebar on <body>"
+
+        sidebar = soup.select_one("nav#quarto-sidebar")
+        if sidebar is None:
+            continue
+        styled = sidebar.select(".sidebar-item-container[style], a.sidebar-item-text[style]")
+        assert not styled, f"{page.name}: inline styles in the sidebar: {styled[:1]}"
+
+    assert "gd-ref-sidebar" not in _deployed_css(pkg_name)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # R4: Landing Page
 # ═══════════════════════════════════════════════════════════════════════════════

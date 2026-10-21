@@ -104,7 +104,7 @@
      * Process all <span class="menu-text"> elements inside the sidebar.
      */
     function processSidebar() {
-        var sidebar = document.querySelector('.gd-ref-sidebar');
+        var sidebar = document.querySelector('body.doc-reference, body.doc-api-page');
         if (!sidebar) return;
 
         var spans = sidebar.querySelectorAll('.menu-text');
