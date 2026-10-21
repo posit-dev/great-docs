@@ -296,6 +296,26 @@ def test_search_json_exists(pkg_name: str):
     assert search.exists(), f"Missing {search}"
 
 
+_SCRIPT_SRC = re.compile(r'<script\b[^>]*\bsrc="([^"]+)"')
+_URL_SCHEME = re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]*:|//")
+
+
+@pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
+def test_local_scripts_resolve_to_site_files(pkg_name: str):
+    """Every local script on every page loads a file shipped in the site."""
+    site = _site_dir(pkg_name).resolve()
+    missing: list[str] = []
+    for page in site.rglob("*.html"):
+        html = page.read_text(encoding="utf-8")
+        for src in _SCRIPT_SRC.findall(html):
+            if _URL_SCHEME.match(src):
+                continue
+            target = (page.parent / src.split("?")[0].split("#")[0]).resolve()
+            if not (target.is_relative_to(site) and target.is_file()):
+                missing.append(f"{page.relative_to(site)}: {src}")
+    assert not missing, "Scripts that do not resolve:\n" + "\n".join(missing)
+
+
 @pytest.mark.dedicated
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_EXPORTS)
 def test_reference_pages_match_exports(pkg_name: str):
