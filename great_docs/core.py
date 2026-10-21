@@ -29,6 +29,7 @@ from ._utils import (
     validate_tree_symlinks,
 )
 from ._website import i18n, markdown_pages, page_dates, page_metadata, page_url, social_cards
+from ._website.navigation import github as nav_github
 from ._website.navigation import label as nav_label
 from ._website.seo import description as seo_description
 from ._website.seo import noindex
@@ -2002,76 +2003,6 @@ class GreatDocs:
         if pyproject_path.exists():
             self._package_metadata_cache = metadata
         return metadata
-
-    def _update_navbar_github_link(
-        self,
-        config: dict,
-        owner: str | None,
-        repo: str | None,
-        repo_url: str | None,
-        github_style: str,
-    ) -> None:
-        """
-        Update an existing navbar's GitHub link to use widget or icon style.
-
-        Parameters
-        ----------
-        config
-            The Quarto configuration dictionary.
-        owner
-            GitHub repository owner.
-        repo
-            GitHub repository name.
-        repo_url
-            Full GitHub repository URL.
-        github_style
-            Either "widget" (with stats dropdown) or "icon" (simple link).
-        """
-        if not repo_url:
-            return
-
-        navbar = config["website"]["navbar"]
-
-        # Ensure right section exists
-        if "right" not in navbar:
-            navbar["right"] = []
-
-        # Build the new GitHub entry based on style
-        if github_style == "widget" and owner and repo:
-            stats = self._fetch_github_repo_stats(owner, repo)
-            stats_attrs = ""
-            if stats:
-                stats_attrs = f' data-stars="{stats["stars"]}" data-forks="{stats["forks"]}"'
-            new_gh_entry = {
-                "text": f'<div id="github-widget" data-owner="{owner}" data-repo="{repo}"{stats_attrs}></div>'
-            }
-        else:
-            new_gh_entry = {"icon": "github", "href": repo_url}
-
-        # Look for existing GitHub entry and replace it
-        new_right = []
-        found_github = False
-
-        for item in navbar["right"]:
-            if isinstance(item, dict):
-                # Check for simple GitHub icon
-                if item.get("icon") == "github":
-                    new_right.append(new_gh_entry)
-                    found_github = True
-                # Check for existing widget
-                elif "github-widget" in str(item.get("text", "")):
-                    new_right.append(new_gh_entry)
-                    found_github = True
-                else:
-                    new_right.append(item)
-            else:
-                new_right.append(item)
-
-        # If no GitHub entry was found, add one
-        if not found_github:
-            new_right.append(new_gh_entry)
-
-        navbar["right"] = new_right
 
     def _get_github_repo_info(self) -> tuple[str | None, str | None, str | None]:
         """
@@ -12548,28 +12479,27 @@ anchor-sections: true
         owner, repo, repo_url = self._get_github_repo_info()
         metadata = self._get_package_metadata()
         github_style = metadata.get("github_style", "widget")  # "widget" or "icon"
+        github_item = None
+        if repo_url:
+            stats = (
+                self._fetch_github_repo_stats(owner, repo)
+                if owner and repo and github_style == "widget"
+                else None
+            )
+            github_item = nav_github.navbar_item(repo_url, owner, repo, github_style, stats)
 
         # Add or update navbar
         if "navbar" not in config["website"]:
             navbar_config = {
                 "left": [],
             }
-
-            # Add GitHub link on the right if repository URL is available
-            if owner and repo and repo_url and github_style == "widget":
-                stats = self._fetch_github_repo_stats(owner, repo)
-                stats_attrs = ""
-                if stats:
-                    stats_attrs = f' data-stars="{stats["stars"]}" data-forks="{stats["forks"]}"'
-                gh_widget_html = f'<div id="github-widget" data-owner="{owner}" data-repo="{repo}"{stats_attrs}></div>'
-                navbar_config["right"] = [{"text": gh_widget_html}]
-            elif repo_url:
-                navbar_config["right"] = [{"icon": "github", "href": repo_url}]
+            if github_item:
+                navbar_config["right"] = [github_item]
 
             config["website"]["navbar"] = navbar_config
         else:
-            # Update existing navbar: upgrade icon to widget if configured
-            self._update_navbar_github_link(config, owner, repo, repo_url, github_style)
+            if github_item:
+                nav_github.set_navbar_item(config["website"]["navbar"], github_item)
 
             # Remove legacy "Home" link (package name in navbar already links home)
             if "left" in config["website"]["navbar"]:
