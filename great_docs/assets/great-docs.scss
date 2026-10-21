@@ -35,11 +35,13 @@ $font-family-monospace: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "
 $docstring-sections: ":is(.doc-parameters, .doc-other-parameters, .doc-type-parameters, .doc-returns, .doc-yields, .doc-receives, .doc-raises, .doc-warns, .doc-attributes, .doc-parameter-attributes, .doc-init-parameters, .doc-see-also, .doc-examples)";
 $doc-object-names: "span.doc-object-name:is(.doc-class-name, .doc-method-name, .doc-module-name, .doc-function-name, .doc-alias-name, .doc-attribute-name, .doc-type-name, .doc-typevar)";
 
-// Match API, CLI and MCP reference pages and their sidebar index links.
-// Quarto removes the trailing `index.html` when serving over HTTP.
-// Match links with and without that suffix.
+// Reference pages and the index links in their sidebars. Sidebar links include
+// the path from the site root, so index links end in `/index.html`, and the
+// leading slash excludes object pages whose names end in `index`. On a served
+// site, Quarto's navigation script strips `index.html`, leaving links that end
+// in `/`.
 $ref-page: "body:is(.doc-reference, .doc-api-page)";
-$ref-index-links: 'a.sidebar-item-text:is([href$="reference/index.html"], [href$="reference/cli/index.html"], [href$="reference/mcp/index.html"], [href$="reference/"], [href$="reference/cli/"], [href$="reference/mcp/"])';
+$ref-index-links: 'a.sidebar-item-text:is([href$="/index.html"], [href$="/"])';
 
 a {
    text-decoration: none;
