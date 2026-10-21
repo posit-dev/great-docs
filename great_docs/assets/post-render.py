@@ -834,28 +834,6 @@ fix_script_paths()
 print("##GD:PASS:Script paths fixed", flush=True)
 
 
-# Remove copy-page widget from the root index page (homepage) and the
-# reference index page.  Neither is a regular documentation page so the
-# Copy / View-as-Markdown buttons are not useful.
-for _idx_label, _idx_path in [
-    ("homepage", os.path.join("_site", "index.html")),
-    ("reference index", os.path.join("_site", "reference", "index.html")),
-    ("CLI reference index", os.path.join("_site", "reference", "cli", "index.html")),
-]:
-    if os.path.isfile(_idx_path):
-        with open(_idx_path, "r", encoding="utf-8") as f:
-            _idx_html = f.read()
-        _idx_cleaned = re.sub(
-            r'<script src="([./ ]*?)copy-page\.js"></script>\n?',
-            "",
-            _idx_html,
-        )
-        if _idx_cleaned != _idx_html:
-            with open(_idx_path, "w", encoding="utf-8") as f:
-                f.write(_idx_cleaned)
-            print(f"Removed copy-page widget from {_idx_label}")
-
-
 def inject_sidebar_body_classes():
     """
     Inject a `gd-ref-sidebar` class on the `<body>` tag for API/CLI reference pages.
