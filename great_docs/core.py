@@ -8008,42 +8008,6 @@ class GreatDocs:
         return "constant"
 
     @staticmethod
-    def _extract_constant_metadata(obj, name: str, categories: dict) -> None:
-        """
-        Extract value and type annotation from a griffe constant/attribute.
-
-        Populates `categories["constant_metadata"][name]` with `"value"`
-        and `"annotation"` strings when they are available and simple enough
-        to display.
-
-        Parameters
-        ----------
-        obj
-            A griffe `Attribute` (or `Alias`) object.
-        name
-            The documented name of the constant.
-        categories
-            The mutable categories dict being built.
-        """
-        meta: dict[str, str] = {}
-        try:
-            if obj.value is not None:
-                val = str(obj.value)
-                # Only store "simple" values (literals, short collections).
-                # Avoid huge reprs that would clutter the page.
-                if len(val) <= 200:
-                    meta["value"] = val
-        except Exception:
-            pass
-        try:
-            if obj.annotation is not None:
-                meta["annotation"] = str(obj.annotation)
-        except Exception:
-            pass
-        if meta:
-            categories["constant_metadata"][name] = meta
-
-    @staticmethod
     def _empty_categories() -> dict:
         """Return a fresh, empty categories dict with all keys."""
         return {
@@ -8068,7 +8032,6 @@ class GreatDocs:
             "class_methods": {},
             "class_method_names": {},
             "class_member_types": {},
-            "constant_metadata": {},
             "cyclic_alias_count": 0,
             # ── Convenience unions ──
             "all_classes": [],
@@ -8138,17 +8101,6 @@ class GreatDocs:
             json.dump(object_types, f, indent=2, sort_keys=True)
 
         print(f"Wrote object type metadata ({len(object_types)} items) to {types_path}")
-
-        # Write constant value metadata (sidecar file) when any constants have
-        # extractable values or annotations.
-        constant_metadata = categories.get("constant_metadata", {})
-        if constant_metadata:
-            values_path = self.build_dir / "_constant_values.json"
-            with open(values_path, "w") as f:
-                json.dump(constant_metadata, f, indent=2, sort_keys=True)
-            print(
-                f"Wrote constant value metadata ({len(constant_metadata)} items) to {values_path}"
-            )
 
     def _categorize_api_objects(self, package_name: str, exports: list) -> dict:
         """
@@ -8386,7 +8338,6 @@ class GreatDocs:
                             categories["type_aliases"].append(name)  # pragma: no cover
                         else:
                             categories["constants"].append(name)
-                            self._extract_constant_metadata(obj, name, categories)
                     elif obj.kind.value == "module":
                         # Drill into the module to discover its public classes and functions
                         # Use qualified names like "module.ClassName" so the renderer resolves
@@ -8597,9 +8548,6 @@ class GreatDocs:
                                         )  # pragma: no cover
                                     else:
                                         categories["constants"].append(qualified)
-                                        self._extract_constant_metadata(
-                                            member, qualified, categories
-                                        )
                                     module_had_members = True
 
                         except (  # pragma: no cover
@@ -9189,7 +9137,6 @@ class GreatDocs:
                     categories["type_aliases"].append(name)
                 else:
                     categories["constants"].append(name)
-                    self._extract_constant_metadata(obj, name, categories)
             elif kind == "module":
                 # Expand module members into qualified names for module_members mapping
                 try:

@@ -760,7 +760,6 @@ class TestCategorizeReferencedObjects:
         pkg.members = {"MY_CONST": obj}
         monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
         monkeypatch.setattr(gd, "_sub_classify_attribute", lambda o: "constant")
-        monkeypatch.setattr(gd, "_extract_constant_metadata", lambda o, n, c: None)
         result = gd._categorize_referenced_objects("mypkg", [{"contents": ["MY_CONST"]}])
         assert "MY_CONST" in result["constants"]
 
@@ -1725,47 +1724,6 @@ class TestSubClassifyAttribute:
 
 
 # ---------------------------------------------------------------------------
-# Extract constant metadata
-# ---------------------------------------------------------------------------
-
-
-class TestExtractConstantMetadata:
-    def test_stores_value_and_annotation(self):
-        obj = MagicMock()
-        obj.value = "42"
-        obj.annotation = "int"
-        categories = {"constant_metadata": {}}
-        GreatDocs._extract_constant_metadata(obj, "MY_CONST", categories)
-        assert categories["constant_metadata"]["MY_CONST"]["value"] == "42"
-        assert categories["constant_metadata"]["MY_CONST"]["annotation"] == "int"
-
-    def test_skips_long_value(self):
-        obj = MagicMock()
-        obj.value = "x" * 201
-        obj.annotation = None
-        categories = {"constant_metadata": {}}
-        GreatDocs._extract_constant_metadata(obj, "BIG", categories)
-        assert "BIG" not in categories["constant_metadata"]
-
-    def test_none_value_skipped(self):
-        obj = MagicMock()
-        obj.value = None
-        obj.annotation = "str"
-        categories = {"constant_metadata": {}}
-        GreatDocs._extract_constant_metadata(obj, "X", categories)
-        assert "value" not in categories["constant_metadata"]["X"]
-        assert categories["constant_metadata"]["X"]["annotation"] == "str"
-
-    def test_value_exception_graceful(self):
-        obj = MagicMock()
-        type(obj).value = property(lambda s: (_ for _ in ()).throw(Exception()))
-        obj.annotation = None
-        categories = {"constant_metadata": {}}
-        GreatDocs._extract_constant_metadata(obj, "BAD", categories)
-        assert "BAD" not in categories["constant_metadata"]
-
-
-# ---------------------------------------------------------------------------
 # Empty categories
 # ---------------------------------------------------------------------------
 
@@ -1777,7 +1735,6 @@ class TestEmptyCategories:
         assert "functions" in cats
         assert "constants" in cats
         assert "type_aliases" in cats
-        assert "constant_metadata" in cats
         assert cats["cyclic_alias_count"] == 0
 
     def test_returns_fresh_instance(self):
@@ -2305,7 +2262,7 @@ class TestCountCliSidebarItems:
 
 
 # ---------------------------------------------------------------------------
-# _write_object_types_json – basic, member_types fallback, constant_metadata
+# _write_object_types_json – basic, member_types fallback
 # ---------------------------------------------------------------------------
 
 
@@ -2345,24 +2302,6 @@ class TestWriteObjectTypesJson:
         data = json.loads((gd.build_dir / "_object_types.json").read_text())
         assert data["Foo.bar"] == "property"
         assert data["Foo.baz"] == "attribute"
-
-    def test_constant_metadata_sidecar(self, tmp_path):
-        gd = _make_gd(tmp_path)
-        gd.build_dir.mkdir(parents=True, exist_ok=True)
-        gd._suppress_artifact_writes = False
-        categories = {
-            "constants": ["MY_CONST"],
-            "class_method_names": {},
-            "class_member_types": {},
-            "constant_metadata": {"MY_CONST": {"value": "42", "annotation": "int"}},
-        }
-        gd._write_object_types_json(categories)
-        import json
-
-        values_path = gd.build_dir / "_constant_values.json"
-        assert values_path.exists()
-        data = json.loads(values_path.read_text())
-        assert data["MY_CONST"]["value"] == "42"
 
     def test_suppressed_writes_nothing(self, tmp_path):
         gd = _make_gd(tmp_path)

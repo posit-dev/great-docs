@@ -9898,49 +9898,6 @@ def test_sub_classify_attribute_constant_no_kind():
     assert GreatDocs._sub_classify_attribute(FakeObj()) == "constant"
 
 
-def test_extract_constant_metadata_value_and_annotation():
-    """_extract_constant_metadata captures both value and annotation."""
-
-    class FakeObj:
-        value = "42"
-        annotation = "int"
-
-    categories = {"constant_metadata": {}}
-    GreatDocs._extract_constant_metadata(FakeObj(), "MY_CONST", categories)
-
-    assert "MY_CONST" in categories["constant_metadata"]
-    assert categories["constant_metadata"]["MY_CONST"]["value"] == "42"
-    assert categories["constant_metadata"]["MY_CONST"]["annotation"] == "int"
-
-
-def test_extract_constant_metadata_no_value_with_annotation():
-    """_extract_constant_metadata skips when value is None."""
-
-    class FakeObj:
-        value = None
-        annotation = "str"
-
-    categories = {"constant_metadata": {}}
-    GreatDocs._extract_constant_metadata(FakeObj(), "X", categories)
-
-    assert "X" in categories["constant_metadata"]
-    assert "value" not in categories["constant_metadata"]["X"]
-    assert categories["constant_metadata"]["X"]["annotation"] == "str"
-
-
-def test_extract_constant_metadata_long_value_key_absence():
-    """_extract_constant_metadata skips values longer than 200 chars."""
-
-    class FakeObj:
-        value = "x" * 201
-        annotation = None
-
-    categories = {"constant_metadata": {}}
-    GreatDocs._extract_constant_metadata(FakeObj(), "BIG", categories)
-
-    assert "BIG" not in categories["constant_metadata"]
-
-
 def test_count_cli_sidebar_items_flat_inline():
     """_count_cli_sidebar_items counts simple string entries."""
     assert GreatDocs._count_cli_sidebar_items(["a.qmd", "b.qmd", "c.qmd"]) == 3
@@ -18342,25 +18299,6 @@ def test_write_object_types_json_basic():
         assert data["Widget.update"] == "classmethod"
 
 
-def test_write_object_types_json_with_constant_metadata():
-    """Test _write_object_types_json writes constant_values.json."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        categories = GreatDocs._empty_categories()
-        categories["constants"] = ["VERSION"]
-        categories["constant_metadata"] = {"VERSION": {"value": "1.0.0", "annotation": "str"}}
-
-        docs._write_object_types_json(categories)
-
-        values_path = docs.build_dir / "_constant_values.json"
-        assert values_path.exists()
-        data = json.loads(values_path.read_text())
-        assert data["VERSION"]["value"] == "1.0.0"
-
-
 def test_categorize_api_objects_fallback_basic():
     """Test _categorize_api_objects_fallback with known stdlib module."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -18945,7 +18883,6 @@ def test_empty_categories_structure():
         "class_methods",
         "class_method_names",
         "class_member_types",
-        "constant_metadata",
         "cyclic_alias_count",
         "all_classes",
         "all_functions",
@@ -19896,45 +19833,6 @@ def test_sub_classify_attribute_constant():
     result = GreatDocs._sub_classify_attribute(obj)
 
     assert result == "constant"
-
-
-def test_extract_constant_metadata_value():
-    """Test _extract_constant_metadata extracts value."""
-
-    obj = MagicMock()
-    obj.value = "42"
-    obj.annotation = "int"
-    categories = {"constant_metadata": {}}
-    GreatDocs._extract_constant_metadata(obj, "MY_CONST", categories)
-
-    assert "MY_CONST" in categories["constant_metadata"]
-    assert categories["constant_metadata"]["MY_CONST"]["value"] == "42"
-    assert categories["constant_metadata"]["MY_CONST"]["annotation"] == "int"
-
-
-def test_extract_constant_metadata_long_value():
-    """Test _extract_constant_metadata skips very long values."""
-
-    obj = MagicMock()
-    obj.value = "x" * 300  # Exceeds 200-char limit
-    obj.annotation = None
-    categories = {"constant_metadata": {}}
-    GreatDocs._extract_constant_metadata(obj, "BIG_CONST", categories)
-    meta = categories["constant_metadata"].get("BIG_CONST", {})
-
-    assert "value" not in meta
-
-
-def test_extract_constant_metadata_no_value():
-    """Test _extract_constant_metadata handles None value."""
-
-    obj = MagicMock()
-    obj.value = None
-    obj.annotation = None
-    categories = {"constant_metadata": {}}
-    GreatDocs._extract_constant_metadata(obj, "NONE_CONST", categories)
-
-    assert "NONE_CONST" not in categories["constant_metadata"]
 
 
 def test_get_package_metadata_license_string():
@@ -21925,7 +21823,6 @@ def test_write_object_types_json_creates_file():
             "class_methods": {"MyClass": 2},
             "class_method_names": {"MyClass": ["run", "stop"]},
             "class_member_types": {"MyClass.run": "method", "MyClass.stop": "classmethod"},
-            "constant_metadata": {"MY_CONST": {"value": "42", "annotation": "int"}},
         }
 
         docs._write_object_types_json(categories)
@@ -21944,27 +21841,6 @@ def test_write_object_types_json_creates_file():
         assert data["DataCls"] == "class"
         assert data["MyClass.run"] == "method"
         assert data["MyClass.stop"] == "classmethod"
-
-        # Check constant values sidecar file
-        values_path = build_dir / "_constant_values.json"
-        assert values_path.exists()
-        values = json.loads(values_path.read_text(encoding="utf-8"))
-        assert values["MY_CONST"]["value"] == "42"
-
-
-def test_write_object_types_json_no_constants():
-    """Test _write_object_types_json skips constant values file when empty."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir(parents=True, exist_ok=True)
-
-        categories = docs._empty_categories()
-
-        docs._write_object_types_json(categories)
-
-        values_path = build_dir / "_constant_values.json"
-        assert not values_path.exists()
 
 
 def test_process_sections_blog_type():
@@ -22526,62 +22402,12 @@ def test_empty_categories_has_all_keys():
             "class_methods",
             "class_method_names",
             "class_member_types",
-            "constant_metadata",
             "cyclic_alias_count",
             "all_classes",
             "all_functions",
         ]
         for key in expected_keys:
             assert key in cats
-
-
-def test_extract_constant_metadata_simple():
-    """Test _extract_constant_metadata extracts value and annotation."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        obj = MagicMock()
-        obj.value = "42"
-        obj.annotation = "int"
-
-        categories = {"constant_metadata": {}}
-        docs._extract_constant_metadata(obj, "MY_CONST", categories)
-        assert "MY_CONST" in categories["constant_metadata"]
-        assert categories["constant_metadata"]["MY_CONST"]["value"] == "42"
-        assert categories["constant_metadata"]["MY_CONST"]["annotation"] == "int"
-
-
-def test_extract_constant_metadata_no_annotation():
-    """Test _extract_constant_metadata omits annotation when None."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        obj = MagicMock()
-        obj.value = "'hello'"
-        obj.annotation = None
-
-        categories = {"constant_metadata": {}}
-        docs._extract_constant_metadata(obj, "GREETING", categories)
-        assert "GREETING" in categories["constant_metadata"]
-        assert "annotation" not in categories["constant_metadata"]["GREETING"]
-
-
-def test_extract_constant_metadata_very_long_value():
-    """Test _extract_constant_metadata skips very long values."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        obj = MagicMock()
-        obj.value = "x" * 250  # > 200 chars
-        obj.annotation = None
-
-        categories = {"constant_metadata": {}}
-        docs._extract_constant_metadata(obj, "BIG", categories)
-        # Should not store value since it's too long
-        assert "BIG" not in categories["constant_metadata"]
 
 
 def test_sub_classify_class_with_decorators_abc():
@@ -36452,56 +36278,6 @@ class TestSubClassify:
         assert GreatDocs._sub_classify_attribute(obj) == "constant"
 
 
-class TestExtractConstantMetadata:
-    """Tests for _extract_constant_metadata."""
-
-    def test_extracts_value_and_annotation(self):
-        """Extracts both value and annotation."""
-        obj = MagicMock()
-        obj.value = "42"
-        obj.annotation = "int"
-        categories = GreatDocs._empty_categories()
-        GreatDocs._extract_constant_metadata(obj, "MY_CONST", categories)
-        assert categories["constant_metadata"]["MY_CONST"]["value"] == "42"
-        assert categories["constant_metadata"]["MY_CONST"]["annotation"] == "int"
-
-    def test_skips_long_values(self):
-        """Skips values longer than 200 characters."""
-        obj = MagicMock()
-        obj.value = "x" * 201
-        obj.annotation = None
-        categories = GreatDocs._empty_categories()
-        GreatDocs._extract_constant_metadata(obj, "BIG_CONST", categories)
-        assert "BIG_CONST" not in categories["constant_metadata"]
-
-    def test_handles_value_exception(self):
-        """Handles exception when accessing value."""
-        obj = MagicMock()
-        type(obj).value = PropertyMock(side_effect=RuntimeError)
-        obj.annotation = "str"
-        categories = GreatDocs._empty_categories()
-        GreatDocs._extract_constant_metadata(obj, "ERR_CONST", categories)
-        assert categories["constant_metadata"]["ERR_CONST"]["annotation"] == "str"
-
-    def test_handles_annotation_exception(self):
-        """Handles exception when accessing annotation."""
-        obj = MagicMock()
-        obj.value = "hello"
-        type(obj).annotation = PropertyMock(side_effect=RuntimeError)
-        categories = GreatDocs._empty_categories()
-        GreatDocs._extract_constant_metadata(obj, "ERR_CONST", categories)
-        assert categories["constant_metadata"]["ERR_CONST"]["value"] == "hello"
-
-    def test_no_metadata(self):
-        """Does not add entry when both value and annotation are None."""
-        obj = MagicMock()
-        obj.value = None
-        obj.annotation = None
-        categories = GreatDocs._empty_categories()
-        GreatDocs._extract_constant_metadata(obj, "EMPTY", categories)
-        assert "EMPTY" not in categories["constant_metadata"]
-
-
 class TestFindPackageInit:
     """Tests for _find_package_init."""
 
@@ -37019,7 +36795,6 @@ class TestEmptyCategories:
         assert "class_methods" in cats
         assert "class_method_names" in cats
         assert "class_member_types" in cats
-        assert "constant_metadata" in cats
         assert "other" in cats
 
     def test_all_lists_empty(self):

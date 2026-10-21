@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import glob
-import json
 import os
 import re
 import sys
@@ -32,28 +31,6 @@ if os.environ.get("GD_FREEZE_ONLY"):
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import PythonLexer
-
-# Load object type metadata for accurate classification
-# Keys are object names (e.g., "parser.ParserError"), values are type strings
-# ("class", "namedtuple", "typeddict", "protocol", "abc", "exception", "function", "method", "constant", "enum", "type_alias", "other")
-object_types = {}
-object_types_path = "_object_types.json"
-if os.path.exists(object_types_path):
-    print(f"Loading object types from {object_types_path}")
-    with open(object_types_path, "r", encoding="utf-8") as f:
-        object_types = json.load(f)
-    print(f"Loaded {len(object_types)} object type entries")
-else:
-    print("No object types file found, falling back to heuristic classification")
-
-# Load constant value metadata for displaying values on constant reference pages.
-# Keys are constant names, values are dicts with optional "value" and "annotation".
-constant_values: dict[str, dict[str, str]] = {}
-constant_values_path = "_constant_values.json"
-if os.path.exists(constant_values_path):
-    with open(constant_values_path, "r", encoding="utf-8") as f:
-        constant_values = json.load(f)
-    print(f"Loaded {len(constant_values)} constant value entries")
 
 # Pygments class to Quarto class mapping
 # Quarto uses different class names than Pygments default
@@ -226,9 +203,6 @@ print(f"Found {len(html_files)} HTML files to process")
 for html_file in html_files:
     print(f"Processing: {html_file}")
 
-    # Extract the item name from the filename (e.g., "GreatDocs.html" -> "GreatDocs")
-    item_name_from_file = os.path.basename(html_file).replace(".html", "")
-
     with open(html_file, "r", encoding="utf-8") as file:
         content = file.read()
 
@@ -237,32 +211,6 @@ for html_file in html_files:
 
     # Convert back to lines for line-by-line processing
     content = content.splitlines(keepends=True)
-
-    content_str = "".join(content)
-
-    # Inject constant value/annotation into constant reference pages.
-    # Replaces the bare ``<p><code>NAME</code></p>`` that the renderer emits with a
-    # styled display showing the type annotation and assigned value.
-    obj_type_for_value = object_types.get(item_name_from_file)
-    if obj_type_for_value == "constant" and item_name_from_file in constant_values:
-        meta = constant_values[item_name_from_file]
-        annotation = meta.get("annotation", "")
-        value = meta.get("value", "")
-
-        # Build the display string:  NAME: type = value
-        parts = [f"<code>{item_name_from_file}</code>"]
-        if annotation:
-            parts.append(f'<code style="color: #6b7280;">: {annotation}</code>')
-        if value:
-            parts.append(f'<code style="color: #6b7280;"> = {value}</code>')
-        replacement_html = "<p>" + "".join(parts) + "</p>"
-
-        # Replace the original bare name paragraph
-        bare_name_html = f"<p><code>{item_name_from_file}</code></p>"
-        if bare_name_html in content_str:
-            content_str = content_str.replace(bare_name_html, replacement_html, 1)
-
-    content = content_str.splitlines(keepends=True)
 
     # Add separator lines between class details and individual members,
     # and between individual member sections.
