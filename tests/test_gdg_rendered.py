@@ -2756,6 +2756,30 @@ def test_navbar_renders_with_links(pkg_name: str):
     assert brand, f"{pkg_name}: navbar missing brand/title element"
 
 
+@requires_bs4
+@pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
+def test_github_widget_placeholder_is_unescaped(pkg_name: str):
+    """Every page carries the GitHub widget element as HTML, not as escaped text."""
+    navbar = _load_quarto_yml(pkg_name).get("website", {}).get("navbar", {})
+    if not any("github-widget" in str(item) for item in navbar.get("right", [])):
+        pytest.skip("No GitHub widget in the navbar")
+
+    pages = sorted(_site_dir(pkg_name).rglob("*.html"))
+    checked = 0
+    for page in pages:
+        soup = _load_html(page)
+        # Pages that Quarto does not render, such as redirects, have no navbar.
+        if soup.select_one("nav.navbar") is None:
+            continue
+        # Quarto escapes the text of a navbar item that has no link.
+        assert "&lt;div id=" not in str(soup.select_one("nav.navbar")), page
+        widgets = soup.select("nav.navbar #github-widget")
+        assert len(widgets) == 1, f"{page}: expected one #github-widget"
+        assert widgets[0].get("data-owner") and widgets[0].get("data-repo"), page
+        checked += 1
+    assert checked, f"{pkg_name}: no page with a navbar"
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # R4: Page Metadata / OG Tags (meta)
 # ═══════════════════════════════════════════════════════════════════════════════
