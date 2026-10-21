@@ -40683,7 +40683,7 @@ def test_back_to_top_script_tag_content():
         after_body = result["format"]["html"]["include-after-body"]
         back_to_top_entries = [item for item in after_body if "back-to-top.js" in str(item)]
         assert len(back_to_top_entries) == 1
-        assert back_to_top_entries[0] == {"text": '<script src="back-to-top.js"></script>'}
+        assert back_to_top_entries[0] == {"text": '<script src="/back-to-top.js"></script>'}
 
 
 def test_back_to_top_not_duplicated():
@@ -41270,7 +41270,7 @@ def test_keyboard_nav_script_tag_content():
         after_body = result["format"]["html"]["include-after-body"]
         kb_entries = [item for item in after_body if "keyboard-nav.js" in str(item)]
         assert len(kb_entries) == 1
-        assert kb_entries[0] == {"text": '<script src="keyboard-nav.js"></script>'}
+        assert kb_entries[0] == {"text": '<script src="/keyboard-nav.js"></script>'}
 
 
 def test_keyboard_nav_not_duplicated():
@@ -42127,7 +42127,7 @@ def test_generate_skills_page_multi_skill_switcher():
         assert "multiple skills" in content
 
         # Script tag for the switcher JS
-        assert 'src="skill-switcher.js"' in content
+        assert 'src="/skill-switcher.js"' in content
 
         # Companion files appear in the first panel
         assert "guide-style.md" in content
