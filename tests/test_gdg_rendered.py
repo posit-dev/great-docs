@@ -7672,6 +7672,30 @@ def test_attribution_off_not_in_footer():
     )
 
 
+@pytest.mark.dedicated
+def test_empty_footer_sections_hidden():
+    """Footer sections without content are hidden by the stylesheet."""
+    pkg = "gdtest_attribution_on"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    html = (_site_dir(pkg) / "index.html").read_text(encoding="utf-8")
+    # The rule hides a section with no element child. Quarto fills an
+    # unconfigured section with bare `&nbsp;` text; if it ever wraps that
+    # filler in an element, the rule stops matching.
+    for side in ("left", "right"):
+        match = re.search(rf'<div class="nav-footer-{side}">(.*?)</div>', html, re.DOTALL)
+        assert match, f"nav-footer-{side} missing from index.html"
+        filler = match.group(1).replace("&nbsp;", "").strip()
+        assert filler == "", f"nav-footer-{side} is not empty: {match.group(1)!r}"
+
+    css = re.sub(r"\s+", "", _deployed_css(pkg))
+    assert ".nav-footer-left:not(:has(>*))" in css
+    assert ".nav-footer-right:not(:has(>*)){display:none" in css, (
+        "compiled CSS lacks the rule hiding empty footer sections"
+    )
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # DED: %seealso with descriptions
 # ═══════════════════════════════════════════════════════════════════════════════

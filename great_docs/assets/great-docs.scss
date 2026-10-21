@@ -2179,6 +2179,14 @@ footer.footer .nav-footer {
     color: rgb(48, 48, 48);
 }
 
+/* Quarto fills unconfigured footer sections with &nbsp;, and each one takes a
+   full row on narrow screens. Sections without child elements are hidden. */
+.nav-footer-left:not(:has(> *)),
+.nav-footer-center:not(:has(> *)),
+.nav-footer-right:not(:has(> *)) {
+    display: none;
+}
+
 /* Footer alignment - add left margin to match content area on large viewports */
 @media (min-width: 992px) {
     .nav-footer {
