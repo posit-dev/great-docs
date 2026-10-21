@@ -4700,21 +4700,49 @@ def test_copy_page_script_present_on_reference_pages():
     assert "copy-page.js" in content, f"{page.name} should include copy-page.js script"
 
 
+def _copy_page_skipped_body_classes() -> set[str]:
+    """
+    Read the body classes that disable page actions
+
+    Returns
+    -------
+    :
+        The class names the script checks with `classList.contains`.
+    """
+    script = Path(__file__).resolve().parent.parent / "great_docs" / "assets" / "copy-page.js"
+    source = script.read_text(encoding="utf-8")
+    return set(re.findall(r"classList\.contains\('([^']+)'\)\) return", source))
+
+
 @pytest.mark.dedicated
 @requires_bs4
-def test_copy_page_script_absent_from_homepage():
-    """The homepage (index.html) should NOT include the copy-page.js script."""
+def test_copy_page_skips_homepage():
+    """The generated homepage loads copy-page.js but carries a class the script skips."""
     pkg = "gdtest_long_names"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+
+    body = _load_html(_site_dir(pkg) / "index.html").body
+    assert body is not None
+    assert "gd-homepage" in body.get("class", [])
+    assert "gd-homepage" in _copy_page_skipped_body_classes()
+
+
+@pytest.mark.dedicated
+@requires_bs4
+def test_copy_page_script_present_on_blended_homepage():
+    """A homepage promoted from the user guide keeps the page actions of a user-guide page."""
+    pkg = "gdtest_homepage_ug"
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
 
     site = _site_dir(pkg)
     index = site / "index.html"
-    if not index.exists():
-        pytest.skip("No index.html found")
-
-    content = index.read_text(encoding="utf-8")
-    assert "copy-page.js" not in content, "Homepage should not include copy-page.js script"
+    assert "copy-page.js" in index.read_text(encoding="utf-8")
+    body = _load_html(index).body
+    assert body is not None
+    assert not set(body.get("class", [])) & _copy_page_skipped_body_classes()
+    assert (site / "index.md").exists()
 
 
 @pytest.mark.dedicated
