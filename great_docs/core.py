@@ -2224,7 +2224,11 @@ class GreatDocs:
                 print(f"   ⚠️  GitHub API returned status {resp.status_code}")
                 break
 
-            data = resp.json()
+            try:
+                data = resp.json()
+            except requests.exceptions.JSONDecodeError:
+                print("   ⚠️  GitHub API returned a malformed release list")
+                break
             if not data:
                 break  # No more pages  # pragma: no cover
 

@@ -6309,6 +6309,40 @@ def test_navbar_release_absent_without_releases():
         assert "title" not in read_yaml(quarto_yml)["website"]["navbar"]
 
 
+def test_navbar_release_absent_on_malformed_github_response():
+    """A release list GitHub returns as invalid JSON shows no release instead of failing"""
+    import requests
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        (project_path / "great-docs.yml").write_text("")
+        (project_path / "pyproject.toml").write_text(
+            "[project]\n"
+            'name = "test-pkg"\n'
+            'version = "0.0.1"\n'
+            "\n"
+            "[project.urls]\n"
+            'Repository = "https://github.com/test/pkg"\n'
+        )
+        build_dir = project_path / "great-docs"
+        build_dir.mkdir()
+        quarto_yml = build_dir / "_quarto.yml"
+        quarto_yml.write_text(
+            "project:\n  type: website\n"
+            "website:\n  title: test-pkg\nformat:\n  html:\n    theme: flatly\n"
+        )
+
+        response = MagicMock(status_code=200)
+        response.json.side_effect = requests.exceptions.JSONDecodeError("Expecting value", "", 0)
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        with patch("requests.get", return_value=response):
+            docs._update_quarto_config()
+
+        assert "title" not in read_yaml(quarto_yml)["website"]["navbar"]
+
+
 def test_navbar_release_absent_without_github_repo():
     """No release is fetched or shown without a GitHub repository"""
     with tempfile.TemporaryDirectory() as tmp_dir:
