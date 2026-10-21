@@ -163,7 +163,7 @@ class TypeInformation(Block):
 
     @cached_property
     def content(self) -> BlockContent:
-        meta = Meta({"title": "Typing Information"})
+        meta = Meta({"title": "Typing Information", "body-classes": "doc-api-page doc-py-api-page"})
         return Blocks([meta, self.sections])
 
     def write(self) -> None:

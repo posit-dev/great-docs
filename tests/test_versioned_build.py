@@ -2492,6 +2492,25 @@ class TestRebuildApiFromSnapshotEdge:
         assert (dest_dir / "reference" / "MyFunc.qmd").exists()
         assert (dest_dir / "reference" / "index.qmd").exists()
 
+    def test_fallback_pages_are_reference_pages(self, tmp_path: Path):
+        """Fallback object and index pages carry the same body classes as rendered ones."""
+        snap_path = tmp_path / "snap.json"
+        ApiSnapshot(
+            version="0.2",
+            package_name="pkg",
+            symbols={"MyFunc": SymbolInfo(name="MyFunc", kind="function")},
+        ).save(snap_path)
+        dest_dir = tmp_path / "build"
+        dest_dir.mkdir()
+
+        _rebuild_api_from_snapshot(dest_dir, snap_path, _make_entry("0.2"))
+
+        ref_dir = dest_dir / "reference"
+        page = (ref_dir / "MyFunc.qmd").read_text()
+        index = (ref_dir / "index.qmd").read_text()
+        assert "body-classes: doc-api-page doc-py-api-page" in page
+        assert "body-classes: doc-reference doc-py-reference" in index
+
     def test_preserves_rich_pages(self, tmp_path: Path):
 
         snap_path = tmp_path / "snap.json"
