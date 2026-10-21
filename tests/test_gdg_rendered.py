@@ -8254,53 +8254,20 @@ def test_DED_i18n_announcement_translated(pkg, expected_fragment):
 
 
 @pytest.mark.dedicated
-@requires_bs4
 @pytest.mark.parametrize(
     "pkg",
     ["gdtest_i18n_french", "gdtest_i18n_japanese", "gdtest_i18n_arabic"],
 )
-def test_DED_i18n_search_no_duplicate_tooltip(pkg):
-    """#quarto-search should not have a title attr (prevents double tooltip)."""
+def test_DED_i18n_search_autocomplete_unpatched(pkg):
+    """Quarto's bundled autocomplete script keeps its default button title."""
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
-
-    soup = _load_html(_site_dir(pkg) / "index.html")
-    search_div = soup.find("div", id="quarto-search")
-    assert search_div is not None, "Missing #quarto-search div"
-    assert search_div.get("title") is None, (
-        f"#quarto-search should not have title attr, found: '{search_div.get('title')}'"
-    )
-
-
-@pytest.mark.dedicated
-@requires_bs4
-@pytest.mark.parametrize(
-    "pkg, expected_title",
-    [
-        ("gdtest_i18n_french", "Recherche"),
-        ("gdtest_i18n_japanese", "サーチ"),
-        ("gdtest_i18n_arabic", None),  # Quarto has no Arabic; patched only when label != 'Search'
-    ],
-)
-def test_DED_i18n_search_button_title_translated(pkg, expected_title):
-    """autocomplete.umd.js search button title is translated when Quarto provides a label."""
-    if not _has_rendered_site(pkg):
-        pytest.skip(f"{pkg} not rendered")
-
-    import re
 
     ac_files = list((_site_dir(pkg) / "site_libs" / "quarto-search").glob("autocomplete.umd.js"))
     assert ac_files, "autocomplete.umd.js not found"
-
-    text = ac_files[0].read_text()
-    m = re.search(r'detachedSearchButtonTitle:"([^"]*)"', text)
-    assert m is not None, "detachedSearchButtonTitle not found in autocomplete.umd.js"
-    if expected_title is None:
-        # No translation available from Quarto; default "Search" is acceptable
-        return
-    assert m.group(1) == expected_title, (
-        f"Expected search button title '{expected_title}', got '{m.group(1)}'"
-    )
+    # tooltips.js translates the button label in the browser, so the build
+    # must leave Quarto's bundled script unchanged.
+    assert 'detachedSearchButtonTitle:"Search"' in ac_files[0].read_text()
 
 
 # ── Quarto search-label in options JSON ───────────────────────────────────────
