@@ -79,9 +79,7 @@ def add_tags(content: str, tags: list[str]) -> str:
     if existing is not None and not isinstance(existing, list):
         raise ValueError(f"`{HEAD_TAGS}` in the front matter is not a list")
     existing_tags = existing or []
-    new_tags = list(
-        dict.fromkeys(tag for tag in map(_raw_inline, tags) if tag not in existing_tags)
-    )
+    new_tags = list(dict.fromkeys(tag for tag in map(raw_inline, tags) if tag not in existing_tags))
     if not new_tags:
         return content
     if front_matter is None or existing is None:
@@ -99,7 +97,7 @@ def add_tags(content: str, tags: list[str]) -> str:
     return content[:block_offset] + new_block + content[block_offset + len(old_block) :]
 
 
-def _raw_inline(markup: str) -> str:
+def raw_inline(markup: str) -> str:
     """
     Wrap markup as an inline raw HTML span for Quarto Markdown
 
