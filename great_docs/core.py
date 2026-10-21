@@ -32,6 +32,7 @@ from ._website import i18n, markdown_pages, page_dates, page_metadata, page_url,
 from ._website.navigation import github as nav_github
 from ._website.navigation import label as nav_label
 from ._website.navigation import release as nav_release
+from ._website.scripts import script_include, script_tag
 from ._website.seo import description as seo_description
 from ._website.seo import noindex
 from ._website.seo import title as seo_title
@@ -10375,7 +10376,7 @@ class GreatDocs:
         # Append starfield script tag after the hero div so the canvas
         # is in the DOM when the script executes.
         if self._config.hero_starfield:
-            hero_html += '<script src="starfield.js"></script>\n\n'
+            hero_html += script_tag("starfield.js") + "\n\n"
 
         return hero_html, cleaned_content
 
@@ -12676,7 +12677,7 @@ anchor-sections: true
                 ]
 
             # Add the GitHub widget script
-            gh_script_entry = {"text": '<script src="github-widget.js"></script>'}
+            gh_script_entry = script_include("github-widget.js")
             if gh_script_entry not in config["format"]["html"]["include-after-body"]:
                 # Check if github-widget.js is already included
                 has_gh_widget = any(
@@ -12695,7 +12696,7 @@ anchor-sections: true
                     config["format"]["html"]["include-after-body"]
                 ]
 
-            copy_page_entry = {"text": '<script src="copy-page.js"></script>'}
+            copy_page_entry = script_include("copy-page.js")
             has_copy_page = any(
                 "copy-page" in str(item) for item in config["format"]["html"]["include-after-body"]
             )
@@ -12710,7 +12711,7 @@ anchor-sections: true
                 config["format"]["html"]["include-after-body"]
             ]
 
-        wrap_script_entry = {"text": '<script src="sidebar-wrap.js"></script>'}
+        wrap_script_entry = script_include("sidebar-wrap.js")
         has_wrap = any(
             "sidebar-wrap" in str(item) for item in config["format"]["html"]["include-after-body"]
         )
@@ -12748,7 +12749,7 @@ anchor-sections: true
                 ]
 
             # Add the sidebar filter script
-            filter_script_entry = {"text": '<script src="sidebar-filter.js"></script>'}
+            filter_script_entry = script_include("sidebar-filter.js")
             has_filter = any(
                 "sidebar-filter" in str(item)
                 for item in config["format"]["html"]["include-after-body"]
@@ -12809,7 +12810,7 @@ anchor-sections: true
                     config["format"]["html"]["include-after-body"]
                 ]
 
-            dark_mode_script_entry = {"text": '<script src="dark-mode-toggle.js"></script>'}
+            dark_mode_script_entry = script_include("dark-mode-toggle.js")
             has_dark_mode = any(
                 "dark-mode-toggle" in str(item)
                 for item in config["format"]["html"]["include-after-body"]
@@ -12826,7 +12827,7 @@ anchor-sections: true
                     config["format"]["html"]["include-after-body"]
                 ]
 
-            back_to_top_entry = {"text": '<script src="back-to-top.js"></script>'}
+            back_to_top_entry = script_include("back-to-top.js")
             has_back_to_top = any(
                 "back-to-top.js" in str(item)
                 for item in config["format"]["html"]["include-after-body"]
@@ -12861,7 +12862,7 @@ anchor-sections: true
                     config["format"]["html"]["include-after-body"]
                 ]
 
-            keyboard_nav_entry = {"text": '<script src="keyboard-nav.js"></script>'}
+            keyboard_nav_entry = script_include("keyboard-nav.js")
             has_keyboard_nav = any(
                 "keyboard-nav.js" in str(item)
                 for item in config["format"]["html"]["include-after-body"]
@@ -12877,7 +12878,7 @@ anchor-sections: true
                 config["format"]["html"]["include-after-body"]
             ]
 
-        copy_code_entry = {"text": '<script src="copy-code.js"></script>'}
+        copy_code_entry = script_include("copy-code.js")
         has_copy_code = any(
             "copy-code.js" in str(item) for item in config["format"]["html"]["include-after-body"]
         )
@@ -12885,7 +12886,7 @@ anchor-sections: true
             config["format"]["html"]["include-after-body"].append(copy_code_entry)
 
         # Add collapsible details script (accordion + smooth animation)
-        details_entry = {"text": '<script src="details.js"></script>'}
+        details_entry = script_include("details.js")
         has_details = any(
             "details.js" in str(item) for item in config["format"]["html"]["include-after-body"]
         )
@@ -12901,7 +12902,7 @@ anchor-sections: true
                 ]
 
             # Reference external script file for early theme detection (cleaner YAML)
-            early_theme_script = {"text": '<script src="theme-init.js"></script>'}
+            early_theme_script = script_include("theme-init.js")
             has_early_theme = any(
                 "theme-init" in str(item) for item in config["format"]["html"]["include-in-header"]
             )
@@ -12909,7 +12910,7 @@ anchor-sections: true
                 config["format"]["html"]["include-in-header"].append(early_theme_script)
 
         # Add mermaid renderer script (custom mermaid with proper theme support)
-        mermaid_renderer_entry = {"text": '<script src="mermaid-renderer.js"></script>'}
+        mermaid_renderer_entry = script_include("mermaid-renderer.js")
         has_mermaid_renderer = any(
             "mermaid-renderer.js" in str(item)
             for item in config["format"]["html"]["include-after-body"]
@@ -12928,9 +12929,7 @@ anchor-sections: true
                     config["format"]["html"]["include-after-body"]
                 ]
 
-            page_metadata_entry = {
-                "text": '<script src="page-metadata.js"></script>'
-            }  # pragma: no cover
+            page_metadata_entry = script_include("page-metadata.js")  # pragma: no cover
             has_page_metadata = any(  # pragma: no cover
                 "page-metadata.js" in str(item)
                 for item in config["format"]["html"]["include-after-body"]
@@ -12951,7 +12950,7 @@ anchor-sections: true
                     config["format"]["html"]["include-after-body"]
                 ]
 
-            page_tags_entry = {"text": '<script src="page-tags.js"></script>'}  # pragma: no cover
+            page_tags_entry = script_include("page-tags.js")  # pragma: no cover
             has_page_tags = any(  # pragma: no cover
                 "page-tags.js" in str(item)
                 for item in config["format"]["html"]["include-after-body"]
@@ -12986,9 +12985,7 @@ anchor-sections: true
                         "text": f"<script>{js_content}</script>"
                     }  # pragma: no cover
                 else:
-                    page_status_entry = {
-                        "text": '<script src="page-status-badges.js"></script>'
-                    }  # pragma: no cover
+                    page_status_entry = script_include("page-status-badges.js")  # pragma: no cover
                 config["format"]["html"]["include-after-body"].append(
                     page_status_entry
                 )  # pragma: no cover
@@ -13074,7 +13071,7 @@ anchor-sections: true
             if not replaced:
                 headers.append(ref_sections_script)
 
-            ref_switcher_script_entry = {"text": '<script src="reference-switcher.js"></script>'}
+            ref_switcher_script_entry = script_include("reference-switcher.js")
             has_ref_switcher = any(
                 "reference-switcher" in str(item)
                 for item in config["format"]["html"]["include-after-body"]
@@ -13090,7 +13087,7 @@ anchor-sections: true
                 config["format"]["html"]["include-after-body"]
             ]
 
-        tooltips_script_entry = {"text": '<script src="tooltips.js"></script>'}
+        tooltips_script_entry = script_include("tooltips.js")
         has_tooltips = any(
             "tooltips.js" in str(item) for item in config["format"]["html"]["include-after-body"]
         )
@@ -13124,7 +13121,7 @@ anchor-sections: true
         config["format"]["html"]["include-after-body"].append(color_swatch_entry)
 
         # Add responsive tables script (always enabled — wraps tables in scroll containers)
-        responsive_tables_script_entry = {"text": '<script src="responsive-tables.js"></script>'}
+        responsive_tables_script_entry = script_include("responsive-tables.js")
         has_responsive_tables = any(
             "responsive-tables.js" in str(item)
             for item in config["format"]["html"]["include-after-body"]
@@ -13164,7 +13161,7 @@ anchor-sections: true
 
         # Add navbar widget collector (always enabled — consolidates dark-mode,
         # keyboard, search, and GitHub widgets into #gd-navbar-widgets)
-        navbar_widgets_entry = {"text": '<script src="navbar-widgets.js"></script>'}
+        navbar_widgets_entry = script_include("navbar-widgets.js")
         has_navbar_widgets = any(
             "navbar-widgets.js" in str(item)
             for item in config["format"]["html"]["include-after-body"]
@@ -13410,7 +13407,7 @@ anchor-sections: true
             if isinstance(after_body, str):
                 after_body = [after_body]  # pragma: no cover
                 config["format"]["html"]["include-after-body"] = after_body  # pragma: no cover
-            ann_script_entry = {"text": '<script src="announcement-banner.js"></script>'}
+            ann_script_entry = script_include("announcement-banner.js")
             if not any("announcement-banner" in str(item) for item in after_body):
                 # Insert at position 0 so the banner script runs first
                 after_body.insert(0, ann_script_entry)
@@ -13439,7 +13436,7 @@ anchor-sections: true
             if isinstance(after_body, str):
                 after_body = [after_body]  # pragma: no cover
                 config["format"]["html"]["include-after-body"] = after_body  # pragma: no cover
-            nb_script_entry = {"text": '<script src="navbar-style.js"></script>'}
+            nb_script_entry = script_include("navbar-style.js")
             if not any("navbar-style" in str(item) for item in after_body):
                 after_body.append(nb_script_entry)
 
@@ -13636,7 +13633,7 @@ anchor-sections: true
             if isinstance(after_body, str):
                 after_body = [after_body]  # pragma: no cover
                 config["format"]["html"]["include-after-body"] = after_body  # pragma: no cover
-            cs_script_entry = {"text": '<script src="content-style.js"></script>'}
+            cs_script_entry = script_include("content-style.js")
             if not any("content-style" in str(item) for item in after_body):
                 after_body.append(cs_script_entry)
 
@@ -13770,7 +13767,7 @@ anchor-sections: true
         if isinstance(after_body, str):
             after_body = [after_body]
             config["format"]["html"]["include-after-body"] = after_body
-        vs_script_entry = {"text": '<script src="version-selector.js"></script>'}
+        vs_script_entry = script_include("version-selector.js")
         if not any("version-selector" in str(item) for item in after_body):
             # Insert before navbar-widgets.js if present, otherwise append
             nw_idx = next(
@@ -14883,7 +14880,7 @@ anchor-sections: true
         # ── Script tag for the switcher (only for multi-skill pages) ──
         if multi_skill:
             lines.append("```{=html}")
-            lines.append('<script src="skill-switcher.js"></script>')
+            lines.append(script_tag("skill-switcher.js"))
             lines.append("```")
             lines.append("")
 
