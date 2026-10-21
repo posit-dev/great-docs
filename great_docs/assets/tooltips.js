@@ -206,7 +206,10 @@
     // it from `data-tippy-content`.
     var attribute = button.hasAttribute("title") ? "title" : "data-tippy-content";
     setAttributeIfChanged(button, attribute, label);
+    // Converting the title removes the icon-only button's accessible name.
+    setAttributeIfChanged(button, "aria-label", label);
 
+    // Autocomplete names its combobox root with the same untranslated label.
     var root = button.closest(".aa-Autocomplete");
     if (root) {
       setAttributeIfChanged(root, "aria-label", label);
