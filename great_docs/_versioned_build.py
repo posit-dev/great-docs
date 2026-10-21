@@ -801,6 +801,7 @@ def _rebuild_api_from_snapshot(
         lines = [
             "---",
             f'title: "{name}"',
+            "body-classes: doc-api-page doc-py-api-page",
             "---",
             "",
             f"# {name} {{.doc-heading}}",
@@ -853,6 +854,7 @@ def _rebuild_api_from_snapshot(
         index_lines = [
             "---",
             f'title: "API Reference ({entry.label})"',
+            "body-classes: doc-reference doc-py-reference",
             "---",
             "",
         ]

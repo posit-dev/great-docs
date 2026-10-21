@@ -1930,6 +1930,41 @@ def test_sidebar_lists_section_titles(pkg_name: str):
     assert len(all_menu_texts) > 0, f"{pkg_name}: sidebar has no menu items at all"
 
 
+_PKGS_WITH_REF_SIDEBAR = [
+    n
+    for n in ("gdtest_ref_section_order", "gdtest_mcp", "gdtest_cli_nested")
+    if n in _RENDERED_PACKAGES
+]
+
+
+@requires_bs4
+@pytest.mark.parametrize("pkg_name", _PKGS_WITH_REF_SIDEBAR)
+def test_reference_sidebar_styles_come_from_the_stylesheet(pkg_name: str):
+    """
+    Reference sidebar styles come from the existing body classes
+
+    API, CLI and MCP pages need no extra body class or inline sidebar styles.
+    """
+    pages = sorted(_ref_dir(pkg_name).rglob("*.html"))
+    assert pages, f"{pkg_name}: no reference pages"
+
+    for page in pages:
+        soup = _load_html(page)
+        body_classes = soup.body.get("class", []) if soup.body else []
+        assert {"doc-reference", "doc-api-page"} & set(body_classes), (
+            f"{page.name}: no reference body class in {body_classes}"
+        )
+        assert "gd-ref-sidebar" not in body_classes, f"{page.name}: gd-ref-sidebar on <body>"
+
+        sidebar = soup.select_one("nav#quarto-sidebar")
+        if sidebar is None:
+            continue
+        styled = sidebar.select(".sidebar-item-container[style], a.sidebar-item-text[style]")
+        assert not styled, f"{page.name}: inline styles in the sidebar: {styled[:1]}"
+
+    assert "gd-ref-sidebar" not in _deployed_css(pkg_name)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # R4: Landing Page
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -11851,6 +11886,30 @@ def test_DED_mermaid_caption_layout_css():
         css, ".cell-output-display figure.figure:has(.mermaid-js) > figcaption"
     )
     assert "text-align:center" in caption
+
+
+# ── sidebar sections ────────────────────────────────────────────────────────
+
+
+@pytest.mark.dedicated
+def test_DED_sidebar_sections_expanded_by_css():
+    """
+    Deployed CSS hides the sidebar chevrons and keeps sections open
+
+    The rendered HTML retains Quarto's collapse markup. Without JavaScript,
+    these CSS rules keep every sidebar section expanded.
+    """
+    pkg = "gdtest_user_guide_sections"
+    if not _has_rendered_site(pkg):
+        pytest.skip(f"{pkg} not rendered")
+    css = _deployed_css(pkg)
+    assert css, "No CSS files found in _site"
+
+    toggle = _mermaid_css_rule(css, "a.sidebar-item-toggle.text-start")
+    assert "display:none" in toggle, "Section chevrons must be hidden"
+
+    section = _mermaid_css_rule(css, "#quarto-sidebar ul.collapse.sidebar-section")
+    assert "display:block" in section, "Collapsible sidebar sections must stay visible"
 
 
 # ── ref_section_order ───────────────────────────────────────────────────────

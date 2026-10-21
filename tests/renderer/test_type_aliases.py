@@ -532,3 +532,24 @@ def test_inventory_roles_unchanged_for_other_kinds():
         obj = _load_member(code, name)
         result = create_inventory("package", "1.0", [InventoryItem(obj=obj, name=name)])
         assert result.entries[0].role == role
+
+
+def test_type_information_page_is_a_reference_page():
+    """Mark the typing-information page as an API page, like the object pages beside it"""
+    from unittest.mock import MagicMock, patch
+
+    import griffe as gf
+
+    from great_docs._apiref.typing_information import TypeInformation
+
+    api_ref = MagicMock()
+    api_ref.package = "package"
+    api_ref.settings.dir = "reference"
+
+    with (
+        gf.temporary_visited_package("package", {"__init__.py": "type Contract = int\n"}) as module,
+        patch("great_docs._apiref.typing_information.get_object", return_value=module),
+    ):
+        rendered = str(TypeInformation("package", api_ref))
+
+    assert "body-classes: doc-api-page doc-py-api-page" in rendered
