@@ -24,8 +24,7 @@ def _load_highlight_signature_with_pygments():
     The script is a standalone build step, not an importable package, and
     runs file-system side effects at module level, so the function (and
     the class-name map it relies on) is sliced out of the real source by
-    name instead of duplicated here, the same way `tests/test_post_render.py`
-    already does for `_postprocess_markdown_content`.
+    name instead of duplicated here.
 
     Returns
     -------

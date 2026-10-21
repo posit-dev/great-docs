@@ -56,9 +56,9 @@ package documentation. See [llms.txt](39-llms-txt.qmd) for details.
 11. Source link metadata (`_source_links.json`) is generated, mapping each documented symbol to its
 file and line numbers on GitHub.
 
-12. Quarto renders all the source files into HTML. A post-render script runs to apply final
-transformations: injecting source links, processing cross-references (GDLS), cleaning up Sphinx/RST
-artifacts, and generating companion Markdown (`.md`) files for each page.
+12. Quarto renders all the source files into HTML, writing a companion Markdown (`.md`) file beside
+each page as it goes. A post-render script then applies final transformations: injecting source
+links, processing cross-references (GDLS), and cleaning up Sphinx/RST artifacts.
 
 After all steps complete, the finished site is in `docs/_site/`.
 
