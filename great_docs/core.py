@@ -32,7 +32,7 @@ from ._website import i18n, markdown_pages, page_dates, page_metadata, page_url,
 from ._website.navigation import github as nav_github
 from ._website.navigation import label as nav_label
 from ._website.navigation import release as nav_release
-from ._website.scripts import script_include, script_tag
+from ._website.scripts import script_include, script_tag, stylesheet_include
 from ._website.seo import description as seo_description
 from ._website.seo import noindex
 from ._website.seo import title as seo_title
@@ -11607,18 +11607,7 @@ anchor-sections: true
         )
         header.insert(theme_index, header_entry)
 
-        # Inline loader: resolves the site root from quarto:offset, since Quarto doesn't always
-        # rewrite bare src paths in text entries for newly-added files
-        after_body.append(
-            {
-                "text": (
-                    "<script>(function(){var s=document.createElement('script');"
-                    "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
-                    "s.src=(m?m.content:'')+'wide-layout.js';"
-                    "document.body.appendChild(s);})();</script>"
-                )
-            }
-        )
+        after_body.append(script_include("wide-layout.js"))
 
     def _update_quarto_config(self) -> None:  # pragma: no cover
         """
@@ -11942,14 +11931,7 @@ anchor-sections: true
                 config["format"]["html"]["include-in-header"].append(marimo_entry)
 
             # Add marimo-islands.js (lazy-load + copy handler)
-            marimo_js_entry = {
-                "text": (
-                    "<script>document.head.appendChild(Object.assign("
-                    "document.createElement('script'),{src:(document.querySelector("
-                    "'meta[name=\"quarto:offset\"]')||{content:''}).content+"
-                    "'marimo-islands.js'}));</script>"
-                )
-            }
+            marimo_js_entry = script_include("marimo-islands.js", defer=True)
             if not any(
                 "marimo-islands.js" in str(item)
                 for item in config["format"]["html"]["include-in-header"]
@@ -11957,102 +11939,53 @@ anchor-sections: true
                 config["format"]["html"]["include-in-header"].append(marimo_js_entry)
 
             # Add marimo-islands.css
-            marimo_css_entry = {
-                "text": (
-                    "<script>document.head.appendChild(Object.assign("
-                    "document.createElement('link'),{rel:'stylesheet',"
-                    "href:(document.querySelector('meta[name=\"quarto:offset\"]')"
-                    "||{content:''}).content+'marimo-islands.css'}));</script>"
-                )
-            }
+            marimo_css_entry = stylesheet_include("marimo-islands.css")
             if not any(
                 "marimo-islands.css" in str(item)
                 for item in config["format"]["html"]["include-in-header"]
             ):
                 config["format"]["html"]["include-in-header"].append(marimo_css_entry)
 
-        # Add gd-lightbox CSS (uses quarto:offset for subdirectory-safe paths)
-        lb_css_entry = {
-            "text": (
-                "<script>document.head.appendChild(Object.assign("
-                "document.createElement('link'),{rel:'stylesheet',"
-                "href:(document.querySelector('meta[name=\"quarto:offset\"]')"
-                "||{content:''}).content+'gd-lightbox.css'}));</script>"
-            )
-        }
+        # Add gd-lightbox CSS
+        lb_css_entry = stylesheet_include("gd-lightbox.css")
         if not any(
             "gd-lightbox.css" in str(item) for item in config["format"]["html"]["include-in-header"]
         ):
             config["format"]["html"]["include-in-header"].append(lb_css_entry)
 
-        # Add gd-lightbox JS (deferred, uses quarto:offset)
-        lb_js_entry = {
-            "text": (
-                "<script>(function(){var s=document.createElement('script');"
-                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
-                "s.src=(m?m.content:'')+'gd-lightbox.js';s.defer=true;"
-                "document.head.appendChild(s);})();</script>"
-            )
-        }
+        # Add gd-lightbox JS (deferred)
+        lb_js_entry = script_include("gd-lightbox.js", defer=True)
         if not any(
             "gd-lightbox.js" in str(item) for item in config["format"]["html"]["include-in-header"]
         ):
             config["format"]["html"]["include-in-header"].append(lb_js_entry)
 
-        # Add gd-lightbox-compare CSS (uses quarto:offset)
-        lb_compare_css_entry = {
-            "text": (
-                "<script>document.head.appendChild(Object.assign("
-                "document.createElement('link'),{rel:'stylesheet',"
-                "href:(document.querySelector('meta[name=\"quarto:offset\"]')"
-                "||{content:''}).content+'gd-lightbox-compare.css'}));</script>"
-            )
-        }
+        # Add gd-lightbox-compare CSS
+        lb_compare_css_entry = stylesheet_include("gd-lightbox-compare.css")
         if not any(
             "gd-lightbox-compare.css" in str(item)
             for item in config["format"]["html"]["include-in-header"]
         ):
             config["format"]["html"]["include-in-header"].append(lb_compare_css_entry)
 
-        # Add gd-lightbox-compare JS (deferred, uses quarto:offset)
-        lb_compare_js_entry = {
-            "text": (
-                "<script>(function(){var s=document.createElement('script');"
-                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
-                "s.src=(m?m.content:'')+'gd-lightbox-compare.js';s.defer=true;"
-                "document.head.appendChild(s);})();</script>"
-            )
-        }
+        # Add gd-lightbox-compare JS (deferred)
+        lb_compare_js_entry = script_include("gd-lightbox-compare.js", defer=True)
         if not any(
             "gd-lightbox-compare.js" in str(item)
             for item in config["format"]["html"]["include-in-header"]
         ):
             config["format"]["html"]["include-in-header"].append(lb_compare_js_entry)
 
-        # Add gd-lightbox-annotate CSS (uses quarto:offset)
-        lb_annotate_css_entry = {
-            "text": (
-                "<script>document.head.appendChild(Object.assign("
-                "document.createElement('link'),{rel:'stylesheet',"
-                "href:(document.querySelector('meta[name=\"quarto:offset\"]')"
-                "||{content:''}).content+'gd-lightbox-annotate.css'}));</script>"
-            )
-        }
+        # Add gd-lightbox-annotate CSS
+        lb_annotate_css_entry = stylesheet_include("gd-lightbox-annotate.css")
         if not any(
             "gd-lightbox-annotate.css" in str(item)
             for item in config["format"]["html"]["include-in-header"]
         ):
             config["format"]["html"]["include-in-header"].append(lb_annotate_css_entry)
 
-        # Add gd-lightbox-annotate JS (deferred, uses quarto:offset)
-        lb_annotate_js_entry = {
-            "text": (
-                "<script>(function(){var s=document.createElement('script');"
-                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
-                "s.src=(m?m.content:'')+'gd-lightbox-annotate.js';s.defer=true;"
-                "document.head.appendChild(s);})();</script>"
-            )
-        }
+        # Add gd-lightbox-annotate JS (deferred)
+        lb_annotate_js_entry = script_include("gd-lightbox-annotate.js", defer=True)
         if not any(
             "gd-lightbox-annotate.js" in str(item)
             for item in config["format"]["html"]["include-in-header"]
@@ -12327,21 +12260,8 @@ anchor-sections: true
         if not has_wrap:
             config["format"]["html"]["include-after-body"].append(wrap_script_entry)
 
-        # Add floating sidebar script (pinned, scrollable sidebar on desktop).
-        # Quarto does not always rewrite bare src paths in text entries for
-        # newly-added files, so we use an inline loader that reads the
-        # quarto:offset meta tag (always present) to resolve the site root.
-        float_inline = (
-            "<script>"
-            "(function(){"
-            "var s=document.createElement('script');"
-            "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
-            "s.src=(m?m.content:'')+'sidebar-float.js';"
-            "document.body.appendChild(s);"
-            "})();"
-            "</script>"
-        )
-        float_script_entry = {"text": float_inline}
+        # Add floating sidebar script (pinned, scrollable sidebar on desktop)
+        float_script_entry = script_include("sidebar-float.js")
         has_float = any(
             "sidebar-float" in str(item) for item in config["format"]["html"]["include-after-body"]
         )
@@ -12444,14 +12364,7 @@ anchor-sections: true
             if not has_back_to_top:
                 config["format"]["html"]["include-after-body"].append(back_to_top_entry)
 
-            on_this_page_entry = {
-                "text": (
-                    "<script>(function(){var s=document.createElement('script');"
-                    "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
-                    "s.src=(m?m.content:'')+'on-this-page.js';"
-                    "document.body.appendChild(s);})();</script>"
-                )
-            }
+            on_this_page_entry = script_include("on-this-page.js")
             has_on_this_page = any(
                 "on-this-page.js" in str(item)
                 for item in config["format"]["html"]["include-after-body"]
@@ -12704,30 +12617,13 @@ anchor-sections: true
             config["format"]["html"]["include-after-body"].append(tooltips_script_entry)
 
         # Add color-swatch script (always enabled — loaded after tooltips)
-        # Use an inline loader that resolves the path against the site root via
-        # Quarto's quarto:offset meta tag (always present). Bare src= paths and
-        # canonical-URL stripping both 404 on nested pages; quarto:offset is the
-        # robust pattern shared with on-this-page.js, etc.
-        color_swatch_entry = {
-            "text": (
-                "<script>(function(){var s=document.createElement('script');"
-                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
-                "s.src=(m?m.content:'')+'color-swatch.js';"
-                "document.body.appendChild(s);})();</script>"
-            )
-        }
-        # Remove any stale plain <script src="color-swatch.js"> entries so the
-        # dynamic loader below is used instead.
-        config["format"]["html"]["include-after-body"] = [
-            item
+        color_swatch_entry = script_include("color-swatch.js")
+        has_color_swatch = any(
+            "color-swatch.js" in str(item)
             for item in config["format"]["html"]["include-after-body"]
-            if not (
-                isinstance(item, dict)
-                and "color-swatch.js" in item.get("text", "")
-                and "createElement" not in item.get("text", "")
-            )
-        ]
-        config["format"]["html"]["include-after-body"].append(color_swatch_entry)
+        )
+        if not has_color_swatch:
+            config["format"]["html"]["include-after-body"].append(color_swatch_entry)
 
         # Add responsive tables script (always enabled — wraps tables in scroll containers)
         responsive_tables_script_entry = script_include("responsive-tables.js")
@@ -12739,29 +12635,7 @@ anchor-sections: true
             config["format"]["html"]["include-after-body"].append(responsive_tables_script_entry)
 
         # Add video embed script (always enabled — lazy loading + YouTube thumbnails)
-        # Use an inline loader that resolves the path against the site root via
-        # Quarto's quarto:offset meta tag (always present). A bare src= path 404s
-        # on nested pages; quarto:offset is the robust pattern shared with
-        # on-this-page.js, etc.
-        video_embed_script_entry = {
-            "text": (
-                "<script>(function(){var s=document.createElement('script');"
-                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
-                "s.src=(m?m.content:'')+'video-embed.js';"
-                "document.body.appendChild(s);})();</script>"
-            )
-        }
-        # Remove any stale plain <script src="video-embed.js"> entries so the
-        # dynamic loader below is used instead.
-        config["format"]["html"]["include-after-body"] = [
-            item
-            for item in config["format"]["html"]["include-after-body"]
-            if not (
-                isinstance(item, dict)
-                and "video-embed.js" in item.get("text", "")
-                and "createElement" not in item.get("text", "")
-            )
-        ]
+        video_embed_script_entry = script_include("video-embed.js")
         has_video_embed = any(
             "video-embed.js" in str(item) for item in config["format"]["html"]["include-after-body"]
         )
