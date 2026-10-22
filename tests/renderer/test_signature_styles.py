@@ -368,7 +368,7 @@ def test_highlighted_style_writes_overloads_as_a_code_block(highlight_style):
 
     qmd = _rendered(_OVERLOADED, "convert")
 
-    assert "```python" in qmd
+    assert "```pythonsignature" in qmd
     # One `convert(` opening a signature line per variant. The count is taken
     # over the line openings so the page title, which also spells `convert(`,
     # is not counted.

@@ -125,14 +125,12 @@ class __RenderDocCallMixin(RenderDoc):
         """
         Render the signature of this callable
 
-        The `highlighted` style writes a fenced code block, which Quarto
-        highlights and `post-render.py` then re-highlights. The `plain` style
-        writes inline markup instead, which a `code` element can hold but a
-        `pre` block cannot. The callable's name carries `sig-name` in both,
-        but parameters differ: `plain` uses `doc-parameter-name`, whilst
-        `highlighted` uses Pygments' `va` token. The stylesheet's colours for
-        the literal classes are scoped to Quarto's own `sourceCode` wrapper,
-        so today they reach only the code block.
+        The `highlighted` style produces a `pythonsignature` code block, which
+        Quarto colours with the build's signature grammar. The `plain` style
+        produces inline markup, which a `code` element can hold but a `pre`
+        block cannot. Callable names use `fu` in `highlighted` and `sig-name`
+        in `plain`; parameters use `va` and `doc-parameter-name`, respectively.
+        Literal colours apply only within the code block's `sourceCode` wrapper.
         """
         name = self.signature_name if self.show_signature_name else ""
         attr = Attr(classes=["doc-signature", f"doc-{self.obj.kind}"])

@@ -276,4 +276,6 @@ def render_signature_block(lines: list[tuple[str, list[str]]], attr: Attr) -> Bl
         return Div(Code(escape_quotes(escape_indents(marked))).html, attr)
 
     text = "\n".join(text for text, _ in lines)
-    return Div(CodeBlock(text, Attr(classes=["python"])), attr)
+    # Quarto highlights `pythonsignature` with the grammar the build supplies,
+    # which marks callable names apart from parameter names.
+    return Div(CodeBlock(text, Attr(classes=["pythonsignature"])), attr)
