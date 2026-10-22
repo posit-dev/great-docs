@@ -85,3 +85,27 @@ def test_page_dates_reach_the_page(tmp_path: Path) -> None:
     assert generated.count('<meta name="gd-auto-generated" content="true">') == 1
     assert 'name="gd-page-' not in generated
     assert page.count(build_time) == generated.count(build_time) == 1
+
+
+def test_robots_front_matter_reaches_the_page(tmp_path: Path):
+    """Emit a robots meta tag only on pages that set `robots`"""
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "metadata.html").write_text(BUNDLED.read_text(encoding="utf-8"), encoding="utf-8")
+    (project / "_quarto.yml").write_text(
+        "project:\n  type: website\nwebsite:\n  title: t\n"
+        "format:\n  html:\n    template-partials:\n      - metadata.html\n",
+        encoding="utf-8",
+    )
+    (project / "index.qmd").write_text("---\ntitle: T\n---\n\nText\n", encoding="utf-8")
+    (project / "draft.qmd").write_text(
+        '---\ntitle: D\nrobots: "noindex, nofollow"\n---\n\nText\n', encoding="utf-8"
+    )
+
+    subprocess.run(["quarto", "render"], cwd=project, check=True, capture_output=True)
+
+    draft = (project / "_site" / "draft.html").read_text(encoding="utf-8")
+    index = (project / "_site" / "index.html").read_text(encoding="utf-8")
+    head_end = draft.index("</head>")
+    assert draft[:head_end].count('<meta name="robots" content="noindex, nofollow">') == 1
+    assert 'name="robots"' not in index
