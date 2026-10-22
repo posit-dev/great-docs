@@ -7600,6 +7600,19 @@ class GreatDocs:
         {"Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum", "EnumCheck"}
     )
 
+    # ── Sub-classification label -> category key ─────────────────────────
+    # Maps `_sub_classify_class` results to keys of `_empty_categories`.
+    _CLASS_SUB_MAP = {
+        "dataclass": "dataclasses",
+        "enum": "enums",
+        "exception": "exceptions",
+        "namedtuple": "namedtuples",
+        "typeddict": "typeddicts",
+        "protocol": "protocols",
+        "abc": "abstract_classes",
+        "class": "classes",
+    }
+
     @staticmethod
     def _sub_classify_class(obj) -> str:
         """
@@ -7867,17 +7880,7 @@ class GreatDocs:
                     if obj.kind.value == "class":
                         # Sub-classify the class
                         sub = self._sub_classify_class(obj)
-                        _CLASS_SUB_MAP = {
-                            "dataclass": "dataclasses",
-                            "enum": "enums",
-                            "exception": "exceptions",
-                            "namedtuple": "namedtuples",
-                            "typeddict": "typeddicts",
-                            "protocol": "protocols",
-                            "abc": "abstract_classes",
-                            "class": "classes",
-                        }
-                        cat_key = _CLASS_SUB_MAP.get(sub, "classes")
+                        cat_key = self._CLASS_SUB_MAP.get(sub, "classes")
                         categories[cat_key].append(name)
                         # Get documentable methods (exclude private methods but include
                         # documented dunder methods like __repr__, __eq__, __len__, etc.)
@@ -8062,17 +8065,7 @@ class GreatDocs:
 
                                 if member_kind == "class":
                                     sub = self._sub_classify_class(member)
-                                    _CLASS_SUB_MAP = {
-                                        "dataclass": "dataclasses",
-                                        "enum": "enums",
-                                        "exception": "exceptions",
-                                        "namedtuple": "namedtuples",
-                                        "typeddict": "typeddicts",
-                                        "protocol": "protocols",
-                                        "abc": "abstract_classes",
-                                        "class": "classes",
-                                    }
-                                    cat_key = _CLASS_SUB_MAP.get(sub, "classes")
+                                    cat_key = self._CLASS_SUB_MAP.get(sub, "classes")
                                     categories[cat_key].append(qualified)
                                     module_had_members = True
 
@@ -8734,17 +8727,7 @@ class GreatDocs:
 
             if kind == "class":
                 sub = self._sub_classify_class(obj)
-                _CLASS_SUB_MAP = {
-                    "dataclass": "dataclasses",
-                    "enum": "enums",
-                    "exception": "exceptions",
-                    "namedtuple": "namedtuples",
-                    "typeddict": "typeddicts",
-                    "protocol": "protocols",
-                    "abc": "abstract_classes",
-                    "class": "classes",
-                }
-                cat_key = _CLASS_SUB_MAP.get(sub, "classes")
+                cat_key = self._CLASS_SUB_MAP.get(sub, "classes")
                 categories[cat_key].append(name)
 
                 # Count public methods for should_split_methods check
@@ -8820,7 +8803,7 @@ class GreatDocs:
                         qualified = f"{name}.{member_name}"
                         if member_kind == "class":
                             sub = self._sub_classify_class(member)
-                            cat_key_mod = _CLASS_SUB_MAP.get(sub, "classes")
+                            cat_key_mod = self._CLASS_SUB_MAP.get(sub, "classes")
                             categories[cat_key_mod].append(qualified)
                         elif member_kind == "function":
                             categories["functions"].append(qualified)

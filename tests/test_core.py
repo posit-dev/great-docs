@@ -934,6 +934,41 @@ class TestCategorizeReferencedObjects:
         assert "mymod.sub_func" in result["functions"]
         assert "mymod.CONST" in result["constants"]
 
+    def test_module_expansion_without_top_level_class(self, tmp_path, monkeypatch):
+        """A module listed alone expands its classes and the members after them."""
+        gd = self._setup(tmp_path, monkeypatch)
+
+        def _member(kind):
+            m = MagicMock()
+            m.kind.value = kind
+            return m
+
+        mod_obj = MagicMock()
+        mod_obj.kind.value = "module"
+        # Dict order is the order the expansion visits the members in.
+        mod_obj.members = {
+            "AFunc": _member("function"),
+            "BDataclass": _member("class"),
+            "CPlain": _member("class"),
+            "DFunc": _member("function"),
+            "E_CONST": _member("attribute"),
+        }
+
+        pkg = MagicMock()
+        pkg.members = {"mymod": mod_obj}
+        monkeypatch.setattr(gd, "_get_griffe_package", lambda name: pkg)
+        monkeypatch.setattr(
+            gd,
+            "_sub_classify_class",
+            lambda o: "dataclass" if o is mod_obj.members["BDataclass"] else "class",
+        )
+        result = gd._categorize_referenced_objects("mypkg", [{"contents": ["mymod"]}])
+        assert "mymod.BDataclass" in result["dataclasses"]
+        assert "mymod.CPlain" in result["classes"]
+        assert "mymod.AFunc" in result["functions"]
+        assert "mymod.DFunc" in result["functions"]
+        assert "mymod.E_CONST" in result["constants"]
+
     def test_module_member_cyclic_alias_skipped(self, tmp_path, monkeypatch):
         """CyclicAliasError on module member's kind skips it."""
         import griffe
