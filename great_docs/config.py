@@ -1422,7 +1422,13 @@ class Config:
 
     @property
     def ref_section_order(self) -> list[str] | None:
-        """Custom display order for reference subsection tabs (api, cli, mcp)."""
+        """
+        Custom display order for reference subsection tabs
+
+        Users name sections `python`, `cli` and `mcp`; `api` is still accepted
+        as an alias of `python`. The result holds the internal section ids
+        (`api`, `cli`, `mcp`), with unknown names and duplicates dropped.
+        """
         try:
             raw = self["ref_section_order"]
         except KeyError:
@@ -1431,7 +1437,12 @@ class Config:
             items = cast("list[object]", raw)
             strings = [item for item in items if isinstance(item, str)]
             if len(strings) == len(items):
-                valid = [s for s in strings if s in ("api", "cli", "mcp")]
+                section_ids = {"python": "api", "api": "api", "cli": "cli", "mcp": "mcp"}
+                valid: list[str] = []
+                for name in strings:
+                    section_id = section_ids.get(name)
+                    if section_id and section_id not in valid:
+                        valid.append(section_id)
                 return valid if valid else None
         return None
 
