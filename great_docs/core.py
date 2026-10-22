@@ -637,35 +637,6 @@ class GreatDocs:
         # build will generate them.
         self._create_index_from_readme(force_rebuild=True)
 
-    def _copy_user_guide_files(self) -> None:
-        """
-        Copy user guide files from project root to build directory.
-
-        Resolves the source directory using `_find_user_guide_dir()`.
-        When `user_guide` config is a list (explicit ordering), only the directory
-        is resolved from conventional locations.
-
-        Copies `.qmd` and `.md` files to `great-docs/user-guide/` directory.
-        """
-        source_user_guide = self._find_user_guide_dir()
-        if source_user_guide is not None:
-            dest_user_guide = self.build_dir / "user-guide"
-            dest_user_guide.mkdir(exist_ok=True)
-
-            # Copy all .qmd and .md files
-            for pattern in ["*.qmd", "*.md"]:
-                for file_path in source_user_guide.glob(pattern):
-                    destination = dest_user_guide / file_path.name
-                    content = self._rebase_source_references(
-                        file_path.read_text(encoding="utf-8"), file_path, destination
-                    )
-                    destination.write_text(
-                        page_dates.add_to_page(
-                            content, file_path, self._config, self._page_authors
-                        ),
-                        encoding="utf-8",
-                    )
-
     def _copy_assets(self) -> bool:
         """
         Copy assets directory from project root to build directory.
