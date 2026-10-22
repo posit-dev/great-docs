@@ -3,7 +3,7 @@ gdtest_rst_mixed_dirs — Tests multiple RST directives in the same docstrings.
 
 Dimensions: L9
 Focus: Multiple different RST directives within a single docstring, rendered as
-styled callout divs by post-render.
+styled callout divs.
 """
 
 SPEC = {

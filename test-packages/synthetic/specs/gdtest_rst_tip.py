@@ -2,7 +2,7 @@
 gdtest_rst_tip — Tests .. tip:: directives in docstrings.
 
 Dimensions: L5
-Focus: RST tip directives rendered as styled callout divs by post-render.
+Focus: RST tip directives rendered as styled callout divs.
 """
 
 SPEC = {

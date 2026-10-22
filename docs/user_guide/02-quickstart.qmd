@@ -94,26 +94,23 @@ processes your user guide and custom pages, generates API reference pages, and r
 the final HTML site. The output shows each step with its status and timing:
 
 ```{.default filename="Build output (abbreviated)"}
-━━ Step  1/19 ─ Prepare build directory ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━ Step  1/20 ─ Prepare build directory ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    [OK] docs/_quarto/default/ ready                                                <0.1s
 
-━━ Step  2/19 ─ Configure API reference ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━ Step  2/20 ─ Configure API reference ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    [OK] 2 section(s), 15 item(s)                                           1.2s
    ...
 
-━━ Step 17/19 ─ Build site with Quarto ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   [OK] quarto render                                                     28.4s
+━━ Step 19/20 ─ Build site with Quarto ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   [OK] Site rendered                                                     28.4s
 
-━━ Step 18/19 ─ Post-render processing ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   [OK] Version assembly complete                                        <0.1s
-
-━━ Step 19/19 ─ Generate SEO files ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━ Step 20/20 ─ Generate SEO files ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       Generated sitemap.xml with 120 URLs
       Generated robots.txt
    [OK] sitemap.xml + robots.txt                                          <0.1s
 
 ==============================================================================
-|  [OK] Build complete — 19/19 steps                                         |
+|  [OK] Build complete — 20/20 steps                                         |
 |  Total time: 35.6s                                                         |
 |                                                                            |
 |  🎉 Site ready →                                                           |

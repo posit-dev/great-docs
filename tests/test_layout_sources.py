@@ -280,7 +280,6 @@ def test_documentation_sources(source_project: tuple[Path, Path], explicit: bool
         "citation.csl",
         "style.css",
         "scripts/prepare.py",
-        "scripts/post-render.py",
         "assets/logo.svg",
         "recipes/start.qmd",
         "custom/about.qmd",

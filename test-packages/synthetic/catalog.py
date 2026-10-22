@@ -157,7 +157,7 @@ ALL_PACKAGES: list[str] = [
     "gdtest_config_combo_f",  # 28
     "gdtest_attribution_on",  # 29
     "gdtest_attribution_off",  # 30
-    # 31–55: Docstring richness & post-render
+    # 31–55: Docstring richness
     "gdtest_rst_versionadded",  # 26
     "gdtest_rst_deprecated",  # 27
     "gdtest_rst_note",  # 28
@@ -1478,7 +1478,7 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
     "gdtest_sphinx_mixed_roles": (
         "Docstrings mix :py:func:, :py:class:, :py:exc:, :py:meth:, and "
         ":py:attr: roles in the same module. All should be translated "
-        "correctly by post-render."
+        "correctly."
     ),
     "gdtest_numpy_rich": (
         "Rich NumPy-style docstrings with ALL standard sections: Parameters, "
@@ -1909,20 +1909,19 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
     ),
     "gdtest_numpy_seealso_desc": (
         "Four functions with NumPy-style See Also sections containing "
-        "'name : description' entries. Tests that descriptions survive the "
-        "post-render merge step and appear in the final rendered output."
+        "'name : description' entries. Tests that descriptions appear in "
+        "the final rendered output."
     ),
     "gdtest_interlinks": (
         "Three classes and a function using [](`~pkg.Name`) interlinks syntax "
         "in docstrings and in user-guide pages, plus inline-code "
-        "autolinking and a configured external source. Tests that both the "
-        "post-render resolver and the all-pages GDLS pass convert these into "
-        "hyperlinks with correct relative paths back to reference/."
+        "autolinking and a configured external source. Tests that these "
+        "become hyperlinks with correct relative paths back to reference/."
     ),
     "gdtest_autolink": (
         "Three classes and a function using inline code (`Name`, `Name()`, "
         "`~~pkg.Name`, `~~.pkg.Name`) that gets auto-converted into clickable "
-        "links to reference pages by the post-render autolink pass."
+        "links to reference pages."
     ),
     "gdtest_skill_default": (
         "Auto-generated skill.md with no config overrides and no curated skill "

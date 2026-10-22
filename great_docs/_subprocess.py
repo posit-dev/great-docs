@@ -14,7 +14,7 @@ class TextModeKwargs(TypedDict):
 
 
 # Windows text-mode pipes default to the locale codec (e.g. cp1252). Quarto and
-# Python post-render hooks emit UTF-8, so parent readers must not rely on
+# Python pre-render scripts emit UTF-8, so parent readers must not rely on
 # locale.getpreferredencoding(False).
 TEXT_MODE_KWARGS: TextModeKwargs = {
     "text": True,

@@ -2,8 +2,8 @@
 gdtest_numpy_seealso_desc — NumPy-style See Also sections with descriptions.
 
 Dimensions: A1, D1, L22
-Focus: Tests that NumPy-style ``See Also`` sections preserve descriptions
-       through the post-render merge step.  Each function uses the standard
+Focus: Tests that NumPy-style ``See Also`` sections preserve descriptions.
+       Each function uses the standard
        ``name : description`` format inside a ``See Also`` docstring section.
 """
 
@@ -11,7 +11,7 @@ SPEC = {
     "name": "gdtest_numpy_seealso_desc",
     "description": (
         "NumPy-style See Also sections with descriptions. "
-        "Tests that 'name : description' entries survive the post-render merge."
+        "Tests that 'name : description' entries keep their descriptions."
     ),
     "dimensions": ["A1", "D1", "L22"],
     "pyproject_toml": {

@@ -2,7 +2,7 @@
 gdtest_rst_important — Tests .. important:: directives in docstrings.
 
 Dimensions: L8
-Focus: RST important directives rendered as styled callout divs by post-render.
+Focus: RST important directives rendered as styled callout divs.
 """
 
 SPEC = {

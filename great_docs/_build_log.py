@@ -221,10 +221,9 @@ def estimate_build_time(
     """
     base = 5.0  # fixed overhead (directory setup, asset copy, etc.)
     griffe = n_api_items * 3.2  # import + introspect + source links
-    quarto = n_total_pages * 0.5  # plain page rendering
+    quarto = n_total_pages * 0.8  # page rendering, including filters
     code = n_code_cells * 3.0  # executable code cell overhead
-    post_render = n_total_pages * 0.3  # HTML post-processing
-    return base + griffe + quarto + code + post_render
+    return base + griffe + quarto + code
 
 
 # ---------------------------------------------------------------------------
@@ -678,24 +677,6 @@ class BuildLog:
                 self._write(f"   {c.DIM}{connector}{c.RESET} {line}")
             else:
                 self._write(f"   {connector} {line}")
-
-    def substep(self, label: str, *, last: bool = False) -> None:
-        """Print a mini-pipeline check-off sub-item (always visible).
-
-        Parameters
-        ----------
-        label
-            Short description of the sub-step (e.g. `"Interlinks resolved"`).
-        last
-            If *True*, use a `└─` connector instead of `├─`.
-        """
-        c = self.colors
-        connector = "└─" if last else "├─"
-        icon = self._icon_ok
-        if self._is_tty:
-            self._write(f"   {c.DIM}{connector}{c.RESET} {icon} {label}")
-        else:
-            self._write(f"   {connector} {icon} {label}")
 
     def step_done(self, summary: str) -> None:
         """Print a success result line with elapsed time."""

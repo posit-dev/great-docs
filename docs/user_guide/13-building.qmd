@@ -53,12 +53,8 @@ package metadata. See [Agent Skills](38-agent-skills.qmd) for details.
 10. `llms.txt` and `llms-full.txt` files are generated. These provide AI-friendly summaries of your
 package documentation. See [llms.txt](39-llms-txt.qmd) for details.
 
-11. Source link metadata (`_source_links.json`) is generated, mapping each documented symbol to its
-file and line numbers on GitHub.
-
-12. Quarto renders all the source files into HTML, writing a companion Markdown (`.md`) file beside
-each page as it goes. A post-render script then applies final transformations: injecting source
-links, processing cross-references (GDLS), and cleaning up Sphinx/RST artifacts.
+11. Quarto renders all the source files into HTML, writing a companion Markdown (`.md`) file beside
+each page as it goes.
 
 After all steps complete, the finished site is in `docs/_site/`.
 
@@ -116,15 +112,12 @@ docs/_quarto/default/
 ├── llms.txt             # LLM-friendly summary
 ├── llms-full.txt        # Full API docs for LLMs
 ├── skill.md             # Agent Skills file
-├── _source_links.json   # GitHub source link metadata
 ├── reference/           # API reference pages
 │   ├── index.qmd
 │   ├── MyClass.qmd
 │   └── ...
 ├── user-guide/          # User guide pages (from docs/user_guide/)
 ├── recipes/             # Recipe pages (from docs/recipes/)
-├── scripts/
-│   └── post-render.py   # HTML post-processing script
 └── _site/               # Final rendered HTML
     ├── index.html
     └── ...

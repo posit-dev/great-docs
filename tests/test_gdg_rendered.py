@@ -599,8 +599,8 @@ def test_pages_have_doc_description(pkg_name: str):
 def test_footer_text_not_in_header(pkg_name: str):
     """Footer text (e.g. 'Developed by ...') must never appear in doc-description.
 
-    When an object has no docstring, the post-render script must not pick up
-    <p> tags from the page footer and move them into the title area.
+    When an object has no docstring, <p> tags from the page footer must not
+    end up in the title area.
     Regression test for the "footer-in-header" bug.
     """
     ref = _ref_dir(pkg_name)
@@ -7858,7 +7858,7 @@ def test_DED_numpy_seealso_desc_links_render():
 @pytest.mark.dedicated
 @requires_bs4
 def test_DED_numpy_seealso_desc_descriptions_render():
-    """gdtest_numpy_seealso_desc: descriptions from See Also survive post-render."""
+    """gdtest_numpy_seealso_desc: descriptions from See Also survive rendering."""
     pkg = "gdtest_numpy_seealso_desc"
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
@@ -9203,7 +9203,7 @@ def test_GT_TABLES_markdown_page_rendered():
 @pytest.mark.dedicated
 @requires_bs4
 def test_GT_TABLES_gt_not_wrapped_responsive():
-    """GT tables should NOT be wrapped in gd-table-responsive by post-render."""
+    """GT tables should NOT be wrapped in gd-table-responsive."""
     if not _has_rendered_site(_GT_TABLES_PKG):
         pytest.skip(f"{_GT_TABLES_PKG} not rendered")
 
@@ -11525,9 +11525,7 @@ def test_DED_bibliography_auto_generated_heading():
     # Regression: shift-heading-level-by: -1 demotes the in-body reference title
     # to a <p>, leaving a duplicate alongside the appendix heading. Post-render
     # must strip that orphan so "References" appears exactly once.
-    assert "<p>References</p>" not in html, (
-        "Orphaned duplicate <p>References</p> should be removed (post-render)"
-    )
+    assert "<p>References</p>" not in html, "Orphaned duplicate <p>References</p> should be removed"
     block_titles = [
         el.get_text().strip()
         for el in soup.find_all(["h1", "h2", "h3", "h4", "p"])
@@ -11570,9 +11568,7 @@ def test_DED_i18n_french_references_heading_localized():
     assert "ref-knuth1984" in html, "Citation should resolve on the French page"
 
     # Regression: the localized title must not be duplicated as an orphan <p>.
-    assert f"<p>{title}</p>" not in html, (
-        f"Orphaned duplicate <p>{title}</p> should be removed (post-render)"
-    )
+    assert f"<p>{title}</p>" not in html, f"Orphaned duplicate <p>{title}</p> should be removed"
     block_titles = [
         el.get_text().strip()
         for el in soup.find_all(["h1", "h2", "h3", "h4", "p"])
@@ -11942,7 +11938,7 @@ def test_DED_resp_tables_default_no_colgroup():
 @pytest.mark.dedicated
 @requires_bs4
 def test_DED_resp_tables_explicit_widths_preserved():
-    """gdtest_responsive_tables: `tbl-colwidths` and raw HTML colgroups survive post-render."""
+    """gdtest_responsive_tables: `tbl-colwidths` and raw HTML colgroups survive rendering."""
     soup = _resp_tables_page("explicit-widths")
     widths = [
         [c.get("style", "").replace(" ", "") for c in t.select("colgroup > col")]

@@ -135,10 +135,9 @@ debugging language issues:
 1. you set `site.lang` in `great-docs.yml`
 2. during the build, Great Docs looks up all translation strings for that language from its internal
 dictionary
-3. the full translation bundle is written into `_gd_options.json`
-4. after Quarto renders each page, the post-render script injects a `<meta name="gd-i18n">` tag into
-the HTML `<head>` containing the JSON-encoded translations
-5. each JavaScript widget reads from this meta tag using a shared `_gdT(key, fallback)` helper
+3. Quarto renders the translation bundle into a `<meta name="gd-i18n">` tag in the `<head>` of each
+page
+4. each JavaScript widget reads from this meta tag using a shared `_gdT(key, fallback)` helper
 function
 
 If a translation is missing for a particular key, the English fallback is used automatically. This
