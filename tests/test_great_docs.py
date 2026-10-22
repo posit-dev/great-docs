@@ -20858,6 +20858,54 @@ def test_find_user_guide_dir_not_found():
         assert result is None
 
 
+def test_find_user_guide_dir_skips_section_directory(tmp_path):
+    (tmp_path / "great-docs.yml").write_text("sections:\n  - title: Guide\n    dir: user_guide\n")
+    (tmp_path / "user_guide").mkdir()
+    docs = GreatDocs(project_path=tmp_path)
+
+    assert docs._find_user_guide_dir() is None
+
+
+def test_find_user_guide_dir_falls_back_past_claimed_directory(tmp_path):
+    (tmp_path / "great-docs.yml").write_text("sections:\n  - title: Guide\n    dir: user_guide\n")
+    (tmp_path / "user_guide").mkdir()
+    (tmp_path / "user-guide").mkdir()
+    docs = GreatDocs(project_path=tmp_path)
+
+    result = docs._find_user_guide_dir()
+
+    assert result is not None
+    assert result.name == "user-guide"
+
+
+def test_custom_page_sources_skip_section_directory(tmp_path):
+    (tmp_path / "great-docs.yml").write_text("sections:\n  - title: Pages\n    dir: custom\n")
+    (tmp_path / "custom").mkdir()
+    docs = GreatDocs(project_path=tmp_path)
+
+    assert docs._get_custom_page_sources() == []
+
+
+@pytest.mark.parametrize(
+    ("claim", "directory"),
+    [
+        ("user_guide: user_guide\n", "user_guide"),
+        ("user_guide:\n  - section: Intro\n    contents: [intro.qmd]\n", "user_guide"),
+        ("custom_pages: custom\n", "custom"),
+    ],
+    ids=["user_guide-string", "user_guide-list", "custom_pages"],
+)
+def test_validate_build_outputs_rejects_guide_claimed_by_section(tmp_path, claim, directory):
+    (tmp_path / "great-docs.yml").write_text(
+        f"{claim}sections:\n  - title: Claimed\n    dir: {directory}\n"
+    )
+    (tmp_path / directory).mkdir()
+    docs = GreatDocs(project_path=tmp_path)
+
+    with pytest.raises(ValueError, match=directory):
+        docs._validate_build_outputs()
+
+
 def test_prepare_build_directory():
     """Test _prepare_build_directory creates build structure."""
     with tempfile.TemporaryDirectory() as tmp_dir:
