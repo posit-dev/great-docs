@@ -3,9 +3,10 @@ gdtest_ref_section_order — Custom reference section ordering.
 
 Dimensions: A1, B1, C1, D1, E1+E6, F6, G1, H7
 Focus: ref_section_order config key. The reference switcher tabs should
-appear in the order specified by the config (cli, api) instead of the
-default (api, cli). The data-gd-ref-sections body attribute should
-reflect this custom ordering.
+appear in the order specified by the config (cli, python) instead of the
+default (python, cli). The config also lists `mcp`, which this package doesn't
+have, to show that absent sections are skipped without an error. The
+data-gd-ref-sections body attribute should reflect this custom ordering.
 """
 
 SPEC = {
@@ -104,7 +105,7 @@ SPEC = {
         "mcp": {
             "enabled": False,
         },
-        "ref_section_order": ["cli", "api"],
+        "ref_section_order": ["mcp", "cli", "python"],
     },
     "expected": {
         "detected_name": "gdtest-ref-section-order",
@@ -115,7 +116,7 @@ SPEC = {
         "section_titles": ["Classes", "Functions"],
         "has_user_guide": False,
         "cli_enabled": True,
-        "ref_section_order": ["cli", "api"],
+        "ref_section_order": ["mcp", "cli", "python"],
         "coverage_exclude": ["nodoc", "bigcl", "ug", "supp", "hdg"],
     },
 }

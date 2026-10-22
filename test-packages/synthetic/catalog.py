@@ -2336,9 +2336,9 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "`d2-<hash>-{light,dark}.svg` files copied into the site."
     ),
     "gdtest_ref_section_order": (
-        "CLI-first package with ref_section_order: [cli, api, mcp] in config. "
-        "The reference switcher tabs should appear CLI-first (cli,api) instead "
-        "of the default (api,cli). The data-gd-ref-sections body attribute "
+        "CLI-first package with ref_section_order: [mcp, cli, python] in config. "
+        "The reference switcher tabs should appear CLI-first instead of the "
+        "default (Python first). The data-gd-ref-sections body attribute "
         "should be 'cli,api' since there is no MCP server."
     ),
     "gdtest_mermaid": (

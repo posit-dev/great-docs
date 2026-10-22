@@ -797,11 +797,11 @@ ordering of reference pages:
 ```{.yaml filename="great-docs.yml"}
 ref_section_order:
   - cli
-  - api
+  - python
   - mcp
 ```
 
-Valid values are `api`, `cli`, and `mcp`. Sections listed here that don't exist in your project are
+Valid values are `python`, `cli`, and `mcp`. Sections listed here that don't exist in your project are
 silently ignored, so it's safe to include `mcp` even if your package has no MCP server. Sections not
 listed are appended at the end in the default order. The navbar "Reference" link will point to
 whichever section is first.
@@ -1157,7 +1157,7 @@ navbar_order:
 # Reference Section Order (within the Reference area)
 ref_section_order:
   - cli
-  - api
+  - python
   - mcp
 
 # API Reference Structure
