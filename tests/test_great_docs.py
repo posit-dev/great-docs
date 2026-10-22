@@ -12104,7 +12104,7 @@ def test_generate_cli_command_page_main():
         assert "my-tool" in result
         assert "sidebar: cli-reference" in result
         assert ".cli-manpage" in result
-        assert '.details summary="Full --help output"' in result
+        assert '.details summary="Full `--help` output"' in result
         assert "doc-api-page" in result
         assert ".doc-signature" in result
         assert ".doc-subject" in result
@@ -12252,6 +12252,54 @@ def test_generate_cli_reference_pages_basic():
         assert (docs.build_dir / "reference" / "cli" / "build.qmd").exists()
 
 
+def test_generate_cli_reference_pages_sections_omit_unlisted():
+    """Commands not named in cli.sections get no page, sidebar entry, or index entry."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+        docs._config._config["cli"]["sections"] = [{"title": "Building", "contents": ["build"]}]
+
+        cli_info = {
+            "name": "tool",
+            "full_path": "tool",
+            "help_text": "Usage: tool\n",
+            "is_group": True,
+            "commands": [
+                {
+                    "name": "build",
+                    "full_path": "tool build",
+                    "help_text": "Usage: tool build\n",
+                    "commands": [],
+                },
+                {
+                    "name": "internal",
+                    "full_path": "tool internal",
+                    "help_text": "Usage: tool internal\n",
+                    "is_group": True,
+                    "commands": [
+                        {
+                            "name": "run",
+                            "full_path": "tool internal run",
+                            "help_text": "Usage: tool internal run\n",
+                            "commands": [],
+                        },
+                    ],
+                },
+            ],
+        }
+        result = docs._generate_cli_reference_pages(cli_info)
+        cli_dir = docs.build_dir / "reference" / "cli"
+
+        assert "reference/cli/build.qmd" in result
+        assert (cli_dir / "build.qmd").exists()
+        # The unlisted group and its subcommands are dropped everywhere.
+        assert not any(isinstance(item, dict) and "section" in item for item in result)
+        assert not (cli_dir / "internal.qmd").exists()
+        assert not (cli_dir / "internal").exists()
+        index = (cli_dir / "index.qmd").read_text()
+        assert "internal" not in index
+
+
 def test_generate_cli_index_page_auto_layout():
     """_generate_cli_index_page auto-groups leaf commands then command groups."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -12263,14 +12311,32 @@ def test_generate_cli_index_page_auto_layout():
             "short_help": "A tool.",
             "is_group": True,
             "commands": [
-                {"name": "build", "short_help": "Build it.", "is_group": False, "commands": []},
-                {"name": "init", "short_help": "Init it.", "is_group": False, "commands": []},
+                {
+                    "name": "build",
+                    "full_path": "tool build",
+                    "short_help": "Build it.",
+                    "is_group": False,
+                    "commands": [],
+                },
+                {
+                    "name": "init",
+                    "full_path": "tool init",
+                    "short_help": "Init it.",
+                    "is_group": False,
+                    "commands": [],
+                },
                 {
                     "name": "skill",
+                    "full_path": "tool skill",
                     "short_help": "Manage skills.",
                     "is_group": True,
                     "commands": [
-                        {"name": "install", "short_help": "Install.", "commands": []},
+                        {
+                            "name": "install",
+                            "full_path": "tool skill install",
+                            "short_help": "Install.",
+                            "commands": [],
+                        },
                     ],
                 },
             ],
@@ -12285,12 +12351,16 @@ def test_generate_cli_index_page_auto_layout():
         assert "[tool](tool.qmd){.doc-function .doc-label .doc-label-cli-group}" in page
         # Leaf commands are listed (code order) under the auto "Commands" section.
         assert "## Commands {.doc-group}" in page
-        assert "[build](build.qmd){.doc-function .doc-label .doc-label-cli}" in page
-        assert page.index("[build]") < page.index("[init]")
+        # Entries show the full invocation, not the bare command name.
+        assert "[tool build](build.qmd){.doc-function .doc-label .doc-label-cli}" in page
+        assert page.index("[tool build]") < page.index("[tool init]")
         # The group gets its own section, with its overview and subcommand links.
         assert "## skill {.doc-group}" in page
-        assert "[skill](skill.qmd){.doc-function .doc-label .doc-label-cli-group}" in page
-        assert "[install](skill/install.qmd){.doc-function .doc-label .doc-label-cli}" in page
+        assert "[tool skill](skill.qmd){.doc-function .doc-label .doc-label-cli-group}" in page
+        assert (
+            "[tool skill install](skill/install.qmd){.doc-function .doc-label .doc-label-cli}"
+            in page
+        )
 
 
 def test_generate_cli_index_page_configured_sections():
@@ -42736,8 +42806,29 @@ def test_generate_cli_command_page_with_help_text(tmp_path):
         "examples": "",
     }
     result = docs._generate_cli_command_page(cmd_info)
-    assert "Full --help output" in result
+    assert '.details summary="Full `--help` output"' in result
     assert "Usage: mypkg run" in result
+
+
+def test_generate_cli_command_page_help_summary_translated(tmp_path):
+    """The collapsible help summary follows the site language."""
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+    (tmp_path / "great-docs.yml").write_text("site:\n  lang: fr\n")
+    docs = GreatDocs(project_path=str(tmp_path))
+
+    cmd_info = {
+        "name": "run",
+        "full_path": "mypkg run",
+        "help": "Run the pipeline.",
+        "help_text": "Usage: mypkg run [OPTIONS]\n",
+        "is_group": False,
+        "options": [],
+        "arguments": [],
+        "commands": [],
+        "examples": "",
+    }
+    result = docs._generate_cli_command_page(cmd_info)
+    assert '.details summary="Sortie complète de `--help`"' in result
 
 
 def test_generate_cli_command_page_with_arguments_typed(tmp_path):
