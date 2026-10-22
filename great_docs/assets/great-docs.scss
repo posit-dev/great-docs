@@ -802,7 +802,7 @@ dt a.doc-method-name::after {
     color: #e2e8f0 !important;
   }
 
-  .doc-signature code span:not(.sig-class, .sig-name, .cn-none, .cn-bool, .op) {
+  .doc-signature code span:not(.sig-name, .op) {
     color: #e2e8f0 !important;
   }
 
@@ -920,41 +920,56 @@ html.theme-loading body {
     text-decoration-thickness: 2px;
 }
 
-/* Signature highlighting - class name (e.g., "Graph" in Graph.add_node) */
-code span.sig-class {
-    color: #0e84b5;
-    font-weight: 600;
-}
-
-/* Signature highlighting - method/function name (e.g., "add_node" in Graph.add_node) */
+/* Callable name in a `plain` signature, such as `add_node` in `Graph.add_node`. */
 code span.sig-name {
     color: #4758AB;
     font-weight: 600;
 }
 
-/* Signature highlighting - None constant */
-code span.cn-none {
+/* CLI and MCP pages also use `.doc-signature` for Bash and JSON blocks.
+   Scope signature token colours to `pythonsignature`. */
+
+/* Callable name, such as `add_node` in `Graph.add_node`. */
+.doc-signature pre.pythonsignature span.fu {
+    color: #4758AB;
+    font-weight: 600;
+}
+
+/* Class name, such as `Graph` in `Graph.add_node`. */
+.doc-signature pre.pythonsignature span.dt {
+    color: #0e84b5;
+    font-weight: 600;
+}
+
+/* `None` constant. */
+.doc-signature pre.pythonsignature span.cn {
     color: #7D4E9E;
     font-weight: 500;
 }
 
-/* Signature highlighting - True/False boolean constants */
-code span.cn-bool {
+/* `True` and `False` constants. */
+.doc-signature pre.pythonsignature span.bn {
     color: #0077AA;
     font-weight: 600;
 }
 
-/* Signature highlighting - operators (=, **, etc.) - override Quarto default */
-#cb1 code span.op {
+/* Operators, such as `=`, `**` and `->`. */
+.doc-signature pre.pythonsignature span.op {
     color: #D14D00;
     font-weight: 500;
 }
 
-/* Spacer between overloaded function signatures */
-#cb1 code span.overload-spacer {
-    display: block;
-    height: 0.35em;
-    user-select: none;
+/* Gap between overloads when each fits on one line. Such lines start with
+   `fu` or `dt` after Quarto's line anchor; a wrapped overload has
+   continuation lines without either token there. Nested `:has()` is
+   invalid, so the selector negates the continuation-line condition. */
+.doc-signature
+    pre.pythonsignature
+    > code:not(:has(> span > a:first-child + :not(span.fu, span.dt)))
+    > span
+    ~ span {
+    display: inline-block;
+    margin-top: 1lh;
 }
 
 .navbar-brand img {
@@ -3982,31 +3997,28 @@ body.quarto-dark .gt_table :not(pre) > code {
 }
 
 /* Signature highlighting - dark mode */
-body.quarto-dark code span.sig-class {
-    color: var(--gd-syn-class) !important;
-}
-
 body.quarto-dark code span.sig-name {
     color: var(--gd-syn-name) !important;
 }
 
-body.quarto-dark code span.cn-none {
+body.quarto-dark .doc-signature pre.pythonsignature span.fu {
+    color: var(--gd-syn-name) !important;
+}
+
+body.quarto-dark .doc-signature pre.pythonsignature span.dt {
+    color: var(--gd-syn-class) !important;
+}
+
+body.quarto-dark .doc-signature pre.pythonsignature span.cn {
     color: var(--gd-syn-none) !important;
 }
 
-body.quarto-dark code span.cn-bool {
+body.quarto-dark .doc-signature pre.pythonsignature span.bn {
     color: var(--gd-syn-bool) !important;
 }
 
-body.quarto-dark #cb1 code span.op {
+body.quarto-dark .doc-signature pre.pythonsignature span.op {
     color: var(--gd-syn-operator) !important;
-}
-
-/* Spacer between overloaded function signatures - dark mode inherits from light */
-body.quarto-dark #cb1 code span.overload-spacer {
-    display: block;
-    height: 0.35em;
-    user-select: none;
 }
 
 /* Pandoc/Quarto syntax highlighting tokens - dark mode */

@@ -1489,13 +1489,11 @@ def freeze(
         rel_target = target.relative_to(build_dir)
 
         click.echo(f"  Rendering {page} → {rel_target} ...")
-        freeze_env = {**os.environ, "GD_FREEZE_ONLY": "1"}
         result = subprocess.run(
             ["quarto", "render", str(rel_target)],
             cwd=build_dir,
             capture_output=True,
             **TEXT_MODE_KWARGS,
-            env=freeze_env,
         )
 
         if result.returncode != 0:

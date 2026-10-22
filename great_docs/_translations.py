@@ -59,9 +59,8 @@ QUARTO_CALLOUT_TITLE_KEYS: dict[str, str] = {
 # TRANSLATION DICTIONARY
 # ══════════════════════════════════════════════════════════════════════════════
 #
-# Each top-level key is a logical string identifier used by JS widgets,
-# Python build code, and the post-render script. Inner keys are BCP 47
-# language codes.
+# Each top-level key is a logical string identifier used by JS widgets and
+# Python build code. Inner keys are BCP 47 language codes.
 #
 # Placeholder tokens use `{name}` syntax and are filled at runtime.
 # ══════════════════════════════════════════════════════════════════════════════

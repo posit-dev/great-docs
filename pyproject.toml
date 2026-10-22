@@ -39,7 +39,6 @@ dependencies = [
     "PyYAML>=6.0",
     "click>=8.0.0",
     "griffe~=2.1.0",
-    "pygments>=2.0.0",
     "requests>=2.25.0",
     "python-dotenv>=1.0.0",
     "Pillow>=9.0.0",
@@ -63,6 +62,9 @@ dev = [
     "pytest>=6.0",
     "pytest-cov>=3.0",
     "pytest-xdist>=3.5",
+    # Generates the signature grammar. The committed grammar must match this
+    # version; bump it and run `make signature-grammar` together.
+    "pygments==2.21.0",
     "ruff>=0.9.9",
     "mypy>=1.0.0",
     "pyright>=1.1.414",

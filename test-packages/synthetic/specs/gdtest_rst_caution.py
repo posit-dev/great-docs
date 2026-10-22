@@ -2,7 +2,7 @@
 gdtest_rst_caution — Tests .. caution:: directives in docstrings.
 
 Dimensions: L6
-Focus: RST caution directives rendered as styled callout divs by post-render.
+Focus: RST caution directives rendered as styled callout divs.
 """
 
 SPEC = {

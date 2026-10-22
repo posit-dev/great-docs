@@ -19,7 +19,7 @@ Focus: A showcase of how Great Docs sizes the columns of Markdown tables, all
        4. **Left alone**: tables with custom classes keep their own layout.
 
 Static checks: Pandoc's dash-derived `<colgroup>` is absent from long-line
-pipe tables (`tbl-colwidths: false`), explicit widths survive post-render,
+pipe tables (`tbl-colwidths: false`), explicit widths survive rendering,
 and the sizing script and CSS ship with the site. Column widths themselves are
 computed client-side by responsive-tables.js, so review the rendered pages in
 a browser (including a narrow viewport) to judge the layout.

@@ -554,12 +554,13 @@ def test_function_pages_have_signature(pkg_name: str):
         if badge_text in ("constant", "type_alias", "typealias", "enum", "namedtuple", "typeddict"):
             continue
 
-        sig_names = soup.select("span.sig-name")
-        assert len(sig_names) > 0, f"{name}.html: no span.sig-name found in signature block"
+        # Callable names use `sig-name` in `plain` signatures and `fu` in highlighted ones.
+        sig_names = soup.select("span.sig-name, pre.pythonsignature span.fu")
+        assert len(sig_names) > 0, f"{name}.html: no callable name found in signature block"
         sig_texts = [s.get_text() for s in sig_names]
         name_base = name.split(".")[-1]
         assert any(name_base in t for t in sig_texts), (
-            f"{name}.html: sig-name {sig_texts} doesn't contain {name_base!r}"
+            f"{name}.html: none of the signature names {sig_texts} contains {name_base!r}"
         )
 
 
@@ -598,8 +599,8 @@ def test_pages_have_doc_description(pkg_name: str):
 def test_footer_text_not_in_header(pkg_name: str):
     """Footer text (e.g. 'Developed by ...') must never appear in doc-description.
 
-    When an object has no docstring, the post-render script must not pick up
-    <p> tags from the page footer and move them into the title area.
+    When an object has no docstring, <p> tags from the page footer must not
+    end up in the title area.
     Regression test for the "footer-in-header" bug.
     """
     ref = _ref_dir(pkg_name)
@@ -1327,7 +1328,7 @@ def test_examples_section_renders(pkg_name: str):
 @pytest.mark.dedicated
 @requires_bs4
 def test_overload_signatures_render():
-    """Overloaded functions show multiple signatures with overload-spacer."""
+    """Overloaded functions show one highlighted signature per variant."""
     pkg = "gdtest_overloads"
     if not _has_rendered_site(pkg):
         pytest.skip("gdtest_overloads not rendered")
@@ -1339,14 +1340,11 @@ def test_overload_signatures_render():
 
     soup = _load_html(page)
 
-    sig_names = soup.select("div.sourceCode span.sig-name")
-    assert len(sig_names) >= 1, f"Expected at least one signature, got {len(sig_names)}"
-
-    # Classic renderer shows multiple overload signatures with spacers.
-    # Q renderer may render fewer distinct sig-name spans.
-    if len(sig_names) >= 2:
-        spacers = soup.select("span.overload-spacer")
-        assert len(spacers) >= 1, "No overload-spacer spans found"
+    sig_names = soup.select("div.doc-signature pre.pythonsignature span.fu")
+    assert len(sig_names) >= 2, f"Expected a signature per overload, got {len(sig_names)}"
+    assert {s.get_text() for s in sig_names} == {"process"}
+    # CSS provides overload spacing without spacer elements in the markup.
+    assert not soup.select("span.overload-spacer")
 
 
 @pytest.mark.dedicated
@@ -4916,7 +4914,7 @@ def test_md_big_class_method_pages():
     assert "# DataProcessor.transform()" in method_content
     # Q renderer uses title-case "Usage" heading
     assert "USAGE" in method_content or "Usage" in method_content
-    assert "``` python" in method_content
+    assert "``` python\n" in method_content, "Expected `python` as the signature fence language"
     assert "## Parameters" in method_content
     assert "## Returns" in method_content
     # Returns should show the type
@@ -7860,7 +7858,7 @@ def test_DED_numpy_seealso_desc_links_render():
 @pytest.mark.dedicated
 @requires_bs4
 def test_DED_numpy_seealso_desc_descriptions_render():
-    """gdtest_numpy_seealso_desc: descriptions from See Also survive post-render."""
+    """gdtest_numpy_seealso_desc: descriptions from See Also survive rendering."""
     pkg = "gdtest_numpy_seealso_desc"
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
@@ -9205,7 +9203,7 @@ def test_GT_TABLES_markdown_page_rendered():
 @pytest.mark.dedicated
 @requires_bs4
 def test_GT_TABLES_gt_not_wrapped_responsive():
-    """GT tables should NOT be wrapped in gd-table-responsive by post-render."""
+    """GT tables should NOT be wrapped in gd-table-responsive."""
     if not _has_rendered_site(_GT_TABLES_PKG):
         pytest.skip(f"{_GT_TABLES_PKG} not rendered")
 
@@ -11527,9 +11525,7 @@ def test_DED_bibliography_auto_generated_heading():
     # Regression: shift-heading-level-by: -1 demotes the in-body reference title
     # to a <p>, leaving a duplicate alongside the appendix heading. Post-render
     # must strip that orphan so "References" appears exactly once.
-    assert "<p>References</p>" not in html, (
-        "Orphaned duplicate <p>References</p> should be removed (post-render)"
-    )
+    assert "<p>References</p>" not in html, "Orphaned duplicate <p>References</p> should be removed"
     block_titles = [
         el.get_text().strip()
         for el in soup.find_all(["h1", "h2", "h3", "h4", "p"])
@@ -11572,9 +11568,7 @@ def test_DED_i18n_french_references_heading_localized():
     assert "ref-knuth1984" in html, "Citation should resolve on the French page"
 
     # Regression: the localized title must not be duplicated as an orphan <p>.
-    assert f"<p>{title}</p>" not in html, (
-        f"Orphaned duplicate <p>{title}</p> should be removed (post-render)"
-    )
+    assert f"<p>{title}</p>" not in html, f"Orphaned duplicate <p>{title}</p> should be removed"
     block_titles = [
         el.get_text().strip()
         for el in soup.find_all(["h1", "h2", "h3", "h4", "p"])
@@ -11948,7 +11942,7 @@ def test_DED_resp_tables_default_no_colgroup():
 @pytest.mark.dedicated
 @requires_bs4
 def test_DED_resp_tables_explicit_widths_preserved():
-    """gdtest_responsive_tables: `tbl-colwidths` and raw HTML colgroups survive post-render."""
+    """gdtest_responsive_tables: `tbl-colwidths` and raw HTML colgroups survive rendering."""
     soup = _resp_tables_page("explicit-widths")
     widths = [
         [c.get("style", "").replace(" ", "") for c in t.select("colgroup > col")]

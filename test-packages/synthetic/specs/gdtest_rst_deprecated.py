@@ -2,7 +2,7 @@
 gdtest_rst_deprecated — Tests .. deprecated:: directives in docstrings.
 
 Dimensions: L2
-Focus: RST deprecated directives rendered as styled callout divs by post-render.
+Focus: RST deprecated directives rendered as styled callout divs.
 """
 
 SPEC = {

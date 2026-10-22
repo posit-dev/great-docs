@@ -2,7 +2,7 @@
 gdtest_rst_versionadded — Tests .. versionadded:: directives in docstrings.
 
 Dimensions: L1
-Focus: RST versionadded directives rendered as styled callout divs by post-render.
+Focus: RST versionadded directives rendered as styled callout divs.
 """
 
 SPEC = {

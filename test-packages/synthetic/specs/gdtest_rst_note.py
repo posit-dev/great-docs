@@ -2,7 +2,7 @@
 gdtest_rst_note — Tests .. note:: directives in docstrings.
 
 Dimensions: L3
-Focus: RST note directives rendered as styled callout divs by post-render.
+Focus: RST note directives rendered as styled callout divs.
 """
 
 SPEC = {

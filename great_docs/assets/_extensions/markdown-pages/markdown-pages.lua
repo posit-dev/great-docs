@@ -235,6 +235,16 @@ end
 
 flatten.Table = plain_cells
 
+-- Markdown consumers recognise `python` as the signature's language.
+flatten.CodeBlock = function(block)
+    if block.classes:includes("pythonsignature") then
+        block.classes = block.classes:map(function(c)
+            return c == "pythonsignature" and "python" or c
+        end)
+        return block
+    end
+end
+
 flatten.Link = function(link)
     if is_relative(link.target) then
         link.target = link.target:gsub("%.qmd$", ".md"):gsub("%.qmd#", ".md#")

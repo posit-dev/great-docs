@@ -2,7 +2,7 @@
 gdtest_rst_warning — Tests .. warning:: directives in docstrings.
 
 Dimensions: L4
-Focus: RST warning directives rendered as styled callout divs by post-render.
+Focus: RST warning directives rendered as styled callout divs.
 """
 
 SPEC = {

@@ -345,10 +345,7 @@ class GreatDocs:
         self._validate_build_outputs()
 
         hook_names = [Path(path).name for path in self._config.pre_render]
-        if len(hook_names) != len(set(hook_names)) or set(hook_names) & {
-            "post-render.py",
-            "restore-freeze.py",
-        }:
+        if len(hook_names) != len(set(hook_names)) or "restore-freeze.py" in hook_names:
             raise ValueError("Pre-render scripts must have distinct, non-reserved filenames")
 
         # Clean any existing build directory to avoid stale artifacts
@@ -367,11 +364,6 @@ class GreatDocs:
         reference_dir.mkdir(exist_ok=True)
         # Directory metadata also marks reference pages generated from older snapshots.
         page_dates.mark_generated(reference_dir, self._config)
-
-        # Copy post-render script
-        post_render_src = self.assets_path / "post-render.py"
-        post_render_dst = scripts_dir / "post-render.py"
-        shutil.copy2(post_render_src, post_render_dst)
 
         # Copy restore-freeze script when freeze is configured OR _freeze/ exists
         has_freeze_cache = self.layout.freeze_dir.is_dir()
@@ -422,6 +414,11 @@ class GreatDocs:
         # Copy SCSS theme file (contains all site styling)
         scss_src = self.assets_path / "great-docs.scss"
         shutil.copy2(scss_src, self.build_dir / "great-docs.scss")
+
+        # Quarto resolves the signature grammar relative to the build directory.
+        shutil.copy2(
+            self.assets_path / "pythonsignature.xml", self.build_dir / "pythonsignature.xml"
+        )
 
         # Copy the evolution demo data file
         demo_json_src = self.assets_path / "api-evolution-demo.json"
@@ -620,14 +617,10 @@ class GreatDocs:
 
         page_dates.copy_portraits(self._config, self.layout.source_dir, self.build_dir)
 
-        # Write options JSON for the post-render script
+        # Write options JSON for the restore-freeze script
         gd_options = {
             "freeze_dir": os.path.relpath(self.layout.freeze_dir, self.build_dir),
         }
-        # Add i18n translations bundle
-        from ._translations import get_translations_bundle
-
-        gd_options["i18n"] = get_translations_bundle(self._config.lang)
         gd_options_path = self.build_dir / "_gd_options.json"
         with open(gd_options_path, "w") as f:
             json.dump(gd_options, f)
@@ -1713,7 +1706,7 @@ class GreatDocs:
         else:
             env["PYTHONPATH"] = new_pythonpath
 
-        # Ensure Python subprocesses (e.g. post-render.py via Quarto) use UTF-8 on Windows.
+        # Ensure Python subprocesses (e.g. pre-render scripts via Quarto) use UTF-8 on Windows.
         env.setdefault("PYTHONUTF8", "1")
 
         return env
@@ -11648,9 +11641,7 @@ anchor-sections: true
         with open(quarto_yml, "r") as f:
             config = read_yaml(f)
 
-        # Add post-render script
         config["project"]["output-dir"] = "_site"
-        config["project"]["post-render"] = "scripts/post-render.py"
 
         # Build pre-render script list
         pre_render_entries: list[str] = []
@@ -11891,6 +11882,14 @@ anchor-sections: true
             if isinstance(config["format"]["html"]["theme"], str):
                 config["format"]["html"]["theme"] = [config["format"]["html"]["theme"]]
             config["format"]["html"]["theme"].append("great-docs.scss")
+
+        # User-defined grammars must keep their order and survive repeated updates.
+        syntax_definitions = config["format"]["html"].get("syntax-definitions") or []
+        if isinstance(syntax_definitions, str):
+            syntax_definitions = [syntax_definitions]
+        if "pythonsignature.xml" not in syntax_definitions:
+            syntax_definitions.append("pythonsignature.xml")
+        config["format"]["html"]["syntax-definitions"] = syntax_definitions
 
         # Add the custom CSS from site.css
         css_files = self._config.css
@@ -15199,7 +15198,7 @@ anchor-sections: true
         """
         Generate all SEO-related files (sitemap.xml, robots.txt).
 
-        Called during the post-render phase after Quarto has built the site.
+        Called after Quarto has built the site.
         """
         if not self._config.seo_enabled:
             return  # pragma: no cover
@@ -15867,7 +15866,7 @@ anchor-sections: true
         except Exception:
             pass  # never let estimation crash the build
 
-        total_steps = 18
+        total_steps = 20
         est_seconds = estimate_build_time(
             n_api_items=n_api_items,
             n_total_pages=n_total_pages,
@@ -15887,16 +15886,8 @@ anchor-sections: true
         # Step counter
         step = 0
 
-        _GD_PASS_PREFIX = "##GD:PASS:"  # pragma: no cover
-
-        def run_streaming(
-            cmd, env=None, progress_bar=None, on_pass=None, on_bar_done=None
-        ):  # pragma: no cover
+        def run_streaming(cmd, env=None, progress_bar=None):  # pragma: no cover
             """Run a subprocess, stream output, optionally feeding a progress bar.
-
-            Lines starting with `##GD:PASS:` are collected into `result.passes` (a list of label
-            strings). If *on_pass* is provided it is called with each label as it arrives. If
-            *on_bar_done* is provided it is called once when the progress bar reaches 100%.
 
             Page-level timing is recorded automatically: each `[i/N] page.qmd` progress line from
             Quarto is timestamped so that per-page render durations can be computed after the
@@ -15914,7 +15905,6 @@ anchor-sections: true
             )
 
             stderr_lines = []
-            pass_labels: list[str] = []
             quarto_warnings: list[str] = []
             bar_finished = [False]  # mutable flag for closure
             page_re = _re_build.compile(r"\[\s*(\d+)/(\d+)\]\s+(.+)")
@@ -15922,23 +15912,15 @@ anchor-sections: true
             _page_timestamps: list[tuple[str, float]] = []
 
             def _finish_bar():
-                """Finish the progress bar, emit warnings, and notify caller."""
+                """Finish the progress bar and emit warnings."""
                 if not bar_finished[0] and progress_bar:
                     bar_finished[0] = True
                     progress_bar.finish()
                     for w in quarto_warnings:
                         log.warn(w)
-                    if on_bar_done:
-                        on_bar_done()
 
             def _handle_line(stripped):
-                """Route a single output line: progress / pass-marker / detail."""
-                if stripped.startswith(_GD_PASS_PREFIX):
-                    label = stripped[len(_GD_PASS_PREFIX) :]
-                    pass_labels.append(label)
-                    if on_pass:
-                        on_pass(label)
-                    return
+                """Route a single output line: progress / detail."""
                 if progress_bar:
                     if not bar_finished[0]:
                         m = page_re.search(stripped)
@@ -15958,8 +15940,7 @@ anchor-sections: true
                         plain = _ansi_re.sub("", stripped)
                         if plain.startswith("WARN"):
                             quarto_warnings.append(plain)
-                    # After bar finishes, post-render output streams through
-                    # here — suppress it (Step 16 shows the substep checklist).
+                    # Suppress Quarto's output after the bar finishes.
                     return
                 log.detail(stripped)
 
@@ -15998,7 +15979,6 @@ anchor-sections: true
             r.returncode = process.returncode
             r.stderr = "".join(stderr_lines)
             r.stdout = ""
-            r.passes = pass_labels
             r.page_timings = page_timings
             return r
 
@@ -16512,10 +16492,7 @@ anchor-sections: true
                     if not vb_result["versions_built"]:
                         log.step_fail("All version builds failed")
 
-                        # Skip steps 17, 18
-                        step += 1
-                        log.step_start(step, "Post-render processing")
-                        log.step_skip(step, "build failed")
+                        # Skip the SEO step
                         step += 1
                         log.step_start(step, "Generate SEO files")
                         log.step_skip(step, "build failed")
@@ -16530,12 +16507,7 @@ anchor-sections: true
                     n_ok = len(vb_result["versions_built"])
                     log.step_done(f"{n_ok} version(s) rendered")
 
-                # ── Step 17: Post-render processing ────────────────
-                step += 1
-                log.step_start(step, "Post-render processing")
-                log.step_done("Version assembly complete")
-
-                # ── Step 18: Generate SEO files ────────────────────
+                # ── Step 20: Generate SEO files ────────────────────
                 step += 1
                 log.step_start(step, "Generate SEO files")
                 try:
@@ -16573,32 +16545,7 @@ anchor-sections: true
                     log.footer(site_path=str(self.layout.site_dir))
             else:
                 bar = log.progress("Rendering pages", 1)
-
-                # Track Step 15→16 transition for live substep display.
-                step16_started = [False]
-                pass_count = [0]
-
-                def _start_step16():
-                    """Transition from Step 15 to Step 16 immediately."""
-                    if not step16_started[0]:
-                        step16_started[0] = True
-                        log.step_done("Site rendered")
-                        nonlocal step
-                        step += 1
-                        log.step_start(step, "Post-render processing")
-
-                def _on_pass(label):
-                    _start_step16()
-                    pass_count[0] += 1
-                    log.substep(label)
-
-                result = run_streaming(
-                    ["quarto", "render"],
-                    env=quarto_env,
-                    progress_bar=bar,
-                    on_pass=_on_pass,
-                    on_bar_done=_start_step16,
-                )
+                result = run_streaming(["quarto", "render"], env=quarto_env, progress_bar=bar)
                 bar.finish()  # no-op if auto-finished at 100%
 
                 # Retry once on transient Quarto filesystem race conditions
@@ -16613,26 +16560,14 @@ anchor-sections: true
                     log.warn("Quarto hit a transient filesystem error — retrying render...")
                     # Reset progress state for retry
                     bar = log.progress("Rendering pages (retry)", 1)
-                    step16_started[0] = False
-                    pass_count[0] = 0
-                    result = run_streaming(
-                        ["quarto", "render"],
-                        env=quarto_env,
-                        progress_bar=bar,
-                        on_pass=_on_pass,
-                        on_bar_done=_start_step16,
-                    )
+                    result = run_streaming(["quarto", "render"], env=quarto_env, progress_bar=bar)
                     bar.finish()
 
                 if result.returncode != 0:
                     log.step_fail("Quarto render failed")
                     log.error_detail(result.stderr)
 
-                    # ── Steps 16, 17 skipped on failure ────────────────
-                    if not step16_started[0]:
-                        step += 1
-                        log.step_start(step, "Post-render processing")
-                    log.step_skip(step, "build failed")
+                    # ── Step 20 skipped on failure ─────────────────────
                     step += 1
                     log.step_start(step, "Generate SEO files")
                     log.step_skip(step, "build failed")
@@ -16640,21 +16575,9 @@ anchor-sections: true
                     log.footer()
                     sys.exit(1)
                 else:
-                    # Step 15 done + Step 16 substeps were emitted live
-                    # via the _on_pass callback.  Finish up Step 16.
-                    if not step16_started[0]:  # pragma: no cover
-                        # No passes arrived (shouldn't happen, but be safe)
-                        log.step_done("Site rendered")  # pragma: no cover
-                        step += 1  # pragma: no cover
-                        log.step_start(step, "Post-render processing")  # pragma: no cover
-                        log.step_done("HTML transforms applied")  # pragma: no cover
-                    else:
-                        n = pass_count[0]  # pragma: no cover
-                        log.step_done(  # pragma: no cover
-                            f"{n} transforms applied"  # pragma: no cover
-                        )  # pragma: no cover
+                    log.step_done("Site rendered")
 
-                    # ── Step 18: Generate SEO files ────────────────────
+                    # ── Step 20: Generate SEO files ────────────────────
                     if self.layout.site_dir != self.build_dir / "_site":
                         from ._versioned_build import assemble_site
 
