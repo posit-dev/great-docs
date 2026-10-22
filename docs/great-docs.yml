@@ -357,8 +357,8 @@ cli:
       desc: Build the documentation site, preview it locally, and freeze executable content.
       contents: [build, preview, freeze]
     - title: Analysis & quality
-      desc: Inspect the project, validate links, and check SEO, prose, and style.
-      contents: [scan, timings, check-links, seo, lint, proofread]
+      desc: Inspect the project, validate links and examples, and check SEO, prose, and style.
+      contents: [scan, timings, check-links, check-examples, seo, lint, proofread]
     - title: API tracking
       desc: Snapshot the public API and diff it across versions.
       contents: [api-snapshot, api-diff]
@@ -366,8 +366,8 @@ cli:
       desc: Set up GitHub Pages, manage versioned builds, and generate the changelog.
       contents: [setup-github-pages, versions, changelog]
     - title: Command groups
-      desc: Grouped commands for Agent Skills and terminal session recordings.
-      contents: [skill, termshow]
+      desc: Grouped commands for Agent Skills, terminal session recordings, and CI reporting.
+      contents: [skill, termshow, ci]
 
 # MCP Server Documentation
 # ------------------------
