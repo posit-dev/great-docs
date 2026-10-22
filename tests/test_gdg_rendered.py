@@ -6078,18 +6078,6 @@ def test_DED_source_path_ref_pages():
     assert (ref / "format_output.html").exists(), "format_output page missing"
 
 
-@pytest.mark.dedicated
-def test_DED_source_title_ref_pages():
-    """gdtest_source_title: reference pages exist with title placement."""
-    pkg = "gdtest_source_title"
-    if not _has_rendered_site(pkg):
-        pytest.skip(f"{pkg} not rendered")
-
-    ref = _ref_dir(pkg)
-    assert (ref / "compress.html").exists(), "compress page missing"
-    assert (ref / "decompress.html").exists(), "decompress page missing"
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # DED: Dynamic & Sidebar & Jupyter Config Packages
 # ═══════════════════════════════════════════════════════════════════════════════

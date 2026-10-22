@@ -1,14 +1,14 @@
 """
 gdtest_stress_all_config — ALL config options at once.
 
-Dimensions: K1, K4, K5, K6, K9, K10, K12, K13, K14, K15
+Dimensions: K1, K5, K6, K9, K10, K12, K13, K14, K15
 Focus: Stress test with every config option set simultaneously.
 """
 
 SPEC = {
     "name": "gdtest_stress_all_config",
     "description": "ALL config options at once.",
-    "dimensions": ["K1", "K4", "K5", "K6", "K9", "K10", "K12", "K13", "K14", "K15"],
+    "dimensions": ["K1", "K5", "K6", "K9", "K10", "K12", "K13", "K14", "K15"],
     "pyproject_toml": {
         "project": {
             "name": "gdtest-stress-all-config",

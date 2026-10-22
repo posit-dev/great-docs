@@ -1,7 +1,7 @@
 """
 gdtest_stress_everything — The ULTIMATE stress test combining EVERYTHING.
 
-Dimensions: K1, K4, K12, K13, K14, L1, L3, L10, L15, M2, M3, N1, N2, P1, Q1
+Dimensions: K1, K12, K13, K14, L1, L3, L10, L15, M2, M3, N1, N2, P1, Q1
 Focus: All config options, rich NumPy docstrings with directives and Sphinx roles,
        a big class with 6 methods, user guide with sections, custom sections,
        explicit reference groups, badges in README, and cosmo theme.
@@ -12,7 +12,6 @@ SPEC = {
     "description": "The ULTIMATE stress test combining EVERYTHING.",
     "dimensions": [
         "K1",
-        "K4",
         "K12",
         "K13",
         "K14",
@@ -42,7 +41,7 @@ SPEC = {
         "display_name": "Everything Stress Test",
         "parser": "numpy",
         "github_style": "icon",
-        "source": {"enabled": True, "placement": "title"},
+        "source": {"enabled": True},
         "dark_mode_toggle": True,
         "authors": [
             {

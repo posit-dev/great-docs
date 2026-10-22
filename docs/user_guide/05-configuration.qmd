@@ -452,7 +452,6 @@ source:
   enabled: true        # Enable/disable source links (default: true)
   branch: main         # Git branch/tag to link to (default: auto-detect)
   path: src/package    # Custom source path for monorepos (default: auto-detect)
-  placement: usage     # Where to place the link: "usage" (default) or "title"
 ```
 
 ## PyPI Link
@@ -1104,7 +1103,6 @@ github_style: widget
 source:
   enabled: true
   branch: main
-  placement: usage
 
 # PyPI Link
 pypi: null  # null (default) links for Python projects; true forces, false disables, or a URL string

@@ -137,7 +137,6 @@ source:
   enabled: true # Enable/disable source links (default: true)
   branch: null # Git branch/tag to link to (default: auto-detect)
   path: null # Custom source path for monorepos (default: auto-detect)
-  placement: usage # Where to place the link: "usage" (default) or "title"
 
 # Sidebar Filter
 # --------------

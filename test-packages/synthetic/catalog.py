@@ -130,7 +130,6 @@ ALL_PACKAGES: list[str] = [
     "gdtest_github_icon",  # 01
     "gdtest_source_branch",  # 02
     "gdtest_source_path",  # 03
-    "gdtest_source_title",  # 04
     "gdtest_source_disabled",  # 05
     "gdtest_sidebar_disabled",  # 06
     "gdtest_sidebar_min_items",  # 07
@@ -512,7 +511,6 @@ DIMENSIONS: dict[str, dict[str, str]] = {
     "K1": {"axis": "config", "label": "github_style: icon"},
     "K2": {"axis": "config", "label": "source.branch override"},
     "K3": {"axis": "config", "label": "source.path override"},
-    "K4": {"axis": "config", "label": "source.placement: title"},
     "K5": {"axis": "config", "label": "source.enabled: false"},
     "K6": {"axis": "config", "label": "sidebar_filter.enabled: false"},
     "K7": {"axis": "config", "label": "sidebar_filter.min_items"},
@@ -1295,11 +1293,6 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "the custom path prefix. Module at top level but source links pretend "
         "it's in src/mylib. Two functions (parse, format_output)."
     ),
-    "gdtest_source_title": (
-        "Tests source.placement: 'title' (vs. default 'usage'). Source code "
-        "links should appear near the title/heading of each API entry, not "
-        "in the usage section. Two functions (compress, decompress)."
-    ),
     "gdtest_source_disabled": (
         "Tests source.enabled: false. No source code links should appear "
         "anywhere in the rendered docs. Two functions (encrypt, decrypt) with "
@@ -1396,8 +1389,8 @@ PACKAGE_DESCRIPTIONS: dict[str, str] = {
         "page these should appear as named section headings."
     ),
     "gdtest_config_combo_a": (
-        "Combination: display_name + authors + funding + github_icon + "
-        "source.placement=title. All these config options together should "
+        "Combination: display_name + authors + funding + github_icon. All "
+        "these config options together should "
         "not conflict. Site title ≠ package name."
     ),
     "gdtest_config_combo_b": (

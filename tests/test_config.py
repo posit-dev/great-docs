@@ -100,7 +100,7 @@ class TestGetItem:
         assert Config(tmp_project)["github_style"] == "widget"
 
     def test_nested_hit(self, tmp_project: Path):
-        assert Config(tmp_project)["source.placement"] == "usage"
+        assert Config(tmp_project)["source.enabled"] is True
 
     def test_missing_top_level_raises(self, tmp_project: Path):
         with pytest.raises(KeyError):
@@ -146,9 +146,6 @@ class TestScalarProperties:
 
     def test_source_path_default(self, tmp_project: Path):
         assert Config(tmp_project).source_path is None
-
-    def test_source_placement_default(self, tmp_project: Path):
-        assert Config(tmp_project).source_placement == "usage"
 
     def test_sidebar_filter_enabled_default(self, tmp_project: Path):
         assert Config(tmp_project).sidebar_filter_enabled is True

@@ -1,12 +1,12 @@
-"""Tests config combo: display_name + authors + funding + github_style: icon + source.placement: title."""
+"""Tests config combo: display_name + authors + funding + github_style: icon."""
 
 SPEC = {
     "name": "gdtest_config_combo_a",
     "description": (
-        "Config combo: display_name, authors, funding, github_style=icon, "
-        "source.placement=title. Tests cosmetic and metadata options together."
+        "Config combo: display_name, authors, funding, github_style=icon. "
+        "Tests cosmetic and metadata options together."
     ),
-    "dimensions": ["K1", "K4", "K12", "K13", "K14"],
+    "dimensions": ["K1", "K12", "K13", "K14"],
     "pyproject_toml": {
         "project": {
             "name": "gdtest-config-combo-a",
@@ -31,7 +31,6 @@ SPEC = {
         "github_style": "icon",
         "source": {
             "enabled": True,
-            "placement": "title",
         },
     },
     "files": {
