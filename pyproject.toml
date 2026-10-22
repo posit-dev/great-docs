@@ -62,8 +62,9 @@ dev = [
     "pytest>=6.0",
     "pytest-cov>=3.0",
     "pytest-xdist>=3.5",
-    # Generates the signature grammar; see `make signature-grammar`
-    "pygments>=2.0.0",
+    # Generates the signature grammar. The committed grammar must match this
+    # version; bump it and run `make signature-grammar` together.
+    "pygments==2.21.0",
     "ruff>=0.9.9",
     "mypy>=1.0.0",
     "pyright>=1.1.414",
