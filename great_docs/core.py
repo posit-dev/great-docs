@@ -2238,13 +2238,23 @@ class GreatDocs:
         if not releases:
             return None
 
-        # Build .qmd content
+        from ._translations import get_translation
+
+        toc_title = get_translation("releases", self._config.lang)
+
+        # Build .qmd content. The TOC lists only the release headings: the
+        # heading shift is pinned so releases always render at level 1, which
+        # keeps `toc-depth: 1` from also picking up the subsections of each
+        # release body (or from listing nothing at all).
         lines: list[str] = [
             "---",
             'title: "Changelog"',
             f"{page_dates.AUTO_GENERATED}: true",
+            "body-classes: gd-changelog-page",
             "toc: true",
-            "toc-depth: 2",
+            "toc-depth: 1",
+            f'toc-title: "{toc_title}"',
+            "shift-heading-level-by: -1",
             "---",
             "",
             "This changelog is generated automatically from ",

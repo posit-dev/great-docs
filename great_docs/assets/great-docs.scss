@@ -142,6 +142,12 @@ h2.changelog-version::before {
     mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20.59 13.41 11 3H4v7l9.59 9.59a2 2 0 0 0 2.82 0l4.18-4.18a2 2 0 0 0 0-2.82Z'/%3E%3Cline x1='7' y1='7' x2='7.01' y2='7'/%3E%3C/svg%3E") no-repeat center / contain;
 }
 
+// Changelog TOC entries (sidebar and mobile panel) match the version headings.
+body.gd-changelog-page #TOC .nav-link,
+body.gd-changelog-page .gd-otp-panel-link {
+    font-family: $font-family-monospace;
+}
+
 h5, .h5 {
    @extend .mt-3;
 }

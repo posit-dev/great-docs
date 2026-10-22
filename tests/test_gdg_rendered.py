@@ -4572,7 +4572,7 @@ def test_hero_auto_logo_detection():
 
 @pytest.mark.dedicated
 def test_md_files_exist_for_html_pages():
-    """Every non-homepage HTML page should have a corresponding .md file."""
+    """Every HTML page except 404.html should have a corresponding .md file."""
     pkg = "gdtest_long_names"
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
@@ -4581,14 +4581,11 @@ def test_md_files_exist_for_html_pages():
     html_files = sorted(site.rglob("*.html"))
     assert len(html_files) > 0, "No HTML files found"
 
-    # Pages that are intentionally excluded from .md generation
-    excluded = {"index.html", "skills.html"}
-
     missing = []
     for html_file in html_files:
         rel = html_file.relative_to(site)
-        # Homepage and skills page are intentionally excluded
-        if str(rel) in excluded:
+        # The 404 page is intentionally excluded
+        if str(rel) == "404.html":
             continue
         md_file = html_file.with_suffix(".md")
         if not md_file.exists():
@@ -4598,14 +4595,16 @@ def test_md_files_exist_for_html_pages():
 
 
 @pytest.mark.dedicated
-def test_md_homepage_excluded():
-    """The homepage (index.html) should NOT have a corresponding .md file."""
+def test_md_homepage_companion():
+    """The homepage (index.html) has a .md companion that it links to."""
     pkg = "gdtest_long_names"
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
 
     site = _site_dir(pkg)
-    assert not (site / "index.md").exists(), "index.md should not exist (homepage excluded)"
+    assert (site / "index.md").exists(), "index.md should exist for the homepage"
+    html = (site / "index.html").read_text(encoding="utf-8")
+    assert '<link rel="alternate" type="text/markdown" href="index.md">' in html
 
 
 @pytest.mark.dedicated
