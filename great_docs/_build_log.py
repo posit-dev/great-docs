@@ -200,7 +200,7 @@ def estimate_build_time(
     =========  ===========  ============================================
     griffe     3.2 s/item   Import + introspection (~1.3 s) **plus**
                             source-link resolution (~1.9 s) per
-                            `_object_types.json` entry.
+                            documented object.
     quarto     0.5 s/page   Markdown-only page render average
     code cell  3.0 s/cell   Jupyter kernel startup amortised per cell
     post-rend  0.3 s/page   HTML transforms (BeautifulSoup)
@@ -209,8 +209,9 @@ def estimate_build_time(
     Parameters
     ----------
     n_api_items
-        Total entries in `_object_types.json` (classes + methods +
-        functions + attributes — **not** just top-level exports).
+        Number of documented objects, counted as entries in the previous
+        build's `objects.inv` (classes, methods, functions and attributes,
+        **not** just top-level exports).
     n_total_pages
         Total `.qmd` / `.md` pages Quarto will render (reference +
         user guide + sections + changelog + homepage + CLI).

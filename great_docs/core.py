@@ -257,10 +257,6 @@ class GreatDocs:
         # Whether API reference was successfully configured (set during build)
         self._has_api_reference = True
 
-        # When True, suppress writes of build artifacts (e.g. `_object_types.json`)
-        # so read-only queries like `documented_symbol_names()` leave no files behind.
-        self._suppress_artifact_writes = False
-
         # Whether MCP pages were actually generated (None = not yet determined)
         self._mcp_pages_generated: bool | None = None
 
@@ -315,40 +311,6 @@ class GreatDocs:
                 normalized, search_paths=self._griffe_search_paths()
             )
         return self._griffe_pkg_cache[normalized]
-
-    def _get_source_location_from_pkg(self, pkg, item_name: str) -> dict | None:
-        """Get source location by navigating an already-loaded griffe package tree.
-
-        Parameters
-        ----------
-        pkg
-            A griffe package object (already loaded).
-        item_name
-            Dotted name relative to the package (e.g., "ClassName.method_name").
-
-        Returns
-        -------
-        dict | None
-            Dictionary with file, start_line, end_line or None if not found.
-        """
-        parts = item_name.split(".")
-        obj = pkg
-        for part in parts:
-            if part not in obj.members:
-                return None
-            obj = obj.members[part]
-
-        if not hasattr(obj, "lineno") or obj.lineno is None:
-            return None
-        if not hasattr(obj, "filepath") or not obj.filepath:
-            return None
-
-        end_lineno = getattr(obj, "endlineno", obj.lineno)
-        return {
-            "file": str(obj.filepath),
-            "start_line": obj.lineno,
-            "end_line": end_lineno or obj.lineno,
-        }
 
     def _validate_build_outputs(self) -> None:
         """Reject version and ownership conflicts before changing project files"""
@@ -6787,96 +6749,6 @@ class GreatDocs:
 
         print("   📄 Blended homepage: first UG page → index.qmd")
 
-    def _get_source_location(self, package_name: str, item_name: str) -> dict | None:
-        """
-        Get source file and line numbers for a class, method, or function.
-
-        Uses griffe for static analysis to avoid import side effects.
-        Leverages the per-build griffe cache to avoid redundant package loads.
-
-        Parameters
-        ----------
-        package_name
-            The name of the package containing the item.
-        item_name
-            The fully qualified name of the item (e.g., "ClassName" or "ClassName.method_name").
-
-        Returns
-        -------
-        dict | None
-            Dictionary with file path and line numbers, or None if not found.
-        """
-        try:
-            normalized_name = package_name.replace("-", "_")
-            pkg = self._get_griffe_package(normalized_name)
-            return self._get_source_location_from_pkg(pkg, item_name)
-        except Exception:
-            return None
-
-    def _build_github_source_url(
-        self, source_location: dict, branch: str | None = None
-    ) -> str | None:
-        """
-        Build a GitHub URL for viewing source code at specific line numbers.
-
-        Parameters
-        ----------
-        source_location
-            Dictionary with file path and line numbers.
-        branch
-            Git branch/tag to link to. If None, attempts to detect from git
-            or falls back to 'main'.
-
-        Returns
-        -------
-        str | None
-            Full GitHub URL with line anchors, or None if repo info not available.
-        """
-        owner, repo, base_url = self._get_github_repo_info()
-
-        if not base_url:
-            return None
-
-        # Determine the branch/ref to use
-        if branch is None:
-            branch = self._detect_git_ref()  # pragma: no cover
-
-        # Get the file path relative to the repository root
-        filepath = source_location.get("file", "")
-        package_root = self._find_package_root()
-
-        # Handle source path configuration for monorepos
-        metadata = self._get_package_metadata()
-        source_path = metadata.get("source_link_path")
-
-        if source_path:
-            # Custom source path specified (for monorepos)
-            relative_path = f"{source_path}/{Path(filepath).name}"
-        else:
-            # Try to make the path relative to package root
-            try:
-                filepath_obj = Path(filepath)
-                if filepath_obj.is_absolute():
-                    relative_path = str(filepath_obj.relative_to(package_root))
-                else:
-                    relative_path = filepath
-            except ValueError:
-                # Path is not relative to package root, use as-is
-                relative_path = filepath
-
-        # Build the URL with line number anchors
-        start_line = source_location.get("start_line", 1)
-        end_line = source_location.get("end_line", start_line)
-
-        url = f"{base_url}/blob/{branch}/{relative_path}"
-
-        if start_line == end_line:
-            url += f"#L{start_line}"
-        else:
-            url += f"#L{start_line}-L{end_line}"
-
-        return url
-
     def _detect_git_ref(self) -> str:
         """
         Detect the current git branch or tag.
@@ -6924,150 +6796,6 @@ class GreatDocs:
 
         # Default fallback
         return "main"
-
-    def _generate_source_links_json(self, package_name: str) -> None:
-        """
-        Generate a JSON file mapping object names to their GitHub source URLs.
-
-        This file is used by the post-render script to inject source links
-        into the HTML documentation.
-
-        Parameters
-        ----------
-        package_name
-            The name of the package to generate source links for.
-        """
-        import json
-
-        metadata = self._get_package_metadata()
-
-        # Check if source links are enabled
-        if not metadata.get("source_link_enabled", True):
-            print("Source links disabled in configuration")
-            return
-
-        # Check if we have GitHub repo info
-        owner, repo, base_url = self._get_github_repo_info()
-        if not base_url:
-            print("No GitHub repository URL found, skipping source links")
-            return
-
-        print(f"Generating source links for {package_name}...")
-
-        source_links: dict[str, dict] = {}
-        normalized_name = package_name.replace("-", "_")
-
-        # Get all exports
-        exports = self._get_package_exports(package_name)
-        if not exports:
-            return
-
-        # Get branch for source links
-        branch = self._detect_git_ref()
-        print(f"Using git ref: {branch}")
-
-        # Pre-warm the griffe cache so _get_source_location doesn't reload per-item
-        try:
-            pkg = self._get_griffe_package(normalized_name)
-        except Exception:
-            pkg = None
-
-        # Derive class membership directly from the griffe tree — avoids the
-        # expensive _categorize_api_objects() path which calls get_object() per
-        # method (dynamic imports, ~100-200ms each).
-        _INIT_DUNDERS = {"__init__", "__new__", "__init_subclass__"}
-        class_method_names: dict[str, list[str]] = {}
-        if pkg is not None:
-            for item_name in exports:
-                if item_name not in pkg.members:
-                    continue
-                obj = pkg.members[item_name]
-                try:
-                    if obj.kind.value != "class":  # pragma: no cover
-                        continue  # pragma: no cover
-                except Exception:  # pragma: no cover
-                    continue  # pragma: no cover
-                methods = []
-                try:
-                    for member_name, member in obj.members.items():
-                        if member_name.startswith("__") and member_name.endswith("__"):
-                            if member_name in _INIT_DUNDERS:
-                                continue
-                        elif member_name.startswith("_"):
-                            continue
-                        try:
-                            if member.kind.value in ("function", "method", "attribute"):
-                                methods.append(member_name)
-                        except Exception:  # pragma: no cover
-                            continue  # pragma: no cover
-                except Exception:  # pragma: no cover
-                    continue  # pragma: no cover
-                if methods:
-                    class_method_names[item_name] = methods
-                    print(f"{item_name}: class with {len(methods)} public methods")
-
-        # Hoist invariants for _build_github_source_url out of the loop
-        package_root = self._find_package_root()
-        metadata = self._get_package_metadata()
-        source_path = metadata.get("source_link_path")
-
-        def _make_github_url(source_loc: dict) -> str | None:
-            filepath = source_loc.get("file", "")
-            if source_path:
-                relative_path = f"{source_path}/{Path(filepath).name}"
-            else:
-                try:
-                    filepath_obj = Path(filepath)
-                    if filepath_obj.is_absolute():
-                        relative_path = str(filepath_obj.relative_to(package_root))
-                    else:
-                        relative_path = filepath
-                except ValueError:  # pragma: no cover
-                    relative_path = filepath  # pragma: no cover
-
-            start_line = source_loc.get("start_line", 1)
-            end_line = source_loc.get("end_line", start_line)
-            url = f"{base_url}/blob/{branch}/{relative_path}"
-            if start_line == end_line:
-                url += f"#L{start_line}"
-            else:
-                url += f"#L{start_line}-L{end_line}"
-            return url
-
-        # Generate source links for each export (uses cached griffe pkg internally)
-        for item_name in exports:
-            source_loc = self._get_source_location(normalized_name, item_name)
-            if source_loc:
-                github_url = _make_github_url(source_loc)
-                if github_url:
-                    source_links[item_name] = {
-                        "url": github_url,
-                        "file": source_loc.get("file", ""),
-                        "start_line": source_loc.get("start_line", 0),
-                        "end_line": source_loc.get("end_line", 0),
-                    }
-
-            # Also get source links for methods of classes
-            if item_name in class_method_names:
-                for method_name in class_method_names[item_name]:
-                    full_name = f"{item_name}.{method_name}"
-                    method_loc = self._get_source_location(normalized_name, full_name)
-                    if method_loc:
-                        method_url = _make_github_url(method_loc)
-                        if method_url:
-                            source_links[full_name] = {
-                                "url": method_url,
-                                "file": method_loc.get("file", ""),
-                                "start_line": method_loc.get("start_line", 0),
-                                "end_line": method_loc.get("end_line", 0),
-                            }
-
-        # Write to JSON file in the docs directory
-        source_links_path = self.build_dir / "_source_links.json"
-        with open(source_links_path, "w", encoding="utf-8") as f:
-            json.dump(source_links, f, indent=2)
-
-        print(f"Generated source links for {len(source_links)} items")
 
     def _find_package_init(self, package_name: str) -> Path | None:
         """
@@ -8038,70 +7766,6 @@ class GreatDocs:
             "all_functions": [],
         }
 
-    def _write_object_types_json(self, categories: dict) -> None:
-        """
-        Write `_object_types.json` mapping each documented name to its type.
-
-        The post-render script reads this file instead of relying on heuristics
-        (e.g. first-character case) to classify objects for badges and
-        parentheses.
-
-        Parameters
-        ----------
-        categories
-            Dictionary returned by `_categorize_api_objects`.
-        """
-        # Read-only callers (e.g. `documented_symbol_names`) must not drop
-        # build artifacts into the project root.
-        if self._suppress_artifact_writes:
-            return
-
-        import json
-
-        # Map each category key to the type label used by post-render
-        _CATEGORY_TYPE_MAP = {
-            "classes": "class",
-            "dataclasses": "class",
-            "enums": "enum",
-            "exceptions": "exception",
-            "namedtuples": "namedtuple",
-            "typeddicts": "typeddict",
-            "protocols": "protocol",
-            "abstract_classes": "abc",
-            "functions": "function",
-            "async_functions": "function",
-            "constants": "constant",
-            "type_aliases": "type_alias",
-            "other": "other",
-        }
-
-        object_types: dict[str, str] = {}
-
-        for cat_key, obj_type in _CATEGORY_TYPE_MAP.items():
-            for name in categories.get(cat_key, []):
-                object_types[name] = obj_type
-
-        # Methods: ClassName.method → specific type (classmethod/staticmethod/method)
-        member_types = categories.get("class_member_types", {})
-        for class_name, method_names in categories.get("class_method_names", {}).items():
-            for method in method_names:
-                key = f"{class_name}.{method}"
-                # Use the specific sub-type if available, otherwise "method"
-                object_types[key] = member_types.get(key, "method")
-
-        # Properties and other descriptor members not in class_method_names
-        # (e.g., @property attributes classified as "attribute" by griffe)
-        for key, member_type in member_types.items():
-            if key not in object_types:
-                object_types[key] = member_type
-
-        types_path = self.build_dir / "_object_types.json"
-        types_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(types_path, "w") as f:
-            json.dump(object_types, f, indent=2, sort_keys=True)
-
-        print(f"Wrote object type metadata ({len(object_types)} items) to {types_path}")
-
     def _categorize_api_objects(self, package_name: str, exports: list) -> dict:
         """
         Categorize API objects using griffe introspection.
@@ -8903,9 +8567,6 @@ class GreatDocs:
                 }
             )
 
-        # Write object type metadata for post-render classification
-        self._write_object_types_json(categories)
-
         return sections if sections else None
 
     def _build_sections_from_reference_config(
@@ -9012,7 +8673,7 @@ class GreatDocs:
         Returns
         -------
         dict
-            A categories dict compatible with `_write_object_types_json`.
+            A categories dict in the shape `_categorize_api_objects` returns.
         """
         import griffe
 
@@ -9399,9 +9060,6 @@ class GreatDocs:
         if sections:
             print(f"Generated {len(sections)} section(s) from reference config")
 
-        # Write object type metadata for post-render classification
-        self._write_object_types_json(categories)
-
         return sections if sections else None
 
     @contextlib.contextmanager
@@ -9409,8 +9067,8 @@ class GreatDocs:
         """
         Yield the API reference for a package, or None when it cannot be resolved
 
-        Restores `sys.path`, `sys.modules` and the artefact-write suppression
-        flag on the way out, so a read-only query leaves no trace. In `dynamic`
+        Restores `sys.path` and `sys.modules` on the way out, so a read-only
+        query leaves no trace. In `dynamic`
         mode resolving the reference performs a real import of the target
         package.
 
@@ -9441,9 +9099,6 @@ class GreatDocs:
         try:
             # Suppress diagnostic prints from the resolution/filtering pipeline — this is a
             # programmatic query method and its callers own their own output streams.
-            # `_suppress_artifact_writes` additionally prevents the pipeline from writing
-            # `_object_types.json` (and its sidecar) into the project root.
-            self._suppress_artifact_writes = True
             # `APIReference` loads the package through a plain griffe loader (sys.path-based),
             # unlike `_create_api_sections_with_config`'s own loader, which is handed explicit
             # search paths. Temporarily extend sys.path so a package that isn't installed (e.g.
@@ -9491,7 +9146,6 @@ class GreatDocs:
                 )
                 yield ref
         finally:
-            self._suppress_artifact_writes = False
             if modules_evicted:
                 for key in [
                     k
@@ -15911,10 +15565,6 @@ anchor-sections: true
                 except Exception:
                     pass
                 try:
-                    self._generate_source_links()
-                except Exception:
-                    pass
-                try:
                     self._generate_changelog()
                 except Exception:
                     pass
@@ -16153,12 +15803,17 @@ anchor-sections: true
         n_api_items = 0
         n_total_pages = 0
         n_code_cells = 0
-        obj_types_path = self.build_dir / "_object_types.json"
-        if obj_types_path.exists():
+        # The previous build's inventory is the best count available before
+        # this build resolves the package.
+        import zlib
+
+        from great_docs._interlinks.sphinx_inventory import INVENTORY_FILENAME, decode
+
+        inventory_path = self.build_dir / INVENTORY_FILENAME
+        if inventory_path.exists():
             try:
-                with open(obj_types_path) as f:
-                    n_api_items = len(json.load(f))
-            except Exception:
+                n_api_items = len(decode(inventory_path.read_bytes()).entries)
+            except (OSError, ValueError, zlib.error):
                 pass
 
         # Cheap page & code-cell scan for the time estimate
@@ -16201,7 +15856,7 @@ anchor-sections: true
         except Exception:
             pass  # never let estimation crash the build
 
-        total_steps = 19
+        total_steps = 18
         est_seconds = estimate_build_time(
             n_api_items=n_api_items,
             n_total_pages=n_total_pages,
@@ -16406,23 +16061,6 @@ anchor-sections: true
             else:
                 log.step_skip(step, "disabled in config")
 
-            # ── Step 5: Generate source links ──────────────────────────
-            step += 1
-            log.step_start(step, "Generate source links")
-            package_name = self._detect_package_name()
-            if package_name:
-                # Source-link generation (and the CLI reference in Step 7,
-                # which reuses pkg_name) load the importable module, which can
-                # differ from the PyPI project name. Honor an explicit
-                # `module:` and build-backend hints via _detect_module_name.
-                pkg_name = self._resolve_importable_name(package_name)
-                with _quiet_prints():
-                    self._generate_source_links_json(pkg_name)
-                log.step_done(f"Source links generated for {pkg_name}")
-            else:
-                pkg_name = None
-                log.step_skip(step, "no package detected")
-
             # ── Step 6: Generate changelog ─────────────────────────────
             step += 1
             log.step_start(step, "Generate changelog")
@@ -16449,9 +16087,12 @@ anchor-sections: true
             step += 1
             log.step_start(step, "Generate CLI reference")
             metadata = self._get_package_metadata()
-            if metadata.get("cli_enabled", False) and not pkg_name:
+            if metadata.get("cli_enabled", False) and not package_name:
                 log.step_skip(step, "no package detected")
             elif metadata.get("cli_enabled", False):
+                # Discover the CLI in the importable module, which can differ
+                # from the PyPI project name.
+                pkg_name = self._resolve_importable_name(package_name)
                 try:
                     with _quiet_prints():
                         cli_info = self._discover_click_cli(pkg_name, display_name=package_name)

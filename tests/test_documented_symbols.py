@@ -66,27 +66,6 @@ def test_documented_objects_returns_the_manifest_items(tmp_path: Path):
     assert "fit" in by_name["mypkg.sub.Widget.fit"].aliases
 
 
-def test_does_not_write_build_artifacts(tmp_path: Path):
-    """`documented_symbol_names` is a read-only query: it must leave no files behind.
-
-    The resolution pipeline (via `_create_api_sections_from_config`) normally
-    writes `_object_types.json`. Calling it as a programmatic query (e.g., from
-    `api-snapshot` / `api-diff`) must not drop that artifact into the project
-    tree.
-    """
-    _write_pkg(tmp_path)
-    gd = GreatDocs(project_path=str(tmp_path))
-
-    names = gd.documented_symbol_names("mypkg")
-    assert names  # sanity: the config path (which performs the write) ran
-
-    artifacts = list(tmp_path.rglob("_object_types.json"))
-    assert artifacts == [], f"query left build artifacts behind: {artifacts}"
-
-    # The flag is reset so a subsequent real build can still write artifacts.
-    assert gd._suppress_artifact_writes is False
-
-
 def test_returns_empty_without_reference_config(tmp_path: Path):
     """Without a reference config, the resolver delegates to auto-discovery (same as the renderer).
 
@@ -229,8 +208,6 @@ def test_search_path_failure_preserves_original_error(
 
     with pytest.raises(RuntimeError, match="search path failure"):
         gd.documented_symbol_names("mypkg")
-
-    assert gd._suppress_artifact_writes is False
 
 
 def test_restores_cached_package_modules(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

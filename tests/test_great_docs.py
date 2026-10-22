@@ -1359,76 +1359,6 @@ version = "0.1.0"
         assert base_url is None
 
 
-def test_get_source_location():
-    """Test source location detection for classes and methods."""
-    docs = GreatDocs()
-    source_loc = docs._get_source_location("great_docs", "GreatDocs")
-
-    assert source_loc is not None
-    assert "file" in source_loc
-    assert "start_line" in source_loc
-    assert "end_line" in source_loc
-    assert source_loc["start_line"] > 0
-    assert source_loc["end_line"] >= source_loc["start_line"]
-    assert "core.py" in source_loc["file"]
-
-
-def test_get_source_location_method_real_project():
-    """Test source location detection for methods."""
-    docs = GreatDocs()
-    source_loc = docs._get_source_location("great_docs", "GreatDocs.install")
-
-    assert source_loc is not None
-    assert "file" in source_loc
-    assert "start_line" in source_loc
-    assert source_loc["start_line"] > 0
-
-
-def test_get_source_location_not_found_real_project():
-    """Test source location returns None for non-existent items."""
-    docs = GreatDocs()
-    source_loc = docs._get_source_location("great_docs", "NonExistentClass")
-
-    assert source_loc is None
-
-
-def test_build_github_source_url():
-    """Test GitHub source URL construction."""
-    docs = GreatDocs()
-
-    source_loc = {
-        "file": "/path/to/great_docs/core.py",
-        "start_line": 42,
-        "end_line": 58,
-    }
-
-    url = docs._build_github_source_url(source_loc, branch="main")
-
-    assert url is not None
-    assert "https://github.com/posit-dev/great-docs" in url
-    assert "blob/main" in url
-    assert "#L42-L58" in url
-
-
-def test_build_github_source_url_single_line_hardcoded_path():
-    """Test GitHub source URL with single line."""
-    docs = GreatDocs()
-
-    source_loc = {
-        "file": "/path/to/great_docs/core.py",
-        "start_line": 42,
-        "end_line": 42,
-    }
-
-    url = docs._build_github_source_url(source_loc, branch="main")
-
-    assert url is not None
-    assert "#L42" in url
-
-    # Should not have the range format
-    assert "#L42-L42" not in url
-
-
 def test_source_link_config_defaults():
     """Test that source link configuration has proper defaults."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -6708,139 +6638,6 @@ def test_module_submodule_allowed_in_exports():
             sys.path.remove(tmp_dir)
 
 
-def test_write_object_types_json():
-    """Test that _write_object_types_json writes correct type mapping."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        categories = docs._empty_categories()
-        categories["classes"] = ["MyClass", "parser.ParserInfo"]
-        categories["exceptions"] = ["parser.ParserError"]
-        categories["functions"] = ["parse", "easter.easter"]
-        categories["constants"] = ["DEFAULTPARSER"]
-        categories["enums"] = ["Color"]
-        categories["type_aliases"] = ["DateType"]
-        categories["other"] = ["sys"]
-        categories["class_method_names"] = {
-            "MyClass": ["fit", "predict"],
-            "parser.ParserInfo": ["info"],
-        }
-
-        docs._write_object_types_json(categories)
-
-        types_path = docs.build_dir / "_object_types.json"
-        assert types_path.exists()
-
-        with open(types_path) as f:
-            obj_types = json.load(f)
-
-        # Classes (including module-qualified ones)
-        assert obj_types["MyClass"] == "class"
-        assert obj_types["parser.ParserInfo"] == "class"
-
-        # Exceptions
-        assert obj_types["parser.ParserError"] == "exception"
-
-        # Functions
-        assert obj_types["parse"] == "function"
-        assert obj_types["easter.easter"] == "function"
-
-        # Constants
-        assert obj_types["DEFAULTPARSER"] == "constant"
-
-        # Enums
-        assert obj_types["Color"] == "enum"
-
-        # Type aliases
-        assert obj_types["DateType"] == "type_alias"
-
-        # Other
-        assert obj_types["sys"] == "other"
-
-        # Methods
-        assert obj_types["MyClass.fit"] == "method"
-        assert obj_types["MyClass.predict"] == "method"
-        assert obj_types["parser.ParserInfo.info"] == "method"
-
-
-def test_write_object_types_json_empty_categories():
-    """Test that _write_object_types_json handles empty categories."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-        categories = docs._empty_categories()
-
-        docs._write_object_types_json(categories)
-
-        types_path = docs.build_dir / "_object_types.json"
-
-        assert types_path.exists()
-
-        with open(types_path) as f:
-            obj_types = json.load(f)
-
-        assert obj_types == {}
-
-
-def test_object_types_integrated_with_categorization():
-    """Test that _categorize_api_objects + _write_object_types_json produce
-    correct types for a package with mixed exports."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "typepkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            '"""Package with diverse types."""\n'
-            '__all__ = ["MyClass", "my_func", "MyError", "MAX_SIZE"]\n'
-            "\n"
-            "class MyClass:\n"
-            '    """A normal class."""\n'
-            "    def action(self): pass\n"
-            "\n"
-            "def my_func():\n"
-            '    """A function."""\n'
-            "    pass\n"
-            "\n"
-            "class MyError(Exception):\n"
-            '    """An exception."""\n'
-            "    pass\n"
-            "\n"
-            "MAX_SIZE = 1024\n"
-        )
-
-        sys.path.insert(0, tmp_dir)
-
-        # Create a build directory for the docs output
-        build_dir = Path(tmp_dir) / "docs"
-        build_dir.mkdir()
-
-        try:
-            docs = GreatDocs(project_path=str(build_dir))
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            categories = docs._categorize_api_objects(
-                "typepkg", ["MyClass", "my_func", "MyError", "MAX_SIZE"]
-            )
-
-            docs._write_object_types_json(categories)
-
-            types_path = docs.build_dir / "_object_types.json"
-            assert types_path.exists()
-
-            with open(types_path) as f:
-                obj_types = json.load(f)
-
-            assert obj_types["MyClass"] == "class"
-            assert obj_types["my_func"] == "function"
-            assert obj_types["MyError"] == "exception"
-            assert obj_types["MAX_SIZE"] == "constant"
-            assert obj_types["MyClass.action"] == "method"
-        finally:
-            sys.path.remove(tmp_dir)
-
-
 def test_categorize_fallback_functions_not_other():
     """Functions must be categorized as 'functions', not 'other', when griffe
     cannot load the package and the inspect-based fallback is used."""
@@ -9251,31 +9048,29 @@ def test_detect_module_name_returns_none():
 @patch.object(GreatDocs, "_generate_llms_full_txt")
 @patch.object(GreatDocs, "_generate_llms_txt")
 @patch.object(GreatDocs, "_prepare_build_directory")
-@patch.object(GreatDocs, "_generate_source_links_json")
-def test_build_source_links_use_module_name(
-    mock_src, mock_prep, mock_llms, mock_llms_full, mock_skill, mock_quarto
+@patch.object(GreatDocs, "_discover_click_cli")
+def test_build_cli_reference_uses_module_name(
+    mock_discover, mock_prep, mock_llms, mock_llms_full, mock_skill, mock_quarto
 ):
-    """Regression: build() generates source links for the importable module name,
+    """Regression: build() discovers the Click CLI in the importable module,
     not the PyPI project name, when the two diverge."""
-
-    class _StopBuild(Exception):
-        pass
-
-    mock_src.side_effect = _StopBuild
+    mock_discover.return_value = None
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         root = Path(tmp_dir)
         (root / "pyproject.toml").write_text('[project]\nname = "my-dist"\n')
-        (root / "great-docs.yml").write_text("module: actual_module\n")
+        (root / "great-docs.yml").write_text("module: actual_module\ncli:\n  enabled: true\n")
 
         docs = GreatDocs(project_path=tmp_dir)
         docs.build_dir.mkdir(parents=True, exist_ok=True)
         (docs.build_dir / "_quarto.yml").write_text(QUARTO_YML_HEADER)
 
-        with pytest.raises(_StopBuild):
+        # The CLI step swallows errors, so the build runs on until the API
+        # reference step fails for want of an `api-reference:` section.
+        with pytest.raises(SystemExit):
             docs.build(refresh=False)
 
-        mock_src.assert_called_once_with("actual_module")
+        mock_discover.assert_called_once_with("actual_module", display_name="my-dist")
 
 
 @patch("great_docs._api_diff.snapshot_from_griffe")
@@ -11774,55 +11569,6 @@ def test_detect_git_ref_fallback_permissive():
         assert isinstance(ref, str) and len(ref) > 0
 
 
-def test_build_github_source_url_basic_line_range():
-    """_build_github_source_url builds URL with line anchors."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text(
-            '[project]\nname = "mypkg"\nversion = "1.0"\n'
-            '[project.urls]\nSource = "https://github.com/user/repo"\n'
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        source = {"file": "mypkg/core.py", "start_line": 10, "end_line": 20}
-        url = docs._build_github_source_url(source, branch="main")
-
-        assert url is not None
-        assert "github.com/user/repo" in url
-        assert "/blob/main/" in url
-        assert "#L10-L20" in url
-
-
-def test_build_github_source_url_single_line():
-    """_build_github_source_url uses single-line anchor when start==end."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text(
-            '[project]\nname = "mypkg"\nversion = "1.0"\n'
-            '[project.urls]\nSource = "https://github.com/user/repo"\n'
-        )
-
-        docs = GreatDocs(project_path=tmp_dir)
-        source = {"file": "mypkg/core.py", "start_line": 42, "end_line": 42}
-        url = docs._build_github_source_url(source, branch="v1.0")
-
-        assert "#L42" in url
-        assert "-L" not in url
-
-
-def test_build_github_source_url_no_repo_empty_url():
-    """_build_github_source_url returns None when no GitHub info available."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-
-        docs = GreatDocs(project_path=tmp_dir)
-        source = {"file": "mypkg/core.py", "start_line": 1, "end_line": 10}
-        url = docs._build_github_source_url(source, branch="main")
-
-        assert url is None
-
-
 def test_process_sections_no_config():
     """_process_sections returns 0 when no sections configured."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -13045,49 +12791,6 @@ def test_normalize_package_name_v2():
         assert docs._normalize_package_name("my-package") == "my_package"
         assert docs._normalize_package_name("already_good") == "already_good"
         assert docs._normalize_package_name("multi-hyphen-name") == "multi_hyphen_name"
-
-
-def test_get_source_location_found():
-    """_get_source_location returns file/line info for an exported symbol."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # Use great_docs itself as a known package
-        result = docs._get_source_location("great_docs", "GreatDocs")
-
-        assert result is not None
-        assert "file" in result
-        assert "start_line" in result
-        assert "end_line" in result
-        assert result["start_line"] > 0
-
-
-def test_get_source_location_not_found_v2():
-    """_get_source_location returns None for non-existent symbol."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._get_source_location("great_docs", "NonExistentSymbol")
-
-        assert result is None
-
-
-def test_get_source_location_method():
-    """_get_source_location finds a class method by dotted name."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._get_source_location("great_docs", "GreatDocs.build")
-        if result is not None:
-            assert result["start_line"] > 0
-            assert result["end_line"] >= result["start_line"]
-
-
-def test_get_source_location_bad_package():
-    """_get_source_location returns None for non-existent packages."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._get_source_location("nonexistent_pkg_xyzzy", "SomeClass")
-
-        assert result is None
 
 
 def test_count_cli_sidebar_items_nested_v2():
@@ -15294,115 +14997,6 @@ def test_get_quarto_env_venv_alternative_name():
         assert env["QUARTO_PYTHON"] == str(venv_python.resolve())
 
 
-def test_build_github_source_url_basic():
-    """Test _build_github_source_url with single-line source location."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # Set up pyproject.toml so _get_github_repo_info returns valid info
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-
-        result = docs._build_github_source_url(
-            {"file": "mypkg/module.py", "start_line": 10, "end_line": 10},
-            branch="main",
-        )
-
-        assert result is not None
-        assert result.endswith("#L10")
-        assert "/blob/main/" in result
-
-
-def test_build_github_source_url_line_range():
-    """Test _build_github_source_url with multi-line range."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-
-        result = docs._build_github_source_url(
-            {"file": "mypkg/core.py", "start_line": 5, "end_line": 20},
-            branch="v1.0",
-        )
-
-        assert result is not None
-        assert result.endswith("#L5-L20")
-        assert "/blob/v1.0/" in result
-
-
-def test_build_github_source_url_no_repo_v2():
-    """Test _build_github_source_url returns None when no repo info."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # No pyproject.toml -> no repo info
-        result = docs._build_github_source_url(
-            {"file": "mypkg/module.py", "start_line": 1, "end_line": 1},
-            branch="main",
-        )
-
-        assert result is None
-
-
-def test_build_github_source_url_source_path_config():
-    """Test _build_github_source_url with custom source_link_path for monorepos."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("source:\n  path: packages/mypkg/src\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
-
-        result = docs._build_github_source_url(
-            {"file": "/absolute/path/module.py", "start_line": 3, "end_line": 3},
-            branch="main",
-        )
-
-        assert result is not None
-        assert "packages/mypkg/src/module.py" in result
-
-
-def test_build_github_source_url_absolute_path():
-    """Test _build_github_source_url with absolute filepath converted to relative."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\n'
-            '[project.urls]\nRepository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-
-        # Make the filepath absolute and inside the package root
-        abs_path = str(Path(tmp_dir) / "mypkg" / "core.py")
-        result = docs._build_github_source_url(
-            {"file": abs_path, "start_line": 1, "end_line": 5},
-            branch="dev",
-        )
-
-        assert result is not None
-        assert "/blob/dev/" in result
-
-
 def _render_doc_source_relative_path(obj):
     """Invoke the renderer's `_source_relative_path` with a stand-in griffe object."""
     import great_docs._apiref._render.doc as docmod
@@ -15523,49 +15117,6 @@ def test_detect_git_ref_fallback():
         result = docs._detect_git_ref()
 
         assert result == "main"
-
-
-def test_generate_source_links_json_disabled():
-    """Test _generate_source_links_json skips when source links disabled."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("source:\n  enabled: false\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
-
-        docs._generate_source_links_json("mypkg")
-
-        # Should return early; no JSON file created
-        assert not (docs.build_dir / "_source_links.json").exists()
-
-
-def test_generate_source_links_json_no_repo():
-    """Test _generate_source_links_json skips when no GitHub repo info."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # No pyproject.toml = no repo
-        docs._generate_source_links_json("mypkg")
-
-        assert not (docs.build_dir / "_source_links.json").exists()
-
-
-def test_get_source_location_no_griffe():
-    """Test _get_source_location handles missing griffe gracefully."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # Mock griffe import failure
-        with patch.dict("sys.modules", {"griffe": None}):
-            result = docs._get_source_location("nonexistent_package", "SomeClass")
-
-            assert result is None
 
 
 def test_strip_frontmatter_with_yaml():
@@ -18265,40 +17816,6 @@ def test_format_authors_yaml_empty():
         assert docs._format_authors_yaml([]) == ""
 
 
-def test_write_object_types_json_basic():
-    """Test _write_object_types_json writes correct type metadata."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        categories = GreatDocs._empty_categories()
-        categories["classes"] = ["Widget", "Panel"]
-        categories["functions"] = ["create_widget"]
-        categories["constants"] = ["VERSION"]
-        categories["exceptions"] = ["WidgetError"]
-        categories["enums"] = ["Color"]
-        categories["class_method_names"] = {"Widget": ["render", "update"]}
-        categories["class_member_types"] = {
-            "Widget.render": "method",
-            "Widget.update": "classmethod",
-        }
-
-        docs._write_object_types_json(categories)
-
-        types_path = docs.build_dir / "_object_types.json"
-        assert types_path.exists()
-        data = json.loads(types_path.read_text())
-        assert data["Widget"] == "class"
-        assert data["Panel"] == "class"
-        assert data["create_widget"] == "function"
-        assert data["VERSION"] == "constant"
-        assert data["WidgetError"] == "exception"
-        assert data["Color"] == "enum"
-        assert data["Widget.render"] == "method"
-        assert data["Widget.update"] == "classmethod"
-
-
 def test_categorize_api_objects_fallback_basic():
     """Test _categorize_api_objects_fallback with known stdlib module."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -19667,27 +19184,6 @@ def test_parse_package_exports_no_all():
         assert result is None
 
 
-def test_get_source_location_not_found():
-    """Test _get_source_location returns None for nonexistent item."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._get_source_location("nonexistent_pkg", "SomeClass")
-
-        assert result is None
-
-
-def test_build_github_source_url_no_repo():
-    """Test _build_github_source_url returns None when no repo info."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-        source_loc = {"file": "src/module.py", "start_line": 10, "end_line": 20}
-        result = docs._build_github_source_url(source_loc)
-
-        assert result is None
-
-
 def test_generate_landing_page_content_no_name():
     """Test _generate_landing_page_content uses 'Package' when no name detected."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -20124,29 +19620,6 @@ def test_process_user_guide_returns_false_no_guide():
         docs = GreatDocs(project_path=tmp_dir)
         result = docs._process_user_guide()
         assert result is False
-
-
-def test_generate_source_links_json_no_metadata():
-    """Test _generate_source_links_json skips when source links disabled."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-        gd_yml = Path(tmp_dir) / "great-docs.yml"
-        gd_yml.write_text("source:\n  enabled: false\n", encoding="utf-8")
-        docs._config = Config(Path(tmp_dir))
-        # Should not crash, just return early
-        docs._generate_source_links_json("mypkg")
-
-
-def test_generate_source_links_json_no_github():
-    """Test _generate_source_links_json skips when no GitHub URL."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-        # No repository URL configured
-        docs._generate_source_links_json("mypkg")
 
 
 def test_get_cli_help_text_for_llms_disabled():
@@ -21071,23 +20544,6 @@ def test_add_section_sidebar():
         assert "recipes" in sidebar_ids
 
 
-def test_build_github_source_url_with_repo():
-    """Test _build_github_source_url builds correct URL."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n[project.urls]\n'
-            'Repository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-        source_loc = {"file": "src/module.py", "start_line": 10, "end_line": 20}
-        result = docs._build_github_source_url(source_loc, branch="main")
-        assert result is not None
-        assert "github.com/owner/repo" in result
-        assert "main" in result
-
-
 def test_get_cli_help_text_for_llms_with_cli():
     """Test _get_cli_help_text_for_llms generates formatted text."""
 
@@ -21540,148 +20996,6 @@ def test_get_cli_entry_point_name_no_scripts_b9():
         assert result is None
 
 
-def test_generate_source_links_json_basic():
-    """Test _generate_source_links_json writes JSON with source links."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\n[project.urls]\n'
-            'Repository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir(parents=True, exist_ok=True)
-
-        fake_source = {
-            "file": "mypkg/core.py",
-            "start_line": 10,
-            "end_line": 20,
-        }
-
-        with (
-            patch.object(docs, "_get_package_exports", return_value=["my_func"]),
-            patch.object(docs, "_get_source_location", return_value=fake_source),
-            patch.object(
-                docs,
-                "_categorize_api_objects",
-                return_value={"all_classes": [], "class_method_names": {}},
-            ),
-            patch.object(docs, "_detect_git_ref", return_value="main"),
-        ):
-            docs._generate_source_links_json("mypkg")
-
-        json_path = build_dir / "_source_links.json"
-        assert json_path.exists()
-
-        data = json.loads(json_path.read_text(encoding="utf-8"))
-        assert "my_func" in data
-        assert "url" in data["my_func"]
-
-
-def test_generate_source_links_json_disabled():
-    """Test _generate_source_links_json skips when source links disabled."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        with patch.object(
-            docs,
-            "_get_package_metadata",
-            return_value={"source_link_enabled": False},
-        ):
-            docs._generate_source_links_json("mypkg")
-
-        # Should not create the json file
-        json_path = Path(tmp_dir) / "great-docs" / "_source_links.json"
-        assert not json_path.exists()
-
-
-def test_generate_source_links_json_no_repo():
-    """Test _generate_source_links_json skips when no GitHub repo found."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        with (
-            patch.object(docs, "_get_package_metadata", return_value={"source_link_enabled": True}),
-            patch.object(docs, "_get_github_repo_info", return_value=(None, None, None)),
-        ):
-            docs._generate_source_links_json("mypkg")
-
-        json_path = Path(tmp_dir) / "great-docs" / "_source_links.json"
-        assert not json_path.exists()
-
-
-def test_generate_source_links_json_no_exports():
-    """Test _generate_source_links_json skips when no exports."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\n[project.urls]\n'
-            'Repository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-
-        with patch.object(docs, "_get_package_exports", return_value=None):
-            docs._generate_source_links_json("mypkg")
-
-        json_path = Path(tmp_dir) / "great-docs" / "_source_links.json"
-        assert not json_path.exists()
-
-
-def test_generate_source_links_json_with_class_methods():
-    """Test _generate_source_links_json includes method source links for classes."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "mypkg"\n[project.urls]\n'
-            'Repository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir(parents=True, exist_ok=True)
-
-        def fake_source_location(pkg_name, item_name):
-            return {
-                "file": f"mypkg/{item_name.replace('.', '/')}.py",
-                "start_line": 1,
-                "end_line": 10,
-            }
-
-        mock_method_do = MagicMock()
-        mock_method_do.kind.value = "function"
-        mock_method_run = MagicMock()
-        mock_method_run.kind.value = "function"
-        mock_class = MagicMock()
-        mock_class.kind.value = "class"
-        mock_class.members = {"do_stuff": mock_method_do, "run": mock_method_run}
-        mock_pkg = MagicMock()
-        mock_pkg.members = {"MyClass": mock_class}
-
-        with (
-            patch.object(docs, "_get_package_exports", return_value=["MyClass"]),
-            patch.object(docs, "_get_source_location", side_effect=fake_source_location),
-            patch.object(docs, "_get_griffe_package", return_value=mock_pkg),
-            patch.object(docs, "_detect_git_ref", return_value="main"),
-        ):
-            docs._generate_source_links_json("mypkg")
-
-        data = json.loads((build_dir / "_source_links.json").read_text(encoding="utf-8"))
-        assert "MyClass" in data
-        assert "MyClass.do_stuff" in data
-        assert "MyClass.run" in data
-
-
 def test_detect_docstring_style_google():
     """Test _detect_docstring_style detects google style docstrings."""
 
@@ -21797,50 +21111,6 @@ def test_detect_dynamic_mode_with_cyclic_error():
             result = docs._detect_dynamic_mode("mypkg")
 
         assert result is False
-
-
-def test_write_object_types_json_creates_file():
-    """Test _write_object_types_json writes object types to JSON."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        build_dir = Path(tmp_dir) / "great-docs"
-        build_dir.mkdir(parents=True, exist_ok=True)
-
-        categories = {
-            "classes": ["MyClass"],
-            "functions": ["my_func"],
-            "async_functions": ["async_func"],
-            "constants": ["MY_CONST"],
-            "type_aliases": ["MyAlias"],
-            "enums": ["Color"],
-            "exceptions": ["MyError"],
-            "dataclasses": ["DataCls"],
-            "namedtuples": [],
-            "typeddicts": [],
-            "protocols": ["MyProto"],
-            "abstract_classes": ["MyABC"],
-            "other": ["something_else"],
-            "class_methods": {"MyClass": 2},
-            "class_method_names": {"MyClass": ["run", "stop"]},
-            "class_member_types": {"MyClass.run": "method", "MyClass.stop": "classmethod"},
-        }
-
-        docs._write_object_types_json(categories)
-
-        types_path = build_dir / "_object_types.json"
-        assert types_path.exists()
-        data = json.loads(types_path.read_text(encoding="utf-8"))
-        assert data["MyClass"] == "class"
-        assert data["my_func"] == "function"
-        assert data["async_func"] == "function"
-        assert data["MY_CONST"] == "constant"
-        assert data["Color"] == "enum"
-        assert data["MyError"] == "exception"
-        assert data["MyProto"] == "protocol"
-        assert data["MyABC"] == "abc"
-        assert data["DataCls"] == "class"
-        assert data["MyClass.run"] == "method"
-        assert data["MyClass.stop"] == "classmethod"
 
 
 def test_process_sections_blog_type():
@@ -23651,48 +22921,6 @@ def test_add_frontmatter_option_string_value():
         assert 'format: "html"' in result
 
 
-def test_build_github_source_url_basic():
-    """Test _build_github_source_url creates correct URL."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n[project.urls]\n'
-            'Repository = "https://github.com/testowner/testrepo"\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        source_loc = {"file": "pkg/core.py", "start_line": 10, "end_line": 20}
-        url = docs._build_github_source_url(source_loc, branch="main")
-        assert url is not None
-        assert "github.com/testowner/testrepo" in url
-        assert "#L10-L20" in url
-
-
-def test_build_github_source_url_single_line():
-    """Test _build_github_source_url with single line."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text(
-            '[project]\nname = "pkg"\n[project.urls]\n'
-            'Repository = "https://github.com/owner/repo"\n',
-            encoding="utf-8",
-        )
-        docs = GreatDocs(project_path=tmp_dir)
-        source_loc = {"file": "pkg/a.py", "start_line": 5, "end_line": 5}
-        url = docs._build_github_source_url(source_loc, branch="v1.0")
-        assert "#L5" in url
-        assert "#L5-L5" not in url
-
-
-def test_build_github_source_url_no_repo():
-    """Test _build_github_source_url returns None when no repo info."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        source_loc = {"file": "pkg/core.py", "start_line": 1, "end_line": 1}
-        url = docs._build_github_source_url(source_loc)
-        assert url is None
-
-
 def test_get_github_repo_info_from_config():
     """Test _get_github_repo_info reads from great-docs.yml repo setting."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -23961,14 +23189,6 @@ def test_add_changelog_to_navbar_idempotent():
             1 for it in items if isinstance(it, dict) and it.get("text") == "Changelog"
         )
         assert changelog_count == 1
-
-
-def test_get_source_location_nonexistent_package():
-    """Test _get_source_location returns None for nonexistent package."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-        result = docs._get_source_location("nonexistent_pkg_xyz", "some_func")
-        assert result is None
 
 
 def test_extract_click_command_basic():
@@ -24304,7 +23524,6 @@ def test_build_prepare_and_render_flow():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_process_user_guide"),
             patch.object(docs, "_copy_assets", return_value=False),
@@ -24358,7 +23577,6 @@ def test_build_no_api_reference():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value=None),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_process_user_guide"),
             patch.object(docs, "_copy_assets", return_value=False),
@@ -24413,7 +23631,6 @@ def test_build_dynamic_fallback_to_static():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_process_user_guide"),
             patch.object(docs, "_copy_assets", return_value=False),
@@ -24479,7 +23696,6 @@ def test_build_dynamic_fallback_preserves_the_quarto_yml_header():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_process_user_guide"),
             patch.object(docs, "_copy_assets", return_value=False),
@@ -24538,7 +23754,6 @@ def test_build_static_mode_failure_exits():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_process_user_guide"),
             patch.object(docs, "_copy_assets", return_value=False),
@@ -24586,7 +23801,6 @@ def test_build_non_dynamic_failure_exits():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_process_user_guide"),
             patch.object(docs, "_copy_assets", return_value=False),
@@ -24627,7 +23841,6 @@ def test_build_with_changelog():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(docs, "_get_package_metadata", return_value={"cli_enabled": False}),
             patch.object(
                 docs,
@@ -24678,7 +23891,6 @@ def test_build_changelog_error_handled():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(
                 docs,
@@ -24729,7 +23941,6 @@ def test_build_with_cli_documentation():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(
                 docs,
                 "_get_package_metadata",
@@ -24782,7 +23993,6 @@ def test_build_with_sections():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value=None),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_process_user_guide"),
             patch.object(docs, "_process_sections", return_value=2),
@@ -24826,7 +24036,6 @@ def test_build_with_assets_triggers_config_update():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value=None),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_process_user_guide"),
             patch.object(docs, "_copy_assets", return_value=True),
@@ -24870,7 +24079,6 @@ def test_build_watch_mode():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value=None),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_process_user_guide"),
             patch.object(docs, "_copy_assets", return_value=False),
@@ -24911,7 +24119,6 @@ def test_build_quarto_render_failure():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value=None),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_process_user_guide"),
             patch.object(docs, "_copy_assets", return_value=False),
@@ -24953,7 +24160,6 @@ def test_build_cli_error_handled():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(
                 docs,
                 "_get_package_metadata",
@@ -26099,7 +25305,6 @@ def test_create_api_sections_from_config_basic():
                     "_get_package_exports",
                     return_value=["ClassA", "func_b"],
                 ),
-                patch.object(docs, "_write_object_types_json"),
             ):
                 result = docs._create_api_sections_from_config("secpkg")
 
@@ -26141,7 +25346,6 @@ def test_create_api_sections_from_config_large_class():
 
             with (
                 patch.object(docs, "_get_package_exports", return_value=["BigClass"]),
-                patch.object(docs, "_write_object_types_json"),
             ):
                 result = docs._create_api_sections_from_config("lgpkg")
 
@@ -26186,7 +25390,6 @@ def test_create_api_sections_from_config_dict_items():
 
             with (
                 patch.object(docs, "_get_package_exports", return_value=["MyClass"]),
-                patch.object(docs, "_write_object_types_json"),
             ):
                 result = docs._create_api_sections_from_config("dictpkg")
 
@@ -26239,7 +25442,6 @@ def test_create_api_sections_from_config_explicit_members_passthrough():
 
             with (
                 patch.object(docs, "_get_package_exports", return_value=["Child"]),
-                patch.object(docs, "_write_object_types_json"),
             ):
                 result = docs._create_api_sections_from_config("inhpkg")
 
@@ -26292,7 +25494,6 @@ def test_create_api_sections_from_config_include_inherited():
 
             with (
                 patch.object(docs, "_get_package_exports", return_value=["Derived"]),
-                patch.object(docs, "_write_object_types_json"),
             ):
                 result = docs._create_api_sections_from_config("inhpkg2")
 
@@ -27760,7 +26961,6 @@ def test_build_section_error_handled():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value=None),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_process_user_guide"),
             patch.object(docs, "_process_sections", side_effect=RuntimeError("section problem")),
@@ -27803,7 +27003,6 @@ def test_build_user_guide_error_handled():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value=None),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_process_user_guide", side_effect=RuntimeError("UG error")),
             patch.object(docs, "_copy_assets", return_value=False),
@@ -27845,7 +27044,6 @@ def test_build_copy_assets_error_handled():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value=None),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_process_user_guide"),
             patch.object(docs, "_copy_assets", side_effect=RuntimeError("copy failed")),
@@ -27887,7 +27085,6 @@ def test_build_changelog_no_releases():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(
                 docs,
@@ -27934,7 +27131,6 @@ def test_build_changelog_no_repo():
             patch.object(docs, "_generate_llms_txt"),
             patch.object(docs, "_generate_llms_full_txt"),
             patch.object(docs, "_detect_package_name", return_value="mypkg"),
-            patch.object(docs, "_generate_source_links_json"),
             patch.object(docs, "_get_package_metadata", return_value={}),
             patch.object(docs, "_get_github_repo_info", return_value=(None, None, None)),
             patch.object(docs, "_process_user_guide"),
@@ -34965,30 +34161,6 @@ def test_rewrite_href_recursive_nested_list():
         assert found4 is False
 
 
-def test_build_github_source_url_with_source_path():
-    """_build_github_source_url uses custom source_link_path."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text(
-            '[project]\nname = "mypkg"\nversion = "1.0"\n'
-            '[project.urls]\nSource = "https://github.com/user/repo"\n'
-        )
-        (tmp / "great-docs.yml").write_text("source:\n  path: packages/mypkg\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-
-        source_loc = {
-            "file": "/abs/path/to/mypkg/module.py",
-            "start_line": 10,
-            "end_line": 20,
-        }
-
-        url = docs._build_github_source_url(source_loc, branch="main")
-        # Should include the custom path
-        assert url is not None
-        assert "main" in url
-
-
 def test_type_sections_empty_lists():
     """TypeSections with no items produces empty Blocks output."""
 
@@ -36553,85 +35725,6 @@ class TestUpdateConfigWithUserGuide:
             ]
             assert len(ug_sidebars) == 1
             assert "Old" not in str(ug_sidebars[0])
-
-
-class TestGetSourceLocation:
-    """Tests for _get_source_location."""
-
-    def test_finds_function_location(self):
-        """Finds source location for a function."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            pkg = tmp / "mypkg"
-            pkg.mkdir()
-            (pkg / "__init__.py").write_text('def my_func():\n    """A function."""\n    pass\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            old_path = sys.path[:]
-            sys.path.insert(0, tmp_dir)
-            try:
-                result = docs._get_source_location("mypkg", "my_func")
-            finally:
-                sys.path[:] = old_path
-            assert result is not None
-            assert result["start_line"] == 1
-
-    def test_finds_method_location(self):
-        """Finds source location for a dotted method."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            pkg = tmp / "mypkg"
-            pkg.mkdir()
-            (pkg / "__init__.py").write_text(
-                "class MyClass:\n    def my_method(self):\n        pass\n"
-            )
-            docs = GreatDocs(project_path=tmp_dir)
-            old_path = sys.path[:]
-            sys.path.insert(0, tmp_dir)
-            try:
-                result = docs._get_source_location("mypkg", "MyClass.my_method")
-            finally:
-                sys.path[:] = old_path
-            assert result is not None
-            assert "file" in result
-
-    def test_returns_none_for_missing_item(self):
-        """Returns None for an item that doesn't exist."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            pkg = tmp / "mypkg"
-            pkg.mkdir()
-            (pkg / "__init__.py").write_text("")
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._get_source_location("mypkg", "nonexistent")
-            assert result is None
-
-
-class TestBuildGithubSourceUrl:
-    """Tests for _build_github_source_url."""
-
-    def test_builds_url_with_line_anchors(self):
-        """Builds URL with line anchors."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text(
-                '[project]\nname = "mypkg"\nversion = "1.0"\n'
-                '[project.urls]\nRepository = "https://github.com/user/repo"\n'
-            )
-            pkg = tmp / "mypkg"
-            pkg.mkdir()
-            (pkg / "__init__.py").write_text('__version__ = "1.0"\n')
-            (pkg / "module.py").write_text("def func(): pass\n")
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._build_github_source_url(
-                {"file": str(pkg / "module.py"), "start_line": 10, "end_line": 20},
-                branch="main",
-            )
-            assert result is not None
-            assert "github.com/user/repo" in result
-            assert "#L10-L20" in result
 
 
 class TestDetectDocstringStyleSphinx:
@@ -42451,7 +41544,6 @@ def test_create_api_sections_from_config_inline_methods_true_never_splits():
 
             with (
                 patch.object(docs, "_get_package_exports", return_value=["BigClass"]),
-                patch.object(docs, "_write_object_types_json"),
             ):
                 result = docs._create_api_sections_from_config("inlinepkg")
 
@@ -42518,7 +41610,6 @@ def test_create_api_sections_from_config_inline_methods_false_always_splits():
 
             with (
                 patch.object(docs, "_get_package_exports", return_value=["SmallClass"]),
-                patch.object(docs, "_write_object_types_json"),
             ):
                 result = docs._create_api_sections_from_config("splitforcepkg")
 
@@ -42559,7 +41650,6 @@ def test_create_api_sections_from_config_inline_methods_custom_threshold():
 
             with (
                 patch.object(docs, "_get_package_exports", return_value=["MediumClass"]),
-                patch.object(docs, "_write_object_types_json"),
             ):
                 result = docs._create_api_sections_from_config("threshpkg")
 
@@ -43225,57 +42315,6 @@ def test_get_package_metadata_invalid_dep_falls_back():
         docs = GreatDocs(project_path=str(tmp_dir))
         meta = docs._get_package_metadata()
         assert any(d["specifier"] == "" for d in meta["dependencies"])
-
-
-# ---------------------------------------------------------------------------
-# _get_source_location_from_pkg — missing lineno / filepath branches
-# ---------------------------------------------------------------------------
-
-
-def test_get_source_location_no_lineno():
-    """_get_source_location_from_pkg returns None when obj has no lineno."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=str(tmp_dir))
-
-        class FakeObj:
-            lineno = None
-            filepath = "/some/file.py"
-            members = {}
-
-        class FakePkg:
-            members = {"MyClass": FakeObj()}
-
-        result = docs._get_source_location_from_pkg(FakePkg(), "MyClass")
-        assert result is None
-
-
-def test_get_source_location_no_filepath():
-    """_get_source_location_from_pkg returns None when obj has no filepath."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=str(tmp_dir))
-
-        class FakeObj:
-            lineno = 10
-            filepath = None
-            members = {}
-
-        class FakePkg:
-            members = {"MyClass": FakeObj()}
-
-        result = docs._get_source_location_from_pkg(FakePkg(), "MyClass")
-        assert result is None
-
-
-def test_get_source_location_member_missing():
-    """_get_source_location_from_pkg returns None when dotted path member absent."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=str(tmp_dir))
-
-        class FakePkg:
-            members = {}
-
-        result = docs._get_source_location_from_pkg(FakePkg(), "Missing.method")
-        assert result is None
 
 
 # ---------------------------------------------------------------------------
