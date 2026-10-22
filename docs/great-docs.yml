@@ -290,6 +290,14 @@ exclude:
   - create_default_config
   - load_config
 
+# Reference Section Order
+# -----------------------
+# Show the CLI first in the Reference area, then the Python API and MCP Server
+ref_section_order:
+  - cli
+  - python
+  - mcp
+
 # API Reference Structure
 # -----------------------
 # Explicit control over API reference organization
