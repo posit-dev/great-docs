@@ -11883,7 +11883,11 @@ def test_DED_sidebar_sections_expanded_by_css():
 
 @pytest.mark.dedicated
 def test_DED_ref_section_order_cli_first():
-    """gdtest_ref_section_order: data-gd-ref-sections has cli before api."""
+    """gdtest_ref_section_order: data-gd-ref-sections has cli before api.
+
+    The config lists `mcp` first, but the package has no MCP server, so it is
+    left out rather than raising an error.
+    """
     pkg = "gdtest_ref_section_order"
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
