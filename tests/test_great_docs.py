@@ -39862,6 +39862,32 @@ def test_wide_layout_meta_precedes_theme_init():
         assert sum("wide-layout.js" in a for a in after_body) == 1
 
 
+def test_theme_init_added_when_details_already_listed():
+    """A config that already loads details.js still gets theme-init.js, after the meta tag."""
+    from great_docs._website.scripts import script_include
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            quarto_content={
+                "project": {"type": "website"},
+                "website": {"navbar": {"left": []}, "sidebar": []},
+                "format": {"html": {"include-after-body": [script_include("details.js")]}},
+            },
+        )
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        header, _ = _wide_entries(result)
+        assert sum("theme-init" in h for h in header) == 1
+        meta_index = next(i for i, h in enumerate(header) if "gd-wide-layout" in h)
+        theme_index = next(i for i, h in enumerate(header) if "theme-init" in h)
+        assert meta_index < theme_index
+
+
 def test_wide_layout_custom_settings():
     """Configured settings flow into the meta tag and CSS custom properties."""
 

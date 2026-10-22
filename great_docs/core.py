@@ -12502,21 +12502,21 @@ anchor-sections: true
         if not has_details:
             config["format"]["html"]["include-after-body"].append(details_entry)
 
-            # Add early theme detection script in header to prevent flash of wrong theme
-            if "include-in-header" not in config["format"]["html"]:
-                config["format"]["html"]["include-in-header"] = []  # pragma: no cover
-            elif isinstance(config["format"]["html"]["include-in-header"], str):
-                config["format"]["html"]["include-in-header"] = [  # pragma: no cover
-                    config["format"]["html"]["include-in-header"]
-                ]
+        # Add early theme detection script in header to prevent flash of wrong theme
+        if "include-in-header" not in config["format"]["html"]:
+            config["format"]["html"]["include-in-header"] = []  # pragma: no cover
+        elif isinstance(config["format"]["html"]["include-in-header"], str):
+            config["format"]["html"]["include-in-header"] = [  # pragma: no cover
+                config["format"]["html"]["include-in-header"]
+            ]
 
-            # Reference external script file for early theme detection (cleaner YAML)
-            early_theme_script = script_include("theme-init.js")
-            has_early_theme = any(
-                "theme-init" in str(item) for item in config["format"]["html"]["include-in-header"]
-            )
-            if not has_early_theme:
-                config["format"]["html"]["include-in-header"].append(early_theme_script)
+        # Reference external script file for early theme detection (cleaner YAML)
+        early_theme_script = script_include("theme-init.js")
+        has_early_theme = any(
+            "theme-init" in str(item) for item in config["format"]["html"]["include-in-header"]
+        )
+        if not has_early_theme:
+            config["format"]["html"]["include-in-header"].append(early_theme_script)
 
         # Add mermaid renderer script (custom mermaid with proper theme support)
         mermaid_renderer_entry = script_include("mermaid-renderer.js")
