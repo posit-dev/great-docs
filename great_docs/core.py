@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
-from yaml12 import format_yaml, read_yaml, write_yaml
+from yaml12 import format_yaml, read_yaml
 
 from ._content_naming import fix_numeric_prefix_links, section_slug, strip_numeric_prefix
 from ._layout import Layout, LayoutError
@@ -20,13 +20,13 @@ from ._subprocess import TEXT_MODE_KWARGS
 from ._typer_cli import is_cli_command, is_cli_group, param_kind, to_click_command
 from ._utils import (
     GITIGNORE_CONTENT,
-    QUARTO_YML_HEADER,
     is_great_docs_build_dir,
     recognised_build_dirs,
     record_site_ownership,
     validate_build_dir,
     validate_layout_outputs,
     validate_tree_symlinks,
+    write_quarto_yml,
 )
 from ._website import i18n, markdown_pages, page_dates, page_metadata, page_url, social_cards
 from ._website.navigation import github as nav_github
@@ -2830,7 +2830,7 @@ class GreatDocs:
         else:
             entries.append(inline_entry)  # pragma: no cover
 
-        write_yaml(config, quarto_yml)
+        self._write_quarto_yml(quarto_yml, config)
 
     @staticmethod
     def _tag_slug(tag_name: str) -> str:
@@ -3053,7 +3053,7 @@ class GreatDocs:
         else:
             entries.append(inline_entry)
 
-        write_yaml(config, quarto_yml)
+        self._write_quarto_yml(quarto_yml, config)
 
     def _process_page_statuses(self) -> bool:
         """
@@ -11441,9 +11441,7 @@ anchor-sections: true
         # Translate navbar labels for i18n
         self._translate_navbar_labels(config)
 
-        with open(quarto_yml, "w") as f:
-            f.write(QUARTO_YML_HEADER)
-            write_yaml(config, f)
+        write_quarto_yml(quarto_yml, config)
 
     def _write_initial_quarto_yml(self) -> None:
         """
