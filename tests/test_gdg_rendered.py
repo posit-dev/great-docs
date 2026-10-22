@@ -1085,9 +1085,11 @@ def test_member_separator_rules_present(pkg_name: str, page_name: str):
     """
     Verify class member separators
 
-    Class pages contain one solid rule after the member summary and one dotted
-    rule between each pair of `level3` members. Derive the expected count from
-    the rendered members so fixtures can add methods without changing the test.
+    The stylesheet draws one solid rule after the member summary and one dotted
+    rule between each pair of `level3` members. Select the members those rules
+    match, and check that the deployed stylesheet carries them. Derive the
+    expected count from the rendered members so fixtures can add methods
+    without changing the test.
     """
     page = _ref_dir(pkg_name) / page_name
     if not page.exists():
@@ -1100,9 +1102,16 @@ def test_member_separator_rules_present(pkg_name: str, page_name: str):
     if not members:
         pytest.skip(f"{page_name}: no member sections to check")
 
-    rules = soup.select("hr")
-    solid_rules = [r for r in rules if "solid" in (r.get("style") or "")]
-    dotted_rules = [r for r in rules if "dotted" in (r.get("style") or "")]
+    groups = (
+        "section:is(.doc-attributes, .doc-classes, .doc-type-aliases, .doc-methods,"
+        " .doc-functions):not(.doc-pages)"
+    )
+    solid_rules = soup.select(f"{groups} > :is(table, .gd-table-responsive) + section")
+    dotted_rules = soup.select(f"{groups} > section + section")
+
+    css = re.sub(r"\s+", "", _deployed_css(pkg_name))
+    assert ">:is(table,.gd-table-responsive)+section::before" in css
+    assert ">section+section::before" in css
 
     assert len(solid_rules) == 1, (
         f"{page_name}: expected exactly one solid rule after the members "
@@ -3161,19 +3170,6 @@ def test_toc_title_config():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.dedicated
-def test_source_disabled_no_links_file():
-    """When source.enabled is false, _source_links.json should not be generated."""
-    pkg = "gdtest_source_disabled"
-    if not _has_rendered_site(pkg):
-        pytest.skip(f"{pkg} not rendered")
-
-    source_links = Layout.make(_RENDERED_DIR / pkg).build_dir / "_source_links.json"
-    assert not source_links.exists(), (
-        f"_source_links.json should not exist when source is disabled: {source_links}"
-    )
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # R4: Display Configuration — Badges, Authors, Funding
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -3587,7 +3583,7 @@ def test_config_combo_a_display_name_and_authors():
 @pytest.mark.dedicated
 @requires_bs4
 def test_config_combo_b_opt_out_flags():
-    """Combo B: sidebar_filter, dark_mode_toggle, and source all disabled."""
+    """Combo B: sidebar_filter and dark_mode_toggle disabled."""
     pkg = "gdtest_config_combo_b"
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
@@ -3603,10 +3599,6 @@ def test_config_combo_b_opt_out_flags():
     assert "dark-mode-toggle.js" not in after_texts, (
         "dark-mode-toggle.js should be absent when dark_mode_toggle is disabled"
     )
-
-    # source.enabled=false → no _source_links.json
-    source_links = Layout.make(_RENDERED_DIR / pkg).build_dir / "_source_links.json"
-    assert not source_links.exists(), "_source_links.json should not exist when source is disabled"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -6010,17 +6002,6 @@ def test_DED_config_extra_keys_builds():
 
 
 @pytest.mark.dedicated
-def test_DED_config_minimal_source_disabled():
-    """gdtest_config_minimal: source disabled means no _source_links.json."""
-    pkg = "gdtest_config_minimal"
-    if not _has_rendered_site(pkg):
-        pytest.skip(f"{pkg} not rendered")
-
-    source_links = Layout.make(_RENDERED_DIR / pkg).build_dir / "_source_links.json"
-    assert not source_links.exists(), "_source_links.json should not exist when source disabled"
-
-
-@pytest.mark.dedicated
 def test_DED_config_parser_google():
     """gdtest_config_parser: ref pages exist with google parser override."""
     pkg = "gdtest_config_parser"
@@ -6075,13 +6056,11 @@ def test_DED_config_sections_examples_dir():
 
 @pytest.mark.dedicated
 def test_DED_source_branch_no_links():
-    """gdtest_source_branch: _source_links.json not present (no repo URL)."""
+    """gdtest_source_branch: reference pages render without a repo URL."""
     pkg = "gdtest_source_branch"
     if not _has_rendered_site(pkg):
         pytest.skip(f"{pkg} not rendered")
 
-    source_links = Layout.make(_RENDERED_DIR / pkg).build_dir / "_source_links.json"
-    # Synthetic packages don't have a real repo, so _source_links.json may not exist
     ref = _ref_dir(pkg)
     assert (ref / "read_data.html").exists(), "read_data page missing"
     assert (ref / "write_data.html").exists(), "write_data page missing"

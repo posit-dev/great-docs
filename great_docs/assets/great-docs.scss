@@ -34,6 +34,7 @@ $font-family-monospace: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "
 // Selectors for similar groups of elements that are created by the renderer
 $docstring-sections: ":is(.doc-parameters, .doc-other-parameters, .doc-type-parameters, .doc-returns, .doc-yields, .doc-receives, .doc-raises, .doc-warns, .doc-attributes, .doc-parameter-attributes, .doc-init-parameters, .doc-see-also, .doc-examples)";
 $doc-object-names: "span.doc-object-name:is(.doc-class-name, .doc-method-name, .doc-module-name, .doc-function-name, .doc-alias-name, .doc-attribute-name, .doc-type-name, .doc-typevar)";
+$member-groups: "section:is(.doc-attributes, .doc-classes, .doc-type-aliases, .doc-methods, .doc-functions):not(.doc-pages)";
 
 // Reference pages and the index links in their sidebars. Sidebar links include
 // the path from the site root, so index links end in `/index.html`, and the
@@ -470,12 +471,24 @@ section:has(> h2.doc-notes, > h3.doc-notes) {
    text-decoration: none;
 }
 
-// docstring spacing and indentation
-section.doc-attributes > section.doc-attribute,
-section.doc-methods > section.doc-method {
-   @extend .ps-4;
-   border-left: 0.025rem solid $gray-500;
-   backgroud-color: cyan;
+// Rules between the members of a group: solid after the summary table,
+// dotted between members. Drawn as a block before the member's heading so
+// that the margins collapse as they would around an `<hr>`. The responsive
+// tables script may wrap the summary table in `.gd-table-responsive`.
+#{$member-groups} {
+   > :is(table, .gd-table-responsive) + section::before,
+   > section + section::before {
+      content: "";
+      display: block;
+      margin: 1.5rem 0 1rem 0;
+      border-top: 2px solid #c5c8cd;
+      opacity: 0.25;
+   }
+
+   > section + section::before {
+      border-top-style: dotted;
+      border-top-color: #b0b4ba;
+   }
 }
 
 // docstring section parameters
