@@ -161,7 +161,8 @@ cli:
   name: null # Click command / Typer app variable; auto-detected
   title: null # Optional index page + sidebar title
   desc: null # Optional intro paragraph atop the index page
-  # sections: explicit grouping/ordering (omit = auto by code order). Example:
+  # sections: explicit grouping/ordering (omit = auto by code order). Commands not
+  # listed get no reference page. Example:
   #   sections:
   #     - title: "Project setup"
   #       desc: "Create and configure a project."
