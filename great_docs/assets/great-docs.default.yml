@@ -202,9 +202,9 @@ mcp:
 # Reference Section Order
 # -----------------------
 # Controls the display order of API subsections (the switcher tabs) in the
-# Reference area. Valid values: "api", "cli", "mcp". Sections listed here
+# Reference area. Valid values: "python", "cli", "mcp". Sections listed here
 # that don't exist in the project are silently ignored. When empty or omitted,
-# the default order is: api, cli, mcp.
+# the default order is: python, cli, mcp.
 ref_section_order: []
 
 # Dark Mode Toggle
