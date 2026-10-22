@@ -2,7 +2,7 @@
 gdtest_rst_danger — Tests .. danger:: directives in docstrings.
 
 Dimensions: L7
-Focus: RST danger directives rendered as styled callout divs by post-render.
+Focus: RST danger directives rendered as styled callout divs.
 """
 
 SPEC = {

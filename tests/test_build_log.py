@@ -326,7 +326,7 @@ class TestEstimateBuildTime:
 
     def test_pages_only(self):
         result = estimate_build_time(n_api_items=0, n_total_pages=200)
-        expected = 5.0 + 200 * 0.5 + 200 * 0.3
+        expected = 5.0 + 200 * 0.8
         assert result == pytest.approx(expected)
 
     def test_code_cells_only(self):
@@ -335,7 +335,7 @@ class TestEstimateBuildTime:
 
     def test_combined(self):
         result = estimate_build_time(n_api_items=162, n_total_pages=203, n_code_cells=50)
-        expected = 5.0 + 162 * 3.2 + 203 * 0.5 + 50 * 3.0 + 203 * 0.3
+        expected = 5.0 + 162 * 3.2 + 203 * 0.8 + 50 * 3.0
         assert result == pytest.approx(expected)
 
     def test_pointblank_scenario(self):
@@ -907,90 +907,6 @@ class TestBuildLogTreeLines:
         log.tree_lines([])
 
         assert stream.getvalue() == ""
-
-
-# =========================================================================
-# BuildLog — substep
-# =========================================================================
-
-
-class TestBuildLogSubstep:
-    """Tests for `BuildLog.substep()`."""
-
-    def test_substep_non_tty_middle(self):
-        """Non-TTY substep uses plain ├─ connector and [OK] icon."""
-        log, stream = _make_log(force_color=False)
-        log.step_start(1, "Test")
-        stream.truncate(0)
-        stream.seek(0)
-        log.substep("Interlinks resolved")
-        out = stream.getvalue()
-
-        assert "├─" in out
-        assert "[OK]" in out
-        assert "Interlinks resolved" in out
-        assert "└─" not in out
-
-    def test_substep_non_tty_last(self):
-        """Non-TTY substep with last=True uses └─ connector."""
-        log, stream = _make_log(force_color=False)
-        log.step_start(1, "Test")
-        stream.truncate(0)
-        stream.seek(0)
-        log.substep("Scale-to-fit injected", last=True)
-        out = stream.getvalue()
-
-        assert "└─" in out
-        assert "├─" not in out
-        assert "[OK]" in out
-        assert "Scale-to-fit injected" in out
-
-    def test_substep_tty_middle(self):
-        """TTY substep uses colored DIM connector and ✓ icon."""
-        log, stream = _make_log(force_color=True)
-        log.step_start(1, "Test")
-        stream.truncate(0)
-        stream.seek(0)
-        log.substep("SEO enhancements applied")
-        out = stream.getvalue()
-
-        assert "├─" in out
-        assert "✔" in out
-        assert "SEO enhancements applied" in out
-
-    def test_substep_tty_last(self):
-        """TTY substep with last=True uses └─ connector."""
-        log, stream = _make_log(force_color=True)
-        log.step_start(1, "Test")
-        stream.truncate(0)
-        stream.seek(0)
-        log.substep("Done", last=True)
-        out = stream.getvalue()
-
-        assert "└─" in out
-        assert "├─" not in out
-        assert "✔" in out
-
-    def test_substep_sequence(self):
-        """Multiple substeps print on separate lines in order."""
-        log, stream = _make_log(force_color=False)
-        log.step_start(1, "Post-render")
-        stream.truncate(0)
-        stream.seek(0)
-        log.substep("Reference pages processed")
-        log.substep("Interlinks resolved")
-        log.substep("Scale-to-fit injected", last=True)
-        lines = [l for l in stream.getvalue().splitlines() if l.strip()]
-
-        assert len(lines) == 3
-        assert "Reference pages" in lines[0]
-        assert "Interlinks" in lines[1]
-        assert "Scale-to-fit" in lines[2]
-
-        # First two use ├─, last uses └─
-        assert "├─" in lines[0]
-        assert "├─" in lines[1]
-        assert "└─" in lines[2]
 
 
 # =========================================================================
@@ -1825,16 +1741,6 @@ class TestDefensiveWrite:
         log = BuildLog(stream=ErrorStream(), force_color=False, width=80)
         log._write("test")  # should not raise
 
-    def test_substep_survives_cp1252_stdout(self):
-        """Issue #200: box-drawing substeps must not crash on cp1252 stdout."""
-        buffer = io.BytesIO()
-        stream = io.TextIOWrapper(buffer, encoding="cp1252", errors="strict")
-        log = BuildLog(stream=stream, force_color=False, width=80)
-        log.substep("SEO enhancements applied")
-        output = buffer.getvalue().decode("utf-8", errors="replace")
-
-        assert "SEO enhancements applied" in output
-
     def test_footer_survives_cp1252_stdout(self):
         """Issue #200: celebration emoji in footer must not crash on cp1252 stdout."""
         buffer = io.BytesIO()
@@ -1845,17 +1751,6 @@ class TestDefensiveWrite:
 
         assert "Site ready" in output
         assert "Build complete" in output
-
-    def test_post_render_stdio_reconfigure_allows_emoji(self):
-        """Issue #200: post-render status prints must survive cp1252 stdout."""
-        buffer = io.BytesIO()
-        wrapper = io.TextIOWrapper(buffer, encoding="cp1252", errors="strict")
-        wrapper.reconfigure(encoding="utf-8", errors="replace")
-        print("\n🔍 Applying SEO enhancements to HTML files...", file=wrapper)
-        wrapper.flush()
-        output = buffer.getvalue().decode("utf-8", errors="replace")
-
-        assert "SEO enhancements" in output
 
     def test_progress_bar_survives_broken_pipe(self):
         class BrokenStream:

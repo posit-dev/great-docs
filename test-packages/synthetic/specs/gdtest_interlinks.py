@@ -12,8 +12,7 @@ Focus: Exercise all interlinks syntax variants in docstrings and user-guide
        - ``Name``, ``Name()`` — autolinked inline code on user-guide pages
        - ``[](`extdemo.Widget`)``, ``[](`ed.Widget`)`` — a configured
          external source, referenced by full name and by its declared alias
-       The post-render resolver and all-pages GDLS pass should convert these
-       references into hyperlinks. User-guide links must be relative to
+       These references should become hyperlinks. User-guide links must be relative to
        ``../reference/``.
 """
 
@@ -262,7 +261,7 @@ SPEC = {
         "has_user_guide": True,
         "user_guide_files": ["01-getting-started.qmd", "02-advanced.qmd", "03-external.qmd"],
         # Map each documented object to the expected (display_text, target_name)
-        # pairs after post-render interlinks resolution.
+        # pairs after interlinks resolution.
         "interlinks_in_prose": {
             # BaseStore: shortened links (~)
             "BaseStore": ["DuckDBStore", "ChromaDBStore"],

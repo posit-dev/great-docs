@@ -582,9 +582,8 @@ Each documented item displays a colored badge indicating its object type:
 | **type alias** | Green | Type alias definitions |
 | **other** | Gray | Uncategorized exports |
 
-Great Docs uses a metadata file (`_object_types.json`) generated during the build to determine the
-correct badge for each item. This ensures accurate classification even for edge cases like constants
-that start with an uppercase letter or functions named after classes.
+Great Docs picks each badge from how the item is defined, not from its name. Constants that start
+with an uppercase letter and functions named after classes therefore get the correct badge.
 
 ### Code Styling
 

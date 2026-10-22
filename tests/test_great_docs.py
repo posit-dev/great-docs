@@ -20802,7 +20802,6 @@ def test_prepare_build_directory():
         assert (build_dir / "_quarto.yml").exists()
         assert (build_dir / "great-docs.scss").exists()
         assert (build_dir / "pythonsignature.xml").exists()
-        assert (build_dir / "scripts" / "post-render.py").exists()
 
 
 def test_update_quarto_config_creates_structure():
@@ -20823,7 +20822,7 @@ def test_update_quarto_config_creates_structure():
         docs._update_quarto_config()
 
         result = _parse_yaml(quarto_yml.read_text(encoding="utf-8"))
-        assert "post-render" in result.get("project", {})
+        assert result["project"]["output-dir"] == "_site"
         theme = result.get("format", {}).get("html", {}).get("theme", [])
         assert "great-docs.scss" in theme
 
