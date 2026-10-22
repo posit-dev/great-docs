@@ -506,6 +506,7 @@ def test_reference_pages_have_type_badge(pkg_name: str):
         "constant",
         "type_alias",
         "typealias",
+        "typevar",
         "dataclass",
         "exception",
         "protocol",
@@ -551,7 +552,15 @@ def test_function_pages_have_signature(pkg_name: str):
         if badge_text is None:
             continue
 
-        if badge_text in ("constant", "type_alias", "typealias", "enum", "namedtuple", "typeddict"):
+        if badge_text in (
+            "constant",
+            "type_alias",
+            "typealias",
+            "typevar",
+            "enum",
+            "namedtuple",
+            "typeddict",
+        ):
             continue
 
         # Callable names use `sig-name` in `plain` signatures and `fu` in highlighted ones.

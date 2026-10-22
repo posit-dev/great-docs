@@ -77,12 +77,20 @@ def test_label_legacy_spelling():
     assert get_label(obj) == "typealias"
 
 
-def test_label_bare_typevar_is_constant():
-    """A bare `T = TypeVar("T")` has no annotation, so it labels as a constant"""
+@pytest.mark.parametrize(
+    ("code", "name"),
+    [
+        ('from typing import TypeVar\nT = TypeVar("T")\n', "T"),
+        ('import typing\nT = typing.TypeVar("T")\n', "T"),
+        ('from typing import ParamSpec\nP = ParamSpec("P")\n', "P"),
+        ('from typing import TypeVarTuple\nTs = TypeVarTuple("Ts")\n', "Ts"),
+    ],
+)
+def test_label_type_variable_without_annotation(code: str, name: str):
+    """Label a type variable by its declared value when it has no annotation"""
     from great_docs._apiref._render._label import get_label
 
-    code = 'from typing import TypeVar\nT = TypeVar("T")\n'
-    assert get_label(_load_member(code, "T")) == "constant"
+    assert get_label(_load_member(code, name)) == "typevar"
 
 
 def test_label_plain_constant_still_works():
