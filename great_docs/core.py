@@ -6770,14 +6770,21 @@ class GreatDocs:
 
     def _detect_git_ref(self) -> str:
         """
-        Detect the current git branch or tag.
+        Detect the current git tag or branch
+
+        A configured source branch takes precedence. Otherwise the exact tag at
+        `HEAD` wins over the branch name. When `git` cannot start, even after one
+        retry, a warning names the error before the function falls back to
+        `main`. A non-zero exit from `git`, as outside a repository, falls back
+        silently.
 
         Returns
         -------
-        str
-            The current branch/tag name, or 'main' as fallback.
+        :
+            The tag or branch name, or `main` as the fallback.
         """
         import subprocess
+        import time
 
         package_root = self._find_package_root()
 
@@ -6787,31 +6794,55 @@ class GreatDocs:
         if configured_branch:
             return configured_branch
 
-        try:
-            # Try to get the current tag first (for versioned docs)
-            result = subprocess.run(
-                ["git", "describe", "--tags", "--exact-match"],
-                cwd=package_root,
-                capture_output=True,
-                **TEXT_MODE_KWARGS,
-            )
-            if result.returncode == 0:
-                return result.stdout.strip()
+        start_error: OSError | None = None
 
-            # Fall back to branch name
-            result = subprocess.run(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                cwd=package_root,
-                capture_output=True,
-                **TEXT_MODE_KWARGS,
-            )
-            if result.returncode == 0:
+        def run_git(*args: str) -> subprocess.CompletedProcess[str] | None:
+            """
+            Run a git command, retrying once if the process cannot start
+
+            Parameters
+            ----------
+            *args
+                Arguments passed to `git`.
+
+            Returns
+            -------
+            :
+                The completed process, or `None` when both attempts fail to start.
+            """
+            nonlocal start_error
+            for attempt in range(2):
+                if attempt:
+                    # Under heavy load an immediate retry can hit the same EAGAIN.
+                    time.sleep(0.2)
+                try:
+                    return subprocess.run(
+                        ["git", *args],
+                        cwd=package_root,
+                        capture_output=True,
+                        **TEXT_MODE_KWARGS,
+                    )
+                except OSError as error:
+                    start_error = error
+            return None
+
+        # Try to get the current tag first (for versioned docs)
+        result = run_git("describe", "--tags", "--exact-match")
+        if result is not None and result.returncode == 0:
+            return result.stdout.strip()
+
+        # Fall back to branch name
+        if result is not None:
+            result = run_git("rev-parse", "--abbrev-ref", "HEAD")
+            if result is not None and result.returncode == 0:
                 branch = result.stdout.strip()
                 if branch != "HEAD":
                     return branch
 
-        except Exception:
-            pass
+        if result is None:
+            print(
+                f"   ⚠️  Could not run git to detect the source-link ref ({start_error}); using 'main'"
+            )
 
         # Default fallback
         return "main"

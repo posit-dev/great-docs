@@ -11608,6 +11608,41 @@ def test_detect_git_ref_fallback_permissive():
         assert isinstance(ref, str) and len(ref) > 0
 
 
+def test_detect_git_ref_retries_a_failed_git_start():
+    """A git process that fails to start once is retried before falling back."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        side_effect = [
+            BlockingIOError(11, "Resource temporarily unavailable"),
+            subprocess.CompletedProcess(["git"], 0, stdout="2.0.0\n", stderr=""),
+        ]
+        with patch("subprocess.run", side_effect=side_effect), patch("time.sleep"):
+            ref = docs._detect_git_ref()
+
+        assert ref == "2.0.0"
+
+
+def test_detect_git_ref_warns_before_falling_back(capsys):
+    """A git process that never starts produces a warning naming the error."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+
+        docs = GreatDocs(project_path=tmp_dir)
+        capsys.readouterr()
+
+        error = BlockingIOError(11, "Resource temporarily unavailable")
+        with patch("subprocess.run", side_effect=error), patch("time.sleep"):
+            ref = docs._detect_git_ref()
+
+        assert ref == "main"
+        assert "Resource temporarily unavailable" in capsys.readouterr().out
+
+
 def test_process_sections_no_config():
     """_process_sections returns 0 when no sections configured."""
     with tempfile.TemporaryDirectory() as tmp_dir:
