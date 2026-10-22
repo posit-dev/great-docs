@@ -14,8 +14,8 @@
     <list name="wordops"><item>and</item><item>in</item><item>is</item><item>not</item><item>or</item></list>
     <contexts>
       <context name="Start" attribute="Normal" lineEndContext="#stay">
-        <RegExpr attribute="Class" String="[A-Za-z_][A-Za-z0-9_]*(?=\.[A-Za-z_][A-Za-z0-9_]*(\(|$))" column="0" context="Qualified"/>
-        <RegExpr attribute="Name" String="[A-Za-z_][A-Za-z0-9_]*(?=\(|$)" column="0"/>
+        <RegExpr attribute="Class" String="[^\W\d]\w*(?=\.[^\W\d]\w*(\(|$))" column="0" context="Qualified"/>
+        <RegExpr attribute="Name" String="[^\W\d]\w*(?=\(|$)" column="0"/>
         <keyword attribute="None" String="nones"/>
         <keyword attribute="Bool" String="bools"/>
         <keyword attribute="Builtin" String="builtins"/>
@@ -23,7 +23,7 @@
         <keyword attribute="Keyword" String="keywords"/>
         <keyword attribute="Operator" String="wordops"/>
         <RegExpr attribute="StringPrefix" String="[bBrRuUfF]{1,2}(?=[&quot;'])"/>
-        <RegExpr attribute="Variable" String="[A-Za-z_][A-Za-z0-9_]*"/>
+        <RegExpr attribute="Variable" String="[^\W\d]\w*"/>
         <RegExpr attribute="Float" String="(\d+\.\d*|\.\d+)([eE][+-]?\d+)?|\d+[eE][+-]?\d+"/>
         <RegExpr attribute="Int" String="\d+"/>
         <DetectChar attribute="String" char="&quot;" context="DQ"/>
@@ -32,7 +32,7 @@
       </context>
       <context name="Qualified" attribute="Normal" lineEndContext="#pop">
         <DetectChar attribute="Operator" char="."/>
-        <RegExpr attribute="Name" String="[A-Za-z_][A-Za-z0-9_]*" context="#pop"/>
+        <RegExpr attribute="Name" String="[^\W\d]\w*" context="#pop"/>
       </context>
       <context name="DQ" attribute="String" lineEndContext="#pop">
         <HlCStringChar attribute="String"/>

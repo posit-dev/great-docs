@@ -26,7 +26,9 @@ OUTPUT = Path(__file__).resolve().parent.parent / "great_docs" / "assets" / "pyt
 # The lexer recognises these names outside its word lists.
 EXTRA_WORDS = {"self", "cls", "Ellipsis", "NotImplemented"}
 
-IDENT = r"[A-Za-z_][A-Za-z0-9_]*"
+# A Python identifier, which may hold non-ASCII letters. Skylighting's `\w`
+# matches them.
+IDENT = r"[^\W\d]\w*"
 
 
 def _candidate_words() -> set[str]:
