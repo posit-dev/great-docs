@@ -4888,6 +4888,49 @@ def test_generate_changelog_page():
         assert "Initial release." in content
         assert "https://github.com/owner/repo/releases" in content
 
+        # The TOC is a flat list of releases under a "Releases" title
+        assert "body-classes: gd-changelog-page" in content
+        assert "toc-depth: 1" in content
+        assert 'toc-title: "Releases"' in content
+        assert "shift-heading-level-by: -1" in content
+
+
+@pytest.mark.parametrize(("lang", "expected"), [("fr", "Versions"), ("ja", "リリース")])
+def test_generate_changelog_page_toc_title_translated(lang, expected):
+    """Test that the changelog TOC title follows the site language."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        pyproject = project_path / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "test-pkg"\nversion = "0.1.0"\n\n'
+            '[project.urls]\nRepository = "https://github.com/owner/repo"\n'
+        )
+        config_path = project_path / "great-docs.yml"
+        config_path.write_text(f"site:\n  lang: {lang}\n")
+        build_dir = project_path / "great-docs"
+        build_dir.mkdir()
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        fake_releases = [
+            {
+                "tag_name": "v1.0.0",
+                "name": "v1.0.0",
+                "body": "Initial release.",
+                "published_at": "2026-01-01T00:00:00Z",
+                "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
+                "prerelease": False,
+            },
+        ]
+
+        with patch.object(docs, "_fetch_github_releases", return_value=fake_releases):
+            docs._generate_changelog_page()
+
+        content = (build_dir / "changelog.qmd").read_text()
+
+        assert f'toc-title: "{expected}"' in content
+
 
 def test_generate_changelog_page_no_github():
     """Test that changelog is skipped when no GitHub repo is configured."""
