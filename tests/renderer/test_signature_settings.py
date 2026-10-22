@@ -1,5 +1,7 @@
+import re
 import textwrap
 
+import griffe as gf
 import pytest
 
 from great_docs._apiref._signature import make_call_signature_text
@@ -206,3 +208,67 @@ def test_a_failed_build_leaves_the_module_state_as_it_found_it(tmp_path, monkeyp
         ).build()
 
     assert _globals.SETTINGS.callable_signatures is original
+
+
+def _signature(source: str, name: str, **options: bool) -> str:
+    """Return the rendered signature of the named callable in `source`"""
+    from great_docs._apiref import content
+    from great_docs._apiref._render import get_render_type
+
+    with gf.temporary_visited_package(
+        "package", {"__init__.py": textwrap.dedent(source)}
+    ) as package:
+        obj = package[name]
+    doc = content.Doc.from_griffe(obj.name, obj)
+    qmd = str(get_render_type(doc)(doc, **options))
+    signature = qmd.split(".doc-signature", 1)[1]
+    return re.search(r"```\w+\n(.*?)```", signature, re.S).group(1)
+
+
+def test_an_annotation_shows_double_quoted_strings():
+    """A `Literal` annotation quotes its strings the way defaults are quoted"""
+    source = """
+    from typing import Literal
+
+    def pick(mode: Literal['fast', 'slow']): ...
+    """
+
+    sig = _signature(source, "pick", show_signature_annotation=True)
+
+    assert 'Literal["fast", "slow"]' in sig
+
+
+def test_an_overload_shows_double_quoted_strings():
+    """An `@overload` variant's annotation, default and return type use double quotes"""
+    source = """
+    from typing import Literal, overload
+
+    @overload
+    def pick(mode: Literal['a'] = 'a') -> Literal['b']: ...
+    @overload
+    def pick(mode: int) -> int: ...
+    def pick(mode='a'): ...
+    """
+
+    sig = _signature(source, "pick")
+
+    assert 'pick(mode: Literal["a"] = "a") -> Literal["b"]' in sig
+
+
+def test_a_prefixed_string_default_shows_double_quotes():
+    """A bytes string default keeps its prefix and takes double quotes"""
+    sig = _signature("def read(data=b'raw'): ...", "read")
+
+    assert 'read(data=b"raw")' in sig
+
+
+def test_a_string_holding_a_quote_or_backslash_keeps_its_quotes():
+    """Rewriting the quotes would change or break such a string"""
+    source = """
+    def say(greeting='say "hi"', path='a\\\\b'): ...
+    """
+
+    sig = _signature(source, "say")
+
+    assert """greeting='say "hi"'""" in sig
+    assert "path='a\\\\b'" in sig

@@ -168,6 +168,10 @@ site-build: ## Build the great-docs site
 adopters: ## Regenerate ADOPTERS.md from a GitHub code search (requires gh CLI)
 	@$(PYTHON) scripts/update_adopters.py
 
+.PHONY: signature-grammar
+signature-grammar: ## Regenerate the signature highlighting grammar from Pygments
+	@$(PYTHON) scripts/make_signature_grammar.py
+
 .PHONY: hub-build
 hub-build: ## Full build of the Great Docs Gauntlet (200 packages, port 3333)
 	@$(PYTHON) test-packages/render_all.py --build

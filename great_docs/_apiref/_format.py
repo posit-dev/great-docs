@@ -37,6 +37,8 @@ STR_RE = re.compile(
 INT_RE = re.compile(r"^(?P<int>[+-]?\d+)$")
 FLOAT_RE = re.compile(r"^(?P<float>[+-]?(\d+\.\d*|\.\d+|\d+)([eE][+-]?\d+)?)$")
 BOOL_RE = re.compile(r"^(?P<bool>True|False)$")
+# Quotes can change without escaping only if the content has no quotes or backslashes.
+_SINGLE_QUOTED_RE = re.compile(r"(?P<prefix>[bBrRuUfF]{0,2})'(?P<content>[^'\"\\]*)'")
 TYPE_RE_LOOKUP = {
     # The second element of the tuple are the respective pygments highlight classes
     "str": (STR_RE, "st"),
@@ -190,12 +192,14 @@ def _(obj: gf.Expr) -> str:
 @repr_obj.register
 def _(s: str) -> str:
     """
-    Normalize a wrapping pair of single quotes on `s` to double quotes
+    Replace single quotes with double quotes when no escaping is needed
 
-    A string that is not single-quoted passes through unchanged.
+    Preserve any prefix, as in `b"raw"`. Leave literals containing double quotes
+    or backslashes unchanged to preserve their value without adding escapes.
+    Leave other input unchanged.
     """
-    if len(s) >= 2 and (s[0] == s[-1] == "'"):
-        s = f'"{s[1:-1]}"'
+    if match := _SINGLE_QUOTED_RE.fullmatch(s):
+        return f'{match["prefix"]}"{match["content"]}"'
     return s
 
 

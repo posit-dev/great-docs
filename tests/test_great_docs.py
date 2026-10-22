@@ -20801,6 +20801,7 @@ def test_prepare_build_directory():
         assert build_dir.exists()
         assert (build_dir / "_quarto.yml").exists()
         assert (build_dir / "great-docs.scss").exists()
+        assert (build_dir / "pythonsignature.xml").exists()
         assert (build_dir / "scripts" / "post-render.py").exists()
 
 
@@ -20825,6 +20826,40 @@ def test_update_quarto_config_creates_structure():
         assert "post-render" in result.get("project", {})
         theme = result.get("format", {}).get("html", {}).get("theme", [])
         assert "great-docs.scss" in theme
+
+
+def _syntax_definitions_after_update(tmp_path: Path, html: str) -> list[str]:
+    """Return syntax definitions after two updates to the supplied `format.html` block"""
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs.build_dir.mkdir(parents=True, exist_ok=True)
+    quarto_yml = docs.build_dir / "_quarto.yml"
+    quarto_yml.write_text(
+        f"project:\n  type: website\nformat:\n  html:\n    theme: flatly\n{html}",
+        encoding="utf-8",
+    )
+
+    docs._update_quarto_config()
+    docs._update_quarto_config()
+
+    result = _parse_yaml(quarto_yml.read_text(encoding="utf-8"))
+    return result["format"]["html"]["syntax-definitions"]
+
+
+def test_update_quarto_config_adds_the_signature_grammar(tmp_path):
+    """Quarto receives the grammar it highlights signatures with, once"""
+    assert _syntax_definitions_after_update(tmp_path, "") == ["pythonsignature.xml"]
+
+
+def test_update_quarto_config_keeps_the_users_syntax_definitions(tmp_path):
+    """A user's own definition, written as a string or a list, stays first"""
+    as_string = _syntax_definitions_after_update(tmp_path, "    syntax-definitions: mine.xml\n")
+    assert as_string == ["mine.xml", "pythonsignature.xml"]
+
+    as_list = _syntax_definitions_after_update(
+        tmp_path, "    syntax-definitions:\n      - mine.xml\n"
+    )
+    assert as_list == ["mine.xml", "pythonsignature.xml"]
 
 
 def test_reference_enabled_config():
@@ -33613,7 +33648,7 @@ def test_render_api_page_single_object_renders_title_once():
     assert "[my_func()]" in _front_matter_title(rendered)
     assert "\n# [my_func()]" not in rendered
     # Body content survives despite the suppressed inner title.
-    assert "```python\nmy_func()" in rendered
+    assert "```pythonsignature\nmy_func()" in rendered
 
 
 def test_render_api_page_class_with_members_renders_title_once():

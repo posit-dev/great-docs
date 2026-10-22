@@ -125,14 +125,12 @@ class __RenderDocCallMixin(RenderDoc):
         """
         Render the signature of this callable
 
-        The `highlighted` style writes a fenced code block, which Quarto
-        highlights and `post-render.py` then re-highlights. The `plain` style
-        writes inline markup instead, which a `code` element can hold but a
-        `pre` block cannot. The callable's name carries `sig-name` in both,
-        but parameters differ: `plain` uses `doc-parameter-name`, whilst
-        `highlighted` uses Pygments' `va` token. The stylesheet's colours for
-        the literal classes are scoped to Quarto's own `sourceCode` wrapper,
-        so today they reach only the code block.
+        The `highlighted` style produces a `pythonsignature` code block, which
+        Quarto colours with the build's signature grammar. The `plain` style
+        produces inline markup, which a `code` element can hold but a `pre`
+        block cannot. Callable names use `fu` in `highlighted` and `sig-name`
+        in `plain`; parameters use `va` and `doc-parameter-name`, respectively.
+        Literal colours apply only within the code block's `sourceCode` wrapper.
         """
         name = self.signature_name if self.show_signature_name else ""
         attr = Attr(classes=["doc-signature", f"doc-{self.obj.kind}"])
@@ -219,8 +217,8 @@ class __RenderDocCallMixin(RenderDoc):
                 continue
             params: list[str] = []
             for p in ov.parameters:
-                ann = str(p.annotation) if p.annotation else ""
-                default = str(p.default) if p.default else ""
+                ann = repr_obj(p.annotation) if p.annotation else ""
+                default = repr_obj(p.default) if p.default else ""
                 if ann and default:
                     params.append(f"{p.name}: {ann} = {default}")
                 elif ann:
@@ -229,7 +227,7 @@ class __RenderDocCallMixin(RenderDoc):
                     params.append(f"{p.name}={default}")
                 else:
                     params.append(p.name)
-            ret = str(ov.returns) if ov.returns else ""
+            ret = repr_obj(ov.returns) if ov.returns else ""
             text = make_call_signature_text(name, params)
             if ret:
                 text += f" -> {ret}"
@@ -286,7 +284,7 @@ class __RenderDocCallMixin(RenderDoc):
                 default = repr_obj(el.default)
 
         if self.show_signature_annotation and el.annotation is not None:
-            annotation, equals = f": {el.annotation}", " = "
+            annotation, equals = f": {repr_obj(el.annotation)}", " = "
         else:
             annotation, equals = "", "="
 

@@ -423,6 +423,11 @@ class GreatDocs:
         scss_src = self.assets_path / "great-docs.scss"
         shutil.copy2(scss_src, self.build_dir / "great-docs.scss")
 
+        # Quarto resolves the signature grammar relative to the build directory.
+        shutil.copy2(
+            self.assets_path / "pythonsignature.xml", self.build_dir / "pythonsignature.xml"
+        )
+
         # Copy the evolution demo data file
         demo_json_src = self.assets_path / "api-evolution-demo.json"
         if demo_json_src.exists():
@@ -11891,6 +11896,14 @@ anchor-sections: true
             if isinstance(config["format"]["html"]["theme"], str):
                 config["format"]["html"]["theme"] = [config["format"]["html"]["theme"]]
             config["format"]["html"]["theme"].append("great-docs.scss")
+
+        # User-defined grammars must keep their order and survive repeated updates.
+        syntax_definitions = config["format"]["html"].get("syntax-definitions") or []
+        if isinstance(syntax_definitions, str):
+            syntax_definitions = [syntax_definitions]
+        if "pythonsignature.xml" not in syntax_definitions:
+            syntax_definitions.append("pythonsignature.xml")
+        config["format"]["html"]["syntax-definitions"] = syntax_definitions
 
         # Add the custom CSS from site.css
         css_files = self._config.css
