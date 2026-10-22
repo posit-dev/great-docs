@@ -93,6 +93,28 @@ or command. The `name` value is the variable name of the Click command object wi
 With explicit configuration, Great Docs skips auto-discovery entirely and goes straight to the
 specified location.
 
+### Grouping Commands
+
+By default, the CLI index page lists commands in code order. To group them under headings, add
+`sections` to the `cli` config. Each section takes a `title`, an optional `desc`, and the top-level
+command names in `contents`:
+
+```{.yaml filename="docs/great-docs.yml"}
+cli:
+  enabled: true
+  sections:
+    - title: Project setup
+      desc: Create and configure a project.
+      contents: [init, config]
+    - title: Building
+      contents: [build, preview]
+```
+
+As with `reference.sections` for the API reference, explicit sections are authoritative: commands
+that aren't listed get no reference page, sidebar entry, or index entry. This lets you leave
+internal commands out of the docs, but it also means a newly added command stays undocumented until
+you add it to a section.
+
 ### Writing Good Click Help
 
 The quality of your CLI documentation depends on the help text you write in your Click decorators
@@ -209,7 +231,8 @@ great-docs build [OPTIONS]
 
 **Collapsible `--help` output:**
 
-The full raw terminal output is available inside a disclosure widget labeled "Full --help output".
+The full raw terminal output is available inside a disclosure widget labeled "Full `--help` output"
+(translated to the site's language).
 Readers can expand it when they want the complete reference, but it doesn't dominate the page.
 
 **Options (structured definition list):**

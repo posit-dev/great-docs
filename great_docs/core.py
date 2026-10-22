@@ -4600,6 +4600,17 @@ class GreatDocs:
         if not cli_info:
             return []
 
+        # Explicit `cli.sections` are authoritative, as `reference.sections` are for the API
+        # reference: top-level commands they don't name get no page, sidebar entry or index entry.
+        if self._config.cli_sections:
+            listed = {
+                name for section in self._config.cli_sections for name in section.get("contents", [])
+            }
+            cli_info = {
+                **cli_info,
+                "commands": [c for c in cli_info.get("commands", []) if c["name"] in listed],
+            }
+
         cli_ref_dir = self.build_dir / "reference" / "cli"
         cli_ref_dir.mkdir(parents=True, exist_ok=True)
 
@@ -4712,7 +4723,8 @@ class GreatDocs:
 
         def emit_entry(cmd: dict, href: str) -> None:
             label = "doc-label-cli-group" if cmd.get("is_group") else "doc-label-cli"
-            name = cmd["name"]
+            # Show the full invocation (e.g. `great-docs init`), as on the command page titles
+            name = cmd.get("full_path") or cmd["name"]
             short = (cmd.get("short_help") or "").strip()
             lines.append(f"[{name}]({href}){{.doc-function .doc-label .{label}}}")
             lines.append(f":   {short}" if short else ":   &nbsp;")
@@ -4949,7 +4961,10 @@ class GreatDocs:
         # --- Collapsible --help output ---
         help_text = cmd_info.get("help_text", "")
         if help_text:
-            lines.append('::: {.details summary="Full --help output"}')
+            from ._translations import get_translation
+
+            help_summary = get_translation("cli_full_help", self._config.lang)
+            lines.append(f'::: {{.details summary="{help_summary}"}}')
             lines.append("")
             lines.append("::: {.cli-manpage}")
             lines.append("")
