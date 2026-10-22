@@ -15090,6 +15090,28 @@ def test_init_exports_source_path_env(monkeypatch):
         assert os.environ.get("SOURCE_PATH") == "packages/mypkg/src"
 
 
+@pytest.mark.parametrize(
+    ("source_yml", "exported"), [("", True), ("source:\n  enabled: false\n", False)]
+)
+def test_init_exports_repo_url_only_when_source_enabled(monkeypatch, source_yml, exported):
+    """The renderer links to source only when source.enabled leaves it on."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pyproject = Path(tmp_dir) / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "mypkg"\n\n'
+            '[project.urls]\nRepository = "https://github.com/owner/mypkg"\n',
+            encoding="utf-8",
+        )
+        (Path(tmp_dir) / "great-docs.yml").write_text(source_yml, encoding="utf-8")
+        # Register so monkeypatch restores it after __init__ writes os.environ.
+        monkeypatch.setenv("GITHUB_REPO_URL", "sentinel")
+
+        GreatDocs(project_path=tmp_dir)
+
+        expected = "https://github.com/owner/mypkg" if exported else None
+        assert os.environ.get("GITHUB_REPO_URL") == expected
+
+
 def test_detect_git_ref_configured_branch():
     """Test _detect_git_ref uses configured branch from metadata."""
 

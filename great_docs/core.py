@@ -268,9 +268,11 @@ class GreatDocs:
             self._config, self.layout.source_dir, self._get_canonical_base_url()
         )
 
-        # Set environment variables needed by the qrenderer
+        # Set environment variables needed by the qrenderer. The renderer links
+        # to source only when it has a repository URL, so `source.enabled: false`
+        # withholds it.
         _, _, url = self._get_github_repo_info()
-        if url:
+        if url and self._config.source_enabled:
             os.environ["GITHUB_REPO_URL"] = str(url)
         else:
             os.environ.pop("GITHUB_REPO_URL", None)
