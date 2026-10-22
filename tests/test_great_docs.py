@@ -17327,25 +17327,28 @@ def _prepared_quarto_config(lang: str) -> dict:
             return read_yaml(f)
 
 
-def test_callout_titles_are_supplied_where_quarto_has_no_translation():
-    from great_docs._translations import get_translation
+def test_strings_are_supplied_where_quarto_has_no_translation():
+    from great_docs._translations import QUARTO_LANGUAGE_KEYS
 
     config = _prepared_quarto_config("ar")
 
     assert config["format"]["html"]["lang"] == "ar"
-    assert config["language"] == {
-        "ar": {
-            "callout-note-title": "ملاحظة",
-            "callout-tip-title": get_translation("tip_callout", "ar"),
-            "callout-warning-title": get_translation("warning_callout", "ar"),
-            "callout-important-title": get_translation("important_callout", "ar"),
-            "callout-caution-title": get_translation("caution_callout", "ar"),
-        }
-    }
+    assert set(config["language"]) == {"ar"}
+    strings = config["language"]["ar"]
+    assert set(strings) == set(QUARTO_LANGUAGE_KEYS)
+    assert strings["callout-note-title"] == "ملاحظة"
+    assert strings["search-label"] == "بحث"
+
+
+@pytest.mark.parametrize(("lang", "label"), [("hi", "खोज"), ("ro", "Căutare"), ("zh-Hant", "搜尋")])
+def test_search_label_is_supplied_where_quarto_has_no_translation(lang: str, label: str):
+    config = _prepared_quarto_config(lang)
+
+    assert config["language"][lang]["search-label"] == label
 
 
 @pytest.mark.parametrize("lang", ["fr", "en"])
-def test_callout_titles_are_left_to_quarto_where_it_translates_them(lang: str):
+def test_strings_are_left_to_quarto_where_it_translates_them(lang: str):
     config = _prepared_quarto_config(lang)
 
     assert "language" not in config
