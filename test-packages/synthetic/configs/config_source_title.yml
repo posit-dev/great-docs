@@ -1,5 +1,0 @@
-# Config variation: Source links in title placement with explicit branch
-source:
-  enabled: true
-  placement: "title"
-  branch: "develop"

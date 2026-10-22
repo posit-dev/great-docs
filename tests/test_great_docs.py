@@ -1373,11 +1373,10 @@ version = "0.1.0"
         docs = GreatDocs(project_path=tmp_dir)
         metadata = docs._get_package_metadata()
 
-        # Defaults should be: enabled=True, branch=None, path=None, placement="usage"
+        # Defaults should be: enabled=True, branch=None, path=None
         assert metadata.get("source_link_enabled", True) is True
         assert metadata.get("source_link_branch") is None
         assert metadata.get("source_link_path") is None
-        assert metadata.get("source_link_placement", "usage") == "usage"
 
 
 def test_source_link_config_custom():
@@ -1398,7 +1397,6 @@ source:
   enabled: false
   branch: develop
   path: src/mypackage
-  placement: title
 """)
 
         docs = GreatDocs(project_path=tmp_dir)
@@ -1407,7 +1405,6 @@ source:
         assert metadata.get("source_link_enabled") is False
         assert metadata.get("source_link_branch") == "develop"
         assert metadata.get("source_link_path") == "src/mypackage"
-        assert metadata.get("source_link_placement") == "title"
 
 
 def test_check_links_extracts_urls():
@@ -1546,7 +1543,6 @@ def test_config_defaults():
         assert config.source_enabled is True
         assert config.source_branch is None
         assert config.source_path is None
-        assert config.source_placement == "usage"
         assert config.sidebar_filter_enabled is True
         assert config.sidebar_filter_min_items == 20
         assert config.cli_enabled is False

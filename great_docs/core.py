@@ -1919,7 +1919,6 @@ class GreatDocs:
         metadata["source_link_enabled"] = self._config.source_enabled
         metadata["source_link_branch"] = self._config.source_branch
         metadata["source_link_path"] = self._config.source_path
-        metadata["source_link_placement"] = self._config.source_placement
 
         # GitHub link style
         metadata["github_style"] = self._config.github_style

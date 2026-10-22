@@ -37,7 +37,6 @@ All keys are optional. Defaults are auto-detected from `pyproject.toml`.
 | `source.enabled`   | `bool` | `true`        | Show "View source" links             |
 | `source.branch`    | `str`  | `"main"`      | Git branch for source links          |
 | `source.path`      | `str`  | auto-detected | Path to package source               |
-| `source.placement` | `str`  | `"repo"`      | Where source links point             |
 
 ## Navigation and theming
 

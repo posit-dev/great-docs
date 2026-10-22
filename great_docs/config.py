@@ -476,11 +476,6 @@ class Config:
         return self["source.path"]
 
     @property
-    def source_placement(self) -> str:
-        """Get the source link placement."""
-        return self["source.placement"]
-
-    @property
     def sidebar_filter_enabled(self) -> bool:
         """Check if sidebar filter is enabled."""
         return self["sidebar_filter.enabled"]

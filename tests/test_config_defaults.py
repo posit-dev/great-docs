@@ -31,7 +31,7 @@ FROZEN_DEFAULT_CONFIG: dict[str, Any] = {
     "repo": None,
     "github_style": "widget",
     "site_url": None,
-    "source": {"enabled": True, "branch": None, "path": None, "placement": "usage"},
+    "source": {"enabled": True, "branch": None, "path": None},
     "sidebar_filter": {"enabled": True, "min_items": 20},
     "marimo": {"enabled": False, "version": None},
     "cli": {

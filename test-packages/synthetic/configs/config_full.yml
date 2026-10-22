@@ -8,7 +8,6 @@ dark_mode_toggle: false
 
 source:
   enabled: true
-  placement: "title"
   branch: "develop"
 
 sidebar_filter:
