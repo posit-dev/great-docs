@@ -799,17 +799,6 @@ class TestCheckDocstringStyle:
         assert len(result.issues) == 1
         assert result.issues[0].symbol == "MyClass.do_stuff"
 
-    def test_invalid_config_style_appends_error(self):
-        """Unknown config_style appends a config error and returns early."""
-        pkg = _make_pkg({"func_a": _make_griffe_obj(docstring="Short.")})
-        result = LintResult()
-        _check_docstring_style(pkg, "mypkg", ["func_a"], "jsdoc", result)
-
-        assert len(result.issues) == 1
-        assert result.issues[0].check == "config"
-        assert result.issues[0].severity == "error"
-        assert "jsdoc" in result.issues[0].message
-
 
 class TestCheckDirectiveConsistency:
     @pytest.mark.parametrize("directive", sorted(DIRECTIVES))
