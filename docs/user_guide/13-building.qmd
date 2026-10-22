@@ -54,7 +54,8 @@ package metadata. See [Agent Skills](38-agent-skills.qmd) for details.
 package documentation. See [llms.txt](39-llms-txt.qmd) for details.
 
 11. Quarto renders all the source files into HTML, writing a companion Markdown (`.md`) file beside
-each page as it goes.
+each page as it goes. A long reference sidebar is rendered once and then copied into each of its
+pages, since building it again for every page takes much of the render time on a large API.
 
 After all steps complete, the finished site is in `docs/_site/`.
 
