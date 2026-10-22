@@ -1943,11 +1943,19 @@ class TestRefSectionOrder:
         assert Config(tmp_path).ref_section_order is None
 
     def test_valid_list(self, tmp_path):
+        cfg = _make_config(tmp_path, "ref_section_order:\n  - cli\n  - python\n  - mcp\n")
+        assert cfg.ref_section_order == ["cli", "api", "mcp"]
+
+    def test_api_alias_of_python(self, tmp_path):
         cfg = _make_config(tmp_path, "ref_section_order:\n  - cli\n  - api\n  - mcp\n")
         assert cfg.ref_section_order == ["cli", "api", "mcp"]
 
+    def test_duplicates_dropped(self, tmp_path):
+        cfg = _make_config(tmp_path, "ref_section_order:\n  - python\n  - cli\n  - api\n")
+        assert cfg.ref_section_order == ["api", "cli"]
+
     def test_filters_invalid_values(self, tmp_path):
-        cfg = _make_config(tmp_path, "ref_section_order:\n  - cli\n  - bogus\n  - api\n")
+        cfg = _make_config(tmp_path, "ref_section_order:\n  - cli\n  - bogus\n  - python\n")
         assert cfg.ref_section_order == ["cli", "api"]
 
     def test_all_invalid_returns_none(self, tmp_path):
