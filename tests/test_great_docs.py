@@ -28864,46 +28864,6 @@ def test_api_reference_build_with_source_dir():
             sys.modules.pop("introtest_srcdir", None)
 
 
-def test_api_reference_build_with_filter():
-    """APIReference.build with filter only writes matching pages."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg = Path(tmp_dir) / "introtest_filter"
-        pkg.mkdir()
-        (pkg / "__init__.py").write_text(
-            'def alpha():\n    """Alpha."""\n    pass\ndef beta():\n    """Beta."""\n    pass\n',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        old_cwd = os.getcwd()
-        os.chdir(tmp_dir)
-        try:
-            ref = APIReference(
-                {
-                    "api-reference": {
-                        "package": "introtest_filter",
-                        "sections": [
-                            {
-                                "title": "Funcs",
-                                "desc": "",
-                                "contents": [{"name": "alpha"}, {"name": "beta"}],
-                            }
-                        ],
-                    }
-                }
-            )
-            ref.build(page_filter="alpha")
-
-            # alpha should be written, beta should not
-            assert (Path(tmp_dir) / "reference" / "alpha.qmd").exists()
-            assert not (Path(tmp_dir) / "reference" / "beta.qmd").exists()
-        finally:
-            os.chdir(old_cwd)
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("introtest_filter", None)
-
-
 def test_api_reference_write_doc_pages_skip_unchanged():
     """APIReference.build skips pages with unchanged content."""
 

@@ -222,13 +222,13 @@ class APIReference:
         """The objects this reference publishes, each with the page it lands on"""
         return self.manifest.items
 
-    def build(self, page_filter: str = "*") -> None:
+    def build(self) -> None:
         """Write reference pages, index, inventory, and (optionally) sidebar to disk"""
         s = self.settings
         with active_settings(s):
-            self._build(s, page_filter)
+            self._build(s)
 
-    def _build(self, s: Settings, page_filter: str) -> None:
+    def _build(self, s: Settings) -> None:
         """
         Write the reference, with the signature settings already published
 
@@ -236,8 +236,6 @@ class APIReference:
         ----------
         s
             The settings of this API reference.
-        page_filter
-            Glob that selects which pages to write.
 
         Returns
         -------
@@ -264,7 +262,6 @@ class APIReference:
             out_page_suffix=s.out_page_suffix,
             rewrite_all_pages=s.rewrite_all_pages,
             header_level=s.header_level,
-            page_filter=page_filter,
             site_toc_depth=self.site_toc_depth,
         )
         write_typing_information(s.typing_module_paths, self)
