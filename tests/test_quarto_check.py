@@ -5,7 +5,7 @@ import tempfile
 import pytest
 
 from great_docs import GreatDocs
-from great_docs.core import QuartoNotFoundError, _ensure_quarto_installed
+from great_docs.core import QuartoNotFoundError, QuartoVersionError, _ensure_quarto_installed
 
 
 TROUBLESHOOTING_URL = "https://posit-dev.github.io/great-docs/recipes/fix-common-build-errors.html"
@@ -16,6 +16,21 @@ def test_ensure_quarto_installed_passes_when_present(monkeypatch):
         "great_docs.core.shutil.which",
         lambda name: "/usr/local/bin/quarto" if name == "quarto" else None,
     )
+    monkeypatch.setattr("great_docs.core._quarto_version", lambda: (1, 10, 0))
+    assert _ensure_quarto_installed() is None
+
+
+def test_ensure_quarto_installed_raises_when_too_old(monkeypatch):
+    monkeypatch.setattr("great_docs.core.shutil.which", lambda name: "/usr/local/bin/quarto")
+    monkeypatch.setattr("great_docs.core._quarto_version", lambda: (1, 8, 26))
+
+    with pytest.raises(QuartoVersionError, match=r"1\.9\.18 or later, but found Quarto 1\.8\.26"):
+        _ensure_quarto_installed()
+
+
+def test_ensure_quarto_installed_passes_when_version_unreadable(monkeypatch):
+    monkeypatch.setattr("great_docs.core.shutil.which", lambda name: "/usr/local/bin/quarto")
+    monkeypatch.setattr("great_docs.core._quarto_version", lambda: None)
     assert _ensure_quarto_installed() is None
 
 

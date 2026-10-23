@@ -43648,7 +43648,10 @@ def test_ensure_quarto_installed_passes_when_present():
     """_ensure_quarto_installed returns None when quarto is found."""
     from great_docs.core import _ensure_quarto_installed
 
-    with patch("shutil.which", return_value="/usr/bin/quarto"):
+    with (
+        patch("shutil.which", return_value="/usr/bin/quarto"),
+        patch("great_docs.core._quarto_version", return_value=(1, 10, 0)),
+    ):
         result = _ensure_quarto_installed()
     assert result is None
 

@@ -3,6 +3,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -91,16 +92,68 @@ class QuartoNotFoundError(RuntimeError):
     """Raised when the Quarto CLI is not available on the system."""
 
 
+class QuartoVersionError(RuntimeError):
+    """Raised when the installed Quarto CLI is older than great-docs supports."""
+
+
+# The bundled extensions set the stage at which their filters run, which
+# Quarto's extension schema accepts from this release
+MIN_QUARTO_VERSION = (1, 9, 18)
+
+
+def _quarto_version() -> tuple[int, ...] | None:
+    """
+    Read the version of the Quarto CLI on the `PATH`
+
+    Returns
+    -------
+    :
+        The release numbers, or `None` when Quarto does not report a
+        recognisable version.
+    """
+    try:
+        proc = subprocess.run(
+            ["quarto", "--version"],
+            capture_output=True,
+            timeout=30,
+            check=True,
+            **TEXT_MODE_KWARGS,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    match = re.match(r"\s*(\d+(?:\.\d+)*)", proc.stdout)
+    return tuple(int(part) for part in match.group(1).split(".")) if match else None
+
+
 def _ensure_quarto_installed() -> None:
-    if shutil.which("quarto") is not None:
-        return
-    raise QuartoNotFoundError(
-        "Quarto was not found on your system. Quarto is a system-level "
-        "dependency of great-docs and is not bundled with the Python package.\n\n"
-        "See the troubleshooting guide:\n"
-        "  https://posit-dev.github.io/great-docs/recipes/fix-common-build-errors.html\n\n"
-        "Or fetch the binary programmatically by using your OS package (brew, yum, winget)."
-    )
+    """
+    Check that a supported Quarto CLI is on the `PATH`
+
+    A Quarto whose version cannot be read passes the check.
+
+    Raises
+    ------
+    QuartoNotFoundError
+        If Quarto is not on the `PATH`.
+    QuartoVersionError
+        If Quarto is older than `MIN_QUARTO_VERSION`.
+    """
+    if shutil.which("quarto") is None:
+        raise QuartoNotFoundError(
+            "Quarto was not found on your system. Quarto is a system-level "
+            "dependency of great-docs and is not bundled with the Python package.\n\n"
+            "See the troubleshooting guide:\n"
+            "  https://posit-dev.github.io/great-docs/recipes/fix-common-build-errors.html\n\n"
+            "Or fetch the binary programmatically by using your OS package (brew, yum, winget)."
+        )
+    version = _quarto_version()
+    if version is not None and version < MIN_QUARTO_VERSION:
+        found = ".".join(map(str, version))
+        required = ".".join(map(str, MIN_QUARTO_VERSION))
+        raise QuartoVersionError(
+            f"great-docs requires Quarto {required} or later, but found Quarto {found}. "
+            "Upgrade Quarto from https://quarto.org/docs/get-started/"
+        )
 
 
 def _migrate_legacy_gitignore_entry(content: str) -> str:

@@ -315,7 +315,7 @@ messages. Common causes include:
 between `---` markers and that the YAML is well-formed.
 - A reference to a file that does not exist. If you renamed or deleted a user guide page, make
 sure the `guide-section` frontmatter in other files does not depend on it.
-- A Quarto version incompatibility. Great Docs is tested with Quarto 1.4 and later. Run
+- A Quarto version incompatibility. Great Docs requires Quarto 1.9.18 or later. Run
 `quarto --version` to check your installed version.
 
 ### Missing API Reference Pages
