@@ -408,6 +408,9 @@ robots: "noindex, nofollow"
 ---
 ```
 
+Write the `robots` value as plain text. Quarto treats it as Markdown, as it does
+`description-meta`.
+
 ## Disabling SEO Features
 
 If you handle SEO through other means (for example, a hosting platform that generates sitemaps for
