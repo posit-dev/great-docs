@@ -12077,7 +12077,7 @@ def test_generate_cli_command_page_main():
         assert ".cli-manpage" in result
         assert '.details summary="Full `--help` output"' in result
         assert "doc-api-page" in result
-        assert ".doc-signature" in result
+        assert "::: {.doc-signature .doc-function}" in result
         assert ".doc-subject" in result
 
 

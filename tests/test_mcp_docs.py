@@ -351,6 +351,16 @@ class TestGenerateToolPage:
         base.update(overrides)
         return base
 
+    def test_signature_block_has_function_class(self):
+        tool = self._tool(
+            input_schema={
+                "type": "object",
+                "properties": {"query": {"type": "string", "description": "The query."}},
+            }
+        )
+        content = _generate_tool_page(tool, "my-server")
+        assert "::: {.doc-signature .doc-function}" in content
+
     def test_title_in_frontmatter(self):
         content = _generate_tool_page(self._tool(), "my-server")
         assert 'title: "do_thing"' in content

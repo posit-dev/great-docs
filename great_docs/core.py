@@ -4883,7 +4883,7 @@ class GreatDocs:
         if cmd_info.get("is_group") and cmd_info.get("commands"):
             usage_parts.append("COMMAND [ARGS]...")
 
-        lines.append("::: {.doc-signature .doc-Kind.FUNCTION}")
+        lines.append("::: {.doc-signature .doc-function}")
         lines.append("```bash")
         lines.append(" ".join(usage_parts))
         lines.append("```")

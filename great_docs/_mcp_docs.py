@@ -796,7 +796,7 @@ def _generate_tool_page(tool: dict[str, Any], server_name: str, language: str = 
                 else:
                     params.append(f'  "{param_name}": ...  // optional')
 
-        lines.append("::: {.doc-signature .doc-Kind.FUNCTION}")
+        lines.append("::: {.doc-signature .doc-function}")
         lines.append("```json")
         lines.append("{")
         lines.append(f'  "tool": "{name}",')
