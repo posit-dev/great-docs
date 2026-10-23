@@ -13909,6 +13909,93 @@ def test_llms_txt_available_returns_false_when_package_cannot_be_imported():
         assert docs._llms_txt_available() is False
 
 
+LLMS_TXT_QUARTO_YMLS = [
+    "no _quarto.yml",
+    "no api-reference",
+    "no sections",
+    "no package",
+    "unimportable package",
+    "importable package with sections",
+]
+
+
+def _write_llms_txt_quarto_yml(build_dir: Path, label: str) -> None:
+    """Materialise the `_quarto.yml` that goes with an llms.txt guard label."""
+    configs = {
+        "no api-reference": "project:\n  type: website\n",
+        "no sections": "api-reference:\n  package: os\n  sections: []\n",
+        "no package": (
+            "api-reference:\n  sections:\n    - title: Core\n      contents: [os.getcwd]\n"
+        ),
+        "unimportable package": (
+            "api-reference:\n"
+            "  package: totally_nonexistent_pkg_xyz\n"
+            "  sections:\n"
+            "    - title: Core\n"
+            "      contents: [totally_nonexistent_pkg_xyz.f]\n"
+        ),
+        "importable package with sections": (
+            "api-reference:\n  package: os\n  sections:\n"
+            "    - title: Core\n      contents: [os.getcwd]\n"
+        ),
+    }
+    if label in configs:
+        (build_dir / "_quarto.yml").write_text(configs[label], encoding="utf-8")
+
+
+@pytest.mark.parametrize("label", LLMS_TXT_QUARTO_YMLS)
+def test_generate_llms_full_txt_matches_the_predicate(label):
+    """`llms-full.txt` is written exactly when the homepage advertises it.
+
+    Regression for #350: `_generate_llms_full_txt` only checked that a `package`
+    was configured, so an `api-reference` block without sections still produced a
+    header-only `llms-full.txt` while every page advertised nothing.
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        build_dir = Path(tmp_dir) / "great-docs"
+        build_dir.mkdir()
+        _write_llms_txt_quarto_yml(build_dir, label)
+        docs = GreatDocs(project_path=tmp_dir)
+
+        docs._generate_llms_full_txt()
+
+        assert (build_dir / "llms-full.txt").exists() == docs._llms_txt_available(), label
+
+
+@pytest.mark.parametrize("label", LLMS_TXT_QUARTO_YMLS)
+def test_prepare_for_freeze_writes_the_llms_files_build_would(label, tmp_path):
+    """`_prepare_for_freeze` leaves the llms files a full `build()` would.
+
+    Its docstring promises the build directory ends up in the state a full
+    `build()` would produce, so it has to honour the same predicate. The freeze
+    path used to call the generators directly and bypassed that gate, leaving
+    files behind that `build()` never writes.
+    """
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
+    docs = GreatDocs(project_path=str(tmp_path))
+    docs.build_dir.mkdir(parents=True, exist_ok=True)
+    _write_llms_txt_quarto_yml(docs.build_dir, label)
+
+    with (
+        patch("great_docs._apiref.api_reference.APIReference"),
+        patch.object(docs, "_prepare_build_directory"),
+        patch.object(docs, "_refresh_api_reference_config"),
+        patch.object(docs, "_generate_skill_md"),
+        patch.object(docs, "_process_user_guide"),
+        patch.object(docs, "_process_sections"),
+        patch.object(docs, "_process_custom_pages"),
+        patch.object(docs, "_copy_assets"),
+        patch.object(docs, "_normalize_freeze_shorthand"),
+        patch.object(docs, "_update_quarto_config"),
+        patch("great_docs._mock_code.process_directory"),
+    ):
+        docs._prepare_for_freeze()
+
+    available = docs._llms_txt_available()
+    assert (docs.build_dir / "llms.txt").exists() == available, label
+    assert (docs.build_dir / "llms-full.txt").exists() == available, label
+
+
 def test_build_metadata_margin_authors_with_rich_metadata():
     """_build_metadata_margin displays rich author metadata (github, orcid, etc.)."""
 
@@ -44359,7 +44446,7 @@ def test_prepare_for_freeze_runs_all_steps(tmp_path):
         "_update_quarto_config",
     ]
 
-    with patch.dict("sys.modules", {"quartodoc": MagicMock()}):
+    with patch("great_docs._apiref.api_reference.APIReference"):
         with patch.multiple(docs, **{name: MagicMock() for name in existing_methods}):
             with patch("great_docs._mock_code.process_directory"):
                 docs._prepare_for_freeze()

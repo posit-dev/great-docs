@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from importlib import resources
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 from yaml12 import format_yaml, read_yaml
@@ -13555,22 +13555,11 @@ anchor-sections: true
         bool
             Whether the build should write both files.
         """
-        quarto_yml = self.build_dir / "_quarto.yml"
-        if not quarto_yml.exists():
+        config = self._llms_txt_quarto_config()
+        if config is None:
             return False
-        try:
-            with open(quarto_yml, "r") as f:
-                config = read_yaml(f) or {}
-        except (OSError, ValueError):
-            return False
-        if not isinstance(config, dict):
-            return False
-        api_ref_config = config.get("api-reference")
-        if not isinstance(api_ref_config, dict):
-            return False
-        package_name = api_ref_config.get("package")
-        if not package_name or not api_ref_config.get("sections"):
-            return False
+        api_ref_config = config["api-reference"]
+        package_name = api_ref_config["package"]
         try:
             import importlib
 
@@ -13578,6 +13567,40 @@ anchor-sections: true
         except ImportError:
             return False
         return True
+
+    def _llms_txt_quarto_config(self) -> dict[str, Any] | None:
+        """
+        Read the `_quarto.yml` configuration the llms.txt files are built from
+
+        Both `_generate_llms_txt` and `_generate_llms_full_txt` build their file
+        from the `api-reference` block, and `_llms_txt_available` predicts
+        whether they will run. Sharing this one guard keeps the three in
+        agreement, so a page can never advertise a file the build will not
+        write, and neither can a file appear without being advertised.
+
+        Returns
+        -------
+        dict[str, Any] | None
+            The parsed `_quarto.yml`, guaranteed to carry an `api-reference`
+            block with a `package` and at least one section, or `None` when the
+            build directory has no usable `_quarto.yml`.
+        """
+        quarto_yml = self.build_dir / "_quarto.yml"
+        if not quarto_yml.exists():
+            return None
+        try:
+            with open(quarto_yml, "r") as f:
+                config = read_yaml(f) or {}
+        except (OSError, ValueError):
+            return None
+        if not isinstance(config, dict):
+            return None
+        api_ref_config = config.get("api-reference")
+        if not isinstance(api_ref_config, dict):
+            return None
+        if not api_ref_config.get("package") or not api_ref_config.get("sections"):
+            return None
+        return cast("dict[str, Any]", config)
 
     def _generate_llms_txt(self) -> None:
         """
@@ -13594,24 +13617,14 @@ anchor-sections: true
         """
         from great_docs._apiref import APIReference, SpecObject
 
-        quarto_yml = self.build_dir / "_quarto.yml"
-
-        if not quarto_yml.exists():
+        config = self._llms_txt_quarto_config()
+        if config is None:
             return
-
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f) or {}
 
         # Get API reference sections and package info
-        if "api-reference" not in config:
-            return
-
         api_ref_config = config["api-reference"]
-        sections = api_ref_config.get("sections", [])
-        package_name = api_ref_config.get("package")
-
-        if not package_name or not sections:
-            return  # pragma: no cover
+        sections = api_ref_config["sections"]
+        package_name = api_ref_config["package"]
 
         # Get package metadata for description and site URL
         metadata = self._get_package_metadata()
@@ -13748,24 +13761,14 @@ anchor-sections: true
         - CLI documentation with --help output for all commands
         """
 
-        quarto_yml = self.build_dir / "_quarto.yml"
-
-        if not quarto_yml.exists():
+        config = self._llms_txt_quarto_config()
+        if config is None:
             return
-
-        with open(quarto_yml, "r") as f:
-            config = read_yaml(f) or {}
 
         # Get API reference sections and package info
-        if "api-reference" not in config:
-            return
-
         api_ref_config = config["api-reference"]
-        sections = api_ref_config.get("sections", [])
-        package_name = api_ref_config.get("package")
-
-        if not package_name:
-            return
+        sections = api_ref_config["sections"]
+        package_name = api_ref_config["package"]
 
         # Get package metadata
         metadata = self._get_package_metadata()
@@ -15570,8 +15573,9 @@ anchor-sections: true
                 except Exception:
                     pass
                 try:
-                    self._generate_llms_txt()
-                    self._generate_llms_full_txt()
+                    if self._llms_txt_available():
+                        self._generate_llms_txt()
+                        self._generate_llms_full_txt()
                 except Exception:
                     pass
                 try:
@@ -15612,16 +15616,14 @@ anchor-sections: true
                     pass
 
             # Step 14: Generate API reference
-            try:
-                from quartodoc import Builder
+            if self._has_api_reference:
+                try:
+                    from great_docs._apiref.api_reference import APIReference
 
-                with redirect_stdout(devnull):
-                    quarto_yml = self.build_dir / "_quarto.yml"
-                    if quarto_yml.exists():
-                        builder = Builder.from_quarto_config(str(quarto_yml))
-                        builder.build()
-            except Exception:
-                pass
+                    with redirect_stdout(devnull):
+                        APIReference(str(self.build_dir / "_quarto.yml")).build()
+                except Exception:
+                    pass
 
             # Normalize freeze shorthand (runs right before render in a full build)
             self._normalize_freeze_shorthand()
