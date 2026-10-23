@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
-from yaml12 import format_yaml, read_yaml, write_yaml
+from yaml12 import format_yaml, read_yaml
 
 from ._content_naming import fix_numeric_prefix_links, section_slug, strip_numeric_prefix
 from ._layout import Layout, LayoutError
@@ -20,20 +20,20 @@ from ._subprocess import TEXT_MODE_KWARGS
 from ._typer_cli import is_cli_command, is_cli_group, param_kind, to_click_command
 from ._utils import (
     GITIGNORE_CONTENT,
-    QUARTO_YML_HEADER,
     is_great_docs_build_dir,
     recognised_build_dirs,
     record_site_ownership,
     validate_build_dir,
     validate_layout_outputs,
     validate_tree_symlinks,
+    write_quarto_yml,
 )
 from ._website import i18n, markdown_pages, page_dates, page_metadata, page_url, social_cards
 from ._website.navigation import github as nav_github
 from ._website.navigation import label as nav_label
 from ._website.navigation import release as nav_release
 from ._website.navigation import shared_sidebar
-from ._website.scripts import script_include, script_tag
+from ._website.scripts import script_include, script_tag, stylesheet_include
 from ._website.seo import description as seo_description
 from ._website.seo import noindex
 from ._website.seo import title as seo_title
@@ -42,7 +42,7 @@ from ._yaml import YamlMapping, locate_front_matter, split_front_matter
 from .config import Config, create_default_config
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterable, Iterator
 
     from ._apiref.api_reference import APIReference
     from ._apiref.inventory import InventoryItem
@@ -329,6 +329,62 @@ class GreatDocs:
             _check_build_dir_collisions(self.layout.build_dir, versions, latest_tag, self.layout)
             for entry in versions:
                 validate_build_dir(self.layout.build_dir_for(entry.tag, latest_tag))
+        self._validate_section_claims()
+
+    def _validate_section_claims(self) -> None:
+        """
+        Reject an explicit user guide or custom pages directory that is also a section
+
+        Raises
+        ------
+        ValueError
+            If `user_guide` or `custom_pages` names a directory that a `sections` entry
+            publishes.
+        """
+        claimed = self._section_source_dirs()
+        if not claimed:
+            return
+
+        package_root = self.layout.source_dir
+        explicit: list[tuple[str, Path]] = []
+        if self._config.user_guide_dir is not None:
+            explicit.append(("user_guide", package_root / self._config.user_guide_dir))
+        elif self._config.user_guide_is_explicit:
+            # A list-form guide still reads its files from the conventional directory.
+            for name in ("user_guide", "user-guide"):
+                candidate = package_root / name
+                if candidate.is_dir():
+                    explicit.append(("user_guide", candidate))
+                    break
+        if self._config["custom_pages"] is not None:
+            explicit.extend(
+                ("custom_pages", package_root / entry["dir"]) for entry in self._config.custom_pages
+            )
+
+        for key, directory in explicit:
+            if directory.resolve() in claimed:
+                raise ValueError(
+                    f"Directory '{directory.relative_to(package_root)}' is claimed by both "
+                    f"`{key}` and `sections`; remove it from one of them"
+                )
+
+    def _section_source_dirs(self) -> set[Path]:
+        """
+        Collect the source directories that `sections` entries publish
+
+        Returns
+        -------
+        set[Path]
+            The resolved directory of every section entry with a `dir`.
+        """
+        sections = self._config.sections
+        if not isinstance(sections, list):
+            return set()
+        return {
+            (self.layout.source_dir / section["dir"]).resolve()
+            for section in sections
+            if isinstance(section, dict) and isinstance(section.get("dir"), str)
+        }
 
     def _prepare_build_directory(self) -> None:  # pragma: no cover
         """
@@ -637,35 +693,6 @@ class GreatDocs:
         # margin can then include links to `llms.txt` and `llms-full.txt` when the
         # build will generate them.
         self._create_index_from_readme(force_rebuild=True)
-
-    def _copy_user_guide_files(self) -> None:
-        """
-        Copy user guide files from project root to build directory.
-
-        Resolves the source directory using `_find_user_guide_dir()`.
-        When `user_guide` config is a list (explicit ordering), only the directory
-        is resolved from conventional locations.
-
-        Copies `.qmd` and `.md` files to `great-docs/user-guide/` directory.
-        """
-        source_user_guide = self._find_user_guide_dir()
-        if source_user_guide is not None:
-            dest_user_guide = self.build_dir / "user-guide"
-            dest_user_guide.mkdir(exist_ok=True)
-
-            # Copy all .qmd and .md files
-            for pattern in ["*.qmd", "*.md"]:
-                for file_path in source_user_guide.glob(pattern):
-                    destination = dest_user_guide / file_path.name
-                    content = self._rebase_source_references(
-                        file_path.read_text(encoding="utf-8"), file_path, destination
-                    )
-                    destination.write_text(
-                        page_dates.add_to_page(
-                            content, file_path, self._config, self._page_authors
-                        ),
-                        encoding="utf-8",
-                    )
 
     def _copy_assets(self) -> bool:
         """
@@ -2831,7 +2858,7 @@ class GreatDocs:
         else:
             entries.append(inline_entry)  # pragma: no cover
 
-        write_yaml(config, quarto_yml)
+        self._write_quarto_yml(quarto_yml, config)
 
     @staticmethod
     def _tag_slug(tag_name: str) -> str:
@@ -3054,7 +3081,7 @@ class GreatDocs:
         else:
             entries.append(inline_entry)
 
-        write_yaml(config, quarto_yml)
+        self._write_quarto_yml(quarto_yml, config)
 
     def _process_page_statuses(self) -> bool:
         """
@@ -3187,6 +3214,7 @@ class GreatDocs:
             else:
                 # Default: sections with sidebar (index page is opt-in)
                 copied = self._copy_section_files(files, source_path, dest_dir)
+                self._copy_directory_metadata(files, source_path, dest_dir, strip_prefix=True)
 
                 has_user_index = (source_path / "index.qmd").exists()
                 generate_index = section_cfg.get("index", False)
@@ -3908,6 +3936,8 @@ class GreatDocs:
     def _get_custom_page_sources(self) -> list[dict[str, Path | str]]:
         """Return configured custom page source directories that exist."""
         sources: list[dict[str, Path | str]] = []
+        is_default = self._config["custom_pages"] is None
+        claimed = self._section_source_dirs()
 
         for entry in self._config.custom_pages:
             self._output_directory(entry["output"])
@@ -3915,6 +3945,9 @@ class GreatDocs:
             if not source_dir.exists() or not source_dir.is_dir():
                 if entry["dir"] != "custom" or self._config.exists():
                     print(f"   ⚠️  Custom pages directory '{entry['dir']}' not found, skipping")
+                continue
+            # The default `custom/` yields to a section; an explicit claim fails validation.
+            if is_default and source_dir.resolve() in claimed:
                 continue
 
             sources.append(
@@ -4913,7 +4946,7 @@ class GreatDocs:
         if cmd_info.get("is_group") and cmd_info.get("commands"):
             usage_parts.append("COMMAND [ARGS]...")
 
-        lines.append("::: {.doc-signature .doc-Kind.FUNCTION}")
+        lines.append("::: {.doc-signature .doc-function}")
         lines.append("```bash")
         lines.append(" ".join(usage_parts))
         lines.append("```")
@@ -5450,7 +5483,8 @@ class GreatDocs:
         Resolves the directory in the following order:
 
         1. If `user_guide` is a string in great-docs.yml, that path is used.
-        2. Otherwise, looks for `user_guide/` then `user-guide/` in the project root.
+        2. Otherwise, looks for `user_guide/` then `user-guide/` in the project root,
+           skipping a directory that a `sections` entry publishes.
 
         Returns
         -------
@@ -5481,14 +5515,14 @@ class GreatDocs:
 
             return user_guide_dir
 
-        # Fall back to conventional directory names
-        user_guide_dir = package_root / "user_guide"
-        if not user_guide_dir.exists() or not user_guide_dir.is_dir():
-            user_guide_dir = package_root / "user-guide"
-        if not user_guide_dir.exists() or not user_guide_dir.is_dir():
-            return None
+        # Fall back to conventional directory names, leaving a section's directory to it
+        claimed = self._section_source_dirs()
+        for name in ("user_guide", "user-guide"):
+            user_guide_dir = package_root / name
+            if user_guide_dir.is_dir() and user_guide_dir.resolve() not in claimed:
+                return user_guide_dir
 
-        return user_guide_dir
+        return None
 
     def _discover_user_guide_explicit(
         self, user_guide_dir: Path, explicit_config: list[dict]
@@ -5818,6 +5852,13 @@ class GreatDocs:
                     shutil.rmtree(dst_dir)  # pragma: no cover
                 shutil.copytree(item, dst_dir)
 
+        self._copy_directory_metadata(
+            (file_info["path"] for file_info in user_guide_info["files"]),
+            source_dir,
+            target_dir,
+            strip_prefix=not is_explicit,
+        )
+
         return copied_files
 
     def _is_reserved_output_directory(self, path: Path) -> bool:
@@ -5870,6 +5911,67 @@ class GreatDocs:
         if directory.name.startswith("_"):
             return True
         return not any(f.suffix == ".qmd" for f in directory.rglob("*"))
+
+    def _copy_directory_metadata(
+        self,
+        pages: "Iterable[Path]",
+        source_dir: Path,
+        dest_dir: Path,
+        *,
+        strip_prefix: bool,
+    ) -> None:
+        """
+        Copy the `_metadata.yml` and `_metadata.yaml` files that apply to copied pages
+
+        Quarto applies a directory's metadata file to the pages beneath it, so a file
+        is copied from `source_dir` and from every directory between it and a page.
+        Directories whose names start with `_` or `.` are skipped because Quarto
+        renders no pages there. A destination file that already exists was written by
+        the build itself; it is kept and the skipped source is reported.
+
+        Parameters
+        ----------
+        pages
+            Source pages that were copied into `dest_dir`.
+        source_dir
+            Root of the source tree the pages came from.
+        dest_dir
+            Build directory that mirrors `source_dir`.
+        strip_prefix
+            Whether numeric prefixes were stripped from the pages' directory names,
+            so the metadata lands in the same renamed directories.
+
+        Returns
+        -------
+        :
+            Nothing; the files are copied in place.
+        """
+        directories = {Path()}
+        for page in pages:
+            if page.is_relative_to(source_dir):
+                directories.update(page.relative_to(source_dir).parents)
+
+        for rel_dir in sorted(directories):
+            if any(part.startswith(("_", ".")) for part in rel_dir.parts):
+                continue
+            dest_rel = (
+                Path(*(strip_numeric_prefix(part) for part in rel_dir.parts))
+                if strip_prefix
+                else rel_dir
+            )
+            for name in ("_metadata.yml", "_metadata.yaml"):
+                src_file = source_dir / rel_dir / name
+                if not src_file.is_file():
+                    continue
+                dst_file = dest_dir / dest_rel / name
+                if dst_file.exists():
+                    print(
+                        f"   ⚠️  Skipping {src_file}: the build already wrote "
+                        f"{dst_file.relative_to(self.build_dir).as_posix()}"
+                    )
+                    continue
+                dst_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src_file, dst_file)
 
     def _add_frontmatter_option(self, content: str, key: str, value) -> str:
         """
@@ -6771,14 +6873,21 @@ class GreatDocs:
 
     def _detect_git_ref(self) -> str:
         """
-        Detect the current git branch or tag.
+        Detect the current git tag or branch
+
+        A configured source branch takes precedence. Otherwise the exact tag at
+        `HEAD` wins over the branch name. When `git` cannot start, even after one
+        retry, a warning names the error before the function falls back to
+        `main`. A non-zero exit from `git`, as outside a repository, falls back
+        silently.
 
         Returns
         -------
-        str
-            The current branch/tag name, or 'main' as fallback.
+        :
+            The tag or branch name, or `main` as the fallback.
         """
         import subprocess
+        import time
 
         package_root = self._find_package_root()
 
@@ -6788,31 +6897,55 @@ class GreatDocs:
         if configured_branch:
             return configured_branch
 
-        try:
-            # Try to get the current tag first (for versioned docs)
-            result = subprocess.run(
-                ["git", "describe", "--tags", "--exact-match"],
-                cwd=package_root,
-                capture_output=True,
-                **TEXT_MODE_KWARGS,
-            )
-            if result.returncode == 0:
-                return result.stdout.strip()
+        start_error: OSError | None = None
 
-            # Fall back to branch name
-            result = subprocess.run(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                cwd=package_root,
-                capture_output=True,
-                **TEXT_MODE_KWARGS,
-            )
-            if result.returncode == 0:
+        def run_git(*args: str) -> subprocess.CompletedProcess[str] | None:
+            """
+            Run a git command, retrying once if the process cannot start
+
+            Parameters
+            ----------
+            *args
+                Arguments passed to `git`.
+
+            Returns
+            -------
+            :
+                The completed process, or `None` when both attempts fail to start.
+            """
+            nonlocal start_error
+            for attempt in range(2):
+                if attempt:
+                    # Under heavy load an immediate retry can hit the same EAGAIN.
+                    time.sleep(0.2)
+                try:
+                    return subprocess.run(
+                        ["git", *args],
+                        cwd=package_root,
+                        capture_output=True,
+                        **TEXT_MODE_KWARGS,
+                    )
+                except OSError as error:
+                    start_error = error
+            return None
+
+        # Try to get the current tag first (for versioned docs)
+        result = run_git("describe", "--tags", "--exact-match")
+        if result is not None and result.returncode == 0:
+            return result.stdout.strip()
+
+        # Fall back to branch name
+        if result is not None:
+            result = run_git("rev-parse", "--abbrev-ref", "HEAD")
+            if result is not None and result.returncode == 0:
                 branch = result.stdout.strip()
                 if branch != "HEAD":
                     return branch
 
-        except Exception:
-            pass
+        if result is None:
+            print(
+                f"   ⚠️  Could not run git to detect the source-link ref ({start_error}); using 'main'"
+            )
 
         # Default fallback
         return "main"
@@ -11442,9 +11575,7 @@ anchor-sections: true
         # Translate navbar labels for i18n
         self._translate_navbar_labels(config)
 
-        with open(quarto_yml, "w") as f:
-            f.write(QUARTO_YML_HEADER)
-            write_yaml(config, f)
+        write_quarto_yml(quarto_yml, config)
 
     def _write_initial_quarto_yml(self) -> None:
         """
@@ -11608,18 +11739,7 @@ anchor-sections: true
         )
         header.insert(theme_index, header_entry)
 
-        # Inline loader: resolves the site root from quarto:offset, since Quarto doesn't always
-        # rewrite bare src paths in text entries for newly-added files
-        after_body.append(
-            {
-                "text": (
-                    "<script>(function(){var s=document.createElement('script');"
-                    "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
-                    "s.src=(m?m.content:'')+'wide-layout.js';"
-                    "document.body.appendChild(s);})();</script>"
-                )
-            }
-        )
+        after_body.append(script_include("wide-layout.js"))
 
     def _update_quarto_config(self) -> None:  # pragma: no cover
         """
@@ -11842,24 +11962,24 @@ anchor-sections: true
         if csl_path:
             config["csl"] = Path(csl_path).name
 
-        # Supply missing callout translations under the selected language.
-        # Scope these labels to the language selected by `lang` so other
-        # languages retain their own labels.
+        # Supply Quarto strings missing for the selected language.
+        # Scope these strings to the language selected by `lang` so other
+        # languages retain their own strings.
         from ._translations import (
-            QUARTO_CALLOUT_TITLE_KEYS,
-            QUARTO_UNTRANSLATED_CALLOUT_LANGUAGES,
+            QUARTO_LANGUAGE_KEYS,
+            QUARTO_UNTRANSLATED_LANGUAGES,
             get_translation,
         )
 
         lang = self._config.lang
-        if lang in QUARTO_UNTRANSLATED_CALLOUT_LANGUAGES:
+        if lang in QUARTO_UNTRANSLATED_LANGUAGES:
             language = config.get("language")
             if language is None:
                 language = config["language"] = {}
             if isinstance(language, dict):
-                titles = language.setdefault(lang, {})
-                for quarto_key, key in QUARTO_CALLOUT_TITLE_KEYS.items():
-                    titles.setdefault(quarto_key, get_translation(key, lang))
+                strings = language.setdefault(lang, {})
+                for quarto_key, key in QUARTO_LANGUAGE_KEYS.items():
+                    strings.setdefault(quarto_key, get_translation(key, lang))
 
         # Disable Quarto's HTML table processing so that GT tables (and other
         # pre-styled HTML tables) are not affected by Bootstrap striping/styles
@@ -11943,14 +12063,7 @@ anchor-sections: true
                 config["format"]["html"]["include-in-header"].append(marimo_entry)
 
             # Add marimo-islands.js (lazy-load + copy handler)
-            marimo_js_entry = {
-                "text": (
-                    "<script>document.head.appendChild(Object.assign("
-                    "document.createElement('script'),{src:(document.querySelector("
-                    "'meta[name=\"quarto:offset\"]')||{content:''}).content+"
-                    "'marimo-islands.js'}));</script>"
-                )
-            }
+            marimo_js_entry = script_include("marimo-islands.js", defer=True)
             if not any(
                 "marimo-islands.js" in str(item)
                 for item in config["format"]["html"]["include-in-header"]
@@ -11958,102 +12071,53 @@ anchor-sections: true
                 config["format"]["html"]["include-in-header"].append(marimo_js_entry)
 
             # Add marimo-islands.css
-            marimo_css_entry = {
-                "text": (
-                    "<script>document.head.appendChild(Object.assign("
-                    "document.createElement('link'),{rel:'stylesheet',"
-                    "href:(document.querySelector('meta[name=\"quarto:offset\"]')"
-                    "||{content:''}).content+'marimo-islands.css'}));</script>"
-                )
-            }
+            marimo_css_entry = stylesheet_include("marimo-islands.css")
             if not any(
                 "marimo-islands.css" in str(item)
                 for item in config["format"]["html"]["include-in-header"]
             ):
                 config["format"]["html"]["include-in-header"].append(marimo_css_entry)
 
-        # Add gd-lightbox CSS (uses quarto:offset for subdirectory-safe paths)
-        lb_css_entry = {
-            "text": (
-                "<script>document.head.appendChild(Object.assign("
-                "document.createElement('link'),{rel:'stylesheet',"
-                "href:(document.querySelector('meta[name=\"quarto:offset\"]')"
-                "||{content:''}).content+'gd-lightbox.css'}));</script>"
-            )
-        }
+        # Add gd-lightbox CSS
+        lb_css_entry = stylesheet_include("gd-lightbox.css")
         if not any(
             "gd-lightbox.css" in str(item) for item in config["format"]["html"]["include-in-header"]
         ):
             config["format"]["html"]["include-in-header"].append(lb_css_entry)
 
-        # Add gd-lightbox JS (deferred, uses quarto:offset)
-        lb_js_entry = {
-            "text": (
-                "<script>(function(){var s=document.createElement('script');"
-                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
-                "s.src=(m?m.content:'')+'gd-lightbox.js';s.defer=true;"
-                "document.head.appendChild(s);})();</script>"
-            )
-        }
+        # Add gd-lightbox JS (deferred)
+        lb_js_entry = script_include("gd-lightbox.js", defer=True)
         if not any(
             "gd-lightbox.js" in str(item) for item in config["format"]["html"]["include-in-header"]
         ):
             config["format"]["html"]["include-in-header"].append(lb_js_entry)
 
-        # Add gd-lightbox-compare CSS (uses quarto:offset)
-        lb_compare_css_entry = {
-            "text": (
-                "<script>document.head.appendChild(Object.assign("
-                "document.createElement('link'),{rel:'stylesheet',"
-                "href:(document.querySelector('meta[name=\"quarto:offset\"]')"
-                "||{content:''}).content+'gd-lightbox-compare.css'}));</script>"
-            )
-        }
+        # Add gd-lightbox-compare CSS
+        lb_compare_css_entry = stylesheet_include("gd-lightbox-compare.css")
         if not any(
             "gd-lightbox-compare.css" in str(item)
             for item in config["format"]["html"]["include-in-header"]
         ):
             config["format"]["html"]["include-in-header"].append(lb_compare_css_entry)
 
-        # Add gd-lightbox-compare JS (deferred, uses quarto:offset)
-        lb_compare_js_entry = {
-            "text": (
-                "<script>(function(){var s=document.createElement('script');"
-                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
-                "s.src=(m?m.content:'')+'gd-lightbox-compare.js';s.defer=true;"
-                "document.head.appendChild(s);})();</script>"
-            )
-        }
+        # Add gd-lightbox-compare JS (deferred)
+        lb_compare_js_entry = script_include("gd-lightbox-compare.js", defer=True)
         if not any(
             "gd-lightbox-compare.js" in str(item)
             for item in config["format"]["html"]["include-in-header"]
         ):
             config["format"]["html"]["include-in-header"].append(lb_compare_js_entry)
 
-        # Add gd-lightbox-annotate CSS (uses quarto:offset)
-        lb_annotate_css_entry = {
-            "text": (
-                "<script>document.head.appendChild(Object.assign("
-                "document.createElement('link'),{rel:'stylesheet',"
-                "href:(document.querySelector('meta[name=\"quarto:offset\"]')"
-                "||{content:''}).content+'gd-lightbox-annotate.css'}));</script>"
-            )
-        }
+        # Add gd-lightbox-annotate CSS
+        lb_annotate_css_entry = stylesheet_include("gd-lightbox-annotate.css")
         if not any(
             "gd-lightbox-annotate.css" in str(item)
             for item in config["format"]["html"]["include-in-header"]
         ):
             config["format"]["html"]["include-in-header"].append(lb_annotate_css_entry)
 
-        # Add gd-lightbox-annotate JS (deferred, uses quarto:offset)
-        lb_annotate_js_entry = {
-            "text": (
-                "<script>(function(){var s=document.createElement('script');"
-                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
-                "s.src=(m?m.content:'')+'gd-lightbox-annotate.js';s.defer=true;"
-                "document.head.appendChild(s);})();</script>"
-            )
-        }
+        # Add gd-lightbox-annotate JS (deferred)
+        lb_annotate_js_entry = script_include("gd-lightbox-annotate.js", defer=True)
         if not any(
             "gd-lightbox-annotate.js" in str(item)
             for item in config["format"]["html"]["include-in-header"]
@@ -12328,21 +12392,8 @@ anchor-sections: true
         if not has_wrap:
             config["format"]["html"]["include-after-body"].append(wrap_script_entry)
 
-        # Add floating sidebar script (pinned, scrollable sidebar on desktop).
-        # Quarto does not always rewrite bare src paths in text entries for
-        # newly-added files, so we use an inline loader that reads the
-        # quarto:offset meta tag (always present) to resolve the site root.
-        float_inline = (
-            "<script>"
-            "(function(){"
-            "var s=document.createElement('script');"
-            "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
-            "s.src=(m?m.content:'')+'sidebar-float.js';"
-            "document.body.appendChild(s);"
-            "})();"
-            "</script>"
-        )
-        float_script_entry = {"text": float_inline}
+        # Add floating sidebar script (pinned, scrollable sidebar on desktop)
+        float_script_entry = script_include("sidebar-float.js")
         has_float = any(
             "sidebar-float" in str(item) for item in config["format"]["html"]["include-after-body"]
         )
@@ -12445,14 +12496,7 @@ anchor-sections: true
             if not has_back_to_top:
                 config["format"]["html"]["include-after-body"].append(back_to_top_entry)
 
-            on_this_page_entry = {
-                "text": (
-                    "<script>(function(){var s=document.createElement('script');"
-                    "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
-                    "s.src=(m?m.content:'')+'on-this-page.js';"
-                    "document.body.appendChild(s);})();</script>"
-                )
-            }
+            on_this_page_entry = script_include("on-this-page.js")
             has_on_this_page = any(
                 "on-this-page.js" in str(item)
                 for item in config["format"]["html"]["include-after-body"]
@@ -12503,21 +12547,21 @@ anchor-sections: true
         if not has_details:
             config["format"]["html"]["include-after-body"].append(details_entry)
 
-            # Add early theme detection script in header to prevent flash of wrong theme
-            if "include-in-header" not in config["format"]["html"]:
-                config["format"]["html"]["include-in-header"] = []  # pragma: no cover
-            elif isinstance(config["format"]["html"]["include-in-header"], str):
-                config["format"]["html"]["include-in-header"] = [  # pragma: no cover
-                    config["format"]["html"]["include-in-header"]
-                ]
+        # Add early theme detection script in header to prevent flash of wrong theme
+        if "include-in-header" not in config["format"]["html"]:
+            config["format"]["html"]["include-in-header"] = []  # pragma: no cover
+        elif isinstance(config["format"]["html"]["include-in-header"], str):
+            config["format"]["html"]["include-in-header"] = [  # pragma: no cover
+                config["format"]["html"]["include-in-header"]
+            ]
 
-            # Reference external script file for early theme detection (cleaner YAML)
-            early_theme_script = script_include("theme-init.js")
-            has_early_theme = any(
-                "theme-init" in str(item) for item in config["format"]["html"]["include-in-header"]
-            )
-            if not has_early_theme:
-                config["format"]["html"]["include-in-header"].append(early_theme_script)
+        # Reference external script file for early theme detection (cleaner YAML)
+        early_theme_script = script_include("theme-init.js")
+        has_early_theme = any(
+            "theme-init" in str(item) for item in config["format"]["html"]["include-in-header"]
+        )
+        if not has_early_theme:
+            config["format"]["html"]["include-in-header"].append(early_theme_script)
 
         # Add mermaid renderer script (custom mermaid with proper theme support)
         mermaid_renderer_entry = script_include("mermaid-renderer.js")
@@ -12705,30 +12749,13 @@ anchor-sections: true
             config["format"]["html"]["include-after-body"].append(tooltips_script_entry)
 
         # Add color-swatch script (always enabled — loaded after tooltips)
-        # Use an inline loader that resolves the path against the site root via
-        # Quarto's quarto:offset meta tag (always present). Bare src= paths and
-        # canonical-URL stripping both 404 on nested pages; quarto:offset is the
-        # robust pattern shared with on-this-page.js, etc.
-        color_swatch_entry = {
-            "text": (
-                "<script>(function(){var s=document.createElement('script');"
-                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
-                "s.src=(m?m.content:'')+'color-swatch.js';"
-                "document.body.appendChild(s);})();</script>"
-            )
-        }
-        # Remove any stale plain <script src="color-swatch.js"> entries so the
-        # dynamic loader below is used instead.
-        config["format"]["html"]["include-after-body"] = [
-            item
+        color_swatch_entry = script_include("color-swatch.js")
+        has_color_swatch = any(
+            "color-swatch.js" in str(item)
             for item in config["format"]["html"]["include-after-body"]
-            if not (
-                isinstance(item, dict)
-                and "color-swatch.js" in item.get("text", "")
-                and "createElement" not in item.get("text", "")
-            )
-        ]
-        config["format"]["html"]["include-after-body"].append(color_swatch_entry)
+        )
+        if not has_color_swatch:
+            config["format"]["html"]["include-after-body"].append(color_swatch_entry)
 
         # Add responsive tables script (always enabled — wraps tables in scroll containers)
         responsive_tables_script_entry = script_include("responsive-tables.js")
@@ -12740,29 +12767,7 @@ anchor-sections: true
             config["format"]["html"]["include-after-body"].append(responsive_tables_script_entry)
 
         # Add video embed script (always enabled — lazy loading + YouTube thumbnails)
-        # Use an inline loader that resolves the path against the site root via
-        # Quarto's quarto:offset meta tag (always present). A bare src= path 404s
-        # on nested pages; quarto:offset is the robust pattern shared with
-        # on-this-page.js, etc.
-        video_embed_script_entry = {
-            "text": (
-                "<script>(function(){var s=document.createElement('script');"
-                "var m=document.querySelector('meta[name=\"quarto:offset\"]');"
-                "s.src=(m?m.content:'')+'video-embed.js';"
-                "document.body.appendChild(s);})();</script>"
-            )
-        }
-        # Remove any stale plain <script src="video-embed.js"> entries so the
-        # dynamic loader below is used instead.
-        config["format"]["html"]["include-after-body"] = [
-            item
-            for item in config["format"]["html"]["include-after-body"]
-            if not (
-                isinstance(item, dict)
-                and "video-embed.js" in item.get("text", "")
-                and "createElement" not in item.get("text", "")
-            )
-        ]
+        video_embed_script_entry = script_include("video-embed.js")
         has_video_embed = any(
             "video-embed.js" in str(item) for item in config["format"]["html"]["include-after-body"]
         )

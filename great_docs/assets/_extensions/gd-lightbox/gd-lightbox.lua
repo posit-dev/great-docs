@@ -331,8 +331,8 @@ local function render_gallery_div(div)
 end
 
 --- Main filter: process images in the document.
---- Note: gd-lightbox.js and gd-lightbox.css are injected globally via core.py
---- using the quarto:offset pattern (handles subdirectory pages correctly).
+--- Note: gd-lightbox.js and gd-lightbox.css are included on every page by
+--- root-relative tags in the site config, which Quarto rewrites for each page.
 --- The Lua filter only transforms image markup.
 return {
     {

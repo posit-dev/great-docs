@@ -22,6 +22,7 @@ Contract for adding an option — keep the single source intact:
   a richer one may coerce shape or derive from other options, but adds no
   default value.
 """
+
 from __future__ import annotations
 
 import copy
@@ -68,6 +69,13 @@ _LEGACY_SITE_KEYS: tuple[str, ...] = (
     "show_author",
     "show_security",
 )
+
+# Docstring formats the API reference renderer can parse.
+_PARSERS: tuple[str, ...] = ("numpy", "google", "sphinx")
+
+
+class ConfigError(ValueError):
+    """A configuration value that great-docs cannot build with"""
 
 
 class Config:
@@ -143,7 +151,37 @@ class Config:
                 print(f"Warning: Could not read great-docs.yml: {e}")
 
         config = self._normalize_shorthands(config)
+        config["parser"] = self._validate_parser(config["parser"], self.config_path)
         return config
+
+    @staticmethod
+    def _validate_parser(value: object, config_path: Path) -> str:
+        """
+        Check that `parser` names a supported docstring format
+
+        Parameters
+        ----------
+        value
+            The merged `parser` value. An empty `parser:` (null) names no format
+            and is rejected like any other unknown value.
+        config_path
+            The configuration file, named in the error.
+
+        Returns
+        -------
+        :
+            The parser name.
+
+        Raises
+        ------
+        ConfigError
+            If `value` is not one of `numpy`, `google` or `sphinx`.
+        """
+        if value not in _PARSERS:
+            raise ConfigError(
+                f"{config_path}: parser: {value!r} is not one of {', '.join(_PARSERS)}."
+            )
+        return cast("str", value)
 
     @staticmethod
     def _normalize_legacy_keys(user_config: ConfigDict) -> ConfigDict:

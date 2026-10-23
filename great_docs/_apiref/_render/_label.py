@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .._type_checks import is_typevar
+
 if TYPE_CHECKING:
     import griffe as gf
 
@@ -108,6 +110,7 @@ def _attribute_label(obj: gf.Attribute) -> str:
         "TypeVar" in annotation_text
         or "ParamSpec" in annotation_text
         or "TypeVarTuple" in annotation_text
+        or is_typevar(obj)
     ):
         return "typevar"
     elif "property" in obj.labels:

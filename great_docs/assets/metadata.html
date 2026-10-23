@@ -19,6 +19,9 @@ $endif$
 $if(description-meta)$
 <meta name="description" content="$description-meta$" />
 $endif$
+$if(robots)$
+<meta name="robots" content="$robots$" />
+$endif$
 
 <title>$pagetitle$$if(title-prefix)$ – $title-prefix$$endif$</title>
 $for(gd-head-tags)$

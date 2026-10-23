@@ -18,6 +18,9 @@ from great_docs._versioned_build import (
     _is_valid_ref_name,
     _merge_tree,
     _prune_cli_pages,
+    _prune_missing_sidebar_pages,
+    _prune_quarto_cli_sidebar,
+    _prune_quarto_sidebar,
     _prune_reference_index,
     _prune_sidebar_contents,
     _published_claims,
@@ -1982,6 +1985,38 @@ class TestPruneQuartoSidebar:
         # The section group with "OldFunc" should be removed
         assert len(contents) == 1
         assert contents[0] == "reference/Kept.qmd"
+
+
+@pytest.mark.parametrize(
+    "prune",
+    [
+        lambda dest: _prune_quarto_cli_sidebar(dest, {"index"}),
+        _prune_missing_sidebar_pages,
+        lambda dest: _prune_quarto_sidebar(dest, "reference", {"Kept"}),
+    ],
+    ids=["cli", "missing-pages", "reference"],
+)
+def test_sidebar_pruning_keeps_generated_header(tmp_path: Path, prune):
+    # Each pruner drops a different stale entry from this one sidebar
+    (tmp_path / "reference").mkdir()
+    (tmp_path / "reference" / "Kept.qmd").write_text("", encoding="utf-8")
+    quarto_yml = tmp_path / "_quarto.yml"
+    seeded = (
+        QUARTO_YML_HEADER
+        + "website:\n"
+        + "  sidebar:\n"
+        + "    - id: cli-reference\n"
+        + "      contents:\n"
+        + "        - reference/cli/old.qmd\n"
+        + "        - reference/Old.qmd\n"
+        + "        - reference/Kept.qmd\n"
+    )
+    quarto_yml.write_text(seeded, encoding="utf-8")
+
+    prune(tmp_path)
+
+    assert quarto_yml.read_text(encoding="utf-8") != seeded
+    assert is_great_docs_build_dir(tmp_path)
 
 
 # ---------------------------------------------------------------------------

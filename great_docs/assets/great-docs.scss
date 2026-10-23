@@ -19,6 +19,7 @@ $label-exception-color: mix($primary, $red-600, 20%);
 $label-property-color: mix($primary, $teal-600, 20%);
 $label-constant-color: mix($primary, $orange-500, 20%);
 $label-typealias-color: mix($primary, $yellow-500, 20%);
+$label-typevar-color: mix($primary, $purple-500, 20%);
 $label-cli-color: mix($primary, $green-600, 20%);
 $label-cli-group-color: mix($primary, $green-600, 20%);
 $label-mcp-tool-color: #e6194B;
@@ -555,6 +556,7 @@ $all_labels: (
   property,
   constant,
   typealias,
+  typevar,
   cli,
   cli-group,
   mcp-tool,
@@ -630,6 +632,12 @@ $method-like-labels: (method, classmethod, staticmethod);
   color: $label-typealias-color;
   border-color: $label-typealias-color;
   background-color: tint-color($label-typealias-color, 95%);
+}
+
+:is(.content, .quarto-secondary-nav-title) span.doc-label-typevar::after {
+  color: $label-typevar-color;
+  border-color: $label-typevar-color;
+  background-color: tint-color($label-typevar-color, 95%);
 }
 
 :is(.content, .quarto-secondary-nav-title) span.doc-label-cli::after {

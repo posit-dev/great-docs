@@ -13,6 +13,7 @@ from ._interlinks import AliasClaims, LoadedSources, build_index, load_sources
 from ._layout import Layout
 from ._utils import fenced_lines, is_in_great_docs_build_dir, parse_seealso
 from ._yaml import YamlMapping, YamlValue, split_front_matter
+from .config import _PARSERS
 
 if TYPE_CHECKING:
     from ._apiref.inventory import InventoryItem
@@ -683,10 +684,6 @@ def _check_ambiguous_references(
             )
 
 
-_STYLES = ("numpy", "google", "sphinx")
-"""The docstring styles a project can be configured for"""
-
-
 def _section_kinds(docstring: str, style: str) -> set[str]:
     """
     Return the kinds of structured section a style's parser finds in a docstring
@@ -748,7 +745,7 @@ def _lost_sections(docstring: str, config_style: str) -> dict[str, set[str]]:
     """
     configured = _section_kinds(docstring, config_style)
     lost: dict[str, set[str]] = {}
-    for style in _STYLES:
+    for style in _PARSERS:
         if style == config_style:
             continue
         missed = _section_kinds(docstring, style) - configured
@@ -765,19 +762,6 @@ def _check_docstring_style(
     result: LintResult,
 ) -> None:
     """Enforce consistent docstring style across all exports."""
-    if config_style not in _STYLES:
-        result.issues.append(
-            LintIssue(
-                check="config",
-                severity="error",
-                symbol="great-docs.yml",
-                message=(
-                    f"parser: {config_style!r} is not one of {', '.join(_STYLES)}, "
-                    f"so docstring style cannot be checked."
-                ),
-            )
-        )
-        return
 
     def _check_one(symbol: str, docstring: str) -> None:
         lost = _lost_sections(docstring, config_style)

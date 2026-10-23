@@ -133,7 +133,7 @@ class __RenderDocCallMixin(RenderDoc):
         Literal colours apply only within the code block's `sourceCode` wrapper.
         """
         name = self.signature_name if self.show_signature_name else ""
-        attr = Attr(classes=["doc-signature", f"doc-{self.obj.kind}"])
+        attr = Attr(classes=["doc-signature", f"doc-{self.kind_slug}"])
         return render_signature_block(self._signature_lines(name), attr)
 
     def _signature_lines(self, name: str) -> list[tuple[str, list[str]]]:

@@ -5,6 +5,7 @@ RST directive handling, overload signatures, parameter exclusion, and **kwargs r
 from __future__ import annotations
 
 import griffe as gf
+import pytest
 
 from great_docs._apiref._tools import render_code_variable
 
@@ -639,3 +640,22 @@ def test_annotation_in_signature():
     # Annotations should appear in the signature with ': type' format
     assert ": int" in qmd
     assert ": str" in qmd
+
+
+@pytest.mark.parametrize(
+    ("code", "name", "expected"),
+    [
+        ("def func():\n    pass\n", "func", "::: {.doc-signature .doc-function}"),
+        (
+            "class MyClass:\n    def __init__(self, x):\n        pass\n",
+            "MyClass",
+            "::: {.doc-signature .doc-class}",
+        ),
+    ],
+)
+def test_signature_carries_the_kind_slug(code, name, expected):
+    """The signature block names its kind with a selectable class, not the griffe enum."""
+    qmd = render_code_variable(code, name)
+
+    assert expected in qmd
+    assert "doc-Kind" not in qmd

@@ -9,7 +9,6 @@ the typing pages — written to disk by `write_index`, `write_pages`,
 from __future__ import annotations
 
 import logging
-from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -307,7 +306,6 @@ def write_pages(
     out_page_suffix: str,
     rewrite_all_pages: bool,
     header_level: int,
-    page_filter: str,
     site_toc_depth: int,
 ) -> None:
     """Write API doc pages to `<dir>/<page.path><out_page_suffix>`
@@ -329,9 +327,6 @@ def write_pages(
         changed.
     header_level :
         Heading depth for the rendered page content.
-    page_filter :
-        Glob pattern; pages whose path does not match are neither rendered
-        nor written. `"*"` writes all pages.
     site_toc_depth :
         Merged site table-of-contents depth. A page overrides it only when
         member headings require a greater depth.
@@ -339,10 +334,6 @@ def write_pages(
     from ._render.api_page import RenderAPIPage
 
     for page in pages:
-        if page_filter != "*" and not fnmatchcase(page.path, page_filter):
-            _log.info(f"Skipping {page.path} (no filter match)")
-            continue
-
         _log.info(f"Rendering {page.path}")
         rendered = str(RenderAPIPage(page, header_level, toc_depth=site_toc_depth))
 

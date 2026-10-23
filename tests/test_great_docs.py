@@ -31,6 +31,7 @@ from yaml12 import parse_yaml as _parse_yaml
 
 from great_docs import Config, GreatDocs, create_default_config, load_config
 from great_docs._content_naming import fix_numeric_prefix_links, strip_numeric_prefix
+from great_docs._website.scripts import script_include, stylesheet_include
 from great_docs._apiref import _globals, content, spec, write
 from great_docs._apiref._docstring_sections import (
     DCDocstringSection,
@@ -143,7 +144,7 @@ from great_docs._apiref.spec import ChildrenStyle, SpecObject, SpecOptions, Spec
 from great_docs._apiref.typing_information import TypeInformation, TypeSections
 from great_docs._apiref.write import _insert_contents
 from great_docs._apiref.write import merge_frontmatter as _merge_frontmatter
-from great_docs._utils import QUARTO_YML_HEADER
+from great_docs._utils import QUARTO_YML_HEADER, validate_build_dir
 from great_docs._yaml import split_front_matter
 from great_docs.cli import (
     _detect_optional_dependencies,
@@ -3897,35 +3898,6 @@ def test_user_guide_config_empty_dir_warns(capsys):
         assert "is empty" in captured.out
 
 
-def test_copy_user_guide_files_uses_config():
-    """Test that _copy_user_guide_files respects the user_guide config option."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        # Create custom directory with files
-        custom_dir = project_path / "my_docs"
-        custom_dir.mkdir()
-        (custom_dir / "guide.qmd").write_text("---\ntitle: Guide\n---\n# Guide\n")
-        (custom_dir / "guide.md").write_text("# Guide MD\n")
-
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("user_guide: my_docs\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        docs._copy_user_guide_files()
-
-        dest = docs.build_dir / "user-guide"
-
-        assert dest.exists()
-        assert (dest / "guide.qmd").exists()
-        assert (dest / "guide.md").exists()
-
-
 def test_user_guide_explicit_config_discovery():
     """Test that explicit user_guide config (list) discovers files correctly."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -5978,6 +5950,65 @@ def test_process_sections_copies_asset_directories():
         # Verify file contents survived the copy
         assert (dest / "data" / "game_revenue.parquet").read_bytes() == b"fake-parquet-data"
         assert (dest / "data" / "scores.csv").read_text() == "a,b\n1,2\n"
+
+
+def _write_section_project(project_path: Path, dir_name: str) -> Path:
+    (project_path / "great-docs.yml").write_text(
+        f"sections:\n  - title: Examples\n    dir: {dir_name}\n"
+    )
+    build_dir = project_path / "great-docs"
+    build_dir.mkdir()
+    (build_dir / "_quarto.yml").write_text(
+        "website:\n"
+        "  navbar:\n"
+        "    left:\n"
+        "      - text: Home\n"
+        "        href: index.qmd\n"
+        "  sidebar: []\n"
+    )
+    return build_dir
+
+
+def test_process_sections_copies_directory_metadata():
+    """Directory metadata in a section lands beside its prefix-stripped pages."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        build_dir = _write_section_project(project_path, "examples")
+
+        topic = project_path / "examples" / "01-topic"
+        topic.mkdir(parents=True)
+        (topic.parent / "page.qmd").write_text('---\ntitle: "Page"\n---\n\nContent\n')
+        (topic.parent / "_metadata.yml").write_text("toc: false\n")
+        (topic / "01-sub.qmd").write_text('---\ntitle: "Sub"\n---\n\nContent\n')
+        (topic / "_metadata.yml").write_text("number-sections: true\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._process_sections() == 1
+
+        dest = build_dir / "examples"
+        assert (dest / "_metadata.yml").read_text() == "toc: false\n"
+        assert (dest / "topic" / "_metadata.yml").read_text() == "number-sections: true\n"
+
+
+def test_directory_metadata_keeps_build_written_file(capsys):
+    """A metadata file the build wrote is kept, and the skipped source is reported."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        build_dir = _write_section_project(project_path, "reference")
+        (build_dir / "reference").mkdir()
+        build_metadata = build_dir / "reference" / "_metadata.yml"
+        build_metadata.write_text("date: 2026-01-01\n")
+
+        section = project_path / "reference"
+        section.mkdir()
+        (section / "page.qmd").write_text('---\ntitle: "Page"\n---\n\nContent\n')
+        (section / "_metadata.yml").write_text("toc: false\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._process_sections() == 1
+
+        assert build_metadata.read_text() == "date: 2026-01-01\n"
+        assert "reference/_metadata.yml" in capsys.readouterr().out
 
 
 def test_process_sections_skips_dirs_with_qmd_files():
@@ -11412,6 +11443,40 @@ def test_copy_user_guide_to_docs_copies_assets():
         assert (docs.build_dir / "user-guide" / "images" / "logo.png").exists()
 
 
+@pytest.mark.parametrize(
+    ("explicit", "subdir"),
+    [(False, "advanced"), (True, "02-advanced")],
+)
+def test_copy_user_guide_to_docs_copies_directory_metadata(explicit, subdir):
+    """Directory metadata lands beside its pages, prefix-stripped only in auto mode."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+
+        src = tmp / "user_guide"
+        advanced = src / "02-advanced"
+        advanced.mkdir(parents=True)
+        (src / "01-intro.qmd").write_text("---\ntitle: Intro\n---\nC\n")
+        (src / "_metadata.yml").write_text("toc: false\n")
+        (advanced / "01-page.qmd").write_text("---\ntitle: Page\n---\nC\n")
+        (advanced / "_metadata.yaml").write_text("number-sections: true\n")
+
+        guide_info = {
+            "files": [
+                {"path": src / "01-intro.qmd", "title": "Intro", "section": None},
+                {"path": advanced / "01-page.qmd", "title": "Page", "section": None},
+            ],
+            "source_dir": src,
+            "explicit": explicit,
+        }
+        docs._copy_user_guide_to_docs(guide_info)
+
+        target = docs.build_dir / "user-guide"
+        assert (target / "_metadata.yml").read_text() == "toc: false\n"
+        assert (target / subdir / "_metadata.yaml").read_text() == "number-sections: true\n"
+
+
 def test_update_sidebar_with_cli_new():
     """_update_sidebar_with_cli adds CLI section to sidebar."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -11606,6 +11671,41 @@ def test_detect_git_ref_fallback_permissive():
 
         # Should be either the actual git branch or 'main' fallback
         assert isinstance(ref, str) and len(ref) > 0
+
+
+def test_detect_git_ref_retries_a_failed_git_start():
+    """A git process that fails to start once is retried before falling back."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+
+        docs = GreatDocs(project_path=tmp_dir)
+
+        side_effect = [
+            BlockingIOError(11, "Resource temporarily unavailable"),
+            subprocess.CompletedProcess(["git"], 0, stdout="2.0.0\n", stderr=""),
+        ]
+        with patch("subprocess.run", side_effect=side_effect), patch("time.sleep"):
+            ref = docs._detect_git_ref()
+
+        assert ref == "2.0.0"
+
+
+def test_detect_git_ref_warns_before_falling_back(capsys):
+    """A git process that never starts produces a warning naming the error."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
+
+        docs = GreatDocs(project_path=tmp_dir)
+        capsys.readouterr()
+
+        error = BlockingIOError(11, "Resource temporarily unavailable")
+        with patch("subprocess.run", side_effect=error), patch("time.sleep"):
+            ref = docs._detect_git_ref()
+
+        assert ref == "main"
+        assert "Resource temporarily unavailable" in capsys.readouterr().out
 
 
 def test_process_sections_no_config():
@@ -12106,7 +12206,7 @@ def test_generate_cli_command_page_main():
         assert ".cli-manpage" in result
         assert '.details summary="Full `--help` output"' in result
         assert "doc-api-page" in result
-        assert ".doc-signature" in result
+        assert "::: {.doc-signature .doc-function}" in result
         assert ".doc-subject" in result
 
 
@@ -17327,25 +17427,28 @@ def _prepared_quarto_config(lang: str) -> dict:
             return read_yaml(f)
 
 
-def test_callout_titles_are_supplied_where_quarto_has_no_translation():
-    from great_docs._translations import get_translation
+def test_strings_are_supplied_where_quarto_has_no_translation():
+    from great_docs._translations import QUARTO_LANGUAGE_KEYS
 
     config = _prepared_quarto_config("ar")
 
     assert config["format"]["html"]["lang"] == "ar"
-    assert config["language"] == {
-        "ar": {
-            "callout-note-title": "ملاحظة",
-            "callout-tip-title": get_translation("tip_callout", "ar"),
-            "callout-warning-title": get_translation("warning_callout", "ar"),
-            "callout-important-title": get_translation("important_callout", "ar"),
-            "callout-caution-title": get_translation("caution_callout", "ar"),
-        }
-    }
+    assert set(config["language"]) == {"ar"}
+    strings = config["language"]["ar"]
+    assert set(strings) == set(QUARTO_LANGUAGE_KEYS)
+    assert strings["callout-note-title"] == "ملاحظة"
+    assert strings["search-label"] == "بحث"
+
+
+@pytest.mark.parametrize(("lang", "label"), [("hi", "खोज"), ("ro", "Căutare"), ("zh-Hant", "搜尋")])
+def test_search_label_is_supplied_where_quarto_has_no_translation(lang: str, label: str):
+    config = _prepared_quarto_config(lang)
+
+    assert config["language"][lang]["search-label"] == label
 
 
 @pytest.mark.parametrize("lang", ["fr", "en"])
-def test_callout_titles_are_left_to_quarto_where_it_translates_them(lang: str):
+def test_strings_are_left_to_quarto_where_it_translates_them(lang: str):
     config = _prepared_quarto_config(lang)
 
     assert "language" not in config
@@ -18686,30 +18789,6 @@ def test_get_package_metadata_setup_cfg():
         assert metadata["description"] == "A legacy package"
         urls = metadata.get("urls", {})
         assert urls.get("Repository") == "https://github.com/user/legacypkg"
-
-
-def test_copy_user_guide_files_basic():
-    """Test _copy_user_guide_files copies files with numeric prefix stripping."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        # Create user_guide directory with files
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-        (ug_dir / "01-getting-started.qmd").write_text(
-            "---\ntitle: Getting Started\n---\n\n# Getting Started\n"
-        )
-        (ug_dir / "02-advanced.qmd").write_text("---\ntitle: Advanced\n---\n\n# Advanced\n")
-
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._copy_user_guide_files()
-
-        # Files should be copied to build dir with numeric prefix
-        ug_build = docs.build_dir / "user-guide"
-        assert ug_build.exists()
 
 
 def test_discover_user_guide_basic_full_project():
@@ -20856,6 +20935,54 @@ def test_find_user_guide_dir_not_found():
         docs = GreatDocs(project_path=tmp_dir)
         result = docs._find_user_guide_dir()
         assert result is None
+
+
+def test_find_user_guide_dir_skips_section_directory(tmp_path):
+    (tmp_path / "great-docs.yml").write_text("sections:\n  - title: Guide\n    dir: user_guide\n")
+    (tmp_path / "user_guide").mkdir()
+    docs = GreatDocs(project_path=tmp_path)
+
+    assert docs._find_user_guide_dir() is None
+
+
+def test_find_user_guide_dir_falls_back_past_claimed_directory(tmp_path):
+    (tmp_path / "great-docs.yml").write_text("sections:\n  - title: Guide\n    dir: user_guide\n")
+    (tmp_path / "user_guide").mkdir()
+    (tmp_path / "user-guide").mkdir()
+    docs = GreatDocs(project_path=tmp_path)
+
+    result = docs._find_user_guide_dir()
+
+    assert result is not None
+    assert result.name == "user-guide"
+
+
+def test_custom_page_sources_skip_section_directory(tmp_path):
+    (tmp_path / "great-docs.yml").write_text("sections:\n  - title: Pages\n    dir: custom\n")
+    (tmp_path / "custom").mkdir()
+    docs = GreatDocs(project_path=tmp_path)
+
+    assert docs._get_custom_page_sources() == []
+
+
+@pytest.mark.parametrize(
+    ("claim", "directory"),
+    [
+        ("user_guide: user_guide\n", "user_guide"),
+        ("user_guide:\n  - section: Intro\n    contents: [intro.qmd]\n", "user_guide"),
+        ("custom_pages: custom\n", "custom"),
+    ],
+    ids=["user_guide-string", "user_guide-list", "custom_pages"],
+)
+def test_validate_build_outputs_rejects_guide_claimed_by_section(tmp_path, claim, directory):
+    (tmp_path / "great-docs.yml").write_text(
+        f"{claim}sections:\n  - title: Claimed\n    dir: {directory}\n"
+    )
+    (tmp_path / directory).mkdir()
+    docs = GreatDocs(project_path=tmp_path)
+
+    with pytest.raises(ValueError, match=directory):
+        docs._validate_build_outputs()
 
 
 def test_prepare_build_directory():
@@ -28864,46 +28991,6 @@ def test_api_reference_build_with_source_dir():
             sys.modules.pop("introtest_srcdir", None)
 
 
-def test_api_reference_build_with_filter():
-    """APIReference.build with filter only writes matching pages."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg = Path(tmp_dir) / "introtest_filter"
-        pkg.mkdir()
-        (pkg / "__init__.py").write_text(
-            'def alpha():\n    """Alpha."""\n    pass\ndef beta():\n    """Beta."""\n    pass\n',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        old_cwd = os.getcwd()
-        os.chdir(tmp_dir)
-        try:
-            ref = APIReference(
-                {
-                    "api-reference": {
-                        "package": "introtest_filter",
-                        "sections": [
-                            {
-                                "title": "Funcs",
-                                "desc": "",
-                                "contents": [{"name": "alpha"}, {"name": "beta"}],
-                            }
-                        ],
-                    }
-                }
-            )
-            ref.build(page_filter="alpha")
-
-            # alpha should be written, beta should not
-            assert (Path(tmp_dir) / "reference" / "alpha.qmd").exists()
-            assert not (Path(tmp_dir) / "reference" / "beta.qmd").exists()
-        finally:
-            os.chdir(old_cwd)
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("introtest_filter", None)
-
-
 def test_api_reference_write_doc_pages_skip_unchanged():
     """APIReference.build skips pages with unchanged content."""
 
@@ -33953,25 +34040,6 @@ def test_prepare_build_directory_config_js_branches():
         assert (docs.build_dir / "announcement-banner.js").exists()
         assert (docs.build_dir / "navbar-style.js").exists()
         assert (docs.build_dir / "content-style.js").exists()
-
-
-def test_copy_user_guide_files_hyphen_variant():
-    """_copy_user_guide_files falls back to 'user-guide' hyphenated dir."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
-        # Create 'user-guide' dir (not 'user_guide')
-        ug = tmp / "user-guide"
-        ug.mkdir()
-        (ug / "intro.qmd").write_text("---\ntitle: Intro\n---\nHello")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        docs._copy_user_guide_files()
-
-        # Verify the file was copied to the build directory
-        assert (docs.build_dir / "user-guide" / "intro.qmd").exists()
 
 
 def test_update_project_gitignore_force_new():
@@ -39227,7 +39295,7 @@ def test_update_quarto_config_video_embed_not_duplicated():
 
 
 def test_update_quarto_config_video_embed_script_tag_format():
-    """video-embed.js uses the quarto:offset loader so nested pages resolve it."""
+    """video-embed.js loads through a plain root-relative tag that Quarto rewrites per page."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
@@ -39237,20 +39305,9 @@ def test_update_quarto_config_video_embed_script_tag_format():
             result = read_yaml(f)
 
         after_body = result["format"]["html"]["include-after-body"]
+        video_entries = [item for item in after_body if "video-embed.js" in str(item)]
 
-        video_entries = [
-            item
-            for item in after_body
-            if isinstance(item, dict) and "video-embed.js" in str(item.get("text", ""))
-        ]
-
-        assert len(video_entries) == 1
-        # Robust path resolution: derive the site root from quarto:offset rather
-        # than a bare relative src= that 404s on nested pages (issue #212).
-        text = video_entries[0]["text"]
-        assert "quarto:offset" in text
-        assert "video-embed.js" in text
-        assert 'src="video-embed.js"' not in text
+        assert video_entries == [script_include("video-embed.js")]
 
 
 def test_prepare_build_directory_copies_video_embed_js():
@@ -39862,6 +39919,32 @@ def test_wide_layout_meta_precedes_theme_init():
         assert sum("wide-layout.js" in a for a in after_body) == 1
 
 
+def test_theme_init_added_when_details_already_listed():
+    """A config that already loads details.js still gets theme-init.js, after the meta tag."""
+    from great_docs._website.scripts import script_include
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(
+            tmp_dir,
+            quarto_content={
+                "project": {"type": "website"},
+                "website": {"navbar": {"left": []}, "sidebar": []},
+                "format": {"html": {"include-after-body": [script_include("details.js")]}},
+            },
+        )
+
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        header, _ = _wide_entries(result)
+        assert sum("theme-init" in h for h in header) == 1
+        meta_index = next(i for i, h in enumerate(header) if "gd-wide-layout" in h)
+        theme_index = next(i for i, h in enumerate(header) if "theme-init" in h)
+        assert meta_index < theme_index
+
+
 def test_wide_layout_custom_settings():
     """Configured settings flow into the meta tag and CSS custom properties."""
 
@@ -40104,8 +40187,8 @@ def test_on_this_page_disabled_via_config():
         assert not has_on_this_page
 
 
-def test_on_this_page_script_tag_uses_quarto_offset():
-    """The on-this-page include-after-body entry uses the quarto:offset pattern."""
+def test_on_this_page_script_tag_is_plain():
+    """The on-this-page script loads through a plain root-relative tag."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
@@ -40118,18 +40201,11 @@ def test_on_this_page_script_tag_uses_quarto_offset():
         after_body = result["format"]["html"]["include-after-body"]
         otp_entries = [item for item in after_body if "on-this-page.js" in str(item)]
 
-        assert len(otp_entries) == 1
-        assert "quarto:offset" in str(otp_entries[0])
+        assert otp_entries == [script_include("on-this-page.js")]
 
 
-def test_color_swatch_script_tag_uses_quarto_offset():
-    """The color-swatch include-after-body entry uses the quarto:offset pattern.
-
-    The previous loader derived the path from canonical/location.href by stripping
-    two path segments, which produced wrong paths (404s) on nested pages such as
-    /docs/examples/foo.html (issue #212). quarto:offset resolves the site root
-    correctly at any depth.
-    """
+def test_color_swatch_script_tag_is_plain():
+    """The color-swatch script loads through a plain root-relative tag."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs, quarto_yml = _make_uqc_docs(tmp_dir)
@@ -40142,10 +40218,73 @@ def test_color_swatch_script_tag_uses_quarto_offset():
         after_body = result["format"]["html"]["include-after-body"]
         swatch_entries = [item for item in after_body if "color-swatch.js" in str(item)]
 
-        assert len(swatch_entries) == 1
-        text = str(swatch_entries[0])
-        assert "quarto:offset" in text
-        assert "canonical" not in text
+        assert swatch_entries == [script_include("color-swatch.js")]
+
+
+def test_update_quarto_config_includes_are_plain_tags_once():
+    """
+    Every site script and stylesheet is a plain tag, added once across re-runs
+
+    Quarto rewrites root-relative paths for each page, so no include needs to
+    locate the site root at load time. Head scripts that should not block
+    parsing carry `defer`.
+    """
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        docs, quarto_yml = _make_uqc_docs(tmp_dir, gd_yml_content="marimo:\n  enabled: true\n")
+
+        docs._update_quarto_config()
+        docs._update_quarto_config()
+
+        with open(quarto_yml) as f:
+            result = read_yaml(f)
+
+        html = result["format"]["html"]
+        header = html["include-in-header"]
+        after_body = html["include-after-body"]
+        entries = header + after_body
+
+        assert not any("quarto:offset" in str(item) for item in entries)
+
+        for name in (
+            "gd-lightbox.js",
+            "gd-lightbox-compare.js",
+            "gd-lightbox-annotate.js",
+            "marimo-islands.js",
+        ):
+            assert script_include(name, defer=True) in header
+        for name in (
+            "gd-lightbox.css",
+            "gd-lightbox-compare.css",
+            "gd-lightbox-annotate.css",
+            "marimo-islands.css",
+        ):
+            assert stylesheet_include(name) in header
+        for name in (
+            "wide-layout.js",
+            "sidebar-float.js",
+            "on-this-page.js",
+            "color-swatch.js",
+            "video-embed.js",
+        ):
+            assert script_include(name) in after_body
+
+        for name in (
+            "gd-lightbox.js",
+            "gd-lightbox-compare.js",
+            "gd-lightbox-annotate.js",
+            "marimo-islands.js",
+            "gd-lightbox.css",
+            "gd-lightbox-compare.css",
+            "gd-lightbox-annotate.css",
+            "marimo-islands.css",
+            "wide-layout.js",
+            "sidebar-float.js",
+            "on-this-page.js",
+            "color-swatch.js",
+            "video-embed.js",
+        ):
+            assert sum(f"/{name}" in str(item) for item in entries) == 1, name
 
 
 def test_on_this_page_not_duplicated():
@@ -40723,6 +40862,31 @@ def test_inject_status_data_inline_string_body():
         entries = result["format"]["html"]["include-after-body"]
         assert isinstance(entries, list)
         assert len(entries) >= 2  # original + injected
+
+
+@pytest.mark.parametrize(
+    ("json_name", "script", "inject"),
+    [
+        ("_tags.json", "page-tags.js", GreatDocs._inject_tags_data_inline),
+        ("_page_status.json", "page-status-badges.js", GreatDocs._inject_status_data_inline),
+    ],
+    ids=["tags", "status"],
+)
+def test_inline_data_injection_keeps_generated_header(tmp_path: Path, json_name, script, inject):
+    gd = GreatDocs(project_path=str(tmp_path))
+    gd.build_dir.mkdir()
+    gd._write_initial_quarto_yml()
+    quarto_yml = gd.build_dir / "_quarto.yml"
+    config = read_yaml(quarto_yml)
+    html = config.setdefault("format", {}).setdefault("html", {})
+    html["include-after-body"] = [script]
+    gd._write_quarto_yml(quarto_yml, config)
+    (gd.build_dir / json_name).write_text("{}", encoding="utf-8")
+
+    inject(gd)
+
+    assert "_DATA__=" in quarto_yml.read_text(encoding="utf-8")
+    validate_build_dir(gd.build_dir)
 
 
 # ── _collect_page_tags ─────────────────────────────────────────────────

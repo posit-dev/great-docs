@@ -12,6 +12,7 @@ import click
 from . import __version__
 from ._layout import CONVENTIONAL_DOC_DIRS, Layout, _find_package_root
 from ._subprocess import TEXT_MODE_KWARGS
+from .config import ConfigError
 from .core import GreatDocs
 
 if TYPE_CHECKING:
@@ -45,7 +46,10 @@ def _config_option(function: Callable[..., Any]) -> Callable[..., Any]:
                 )
             except ValueError as error:
                 raise click.ClickException(str(error)) from error
-        return function(*args, **kwargs)
+        try:
+            return function(*args, **kwargs)
+        except ConfigError as error:
+            raise click.ClickException(str(error)) from error
 
     return selected
 

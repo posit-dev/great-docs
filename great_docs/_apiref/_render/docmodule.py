@@ -36,7 +36,7 @@ class __RenderDocModule(RenderDocMembersMixin, RenderDoc):
             return None
         return Div(
             Code(self.signature_name),
-            Attr(classes=["doc-signature", f"doc-{self.kind}"]),
+            Attr(classes=["doc-signature", f"doc-{self.kind_slug}"]),
         )
 
 
