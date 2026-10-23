@@ -41,7 +41,7 @@ from ._yaml import YamlMapping, locate_front_matter, split_front_matter
 from .config import Config, create_default_config
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterable, Iterator
 
     from ._apiref.api_reference import APIReference
     from ._apiref.inventory import InventoryItem
@@ -3213,6 +3213,7 @@ class GreatDocs:
             else:
                 # Default: sections with sidebar (index page is opt-in)
                 copied = self._copy_section_files(files, source_path, dest_dir)
+                self._copy_directory_metadata(files, source_path, dest_dir, strip_prefix=True)
 
                 has_user_index = (source_path / "index.qmd").exists()
                 generate_index = section_cfg.get("index", False)
@@ -5850,6 +5851,13 @@ class GreatDocs:
                     shutil.rmtree(dst_dir)  # pragma: no cover
                 shutil.copytree(item, dst_dir)
 
+        self._copy_directory_metadata(
+            (file_info["path"] for file_info in user_guide_info["files"]),
+            source_dir,
+            target_dir,
+            strip_prefix=not is_explicit,
+        )
+
         return copied_files
 
     def _is_reserved_output_directory(self, path: Path) -> bool:
@@ -5902,6 +5910,67 @@ class GreatDocs:
         if directory.name.startswith("_"):
             return True
         return not any(f.suffix == ".qmd" for f in directory.rglob("*"))
+
+    def _copy_directory_metadata(
+        self,
+        pages: "Iterable[Path]",
+        source_dir: Path,
+        dest_dir: Path,
+        *,
+        strip_prefix: bool,
+    ) -> None:
+        """
+        Copy the `_metadata.yml` and `_metadata.yaml` files that apply to copied pages
+
+        Quarto applies a directory's metadata file to the pages beneath it, so a file
+        is copied from `source_dir` and from every directory between it and a page.
+        Directories whose names start with `_` or `.` are skipped because Quarto
+        renders no pages there. A destination file that already exists was written by
+        the build itself; it is kept and the skipped source is reported.
+
+        Parameters
+        ----------
+        pages
+            Source pages that were copied into `dest_dir`.
+        source_dir
+            Root of the source tree the pages came from.
+        dest_dir
+            Build directory that mirrors `source_dir`.
+        strip_prefix
+            Whether numeric prefixes were stripped from the pages' directory names,
+            so the metadata lands in the same renamed directories.
+
+        Returns
+        -------
+        :
+            Nothing; the files are copied in place.
+        """
+        directories = {Path()}
+        for page in pages:
+            if page.is_relative_to(source_dir):
+                directories.update(page.relative_to(source_dir).parents)
+
+        for rel_dir in sorted(directories):
+            if any(part.startswith(("_", ".")) for part in rel_dir.parts):
+                continue
+            dest_rel = (
+                Path(*(strip_numeric_prefix(part) for part in rel_dir.parts))
+                if strip_prefix
+                else rel_dir
+            )
+            for name in ("_metadata.yml", "_metadata.yaml"):
+                src_file = source_dir / rel_dir / name
+                if not src_file.is_file():
+                    continue
+                dst_file = dest_dir / dest_rel / name
+                if dst_file.exists():
+                    print(
+                        f"   ⚠️  Skipping {src_file}: the build already wrote "
+                        f"{dst_file.relative_to(self.build_dir).as_posix()}"
+                    )
+                    continue
+                dst_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src_file, dst_file)
 
     def _add_frontmatter_option(self, content: str, key: str, value) -> str:
         """

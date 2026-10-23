@@ -5952,6 +5952,65 @@ def test_process_sections_copies_asset_directories():
         assert (dest / "data" / "scores.csv").read_text() == "a,b\n1,2\n"
 
 
+def _write_section_project(project_path: Path, dir_name: str) -> Path:
+    (project_path / "great-docs.yml").write_text(
+        f"sections:\n  - title: Examples\n    dir: {dir_name}\n"
+    )
+    build_dir = project_path / "great-docs"
+    build_dir.mkdir()
+    (build_dir / "_quarto.yml").write_text(
+        "website:\n"
+        "  navbar:\n"
+        "    left:\n"
+        "      - text: Home\n"
+        "        href: index.qmd\n"
+        "  sidebar: []\n"
+    )
+    return build_dir
+
+
+def test_process_sections_copies_directory_metadata():
+    """Directory metadata in a section lands beside its prefix-stripped pages."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        build_dir = _write_section_project(project_path, "examples")
+
+        topic = project_path / "examples" / "01-topic"
+        topic.mkdir(parents=True)
+        (topic.parent / "page.qmd").write_text('---\ntitle: "Page"\n---\n\nContent\n')
+        (topic.parent / "_metadata.yml").write_text("toc: false\n")
+        (topic / "01-sub.qmd").write_text('---\ntitle: "Sub"\n---\n\nContent\n')
+        (topic / "_metadata.yml").write_text("number-sections: true\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._process_sections() == 1
+
+        dest = build_dir / "examples"
+        assert (dest / "_metadata.yml").read_text() == "toc: false\n"
+        assert (dest / "topic" / "_metadata.yml").read_text() == "number-sections: true\n"
+
+
+def test_directory_metadata_keeps_build_written_file(capsys):
+    """A metadata file the build wrote is kept, and the skipped source is reported."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = Path(tmp_dir)
+        build_dir = _write_section_project(project_path, "reference")
+        (build_dir / "reference").mkdir()
+        build_metadata = build_dir / "reference" / "_metadata.yml"
+        build_metadata.write_text("date: 2026-01-01\n")
+
+        section = project_path / "reference"
+        section.mkdir()
+        (section / "page.qmd").write_text('---\ntitle: "Page"\n---\n\nContent\n')
+        (section / "_metadata.yml").write_text("toc: false\n")
+
+        docs = GreatDocs(project_path=tmp_dir)
+        assert docs._process_sections() == 1
+
+        assert build_metadata.read_text() == "date: 2026-01-01\n"
+        assert "reference/_metadata.yml" in capsys.readouterr().out
+
+
 def test_process_sections_skips_dirs_with_qmd_files():
     """Test that subdirectories containing .qmd files are NOT copied as asset dirs."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -11382,6 +11441,40 @@ def test_copy_user_guide_to_docs_copies_assets():
         docs._copy_user_guide_to_docs(guide_info)
 
         assert (docs.build_dir / "user-guide" / "images" / "logo.png").exists()
+
+
+@pytest.mark.parametrize(
+    ("explicit", "subdir"),
+    [(False, "advanced"), (True, "02-advanced")],
+)
+def test_copy_user_guide_to_docs_copies_directory_metadata(explicit, subdir):
+    """Directory metadata lands beside its pages, prefix-stripped only in auto mode."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        docs = GreatDocs(project_path=tmp_dir)
+        docs.build_dir.mkdir(parents=True, exist_ok=True)
+
+        src = tmp / "user_guide"
+        advanced = src / "02-advanced"
+        advanced.mkdir(parents=True)
+        (src / "01-intro.qmd").write_text("---\ntitle: Intro\n---\nC\n")
+        (src / "_metadata.yml").write_text("toc: false\n")
+        (advanced / "01-page.qmd").write_text("---\ntitle: Page\n---\nC\n")
+        (advanced / "_metadata.yaml").write_text("number-sections: true\n")
+
+        guide_info = {
+            "files": [
+                {"path": src / "01-intro.qmd", "title": "Intro", "section": None},
+                {"path": advanced / "01-page.qmd", "title": "Page", "section": None},
+            ],
+            "source_dir": src,
+            "explicit": explicit,
+        }
+        docs._copy_user_guide_to_docs(guide_info)
+
+        target = docs.build_dir / "user-guide"
+        assert (target / "_metadata.yml").read_text() == "toc: false\n"
+        assert (target / subdir / "_metadata.yaml").read_text() == "number-sections: true\n"
 
 
 def test_update_sidebar_with_cli_new():
