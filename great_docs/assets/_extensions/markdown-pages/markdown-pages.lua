@@ -292,8 +292,15 @@ local function write_companion(doc)
     local path = page_path(out, quarto.project.output_directory)
     if path == "404.html" then return nil end
 
+    -- Open with the title the HTML page shows. Under the site's
+    -- `shift-heading-level-by: -1`, a page whose body starts with a `#`
+    -- heading shows that heading as its title, not the front-matter title.
+    -- This filter sees the body before the shift is applied, and cannot read
+    -- the shift setting, so it assumes the site default.
     local blocks = pandoc.Blocks({})
-    if doc.meta.title and pandoc.utils.stringify(doc.meta.title) ~= "" then
+    local first = doc.blocks[1]
+    local titled = first and first.t == "Header" and first.level == 1
+    if not titled and doc.meta.title and pandoc.utils.stringify(doc.meta.title) ~= "" then
         local title = pandoc.Header(1, quarto.utils.as_inlines(doc.meta.title))
         blocks:insert(title:walk(flatten))
     end
