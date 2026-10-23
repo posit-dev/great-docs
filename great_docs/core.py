@@ -15595,16 +15595,14 @@ anchor-sections: true
                     pass
 
             # Step 14: Generate API reference
-            try:
-                from quartodoc import Builder
+            if self._has_api_reference:
+                try:
+                    from great_docs._apiref.api_reference import APIReference
 
-                with redirect_stdout(devnull):
-                    quarto_yml = self.build_dir / "_quarto.yml"
-                    if quarto_yml.exists():
-                        builder = Builder.from_quarto_config(str(quarto_yml))
-                        builder.build()
-            except Exception:
-                pass
+                    with redirect_stdout(devnull):
+                        APIReference(str(self.build_dir / "_quarto.yml")).build()
+                except Exception:
+                    pass
 
             # Normalize freeze shorthand (runs right before render in a full build)
             self._normalize_freeze_shorthand()

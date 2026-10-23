@@ -13807,7 +13807,7 @@ def test_prepare_for_freeze_writes_the_llms_files_build_would(label, tmp_path):
     _write_llms_txt_quarto_yml(docs.build_dir, label)
 
     with (
-        patch.dict("sys.modules", {"quartodoc": MagicMock()}),
+        patch("great_docs._apiref.api_reference.APIReference"),
         patch.object(docs, "_prepare_build_directory"),
         patch.object(docs, "_refresh_api_reference_config"),
         patch.object(docs, "_generate_skill_md"),
@@ -44191,7 +44191,7 @@ def test_prepare_for_freeze_runs_all_steps(tmp_path):
         "_update_quarto_config",
     ]
 
-    with patch.dict("sys.modules", {"quartodoc": MagicMock()}):
+    with patch("great_docs._apiref.api_reference.APIReference"):
         with patch.multiple(docs, **{name: MagicMock() for name in existing_methods}):
             with patch("great_docs._mock_code.process_directory"):
                 docs._prepare_for_freeze()
