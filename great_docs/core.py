@@ -328,6 +328,62 @@ class GreatDocs:
             _check_build_dir_collisions(self.layout.build_dir, versions, latest_tag, self.layout)
             for entry in versions:
                 validate_build_dir(self.layout.build_dir_for(entry.tag, latest_tag))
+        self._validate_section_claims()
+
+    def _validate_section_claims(self) -> None:
+        """
+        Reject an explicit user guide or custom pages directory that is also a section
+
+        Raises
+        ------
+        ValueError
+            If `user_guide` or `custom_pages` names a directory that a `sections` entry
+            publishes.
+        """
+        claimed = self._section_source_dirs()
+        if not claimed:
+            return
+
+        package_root = self.layout.source_dir
+        explicit: list[tuple[str, Path]] = []
+        if self._config.user_guide_dir is not None:
+            explicit.append(("user_guide", package_root / self._config.user_guide_dir))
+        elif self._config.user_guide_is_explicit:
+            # A list-form guide still reads its files from the conventional directory.
+            for name in ("user_guide", "user-guide"):
+                candidate = package_root / name
+                if candidate.is_dir():
+                    explicit.append(("user_guide", candidate))
+                    break
+        if self._config["custom_pages"] is not None:
+            explicit.extend(
+                ("custom_pages", package_root / entry["dir"]) for entry in self._config.custom_pages
+            )
+
+        for key, directory in explicit:
+            if directory.resolve() in claimed:
+                raise ValueError(
+                    f"Directory '{directory.relative_to(package_root)}' is claimed by both "
+                    f"`{key}` and `sections`; remove it from one of them"
+                )
+
+    def _section_source_dirs(self) -> set[Path]:
+        """
+        Collect the source directories that `sections` entries publish
+
+        Returns
+        -------
+        set[Path]
+            The resolved directory of every section entry with a `dir`.
+        """
+        sections = self._config.sections
+        if not isinstance(sections, list):
+            return set()
+        return {
+            (self.layout.source_dir / section["dir"]).resolve()
+            for section in sections
+            if isinstance(section, dict) and isinstance(section.get("dir"), str)
+        }
 
     def _prepare_build_directory(self) -> None:  # pragma: no cover
         """
@@ -3878,6 +3934,8 @@ class GreatDocs:
     def _get_custom_page_sources(self) -> list[dict[str, Path | str]]:
         """Return configured custom page source directories that exist."""
         sources: list[dict[str, Path | str]] = []
+        is_default = self._config["custom_pages"] is None
+        claimed = self._section_source_dirs()
 
         for entry in self._config.custom_pages:
             self._output_directory(entry["output"])
@@ -3885,6 +3943,9 @@ class GreatDocs:
             if not source_dir.exists() or not source_dir.is_dir():
                 if entry["dir"] != "custom" or self._config.exists():
                     print(f"   ⚠️  Custom pages directory '{entry['dir']}' not found, skipping")
+                continue
+            # The default `custom/` yields to a section; an explicit claim fails validation.
+            if is_default and source_dir.resolve() in claimed:
                 continue
 
             sources.append(
@@ -5420,7 +5481,8 @@ class GreatDocs:
         Resolves the directory in the following order:
 
         1. If `user_guide` is a string in great-docs.yml, that path is used.
-        2. Otherwise, looks for `user_guide/` then `user-guide/` in the project root.
+        2. Otherwise, looks for `user_guide/` then `user-guide/` in the project root,
+           skipping a directory that a `sections` entry publishes.
 
         Returns
         -------
@@ -5451,14 +5513,14 @@ class GreatDocs:
 
             return user_guide_dir
 
-        # Fall back to conventional directory names
-        user_guide_dir = package_root / "user_guide"
-        if not user_guide_dir.exists() or not user_guide_dir.is_dir():
-            user_guide_dir = package_root / "user-guide"
-        if not user_guide_dir.exists() or not user_guide_dir.is_dir():
-            return None
+        # Fall back to conventional directory names, leaving a section's directory to it
+        claimed = self._section_source_dirs()
+        for name in ("user_guide", "user-guide"):
+            user_guide_dir = package_root / name
+            if user_guide_dir.is_dir() and user_guide_dir.resolve() not in claimed:
+                return user_guide_dir
 
-        return user_guide_dir
+        return None
 
     def _discover_user_guide_explicit(
         self, user_guide_dir: Path, explicit_config: list[dict]
