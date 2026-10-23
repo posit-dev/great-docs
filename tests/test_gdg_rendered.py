@@ -316,6 +316,25 @@ def test_local_scripts_resolve_to_site_files(pkg_name: str):
     assert not missing, "Scripts that do not resolve:\n" + "\n".join(missing)
 
 
+_STYLESHEET_HREF = re.compile(r'<link\b[^>]*\brel="stylesheet"[^>]*\bhref="([^"]+)"')
+
+
+@pytest.mark.parametrize("pkg_name", _RENDERED_PACKAGES)
+def test_local_stylesheets_resolve_to_site_files(pkg_name: str):
+    """Every local stylesheet on every page loads a file shipped in the site."""
+    site = _site_dir(pkg_name).resolve()
+    missing: list[str] = []
+    for page in site.rglob("*.html"):
+        html = page.read_text(encoding="utf-8")
+        for href in _STYLESHEET_HREF.findall(html):
+            if _URL_SCHEME.match(href):
+                continue
+            target = (page.parent / href.split("?")[0].split("#")[0]).resolve()
+            if not (target.is_relative_to(site) and target.is_file()):
+                missing.append(f"{page.relative_to(site)}: {href}")
+    assert not missing, "Stylesheets that do not resolve:\n" + "\n".join(missing)
+
+
 @pytest.mark.dedicated
 @pytest.mark.parametrize("pkg_name", _PKGS_WITH_EXPORTS)
 def test_reference_pages_match_exports(pkg_name: str):
