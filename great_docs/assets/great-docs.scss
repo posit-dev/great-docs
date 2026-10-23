@@ -889,13 +889,20 @@ dt a.doc-method-name::after {
    General site styles (merged from great-docs.css)
    ============================================================================ */
 
-/* Theme loading - hide page until theme is applied to prevent flash */
-html.theme-loading {
+/* Hide the page until theme-init.js has finished and after-body scripts have
+   painted.  An inline <style> in metadata.html applies the same rules first
+   thing in <head>; they are repeated here for pages that don't use it.
+   `opacity` does the hiding: Quarto sets `visibility: visible !important` on
+   the sidebar sections, the TOC and the navbar offcanvas, which escapes an
+   inherited `visibility: hidden`.  `visibility` stays to keep the hidden page
+   out of hit-testing. */
+html:not(.theme-loaded) {
     visibility: hidden;
 }
 
-html.theme-loading body {
+html:not(.theme-loaded) body {
     visibility: hidden;
+    opacity: 0;
 }
 
 /* General heading weight -- handled by SCSS @extend .fw-medium */
