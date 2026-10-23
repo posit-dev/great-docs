@@ -11930,24 +11930,24 @@ anchor-sections: true
         if csl_path:
             config["csl"] = Path(csl_path).name
 
-        # Supply missing callout translations under the selected language.
-        # Scope these labels to the language selected by `lang` so other
-        # languages retain their own labels.
+        # Supply Quarto strings missing for the selected language.
+        # Scope these strings to the language selected by `lang` so other
+        # languages retain their own strings.
         from ._translations import (
-            QUARTO_CALLOUT_TITLE_KEYS,
-            QUARTO_UNTRANSLATED_CALLOUT_LANGUAGES,
+            QUARTO_LANGUAGE_KEYS,
+            QUARTO_UNTRANSLATED_LANGUAGES,
             get_translation,
         )
 
         lang = self._config.lang
-        if lang in QUARTO_UNTRANSLATED_CALLOUT_LANGUAGES:
+        if lang in QUARTO_UNTRANSLATED_LANGUAGES:
             language = config.get("language")
             if language is None:
                 language = config["language"] = {}
             if isinstance(language, dict):
-                titles = language.setdefault(lang, {})
-                for quarto_key, key in QUARTO_CALLOUT_TITLE_KEYS.items():
-                    titles.setdefault(quarto_key, get_translation(key, lang))
+                strings = language.setdefault(lang, {})
+                for quarto_key, key in QUARTO_LANGUAGE_KEYS.items():
+                    strings.setdefault(quarto_key, get_translation(key, lang))
 
         # Disable Quarto's HTML table processing so that GT tables (and other
         # pre-styled HTML tables) are not affected by Bootstrap striping/styles
