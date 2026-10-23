@@ -135,16 +135,23 @@ def is_enum(obj: gf.Object | gf.Alias) -> bool:
     )
 
 
+_TYPE_VARIABLE_KINDS = frozenset({"TypeVar", "ParamSpec", "TypeVarTuple"})
+
+
 def is_typevar(obj: gf.Object | gf.Alias) -> bool:
     """
-    Whether `obj` is a declaration of a `TypeVar`
+    Whether `obj` is a declaration of a type variable
+
+    A type variable is a `TypeVar`, `ParamSpec` or `TypeVarTuple`, called by
+    its bare name or through any module, such as `typing.TypeVar`.
     """
     target = _resolved(obj)
+    if not (isinstance(target, gf.Attribute) and isinstance(target.value, gf.ExprCall)):
+        return False
+    function = target.value.function
     return (
-        isinstance(target, gf.Attribute)
-        and isinstance(target.value, gf.ExprCall)
-        and isinstance(target.value.function, gf.ExprName)
-        and target.value.function.name == "TypeVar"
+        isinstance(function, (gf.ExprName, gf.ExprAttribute))
+        and function.canonical_path.rpartition(".")[2] in _TYPE_VARIABLE_KINDS
     )
 
 

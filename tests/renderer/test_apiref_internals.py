@@ -125,6 +125,21 @@ def test_is_typevar_follows_a_reexported_typevar():
     assert is_typevar(_reexported(source, "T")) is True
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        'import typing\nT = typing.TypeVar("T")\n',
+        'import typing as t\nT = t.TypeVar("T")\n',
+        'import typing_extensions\nT = typing_extensions.TypeVar("T")\n',
+        'from typing import ParamSpec\nT = ParamSpec("T")\n',
+        'from typing import TypeVarTuple\nT = TypeVarTuple("T")\n',
+    ],
+)
+def test_is_typevar_recognises_qualified_and_variadic_spellings(source: str):
+    """Recognise every kind of type variable under any import spelling"""
+    assert is_typevar(_reexported(source, "T")) is True
+
+
 def test_classification_of_an_unloadable_target_is_false():
     """Return `False` when an alias target cannot be loaded"""
     modules = {"__init__.py": "from never_imported_package import Contract\n"}
