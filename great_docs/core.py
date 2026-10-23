@@ -32,6 +32,7 @@ from ._website import i18n, markdown_pages, page_dates, page_metadata, page_url,
 from ._website.navigation import github as nav_github
 from ._website.navigation import label as nav_label
 from ._website.navigation import release as nav_release
+from ._website.navigation import shared_sidebar
 from ._website.scripts import script_include, script_tag, stylesheet_include
 from ._website.seo import description as seo_description
 from ._website.seo import noindex
@@ -16426,6 +16427,13 @@ anchor-sections: true
             # ── Pre-render termshow recordings ──────────────────────
             self._prerender_term_player(log)
 
+            # Render each long reference sidebar once rather than on every page.
+            # A versioned build does this in each version's own directory.
+            if watch or not self._config.has_versions:
+                shared = shared_sidebar.prepare(self.build_dir)
+                if shared:
+                    log.detail("Sharing rendered sidebar(s): " + ", ".join(shared))
+
             # ── Step 16: Build site with Quarto ────────────────────────
             step += 1
             log.step_start(step, "Build site with Quarto")
@@ -16433,6 +16441,7 @@ anchor-sections: true
                 log.step_done("Starting watch mode...")
                 log.footer(watch_mode=True)
                 self._print_layout_notice()
+                quarto_env[shared_sidebar.PREVIEW_ENV] = "1"
                 subprocess.run(["quarto", "preview", "--no-browser"], env=quarto_env)
                 return
             elif self._config.has_versions:

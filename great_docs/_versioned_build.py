@@ -34,6 +34,7 @@ from great_docs._versioning import (
     version_url_segment,
 )
 from great_docs._website import page_metadata
+from great_docs._website.navigation import shared_sidebar
 
 if TYPE_CHECKING:
     from great_docs._api_diff import ApiSnapshot
@@ -2267,6 +2268,8 @@ def run_versioned_build(  # pragma: no cover
         _prune_missing_sidebar_pages(ver_dir)
         _rewrite_quarto_yml_for_version(ver_dir, entry, latest_tag)
         _sync_status_inline_script(ver_dir)
+        # Last, so the trimmed sidebars reflect every change above
+        shared_sidebar.prepare(ver_dir)
         pages_by_version[entry.tag] = pages
         dir_by_tag[entry.tag] = ver_dir
 
