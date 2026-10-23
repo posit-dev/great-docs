@@ -193,6 +193,8 @@ If auto-detection doesn't work for your project, or you want to override it:
 parser: google  # Options: numpy (default), google, sphinx
 ```
 
+Any other value stops the build with an error.
+
 ### When to Change the Parser
 
 You might need to manually set the parser if:

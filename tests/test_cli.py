@@ -285,6 +285,16 @@ def test_project_commands_reject_missing_selected_config(tmp_path: Path, command
     assert "Configuration file does not exist" in result.output
 
 
+def test_unknown_parser_reports_a_one_line_error(tmp_path: Path):
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs/great-docs.yml").write_text("parser: auto\n")
+    result = CliRunner().invoke(cli, ["lint", "--project-path", str(tmp_path)])
+    assert result.exit_code != 0
+    assert "'auto'" in result.output
+    assert "numpy, google, sphinx" in result.output
+    assert "Traceback" not in result.output
+
+
 @pytest.mark.parametrize("command", ["init", "config"])
 @pytest.mark.parametrize("selection", [None, "website/settings.yml"])
 def test_creation_selects_docs_or_custom_config(

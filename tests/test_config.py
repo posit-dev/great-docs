@@ -7,7 +7,13 @@ from unittest.mock import patch
 import pytest
 
 from great_docs import config as config_module
-from great_docs.config import DEFAULT_CONFIG, Config, create_default_config, load_config
+from great_docs.config import (
+    DEFAULT_CONFIG,
+    Config,
+    ConfigError,
+    create_default_config,
+    load_config,
+)
 
 
 @pytest.fixture
@@ -1539,6 +1545,20 @@ class TestNonMappingConfig:
         cfg = _make_config(tmp_path, "just a string\n")
         assert cfg.parser == DEFAULT_CONFIG["parser"]
         assert "must be a mapping" in capsys.readouterr().out
+
+
+class TestParser:
+    @pytest.mark.parametrize("parser", ["numpy", "google", "sphinx"])
+    def test_supported_parser_loads(self, tmp_path: Path, parser: str):
+        assert _make_config(tmp_path, f"parser: {parser}\n").parser == parser
+
+    def test_empty_parser_is_rejected(self, tmp_path: Path):
+        with pytest.raises(ConfigError, match="None.*numpy, google, sphinx"):
+            _make_config(tmp_path, "parser:\n")
+
+    def test_unknown_parser_is_rejected(self, tmp_path: Path):
+        with pytest.raises(ConfigError, match="'auto'.*numpy, google, sphinx"):
+            _make_config(tmp_path, "parser: auto\n")
 
 
 class TestSeoShorthandNormalization:
