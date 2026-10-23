@@ -18,6 +18,9 @@ pytestmark = pytest.mark.skipif(shutil.which("quarto") is None, reason="Quarto i
 _QUARTO_YML = """\
 project:
   type: website
+format:
+  html:
+    shift-heading-level-by: -1
 {filters}website:
   title: EnvelopeSiteTitle
   navbar:
@@ -90,11 +93,20 @@ _PAGES = {
     "reference/a.qmd": "---\ntitle: Page *A*\n---\n\nA text.\n",
     "reference/b.qmd": "---\ntitle: Page B\n---\n\n## Part\n\nB text.\n",
     "guide/page.qmd": _GUIDE_PAGE,
+    "guide/repeated.qmd": "---\ntitle: Repeated\n---\n\n# Repeated\n\nText.\n\n## Part\n",
+    "guide/renamed.qmd": "---\ntitle: Front matter\n---\n\n# Body heading\n\nText.\n",
     "guide/draft.qmd": "---\ntitle: Draft\ndraft: true\n---\n\nDraft text.\n",
     "404.qmd": "---\ntitle: Not found\n---\n\nMissing.\n",
 }
 
-_COMPANIONS = ["index.md", "reference/a.md", "reference/b.md", "guide/page.md"]
+_COMPANIONS = [
+    "index.md",
+    "reference/a.md",
+    "reference/b.md",
+    "guide/page.md",
+    "guide/repeated.md",
+    "guide/renamed.md",
+]
 
 _ALTERNATE = re.compile(r'<link rel="alternate" type="text/markdown" href="([^"]*)">')
 
@@ -162,6 +174,18 @@ def test_companion_opens_with_the_page_title(guide: str):
 
 def test_page_title_keeps_inline_formatting(site: Path):
     assert (site / "reference/a.md").read_text(encoding="utf-8").startswith("# Page *A*\n")
+
+
+def test_leading_heading_matching_the_title_is_not_repeated(site: Path):
+    companion = (site / "guide/repeated.md").read_text(encoding="utf-8")
+    assert companion.startswith("# Repeated\n\nText.\n\n## Part\n")
+
+
+def test_leading_heading_replaces_the_title(site: Path):
+    # `shift-heading-level-by: -1` makes the page heading the HTML title
+    companion = (site / "guide/renamed.md").read_text(encoding="utf-8")
+    assert companion.startswith("# Body heading\n\nText.")
+    assert "Front matter" not in companion
 
 
 def test_untitled_page_opens_with_its_content(site: Path):
