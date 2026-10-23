@@ -13602,8 +13602,8 @@ anchor-sections: true
 
         # Get API reference sections and package info
         api_ref_config = config["api-reference"]
-        sections = api_ref_config.get("sections", [])
-        package_name = api_ref_config.get("package")
+        sections = api_ref_config["sections"]
+        package_name = api_ref_config["package"]
 
         # Get package metadata for description and site URL
         metadata = self._get_package_metadata()
@@ -13746,8 +13746,8 @@ anchor-sections: true
 
         # Get API reference sections and package info
         api_ref_config = config["api-reference"]
-        sections = api_ref_config.get("sections", [])
-        package_name = api_ref_config.get("package")
+        sections = api_ref_config["sections"]
+        package_name = api_ref_config["package"]
 
         # Get package metadata
         metadata = self._get_package_metadata()
