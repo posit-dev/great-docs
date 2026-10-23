@@ -143,7 +143,7 @@ from great_docs._apiref.spec import ChildrenStyle, SpecObject, SpecOptions, Spec
 from great_docs._apiref.typing_information import TypeInformation, TypeSections
 from great_docs._apiref.write import _insert_contents
 from great_docs._apiref.write import merge_frontmatter as _merge_frontmatter
-from great_docs._utils import QUARTO_YML_HEADER
+from great_docs._utils import QUARTO_YML_HEADER, validate_build_dir
 from great_docs._yaml import split_front_matter
 from great_docs.cli import (
     _detect_optional_dependencies,
@@ -40637,6 +40637,31 @@ def test_inject_status_data_inline_string_body():
         entries = result["format"]["html"]["include-after-body"]
         assert isinstance(entries, list)
         assert len(entries) >= 2  # original + injected
+
+
+@pytest.mark.parametrize(
+    ("json_name", "script", "inject"),
+    [
+        ("_tags.json", "page-tags.js", GreatDocs._inject_tags_data_inline),
+        ("_page_status.json", "page-status-badges.js", GreatDocs._inject_status_data_inline),
+    ],
+    ids=["tags", "status"],
+)
+def test_inline_data_injection_keeps_generated_header(tmp_path: Path, json_name, script, inject):
+    gd = GreatDocs(project_path=str(tmp_path))
+    gd.build_dir.mkdir()
+    gd._write_initial_quarto_yml()
+    quarto_yml = gd.build_dir / "_quarto.yml"
+    config = read_yaml(quarto_yml)
+    html = config.setdefault("format", {}).setdefault("html", {})
+    html["include-after-body"] = [script]
+    gd._write_quarto_yml(quarto_yml, config)
+    (gd.build_dir / json_name).write_text("{}", encoding="utf-8")
+
+    inject(gd)
+
+    assert "_DATA__=" in quarto_yml.read_text(encoding="utf-8")
+    validate_build_dir(gd.build_dir)
 
 
 # ── _collect_page_tags ─────────────────────────────────────────────────

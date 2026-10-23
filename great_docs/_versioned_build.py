@@ -14,13 +14,13 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from great_docs._subprocess import TEXT_MODE_KWARGS
 from great_docs._utils import (
-    QUARTO_YML_HEADER,
     is_great_docs_build_dir,
     record_site_ownership,
     validate_build_dir,
     validate_layout_outputs,
     validate_site_dir,
     validate_tree_symlinks,
+    write_quarto_yml,
 )
 from great_docs._versioning import (
     VersionEntry,
@@ -392,7 +392,7 @@ def _prune_quarto_cli_sidebar(dest_dir: Path, valid_stems: set[str]) -> None:
         return
 
     try:
-        from yaml12 import read_yaml, write_yaml
+        from yaml12 import read_yaml
 
         content = read_yaml(quarto_yml)
         if not content:
@@ -420,7 +420,7 @@ def _prune_quarto_cli_sidebar(dest_dir: Path, valid_stems: set[str]) -> None:
             break
 
         if modified:
-            write_yaml(content, quarto_yml)
+            write_quarto_yml(quarto_yml, content)
     except Exception:  # pragma: no cover
         pass  # pragma: no cover
 
@@ -433,7 +433,7 @@ def _prune_missing_sidebar_pages(dest_dir: Path) -> None:
     instead of links. This function walks every sidebar section and drops entries that point to
     non-existent files. Empty sections are removed entirely.
     """
-    from yaml12 import read_yaml, write_yaml
+    from yaml12 import read_yaml
 
     quarto_yml = dest_dir / "_quarto.yml"
     if not quarto_yml.exists():
@@ -455,8 +455,7 @@ def _prune_missing_sidebar_pages(dest_dir: Path) -> None:
                 modified = True
 
         if modified:
-            with open(quarto_yml, "w", encoding="utf-8") as fh:
-                write_yaml(content, fh)
+            write_quarto_yml(quarto_yml, content)
     except Exception:
         pass  # Best-effort
 
@@ -1277,7 +1276,7 @@ def _prune_quarto_sidebar(dest_dir: Path, section: str, valid_symbols: set[str])
         return
 
     try:
-        from yaml12 import read_yaml, write_yaml
+        from yaml12 import read_yaml
 
         content = read_yaml(quarto_yml)
         if not content:
@@ -1342,7 +1341,7 @@ def _prune_quarto_sidebar(dest_dir: Path, section: str, valid_symbols: set[str])
                 modified = True
 
         if modified:
-            write_yaml(content, quarto_yml)
+            write_quarto_yml(quarto_yml, content)
     except Exception:  # pragma: no cover
         pass  # pragma: no cover
 
@@ -1692,7 +1691,7 @@ def _rewrite_quarto_yml_for_version(
     asset paths resolve within that version. Use the latest version's base
     address for canonical links and `og:url` tags to matching pages.
     """
-    from yaml12 import read_yaml, write_yaml
+    from yaml12 import read_yaml
 
     quarto_yml = dest_dir / "_quarto.yml"
     if not quarto_yml.exists():
@@ -1725,9 +1724,7 @@ def _rewrite_quarto_yml_for_version(
                     f"{title} ({entry.label}){navbar_title[len(title) :]}"
                 )
 
-    with open(quarto_yml, "w") as f:
-        f.write(QUARTO_YML_HEADER)
-        write_yaml(config, f)
+    write_quarto_yml(quarto_yml, config)
 
 
 # ---------------------------------------------------------------------------
