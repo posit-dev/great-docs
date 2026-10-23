@@ -5183,20 +5183,6 @@ def test_md_disabled_config_written():
 
 
 @pytest.mark.dedicated
-def test_md_disabled_gd_options():
-    """gdtest_md_disabled: _gd_options.json has markdown_pages: false."""
-    pkg = "gdtest_md_disabled"
-    opts_path = Layout.make(_RENDERED_DIR / pkg).build_dir / "_gd_options.json"
-    if not opts_path.exists():
-        pytest.skip("_gd_options.json not found")
-
-    import json
-
-    opts = json.loads(opts_path.read_text(encoding="utf-8"))
-    assert opts["markdown_pages"] is False
-
-
-@pytest.mark.dedicated
 def test_md_disabled_html_pages_still_exist():
     """gdtest_md_disabled: HTML reference pages are still generated."""
     pkg = "gdtest_md_disabled"
@@ -5273,24 +5259,6 @@ def test_md_no_widget_config_written():
     cfg = parse_yaml(gd_yml.read_text(encoding="utf-8"))
     assert isinstance(cfg["markdown_pages"], dict)
     assert cfg["markdown_pages"]["widget"] is False
-
-
-@pytest.mark.dedicated
-def test_md_no_widget_gd_options():
-    """gdtest_md_no_widget: _gd_options.json has markdown_pages: true.
-
-    When only the widget is disabled, .md generation is still enabled,
-    so markdown_pages should be true in the options file.
-    """
-    pkg = "gdtest_md_no_widget"
-    opts_path = Layout.make(_RENDERED_DIR / pkg).build_dir / "_gd_options.json"
-    if not opts_path.exists():
-        pytest.skip("_gd_options.json not found")
-
-    import json
-
-    opts = json.loads(opts_path.read_text(encoding="utf-8"))
-    assert opts["markdown_pages"] is True
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

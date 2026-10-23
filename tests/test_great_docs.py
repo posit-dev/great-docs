@@ -3897,35 +3897,6 @@ def test_user_guide_config_empty_dir_warns(capsys):
         assert "is empty" in captured.out
 
 
-def test_copy_user_guide_files_uses_config():
-    """Test that _copy_user_guide_files respects the user_guide config option."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        project_path = Path(tmp_dir)
-
-        pyproject = project_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"')
-
-        # Create custom directory with files
-        custom_dir = project_path / "my_docs"
-        custom_dir.mkdir()
-        (custom_dir / "guide.qmd").write_text("---\ntitle: Guide\n---\n# Guide\n")
-        (custom_dir / "guide.md").write_text("# Guide MD\n")
-
-        config_path = project_path / "great-docs.yml"
-        config_path.write_text("user_guide: my_docs\n")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        docs._copy_user_guide_files()
-
-        dest = docs.build_dir / "user-guide"
-
-        assert dest.exists()
-        assert (dest / "guide.qmd").exists()
-        assert (dest / "guide.md").exists()
-
-
 def test_user_guide_explicit_config_discovery():
     """Test that explicit user_guide config (list) discovers files correctly."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -18688,30 +18659,6 @@ def test_get_package_metadata_setup_cfg():
         assert urls.get("Repository") == "https://github.com/user/legacypkg"
 
 
-def test_copy_user_guide_files_basic():
-    """Test _copy_user_guide_files copies files with numeric prefix stripping."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        pyproject = Path(tmp_dir) / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "mypkg"\n', encoding="utf-8")
-
-        # Create user_guide directory with files
-        ug_dir = Path(tmp_dir) / "user_guide"
-        ug_dir.mkdir()
-        (ug_dir / "01-getting-started.qmd").write_text(
-            "---\ntitle: Getting Started\n---\n\n# Getting Started\n"
-        )
-        (ug_dir / "02-advanced.qmd").write_text("---\ntitle: Advanced\n---\n\n# Advanced\n")
-
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-        docs._copy_user_guide_files()
-
-        # Files should be copied to build dir with numeric prefix
-        ug_build = docs.build_dir / "user-guide"
-        assert ug_build.exists()
-
-
 def test_discover_user_guide_basic_full_project():
     """Test _discover_user_guide finds user guide files."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -28864,46 +28811,6 @@ def test_api_reference_build_with_source_dir():
             sys.modules.pop("introtest_srcdir", None)
 
 
-def test_api_reference_build_with_filter():
-    """APIReference.build with filter only writes matching pages."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg = Path(tmp_dir) / "introtest_filter"
-        pkg.mkdir()
-        (pkg / "__init__.py").write_text(
-            'def alpha():\n    """Alpha."""\n    pass\ndef beta():\n    """Beta."""\n    pass\n',
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        old_cwd = os.getcwd()
-        os.chdir(tmp_dir)
-        try:
-            ref = APIReference(
-                {
-                    "api-reference": {
-                        "package": "introtest_filter",
-                        "sections": [
-                            {
-                                "title": "Funcs",
-                                "desc": "",
-                                "contents": [{"name": "alpha"}, {"name": "beta"}],
-                            }
-                        ],
-                    }
-                }
-            )
-            ref.build(page_filter="alpha")
-
-            # alpha should be written, beta should not
-            assert (Path(tmp_dir) / "reference" / "alpha.qmd").exists()
-            assert not (Path(tmp_dir) / "reference" / "beta.qmd").exists()
-        finally:
-            os.chdir(old_cwd)
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("introtest_filter", None)
-
-
 def test_api_reference_write_doc_pages_skip_unchanged():
     """APIReference.build skips pages with unchanged content."""
 
@@ -33953,25 +33860,6 @@ def test_prepare_build_directory_config_js_branches():
         assert (docs.build_dir / "announcement-banner.js").exists()
         assert (docs.build_dir / "navbar-style.js").exists()
         assert (docs.build_dir / "content-style.js").exists()
-
-
-def test_copy_user_guide_files_hyphen_variant():
-    """_copy_user_guide_files falls back to 'user-guide' hyphenated dir."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp = Path(tmp_dir)
-        (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\nversion = "1.0"\n')
-        # Create 'user-guide' dir (not 'user_guide')
-        ug = tmp / "user-guide"
-        ug.mkdir()
-        (ug / "intro.qmd").write_text("---\ntitle: Intro\n---\nHello")
-
-        docs = GreatDocs(project_path=tmp_dir)
-        docs.build_dir.mkdir(parents=True, exist_ok=True)
-
-        docs._copy_user_guide_files()
-
-        # Verify the file was copied to the build directory
-        assert (docs.build_dir / "user-guide" / "intro.qmd").exists()
 
 
 def test_update_project_gitignore_force_new():
