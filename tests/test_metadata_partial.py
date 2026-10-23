@@ -17,6 +17,8 @@ UPSTREAM_RELATIVE = Path("formats") / "html" / "pandoc" / "metadata.html"
 HEAD_TAGS_LOOP = ["$for(gd-head-tags)$", "$gd-head-tags$", "$endfor$"]
 # Removed as one block, since `$endif$` also closes Quarto's own conditionals.
 ROBOTS_LINES = ["$if(robots)$", '<meta name="robots" content="$robots$" />', "$endif$"]
+# Hide the page until theme-init.js reveals it (with a no-JS fallback).
+PAGE_REVEAL_PREFIXES = ("<style>html:not(.theme-loaded)", "<noscript><style>html:not(.theme-loaded)")
 
 
 def _quarto_partial() -> Path | None:
@@ -84,11 +86,15 @@ def _unmodified_lines(content: str) -> list[str]:
     Returns
     -------
     :
-        Lines other than the title element, the robots tag and the
-        `gd-head-tags` loop.
+        Lines other than the title element, the robots tag, the page-reveal
+        styles and the `gd-head-tags` loop.
     """
     content = content.replace("\n".join(ROBOTS_LINES) + "\n", "")
-    return [line for line in _without_title(content) if line not in HEAD_TAGS_LOOP]
+    return [
+        line
+        for line in _without_title(content)
+        if line not in HEAD_TAGS_LOOP and not line.startswith(PAGE_REVEAL_PREFIXES)
+    ]
 
 
 def test_bundled_partial_contains_title_element():
@@ -104,8 +110,8 @@ def test_bundled_partial_matches_quarto_except_for_title_and_head_tags() -> None
     """
     Keep the bundled metadata tags aligned with Quarto
 
-    Exclude the title element, the robots tag and the `gd-head-tags` loop,
-    which great-docs replaces or adds.
+    Exclude the title element, the robots tag, the page-reveal styles and the
+    `gd-head-tags` loop, which great-docs replaces or adds.
     """
     upstream = _quarto_partial()
     assert upstream is not None
