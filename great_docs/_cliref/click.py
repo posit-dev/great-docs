@@ -534,6 +534,46 @@ def entry_point_name(package_root: Path, target: str) -> str | None:
     return next(iter(scripts), None)
 
 
+def _strip_rich_markup(text: str, cmd: Any) -> str:
+    """
+    Strip Rich tags from help whose command uses Rich markup
+
+    Parameters
+    ----------
+    text
+        The structured help text.
+    cmd
+        The command that owns the help text.
+
+    Returns
+    -------
+    :
+        Plain text for Rich markup, or the original text for other markup modes,
+        unavailable rich-click, or malformed tags.
+    """
+    if not text:
+        return text
+
+    try:
+        from rich.errors import MarkupError
+        from rich.text import Text
+        from rich_click import RichCommand
+    except ImportError:
+        return text
+
+    if not isinstance(cmd, RichCommand):
+        return text
+
+    formatter = cmd.context_class(cmd, info_name="").make_formatter()
+    if formatter.config.text_markup != "rich":
+        return text
+
+    try:
+        return Text.from_markup(text).plain
+    except MarkupError:
+        return text
+
+
 def extract_command(cmd: Any, name: str, parent_path: str = "") -> CliCommand:
     """
     Describe a Click command and its visible subcommands for the reference pages
@@ -565,21 +605,24 @@ def extract_command(cmd: Any, name: str, parent_path: str = "") -> CliCommand:
         if kind == "option":
             opt_info = extract_option(param)
             if opt_info:
+                opt_info["help"] = _strip_rich_markup(opt_info.get("help", ""), cmd)
                 options.append(opt_info)
         elif kind == "argument":
             arguments.append(extract_argument(param))
 
-    description, examples = parse_help_parts(cmd.help or "")
+    command_help = _strip_rich_markup(cmd.help or "", cmd)
+    description, examples = parse_help_parts(command_help)
 
     # Click leaves `short_help` empty for some subcommands; derive it from the help string.
     short_help = getattr(cmd, "short_help", "") or ""
-    if not short_help and cmd.help:
+    if not short_help and command_help:
         short_help = cmd.get_short_help_str(limit=150)
+    short_help = _strip_rich_markup(short_help, cmd)
 
     info: CliCommand = {
         "name": name,
         "full_path": full_path,
-        "help": cmd.help or "",
+        "help": command_help,
         "short_help": short_help,
         "help_text": help_output(cmd, full_path),
         "deprecated": getattr(cmd, "deprecated", False),
