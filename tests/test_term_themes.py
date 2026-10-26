@@ -9,7 +9,7 @@ import pytest
 
 from great_docs._term_player import generate_manifest
 from great_docs._term_player.parser import Event, Recording, TermInfo, Theme
-from great_docs._term_player.script import _parse_script_data
+from great_docs._term_player.script import _parse_script_data, load_script
 from great_docs._term_player.themes import get_theme, resolve_theme, theme_names
 
 _HEX = re.compile(r"^#[0-9a-f]{6}$")
@@ -137,3 +137,21 @@ class TestScriptTheme:
         assert 'fill="#282a36"' in svg
         assert "#ff5555" in svg  # dracula red
         assert manifest.theme == "dracula"
+
+
+class TestDocsGallery:
+    """The user guide's theme gallery should cover every built-in theme."""
+
+    _DOCS = Path(__file__).resolve().parents[1] / "docs"
+
+    @pytest.mark.parametrize("name", theme_names())
+    def test_theme_has_gallery_recording(self, name: str):
+        assets = self._DOCS / "assets" / "themes"
+        assert (assets / f"{name}.termshow").exists()
+        script = load_script(assets / f"{name}.termshow.yml")
+        assert script.theme_name == name
+
+    def test_every_theme_is_embedded_in_guide(self):
+        guide = (self._DOCS / "user_guide" / "41-terminal-recordings.qmd").read_text()
+        for name in theme_names():
+            assert f'file="assets/themes/{name}"' in guide
