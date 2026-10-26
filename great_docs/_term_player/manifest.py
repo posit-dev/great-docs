@@ -8,44 +8,68 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .emulator import ScreenState, TerminalEmulator
-from .parser import Recording
-from .renderer import render_frame
+from .parser import Recording, Theme
+from .renderer import (
+    DEFAULT_FONT_SIZE,
+    DEFAULT_LINE_HEIGHT,
+    DEFAULT_PADDING,
+    Line,
+    line_model,
+    render_svg,
+)
 from .script import Annotation, Chapter, Highlight, Script, Snippet
+
+MANIFEST_VERSION = 2
 
 
 @dataclass
 class KeyframeEntry:
-    """A keyframe in the manifest."""
+    """A keyframe in the manifest: the screen shown from `time` onward."""
 
     time: float
     file: str
+    # Index into `Manifest.frames` (v2); identical screens share one frame
+    frame: int | None = None
 
 
 @dataclass
-class DeltaChange:
-    """A single cell change in a delta frame."""
+class FrameEntry:
+    """A unique screen, stored as indices into `Manifest.lines` (one per row)."""
 
-    row: int
-    col: int
-    char: str
-    fg: str | None = None
-    bg: str | None = None
-    bold: bool = False
+    lines: list[int]
+    cursor: tuple[int, int] | None = None
+    # Only set when a resize gave this frame a different size from `Manifest.cols/rows`
+    size: tuple[int, int] | None = None
 
 
 @dataclass
-class DeltaEntry:
-    """A delta frame (incremental changes between keyframes)."""
+class ScreenSettings:
+    """Render settings the player needs to draw frames as SVG."""
 
-    time: float
-    changes: list[DeltaChange] = field(default_factory=list)
+    font_family: str
+    font_size: int = DEFAULT_FONT_SIZE
+    line_height: float = DEFAULT_LINE_HEIGHT
+    padding: int = DEFAULT_PADDING
+    fg: str = Theme().fg
+    bg: str = Theme().bg
+
+
+@dataclass
+class ManifestStats:
+    """Size information about a render (not serialized)."""
+
+    keyframes: int = 0
+    frames: int = 0
+    lines: int = 0
+    # Bytes of the manifest, which is all a page inlines
+    manifest_bytes: int = 0
 
 
 @dataclass
 class Manifest:
     """The complete manifest describing a rendered termshow recording."""
 
-    version: int = 1
+    version: int = MANIFEST_VERSION
     title: str = ""
     duration: float = 0.0
     cols: int = 80
@@ -53,14 +77,21 @@ class Manifest:
     theme: str = "default"
     chapters: list[Chapter] = field(default_factory=list)
     keyframes: list[KeyframeEntry] = field(default_factory=list)
-    deltas: list[DeltaEntry] = field(default_factory=list)
+    screen: ScreenSettings | None = None
+    lines: list[Line] = field(default_factory=list)
+    frames: list[FrameEntry] = field(default_factory=list)
     annotations: list[Annotation] = field(default_factory=list)
     highlights: list[Highlight] = field(default_factory=list)
     snippets: list[Snippet] = field(default_factory=list)
     window_chrome: str = "none"
+    stats: ManifestStats = field(default_factory=ManifestStats)
 
     def to_json(self) -> str:
-        """Serialize manifest to JSON string."""
+        """Serialize manifest to a compact JSON string.
+
+        The output is safe to embed in an HTML `<script>` element: `</` is
+        written as `<\\/` so terminal text can't close the element early.
+        """
         data = {
             "version": self.version,
             "title": self.title,
@@ -68,14 +99,7 @@ class Manifest:
             "term": {"cols": self.cols, "rows": self.rows},
             "theme": self.theme,
             "chapters": [{"time": round(ch.time, 3), "label": ch.label} for ch in self.chapters],
-            "keyframes": [{"time": round(kf.time, 3), "file": kf.file} for kf in self.keyframes],
-            "deltas": [
-                {
-                    "time": round(d.time, 3),
-                    "changes": [_delta_change_to_dict(c) for c in d.changes],
-                }
-                for d in self.deltas
-            ],
+            "keyframes": [_serialize_keyframe(kf) for kf in self.keyframes],
             "annotations": [
                 {
                     "time": round(a.time, 3),
@@ -101,7 +125,19 @@ class Manifest:
         }
         if self.window_chrome != "none":
             data["window_chrome"] = self.window_chrome
-        return json.dumps(data, indent=2)
+        if self.screen is not None:
+            data["screen"] = {
+                "font_family": self.screen.font_family,
+                "font_size": self.screen.font_size,
+                "line_height": self.screen.line_height,
+                "padding": self.screen.padding,
+                "fg": self.screen.fg,
+                "bg": self.screen.bg,
+            }
+            data["lines"] = [_serialize_line(line) for line in self.lines]
+            data["frames"] = [_serialize_frame(fr) for fr in self.frames]
+        text = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+        return text.replace("</", "<\\/")
 
     @staticmethod
     def _serialize_highlight(h: Highlight) -> dict:
@@ -171,6 +207,10 @@ def generate_manifest(
     out_path = Path(output_dir) if output_dir else None
     if out_path:
         out_path.mkdir(parents=True, exist_ok=True)
+        # Frames are numbered by unique screen, so a re-render can produce
+        # fewer files than last time; clear the old ones
+        for stale in out_path.glob(f"{prefix}-[0-9][0-9][0-9]*.svg"):
+            stale.unlink()
 
     # Set up emulator
     emu = TerminalEmulator(cols=recording.term.cols, rows=recording.term.rows)
@@ -213,6 +253,13 @@ def generate_manifest(
         # Run a pre-pass to detect the prompt from input events
         prompt_prefix = _detect_prompt_prefix(recording)
 
+    screen = ScreenSettings(
+        font_family=font_family,
+        line_height=line_height if line_height is not None else DEFAULT_LINE_HEIGHT,
+        fg=theme.fg,
+        bg=theme.bg,
+    )
+
     # Determine keyframe times
     keyframe_times = _compute_keyframe_times(recording.duration, keyframe_interval, chapters)
 
@@ -222,13 +269,18 @@ def generate_manifest(
             keyframe_times.append(round(event.time, 3))
     keyframe_times = sorted(set(keyframe_times))
 
-    # Process events and capture keyframes + deltas
+    # Process events and capture keyframes. Rows and whole screens are
+    # deduplicated: each unique row becomes one entry in `lines`, each unique
+    # screen one entry in `frames` (and one SVG file), and keyframes point at
+    # frames by index.
     keyframes: list[KeyframeEntry] = []
-    deltas: list[DeltaEntry] = []
+    lines: list[Line] = []
+    line_ids: dict[Line, int] = {}
+    frames: list[FrameEntry] = []
+    frame_ids: dict[tuple, int] = {}
+    stats = ManifestStats()
 
     event_idx = 0
-    kf_idx = 0
-    prev_state = None
 
     # Always capture initial state (time 0)
     if 0.0 not in keyframe_times:  # pragma: no cover
@@ -238,7 +290,9 @@ def generate_manifest(
         # Feed events up to this keyframe time
         while event_idx < len(recording.events):
             event = recording.events[event_idx]
-            if event.time > target_time:
+            # Keyframe times are rounded, so compare at the same precision (accumulated
+            # delays like 1.1400000000000001 must still count as at-or-before 1.14)
+            if round(event.time, 3) > target_time:
                 break
 
             if event.code == "o":
@@ -267,31 +321,48 @@ def generate_manifest(
                     state, prompt_pattern, prompt_replacement
                 )
 
-        frame_num = len(keyframes)
-        filename = f"{prefix}-{frame_num:03d}.svg"
-
-        svg = render_frame(
-            state,
-            theme,
-            font_family=font_family,
-            show_cursor=show_cursor,
-            window_chrome=window_chrome,
-            **({"line_height": line_height} if line_height is not None else {}),
+        row_ids: list[int] = []
+        for r in range(state.rows):
+            line = line_model(state.cells[r], theme)
+            if line not in line_ids:
+                line_ids[line] = len(lines)
+                lines.append(line)
+            row_ids.append(line_ids[line])
+        cursor = (
+            (state.cursor_row, state.cursor_col) if show_cursor and state.cursor_visible else None
         )
+        size = (state.cols, state.rows)
+        frame_key = (size, tuple(row_ids), cursor)
 
-        if out_path:
-            (out_path / filename).write_text(svg, encoding="utf-8")
+        frame_idx = frame_ids.get(frame_key)
+        if frame_idx is None:
+            frame_idx = len(frames)
+            frame_ids[frame_key] = frame_idx
+            frames.append(
+                FrameEntry(
+                    lines=row_ids,
+                    cursor=cursor,
+                    size=None if size == (recording.term.cols, recording.term.rows) else size,
+                )
+            )
+            svg = render_svg(
+                [lines[i] for i in row_ids],
+                cols=state.cols,
+                cursor=cursor,
+                theme=theme,
+                font_family=font_family,
+                line_height=screen.line_height,
+            )
+            if out_path:
+                (out_path / f"{prefix}-{frame_idx:03d}.svg").write_text(svg, encoding="utf-8")
 
-        keyframes.append(KeyframeEntry(time=target_time, file=filename))
-        prev_state = state
-
-    # Capture deltas between keyframes (character-level changes)
-    # For Phase 1, we use keyframes only; deltas will come in Phase 2
-    # This keeps things simple while still providing smooth chapter-based playback
+        keyframes.append(
+            KeyframeEntry(time=target_time, file=f"{prefix}-{frame_idx:03d}.svg", frame=frame_idx)
+        )
 
     # Build manifest
     manifest = Manifest(
-        version=1,
+        version=MANIFEST_VERSION,
         title=recording.title,
         duration=recording.duration,
         cols=recording.term.cols,
@@ -299,15 +370,24 @@ def generate_manifest(
         theme=script.theme_name if script and script.theme_name else "default",
         chapters=chapters,
         keyframes=keyframes,
-        deltas=deltas,
+        screen=screen,
+        lines=lines,
+        frames=frames,
         annotations=script.annotations if script else [],
         highlights=script.highlights if script else [],
         snippets=script.snippets if script else [],
         window_chrome=window_chrome,
+        stats=stats,
     )
 
+    manifest_json = manifest.to_json()
+    stats.keyframes = len(keyframes)
+    stats.frames = len(frames)
+    stats.lines = len(lines)
+    stats.manifest_bytes = len(manifest_json.encode("utf-8"))
+
     if out_path:
-        (out_path / "manifest.json").write_text(manifest.to_json(), encoding="utf-8")
+        (out_path / "manifest.json").write_text(manifest_json, encoding="utf-8")
 
     return manifest
 
@@ -336,15 +416,35 @@ def _compute_keyframe_times(
     return sorted(times)
 
 
-def _delta_change_to_dict(change: DeltaChange) -> dict:
-    """Convert a DeltaChange to a JSON-serializable dict."""
-    d: dict = {"row": change.row, "col": change.col, "char": change.char}
-    if change.fg:
-        d["fg"] = change.fg
-    if change.bg:
-        d["bg"] = change.bg
-    if change.bold:
-        d["bold"] = True
+def _serialize_keyframe(kf: KeyframeEntry) -> dict:
+    d: dict = {"time": round(kf.time, 3), "file": kf.file}
+    if kf.frame is not None:
+        d["frame"] = kf.frame
+    return d
+
+
+def _serialize_line(line: Line) -> list:
+    """Serialize a row as `[bg_spans, text_spans]`.
+
+    Background spans are `[col, length, color]`; text spans are
+    `[col, text, color]`, with a fourth CSS-classes item only when non-empty.
+    """
+    bg_spans, text_spans = line
+    return [
+        [list(span) for span in bg_spans],
+        [
+            [col, text, color, cls] if cls else [col, text, color]
+            for col, text, color, cls in text_spans
+        ],
+    ]
+
+
+def _serialize_frame(frame: FrameEntry) -> dict:
+    d: dict = {"lines": frame.lines}
+    if frame.cursor is not None:
+        d["cursor"] = list(frame.cursor)
+    if frame.size is not None:
+        d["size"] = list(frame.size)
     return d
 
 

@@ -108,8 +108,8 @@ automatically during the build step.
 great-docs build
 ```
 
-During the build, Great Docs automatically finds all `.termshow` files, renders them into SVG
-keyframes, and embeds the data inline in your HTML pages. No runtime fetches are needed.
+During the build, Great Docs automatically finds all `.termshow` files, renders them into compact
+player data, and embeds that data inline in your HTML pages. No runtime fetches are needed.
 
 That's the entire workflow: record, annotate, embed, and build. The following sections cover each
 piece in detail.
@@ -1020,8 +1020,15 @@ to point at a different script file. Asciinema `.cast` files work too. Press
 great-docs termshow render docs/assets/my-demo.termshow
 ```
 
-Generates the SVG keyframes and `manifest.json` without a full site build. Useful for inspecting
-the output or debugging chapter timing.
+Generates the SVG frames and `manifest.json` without a full site build. Useful for inspecting
+the output or debugging chapter timing. The command also reports the page payload, the size of
+the player data each page embeds:
+
+```
+✓ Rendered 107 keyframes (95 unique screens) to docs/assets/termshow/termshow-demo/
+  Duration: 23.4s | Chapters: 2
+  Page payload: 19.1 KB
+```
 
 Both commands work with any `.termshow` file that has a companion `.termshow.yml` script.
 
@@ -1051,18 +1058,23 @@ The Termshow pipeline has two phases:
 
 1. Discovers all `.termshow` files under the selected configuration directory
 2. Parses each recording + its YAML script
-3. Renders SVG keyframes at each visual change point
-4. Generates `manifest.json` with timing, chapters, and annotations
-5. The Quarto shortcode filter embeds the manifest and all SVGs inline as JSON
+3. Captures the screen at each visual change point. Identical screens are stored once, and so
+   are identical rows, which is what keeps the data small: most of a terminal stays the same from
+   one moment to the next
+4. Generates `manifest.json` with timing, chapters, annotations, and those compact screens, plus
+   one SVG file per unique screen (used for the poster image)
+5. The Quarto shortcode filter embeds the manifest inline as JSON
 
 **Page load** (JavaScript, no network requests):
 
-1. Reads inline manifest and SVG data from embedded `<script>` elements
+1. Reads the inline manifest from an embedded `<script>` element
 2. Builds the player UI (viewport, controls, chapter bar, overlays)
-3. On play: advances time via `requestAnimationFrame`, swaps SVG frames at correct timestamps
+3. On play: advances time via `requestAnimationFrame`, drawing each screen as SVG the first time
+   it's needed and swapping frames at the correct timestamps
 
 This architecture means zero runtime fetches, full offline support (including `file://` protocol),
-and pixel-perfect SVG rendering at any zoom level.
+and pixel-perfect SVG rendering at any zoom level. Pages built with older versions of Great Docs
+(whose manifests list one SVG file per keyframe) keep playing with the current player.
 
 ## The Termshow Editor
 

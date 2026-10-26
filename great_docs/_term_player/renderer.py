@@ -15,6 +15,19 @@ DEFAULT_LINE_HEIGHT = 1.5  # Line height multiplier
 DEFAULT_PADDING = 16  # Padding inside terminal frame
 
 
+# A rendered row: background spans `(col, length, color)` and text spans
+# `(col, text, color, css_classes)`, with colors already resolved through the theme.
+# Rows are hashable so identical rows can be shared between frames.
+BgSpan = tuple[int, int, str]
+TextSpan = tuple[int, str, str, str]
+Line = tuple[tuple[BgSpan, ...], tuple[TextSpan, ...]]
+
+
+def line_model(row: list[Cell], theme: Theme) -> Line:
+    """Resolve one row of terminal cells into its background and text spans."""
+    return (tuple(_collect_bg_spans(row, theme)), tuple(_collect_text_spans(row, theme)))
+
+
 def render_frame(
     state: ScreenState,
     theme: Theme | None = None,
@@ -43,7 +56,9 @@ def render_frame(
     show_cursor
         Whether to render the cursor block.
     window_chrome
-        Window decoration style: "none", "minimal", or "colorful".
+        Window decoration style: "none", "minimal", or "colorful". Chrome is
+        drawn by the player as a CSS overlay, so this is accepted for API
+        compatibility only.
 
     Returns
     -------
@@ -53,16 +68,42 @@ def render_frame(
     if theme is None:
         theme = Theme()
 
+    lines = [line_model(state.cells[r], theme) for r in range(state.rows)]
+    cursor = (state.cursor_row, state.cursor_col) if show_cursor and state.cursor_visible else None
+
+    return render_svg(
+        lines,
+        cols=state.cols,
+        cursor=cursor,
+        theme=theme,
+        font_family=font_family,
+        font_size=font_size,
+        line_height=line_height,
+    )
+
+
+def render_svg(
+    lines: list[Line],
+    *,
+    cols: int,
+    cursor: tuple[int, int] | None,
+    theme: Theme,
+    font_family: str = DEFAULT_FONT_FAMILY,
+    font_size: int = DEFAULT_FONT_SIZE,
+    line_height: float = DEFAULT_LINE_HEIGHT,
+) -> str:
+    """Render resolved rows (see `line_model`) as an SVG document.
+
+    The player's `renderFrameSvg()` in `termshow.js` mirrors this function so
+    that frames drawn in the browser from a v2 manifest match the SVG files
+    written at render time. Keep the two in sync.
+    """
     cell_w = font_size * 0.6  # Monospace character width approximation
     cell_h = font_size * line_height
 
     pad = DEFAULT_PADDING
-    chrome_h = 0.0  # Chrome is rendered as CSS overlay, not in SVG
-
-    content_w = state.cols * cell_w
-    content_h = state.rows * cell_h
-    svg_w = content_w + pad * 2
-    svg_h = content_h + pad * 2 + chrome_h
+    svg_w = cols * cell_w + pad * 2
+    svg_h = len(lines) * cell_h + pad * 2
 
     parts: list[str] = []
 
@@ -94,20 +135,13 @@ def render_frame(
         f'<rect width="{svg_w:.1f}" height="{svg_h:.1f}" fill="{theme.bg}" rx="8" ry="8"/>'
     )
 
-    # Window chrome is now rendered as CSS overlay by the player
-    # (kept as parameter for API compatibility)
-
     # Terminal content group
-    content_y = pad + chrome_h
-    parts.append(f'<g transform="translate({pad},{content_y})">')
+    parts.append(f'<g transform="translate({pad},{pad})">')
 
-    # Render each row
-    for row_idx in range(state.rows):
-        row = state.cells[row_idx]
+    for row_idx, (bg_spans, text_spans) in enumerate(lines):
         y = row_idx * cell_h
 
-        # Render background spans (colored backgrounds)
-        bg_spans = _collect_bg_spans(row, theme)
+        # Colored backgrounds
         for span_col, span_len, bg_color in bg_spans:
             x = span_col * cell_w
             w = span_len * cell_w
@@ -116,20 +150,19 @@ def render_frame(
                 f'width="{w:.1f}" height="{cell_h:.1f}" fill="{bg_color}"/>'
             )
 
-        # Render text spans (grouped by style for efficiency)
-        text_spans = _collect_text_spans(row, theme)
+        # Text runs (grouped by style)
         for span_col, text, fg_color, classes in text_spans:
             x = span_col * cell_w
             cls_attr = f' class="gd-tp-text {classes}"' if classes else ' class="gd-tp-text"'
-            fill_attr = f' fill="{fg_color}"' if fg_color else f' fill="{theme.fg}"'
             parts.append(
-                f'<text x="{x:.1f}" y="{y:.1f}"{cls_attr}{fill_attr}>{xml_escape(text)}</text>'
+                f'<text x="{x:.1f}" y="{y:.1f}"{cls_attr} fill="{fg_color}">'
+                f"{xml_escape(text)}</text>"
             )
 
     # Cursor
-    if show_cursor and state.cursor_visible:
-        cx = state.cursor_col * cell_w
-        cy = state.cursor_row * cell_h
+    if cursor is not None:
+        cx = cursor[1] * cell_w
+        cy = cursor[0] * cell_h
         parts.append(
             f'<rect x="{cx:.1f}" y="{cy:.1f}" '
             f'width="{cell_w:.1f}" height="{cell_h:.1f}" '

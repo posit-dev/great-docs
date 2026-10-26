@@ -4,6 +4,10 @@
  * A lightweight player for pre-rendered SVG terminal recordings.
  * Loads a manifest.json and displays keyframe SVGs with timeline navigation,
  * chapter markers, annotations, and keyboard controls.
+ *
+ * A version 2 manifest stores each unique screen as rows of styled spans and
+ * the player draws the SVG itself (`renderFrameSvg`); version 1 manifests
+ * point at pre-rendered SVG files, which are inlined or fetched.
  */
 (function () {
   'use strict';
@@ -157,6 +161,7 @@
     function activate(manifest, frames) {
       state.manifest = manifest;
       state.frames = frames;
+      state.svgCache = [];
       controls.duration.textContent = formatTime(manifest.duration);
       renderChapterMarkers(controls.timeline, manifest);
 
@@ -633,6 +638,17 @@
       }
     }
 
+    const kf = manifest.keyframes[idx];
+
+    // Version 2: draw the screen from the manifest
+    if (manifest.frames && kf.frame != null) {
+      if (!state.svgCache[kf.frame]) {
+        state.svgCache[kf.frame] = renderFrameSvg(manifest, kf.frame);
+      }
+      svgContainer.innerHTML = state.svgCache[kf.frame];
+      return;
+    }
+
     // Use inline frames if available (no fetch needed)
     if (state.frames && state.frames[idx]) {
       svgContainer.innerHTML = state.frames[idx];
@@ -640,7 +656,6 @@
     }
 
     // Fallback: fetch the SVG file
-    const kf = manifest.keyframes[idx];
     const svgUrl = state.baseUrl + kf.file;
 
     fetchResource(svgUrl, false)
@@ -648,6 +663,86 @@
         svgContainer.innerHTML = svg;
       })
       .catch(() => {});
+  }
+
+  function escapeXml(text) {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /**
+   * Draw frame `frameIdx` of a version 2 manifest as an SVG string.
+   *
+   * Mirrors `render_svg()` in great_docs/_term_player/renderer.py so the
+   * result matches the SVG files written at render time (the highlight and
+   * snippet code measures this markup). Keep the two in sync.
+   */
+  function renderFrameSvg(manifest, frameIdx) {
+    const screen = manifest.screen;
+    const frame = manifest.frames[frameIdx];
+    const cols = frame.size ? frame.size[0] : manifest.term.cols;
+    const fmt = (n) => n.toFixed(1);
+
+    const cellW = screen.font_size * 0.6;
+    const cellH = screen.font_size * screen.line_height;
+    const pad = screen.padding;
+    const svgW = cols * cellW + pad * 2;
+    const svgH = frame.lines.length * cellH + pad * 2;
+
+    const parts = [];
+    parts.push(
+      '<svg xmlns="http://www.w3.org/2000/svg" ' +
+      'viewBox="0 0 ' + fmt(svgW) + ' ' + fmt(svgH) + '" ' +
+      'width="' + fmt(svgW) + '" height="' + fmt(svgH) + '" ' +
+      'role="img" aria-label="Terminal recording frame">'
+    );
+    parts.push(
+      '<style>' +
+      '.gd-tp-text{font-family:' + screen.font_family + ';font-size:' + screen.font_size + 'px;' +
+      'white-space:pre;dominant-baseline:text-before-edge}' +
+      '.gd-tp-bold{font-weight:700}' +
+      '.gd-tp-italic{font-style:italic}' +
+      '.gd-tp-underline{text-decoration:underline}' +
+      '.gd-tp-strikethrough{text-decoration:line-through}' +
+      '.gd-tp-dim{opacity:0.6}' +
+      '@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}' +
+      '.gd-tp-cursor{animation:blink 1s step-end infinite}' +
+      '</style>'
+    );
+    parts.push(
+      '<rect width="' + fmt(svgW) + '" height="' + fmt(svgH) + '" fill="' + screen.bg +
+      '" rx="8" ry="8"/>'
+    );
+    parts.push('<g transform="translate(' + pad + ',' + pad + ')">');
+
+    frame.lines.forEach((lineIdx, rowIdx) => {
+      const line = manifest.lines[lineIdx];
+      const y = fmt(rowIdx * cellH);
+      for (const [col, len, color] of line[0]) {
+        parts.push(
+          '<rect x="' + fmt(col * cellW) + '" y="' + y + '" ' +
+          'width="' + fmt(len * cellW) + '" height="' + fmt(cellH) + '" fill="' + color + '"/>'
+        );
+      }
+      for (const [col, text, color, classes] of line[1]) {
+        const cls = classes ? 'gd-tp-text ' + classes : 'gd-tp-text';
+        parts.push(
+          '<text x="' + fmt(col * cellW) + '" y="' + y + '" class="' + cls + '" fill="' + color +
+          '">' + escapeXml(text) + '</text>'
+        );
+      }
+    });
+
+    if (frame.cursor) {
+      parts.push(
+        '<rect x="' + fmt(frame.cursor[1] * cellW) + '" y="' + fmt(frame.cursor[0] * cellH) + '" ' +
+        'width="' + fmt(cellW) + '" height="' + fmt(cellH) + '" ' +
+        'fill="' + screen.fg + '" opacity="0.7" class="gd-tp-cursor"/>'
+      );
+    }
+
+    parts.push('</g>');
+    parts.push('</svg>');
+    return parts.join('\n');
   }
 
   function findKeyframeIndex(keyframes, time) {
@@ -1022,6 +1117,10 @@
   }
 
   // --- Initialization ---
+
+  // Exposed for tests and for embedding outside the Quarto shortcode
+  window.Termshow = window.Termshow || {};
+  window.Termshow.renderFrame = renderFrameSvg;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initAll);
