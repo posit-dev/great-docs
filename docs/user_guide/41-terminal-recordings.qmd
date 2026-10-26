@@ -202,8 +202,14 @@ highlights:
     fade_in: 0.3
 ```
 
-All fields are optional except `source`. Start with just chapters and add annotations, cuts, or
+Every field is optional, including `source`: the build pairs `NAME.termshow.yml` with
+`NAME.termshow` in the same directory. Start with just chapters and add annotations, cuts, or
 highlights as you refine the presentation.
+
+::: {.version-only versions=">=0.18"}
+The complete format, with JSON Schemas for editor autocompletion and validation, is in
+[Termshow File Formats](termshow-file-formats.qmd).
+:::
 
 ## Settings Reference
 
@@ -838,6 +844,12 @@ For pattern matches, an optional `target.group` (default `0`) selects which capt
 highlight. This lets you match context (e.g., a full line) while only decorating the interesting
 part (e.g., a flag name).
 
+::: {.callout-note}
+The player currently draws `region` and `lines` targets. Pattern targets (`match`, `group`, and
+`track_scroll`) are part of the file format and are kept in the rendered manifest, but they aren't
+drawn yet. Use a `region` when the highlight needs to appear today.
+:::
+
 **Scroll tracking.** Terminal output scrolls. A region-based highlight is positional: row 5
 stays at row 5 even after scrolling pushes new content into that row. Set `target.track_scroll:
 true` to have the highlight follow the matched text as it moves. Scroll tracking only works
@@ -860,31 +872,35 @@ Each highlight has a `style` that controls its visual adornment:
 
 | Style | Visual | Notes |
 |-------|--------|-------|
-| `box` | Bordered rectangle around text | Default style; technical look |
-| `underline` | Underline beneath text | Solid or wavy (set via subtype) |
+| `outline` | Thin ring around the text | Default style |
+| `box` | Bordered rectangle with a faint fill | Technical look |
+| `underline` | Solid line beneath the text | |
+| `underline-wavy` | Wavy line beneath the text | Reads as "error" or "warning" |
 | `background` | Semi-transparent background fill | Good for multi-line selections |
-| `spotlight` | Dims everything *except* the target | Viewport-wide dimming with cutout |
-| `badge` | Small label pill adjacent to text | Position: before or after |
-| `bracket` | Curly brace spanning lines | For grouping multiple rows |
+| `spotlight` | Faint fill with a soft glow around it | Draws the eye without a hard border |
+| `glow` | Glowing ring around the text | Stronger than `outline` |
+| `bracket` | Bar down the left edge | For grouping multiple rows |
+| `badge-before` | Outline with a label pill above | Set the label with `badge_text` |
+| `badge-after` | Outline with a label pill below | Set the label with `badge_text` |
 
 ### Badge Details
 
-Badge style attaches a small inline pill adjacent to the highlighted text:
+The badge styles attach a small label pill to the highlighted text:
 
 ```yaml
 highlights:
   - at: 18.0
     duration: 5.0
     target:
-      match: '--verbose'
-    style: badge
+      region: { row: 3, col: 12, width: 9, height: 1 }
+    style: badge-after
     badge_text: "recommended"
     color: "#8be9fd"
 ```
 
-The `badge_text` field sets the label inside the badge. Use the badge position control in the
-Properties Panel to place it before or after the matched text. Badges will wrap to the opposite
-side if they would overflow the viewport.
+The `badge_text` field sets the label inside the badge, and `badge_icon` adds a short prefix
+(often an emoji) before it. `badge-before` places the pill above the text and `badge-after`
+places it below.
 
 ### Animation & Transitions
 
@@ -892,8 +908,8 @@ Highlights support animated entry and exit:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `fade_in` | `0` | Duration of the appear transition (seconds) |
-| `fade_out` | `0` | Duration of the disappear transition (seconds) |
+| `fade_in` | `0.3` | Duration of the appear transition (seconds) |
+| `fade_out` | `0.3` | Duration of the disappear transition (seconds) |
 | `pulse` | `false` | Gentle pulsing animation that loops continuously |
 
 When `pulse` is enabled, the highlight's opacity oscillates between 100% and 50% on a 1.5-second
@@ -908,18 +924,18 @@ The complete set of fields available for each highlight entry:
 | Field | Default | Description |
 |-------|---------|-------------|
 | `at` | *(required)* | Time in seconds when the highlight appears |
-| `duration` | *(required)* | How long the highlight remains visible |
+| `duration` | `2.0` | How long the highlight remains visible |
 | `target` | *(required)* | Targeting object (see above) |
-| `style` | `"box"` | Adornment style (see table above) |
-| `color` | `"#f1fa8c"` | Adornment color (hex or rgba) |
-| `opacity` | `1` | Overall opacity of the highlight (0–1) |
+| `style` | `"outline"` | Adornment style (see table above) |
+| `color` | `"#f1fa8c"` | Adornment color (any CSS color, such as hex or rgba) |
 | `badge_text` | `""` | Label text for badge styles |
+| `badge_icon` | `""` | Short prefix shown before `badge_text` |
 | `pulse` | `false` | Enable pulsing animation |
-| `fade_in` | `0` | Appear transition duration (seconds) |
-| `fade_out` | `0` | Disappear transition duration (seconds) |
+| `fade_in` | `0.3` | Appear transition duration (seconds) |
+| `fade_out` | `0.3` | Disappear transition duration (seconds) |
 
-Only `at`, `duration`, and `target` are required. All other fields have sensible defaults and
-can be omitted for simple highlights.
+Only `at` and `target` are required. All other fields have sensible defaults and can be omitted
+for simple highlights.
 
 ### Examples
 
@@ -938,15 +954,15 @@ highlights:
     color: "rgba(255, 184, 108, 0.15)"
 ```
 
-Call out a specific flag using regex with a badge:
+Call out a specific flag with a badge:
 
 ```yaml
 highlights:
   - at: 12.0
     duration: 5.0
     target:
-      match: '--output'
-    style: badge
+      region: { row: 1, col: 18, width: 8, height: 1 }
+    style: badge-before
     badge_text: "new in v2"
     color: "#bd93f9"
 ```
