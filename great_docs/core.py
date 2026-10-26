@@ -15196,8 +15196,10 @@ anchor-sections: true
 
         Discovers all .termshow files in the project root, applies any
         companion .termshow.yml scripts, and renders SVG frames into
-        great-docs/termshow/<basename>/ so the Quarto shortcode can
-        reference them.
+        great-docs/termshow/<relative path without extension>/ so the Quarto
+        shortcode can reference them. Keying output by relative path (rather
+        than basename) keeps same-named recordings in different directories
+        from overwriting each other.
         """
 
         # Find all .termshow files in the project root (they live outside
@@ -15224,9 +15226,9 @@ anchor-sections: true
 
         rendered_count = 0
         for ts_file in termshow_files:
-            basename = ts_file.stem
+            rel_stem = ts_file.relative_to(self.layout.source_dir).with_suffix("")
             # Output into the great-docs project directory (Quarto project)
-            output_dir = self.build_dir / "termshow" / basename
+            output_dir = self.build_dir / "termshow" / rel_stem
 
             try:
                 recording = parse_termshow(str(ts_file))
@@ -15246,7 +15248,7 @@ anchor-sections: true
                 )
                 rendered_count += 1
             except Exception as e:
-                log.warn(f"termshow: failed to render {ts_file.name}: {e}")
+                log.warn(f"termshow: failed to render {rel_stem.as_posix()}.termshow: {e}")
 
         if rendered_count:
             log.detail(f"Pre-rendered {rendered_count} terminal recording(s)")

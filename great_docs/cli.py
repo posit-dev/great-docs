@@ -4224,8 +4224,51 @@ def term_import_cast(source: str, output: str) -> None:
     click.echo(f"  Duration: {recording.duration:.1f}s | Events: {len(recording.events)}")
 
 
+@click.command("play")
+@click.argument("source", type=click.Path(exists=True))
+@click.option("--speed", type=float, default=1.0, help="Playback speed multiplier")
+@click.option(
+    "--script", type=click.Path(exists=True), default=None, help="Path to .termshow.yml script"
+)
+@click.option("--no-script", is_flag=True, help="Ignore any companion .termshow.yml script")
+def term_play(source: str, speed: float, script: str | None, no_script: bool) -> None:
+    """Play a recording directly in the terminal.
+
+    Applies the companion .termshow.yml script (cuts and speed changes) unless
+    --no-script is given. Accepts .termshow and asciicast (.cast) files. Press
+    Ctrl+C to stop.
+
+    Examples:
+      great-docs termshow play demos/install.termshow
+      great-docs termshow play demos/install.termshow --speed 2
+    """
+    from ._term_player import apply_script, parse_asciicast, parse_termshow
+    from ._term_player.playback import play_recording
+    from ._term_player.script import load_script
+
+    if speed <= 0:
+        raise click.BadParameter("must be greater than 0", param_hint="--speed")
+
+    source_path = Path(source)
+    if source_path.suffix == ".cast":
+        recording = parse_asciicast(source_path)
+    else:
+        recording = parse_termshow(source_path)
+
+    if not no_script:
+        script_path = Path(script) if script else source_path.with_suffix(".termshow.yml")
+        if script_path.exists():
+            recording = apply_script(recording, load_script(script_path))
+
+    try:
+        play_recording(recording, speed=speed)
+    except KeyboardInterrupt:
+        click.echo("\n✓ Playback stopped.")
+
+
 termshow.add_command(term_record)
 termshow.add_command(term_render)
+termshow.add_command(term_play)
 termshow.add_command(term_import_cast)
 
 

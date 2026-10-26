@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .parser import Event, Recording, Theme
+from .themes import resolve_theme
 
 
 @dataclass
@@ -130,6 +131,8 @@ class Script:
     speed: float = 1.0
     theme_name: str | None = None
     theme: Theme | None = None
+    # Raw `settings.theme` value (name or inline mapping), kept for round-tripping
+    theme_spec: str | dict[str, Any] | None = None
     font_family: str | None = None
     line_height: float | None = None
     show_cursor: bool = True
@@ -177,7 +180,14 @@ def _parse_script_data(data: dict[str, Any]) -> Script:
     settings = data.get("settings", {})
     if isinstance(settings, dict):
         script.speed = settings.get("speed", 1.0)
-        script.theme_name = settings.get("theme")
+        theme_spec = settings.get("theme")
+        if theme_spec is not None:
+            script.theme_spec = theme_spec
+            script.theme = resolve_theme(theme_spec)
+            if isinstance(theme_spec, str):
+                script.theme_name = theme_spec
+            else:
+                script.theme_name = theme_spec.get("base") or "custom"
         script.font_family = settings.get("font_family")
         script.line_height = settings.get("line_height")
         script.show_cursor = settings.get("show_cursor", True)

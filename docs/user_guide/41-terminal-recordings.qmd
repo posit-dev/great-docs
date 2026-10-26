@@ -164,9 +164,7 @@ settings:
   window_chrome: colorful     # Window decoration style
   theme: monokai              # Terminal color scheme
   font_family: "JetBrains Mono, Fira Code, monospace"
-  font_size: 14               # Font size in rendered SVG (px)
   line_height: 1.2            # Line height multiplier
-  padding: 12                 # Inner padding (px)
   prompt: "❯"                 # Replace detected prompts with ❯
 
 chapters:
@@ -214,22 +212,185 @@ frames. All settings are optional and have sensible defaults.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `window_chrome` | `colorful` | Window decoration style |
-| `theme` | (auto) | Terminal color scheme |
-| `font_family` | (system stack) | Font family for rendered SVG |
-| `font_size` | `14` | Font size in px |
-| `line_height` | `1.2` | Line height multiplier |
-| `padding` | `12` | Inner padding in px |
+| `window_chrome` | `none` | Window decoration style |
+| `theme` | `default` | Terminal color scheme (see [Themes](#themes)) |
+| `font_family` | (monospace stack) | Font family for rendered SVG |
+| `line_height` | `1.5` | Line height multiplier |
+| `show_cursor` | `true` | Render the terminal cursor |
+| `speed` | `1.0` | Global playback speed multiplier (applied at render time) |
 | `prompt` | (none) | Prompt replacement character |
 | `prompt_pattern` | (none) | Prompt detection regex |
 
-The `window_chrome` setting accepts `colorful` (traffic-light buttons), `plain` (grey dots), or
+The `window_chrome` setting accepts `colorful` (traffic-light buttons), `minimal` (grey dots), or
 `none` (no title bar). The `font_family` value is a comma-separated list passed directly to the
-SVG `font-family` attribute. The `prompt` and `prompt_pattern` settings work together for prompt
-substitution, described in the next section.
+SVG `font-family` attribute. Lower `line_height` values (around `1.2`) make box-drawing characters
+connect vertically. The `prompt` and `prompt_pattern` settings work together for prompt
+substitution, described below.
 
 These settings are applied at render time. Changing them requires re-rendering but not
 re-recording.
+
+## Themes
+
+The `theme` setting picks the terminal's color scheme: the foreground, background, and the 16 ANSI
+colors that programs use for colored output. Use one of the built-in themes by name:
+
+```yaml
+settings:
+  theme: dracula
+```
+
+The built-in themes are shown below, each playing the same short recording so you can compare how
+they render prompts, `git` and `ls` output, and the full 16-color palette (normal colors on the
+first row of swatches, bright colors on the second).
+
+```{=html}
+<style>
+.termshow-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 1rem 1.25rem;
+  margin: 1rem 0 1.5rem;
+}
+.termshow-theme-cell > p { margin: 0 0 0.35rem; }
+.termshow-theme-cell .gd-termshow { margin: 0; }
+</style>
+```
+
+**Dark themes**
+
+:::: {.termshow-theme-grid}
+::: {.termshow-theme-cell}
+`default`
+
+{{< termshow file="assets/themes/default" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`catppuccin-mocha`
+
+{{< termshow file="assets/themes/catppuccin-mocha" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`dracula`
+
+{{< termshow file="assets/themes/dracula" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`github-dark`
+
+{{< termshow file="assets/themes/github-dark" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`gruvbox-dark`
+
+{{< termshow file="assets/themes/gruvbox-dark" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`monokai`
+
+{{< termshow file="assets/themes/monokai" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`nord`
+
+{{< termshow file="assets/themes/nord" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`one-dark`
+
+{{< termshow file="assets/themes/one-dark" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`rose-pine`
+
+{{< termshow file="assets/themes/rose-pine" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`solarized-dark`
+
+{{< termshow file="assets/themes/solarized-dark" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`tokyo-night`
+
+{{< termshow file="assets/themes/tokyo-night" autoplay="true" loop="true" controls="false" >}}
+:::
+::::
+
+**Light themes**
+
+:::: {.termshow-theme-grid}
+::: {.termshow-theme-cell}
+`catppuccin-latte`
+
+{{< termshow file="assets/themes/catppuccin-latte" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`github-light`
+
+{{< termshow file="assets/themes/github-light" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`gruvbox-light`
+
+{{< termshow file="assets/themes/gruvbox-light" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`rose-pine-dawn`
+
+{{< termshow file="assets/themes/rose-pine-dawn" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`solarized-light`
+
+{{< termshow file="assets/themes/solarized-light" autoplay="true" loop="true" controls="false" >}}
+:::
+::::
+
+Names are case-insensitive, and spaces or underscores work in place of hyphens (`Tokyo Night`
+resolves to `tokyo-night`). An unknown name stops the render with an error listing the available
+themes, so a typo never silently falls back to the default.
+
+To use your own colors, give `theme` a mapping instead. Start from a built-in theme with `base` and
+override only what you need:
+
+```yaml
+settings:
+  theme:
+    base: nord
+    bg: "#1b1f27"
+```
+
+Or define a full theme. The `palette` lists the 8 normal ANSI colors (black, red, green, yellow,
+blue, magenta, cyan, white) followed by their 8 bright variants. If you provide only 8 colors, they
+are reused for the bright variants:
+
+```yaml
+settings:
+  theme:
+    fg: "#e0e0e0"
+    bg: "#101010"
+    palette: ["#202020", "#ff5f56", "#27c93f", "#ffbd2e",
+              "#4aa8ff", "#c678dd", "#56b6c2", "#e0e0e0"]
+```
+
+All colors must be hex values (`#rgb` or `#rrggbb`). The terminal theme only affects the recording
+itself. The surrounding player controls follow the page's light/dark mode, or the shortcode's
+`theme` option.
 
 ## Prompt Substitution
 
@@ -337,11 +498,21 @@ The shortcode accepts the following options to control player behavior:
 | `loop` | `"false"` | Loop playback when reaching the end |
 | `speed` | `"1"` | Initial playback speed multiplier |
 | `pause_on_chapters` | `"false"` | Auto-pause at each chapter boundary |
+| `poster` | `"0"` | Time (in seconds) of the frame shown before playback starts |
 | `controls` | `"true"` | Show the control bar |
-| `theme` | `"auto"` | Player theme: `auto`, `dark`, or `light` |
+| `theme` | `"auto"` | Player controls theme: `auto` (follow the page), `dark`, or `light` |
 
 All options are specified as key-value attributes on the shortcode. Unrecognized options are
 silently ignored, so you can safely add new ones as they become available.
+
+The `poster` frame is what readers see before pressing play, so pick a moment that shows what the
+recording is about (for example, the finished output) rather than an empty prompt. Playback still
+starts from the beginning. Setting `controls="false"` hides the control bar for a cleaner look in
+hero sections; keyboard shortcuts and the center play button still work.
+
+The `file` path is relative to the project root and matches the location of the `.termshow` file,
+so recordings with the same name in different directories never collide. If no rendered output is
+found for a path, the build logs a warning.
 
 ### Examples
 
@@ -835,9 +1006,13 @@ You can preview and render recordings outside of a full site build using these C
 
 ```bash
 great-docs termshow play docs/assets/my-demo.termshow
+great-docs termshow play docs/assets/my-demo.termshow --speed 2
 ```
 
-Plays the recording directly in your terminal for quick review.
+Plays the recording directly in your terminal for quick review, with cuts and speed changes from
+the companion `.termshow.yml` applied. Use `--no-script` to play the raw recording, or `--script`
+to point at a different script file. Asciinema `.cast` files work too. Press
+{{< keys "Ctrl" >}}+{{< keys "C" >}} to stop.
 
 ### Render SVG frames manually
 
@@ -1022,7 +1197,7 @@ The Settings panel exposes the following controls:
 | Control | Description |
 |---------|-------------|
 | **Default speed** | Playback speed multiplier (dropdown: 0.5×, 1×, 1.5×, 2×, 3×) |
-| **Chrome** | Window decoration style (dropdown: colorful, simple, none) |
+| **Chrome** | Window decoration style (dropdown: colorful, minimal, none) |
 | **Font family** | Comma-separated font stack for rendered output |
 | **Prompt** | Replacement character for prompt substitution, with preset buttons |
 | **Pattern** | Regex pattern for prompt detection (see [Prompt Substitution]) |
