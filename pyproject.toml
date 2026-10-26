@@ -62,6 +62,8 @@ dev = [
     "pytest>=6.0",
     "pytest-cov>=3.0",
     "pytest-xdist>=3.5",
+    # Validates termshow files against their published JSON Schemas
+    "jsonschema>=4.18",
     # Generates the signature grammar. The committed grammar must match this
     # version; bump it and run `make signature-grammar` together.
     "pygments==2.21.0",
@@ -98,7 +100,7 @@ where = ["."]
 include = ["great_docs*"]
 
 [tool.setuptools.package-data]
-great_docs = ["assets/*", "assets/.*"]
+great_docs = ["assets/*", "assets/.*", "_term_player/schemas/*.json"]
 
 [tool.setuptools]
 include-package-data = true
