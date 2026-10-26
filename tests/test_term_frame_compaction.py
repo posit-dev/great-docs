@@ -13,7 +13,8 @@ from click.testing import CliRunner
 from great_docs._term_player import generate_manifest
 from great_docs._term_player.manifest import Manifest
 from great_docs._term_player.parser import Event, Recording, TermInfo
-from great_docs._term_player.script import Script
+from great_docs._term_player.renderer import render_svg
+from great_docs._term_player.script import Script, _parse_script_data
 from great_docs._term_player.themes import get_theme
 from great_docs.cli import cli
 
@@ -141,6 +142,57 @@ class TestFormat:
         assert manifest.frames[-1].size == (30, 5)
 
 
+def _pair_script(spec="auto") -> Script:
+    return _parse_script_data({"settings": {"theme": spec}})
+
+
+class TestThemePair:
+    def test_single_theme_has_no_dark_member(self, tmp_path: Path):
+        _, data = _render(tmp_path)
+        assert "dark" not in data
+        assert "cursor" not in data["screen"]
+
+    def test_dark_member(self, tmp_path: Path):
+        manifest = generate_manifest(_recording(), _pair_script(), output_dir=tmp_path)
+        data = json.loads(manifest.to_json())
+        dark = get_theme("github-dark")
+        assert data["theme"] == "auto"
+        assert data["screen"]["bg"] == get_theme("github-light").bg
+        assert (data["dark"]["fg"], data["dark"]["bg"]) == (dark.fg, dark.bg)
+        assert "cursor" not in data["dark"]
+        # Dark rows run parallel to `lines`: same text, different colors
+        assert len(data["dark"]["lines"]) == len(data["lines"])
+        for light_line, dark_line in zip(data["lines"], data["dark"]["lines"]):
+            assert [span[:2] for span in light_line[1]] == [span[:2] for span in dark_line[1]]
+        assert data["dark"]["lines"] != data["lines"]
+
+    def test_cursor_colors(self, tmp_path: Path):
+        script = _pair_script({"light": "catppuccin-latte", "dark": "catppuccin-mocha"})
+        data = json.loads(generate_manifest(_recording(), script).to_json())
+        assert data["screen"]["cursor"] == "#dc8a78"
+        assert data["dark"]["cursor"] == "#f5e0dc"
+
+    def test_svg_files_use_light_side(self, tmp_path: Path):
+        generate_manifest(_recording(), _pair_script(), output_dir=tmp_path)
+        svg = (tmp_path / "frame-000.svg").read_text(encoding="utf-8")
+        assert f'fill="{get_theme("github-light").bg}"' in svg
+
+    def test_rows_alike_in_one_theme_stay_apart(self, tmp_path: Path):
+        """Rows that look the same in the light theme but not the dark get two lines."""
+        recording = Recording(
+            term=TermInfo(cols=10, rows=2),
+            events=[Event(time=0.0, code="o", data="\x1b[30mx\x1b[0m\r\n\x1b[90mx\x1b[0m")],
+        )
+        black = "#000000"
+        light = {"palette": [black] * 16}
+        dark = {"palette": ["#111111"] * 8 + ["#999999"] * 8}
+        manifest = generate_manifest(recording, _pair_script({"light": light, "dark": dark}))
+        frame = manifest.frames[0]
+        assert manifest.lines[frame.lines[0]] == manifest.lines[frame.lines[1]]
+        assert frame.lines[0] != frame.lines[1]
+        assert len(manifest.dark.lines) == len(manifest.lines)
+
+
 class TestJsonEncoding:
     def test_compact(self, tmp_path: Path):
         manifest, _ = _render(tmp_path)
@@ -189,7 +241,7 @@ class TestStats:
 _PARITY_JS = r"""
 const fs = require('fs');
 const vm = require('vm');
-const [playerPath, manifestPath] = process.argv.slice(1);
+const [playerPath, manifestPath, mode] = process.argv.slice(1);
 const window = { location: { protocol: 'https:' } };
 const document = {
   readyState: 'complete',
@@ -200,16 +252,16 @@ const document = {
 class MutationObserver { observe() {} }
 vm.runInNewContext(fs.readFileSync(playerPath, 'utf8'), { window, document, MutationObserver });
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-const out = manifest.frames.map((_, i) => window.Termshow.renderFrame(manifest, i));
+const out = manifest.frames.map((_, i) => window.Termshow.renderFrame(manifest, i, mode));
 process.stdout.write(JSON.stringify(out));
 """
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
 class TestPlayerParity:
-    def _js_frames(self, out: Path) -> list[str]:
+    def _js_frames(self, out: Path, mode: str = "light") -> list[str]:
         result = subprocess.run(
-            ["node", "-e", _PARITY_JS, str(_PLAYER_JS), str(out / "manifest.json")],
+            ["node", "-e", _PARITY_JS, str(_PLAYER_JS), str(out / "manifest.json"), mode],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -223,8 +275,9 @@ class TestPlayerParity:
             None,
             Script(font_family="Courier", line_height=1.3),
             Script(theme_name="dracula", theme=get_theme("dracula"), show_cursor=False),
+            _pair_script({"light": "catppuccin-latte", "dark": "catppuccin-mocha"}),
         ],
-        ids=["default", "font-and-line-height", "no-cursor"],
+        ids=["default", "font-and-line-height", "no-cursor", "pair-light-side"],
     )
     def test_js_matches_python_svg(self, tmp_path: Path, script: Script | None):
         manifest = generate_manifest(_recording(), script, output_dir=tmp_path)
@@ -245,3 +298,91 @@ class TestPlayerParity:
         generate_manifest(recording, output_dir=tmp_path)
         for i, svg in enumerate(self._js_frames(tmp_path)):
             assert svg == (tmp_path / f"frame-{i:03d}.svg").read_text(encoding="utf-8")
+
+    def test_js_matches_python_svg_for_dark_side(self, tmp_path: Path):
+        script = _pair_script({"light": "catppuccin-latte", "dark": "catppuccin-mocha"})
+        manifest = generate_manifest(_recording(), script, output_dir=tmp_path)
+        js_frames = self._js_frames(tmp_path, "dark")
+        for frame, svg in zip(manifest.frames, js_frames, strict=True):
+            expected = render_svg(
+                [manifest.dark.lines[i] for i in frame.lines],
+                cols=_recording().term.cols,
+                cursor=frame.cursor,
+                theme=script.dark_theme,
+                font_family=manifest.screen.font_family,
+                line_height=manifest.screen.line_height,
+            )
+            assert svg == expected
+        assert 'fill="#f5e0dc" opacity="0.7"' in js_frames[0]
+
+    def test_dark_mode_without_dark_member_uses_screen(self, tmp_path: Path):
+        generate_manifest(_recording(), output_dir=tmp_path)
+        for i, svg in enumerate(self._js_frames(tmp_path, "dark")):
+            assert svg == (tmp_path / f"frame-{i:03d}.svg").read_text(encoding="utf-8")
+
+
+# Calls the player's `colorMode` with a page whose <html> has the given
+# `data-bs-theme` and classes, and a given system preference
+_MODE_JS = r"""
+const fs = require('fs');
+const vm = require('vm');
+const [playerPath, casesJson] = process.argv.slice(1);
+const out = JSON.parse(casesJson).map(([manifest, option, bsTheme, htmlClass, systemDark]) => {
+  const html = {
+    getAttribute: (name) => (name === 'data-bs-theme' ? bsTheme : null),
+    classList: { contains: (c) => c === htmlClass },
+  };
+  const window = {
+    location: { protocol: 'https:' },
+    matchMedia: () => ({ matches: systemDark, addEventListener() {} }),
+  };
+  const document = {
+    readyState: 'complete',
+    querySelectorAll: () => [],
+    documentElement: html,
+    body: { classList: { contains: () => false } },
+    addEventListener: () => {},
+  };
+  class MutationObserver { observe() {} }
+  vm.runInNewContext(fs.readFileSync(playerPath, 'utf8'), { window, document, MutationObserver });
+  return window.Termshow.colorMode(manifest, option);
+});
+process.stdout.write(JSON.stringify(out));
+"""
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_player_color_mode():
+    pair = {"screen": {"bg": "#ffffff"}, "dark": {"bg": "#0d1117"}}
+    light_single = {"screen": {"bg": "#fdf6e3"}}
+    dark_single = {"screen": {"bg": "#282a36"}}
+    cases = {
+        # A forced option wins
+        "forced-light": ([dark_single, "light", "dark", None, True], "light"),
+        "forced-dark": ([pair, "dark", "light", None, False], "dark"),
+        # A pair follows the page: data-bs-theme, then classes, then the system
+        "pair-bs-dark": ([pair, "auto", "dark", None, False], "dark"),
+        "pair-bs-light": ([pair, "auto", "light", None, True], "light"),
+        "pair-class": ([pair, "auto", None, "quarto-dark", False], "dark"),
+        "pair-system": ([pair, "auto", None, None, True], "dark"),
+        "pair-default": ([pair, "auto", None, None, False], "light"),
+        # A single theme matches the chrome to its background
+        "single-light": ([light_single, "auto", "dark", None, True], "light"),
+        "single-dark": ([dark_single, "auto", "light", None, False], "dark"),
+        "v1": ([{}, "auto", "light", None, False], "dark"),
+    }
+    result = subprocess.run(
+        [
+            "node",
+            "-e",
+            _MODE_JS,
+            str(_PLAYER_JS),
+            json.dumps([args for args, _ in cases.values()]),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    )
+    got = dict(zip(cases, json.loads(result.stdout)))
+    assert got == {name: expected for name, (_, expected) in cases.items()}
