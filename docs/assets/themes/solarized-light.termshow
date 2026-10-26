@@ -1,0 +1,11 @@
+{"version": 1, "format": "termshow", "term": {"cols": 38, "rows": 10, "type": "xterm-256color"}}
+[0.4, "o", "\u001b[32m$\u001b[0m "]
+[0.35, "o", "git sta"]
+[0.15, "o", "tus -s"]
+[0.4, "o", "\r\n\u001b[32mA\u001b[0m  docs/guide.md\r\n \u001b[31mM\u001b[0m src/app.py\r\n\u001b[31m??\u001b[0m notes.txt\r\n\u001b[32m$\u001b[0m "]
+[0.35, "o", "ls"]
+[0.4, "o", "\r\n\u001b[34mdocs\u001b[0m  \u001b[34msrc\u001b[0m  \u001b[32mbuild.sh\u001b[0m  \u001b[35mlogo.png\u001b[0m  \u001b[36mlink\u001b[0m\r\n\u001b[32m$\u001b[0m "]
+[0.35, "o", "pale"]
+[0.15, "o", "tte"]
+[0.4, "o", "\r\n\u001b[30m\u2588\u2588\u2588\u001b[0m\u001b[31m\u2588\u2588\u2588\u001b[0m\u001b[32m\u2588\u2588\u2588\u001b[0m\u001b[33m\u2588\u2588\u2588\u001b[0m\u001b[34m\u2588\u2588\u2588\u001b[0m\u001b[35m\u2588\u2588\u2588\u001b[0m\u001b[36m\u2588\u2588\u2588\u001b[0m\u001b[37m\u2588\u2588\u2588\u001b[0m\r\n\u001b[90m\u2588\u2588\u2588\u001b[0m\u001b[91m\u2588\u2588\u2588\u001b[0m\u001b[92m\u2588\u2588\u2588\u001b[0m\u001b[93m\u2588\u2588\u2588\u001b[0m\u001b[94m\u2588\u2588\u2588\u001b[0m\u001b[95m\u2588\u2588\u2588\u001b[0m\u001b[96m\u2588\u2588\u2588\u001b[0m\u001b[97m\u2588\u2588\u2588\u001b[0m\r\n\u001b[32m$\u001b[0m "]
+[3.0, "o", ""]
