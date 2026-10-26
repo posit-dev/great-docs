@@ -597,7 +597,7 @@
 
     // Update highlights
     if (state.highlightLayer) {
-      updateHighlights(state.highlightLayer, manifest.highlights, state.currentTime, svgContainer);
+      updateHighlights(state, state.currentTime, svgContainer);
     }
 
     // Update copy-snippet buttons
@@ -799,7 +799,145 @@
     }
   }
 
-  function updateHighlights(layer, highlights, time, svgContainer) {
+  // Per-manifest caches for pattern targets: row text by frame, match results,
+  // and the fixed position of each non-tracking highlight
+  const matchCaches = new WeakMap();
+
+  function matchCache(manifest) {
+    let cache = matchCaches.get(manifest);
+    if (!cache) {
+      cache = { rows: [], matches: new Map(), anchors: new WeakMap() };
+      matchCaches.set(manifest, cache);
+    }
+    return cache;
+  }
+
+  /**
+   * Plain text of each row of a version 2 frame. Spans are placed at their
+   * columns (one character per cell) and gaps are filled with spaces.
+   */
+  function frameRows(manifest, frameIdx) {
+    const cache = matchCache(manifest);
+    if (!cache.rows[frameIdx]) {
+      cache.rows[frameIdx] = manifest.frames[frameIdx].lines.map((lineIdx) => {
+        const cells = [];
+        for (const [col, text] of manifest.lines[lineIdx][1]) {
+          Array.from(text).forEach((ch, i) => { cells[col + i] = ch; });
+        }
+        return Array.from(cells, (ch) => (ch === undefined ? ' ' : ch)).join('');
+      });
+    }
+    return cache.rows[frameIdx];
+  }
+
+  /**
+   * First row (from the top) where `pattern` matches, as a cell rectangle
+   * covering capture group `group`. Returns null when nothing matches or the
+   * pattern isn't a valid JavaScript regex.
+   */
+  function findMatch(rows, pattern, group) {
+    let re;
+    try {
+      re = new RegExp(pattern, 'd');
+    } catch (e) {
+      try { re = new RegExp(pattern); } catch (e2) { return null; }
+    }
+    const g = group || 0;
+    for (let row = 0; row < rows.length; row++) {
+      const text = rows[row];
+      const m = re.exec(text);
+      if (!m || m[g] == null || m[g] === '') continue;
+      let start = m.index;
+      if (g) start = m.indices ? m.indices[g][0] : m.index + m[0].indexOf(m[g]);
+      return {
+        row: row,
+        col: Array.from(text.slice(0, start)).length,
+        width: Array.from(m[g]).length,
+        height: 1,
+      };
+    }
+    return null;
+  }
+
+  function matchInFrame(manifest, frameIdx, target) {
+    const cache = matchCache(manifest);
+    const key = frameIdx + ' ' + (target.group || 0) + ' ' + target.match;
+    if (!cache.matches.has(key)) {
+      cache.matches.set(key, findMatch(frameRows(manifest, frameIdx), target.match, target.group));
+    }
+    return cache.matches.get(key);
+  }
+
+  /**
+   * Where a pattern-targeted highlight sits at `time`, as {row, col, width,
+   * height} in cells, or null when it shouldn't be drawn.
+   *
+   * With `track_scroll`, the pattern is matched against the screen shown at
+   * `time`, so the highlight follows the text and hides while it's off-screen.
+   * Otherwise the highlight stays where the text first appears during its
+   * time range. Needs a version 2 manifest.
+   */
+  function locateMatch(manifest, hl, time) {
+    const target = hl.target || {};
+    if (!target.match || !manifest.frames) return null;
+    const keyframes = manifest.keyframes;
+
+    if (target.track_scroll) {
+      const kf = keyframes[findKeyframeIndex(keyframes, time)];
+      return kf && kf.frame != null ? matchInFrame(manifest, kf.frame, target) : null;
+    }
+
+    const cache = matchCache(manifest);
+    if (!cache.anchors.has(hl)) {
+      let anchor = null;
+      for (let i = findKeyframeIndex(keyframes, hl.time); i < keyframes.length; i++) {
+        const kf = keyframes[i];
+        if (kf.time > hl.time + hl.duration) break;
+        const pos = kf.frame != null ? matchInFrame(manifest, kf.frame, target) : null;
+        if (pos) {
+          anchor = { time: kf.time, pos: pos };
+          break;
+        }
+      }
+      cache.anchors.set(hl, anchor);
+    }
+    const anchor = cache.anchors.get(hl);
+    return anchor && time >= anchor.time ? anchor.pos : null;
+  }
+
+  /**
+   * Cell grid of a version 2 frame in viewBox units, computed from the
+   * manifest the same way `renderFrameSvg` lays the frame out.
+   */
+  function frameGrid(manifest, frameIdx) {
+    const screen = manifest.screen;
+    const frame = manifest.frames[frameIdx];
+    const cols = frame.size ? frame.size[0] : manifest.term.cols;
+    const cellW = screen.font_size * 0.6;
+    const cellH = screen.font_size * screen.line_height;
+    return {
+      vbW: cols * cellW + screen.padding * 2,
+      vbH: frame.lines.length * cellH + screen.padding * 2,
+      cellW: cellW,
+      cellH: cellH,
+      translateX: screen.padding,
+      translateY: screen.padding,
+    };
+  }
+
+  function placeHighlight(node, grid, r) {
+    var x = grid.translateX + r.col * grid.cellW;
+    var y = grid.translateY + r.row * grid.cellH;
+    node.style.left = (x / grid.vbW * 100) + '%';
+    node.style.top = (y / grid.vbH * 100) + '%';
+    node.style.width = (r.width * grid.cellW / grid.vbW * 100) + '%';
+    node.style.height = (r.height * grid.cellH / grid.vbH * 100) + '%';
+  }
+
+  function updateHighlights(state, time, svgContainer) {
+    var layer = state.highlightLayer;
+    var manifest = state.manifest;
+    var highlights = manifest.highlights;
     if (!highlights || highlights.length === 0) {
       if (layer._hlEls) {
         for (var i = 0; i < layer._hlEls.length; i++) {
@@ -836,11 +974,18 @@
       }
     }
 
-    // Measure grid in viewBox coordinates (cacheable — never changes with resize)
-    var grid = layer._grid;
-    if (!grid) {
-      grid = measureViewBoxGrid(svgContainer);
-      if (grid) layer._grid = grid;
+    // Grid in viewBox coordinates. Version 2 frames carry their own size (it
+    // changes after a resize); version 1 SVGs are measured once
+    var grid;
+    var kf = manifest.keyframes[state.currentKeyframeIdx];
+    if (manifest.frames && kf && kf.frame != null) {
+      grid = frameGrid(manifest, kf.frame);
+    } else {
+      grid = layer._grid;
+      if (!grid) {
+        grid = measureViewBoxGrid(svgContainer);
+        if (grid) layer._grid = grid;
+      }
     }
 
     for (var k = 0; k < highlights.length; k++) {
@@ -855,16 +1000,15 @@
         node.style.opacity = Math.min(fadeIn, fadeOut);
 
         // Position using percentage of viewBox (scales with SVG responsively)
-        if (grid && h.target && h.target.region) {
-          var r = h.target.region;
-          var x = grid.translateX + r.col * grid.cellW;
-          var y = grid.translateY + r.row * grid.cellH;
-          var w = r.width * grid.cellW;
-          var hh = r.height * grid.cellH;
-          node.style.left = (x / grid.vbW * 100) + '%';
-          node.style.top = (y / grid.vbH * 100) + '%';
-          node.style.width = (w / grid.vbW * 100) + '%';
-          node.style.height = (hh / grid.vbH * 100) + '%';
+        if (h.target && h.target.match) {
+          var pos = grid ? locateMatch(manifest, h, time) : null;
+          if (pos) {
+            placeHighlight(node, grid, pos);
+          } else {
+            node.style.opacity = '0';
+          }
+        } else if (grid && h.target && h.target.region) {
+          placeHighlight(node, grid, h.target.region);
         } else if (grid && h.target && h.target.lines) {
           var lines = h.target.lines;
           var minLine = Math.min.apply(null, lines);
@@ -1121,6 +1265,7 @@
   // Exposed for tests and for embedding outside the Quarto shortcode
   window.Termshow = window.Termshow || {};
   window.Termshow.renderFrame = renderFrameSvg;
+  window.Termshow.locateMatch = locateMatch;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initAll);
