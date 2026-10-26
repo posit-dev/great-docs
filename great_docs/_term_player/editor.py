@@ -13,21 +13,13 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from typing import Any
 
+from yaml12 import parse_yaml
+
 from great_docs._subprocess import TEXT_MODE_KWARGS
 
 from .manifest import generate_manifest
 from .parser import Event, Recording, TermInfo, parse_termshow
-from .script import (
-    Annotation,
-    Chapter,
-    Cut,
-    Highlight,
-    HighlightTarget,
-    Script,
-    Snippet,
-    load_script,
-)
-from .themes import resolve_theme
+from .script import Script, _parse_script_data, apply_script, load_script
 
 
 def _build_editor_data(recording: Recording, script: Script | None) -> dict[str, Any]:
@@ -80,6 +72,10 @@ def _build_editor_data(recording: Recording, script: Script | None) -> dict[str,
                 }
                 for cut in (script.cuts if script else [])
             ],
+            "speed_map": [
+                {"start": seg.start, "end": seg.end, "speed": seg.speed}
+                for seg in (script.speed_map if script else [])
+            ],
             "snippets": [
                 {
                     "time": cmd.time,
@@ -116,22 +112,41 @@ def _build_editor_data(recording: Recording, script: Script | None) -> dict[str,
     return data
 
 
+def _dq(value: Any) -> str:
+    """Quote a string for YAML in double quotes (JSON strings are valid YAML)."""
+    return json.dumps(str(value), ensure_ascii=False)
+
+
+def _sq(value: Any) -> str:
+    """Quote a string for YAML in single quotes, so regex backslashes stay readable."""
+    text = str(value)
+    # Single-quoted YAML can't hold line breaks or control characters as-is
+    if not text.isprintable():
+        return _dq(text)
+    return "'" + text.replace("'", "''") + "'"
+
+
+def _num(value: Any) -> float:
+    """A time or duration, rounded to the millisecond."""
+    return round(float(value), 3)
+
+
 def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
     """Serialize editor script data back to YAML string."""
-    lines = [f"source: {source_path}", ""]
+    lines = [f"source: {_dq(source_path)}", ""] if source_path else []
 
     settings = script_data.get("settings", {})
     setting_lines = []
     if settings.get("speed") and settings["speed"] != 1.0:
         setting_lines.append(f"  speed: {settings['speed']}")
-    if settings.get("window_chrome"):
+    if settings.get("window_chrome") and settings["window_chrome"] != "none":
         setting_lines.append(f"  window_chrome: {settings['window_chrome']}")
     if settings.get("font_family"):
-        setting_lines.append(f'  font_family: "{settings["font_family"]}"')
+        setting_lines.append(f"  font_family: {_dq(settings['font_family'])}")
     if settings.get("prompt"):
-        setting_lines.append(f'  prompt: "{settings["prompt"]}"')
+        setting_lines.append(f"  prompt: {_dq(settings['prompt'])}")
     if settings.get("prompt_pattern"):
-        setting_lines.append(f"  prompt_pattern: '{settings['prompt_pattern']}'")
+        setting_lines.append(f"  prompt_pattern: {_sq(settings['prompt_pattern'])}")
     theme = settings.get("theme")
     if isinstance(theme, str) and theme:
         setting_lines.append(f"  theme: {theme}")
@@ -151,17 +166,17 @@ def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
     if chapters:
         lines.append("chapters:")
         for ch in sorted(chapters, key=lambda c: c["time"]):
-            lines.append(f"  - at: {round(ch['time'], 2)}")
-            lines.append(f'    label: "{ch["label"]}"')
+            lines.append(f"  - at: {_num(ch['time'])}")
+            lines.append(f"    label: {_dq(ch['label'])}")
         lines.append("")
 
     annotations = script_data.get("annotations", [])
     if annotations:
         lines.append("annotations:")
         for ann in sorted(annotations, key=lambda a: a["time"]):
-            lines.append(f"  - at: {round(ann['time'], 2)}")
-            lines.append(f"    duration: {round(ann['duration'], 2)}")
-            lines.append(f'    text: "{ann["text"]}"')
+            lines.append(f"  - at: {_num(ann['time'])}")
+            lines.append(f"    duration: {_num(ann['duration'])}")
+            lines.append(f"    text: {_dq(ann['text'])}")
             lines.append(f"    position: {ann['position']}")
             width = ann.get("width", "medium")
             if width != "medium":
@@ -173,48 +188,56 @@ def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
     if cuts:
         lines.append("cuts:")
         for cut in sorted(cuts, key=lambda c: c["start"]):
-            lines.append(f"  - from: {round(cut['start'], 2)}")
-            lines.append(f"    to: {round(cut['end'], 2)}")
+            lines.append(f"  - from: {_num(cut['start'])}")
+            lines.append(f"    to: {_num(cut['end'])}")
             lines.append(f"    type: {cut['type']}")
+        lines.append("")
+
+    speed_map = script_data.get("speed_map", [])
+    if speed_map:
+        lines.append("speed_map:")
+        for seg in sorted(speed_map, key=lambda s: s["start"]):
+            lines.append(f"  - from: {_num(seg['start'])}")
+            lines.append(f"    to: {_num(seg['end'])}")
+            lines.append(f"    speed: {seg.get('speed', 1.0)}")
         lines.append("")
 
     snippets = script_data.get("snippets", [])
     if snippets:
         lines.append("snippets:")
         for cmd in sorted(snippets, key=lambda c: c["time"]):
-            lines.append(f"  - at: {round(cmd['time'], 2)}")
-            lines.append(f"    duration: {round(cmd['duration'], 2)}")
+            lines.append(f"  - at: {_num(cmd['time'])}")
+            lines.append(f"    duration: {_num(cmd['duration'])}")
             text = cmd.get("text", "")
             match = cmd.get("match", "")
             if text:
-                lines.append(f'    text: "{text}"')
+                lines.append(f"    text: {_dq(text)}")
             if match:
-                lines.append(f"    match: '{match}'")
+                lines.append(f"    match: {_sq(match)}")
             label = cmd.get("label", "")
             if label:
-                lines.append(f'    label: "{label}"')
+                lines.append(f"    label: {_dq(label)}")
         lines.append("")
 
     highlights = script_data.get("highlights", [])
     if highlights:
         lines.append("highlights:")
         for hl in sorted(highlights, key=lambda h: h["time"]):
-            lines.append(f"  - at: {round(hl['time'], 2)}")
-            lines.append(f"    duration: {round(hl['duration'], 2)}")
+            lines.append(f"  - at: {_num(hl['time'])}")
+            lines.append(f"    duration: {_num(hl['duration'])}")
             lines.append(f"    style: {hl.get('style', 'outline')}")
             color = hl.get("color", "#f1fa8c")
             if color and color != "#f1fa8c":
-                lines.append(f"    color: '{color}'")
+                lines.append(f"    color: {_sq(color)}")
             target = hl.get("target", {})
             if target:
                 lines.append("    target:")
                 if target.get("region"):
-                    r = target["region"]
-                    lines.append(
-                        f"      region: {{row: {r.get('row', 0)}, col: {r.get('col', 0)}, width: {r.get('width', 10)}, height: {r.get('height', 1)}}}"
-                    )
+                    # Keep the region's own keys, so a missing `height` stays missing
+                    region = ", ".join(f"{k}: {v}" for k, v in target["region"].items())
+                    lines.append(f"      region: {{{region}}}")
                 if target.get("match"):
-                    lines.append(f"      match: '{target['match']}'")
+                    lines.append(f"      match: {_sq(target['match'])}")
                     if target.get("group"):
                         lines.append(f"      group: {target['group']}")
                 if target.get("lines"):
@@ -223,7 +246,14 @@ def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
                     lines.append("      track_scroll: true")
             badge_text = hl.get("badge_text", "")
             if badge_text:
-                lines.append(f'    badge_text: "{badge_text}"')
+                lines.append(f"    badge_text: {_dq(badge_text)}")
+            badge_icon = hl.get("badge_icon", "")
+            if badge_icon:
+                lines.append(f"    badge_icon: {_dq(badge_icon)}")
+            for key in ("fade_in", "fade_out"):
+                value = hl.get(key, 0.3)
+                if value is not None and value != 0.3:
+                    lines.append(f"    {key}: {value}")
             if hl.get("pulse"):
                 lines.append("    pulse: true")
         lines.append("")
@@ -387,67 +417,10 @@ def _generate_preview_html(editor_data: dict, script_data: dict) -> str:
         events=[Event(time=e["time"], code=e["code"], data=e["data"]) for e in rec_data["events"]],
     )
 
-    # Reconstruct Script from the client's current script state
-    settings = script_data.get("settings", {})
-    script = Script(
-        speed=settings.get("speed", 1.0),
-        window_chrome=settings.get("window_chrome", "none"),
-        font_family=settings.get("font_family"),
-        prompt=settings.get("prompt"),
-        prompt_pattern=settings.get("prompt_pattern"),
-        theme=resolve_theme(settings["theme"]) if settings.get("theme") else None,
-        line_height=settings.get("line_height"),
-        show_cursor=settings.get("show_cursor", True),
-        chapters=[
-            Chapter(time=ch["time"], label=ch["label"]) for ch in script_data.get("chapters", [])
-        ],
-        cuts=[
-            Cut(start=c["start"], end=c["end"], type=c.get("type", "remove"))
-            for c in script_data.get("cuts", [])
-        ],
-        annotations=[
-            Annotation(
-                time=a["time"],
-                duration=a["duration"],
-                text=a["text"],
-                position=a.get("position", "bottom"),
-                width=a.get("width", "medium"),
-                style=a.get("style", "note"),
-            )
-            for a in script_data.get("annotations", [])
-        ],
-        highlights=[
-            Highlight(
-                time=h["time"],
-                duration=h["duration"],
-                target=HighlightTarget(
-                    region=h.get("target", {}).get("region"),
-                    match=h.get("target", {}).get("match"),
-                    group=h.get("target", {}).get("group", 0),
-                    lines=h.get("target", {}).get("lines"),
-                    track_scroll=h.get("target", {}).get("track_scroll", False),
-                ),
-                style=h.get("style", "box"),
-                color=h.get("color", "#f1fa8c"),
-                badge_text=h.get("badge_text", ""),
-                badge_icon=h.get("badge_icon", ""),
-                fade_in=h.get("fade_in", 0.3),
-                fade_out=h.get("fade_out", 0.3),
-                pulse=h.get("pulse", False),
-            )
-            for h in script_data.get("highlights", [])
-        ],
-        snippets=[
-            Snippet(
-                time=s["time"],
-                duration=s["duration"],
-                text=s.get("text", ""),
-                match=s.get("match", ""),
-                label=s.get("label", ""),
-            )
-            for s in script_data.get("snippets", [])
-        ],
-    )
+    # Reconstruct Script from the client's current script state. Going through
+    # the saved YAML means the preview reads the script exactly as a build would.
+    script = _parse_script_data(parse_yaml(_serialize_script(script_data, "preview.termshow")))
+    recording = apply_script(recording, script)
 
     # Set up temp directory for Quarto project
     tmp_dir = Path(tempfile.mkdtemp(prefix="termshow-preview-"))
@@ -3338,7 +3311,7 @@ body {
         const target = hl.target || {};
         if (target.match) {
           // Match-based: search terminal buffer for pattern
-          const matchPos = findMatchInTerminal(target.match);
+          const matchPos = findMatchInTerminal(target.match, target.group);
           if (matchPos) {
             node.style.left = (paddingLeft + matchPos.col * cellW) + 'px';
             node.style.top = (paddingTop + matchPos.row * cellH) + 'px';
@@ -3372,18 +3345,27 @@ body {
   }
 
   // Search the current terminal text buffer for a regex match
-  function findMatchInTerminal(pattern) {
+  // Same rules as the player: first matching row from the top, covering
+  // capture group `group`, with columns counted in characters
+  function findMatchInTerminal(pattern, group) {
     try {
       const pre = document.getElementById('terminal-output');
       // Get plain text lines from the rendered terminal
       const text = pre.textContent || '';
       const lines = text.split('\\n');
-      const re = new RegExp(pattern);
+      const g = group || 0;
+      let re;
+      try { re = new RegExp(pattern, 'd'); } catch (e) { re = new RegExp(pattern); }
       for (let row = 0; row < lines.length; row++) {
         const m = re.exec(lines[row]);
-        if (m) {
-          return { row: row, col: m.index, length: m[0].length };
-        }
+        if (!m || m[g] == null || m[g] === '') continue;
+        let start = m.index;
+        if (g) start = m.indices ? m.indices[g][0] : m.index + m[0].indexOf(m[g]);
+        return {
+          row: row,
+          col: Array.from(lines[row].slice(0, start)).length,
+          length: Array.from(m[g]).length,
+        };
       }
     } catch (e) {
       // Invalid regex — ignore

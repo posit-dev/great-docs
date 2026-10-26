@@ -179,9 +179,16 @@ A highlight `target` is a mapping with one of these keys:
 - `match`: a regular expression matched against the screen text, with optional `group` (the
   capture group to decorate, default `0`) and `track_scroll` (`false`)
 
-The player currently draws `region` and `lines` targets only. `match` targets are valid and are
-kept in the manifest, but they aren't drawn yet. Older scripts may put `region` directly on the
-highlight instead of under `target`; that form is still read but is deprecated.
+A `match` pattern is a JavaScript regular expression, since the player does the matching. It's
+tried against each row of the screen in turn, and the first row from the top that matches wins.
+Columns are counted in characters, and a match never spans two rows. Without `track_scroll`, the
+highlight is placed where the text first appears during the highlight's time range and stays
+there. With `track_scroll: true`, the pattern is matched against every screen, so the highlight
+follows the text as it scrolls and hides while it's off-screen. Either way, nothing is drawn
+until the text appears. Pattern targets need a version 2 manifest.
+
+Older scripts may put `region` directly on the highlight instead of under `target`; that form is
+still read but is deprecated.
 
 ## Player manifests (`manifest.json`)
 
