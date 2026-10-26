@@ -562,9 +562,10 @@
   background: #585b70;
 }
 
-/* Light theme overrides (Quarto body[data-bs-theme="light"]) */
-body[data-bs-theme="light"] .gd-termshow,
-:root:not([data-bs-theme="dark"]) .gd-termshow.gd-tp-light {
+/* Light theme overrides: follows Quarto's body[data-bs-theme="light"] unless the
+   player is forced dark (theme="dark"); theme="light" forces light everywhere */
+body[data-bs-theme="light"] .gd-termshow:not(.gd-tp-dark),
+.gd-termshow.gd-tp-light {
   --gd-tp-bg: #eff1f5;
   --gd-tp-fg: #4c4f69;
   --gd-tp-border: #ccd0da;
@@ -635,15 +636,15 @@ body[data-bs-theme="light"] .gd-termshow,
 }
 
 /* Light theme copy button */
-body[data-bs-theme="light"] .gd-tp-copy-snippet,
-:root:not([data-bs-theme="dark"]) .gd-termshow.gd-tp-light .gd-tp-copy-snippet {
+body[data-bs-theme="light"] .gd-termshow:not(.gd-tp-dark) .gd-tp-copy-snippet,
+.gd-termshow.gd-tp-light .gd-tp-copy-snippet {
   background: rgba(239, 241, 245, 0.92);
   border-color: rgba(30, 102, 245, 0.3);
   color: var(--gd-tp-fg);
 }
 
-body[data-bs-theme="light"] .gd-tp-copy-snippet:hover,
-:root:not([data-bs-theme="dark"]) .gd-termshow.gd-tp-light .gd-tp-copy-snippet:hover {
+body[data-bs-theme="light"] .gd-termshow:not(.gd-tp-dark) .gd-tp-copy-snippet:hover,
+.gd-termshow.gd-tp-light .gd-tp-copy-snippet:hover {
   border-color: var(--gd-tp-accent);
   background: rgba(239, 241, 245, 0.98);
 }

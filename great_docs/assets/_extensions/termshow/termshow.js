@@ -60,7 +60,15 @@
       speed: parseFloat(container.dataset.speed) || 1.0,
       pauseOnChapters: container.dataset.pauseOnChapters === 'true',
       loop: container.dataset.loop === 'true',
+      poster: parseFloat(container.dataset.poster) || 0,
+      controls: container.dataset.controls !== 'false',
+      theme: container.dataset.theme || 'auto',
     };
+
+    // Player chrome theme: "auto" follows the page; "dark"/"light" force it
+    if (options.theme === 'dark' || options.theme === 'light') {
+      container.classList.add('gd-tp-' + options.theme);
+    }
 
     // Create player state
     const state = {
@@ -140,6 +148,10 @@
     container.appendChild(chapterBar);
     container.appendChild(viewport);
     container.appendChild(controls.root);
+    if (!options.controls) {
+      controls.root.style.display = 'none';
+      container.classList.add('gd-tp-no-controls');
+    }
 
     // Initialize with manifest (inline or fetched)
     function activate(manifest, frames) {
@@ -171,8 +183,8 @@
       state.chapterText = chapterText;
 
       updateChapterBar(chapterBar, manifest, 0);
-      // Show initial frame
-      showFrame(state, svgContainer, 0);
+      // Show the poster frame (playback still starts from 0)
+      showFrame(state, svgContainer, findKeyframeIndex(manifest.keyframes, options.poster));
       if (options.autoplay) {
         play(state, svgContainer, annotationLayer, controls, options, container, centerOverlay, chapterBar);
       }

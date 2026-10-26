@@ -12,16 +12,22 @@
 --   loop             "true"/"false" - loop playback
 --   speed            number - playback speed multiplier
 --   pause_on_chapters "true"/"false" - auto-pause at chapter boundaries
---   poster           number - time (s) for poster frame
+--   poster           number - time (s) of the frame shown before playback
 --   controls         "true"/"false" - show control bar
 --   theme            "auto"/"dark"/"light" - player theme override
+--
+-- Rendered output is looked up at termshow/<file>/ first (how Great Docs
+-- builds lay it out), then termshow/<basename>/ (the default output of a
+-- standalone `termshow render`).
 --
 -- The shortcode embeds manifest JSON + SVG frames inline so the player
 -- works without network fetches (including with file:// protocol).
 
 local function escape_attr(s)
     if s == nil then return "" end
-    return s:gsub('"', "&quot;"):gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
+    -- Escape "&" first so the entities added below aren't double-escaped
+    local escaped = s:gsub("&", "&amp;"):gsub('"', "&quot;"):gsub("<", "&lt;"):gsub(">", "&gt;")
+    return escaped
 end
 
 local function kwarg_str(kwargs, key)
@@ -44,6 +50,19 @@ local function read_project_file(rel_path)
     local content = f:read("*a")
     f:close()
     return content
+end
+
+--- Return the keyframe file to use as the poster for a given time (seconds).
+local function poster_frame(manifest_json, poster_time)
+    local chosen = nil
+    for t, f in manifest_json:gmatch('"time"%s*:%s*([%d%.]+)%s*,%s*"file"%s*:%s*"([^"]+)"') do
+        if chosen == nil or tonumber(t) <= poster_time then
+            chosen = f
+        else
+            break
+        end
+    end
+    return chosen
 end
 
 --- Register CSS/JS/font assets as a Quarto HTML dependency (once per document).
@@ -77,9 +96,25 @@ return {
             return pandoc.Null()
         end
 
-        -- Build paths
-        local basename = file:match("([^/]+)$") or file
-        local tp_dir = "termshow/" .. basename .. "/"
+        -- Resolve the rendered output directory
+        -- (a trailing ".termshow" extension is optional)
+        local rel = file:gsub("^%./", ""):gsub("%.termshow$", "")
+        local basename = rel:match("([^/]+)$") or rel
+        local tp_dir = "termshow/" .. rel .. "/"
+        local manifest_json = read_project_file(tp_dir .. "manifest.json")
+        if not manifest_json and basename ~= rel then
+            local fallback_dir = "termshow/" .. basename .. "/"
+            local fallback_json = read_project_file(fallback_dir .. "manifest.json")
+            if fallback_json then
+                tp_dir = fallback_dir
+                manifest_json = fallback_json
+            end
+        end
+        if not manifest_json then
+            quarto.log.warning("[termshow] no rendered output found for '" .. file
+                .. "' (looked in termshow/" .. rel .. "/). Run `great-docs termshow render`"
+                .. " or check the file path.")
+        end
 
         -- Read options
         local autoplay = kwarg_str(kwargs, "autoplay")
@@ -96,9 +131,6 @@ return {
         if controls == "" then controls = "true" end
         local theme = kwarg_str(kwargs, "theme")
         if theme == "" then theme = "auto" end
-
-        -- Try to read manifest.json from the pre-rendered output
-        local manifest_json = read_project_file(tp_dir .. "manifest.json")
 
         -- Read SVG frames inline if manifest exists
         local frames_json = "[]"
@@ -125,7 +157,11 @@ return {
         if quarto and quarto.project and quarto.project.offset then
             offset = quarto.project.offset .. "/"
         end
-        local poster_path = offset .. tp_dir .. "frame-000.svg"
+        local poster_file = "frame-000.svg"
+        if manifest_json then
+            poster_file = poster_frame(manifest_json, tonumber(poster) or 0) or poster_file
+        end
+        local poster_path = offset .. tp_dir .. poster_file
         local manifest_url = offset .. tp_dir .. "manifest.json"
 
         -- Generate HTML with inline data
@@ -135,7 +171,10 @@ return {
         table.insert(parts, 'data-autoplay="' .. escape_attr(autoplay) .. '" ')
         table.insert(parts, 'data-loop="' .. escape_attr(loop) .. '" ')
         table.insert(parts, 'data-speed="' .. escape_attr(speed) .. '" ')
-        table.insert(parts, 'data-pause-on-chapters="' .. escape_attr(pause_on_chapters) .. '">')
+        table.insert(parts, 'data-pause-on-chapters="' .. escape_attr(pause_on_chapters) .. '" ')
+        table.insert(parts, 'data-poster="' .. escape_attr(poster) .. '" ')
+        table.insert(parts, 'data-controls="' .. escape_attr(controls) .. '" ')
+        table.insert(parts, 'data-theme="' .. escape_attr(theme) .. '">')
 
         -- Embed manifest as inline JSON script
         if manifest_json then
