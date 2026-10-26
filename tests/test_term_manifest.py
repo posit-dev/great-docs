@@ -8,14 +8,11 @@ from pathlib import Path
 import pytest
 
 from great_docs._term_player.manifest import (
-    DeltaChange,
-    DeltaEntry,
     KeyframeEntry,
     Manifest,
     _apply_prompt_pattern_substitution,
     _apply_prompt_substitution,
     _compute_keyframe_times,
-    _delta_change_to_dict,
     _detect_prompt_prefix,
     _find_prompt_char_in_prefix,
     generate_manifest,
@@ -149,36 +146,6 @@ class TestComputeKeyframeTimes:
 
 
 # ---------------------------------------------------------------------------
-# _delta_change_to_dict
-# ---------------------------------------------------------------------------
-
-
-class TestDeltaChangeToDict:
-    def test_minimal(self):
-        change = DeltaChange(row=1, col=5, char="X")
-        d = _delta_change_to_dict(change)
-        assert d == {"row": 1, "col": 5, "char": "X"}
-
-    def test_with_fg_bg(self):
-        change = DeltaChange(row=0, col=0, char="A", fg="#ff0000", bg="#00ff00")
-        d = _delta_change_to_dict(change)
-        assert d["fg"] == "#ff0000"
-        assert d["bg"] == "#00ff00"
-
-    def test_with_bold(self):
-        change = DeltaChange(row=0, col=0, char="B", bold=True)
-        d = _delta_change_to_dict(change)
-        assert d["bold"] is True
-
-    def test_no_optional_fields_when_empty(self):
-        change = DeltaChange(row=0, col=0, char=" ")
-        d = _delta_change_to_dict(change)
-        assert "fg" not in d
-        assert "bg" not in d
-        assert "bold" not in d
-
-
-# ---------------------------------------------------------------------------
 # generate_manifest
 # ---------------------------------------------------------------------------
 
@@ -297,7 +264,7 @@ class TestGenerateManifest:
 
         manifest_text = (out / "manifest.json").read_text()
         data = json.loads(manifest_text)
-        assert data["version"] == 1
+        assert data["version"] == 2
         assert "keyframes" in data
         assert "chapters" in data
 
