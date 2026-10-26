@@ -13,6 +13,7 @@ from great_docs._term_player.script import (
     Cut,
     Script,
     Snippet,
+    _parse_script_data,
 )
 
 
@@ -72,7 +73,7 @@ class TestBuildEditorData:
     def test_settings_with_all_fields(self):
         script = _make_script(
             speed=1.5,
-            window_chrome="simple",
+            window_chrome="minimal",
             font_family="JetBrains Mono, monospace",
             prompt="❯",
             prompt_pattern=r"^\$ ",
@@ -80,7 +81,7 @@ class TestBuildEditorData:
         data = _build_editor_data(_make_recording(), script)
         s = data["script"]["settings"]
         assert s["speed"] == 1.5
-        assert s["window_chrome"] == "simple"
+        assert s["window_chrome"] == "minimal"
         assert s["font_family"] == "JetBrains Mono, monospace"
         assert s["prompt"] == "❯"
         assert s["prompt_pattern"] == r"^\$ "
@@ -345,7 +346,7 @@ class TestSerializeScript:
         script_data = {
             "settings": {
                 "speed": 3.0,
-                "window_chrome": "simple",
+                "window_chrome": "minimal",
                 "font_family": "Fira Code, monospace",
                 "prompt": "$",
                 "prompt_pattern": r"^\$ ",
@@ -370,7 +371,7 @@ class TestSerializeScript:
         parsed = parse_yaml(yaml_str)
         s = parsed["settings"]
         assert s["speed"] == 3.0
-        assert s["window_chrome"] == "simple"
+        assert s["window_chrome"] == "minimal"
         assert s["font_family"] == "Fira Code, monospace"
         assert s["prompt"] == "$"
         assert s["prompt_pattern"] == r"^\$ "
@@ -415,7 +416,7 @@ class TestEditorRoundTrip:
     def test_settings_round_trip(self):
         script = _make_script(
             speed=1.5,
-            window_chrome="simple",
+            window_chrome="minimal",
             font_family="Cascadia Code",
             prompt="❯",
             prompt_pattern=r"^\$ ",
@@ -425,7 +426,7 @@ class TestEditorRoundTrip:
         parsed = parse_yaml(yaml_str)
         s = parsed["settings"]
         assert s["speed"] == 1.5
-        assert s["window_chrome"] == "simple"
+        assert s["window_chrome"] == "minimal"
         assert s["font_family"] == "Cascadia Code"
         assert s["prompt"] == "❯"
         assert s["prompt_pattern"] == r"^\$ "
@@ -444,6 +445,41 @@ class TestEditorRoundTrip:
         yaml_str = _serialize_script(data["script"], "demo.termshow")
         parsed = parse_yaml(yaml_str)
         assert parsed["settings"]["font_family"] == "JetBrains Mono, Fira Code, monospace"
+
+    def test_theme_name_round_trip(self):
+        """A named theme survives open → save in the editor."""
+        script = _parse_script_data({"settings": {"theme": "dracula"}})
+        data = _build_editor_data(_make_recording(), script)
+        yaml_str = _serialize_script(data["script"], "demo.termshow")
+        reparsed = _parse_script_data(parse_yaml(yaml_str))
+        assert reparsed.theme_name == "dracula"
+        assert reparsed.theme.bg == "#282a36"
+
+    def test_inline_theme_round_trip(self):
+        """An inline theme mapping survives open → save with its colors intact."""
+        spec = {"base": "nord", "bg": "#000000"}
+        script = _parse_script_data({"settings": {"theme": spec}})
+        data = _build_editor_data(_make_recording(), script)
+        yaml_str = _serialize_script(data["script"], "demo.termshow")
+        reparsed = _parse_script_data(parse_yaml(yaml_str))
+        assert reparsed.theme_spec == spec
+        assert reparsed.theme.bg == "#000000"
+        assert reparsed.theme.fg == "#d8dee9"
+
+    def test_line_height_and_show_cursor_round_trip(self):
+        script = _make_script(line_height=1.2, show_cursor=False)
+        data = _build_editor_data(_make_recording(), script)
+        yaml_str = _serialize_script(data["script"], "demo.termshow")
+        parsed = parse_yaml(yaml_str)
+        assert parsed["settings"]["line_height"] == 1.2
+        assert parsed["settings"]["show_cursor"] is False
+
+    def test_default_settings_omit_settings_block(self):
+        """No `settings:` key is written when every setting is at its default."""
+        script = _make_script(window_chrome=None)
+        data = _build_editor_data(_make_recording(), script)
+        yaml_str = _serialize_script(data["script"], "demo.termshow")
+        assert "settings" not in parse_yaml(yaml_str)
 
     def test_full_round_trip(self):
         script = _make_script(
