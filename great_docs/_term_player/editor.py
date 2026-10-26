@@ -27,6 +27,7 @@ from .script import (
     Snippet,
     load_script,
 )
+from .themes import resolve_theme
 
 
 def _build_editor_data(recording: Recording, script: Script | None) -> dict[str, Any]:
@@ -53,6 +54,9 @@ def _build_editor_data(recording: Recording, script: Script | None) -> dict[str,
                 "font_family": script.font_family if script else None,
                 "prompt": script.prompt if script else None,
                 "prompt_pattern": script.prompt_pattern if script else None,
+                "theme": script.theme_spec if script else None,
+                "line_height": script.line_height if script else None,
+                "show_cursor": script.show_cursor if script else True,
             },
             "chapters": [
                 {"time": ch.time, "label": ch.label} for ch in (script.chapters if script else [])
@@ -117,18 +121,30 @@ def _serialize_script(script_data: dict[str, Any], source_path: str) -> str:
     lines = [f"source: {source_path}", ""]
 
     settings = script_data.get("settings", {})
-    if any(v is not None for v in settings.values()):
+    setting_lines = []
+    if settings.get("speed") and settings["speed"] != 1.0:
+        setting_lines.append(f"  speed: {settings['speed']}")
+    if settings.get("window_chrome"):
+        setting_lines.append(f"  window_chrome: {settings['window_chrome']}")
+    if settings.get("font_family"):
+        setting_lines.append(f'  font_family: "{settings["font_family"]}"')
+    if settings.get("prompt"):
+        setting_lines.append(f'  prompt: "{settings["prompt"]}"')
+    if settings.get("prompt_pattern"):
+        setting_lines.append(f"  prompt_pattern: '{settings['prompt_pattern']}'")
+    theme = settings.get("theme")
+    if isinstance(theme, str) and theme:
+        setting_lines.append(f"  theme: {theme}")
+    elif isinstance(theme, dict) and theme:
+        # JSON is valid YAML flow style, and keeps hex colors quoted
+        setting_lines.append(f"  theme: {json.dumps(theme)}")
+    if settings.get("line_height") is not None:
+        setting_lines.append(f"  line_height: {settings['line_height']}")
+    if settings.get("show_cursor") is False:
+        setting_lines.append("  show_cursor: false")
+    if setting_lines:
         lines.append("settings:")
-        if settings.get("speed") and settings["speed"] != 1.0:
-            lines.append(f"  speed: {settings['speed']}")
-        if settings.get("window_chrome"):
-            lines.append(f"  window_chrome: {settings['window_chrome']}")
-        if settings.get("font_family"):
-            lines.append(f'  font_family: "{settings["font_family"]}"')
-        if settings.get("prompt"):
-            lines.append(f'  prompt: "{settings["prompt"]}"')
-        if settings.get("prompt_pattern"):
-            lines.append(f"  prompt_pattern: '{settings['prompt_pattern']}'")
+        lines.extend(setting_lines)
         lines.append("")
 
     chapters = script_data.get("chapters", [])
@@ -379,6 +395,9 @@ def _generate_preview_html(editor_data: dict, script_data: dict) -> str:
         font_family=settings.get("font_family"),
         prompt=settings.get("prompt"),
         prompt_pattern=settings.get("prompt_pattern"),
+        theme=resolve_theme(settings["theme"]) if settings.get("theme") else None,
+        line_height=settings.get("line_height"),
+        show_cursor=settings.get("show_cursor", True),
         chapters=[
             Chapter(time=ch["time"], label=ch["label"]) for ch in script_data.get("chapters", [])
         ],
@@ -2451,7 +2470,7 @@ body {
         <span class="setting-label">Chrome</span>
         <select id="setting-chrome">
           <option value="colorful">colorful</option>
-          <option value="simple">simple</option>
+          <option value="minimal">minimal</option>
           <option value="none">none</option>
         </select>
       </div>
