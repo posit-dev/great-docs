@@ -4204,9 +4204,12 @@ def term_render(source: str, output_dir: str | None, interval: float, script: st
         recording, script_obj, output_dir=output_dir, keyframe_interval=interval
     )
 
-    n_frames = len(manifest.keyframes)
-    click.echo(f"✓ Rendered {n_frames} keyframes to {output_dir}/")
+    stats = manifest.stats
+    click.echo(
+        f"✓ Rendered {stats.keyframes} keyframes ({stats.frames} unique screens) to {output_dir}/"
+    )
     click.echo(f"  Duration: {manifest.duration:.1f}s | Chapters: {len(manifest.chapters)}")
+    click.echo(f"  Page payload: {stats.manifest_bytes / 1024:.1f} KB")
 
 
 @click.command("import-cast")
