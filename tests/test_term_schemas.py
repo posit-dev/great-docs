@@ -27,6 +27,7 @@ from great_docs._term_player.script import (
     HighlightTarget,
     Script,
     Snippet,
+    _parse_script_data,
     apply_script,
     load_script,
 )
@@ -294,6 +295,15 @@ def test_rendered_manifest_with_every_feature_validates():
     assert any(len(span) == 4 for line in data["lines"] for span in line[1])
 
 
+def test_rendered_theme_pair_manifest_validates():
+    rec = _recording([Event(time=0.0, code="o", data="$ \x1b[1;31mred\x1b[0m \x1b[42m ok \x1b[0m")])
+    spec = {"light": "catppuccin-latte", "dark": {"base": "catppuccin-mocha", "bg": "#000000"}}
+    data = _manifest_dict(rec, _parse_script_data({"settings": {"theme": spec}}))
+    assert _errors("manifest", data) == []
+    assert "cursor" in data["screen"] and "cursor" in data["dark"]
+    assert _errors("manifest", {**data, "dark": {"fg": "#ffffff", "lines": []}})
+
+
 def test_rendered_manifest_serialization_contract():
     rec = _recording(
         [Event(time=0.0, code="o", data="$ </b>"), Event(time=1.0, code="o", data="x")]
@@ -364,11 +374,30 @@ def test_recording_rejects_bad_events(event: list):
         {"snippets": [{"at": 1, "label": "nothing to copy"}]},
         {"cuts": [{"from": 1}]},
         {"settings": {"theme": {"palette": ["#000000"] * 5}}},
+        {"settings": {"theme": {"cursor": "red"}}},
+        {"settings": {"theme": {"light": "nord"}}},
+        {"settings": {"theme": {"light": "nord", "dark": "dracula", "bg": "#000000"}}},
+        {"settings": {"theme": {"light": "auto", "dark": "dracula"}}},
         {"chapter": [{"at": 0, "label": "typo in key"}]},
     ],
 )
 def test_script_rejects_mistakes(script: dict):
     assert _errors("script", script)
+
+
+@pytest.mark.parametrize(
+    "theme",
+    [
+        "auto",
+        {"base": "nord", "cursor": "#88c0d0"},
+        {"light": "github-light", "dark": "github-dark"},
+        {"light": {"base": "github-light", "cursor": "#0969da"}, "dark": {"bg": "#000000"}},
+    ],
+)
+def test_script_accepts_theme_forms(theme):
+    assert _errors("script", {"settings": {"theme": theme}}) == []
+    # Everything the schema accepts, the code accepts too
+    _parse_script_data({"settings": {"theme": theme}})
 
 
 def test_script_accepts_legacy_highlight_region():
