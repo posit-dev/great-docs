@@ -15225,6 +15225,7 @@ anchor-sections: true
             return
 
         rendered_count = 0
+        manifest_bytes = 0
         for ts_file in termshow_files:
             rel_stem = ts_file.relative_to(self.layout.source_dir).with_suffix("")
             # Output into the great-docs project directory (Quarto project)
@@ -15240,18 +15241,22 @@ anchor-sections: true
                     script = load_script(str(script_file))
                     recording = apply_script(recording, script)
 
-                generate_manifest(
+                manifest = generate_manifest(
                     recording,
                     script=script,
                     output_dir=str(output_dir),
                     keyframe_interval=2.0,
                 )
                 rendered_count += 1
+                manifest_bytes += manifest.stats.manifest_bytes
             except Exception as e:
                 log.warn(f"termshow: failed to render {rel_stem.as_posix()}.termshow: {e}")
 
         if rendered_count:
-            log.detail(f"Pre-rendered {rendered_count} terminal recording(s)")
+            log.detail(
+                f"Pre-rendered {rendered_count} terminal recording(s) "
+                f"({manifest_bytes / 1024:.0f} KB of player data)"
+            )
             # Register termshow output as a Quarto resource so it gets
             # copied to _site/
             self._add_project_resources(["termshow/**"], [])
