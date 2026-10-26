@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import importlib.util
+import json
+import subprocess
+from pathlib import Path
+
 from yaml12 import parse_yaml
 import pytest
 
@@ -11,8 +16,11 @@ from great_docs._term_player.script import (
     Annotation,
     Chapter,
     Cut,
+    Highlight,
+    HighlightTarget,
     Script,
     Snippet,
+    SpeedSegment,
     _parse_script_data,
 )
 
@@ -1335,3 +1343,139 @@ class TestGetEditorHtml:
         result = _get_editor_html()
         assert isinstance(result, str)
         assert len(result) > 0
+
+
+# ---------------------------------------------------------------------------
+# Round-trip of real scripts: load → editor data → save → load
+# ---------------------------------------------------------------------------
+
+_ROOT = Path(__file__).resolve().parent.parent
+_SCHEMA = _ROOT / "great_docs" / "_term_player" / "schemas" / "termshow-script.schema.json"
+
+
+def _real_scripts() -> dict[str, str]:
+    """Every script in the docs, plus those embedded in the synthetic specs."""
+    found: dict[str, str] = {}
+    try:
+        tracked = subprocess.run(
+            ["git", "ls-files", "docs"], cwd=_ROOT, capture_output=True, text=True, check=True
+        ).stdout.splitlines()
+    except (OSError, subprocess.CalledProcessError):  # pragma: no cover
+        tracked = []
+    for rel in tracked:
+        if rel.endswith(".termshow.yml"):
+            found[rel] = (_ROOT / rel).read_text(encoding="utf-8")
+    for spec_path in sorted((_ROOT / "test-packages" / "synthetic" / "specs").glob("*.py")):
+        if "termshow" not in spec_path.read_text(encoding="utf-8"):
+            continue
+        spec = importlib.util.spec_from_file_location(f"_spec_{spec_path.stem}", spec_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for value in vars(module).values():
+            if isinstance(value, dict) and isinstance(value.get("files"), dict):
+                for name, content in value["files"].items():
+                    if name.endswith(".termshow.yml"):
+                        found[f"{spec_path.stem}:{name}"] = content
+    return found
+
+
+def _save_and_reload(script: Script) -> tuple[str, Script]:
+    data = _build_editor_data(_make_recording(), script)
+    # The browser sends the script back as JSON
+    script_data = json.loads(json.dumps(data["script"]))
+    yaml_str = _serialize_script(script_data, script.source)
+    return yaml_str, _parse_script_data(parse_yaml(yaml_str))
+
+
+def _schema_errors(yaml_str: str) -> list[str]:
+    jsonschema = pytest.importorskip("jsonschema")
+    validator = jsonschema.Draft202012Validator(json.loads(_SCHEMA.read_text()))
+    return [e.message for e in validator.iter_errors(parse_yaml(yaml_str))]
+
+
+def test_real_scripts_found():
+    assert len(_real_scripts()) >= 3
+
+
+@pytest.mark.parametrize("key", sorted(_real_scripts()))
+def test_real_script_survives_editor_save(key: str):
+    script = _parse_script_data(parse_yaml(_real_scripts()[key]))
+    yaml_str, reloaded = _save_and_reload(script)
+    assert reloaded == script
+    assert _schema_errors(yaml_str) == []
+
+
+def test_every_field_survives_editor_save():
+    script = _make_script(
+        speed=1.25,
+        window_chrome="minimal",
+        line_height=1.3,
+        show_cursor=False,
+        prompt="❯",
+        prompt_pattern=r"^\$ ",
+        chapters=[Chapter(time=0.125, label="Intro")],
+        annotations=[Annotation(time=1.0, duration=2.0, text="Hi", width="large")],
+        cuts=[Cut(start=2.0, end=3.5, type="ellipsis")],
+        speed_map=[SpeedSegment(start=4.0, end=6.0, speed=3.0)],
+        snippets=[Snippet(time=0.5, duration=4.0, text="echo hi", match=r"\$ (.+)", label="Run")],
+        highlights=[
+            Highlight(
+                time=1.0,
+                duration=2.0,
+                target=HighlightTarget(region={"row": 1, "col": 2, "width": 3, "height": 2}),
+                style="badge-after",
+                color="#ff79c6",
+                badge_text="1",
+                badge_icon="★",
+                fade_in=0.0,
+                fade_out=0.75,
+                pulse=True,
+            ),
+            Highlight(
+                time=2.0,
+                duration=1.0,
+                target=HighlightTarget(match=r"(done) in \d+s", group=1, track_scroll=True),
+            ),
+            Highlight(time=3.0, duration=1.0, target=HighlightTarget(lines=[0, 1])),
+        ],
+    )
+    yaml_str, reloaded = _save_and_reload(script)
+    assert reloaded == script
+    assert _schema_errors(yaml_str) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        'say "hi"',
+        "it's",
+        "two\nlines",
+        r"back\slash \n not a newline",
+        "tab\there",
+        "# not a comment",
+        "key: value",
+        "{braces} [brackets] & *star",
+        "trailing space ",
+        "\x1b[1mbold\x1b[0m",
+    ],
+)
+def test_awkward_strings_survive_editor_save(text: str):
+    script = _make_script(
+        prompt=text,
+        prompt_pattern=text,
+        font_family=text,
+        chapters=[Chapter(time=0.0, label=text)],
+        annotations=[Annotation(time=0.0, duration=1.0, text=text)],
+        snippets=[Snippet(time=0.0, duration=1.0, text=text, match=text, label=text)],
+        highlights=[
+            Highlight(
+                time=0.0,
+                duration=1.0,
+                target=HighlightTarget(match=text),
+                badge_text=text,
+                badge_icon=text,
+            )
+        ],
+    )
+    _, reloaded = _save_and_reload(script)
+    assert reloaded == script
