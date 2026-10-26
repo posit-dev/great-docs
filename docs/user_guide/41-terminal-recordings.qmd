@@ -240,11 +240,126 @@ settings:
   theme: dracula
 ```
 
-The built-in themes are:
+The built-in themes are shown below, each playing the same short recording so you can compare how
+they render prompts, `git` and `ls` output, and the full 16-color palette (normal colors on the
+first row of swatches, bright colors on the second).
 
-| Dark | Light |
-|------|-------|
-| `default`, `catppuccin-mocha`, `dracula`, `github-dark`, `gruvbox-dark`, `monokai`, `nord`, `one-dark`, `rose-pine`, `solarized-dark`, `tokyo-night` | `catppuccin-latte`, `github-light`, `gruvbox-light`, `rose-pine-dawn`, `solarized-light` |
+```{=html}
+<style>
+.termshow-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 1rem 1.25rem;
+  margin: 1rem 0 1.5rem;
+}
+.termshow-theme-cell > p { margin: 0 0 0.35rem; }
+.termshow-theme-cell .gd-termshow { margin: 0; }
+</style>
+```
+
+**Dark themes**
+
+:::: {.termshow-theme-grid}
+::: {.termshow-theme-cell}
+`default`
+
+{{< termshow file="assets/themes/default" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`catppuccin-mocha`
+
+{{< termshow file="assets/themes/catppuccin-mocha" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`dracula`
+
+{{< termshow file="assets/themes/dracula" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`github-dark`
+
+{{< termshow file="assets/themes/github-dark" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`gruvbox-dark`
+
+{{< termshow file="assets/themes/gruvbox-dark" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`monokai`
+
+{{< termshow file="assets/themes/monokai" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`nord`
+
+{{< termshow file="assets/themes/nord" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`one-dark`
+
+{{< termshow file="assets/themes/one-dark" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`rose-pine`
+
+{{< termshow file="assets/themes/rose-pine" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`solarized-dark`
+
+{{< termshow file="assets/themes/solarized-dark" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`tokyo-night`
+
+{{< termshow file="assets/themes/tokyo-night" autoplay="true" loop="true" controls="false" >}}
+:::
+::::
+
+**Light themes**
+
+:::: {.termshow-theme-grid}
+::: {.termshow-theme-cell}
+`catppuccin-latte`
+
+{{< termshow file="assets/themes/catppuccin-latte" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`github-light`
+
+{{< termshow file="assets/themes/github-light" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`gruvbox-light`
+
+{{< termshow file="assets/themes/gruvbox-light" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`rose-pine-dawn`
+
+{{< termshow file="assets/themes/rose-pine-dawn" autoplay="true" loop="true" controls="false" >}}
+:::
+
+::: {.termshow-theme-cell}
+`solarized-light`
+
+{{< termshow file="assets/themes/solarized-light" autoplay="true" loop="true" controls="false" >}}
+:::
+::::
 
 Names are case-insensitive, and spaces or underscores work in place of hyphens (`Tokyo Night`
 resolves to `tokyo-night`). An unknown name stops the render with an error listing the available
