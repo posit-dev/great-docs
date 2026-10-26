@@ -10,7 +10,13 @@ import pytest
 from great_docs._term_player import generate_manifest
 from great_docs._term_player.parser import Event, Recording, TermInfo, Theme
 from great_docs._term_player.script import _parse_script_data, load_script
-from great_docs._term_player.themes import get_theme, resolve_theme, theme_names
+from great_docs._term_player.themes import (
+    AUTO_PAIR,
+    get_theme,
+    resolve_theme,
+    resolve_theme_pair,
+    theme_names,
+)
 
 _HEX = re.compile(r"^#[0-9a-f]{6}$")
 
@@ -93,11 +99,67 @@ class TestResolveTheme:
             ({"palette": ["#000"] * 7 + ["nope"]}, r"palette\[7\]"),
             ({"base": "nope"}, "Unknown termshow theme"),
             (42, "must be a name or a mapping"),
+            ({"cursor": "red"}, "cursor must be a hex color"),
         ],
     )
     def test_invalid_specs(self, spec, message):
         with pytest.raises(ValueError, match=message):
             resolve_theme(spec)
+
+    def test_inline_cursor(self):
+        assert resolve_theme({"base": "nord", "cursor": "#88c0d0"}).cursor == "#88c0d0"
+
+    def test_builtin_cursor_colors(self):
+        assert get_theme("catppuccin-mocha").cursor == "#f5e0dc"
+        assert get_theme("catppuccin-latte").cursor == "#dc8a78"
+        # Themes without their own cursor color draw it in the foreground color
+        assert get_theme("dracula").cursor is None
+        assert resolve_theme({"base": "catppuccin-mocha"}).cursor == "#f5e0dc"
+
+    def test_pair_resolves_to_light_side(self):
+        assert resolve_theme({"light": "nord", "dark": "dracula"}).bg == get_theme("nord").bg
+        assert resolve_theme("auto").bg == get_theme(AUTO_PAIR[0]).bg
+
+
+class TestResolveThemePair:
+    def test_single_theme_has_no_dark_side(self):
+        theme, dark = resolve_theme_pair("dracula")
+        assert theme.bg == "#282a36"
+        assert dark is None
+
+    def test_auto_is_the_builtin_pair(self):
+        light, dark = resolve_theme_pair("auto")
+        assert AUTO_PAIR == ("github-light", "github-dark")
+        assert light == get_theme("github-light")
+        assert dark == get_theme("github-dark")
+
+    def test_named_pair(self):
+        light, dark = resolve_theme_pair({"light": "catppuccin-latte", "dark": "catppuccin-mocha"})
+        assert light == get_theme("catppuccin-latte")
+        assert dark == get_theme("catppuccin-mocha")
+
+    def test_inline_sides(self):
+        light, dark = resolve_theme_pair(
+            {"light": {"base": "github-light", "cursor": "#0969da"}, "dark": {"bg": "#000000"}}
+        )
+        assert light.bg == get_theme("github-light").bg
+        assert light.cursor == "#0969da"
+        assert dark.bg == "#000000"
+        assert dark.fg == Theme().fg
+
+    @pytest.mark.parametrize(
+        "spec, message",
+        [
+            ({"light": "nord"}, "missing `dark`"),
+            ({"dark": "nord"}, "missing `light`"),
+            ({"light": "nord", "dark": "dracula", "bg": "#000000"}, "only `light` and `dark`"),
+            ({"light": "auto", "dark": "dracula"}, "must be one theme"),
+            ({"light": "nord", "dark": "nope"}, "Unknown termshow theme"),
+        ],
+    )
+    def test_invalid_pairs(self, spec, message):
+        with pytest.raises(ValueError, match=message):
+            resolve_theme_pair(spec)
 
 
 class TestScriptTheme:
@@ -115,6 +177,24 @@ class TestScriptTheme:
     def test_inline_theme_without_base_is_custom(self):
         script = _parse_script_data({"settings": {"theme": {"bg": "#111111"}}})
         assert script.theme_name == "custom"
+
+    def test_auto_theme(self):
+        script = _parse_script_data({"settings": {"theme": "auto"}})
+        assert script.theme_name == "auto"
+        assert script.theme == get_theme("github-light")
+        assert script.dark_theme == get_theme("github-dark")
+
+    def test_pair_is_named_after_light_side(self):
+        script = _parse_script_data(
+            {"settings": {"theme": {"light": {"base": "nord"}, "dark": "dracula"}}}
+        )
+        assert script.theme_name == "nord"
+        assert script.dark_theme.bg == "#282a36"
+        script = _parse_script_data({"settings": {"theme": {"light": {}, "dark": "dracula"}}})
+        assert script.theme_name == "custom"
+
+    def test_single_theme_has_no_dark_side(self):
+        assert _parse_script_data({"settings": {"theme": "nord"}}).dark_theme is None
 
     def test_no_theme(self):
         script = _parse_script_data({"settings": {}})
@@ -137,6 +217,16 @@ class TestScriptTheme:
         assert 'fill="#282a36"' in svg
         assert "#ff5555" in svg  # dracula red
         assert manifest.theme == "dracula"
+
+    def test_cursor_color_reaches_rendered_svg(self, tmp_path: Path):
+        recording = Recording(
+            term=TermInfo(cols=20, rows=4), events=[Event(time=0.0, code="o", data="$ ")]
+        )
+        script = _parse_script_data({"settings": {"theme": {"base": "nord", "cursor": "#ff0000"}}})
+        manifest = generate_manifest(recording, script, output_dir=tmp_path)
+        svg = (tmp_path / manifest.keyframes[-1].file).read_text()
+        assert 'fill="#ff0000" opacity="0.7" class="gd-tp-cursor"' in svg
+        assert manifest.screen.cursor == "#ff0000"
 
 
 class TestDocsGallery:

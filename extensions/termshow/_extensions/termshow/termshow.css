@@ -562,9 +562,9 @@
   background: #585b70;
 }
 
-/* Light theme overrides: follows Quarto's body[data-bs-theme="light"] unless the
-   player is forced dark (theme="dark"); theme="light" forces light everywhere */
-body[data-bs-theme="light"] .gd-termshow:not(.gd-tp-dark),
+/* Light theme overrides. The player sets gd-tp-light or gd-tp-dark: from the
+   shortcode's theme="light"/"dark", from the page's color mode for a recording
+   with a light/dark theme pair, or else from the recording's background */
 .gd-termshow.gd-tp-light {
   --gd-tp-bg: #eff1f5;
   --gd-tp-fg: #4c4f69;
@@ -636,14 +636,12 @@ body[data-bs-theme="light"] .gd-termshow:not(.gd-tp-dark),
 }
 
 /* Light theme copy button */
-body[data-bs-theme="light"] .gd-termshow:not(.gd-tp-dark) .gd-tp-copy-snippet,
 .gd-termshow.gd-tp-light .gd-tp-copy-snippet {
   background: rgba(239, 241, 245, 0.92);
   border-color: rgba(30, 102, 245, 0.3);
   color: var(--gd-tp-fg);
 }
 
-body[data-bs-theme="light"] .gd-termshow:not(.gd-tp-dark) .gd-tp-copy-snippet:hover,
 .gd-termshow.gd-tp-light .gd-tp-copy-snippet:hover {
   border-color: var(--gd-tp-accent);
   background: rgba(239, 241, 245, 0.98);

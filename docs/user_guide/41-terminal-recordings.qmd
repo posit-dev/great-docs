@@ -394,9 +394,51 @@ settings:
               "#4aa8ff", "#c678dd", "#56b6c2", "#e0e0e0"]
 ```
 
-All colors must be hex values (`#rgb` or `#rrggbb`). The terminal theme only affects the recording
-itself. The surrounding player controls follow the page's light/dark mode, or the shortcode's
-`theme` option.
+Any theme mapping can also set `cursor`, the color of the cursor block. Without it, the cursor is
+drawn in the foreground color. Of the built-in themes, `catppuccin-mocha` and `catppuccin-latte`
+have their own cursor colors.
+
+All colors must be hex values (`#rgb` or `#rrggbb`).
+
+### Light and dark pairs
+
+A single theme looks the same whatever the page's color mode, so a dark recording stays dark when
+a reader switches the site to light mode. To follow the page instead, give the recording one theme
+for each mode. `auto` uses a built-in pair, `github-light` and `github-dark`:
+
+```yaml
+settings:
+  theme: auto
+```
+
+To choose the pair yourself, give `light` and `dark` themes. Each side can be a theme name or a
+mapping, just like a single theme:
+
+```yaml
+settings:
+  theme:
+    light: catppuccin-latte
+    dark:
+      base: catppuccin-mocha
+      bg: "#11111b"
+```
+
+This recording uses `theme: auto`. Switch the site between light and dark mode to see it change:
+
+{{< termshow file="assets/theme-pair" autoplay="true" loop="true" controls="false" >}}
+
+The player switches as soon as the page's mode changes, even during playback. On a page without a
+light/dark switch, it follows the reader's system setting. The SVG frame files and the poster
+image use the light theme, so in dark mode the light frame can show for a moment while the page
+loads.
+
+### Player colors
+
+The player's controls and title bar have a light and a dark look. With a theme pair, they follow
+the page's color mode along with the recording. With a single theme, they match the recording's
+background: dark controls for a dark theme, light controls for a light one. The shortcode's
+`theme` option forces one look either way, and for a theme pair it also picks that side of the
+pair (see [Shortcode Reference](#shortcode-reference)).
 
 ## Prompt Substitution
 
@@ -506,7 +548,7 @@ The shortcode accepts the following options to control player behavior:
 | `pause_on_chapters` | `"false"` | Auto-pause at each chapter boundary |
 | `poster` | `"0"` | Time (in seconds) of the frame shown before playback starts |
 | `controls` | `"true"` | Show the control bar |
-| `theme` | `"auto"` | Player controls theme: `auto` (follow the page), `dark`, or `light` |
+| `theme` | `"auto"` | Player color mode: `auto`, `dark`, or `light` (see [Player colors](#player-colors)) |
 
 All options are specified as key-value attributes on the shortcode. Unrecognized options are
 silently ignored, so you can safely add new ones as they become available.

@@ -33,6 +33,8 @@ class Theme:
             "#a6adc8",
         ]
     )
+    # Cursor block color; the foreground color when not set
+    cursor: str | None = None
 
 
 @dataclass
@@ -202,6 +204,7 @@ def _parse_theme(data: dict) -> Theme:
     theme = Theme()
     theme.fg = data.get("fg", theme.fg)
     theme.bg = data.get("bg", theme.bg)
+    theme.cursor = data.get("cursor", theme.cursor)
 
     palette_raw = data.get("palette", "")
     if isinstance(palette_raw, str) and palette_raw:

@@ -48,6 +48,7 @@
               "properties": {
                 "fg": { "$ref": "#/$defs/hexColor" },
                 "bg": { "$ref": "#/$defs/hexColor" },
+                "cursor": { "$ref": "#/$defs/hexColor" },
                 "palette": {
                   "description": "The 16 ANSI colors, as a list or as a colon-separated string (the asciicast convention).",
                   "oneOf": [

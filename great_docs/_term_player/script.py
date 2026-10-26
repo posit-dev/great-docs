@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .parser import Event, Recording, Theme
-from .themes import resolve_theme
+from .themes import resolve_theme_pair
 
 
 @dataclass
@@ -128,8 +128,10 @@ class Script:
     source: str = ""
     speed: float = 1.0
     theme_name: str | None = None
+    # For a light/dark pair, `theme` is the light side and `dark_theme` the dark side
     theme: Theme | None = None
-    # Raw `settings.theme` value (name or inline mapping), kept for round-tripping
+    dark_theme: Theme | None = None
+    # Raw `settings.theme` value (name, inline mapping, or pair), kept for round-tripping
     theme_spec: str | dict[str, Any] | None = None
     font_family: str | None = None
     line_height: float | None = None
@@ -168,6 +170,16 @@ def load_script(path: str | Path) -> Script:
     return _parse_script_data(data)
 
 
+def _theme_name(spec: Any) -> str:
+    """The name recorded in the manifest for a `settings.theme` value."""
+    if isinstance(spec, str):
+        return spec
+    if "light" in spec:
+        # A pair is named after its light side, which is the primary theme
+        return _theme_name(spec["light"])
+    return spec.get("base") or "custom"
+
+
 def _parse_script_data(data: dict[str, Any]) -> Script:
     """Parse script data from a dictionary."""
     script = Script()
@@ -181,11 +193,8 @@ def _parse_script_data(data: dict[str, Any]) -> Script:
         theme_spec = settings.get("theme")
         if theme_spec is not None:
             script.theme_spec = theme_spec
-            script.theme = resolve_theme(theme_spec)
-            if isinstance(theme_spec, str):
-                script.theme_name = theme_spec
-            else:
-                script.theme_name = theme_spec.get("base") or "custom"
+            script.theme, script.dark_theme = resolve_theme_pair(theme_spec)
+            script.theme_name = _theme_name(theme_spec)
         script.font_family = settings.get("font_family")
         script.line_height = settings.get("line_height")
         script.show_cursor = settings.get("show_cursor", True)

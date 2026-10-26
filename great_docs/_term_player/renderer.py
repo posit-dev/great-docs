@@ -166,7 +166,7 @@ def render_svg(
         parts.append(
             f'<rect x="{cx:.1f}" y="{cy:.1f}" '
             f'width="{cell_w:.1f}" height="{cell_h:.1f}" '
-            f'fill="{theme.fg}" opacity="0.7" class="gd-tp-cursor"/>'
+            f'fill="{theme.cursor or theme.fg}" opacity="0.7" class="gd-tp-cursor"/>'
         )
 
     parts.append("</g>")

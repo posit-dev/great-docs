@@ -474,6 +474,26 @@ class TestEditorRoundTrip:
         assert reparsed.theme.bg == "#000000"
         assert reparsed.theme.fg == "#d8dee9"
 
+    @pytest.mark.parametrize(
+        "spec",
+        [
+            "auto",
+            {
+                "light": "catppuccin-latte",
+                "dark": {"base": "catppuccin-mocha", "cursor": "#ff0000"},
+            },
+        ],
+    )
+    def test_theme_pair_round_trip(self, spec):
+        """A light/dark pair survives open → save with both sides intact."""
+        script = _parse_script_data({"settings": {"theme": spec}})
+        data = _build_editor_data(_make_recording(), script)
+        yaml_str = _serialize_script(data["script"], "demo.termshow")
+        reparsed = _parse_script_data(parse_yaml(yaml_str))
+        assert reparsed.theme_spec == spec
+        assert reparsed.theme == script.theme
+        assert reparsed.dark_theme == script.dark_theme
+
     def test_line_height_and_show_cursor_round_trip(self):
         script = _make_script(line_height=1.2, show_cursor=False)
         data = _build_editor_data(_make_recording(), script)

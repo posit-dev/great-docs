@@ -52,6 +52,22 @@ class ScreenSettings:
     padding: int = DEFAULT_PADDING
     fg: str = Theme().fg
     bg: str = Theme().bg
+    # Only set when the theme has its own cursor color (otherwise it's `fg`)
+    cursor: str | None = None
+
+
+@dataclass
+class DarkVariant:
+    """The dark side of a light/dark theme pair.
+
+    `lines` runs parallel to `Manifest.lines`: entry *i* is row *i* drawn in
+    the dark theme, so frames can index either list.
+    """
+
+    fg: str
+    bg: str
+    cursor: str | None = None
+    lines: list[Line] = field(default_factory=list)
 
 
 @dataclass
@@ -80,6 +96,7 @@ class Manifest:
     screen: ScreenSettings | None = None
     lines: list[Line] = field(default_factory=list)
     frames: list[FrameEntry] = field(default_factory=list)
+    dark: DarkVariant | None = None
     annotations: list[Annotation] = field(default_factory=list)
     highlights: list[Highlight] = field(default_factory=list)
     snippets: list[Snippet] = field(default_factory=list)
@@ -134,8 +151,16 @@ class Manifest:
                 "fg": self.screen.fg,
                 "bg": self.screen.bg,
             }
+            if self.screen.cursor:
+                data["screen"]["cursor"] = self.screen.cursor
             data["lines"] = [_serialize_line(line) for line in self.lines]
             data["frames"] = [_serialize_frame(fr) for fr in self.frames]
+            if self.dark is not None:
+                dark: dict = {"fg": self.dark.fg, "bg": self.dark.bg}
+                if self.dark.cursor:
+                    dark["cursor"] = self.dark.cursor
+                dark["lines"] = [_serialize_line(line) for line in self.dark.lines]
+                data["dark"] = dark
         text = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         return text.replace("</", "<\\/")
 
@@ -217,6 +242,7 @@ def generate_manifest(
 
     # Determine render settings from script
     theme = recording.term.theme
+    dark_theme: Theme | None = None
     font_family = "JetBrains Mono, Fira Code, SF Mono, Menlo, Consolas, monospace"
     line_height: float | None = None
     show_cursor = True
@@ -225,6 +251,7 @@ def generate_manifest(
     if script:
         if script.theme:
             theme = script.theme
+            dark_theme = script.dark_theme
         if script.font_family:
             font_family = script.font_family
         if script.line_height is not None:
@@ -258,6 +285,13 @@ def generate_manifest(
         line_height=line_height if line_height is not None else DEFAULT_LINE_HEIGHT,
         fg=theme.fg,
         bg=theme.bg,
+        cursor=theme.cursor,
+    )
+    # With a light/dark pair, every row is also drawn in the dark theme
+    dark = (
+        DarkVariant(fg=dark_theme.fg, bg=dark_theme.bg, cursor=dark_theme.cursor)
+        if dark_theme
+        else None
     )
 
     # Determine keyframe times
@@ -272,10 +306,11 @@ def generate_manifest(
     # Process events and capture keyframes. Rows and whole screens are
     # deduplicated: each unique row becomes one entry in `lines`, each unique
     # screen one entry in `frames` (and one SVG file), and keyframes point at
-    # frames by index.
+    # frames by index. With a theme pair, rows are deduplicated by their
+    # (light, dark) pair, since two rows can look the same in one theme only.
     keyframes: list[KeyframeEntry] = []
     lines: list[Line] = []
-    line_ids: dict[Line, int] = {}
+    line_ids: dict[Line | tuple[Line, Line], int] = {}
     frames: list[FrameEntry] = []
     frame_ids: dict[tuple, int] = {}
     stats = ManifestStats()
@@ -324,10 +359,17 @@ def generate_manifest(
         row_ids: list[int] = []
         for r in range(state.rows):
             line = line_model(state.cells[r], theme)
-            if line not in line_ids:
-                line_ids[line] = len(lines)
+            if dark is not None:
+                dark_line = line_model(state.cells[r], dark_theme)
+                key = (line, dark_line)
+            else:
+                key = line
+            if key not in line_ids:
+                line_ids[key] = len(lines)
                 lines.append(line)
-            row_ids.append(line_ids[line])
+                if dark is not None:
+                    dark.lines.append(dark_line)
+            row_ids.append(line_ids[key])
         cursor = (
             (state.cursor_row, state.cursor_col) if show_cursor and state.cursor_visible else None
         )
@@ -373,6 +415,7 @@ def generate_manifest(
         screen=screen,
         lines=lines,
         frames=frames,
+        dark=dark,
         annotations=script.annotations if script else [],
         highlights=script.highlights if script else [],
         snippets=script.snippets if script else [],

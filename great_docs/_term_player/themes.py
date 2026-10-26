@@ -12,7 +12,19 @@ inline mapping:
       theme:
         base: nord          # optional: start from a named theme
         bg: "#000000"
+        cursor: "#88c0d0"
         palette: [...]      # 8 or 16 colors
+
+A light/dark pair gives the player one theme for each color mode. `auto` is
+the built-in pair, and each side can be a name or an inline mapping:
+
+    settings:
+      theme: auto
+
+    settings:
+      theme:
+        light: catppuccin-latte
+        dark: {base: catppuccin-mocha, bg: "#000000"}
 """
 
 from __future__ import annotations
@@ -151,6 +163,17 @@ _THEME_DATA: dict[str, tuple[str, str, list[str]]] = {
     ),
 }  # fmt: skip
 
+# Cursor colors for themes whose cursor isn't their foreground color
+_CURSORS: dict[str, str] = {
+    "catppuccin-mocha": "#f5e0dc",
+    "catppuccin-latte": "#dc8a78",
+}
+
+# The pair used for `theme: auto`
+AUTO_PAIR = ("github-light", "github-dark")
+
+_PAIR_KEYS = {"light", "dark"}
+
 _HEX_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 
 
@@ -180,13 +203,64 @@ def get_theme(name: str) -> Theme:
             f"Unknown termshow theme {name!r}. Available themes: {', '.join(theme_names())}"
         )
     fg, bg, palette = _THEME_DATA[key]
-    return Theme(fg=fg, bg=bg, palette=list(palette))
+    return Theme(fg=fg, bg=bg, palette=list(palette), cursor=_CURSORS.get(key))
 
 
 def _check_color(value: Any, field: str) -> str:
     if not isinstance(value, str) or not _HEX_RE.match(value):
         raise ValueError(f"termshow theme {field} must be a hex color like '#1e1e2e', got {value!r}")
     return value
+
+
+def is_theme_pair(spec: Any) -> bool:
+    """Whether a `settings.theme` value is a light/dark pair (`auto` or `{light, dark}`)."""
+    if spec == "auto":
+        return True
+    return isinstance(spec, dict) and bool(_PAIR_KEYS & set(spec))
+
+
+def resolve_theme_pair(spec: str | dict[str, Any]) -> tuple[Theme, Theme | None]:
+    """Resolve a `settings.theme` value into its light (or only) theme and its dark theme.
+
+    Parameters
+    ----------
+    spec
+        Anything `resolve_theme()` accepts, `"auto"` for the built-in pair
+        (`AUTO_PAIR`), or a mapping with `light` and `dark` keys whose values
+        are theme names or inline mappings.
+
+    Returns
+    -------
+    tuple
+        `(theme, dark)`. For a single theme, `dark` is None. For a pair,
+        `theme` is the light side: it's the one used for SVG files and by
+        players that don't know about the dark side.
+
+    Raises
+    ------
+    ValueError
+        If the spec is invalid, or a pair is missing a side or mixes in other keys.
+    """
+    if not is_theme_pair(spec):
+        return resolve_theme(spec), None
+    if spec == "auto":
+        return get_theme(AUTO_PAIR[0]), get_theme(AUTO_PAIR[1])
+    extra = set(spec) - _PAIR_KEYS
+    if extra:
+        raise ValueError(
+            "termshow theme pair takes only `light` and `dark`, got "
+            + ", ".join(sorted(map(str, extra)))
+        )
+    missing = _PAIR_KEYS - set(spec)
+    if missing:
+        raise ValueError(f"termshow theme pair is missing `{missing.pop()}`")
+    sides = []
+    for side in ("light", "dark"):
+        value = spec[side]
+        if is_theme_pair(value):
+            raise ValueError(f"termshow theme `{side}` must be one theme, not a pair")
+        sides.append(resolve_theme(value))
+    return sides[0], sides[1]
 
 
 def resolve_theme(spec: str | dict[str, Any]) -> Theme:
@@ -196,14 +270,18 @@ def resolve_theme(spec: str | dict[str, Any]) -> Theme:
     ----------
     spec
         A built-in theme name, or a mapping with optional `base` (theme name),
-        `fg`, `bg`, and `palette` (8 or 16 hex colors; 8 colors are reused for
-        the bright variants).
+        `fg`, `bg`, `cursor`, and `palette` (8 or 16 hex colors; 8 colors are
+        reused for the bright variants). For a light/dark pair, this returns
+        the light side (see `resolve_theme_pair()`).
 
     Raises
     ------
     ValueError
         If the name is unknown or a color value is invalid.
     """
+    if is_theme_pair(spec):
+        return resolve_theme_pair(spec)[0]
+
     if isinstance(spec, str):
         return get_theme(spec)
 
@@ -217,6 +295,8 @@ def resolve_theme(spec: str | dict[str, Any]) -> Theme:
         theme.fg = _check_color(spec["fg"], "fg")
     if "bg" in spec:
         theme.bg = _check_color(spec["bg"], "bg")
+    if "cursor" in spec:
+        theme.cursor = _check_color(spec["cursor"], "cursor")
     if "palette" in spec:
         palette = spec["palette"]
         if not isinstance(palette, list) or len(palette) not in (8, 16):

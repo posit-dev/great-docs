@@ -25,7 +25,7 @@
       }
     },
     "theme": {
-      "description": "Name of the theme used: a built-in name, `custom`, or `default`.",
+      "description": "Name of the theme used: a built-in name, `custom`, `default`, or `auto`. For a light/dark pair other than `auto`, the light side's name.",
       "type": "string"
     },
     "window_chrome": {
@@ -59,6 +59,21 @@
       "description": "Unique screens, referenced by index from `keyframes`.",
       "type": "array",
       "items": { "$ref": "#/$defs/frame" }
+    },
+    "dark": {
+      "description": "The dark side of a light/dark theme pair. `screen`, `lines`, and the SVG files use the light side; a player draws with these colors and rows instead when the page is in dark mode.",
+      "type": "object",
+      "required": ["fg", "bg", "lines"],
+      "properties": {
+        "fg": { "$ref": "#/$defs/color" },
+        "bg": { "$ref": "#/$defs/color" },
+        "cursor": { "$ref": "#/$defs/color" },
+        "lines": {
+          "description": "The rows of `lines` drawn in the dark theme, at the same indices.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/line" }
+        }
+      }
     },
     "annotations": {
       "type": "array",
@@ -132,7 +147,11 @@
           "minimum": 0
         },
         "fg": { "$ref": "#/$defs/color" },
-        "bg": { "$ref": "#/$defs/color" }
+        "bg": { "$ref": "#/$defs/color" },
+        "cursor": {
+          "description": "Cursor block color. Omitted when the cursor is drawn in `fg`.",
+          "$ref": "#/$defs/color"
+        }
       }
     },
     "line": {
