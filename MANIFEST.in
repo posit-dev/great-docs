@@ -2,3 +2,4 @@ include LICENSE
 include README.md
 recursive-include great_docs/assets *
 include great_docs/assets/.gitignore
+recursive-include great_docs/_term_player/schemas *.json

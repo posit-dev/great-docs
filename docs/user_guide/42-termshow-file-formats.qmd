@@ -1,0 +1,351 @@
+---
+title: "Termshow File Formats"
+guide-section: "Site Content"
+bread-crumbs: false
+tags: [Terminal, Reference, Extensions]
+status: experimental
+versions: ">=0.18"
+---
+
+# Termshow File Formats
+
+This page is the reference for the three files behind a [terminal recording](terminal-recordings.qmd).
+It's written for people building tools that read or write them: recorders, converters, editors,
+and players. If you only want to record and publish, the Terminal Recordings guide covers
+everything you need.
+
+| File | Written by | Purpose |
+|------|------------|---------|
+| `NAME.termshow` | The recorder or an importer | What happened in the terminal, with timing |
+| `NAME.termshow.yml` | You, or the Termshow Editor | How to present it: settings, chapters, cuts, overlays |
+| `manifest.json` | `great-docs build` or `great-docs termshow render` | Everything the player needs, ready to embed in a page |
+
+The first two are source files you keep in your repository. The manifest is build output.
+
+Each file has a JSON Schema (draft 2020-12). They ship with the `great-docs` package, under
+`great_docs/_term_player/schemas/`, and are published at these URLs:
+
+| File | Schema |
+|------|--------|
+| `.termshow` | <https://raw.githubusercontent.com/posit-dev/great-docs/main/great_docs/_term_player/schemas/termshow-recording.schema.json> |
+| `.termshow.yml` | <https://raw.githubusercontent.com/posit-dev/great-docs/main/great_docs/_term_player/schemas/termshow-script.schema.json> |
+| `manifest.json` | <https://raw.githubusercontent.com/posit-dev/great-docs/main/great_docs/_term_player/schemas/termshow-manifest.schema.json> |
+
+## Conventions
+
+These rules apply to all three formats:
+
+- Files are UTF-8.
+- Times and durations are in seconds, as JSON numbers.
+- Rows and columns are counted from 0, starting at the top-left cell.
+- A reader **must ignore** members it doesn't recognize in `.termshow` headers and in
+  `manifest.json`, so that new optional members can be added without a version bump. The script
+  schema is stricter and rejects unknown keys, because a misspelled key in a hand-written script
+  (such as `duraton`) would otherwise be silently ignored.
+
+## Recordings (`.termshow`)
+
+A recording is newline-delimited JSON: one JSON value per line. The first line is a **header**
+object and every later line is an **event** array. Blank lines and lines starting with `#` are
+skipped.
+
+```json
+{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 24, "type": "xterm-256color"}, "timestamp": 1777200000, "title": "demo"}
+[0.5, "o", "$ "]
+[0.8, "i", "ls"]
+[0.0, "o", "ls\r\n"]
+[0.1, "o", "README.md  src  tests\r\n$ "]
+[1.0, "m", "Listing files"]
+[0.4, "x", "0"]
+```
+
+### Header
+
+The header describes the terminal the session was recorded in:
+
+| Member | Required | Type | Description |
+|--------|----------|------|-------------|
+| `version` | yes | `1` | Recording format version |
+| `format` | yes | `"termshow"` | Format identifier |
+| `term.cols` | yes | integer ≥ 1 | Terminal width in columns |
+| `term.rows` | yes | integer ≥ 1 | Terminal height in rows |
+| `term.type` | no | string | Value of `TERM` (default `xterm-256color`) |
+| `term.theme` | no | object | Recording terminal's colors: `fg`, `bg`, and `palette` (16 hex colors, as a list or a colon-separated string) |
+| `title` | no | string | Human-readable title |
+| `timestamp` | no | integer | Start time, in Unix seconds |
+
+A script's `settings.theme` takes precedence over `term.theme`.
+
+### Events
+
+Each event is a three-item array, `[delay, code, data]`:
+
+- `delay` is the number of seconds since the previous event (or since the start, for the first
+  event). Delays are relative, so editing one event's timing doesn't shift the absolute times
+  stored in later lines.
+- `code` is a string identifying the event type.
+- `data` is a string whose meaning depends on the code.
+
+| Code | Meaning | `data` |
+|------|---------|--------|
+| `o` | Output written to the terminal | Text, including ANSI escape sequences |
+| `i` | Input typed by the user | The keystrokes. Used to detect the shell prompt; not drawn |
+| `m` | Marker | A label. Becomes a chapter when the script defines no chapters |
+| `r` | Resize | `COLSxROWS`, such as `100x30` |
+| `x` | Exit | The shell's exit status, such as `0` |
+
+Readers must ignore event codes they don't recognize.
+
+The format follows [asciicast v3](https://docs.asciinema.org/manual/asciicast/v3/) closely:
+relative delays, the same event codes, and a `term` object in the header. `great-docs termshow
+import` converts asciicast v2 and v3 files.
+
+## Scripts (`.termshow.yml`)
+
+A script is a YAML mapping that controls how a recording is presented. It's paired with the
+recording by name: `demo.termshow.yml` belongs to `demo.termshow` in the same directory. Every
+key is optional, and a recording without a script plays as recorded.
+
+Times in a script use two timelines:
+
+- `cuts` and `speed_map` refer to the **original recording**.
+- Everything else (`chapters`, `annotations`, `highlights`, `snippets`) refers to the
+  **playback timeline**: the time a viewer sees on the player, after cuts and speed changes are
+  applied.
+
+The Terminal Recordings guide explains what each feature looks like. This section lists the keys
+and their defaults.
+
+### Top-level keys
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `source` | string | Path to the recording. Informational only; pairing is by file name |
+| `settings` | mapping | Render settings (below) |
+| `chapters` | list | Named points on the timeline |
+| `cuts` | list | Ranges removed from playback |
+| `speed_map` | list | Ranges played at a different speed |
+| `annotations` | list | Text overlays at the edges of the viewport |
+| `highlights` | list | Decorations attached to terminal text |
+| `snippets` | list | Copy buttons shown for a time range |
+
+### `settings`
+
+These settings control how the recording is rendered:
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `theme` | `default` | A built-in theme name, or a mapping with optional `base` (theme name), `fg`, `bg`, and `palette` (8 or 16 hex colors; 8 are reused for the bright colors) |
+| `window_chrome` | `none` | `none`, `minimal`, or `colorful` |
+| `font_family` | monospace stack | CSS `font-family` list |
+| `line_height` | `1.5` | Row height as a multiple of the font size |
+| `show_cursor` | `true` | Draw the cursor |
+| `speed` | `1.0` | Speed multiplier for the whole recording |
+| `prompt` | (none) | Replacement for the prompt character on prompt rows |
+| `prompt_pattern` | (none) | Regular expression that finds prompts when the recording has no input events |
+
+The built-in themes are `catppuccin-latte`, `catppuccin-mocha`, `default`, `dracula`,
+`github-dark`, `github-light`, `gruvbox-dark`, `gruvbox-light`, `monokai`, `nord`, `one-dark`,
+`rose-pine`, `rose-pine-dawn`, `solarized-dark`, `solarized-light`, and `tokyo-night`. Great Docs
+also accepts other spellings of these names (`Tokyo Night`, `tokyo_night`), but the schema only
+accepts the names as listed.
+
+### Timeline items
+
+Each list holds mappings with these keys. Keys marked *required* have no default.
+
+| List | Keys |
+|------|------|
+| `chapters` | `at` *required*, `label` (`""`) |
+| `cuts` | `from` *required*, `to` *required*, `type` (`jump`; or `ellipsis`, which the editor previews with a brief "…") |
+| `speed_map` | `from` *required*, `to` *required*, `speed` (`1.0`) |
+| `annotations` | `at` *required*, `duration` (`3.0`), `text` (`""`), `position` (`bottom-right`), `style` (`callout`), `width` (`medium`) |
+| `snippets` | `at` *required*, `duration` (`5.0`), `text`, `match`, `label`. At least one of `text` or `match` is required |
+| `highlights` | `at` *required*, `target` *required*, `duration` (`2.0`), `style` (`outline`), `color` (`#f1fa8c`), `badge_text`, `badge_icon`, `fade_in` (`0.3`), `fade_out` (`0.3`), `pulse` (`false`) |
+
+The enumerated values are:
+
+- annotation `position`: `top-left`, `top`, `top-right`, `left`, `right`, `bottom-left`,
+  `bottom`, `bottom-right`
+- annotation `style`: `callout`, `subtle`, `highlight`
+- annotation `width`: `small`, `medium`, `large`
+- highlight `style`: `outline`, `box`, `underline`, `underline-wavy`, `background`, `spotlight`,
+  `glow`, `bracket`, `badge-before`, `badge-after`
+
+A highlight `target` is a mapping with one of these keys:
+
+- `region`: a rectangle `{row, col, width, height}`, with all four given
+- `lines`: a list of row numbers, each highlighted across the full width
+- `match`: a regular expression matched against the screen text, with optional `group` (the
+  capture group to decorate, default `0`) and `track_scroll` (`false`)
+
+The player currently draws `region` and `lines` targets only. `match` targets are valid and are
+kept in the manifest, but they aren't drawn yet. Older scripts may put `region` directly on the
+highlight instead of under `target`; that form is still read but is deprecated.
+
+## Player manifests (`manifest.json`)
+
+The manifest is a JSON object that holds a rendered recording. The build writes it to
+`termshow/NAME/manifest.json`, together with one SVG file per unique screen, and embeds it in the
+page inside a `<script type="application/json">` element. This page describes **version 2**.
+
+### Top-level members
+
+These members describe the whole recording:
+
+| Member | Required | Description |
+|--------|----------|-------------|
+| `version` | yes | `2`. Must be the **first** member of the object |
+| `title` | no | Recording title |
+| `duration` | yes | Length in seconds |
+| `term` | yes | `{cols, rows}`: the size at the start |
+| `theme` | no | Name of the theme used (`custom` for an inline theme without `base`) |
+| `window_chrome` | no | `minimal` or `colorful`; omitted when there is none |
+| `chapters` | no | `[{time, label}]` |
+| `keyframes` | yes | When to show each screen (below) |
+| `screen` | yes | Settings for drawing frames (below) |
+| `lines` | yes | Unique rows (below) |
+| `frames` | yes | Unique screens (below) |
+| `annotations` | no | Script annotations, with `at` renamed to `time` |
+| `highlights` | no | Script highlights, with `at` renamed to `time`; members at their default value are left out |
+| `snippets` | no | Script snippets, with `at` renamed to `time` |
+
+### Keyframes
+
+`keyframes` lists, in time order, the screen to show from each `time` onward. The first keyframe
+is at time `0`. Several keyframes can share one screen, which is common during pauses.
+
+```json
+{"time":4.5,"file":"frame-012.svg","frame":12}
+```
+
+- `frame` is an index into `frames`.
+- `file` names that screen's SVG file, relative to the manifest. It's written immediately after
+  `time`, as shown. The SVG files serve as poster images, and as a fallback for players that
+  can't draw a frame themselves.
+
+### Frames and lines
+
+Most of a terminal stays the same from one moment to the next. To keep the manifest small, each
+unique row is stored once in `lines`, and each unique screen once in `frames`:
+
+```json
+"lines":[
+  [[],[[0,"$ ls","#d0d0d0"]]],
+  [[[0,4,"#a6e3a1"]],[[0,"PASS","#1e1e2e","gd-tp-bold"],[5,"tests/test_app.py","#d0d0d0"]]]
+],
+"frames":[
+  {"lines":[0,1,2,2,2],"cursor":[1,0]},
+  {"lines":[0,1,3,2,2],"size":[100,30]}
+]
+```
+
+A **line** is a two-item array, `[backgroundSpans, textSpans]`:
+
+- A background span is `[col, length, color]`: a run of cells whose background differs from
+  the terminal background.
+- A text span is `[col, text, color]`, or `[col, text, color, classes]` when the text has
+  attributes. `classes` is a space-separated list drawn from `gd-tp-bold`, `gd-tp-italic`,
+  `gd-tp-underline`, `gd-tp-strikethrough`, and `gd-tp-dim`.
+
+Colors are resolved hex values. Themes and palette indexes have already been applied, so a player
+doesn't need to know about either.
+
+A **frame** has these members:
+
+| Member | Description |
+|--------|-------------|
+| `lines` | One index into `lines` per row, top to bottom |
+| `cursor` | `[row, col]`; omitted when the cursor is hidden |
+| `size` | `[cols, rows]`; only present when it differs from `term` (after a resize) |
+
+### Drawing a frame
+
+`screen` holds what's needed to turn a frame into an image: `font_family`, `font_size` (pixels),
+`line_height`, `padding` (pixels), and the terminal `fg` and `bg` colors.
+
+Each cell is `0.6 × font_size` wide and `font_size × line_height` tall. The image is
+`cols × cellWidth + 2 × padding` wide and `rows × cellHeight + 2 × padding` tall. To draw a frame:
+
+1. Fill the image with `bg`.
+2. Draw each background span as a rectangle at `(col × cellWidth, row × cellHeight)`, offset by
+   `padding`, that is `length` cells wide and one cell tall.
+3. Draw each text span at the same position, with its top edge on the top of the row.
+4. If there's a `cursor`, draw a one-cell rectangle there in `fg` at 70% opacity.
+
+The reference player, `termshow.js`, builds exactly the same SVG markup as the files that
+`great-docs` writes, so the frame looks identical whether it's drawn in the browser or loaded as
+an image.
+
+### Serialization
+
+The build writes manifests as compact JSON with these properties, which consumers can rely on:
+
+- No whitespace between tokens, and non-ASCII text written as-is, not as `\u` escapes.
+- `</` is written as `<\/`, so the JSON can be embedded in an HTML `<script>` element safely.
+  (`<\/` is a valid JSON escape, so a JSON parser reads it back as `</`.)
+- `version` is the first member. In each keyframe, `file` immediately follows `time`. Tools
+  that can't parse JSON, such as the Quarto Lua filter, depend on these two orderings.
+
+### Version 1 and versioning
+
+Pages built by Great Docs 0.17 and earlier contain **version 1** manifests. These have no
+`screen`, `lines`, or `frames`, and their keyframes have no `frame` member: each keyframe's
+`file` holds the full SVG for that moment. Players should support both versions.
+
+New optional members can be added without changing the version, since readers ignore members
+they don't recognize. A change that would break existing readers requires a new version number.
+Because every keyframe keeps its `file`, a player that meets a version it doesn't know can still
+show the SVG files.
+
+## Validating files
+
+Any JSON Schema validator for draft 2020-12 can check these files. The schemas validate one JSON
+value at a time, so a recording is checked line by line: the header against
+`#/$defs/header`, and each event against `#/$defs/event`. In Python, with the `jsonschema` and
+PyYAML packages:
+
+```python
+import json
+from pathlib import Path
+
+import jsonschema
+import yaml
+
+schemas = Path("great_docs/_term_player/schemas")
+
+
+def load(name):
+    return json.loads((schemas / f"termshow-{name}.schema.json").read_text())
+
+
+# A script
+jsonschema.validate(yaml.safe_load(Path("demo.termshow.yml").read_text()), load("script"))
+
+# A recording: every line validates against the root schema
+recording = load("recording")
+for line in Path("demo.termshow").read_text().splitlines():
+    if line.strip() and not line.startswith("#"):
+        jsonschema.validate(json.loads(line), recording)
+```
+
+### Editor support
+
+Editors that use the YAML language server (VS Code with the Red Hat YAML extension, and many
+others) can validate a script and autocomplete its keys as you type. Add a comment to the top of
+the file:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/posit-dev/great-docs/main/great_docs/_term_player/schemas/termshow-script.schema.json
+```
+
+To cover every script in a project, map the schema to the `*.termshow.yml` pattern in your editor
+settings instead. In VS Code, that's the `yaml.schemas` setting:
+
+```json
+{
+  "yaml.schemas": {
+    "https://raw.githubusercontent.com/posit-dev/great-docs/main/great_docs/_term_player/schemas/termshow-script.schema.json": "*.termshow.yml"
+  }
+}
+```

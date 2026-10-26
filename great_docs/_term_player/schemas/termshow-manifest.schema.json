@@ -1,0 +1,275 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/posit-dev/great-docs/main/great_docs/_term_player/schemas/termshow-manifest.schema.json",
+  "title": "Termshow player manifest (manifest.json)",
+  "description": "A rendered recording: everything the player needs to play it. Version 2 stores each unique row and screen once and the player draws frames as SVG; version 1 (legacy) lists one SVG file per keyframe. Readers must ignore members they don't recognize.",
+  "type": "object",
+  "required": ["version", "duration", "term", "keyframes"],
+  "properties": {
+    "version": {
+      "description": "Manifest format version. Must be the first member of the object.",
+      "enum": [1, 2]
+    },
+    "title": { "type": "string" },
+    "duration": {
+      "description": "Length of the rendered recording in seconds.",
+      "$ref": "#/$defs/time"
+    },
+    "term": {
+      "description": "Terminal size at the start. Frames with a different size carry their own `size`.",
+      "type": "object",
+      "required": ["cols", "rows"],
+      "properties": {
+        "cols": { "type": "integer", "minimum": 1 },
+        "rows": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "theme": {
+      "description": "Name of the theme used: a built-in name, `custom`, or `default`.",
+      "type": "string"
+    },
+    "window_chrome": {
+      "description": "Title bar decoration. Omitted when `none`.",
+      "enum": ["none", "minimal", "colorful"]
+    },
+    "chapters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["time", "label"],
+        "properties": {
+          "time": { "$ref": "#/$defs/time" },
+          "label": { "type": "string" }
+        }
+      }
+    },
+    "keyframes": {
+      "description": "The screen to show from each `time` onward, in time order. The first keyframe is at time 0.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/keyframe" }
+    },
+    "screen": { "$ref": "#/$defs/screen" },
+    "lines": {
+      "description": "Unique rendered rows, referenced by index from `frames`.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/line" }
+    },
+    "frames": {
+      "description": "Unique screens, referenced by index from `keyframes`.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/frame" }
+    },
+    "annotations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/annotation" }
+    },
+    "highlights": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/highlight" }
+    },
+    "snippets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/snippet" }
+    }
+  },
+  "if": {
+    "properties": { "version": { "const": 2 } }
+  },
+  "then": {
+    "required": ["screen", "lines", "frames"],
+    "properties": {
+      "keyframes": {
+        "items": { "required": ["frame"] }
+      }
+    }
+  },
+  "$defs": {
+    "time": {
+      "type": "number",
+      "minimum": 0
+    },
+    "index": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "color": {
+      "description": "A hex color.",
+      "type": "string",
+      "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+    },
+    "keyframe": {
+      "type": "object",
+      "required": ["time", "file"],
+      "properties": {
+        "time": { "$ref": "#/$defs/time" },
+        "file": {
+          "description": "SVG file for this screen, relative to the manifest. Written as the member right after `time`.",
+          "type": "string",
+          "pattern": "^[^/\\\\\"]+\\.svg$"
+        },
+        "frame": {
+          "description": "Index into `frames` (version 2).",
+          "$ref": "#/$defs/index"
+        }
+      }
+    },
+    "screen": {
+      "description": "Settings for drawing frames (version 2).",
+      "type": "object",
+      "required": ["font_family", "font_size", "line_height", "padding", "fg", "bg"],
+      "properties": {
+        "font_family": { "type": "string" },
+        "font_size": {
+          "description": "Font size in pixels. A cell is `0.6 * font_size` wide and `font_size * line_height` tall.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "line_height": { "type": "number", "exclusiveMinimum": 0 },
+        "padding": {
+          "description": "Space around the cell grid, in pixels.",
+          "type": "number",
+          "minimum": 0
+        },
+        "fg": { "$ref": "#/$defs/color" },
+        "bg": { "$ref": "#/$defs/color" }
+      }
+    },
+    "line": {
+      "description": "One row: `[backgroundSpans, textSpans]`.",
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/bgSpan" }
+        },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/textSpan" }
+        }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "bgSpan": {
+      "description": "`[col, length, color]`: a run of cells with a non-default background.",
+      "type": "array",
+      "prefixItems": [
+        { "$ref": "#/$defs/index" },
+        { "type": "integer", "minimum": 1 },
+        { "$ref": "#/$defs/color" }
+      ],
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "textSpan": {
+      "description": "`[col, text, color]` or `[col, text, color, classes]`: a run of text in one style. `classes` is a space-separated list of `gd-tp-bold`, `gd-tp-italic`, `gd-tp-underline`, `gd-tp-strikethrough` and `gd-tp-dim`.",
+      "type": "array",
+      "prefixItems": [
+        { "$ref": "#/$defs/index" },
+        { "type": "string", "minLength": 1 },
+        { "$ref": "#/$defs/color" },
+        {
+          "type": "string",
+          "pattern": "^gd-tp-(bold|italic|underline|strikethrough|dim)( gd-tp-(bold|italic|underline|strikethrough|dim))*$"
+        }
+      ],
+      "minItems": 3,
+      "maxItems": 4
+    },
+    "frame": {
+      "type": "object",
+      "required": ["lines"],
+      "properties": {
+        "lines": {
+          "description": "One index into `lines` per row, top to bottom.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/index" }
+        },
+        "cursor": {
+          "description": "`[row, col]` of the cursor. Omitted when the cursor is hidden.",
+          "type": "array",
+          "prefixItems": [{ "$ref": "#/$defs/index" }, { "$ref": "#/$defs/index" }],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "size": {
+          "description": "`[cols, rows]`, only when it differs from `term` (after a resize).",
+          "type": "array",
+          "prefixItems": [
+            { "type": "integer", "minimum": 1 },
+            { "type": "integer", "minimum": 1 }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "required": ["time", "duration", "text"],
+      "properties": {
+        "time": { "$ref": "#/$defs/time" },
+        "duration": { "$ref": "#/$defs/time" },
+        "text": { "type": "string" },
+        "position": { "type": "string" },
+        "style": { "type": "string" },
+        "width": { "type": "string" }
+      }
+    },
+    "highlight": {
+      "type": "object",
+      "required": ["time", "duration", "target", "style"],
+      "properties": {
+        "time": { "$ref": "#/$defs/time" },
+        "duration": { "$ref": "#/$defs/time" },
+        "target": {
+          "type": "object",
+          "properties": {
+            "region": {
+              "type": "object",
+              "required": ["row", "col", "width", "height"],
+              "properties": {
+                "row": { "$ref": "#/$defs/index" },
+                "col": { "$ref": "#/$defs/index" },
+                "width": { "type": "integer", "minimum": 1 },
+                "height": { "type": "integer", "minimum": 1 }
+              }
+            },
+            "lines": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/index" }
+            },
+            "match": { "type": "string" },
+            "group": { "$ref": "#/$defs/index" },
+            "track_scroll": { "type": "boolean" }
+          }
+        },
+        "style": { "type": "string" },
+        "color": { "type": "string" },
+        "badge_text": { "type": "string" },
+        "badge_icon": { "type": "string" },
+        "fade_in": {
+          "description": "Seconds; 0.3 when omitted.",
+          "$ref": "#/$defs/time"
+        },
+        "fade_out": {
+          "description": "Seconds; 0.3 when omitted.",
+          "$ref": "#/$defs/time"
+        },
+        "pulse": { "type": "boolean" }
+      }
+    },
+    "snippet": {
+      "type": "object",
+      "required": ["time", "duration"],
+      "properties": {
+        "time": { "$ref": "#/$defs/time" },
+        "duration": { "$ref": "#/$defs/time" },
+        "text": { "type": "string" },
+        "match": { "type": "string" },
+        "label": { "type": "string" }
+      }
+    }
+  }
+}

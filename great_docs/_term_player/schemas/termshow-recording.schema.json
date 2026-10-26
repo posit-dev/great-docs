@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/posit-dev/great-docs/main/great_docs/_term_player/schemas/termshow-recording.schema.json",
+  "title": "Termshow recording line",
+  "description": "One line of a `.termshow` recording. The file is newline-delimited JSON: the first line is a header and every later line is an event. Validate line 1 against `#/$defs/header` and each later line against `#/$defs/event`; any single line also validates against this schema's root.",
+  "oneOf": [
+    { "$ref": "#/$defs/header" },
+    { "$ref": "#/$defs/event" }
+  ],
+  "$defs": {
+    "header": {
+      "title": "Recording header",
+      "description": "Metadata for the recording. Readers must ignore members they don't recognize.",
+      "type": "object",
+      "required": ["version", "format", "term"],
+      "properties": {
+        "version": {
+          "description": "Recording format version.",
+          "const": 1
+        },
+        "format": {
+          "description": "Format identifier.",
+          "const": "termshow"
+        },
+        "term": {
+          "description": "The terminal the session was recorded in.",
+          "type": "object",
+          "required": ["cols", "rows"],
+          "properties": {
+            "cols": {
+              "description": "Terminal width in columns.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "rows": {
+              "description": "Terminal height in rows.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "type": {
+              "description": "Value of `TERM` during recording.",
+              "type": "string",
+              "default": "xterm-256color"
+            },
+            "theme": {
+              "description": "Colors of the recording terminal. A script's `settings.theme` takes precedence.",
+              "type": "object",
+              "properties": {
+                "fg": { "$ref": "#/$defs/hexColor" },
+                "bg": { "$ref": "#/$defs/hexColor" },
+                "palette": {
+                  "description": "The 16 ANSI colors, as a list or as a colon-separated string (the asciicast convention).",
+                  "oneOf": [
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/$defs/hexColor" },
+                      "minItems": 16,
+                      "maxItems": 16
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}(:#[0-9a-fA-F]{6}){15}$"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "title": {
+          "description": "Human-readable title.",
+          "type": "string"
+        },
+        "timestamp": {
+          "description": "When recording started, in Unix seconds.",
+          "type": "integer"
+        }
+      }
+    },
+    "event": {
+      "title": "Recording event",
+      "description": "`[delay, code, data]`. `delay` is seconds since the previous event (or since the start, for the first event).",
+      "type": "array",
+      "prefixItems": [
+        {
+          "description": "Seconds since the previous event.",
+          "type": "number",
+          "minimum": 0
+        },
+        {
+          "description": "Event code: `o` output, `i` input, `m` marker, `r` resize, `x` exit. Readers must ignore codes they don't recognize.",
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "description": "Event payload; its meaning depends on the code.",
+          "type": "string"
+        }
+      ],
+      "minItems": 3,
+      "maxItems": 3,
+      "allOf": [
+        {
+          "if": { "prefixItems": [true, { "const": "r" }] },
+          "then": {
+            "prefixItems": [true, true, { "pattern": "^[0-9]+x[0-9]+$" }]
+          }
+        },
+        {
+          "if": { "prefixItems": [true, { "const": "x" }] },
+          "then": {
+            "prefixItems": [true, true, { "pattern": "^-?[0-9]+$" }]
+          }
+        }
+      ]
+    },
+    "hexColor": {
+      "type": "string",
+      "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+    }
+  }
+}

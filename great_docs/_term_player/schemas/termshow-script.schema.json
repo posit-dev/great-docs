@@ -1,0 +1,342 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/posit-dev/great-docs/main/great_docs/_term_player/schemas/termshow-script.schema.json",
+  "title": "Termshow script (.termshow.yml)",
+  "description": "Presentation layer for a `.termshow` recording: settings, chapters, cuts, annotations, highlights and snippets. Times are in seconds: `cuts` and `speed_map` use the recording's original timeline, and everything else uses the playback timeline (after cuts and speed changes).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "source": {
+      "description": "Path to the recording this script belongs to. Informational: tools pair `NAME.termshow.yml` with `NAME.termshow` in the same directory.",
+      "type": "string"
+    },
+    "settings": { "$ref": "#/$defs/settings" },
+    "chapters": {
+      "description": "Named points on the timeline, shown as markers and in the chapter bar.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/chapter" }
+    },
+    "cuts": {
+      "description": "Time ranges removed from playback. Applied at render time; the recording is not changed.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/cut" }
+    },
+    "speed_map": {
+      "description": "Time ranges played at a different speed. Applied at render time, after cuts.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/speedSegment" }
+    },
+    "annotations": {
+      "description": "Text overlays shown at the edges of the viewport.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/annotation" }
+    },
+    "highlights": {
+      "description": "Decorations attached to terminal text.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/highlight" }
+    },
+    "snippets": {
+      "description": "Copy buttons shown in the title bar for a time range.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/snippet" }
+    }
+  },
+  "$defs": {
+    "time": {
+      "type": "number",
+      "minimum": 0
+    },
+    "duration": {
+      "type": "number",
+      "minimum": 0
+    },
+    "hexColor": {
+      "type": "string",
+      "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+    },
+    "themeName": {
+      "description": "A built-in theme.",
+      "enum": [
+        "catppuccin-latte",
+        "catppuccin-mocha",
+        "default",
+        "dracula",
+        "github-dark",
+        "github-light",
+        "gruvbox-dark",
+        "gruvbox-light",
+        "monokai",
+        "nord",
+        "one-dark",
+        "rose-pine",
+        "rose-pine-dawn",
+        "solarized-dark",
+        "solarized-light",
+        "tokyo-night"
+      ]
+    },
+    "settings": {
+      "description": "Render settings. Changing them needs a re-render, not a re-recording.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "theme": {
+          "description": "Terminal colors: a built-in theme name, or a mapping that overrides parts of one.",
+          "oneOf": [
+            { "$ref": "#/$defs/themeName" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "base": {
+                  "$ref": "#/$defs/themeName",
+                  "description": "Theme to start from (`default` when omitted)."
+                },
+                "fg": { "$ref": "#/$defs/hexColor" },
+                "bg": { "$ref": "#/$defs/hexColor" },
+                "palette": {
+                  "description": "ANSI colors 0-15. With 8 colors, the 8 are reused for the bright variants.",
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/hexColor" },
+                  "oneOf": [
+                    { "minItems": 8, "maxItems": 8 },
+                    { "minItems": 16, "maxItems": 16 }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "window_chrome": {
+          "description": "Title bar decoration.",
+          "enum": ["none", "minimal", "colorful"],
+          "default": "none"
+        },
+        "font_family": {
+          "description": "CSS font-family list for terminal text.",
+          "type": "string"
+        },
+        "line_height": {
+          "description": "Row height as a multiple of the font size. Around 1.2 makes box-drawing characters join up.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 1.5
+        },
+        "show_cursor": {
+          "description": "Draw the terminal cursor.",
+          "type": "boolean",
+          "default": true
+        },
+        "speed": {
+          "description": "Playback speed multiplier for the whole recording.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 1
+        },
+        "prompt": {
+          "description": "Replacement for the shell prompt character on prompt rows.",
+          "type": ["string", "null"]
+        },
+        "prompt_pattern": {
+          "description": "Regular expression that matches the prompt at the start of a row; used to find prompts when the recording has no input events.",
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "chapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["at"],
+      "properties": {
+        "at": { "$ref": "#/$defs/time" },
+        "label": { "type": "string", "default": "" }
+      }
+    },
+    "cut": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "$ref": "#/$defs/time" },
+        "to": { "$ref": "#/$defs/time" },
+        "type": {
+          "description": "Both types remove the range at render time; the editor previews `ellipsis` cuts with a brief … marker.",
+          "enum": ["jump", "ellipsis"],
+          "default": "jump"
+        }
+      }
+    },
+    "speedSegment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "$ref": "#/$defs/time" },
+        "to": { "$ref": "#/$defs/time" },
+        "speed": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 1
+        }
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["at"],
+      "properties": {
+        "at": { "$ref": "#/$defs/time" },
+        "duration": { "$ref": "#/$defs/duration", "default": 3 },
+        "text": { "type": "string", "default": "" },
+        "position": {
+          "enum": [
+            "top-left",
+            "top",
+            "top-right",
+            "left",
+            "right",
+            "bottom-left",
+            "bottom",
+            "bottom-right"
+          ],
+          "default": "bottom-right"
+        },
+        "style": {
+          "enum": ["callout", "subtle", "highlight"],
+          "default": "callout"
+        },
+        "width": {
+          "description": "Maximum width: 25%, 50% or 75% of the viewport.",
+          "enum": ["small", "medium", "large"],
+          "default": "medium"
+        }
+      }
+    },
+    "region": {
+      "description": "A rectangle of cells, 0-indexed from the top-left.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["row", "col", "width", "height"],
+      "properties": {
+        "row": { "type": "integer", "minimum": 0 },
+        "col": { "type": "integer", "minimum": 0 },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "highlightTarget": {
+      "description": "The text to decorate. Give one of `region`, `lines` or `match`.",
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        { "required": ["region"] },
+        { "required": ["lines"] },
+        { "required": ["match"] }
+      ],
+      "properties": {
+        "region": { "$ref": "#/$defs/region" },
+        "lines": {
+          "description": "Whole rows, 0-indexed.",
+          "type": "array",
+          "items": { "type": "integer", "minimum": 0 },
+          "minItems": 1
+        },
+        "match": {
+          "description": "Regular expression matched against the screen text.",
+          "type": "string"
+        },
+        "group": {
+          "description": "Capture group of `match` to decorate (0 is the whole match).",
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "track_scroll": {
+          "description": "Follow `match` as the text scrolls.",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "highlight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["at"],
+      "oneOf": [
+        { "required": ["target"] },
+        { "required": ["region"] }
+      ],
+      "properties": {
+        "at": { "$ref": "#/$defs/time" },
+        "duration": { "$ref": "#/$defs/duration", "default": 2 },
+        "target": { "$ref": "#/$defs/highlightTarget" },
+        "region": {
+          "$ref": "#/$defs/region",
+          "description": "Legacy shorthand for `target: {region: …}`.",
+          "deprecated": true
+        },
+        "style": {
+          "enum": [
+            "outline",
+            "box",
+            "underline",
+            "underline-wavy",
+            "background",
+            "spotlight",
+            "glow",
+            "bracket",
+            "badge-before",
+            "badge-after"
+          ],
+          "default": "outline"
+        },
+        "color": {
+          "description": "Any CSS color.",
+          "type": "string",
+          "default": "#f1fa8c"
+        },
+        "badge_text": {
+          "description": "Badge label, for the `badge-before` and `badge-after` styles.",
+          "type": "string"
+        },
+        "badge_icon": {
+          "description": "Text (often an emoji) shown before `badge_text`.",
+          "type": "string"
+        },
+        "fade_in": { "$ref": "#/$defs/duration", "default": 0.3 },
+        "fade_out": { "$ref": "#/$defs/duration", "default": 0.3 },
+        "pulse": {
+          "description": "Pulse the highlight's opacity while it's shown.",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "snippet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["at"],
+      "anyOf": [
+        { "required": ["text"] },
+        { "required": ["match"] }
+      ],
+      "properties": {
+        "at": { "$ref": "#/$defs/time" },
+        "duration": { "$ref": "#/$defs/duration", "default": 5 },
+        "text": {
+          "description": "Text copied to the clipboard.",
+          "type": "string"
+        },
+        "match": {
+          "description": "Regular expression matched against the screen text; the first capture group (or the whole match) is copied, falling back to `text`.",
+          "type": "string"
+        },
+        "label": {
+          "description": "Button label.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}
