@@ -844,16 +844,16 @@ For pattern matches, an optional `target.group` (default `0`) selects which capt
 highlight. This lets you match context (e.g., a full line) while only decorating the interesting
 part (e.g., a flag name).
 
-::: {.callout-note}
-The player currently draws `region` and `lines` targets. Pattern targets (`match`, `group`, and
-`track_scroll`) are part of the file format and are kept in the rendered manifest, but they aren't
-drawn yet. Use a `region` when the highlight needs to appear today.
-:::
+Patterns are JavaScript regular expressions, tried against one row of the screen at a time. The
+first row from the top that matches is the one highlighted, and the highlight doesn't appear until
+that text is on screen.
 
 **Scroll tracking.** Terminal output scrolls. A region-based highlight is positional: row 5
-stays at row 5 even after scrolling pushes new content into that row. Set `target.track_scroll:
-true` to have the highlight follow the matched text as it moves. Scroll tracking only works
-with `target.match` (the renderer re-runs the regex each frame to locate the text's new position):
+stays at row 5 even after scrolling pushes new content into that row. A pattern highlight is
+placed where its text first appears, and by default it stays there. Set `target.track_scroll:
+true` to have it follow the matched text as it moves instead, hiding while the text is scrolled
+off-screen. Scroll tracking only works with `target.match` (the player re-runs the regex on each
+screen to find the text's new position):
 
 ```yaml
 highlights:
