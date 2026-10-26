@@ -8,6 +8,10 @@
  * A version 2 manifest stores each unique screen as rows of styled spans and
  * the player draws the SVG itself (`renderFrameSvg`); version 1 manifests
  * point at pre-rendered SVG files, which are inlined or fetched.
+ *
+ * A manifest rendered with a light/dark theme pair carries a `dark` member
+ * with the dark theme's colors and rows; the player draws whichever side
+ * matches the page's color mode and redraws when the mode changes.
  */
 (function () {
   'use strict';
@@ -69,7 +73,8 @@
       theme: container.dataset.theme || 'auto',
     };
 
-    // Player chrome theme: "auto" follows the page; "dark"/"light" force it
+    // Player chrome theme: "dark"/"light" force it; "auto" is resolved by
+    // `applyMode()` once the manifest is loaded
     if (options.theme === 'dark' || options.theme === 'light') {
       container.classList.add('gd-tp-' + options.theme);
     }
@@ -86,6 +91,9 @@
       animFrameId: null,
       lastTick: null,
       speed: options.speed,
+      // 'light' or 'dark': the chrome, and the side drawn for a theme pair
+      mode: null,
+      shownIdx: -1,
       baseUrl: manifestUrl.substring(0, manifestUrl.lastIndexOf('/') + 1),
     };
 
@@ -161,7 +169,12 @@
     function activate(manifest, frames) {
       state.manifest = manifest;
       state.frames = frames;
-      state.svgCache = [];
+      state.svgCache = {};
+      applyMode();
+      if (options.theme !== 'dark' && options.theme !== 'light') {
+        modeListeners.push(applyMode);
+        watchColorMode();
+      }
       controls.duration.textContent = formatTime(manifest.duration);
       renderChapterMarkers(controls.timeline, manifest);
 
@@ -192,6 +205,20 @@
       showFrame(state, svgContainer, findKeyframeIndex(manifest.keyframes, options.poster));
       if (options.autoplay) {
         play(state, svgContainer, annotationLayer, controls, options, container, centerOverlay, chapterBar);
+      }
+    }
+
+    // Set the chrome classes for the current color mode, and redraw a theme
+    // pair's frame when the mode changes
+    function applyMode() {
+      var mode = colorMode(state.manifest, options.theme);
+      if (mode === state.mode) return;
+      var redraw = state.mode !== null && state.manifest && state.manifest.dark;
+      state.mode = mode;
+      container.classList.toggle('gd-tp-dark', mode === 'dark');
+      container.classList.toggle('gd-tp-light', mode === 'light');
+      if (redraw && state.shownIdx >= 0) {
+        showFrame(state, svgContainer, state.shownIdx);
       }
     }
 
@@ -639,13 +666,16 @@
     }
 
     const kf = manifest.keyframes[idx];
+    state.shownIdx = idx;
 
     // Version 2: draw the screen from the manifest
     if (manifest.frames && kf.frame != null) {
-      if (!state.svgCache[kf.frame]) {
-        state.svgCache[kf.frame] = renderFrameSvg(manifest, kf.frame);
+      const mode = manifest.dark && state.mode === 'dark' ? 'dark' : 'light';
+      const key = mode + kf.frame;
+      if (!state.svgCache[key]) {
+        state.svgCache[key] = renderFrameSvg(manifest, kf.frame, mode);
       }
-      svgContainer.innerHTML = state.svgCache[kf.frame];
+      svgContainer.innerHTML = state.svgCache[key];
       return;
     }
 
@@ -675,9 +705,15 @@
    * Mirrors `render_svg()` in great_docs/_term_player/renderer.py so the
    * result matches the SVG files written at render time (the highlight and
    * snippet code measures this markup). Keep the two in sync.
+   *
+   * With `mode` 'dark' and a manifest that has a `dark` member, the frame is
+   * drawn in the dark theme's colors and rows.
    */
-  function renderFrameSvg(manifest, frameIdx) {
+  function renderFrameSvg(manifest, frameIdx, mode) {
     const screen = manifest.screen;
+    const dark = mode === 'dark' ? manifest.dark : null;
+    const colors = dark || screen;
+    const rows = dark ? dark.lines : manifest.lines;
     const frame = manifest.frames[frameIdx];
     const cols = frame.size ? frame.size[0] : manifest.term.cols;
     const fmt = (n) => n.toFixed(1);
@@ -709,13 +745,13 @@
       '</style>'
     );
     parts.push(
-      '<rect width="' + fmt(svgW) + '" height="' + fmt(svgH) + '" fill="' + screen.bg +
+      '<rect width="' + fmt(svgW) + '" height="' + fmt(svgH) + '" fill="' + colors.bg +
       '" rx="8" ry="8"/>'
     );
     parts.push('<g transform="translate(' + pad + ',' + pad + ')">');
 
     frame.lines.forEach((lineIdx, rowIdx) => {
-      const line = manifest.lines[lineIdx];
+      const line = rows[lineIdx];
       const y = fmt(rowIdx * cellH);
       for (const [col, len, color] of line[0]) {
         parts.push(
@@ -736,7 +772,7 @@
       parts.push(
         '<rect x="' + fmt(frame.cursor[1] * cellW) + '" y="' + fmt(frame.cursor[0] * cellH) + '" ' +
         'width="' + fmt(cellW) + '" height="' + fmt(cellH) + '" ' +
-        'fill="' + screen.fg + '" opacity="0.7" class="gd-tp-cursor"/>'
+        'fill="' + (colors.cursor || colors.fg) + '" opacity="0.7" class="gd-tp-cursor"/>'
       );
     }
 
@@ -861,7 +897,7 @@
 
   function matchInFrame(manifest, frameIdx, target) {
     const cache = matchCache(manifest);
-    const key = frameIdx + ' ' + (target.group || 0) + ' ' + target.match;
+    const key = frameIdx + '|' + (target.group || 0) + '|' + target.match;
     if (!cache.matches.has(key)) {
       cache.matches.set(key, findMatch(frameRows(manifest, frameIdx), target.match, target.group));
     }
@@ -1252,6 +1288,70 @@
     }
   }
 
+  // --- Color mode ---
+
+  // Players following the page's color mode; each is called when it changes
+  const modeListeners = [];
+  let watchingColorMode = false;
+
+  /**
+   * The page's color mode. Great Docs and Quarto mark it on <html> (the
+   * `data-bs-theme` attribute, or the quarto-dark/quarto-light classes);
+   * outside such a site, the reader's system setting decides.
+   */
+  function pageColorMode() {
+    const html = document.documentElement;
+    const theme = html && html.getAttribute ? html.getAttribute('data-bs-theme') : null;
+    if (theme === 'dark' || theme === 'light') return theme;
+    for (const el of [html, document.body]) {
+      if (el && el.classList) {
+        if (el.classList.contains('quarto-dark')) return 'dark';
+        if (el.classList.contains('quarto-light')) return 'light';
+      }
+    }
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+    return 'light';
+  }
+
+  /** Whether a `#rgb` or `#rrggbb` color is dark (relative luminance below 0.5). */
+  function isDarkColor(hex) {
+    let h = String(hex || '').replace('#', '');
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return true;
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 < 0.5;
+  }
+
+  /**
+   * Resolve a player's mode: a forced `theme` option wins; a theme pair
+   * follows the page; a single theme matches the chrome to its background.
+   */
+  function colorMode(manifest, themeOption) {
+    if (themeOption === 'dark' || themeOption === 'light') return themeOption;
+    if (manifest && manifest.dark) return pageColorMode();
+    if (manifest && manifest.screen) return isDarkColor(manifest.screen.bg) ? 'dark' : 'light';
+    return 'dark';
+  }
+
+  /** Start watching for color mode changes (once per page). */
+  function watchColorMode() {
+    if (watchingColorMode) return;
+    watchingColorMode = true;
+    const notify = () => modeListeners.forEach((fn) => fn());
+    const attrs = { attributes: true, attributeFilter: ['class', 'data-bs-theme'] };
+    const modeObserver = new MutationObserver(notify);
+    if (document.documentElement) modeObserver.observe(document.documentElement, attrs);
+    if (document.body) modeObserver.observe(document.body, attrs);
+    if (window.matchMedia) {
+      const query = window.matchMedia('(prefers-color-scheme: dark)');
+      if (query.addEventListener) query.addEventListener('change', notify);
+    }
+  }
+
   // --- Utilities ---
 
   function formatTime(seconds) {
@@ -1266,6 +1366,7 @@
   window.Termshow = window.Termshow || {};
   window.Termshow.renderFrame = renderFrameSvg;
   window.Termshow.locateMatch = locateMatch;
+  window.Termshow.colorMode = colorMode;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initAll);
