@@ -86,7 +86,7 @@ SPEC = {
         # ── Terminal recordings ──────────────────────────────────────────
         #
         # Recording 1: Simple CLI commands
-        "demos/getting-started.termshow": (
+        "docs/demos/getting-started.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Getting Started"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "p"]\n'
@@ -168,7 +168,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
         ),
         # Script for the getting-started recording
-        "demos/getting-started.termshow.yml": (
+        "docs/demos/getting-started.termshow.yml": (
             "source: demos/getting-started.termshow\n"
             "\n"
             "settings:\n"
@@ -214,28 +214,28 @@ SPEC = {
             '    label: "Run"\n'
         ),
         # Recording 2: TUI interface demo
-        "demos/tui-demo.termshow": (
+        "docs/demos/tui-demo.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 60, "rows": 18, "type": "xterm-256color"}, "title": "TUI Interface"}\n'
             '[0.3, "o", "\\u001b[2J\\u001b[H"]\n'
             '[0.2, "o", "\\u001b[34m\\u001b[1m\\u250c\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2510\\u001b[0m\\r\\n"]\n'
             '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m                                                \\u001b[34m\\u001b[1m\\u2502\\u001b[0m\\r\\n"]\n'
             '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m   \\u001b[36m\\u001b[1m\\u2728 my-tool v1.0\\u001b[0m                               \\u001b[34m\\u001b[1m\\u2502\\u001b[0m\\r\\n"]\n'
             '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m                                                \\u001b[34m\\u001b[1m\\u2502\\u001b[0m\\r\\n"]\n'
-            '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m   \\u001b[33m\\u276f\\u001b[0m \\u001b[1mNew Project\\u001b[0m                              \\u001b[34m\\u001b[1m\\u2502\\u001b[0m\\r\\n"]\n'
-            '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m     Open Existing                            \\u001b[34m\\u001b[1m\\u2502\\u001b[0m\\r\\n"]\n'
-            '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m     Recent Files                             \\u001b[34m\\u001b[1m\\u2502\\u001b[0m\\r\\n"]\n'
-            '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m     Settings                                 \\u001b[34m\\u001b[1m\\u2502\\u001b[0m\\r\\n"]\n'
-            '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m     \\u001b[90mQuit\\u001b[0m                                     \\u001b[34m\\u001b[1m\\u2502\\u001b[0m\\r\\n"]\n'
+            '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m   \\u001b[33m\\u276f\\u001b[0m \\u001b[1mNew Project\\u001b[0m                                \\u001b[34m\\u001b[1m\\u2502\\u001b[0m\\r\\n"]\n'
+            '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m     Open Existing                              \\u001b[34m\\u001b[1m\\u2502\\u001b[0m\\r\\n"]\n'
+            '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m     Recent Files                               \\u001b[34m\\u001b[1m\\u2502\\u001b[0m\\r\\n"]\n'
+            '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m     Settings                                   \\u001b[34m\\u001b[1m\\u2502\\u001b[0m\\r\\n"]\n'
+            '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m     \\u001b[90mQuit\\u001b[0m                                       \\u001b[34m\\u001b[1m\\u2502\\u001b[0m\\r\\n"]\n'
             '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m                                                \\u001b[34m\\u001b[1m\\u2502\\u001b[0m\\r\\n"]\n'
-            '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m   \\u001b[90m\\u2191/\\u2193 navigate  \\u23ce enter  q quit\\u001b[0m             \\u001b[34m\\u001b[1m\\u2502\\u001b[0m\\r\\n"]\n'
+            '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m   \\u001b[90m\\u2191/\\u2193 navigate  \\u23ce enter  q quit\\u001b[0m                \\u001b[34m\\u001b[1m\\u2502\\u001b[0m\\r\\n"]\n'
             '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m                                                \\u001b[34m\\u001b[1m\\u2502\\u001b[0m\\r\\n"]\n'
             '[0.02, "o", "\\u001b[34m\\u001b[1m\\u2514\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2518\\u001b[0m\\r\\n"]\n'
             '[2.0, "m", "Main menu"]\n'
             # User navigates down
-            '[0.8, "o", "\\u001b[9;1H"]\n'
-            '[0.05, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m     New Project                              \\u001b[34m\\u001b[1m\\u2502\\u001b[0m"]\n'
-            '[0.05, "o", "\\u001b[10;1H"]\n'
-            '[0.05, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m   \\u001b[33m\\u276f\\u001b[0m \\u001b[1mOpen Existing\\u001b[0m                            \\u001b[34m\\u001b[1m\\u2502\\u001b[0m"]\n'
+            '[0.8, "o", "\\u001b[5;1H"]\n'
+            '[0.05, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m     New Project                                \\u001b[34m\\u001b[1m\\u2502\\u001b[0m"]\n'
+            '[0.05, "o", "\\u001b[6;1H"]\n'
+            '[0.05, "o", "\\u001b[34m\\u001b[1m\\u2502\\u001b[0m   \\u001b[33m\\u276f\\u001b[0m \\u001b[1mOpen Existing\\u001b[0m                              \\u001b[34m\\u001b[1m\\u2502\\u001b[0m"]\n'
             '[1.5, "m", "Navigate to Open"]\n'
             # User presses Enter
             '[0.5, "o", "\\u001b[2J\\u001b[H"]\n'
@@ -250,7 +250,7 @@ SPEC = {
             '[1.5, "m", "Project loaded"]\n'
         ),
         # Script for TUI demo
-        "demos/tui-demo.termshow.yml": (
+        "docs/demos/tui-demo.termshow.yml": (
             "source: demos/tui-demo.termshow\n"
             "\n"
             "settings:\n"
@@ -282,7 +282,7 @@ SPEC = {
             "    style: callout\n"
         ),
         # Recording 3: Live Great Docs CLI commands
-        "demos/great-docs-cli.termshow": (
+        "docs/demos/great-docs-cli.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 24, "type": "xterm-256color"}, "title": "Great Docs CLI"}\n'
             # -- Chapter 1: Version check --
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
@@ -442,7 +442,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
         ),
         # Script for the Great Docs CLI demo
-        "demos/great-docs-cli.termshow.yml": (
+        "docs/demos/great-docs-cli.termshow.yml": (
             "source: demos/great-docs-cli.termshow\n"
             "\n"
             "settings:\n"
@@ -1040,7 +1040,7 @@ SPEC = {
         # against real terminal content.
         #
         # --- Position demos ---
-        "demos/ann-pos-top-left.termshow": (
+        "docs/demos/ann-pos-top-left.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Position Demo"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "e"]\n'
@@ -1076,7 +1076,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/ann-pos-top-left.termshow.yml": (
+        "docs/demos/ann-pos-top-left.termshow.yml": (
             "source: demos/ann-pos-top-left.termshow\n"
             "\n"
             "settings:\n"
@@ -1089,7 +1089,7 @@ SPEC = {
             "    position: top-left\n"
             "    style: callout\n"
         ),
-        "demos/ann-pos-top.termshow": (
+        "docs/demos/ann-pos-top.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Position Demo"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "e"]\n'
@@ -1125,7 +1125,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/ann-pos-top.termshow.yml": (
+        "docs/demos/ann-pos-top.termshow.yml": (
             "source: demos/ann-pos-top.termshow\n"
             "\n"
             "settings:\n"
@@ -1138,7 +1138,7 @@ SPEC = {
             "    position: top\n"
             "    style: callout\n"
         ),
-        "demos/ann-pos-top-right.termshow": (
+        "docs/demos/ann-pos-top-right.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Position Demo"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "e"]\n'
@@ -1174,7 +1174,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/ann-pos-top-right.termshow.yml": (
+        "docs/demos/ann-pos-top-right.termshow.yml": (
             "source: demos/ann-pos-top-right.termshow\n"
             "\n"
             "settings:\n"
@@ -1187,7 +1187,7 @@ SPEC = {
             "    position: top-right\n"
             "    style: callout\n"
         ),
-        "demos/ann-pos-left.termshow": (
+        "docs/demos/ann-pos-left.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Position Demo"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "e"]\n'
@@ -1223,7 +1223,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/ann-pos-left.termshow.yml": (
+        "docs/demos/ann-pos-left.termshow.yml": (
             "source: demos/ann-pos-left.termshow\n"
             "\n"
             "settings:\n"
@@ -1236,7 +1236,7 @@ SPEC = {
             "    position: left\n"
             "    style: callout\n"
         ),
-        "demos/ann-pos-right.termshow": (
+        "docs/demos/ann-pos-right.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Position Demo"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "e"]\n'
@@ -1272,7 +1272,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/ann-pos-right.termshow.yml": (
+        "docs/demos/ann-pos-right.termshow.yml": (
             "source: demos/ann-pos-right.termshow\n"
             "\n"
             "settings:\n"
@@ -1285,7 +1285,7 @@ SPEC = {
             "    position: right\n"
             "    style: callout\n"
         ),
-        "demos/ann-pos-bottom-left.termshow": (
+        "docs/demos/ann-pos-bottom-left.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Position Demo"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "e"]\n'
@@ -1321,7 +1321,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/ann-pos-bottom-left.termshow.yml": (
+        "docs/demos/ann-pos-bottom-left.termshow.yml": (
             "source: demos/ann-pos-bottom-left.termshow\n"
             "\n"
             "settings:\n"
@@ -1334,7 +1334,7 @@ SPEC = {
             "    position: bottom-left\n"
             "    style: callout\n"
         ),
-        "demos/ann-pos-bottom.termshow": (
+        "docs/demos/ann-pos-bottom.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Position Demo"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "e"]\n'
@@ -1370,7 +1370,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/ann-pos-bottom.termshow.yml": (
+        "docs/demos/ann-pos-bottom.termshow.yml": (
             "source: demos/ann-pos-bottom.termshow\n"
             "\n"
             "settings:\n"
@@ -1383,7 +1383,7 @@ SPEC = {
             "    position: bottom\n"
             "    style: callout\n"
         ),
-        "demos/ann-pos-bottom-right.termshow": (
+        "docs/demos/ann-pos-bottom-right.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Position Demo"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "e"]\n'
@@ -1419,7 +1419,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/ann-pos-bottom-right.termshow.yml": (
+        "docs/demos/ann-pos-bottom-right.termshow.yml": (
             "source: demos/ann-pos-bottom-right.termshow\n"
             "\n"
             "settings:\n"
@@ -1433,7 +1433,7 @@ SPEC = {
             "    style: callout\n"
         ),
         # --- Width demos (all at top-right) ---
-        "demos/ann-width-small.termshow": (
+        "docs/demos/ann-width-small.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Width Demo"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "e"]\n'
@@ -1469,7 +1469,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/ann-width-small.termshow.yml": (
+        "docs/demos/ann-width-small.termshow.yml": (
             "source: demos/ann-width-small.termshow\n"
             "\n"
             "settings:\n"
@@ -1483,7 +1483,7 @@ SPEC = {
             "    style: callout\n"
             "    width: small\n"
         ),
-        "demos/ann-width-medium.termshow": (
+        "docs/demos/ann-width-medium.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Width Demo"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "e"]\n'
@@ -1519,7 +1519,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/ann-width-medium.termshow.yml": (
+        "docs/demos/ann-width-medium.termshow.yml": (
             "source: demos/ann-width-medium.termshow\n"
             "\n"
             "settings:\n"
@@ -1533,7 +1533,7 @@ SPEC = {
             "    style: callout\n"
             "    width: medium\n"
         ),
-        "demos/ann-width-large.termshow": (
+        "docs/demos/ann-width-large.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 20, "type": "xterm-256color"}, "title": "Annotation Width Demo"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "e"]\n'
@@ -1569,7 +1569,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/ann-width-large.termshow.yml": (
+        "docs/demos/ann-width-large.termshow.yml": (
             "source: demos/ann-width-large.termshow\n"
             "\n"
             "settings:\n"
@@ -1590,7 +1590,7 @@ SPEC = {
         # visible against terminal content.
         #
         # --- Style: outline ---
-        "demos/hl-style-outline.termshow": (
+        "docs/demos/hl-style-outline.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Outline"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "g"]\n'
@@ -1616,7 +1616,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/hl-style-outline.termshow.yml": (
+        "docs/demos/hl-style-outline.termshow.yml": (
             "source: demos/hl-style-outline.termshow\n"
             "\n"
             "settings:\n"
@@ -1630,7 +1630,7 @@ SPEC = {
             "      region: {row: 2, col: 2, width: 15, height: 1}\n"
         ),
         # --- Style: underline ---
-        "demos/hl-style-underline.termshow": (
+        "docs/demos/hl-style-underline.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Underline"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "g"]\n'
@@ -1656,7 +1656,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/hl-style-underline.termshow.yml": (
+        "docs/demos/hl-style-underline.termshow.yml": (
             "source: demos/hl-style-underline.termshow\n"
             "\n"
             "settings:\n"
@@ -1671,7 +1671,7 @@ SPEC = {
             "      region: {row: 2, col: 3, width: 30, height: 1}\n"
         ),
         # --- Style: underline-wavy ---
-        "demos/hl-style-underline-wavy.termshow": (
+        "docs/demos/hl-style-underline-wavy.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Underline Wavy"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "p"]\n'
@@ -1695,7 +1695,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/hl-style-underline-wavy.termshow.yml": (
+        "docs/demos/hl-style-underline-wavy.termshow.yml": (
             "source: demos/hl-style-underline-wavy.termshow\n"
             "\n"
             "settings:\n"
@@ -1710,7 +1710,7 @@ SPEC = {
             "      region: {row: 4, col: 0, width: 38, height: 1}\n"
         ),
         # --- Style: background ---
-        "demos/hl-style-background.termshow": (
+        "docs/demos/hl-style-background.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Background"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "c"]\n'
@@ -1736,7 +1736,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/hl-style-background.termshow.yml": (
+        "docs/demos/hl-style-background.termshow.yml": (
             "source: demos/hl-style-background.termshow\n"
             "\n"
             "settings:\n"
@@ -1751,7 +1751,7 @@ SPEC = {
             "      region: {row: 3, col: 0, width: 17, height: 1}\n"
         ),
         # --- Style: spotlight ---
-        "demos/hl-style-spotlight.termshow": (
+        "docs/demos/hl-style-spotlight.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Spotlight"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "g"]\n'
@@ -1778,7 +1778,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/hl-style-spotlight.termshow.yml": (
+        "docs/demos/hl-style-spotlight.termshow.yml": (
             "source: demos/hl-style-spotlight.termshow\n"
             "\n"
             "settings:\n"
@@ -1793,7 +1793,7 @@ SPEC = {
             "      region: {row: 4, col: 0, width: 32, height: 1}\n"
         ),
         # --- Style: glow ---
-        "demos/hl-style-glow.termshow": (
+        "docs/demos/hl-style-glow.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Glow"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "g"]\n'
@@ -1821,7 +1821,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/hl-style-glow.termshow.yml": (
+        "docs/demos/hl-style-glow.termshow.yml": (
             "source: demos/hl-style-glow.termshow\n"
             "\n"
             "settings:\n"
@@ -1837,7 +1837,7 @@ SPEC = {
             "    pulse: true\n"
         ),
         # --- Style: box ---
-        "demos/hl-style-box.termshow": (
+        "docs/demos/hl-style-box.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Box"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "p"]\n'
@@ -1860,7 +1860,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/hl-style-box.termshow.yml": (
+        "docs/demos/hl-style-box.termshow.yml": (
             "source: demos/hl-style-box.termshow\n"
             "\n"
             "settings:\n"
@@ -1875,7 +1875,7 @@ SPEC = {
             "      region: {row: 2, col: 0, width: 20, height: 2}\n"
         ),
         # --- Style: badge-before ---
-        "demos/hl-style-badge-before.termshow": (
+        "docs/demos/hl-style-badge-before.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Badge Before"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "g"]\n'
@@ -1903,7 +1903,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/hl-style-badge-before.termshow.yml": (
+        "docs/demos/hl-style-badge-before.termshow.yml": (
             "source: demos/hl-style-badge-before.termshow\n"
             "\n"
             "settings:\n"
@@ -1919,7 +1919,7 @@ SPEC = {
             "      region: {row: 4, col: 0, width: 34, height: 1}\n"
         ),
         # --- Style: badge-after ---
-        "demos/hl-style-badge-after.termshow": (
+        "docs/demos/hl-style-badge-after.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Badge After"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "g"]\n'
@@ -1945,7 +1945,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/hl-style-badge-after.termshow.yml": (
+        "docs/demos/hl-style-badge-after.termshow.yml": (
             "source: demos/hl-style-badge-after.termshow\n"
             "\n"
             "settings:\n"
@@ -1961,7 +1961,7 @@ SPEC = {
             "      region: {row: 3, col: 0, width: 37, height: 1}\n"
         ),
         # --- Style: bracket ---
-        "demos/hl-style-bracket.termshow": (
+        "docs/demos/hl-style-bracket.termshow": (
             '{"version": 1, "format": "termshow", "term": {"cols": 80, "rows": 12, "type": "xterm-256color"}, "title": "Highlight: Bracket"}\n'
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[0.08, "o", "g"]\n'
@@ -1989,7 +1989,7 @@ SPEC = {
             '[0.5, "o", "\\u001b[32m\\u001b[1m$\\u001b[0m "]\n'
             '[5.0, "o", ""]\n'
         ),
-        "demos/hl-style-bracket.termshow.yml": (
+        "docs/demos/hl-style-bracket.termshow.yml": (
             "source: demos/hl-style-bracket.termshow\n"
             "\n"
             "settings:\n"
