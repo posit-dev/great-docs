@@ -20,8 +20,10 @@
 -- builds lay it out), then termshow/<basename>/ (the default output of a
 -- standalone `termshow render`).
 --
--- The shortcode embeds manifest JSON + SVG frames inline so the player
--- works without network fetches (including with file:// protocol).
+-- The shortcode embeds the manifest inline so the player works without
+-- network fetches (including with file:// protocol). A version 2 manifest
+-- carries the screens themselves (the player draws them as SVG); for older
+-- version 1 output the SVG frame files are inlined alongside it.
 
 local function escape_attr(s)
     if s == nil then return "" end
@@ -63,6 +65,11 @@ local function poster_frame(manifest_json, poster_time)
         end
     end
     return chosen
+end
+
+--- Return the manifest's format version (1 when it can't be read).
+local function manifest_version(manifest_json)
+    return tonumber(manifest_json:match('^%s*{%s*"version"%s*:%s*(%d+)')) or 1
 end
 
 --- Register CSS/JS/font assets as a Quarto HTML dependency (once per document).
@@ -132,9 +139,11 @@ return {
         local theme = kwarg_str(kwargs, "theme")
         if theme == "" then theme = "auto" end
 
-        -- Read SVG frames inline if manifest exists
-        local frames_json = "[]"
-        if manifest_json then
+        -- Version 1 manifests only reference SVG files; read them in so they
+        -- can be inlined
+        local frames_json = nil
+        if manifest_json and manifest_version(manifest_json) < 2 then
+            frames_json = "[]"
             -- Parse keyframes from manifest to know which SVGs to embed
             local frames = {}
             for frame_file in manifest_json:gmatch('"file"%s*:%s*"([^"]+)"') do
@@ -181,10 +190,12 @@ return {
             table.insert(parts, '\n  <script type="application/json" class="gd-tp-manifest">')
             table.insert(parts, manifest_json)
             table.insert(parts, '</script>')
-            -- Embed SVG frames as inline JSON array
-            table.insert(parts, '\n  <script type="application/json" class="gd-tp-frames">')
-            table.insert(parts, frames_json)
-            table.insert(parts, '</script>')
+            if frames_json then
+                -- Embed SVG frames as inline JSON array
+                table.insert(parts, '\n  <script type="application/json" class="gd-tp-frames">')
+                table.insert(parts, frames_json)
+                table.insert(parts, '</script>')
+            end
         end
 
         -- Poster image (visible before JS loads, works with file://)
