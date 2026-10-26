@@ -55,6 +55,37 @@
       "type": "string",
       "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
     },
+    "themeSpec": {
+      "description": "One theme: a built-in name, or a mapping that overrides parts of one.",
+      "oneOf": [
+        { "$ref": "#/$defs/themeName" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "base": {
+              "$ref": "#/$defs/themeName",
+              "description": "Theme to start from (`default` when omitted)."
+            },
+            "fg": { "$ref": "#/$defs/hexColor" },
+            "bg": { "$ref": "#/$defs/hexColor" },
+            "cursor": {
+              "$ref": "#/$defs/hexColor",
+              "description": "Cursor block color (the foreground color when omitted)."
+            },
+            "palette": {
+              "description": "ANSI colors 0-15. With 8 colors, the 8 are reused for the bright variants.",
+              "type": "array",
+              "items": { "$ref": "#/$defs/hexColor" },
+              "oneOf": [
+                { "minItems": 8, "maxItems": 8 },
+                { "minItems": 16, "maxItems": 16 }
+              ]
+            }
+          }
+        }
+      ]
+    },
     "themeName": {
       "description": "A built-in theme.",
       "enum": [
@@ -82,28 +113,20 @@
       "additionalProperties": false,
       "properties": {
         "theme": {
-          "description": "Terminal colors: a built-in theme name, or a mapping that overrides parts of one.",
+          "description": "Terminal colors: a built-in theme name, a mapping that overrides parts of one, or a light/dark pair (`auto` for the built-in pair, or `{light, dark}`). The player shows the side that matches the page's color mode.",
           "oneOf": [
-            { "$ref": "#/$defs/themeName" },
+            { "$ref": "#/$defs/themeSpec" },
+            {
+              "const": "auto",
+              "description": "The built-in light/dark pair: `github-light` and `github-dark`."
+            },
             {
               "type": "object",
               "additionalProperties": false,
+              "required": ["light", "dark"],
               "properties": {
-                "base": {
-                  "$ref": "#/$defs/themeName",
-                  "description": "Theme to start from (`default` when omitted)."
-                },
-                "fg": { "$ref": "#/$defs/hexColor" },
-                "bg": { "$ref": "#/$defs/hexColor" },
-                "palette": {
-                  "description": "ANSI colors 0-15. With 8 colors, the 8 are reused for the bright variants.",
-                  "type": "array",
-                  "items": { "$ref": "#/$defs/hexColor" },
-                  "oneOf": [
-                    { "minItems": 8, "maxItems": 8 },
-                    { "minItems": 16, "maxItems": 16 }
-                  ]
-                }
+                "light": { "$ref": "#/$defs/themeSpec" },
+                "dark": { "$ref": "#/$defs/themeSpec" }
               }
             }
           ]
