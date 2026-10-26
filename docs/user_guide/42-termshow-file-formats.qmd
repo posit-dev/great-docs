@@ -70,7 +70,7 @@ The header describes the terminal the session was recorded in:
 | `term.cols` | yes | integer ≥ 1 | Terminal width in columns |
 | `term.rows` | yes | integer ≥ 1 | Terminal height in rows |
 | `term.type` | no | string | Value of `TERM` (default `xterm-256color`) |
-| `term.theme` | no | object | Recording terminal's colors: `fg`, `bg`, and `palette` (16 hex colors, as a list or a colon-separated string) |
+| `term.theme` | no | object | Recording terminal's colors: `fg`, `bg`, optional `cursor`, and `palette` (16 hex colors, as a list or a colon-separated string) |
 | `title` | no | string | Human-readable title |
 | `timestamp` | no | integer | Start time, in Unix seconds |
 
@@ -135,7 +135,7 @@ These settings control how the recording is rendered:
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `theme` | `default` | A built-in theme name, or a mapping with optional `base` (theme name), `fg`, `bg`, and `palette` (8 or 16 hex colors; 8 are reused for the bright colors) |
+| `theme` | `default` | One theme, or a light/dark pair (below) |
 | `window_chrome` | `none` | `none`, `minimal`, or `colorful` |
 | `font_family` | monospace stack | CSS `font-family` list |
 | `line_height` | `1.5` | Row height as a multiple of the font size |
@@ -143,6 +143,16 @@ These settings control how the recording is rendered:
 | `speed` | `1.0` | Speed multiplier for the whole recording |
 | `prompt` | (none) | Replacement for the prompt character on prompt rows |
 | `prompt_pattern` | (none) | Regular expression that finds prompts when the recording has no input events |
+
+A single theme is a built-in theme name, or a mapping with optional `base` (theme name), `fg`,
+`bg`, `cursor`, and `palette` (8 or 16 hex colors; 8 are reused for the bright colors). Without
+`cursor`, the cursor is drawn in `fg`.
+
+A **pair** gives one theme for each color mode:
+
+- `auto` is the built-in pair: `github-light` and `github-dark`.
+- A mapping with exactly two keys, `light` and `dark`, each holding a single theme (a name or a
+  mapping). Both are required, and other keys aren't allowed next to them.
 
 The built-in themes are `catppuccin-latte`, `catppuccin-mocha`, `default`, `dracula`,
 `github-dark`, `github-light`, `gruvbox-dark`, `gruvbox-light`, `monokai`, `nord`, `one-dark`,
@@ -206,13 +216,14 @@ These members describe the whole recording:
 | `title` | no | Recording title |
 | `duration` | yes | Length in seconds |
 | `term` | yes | `{cols, rows}`: the size at the start |
-| `theme` | no | Name of the theme used (`custom` for an inline theme without `base`) |
+| `theme` | no | Name of the theme used: `auto` for that pair, the light side's name for other pairs, and `custom` for an inline theme without `base` |
 | `window_chrome` | no | `minimal` or `colorful`; omitted when there is none |
 | `chapters` | no | `[{time, label}]` |
 | `keyframes` | yes | When to show each screen (below) |
 | `screen` | yes | Settings for drawing frames (below) |
 | `lines` | yes | Unique rows (below) |
 | `frames` | yes | Unique screens (below) |
+| `dark` | no | The dark side of a theme pair (see [Light/dark pairs](#lightdark-pairs)) |
 | `annotations` | no | Script annotations, with `at` renamed to `time` |
 | `highlights` | no | Script highlights, with `at` renamed to `time`; members at their default value are left out |
 | `snippets` | no | Script snippets, with `at` renamed to `time` |
@@ -269,7 +280,8 @@ A **frame** has these members:
 ### Drawing a frame
 
 `screen` holds what's needed to turn a frame into an image: `font_family`, `font_size` (pixels),
-`line_height`, `padding` (pixels), and the terminal `fg` and `bg` colors.
+`line_height`, `padding` (pixels), the terminal `fg` and `bg` colors, and `cursor`, which is only
+present when the theme has its own cursor color.
 
 Each cell is `0.6 × font_size` wide and `font_size × line_height` tall. The image is
 `cols × cellWidth + 2 × padding` wide and `rows × cellHeight + 2 × padding` tall. To draw a frame:
@@ -278,11 +290,40 @@ Each cell is `0.6 × font_size` wide and `font_size × line_height` tall. The im
 2. Draw each background span as a rectangle at `(col × cellWidth, row × cellHeight)`, offset by
    `padding`, that is `length` cells wide and one cell tall.
 3. Draw each text span at the same position, with its top edge on the top of the row.
-4. If there's a `cursor`, draw a one-cell rectangle there in `fg` at 70% opacity.
+4. If the frame has a `cursor`, draw a one-cell rectangle there at 70% opacity, in
+   `screen.cursor`, or in `fg` when that's absent.
 
 The reference player, `termshow.js`, builds exactly the same SVG markup as the files that
 `great-docs` writes, so the frame looks identical whether it's drawn in the browser or loaded as
 an image.
+
+### Light/dark pairs
+
+A recording rendered with a theme pair has a `dark` member. `screen` and `lines` hold the light
+theme, and so do the SVG files. `dark` holds the dark theme:
+
+```json
+"dark":{"fg":"#e6edf3","bg":"#0d1117","lines":[
+  [[],[[0,"$ ls","#e6edf3"]]],
+  [[[0,4,"#3fb950"]],[[0,"PASS","#0d1117","gd-tp-bold"],[5,"tests/test_app.py","#e6edf3"]]]
+]}
+```
+
+| Member | Description |
+|--------|-------------|
+| `fg`, `bg` | The dark theme's terminal colors |
+| `cursor` | The dark theme's cursor color; omitted when it's `fg` |
+| `lines` | The rows of `lines` in the dark theme's colors, at the same indices |
+
+Because `dark.lines` runs parallel to `lines`, frames work with either list. To draw a frame in dark
+mode, follow the steps above with `dark.fg`, `dark.bg`, `dark.cursor`, and `dark.lines` in place
+of their `screen` and top-level counterparts. Rows that look the same in one theme but not the
+other get separate entries, so `lines` can hold repeats.
+
+A player that ignores `dark` shows the light theme. The reference player picks the dark side when
+the page is in dark mode: when `<html>` has `data-bs-theme="dark"`, or `<html>` or `<body>` has
+the `quarto-dark` class, or, on pages with none of these markers, when the reader's system prefers
+dark. It switches when the mode changes.
 
 ### Serialization
 
