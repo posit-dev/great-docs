@@ -5329,35 +5329,36 @@ class GreatDocs:
     # MCP Server Documentation Methods
     # =========================================================================
 
-    def _discover_mcp_server(self) -> dict | None:
+    def _discover_mcp_server(self, package: str | None) -> dict[str, Any] | None:
         """
-        Discover and introspect the configured MCP server module.
+        Introspect the MCP server that the site documents
+
+        Use `mcp.module` when set. Otherwise, try `<package>.mcp`, `<package>.mcp_server` and
+        `<package>.server` in order, selecting the first module that imports successfully.
+        Probing a candidate also imports the documented package. Without a package, try no
+        candidates.
+
+        Parameters
+        ----------
+        package
+            The importable name of the documented package, or `None` when the project has none.
 
         Returns
         -------
-        dict | None
-            Server metadata with tools/resources/prompts, or None if not found.
+        :
+            Server metadata with tools, resources and prompts, or `None` when no server is found.
         """
-        module_path = self._config.mcp_module
-        if not module_path:
-            # Try common MCP module locations based on the documented package
-            package_name = self._normalize_package_name(
-                self._config["module"] or self.build_dir.name
-            )
-            common_mcp_modules = [
-                f"{package_name}.mcp",
-                f"{package_name}.mcp_server",
-                f"{package_name}.server",
-            ]
-            for candidate in common_mcp_modules:
-                try:
-                    import importlib
+        import importlib
 
+        module_path = self._config.mcp_module
+        if not module_path and package:
+            for candidate in (f"{package}.mcp", f"{package}.mcp_server", f"{package}.server"):
+                try:
                     importlib.import_module(candidate)
-                    module_path = candidate
-                    break
                 except ImportError:
                     continue
+                module_path = candidate
+                break
 
         if not module_path:
             print("No MCP module configured or found")
@@ -16245,8 +16246,13 @@ anchor-sections: true
             log.step_start(step, "Generate MCP server reference")
             if self._config.mcp_enabled:
                 try:
+                    mcp_package = (
+                        self._resolve_importable_name(package_name)
+                        if package_name
+                        else self._detect_module_name()
+                    )
                     with _quiet_prints():
-                        mcp_info = self._discover_mcp_server()
+                        mcp_info = self._discover_mcp_server(mcp_package)
                     if mcp_info:
                         with _quiet_prints():
                             mcp_files = self._generate_mcp_reference_pages(mcp_info)

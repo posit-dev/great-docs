@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib
+import sys
 import types
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -255,51 +256,156 @@ class TestFindClickCliObj:
         assert result is None
 
 
+def _make_root_project(tmp_path: Path, config: str = "") -> GreatDocs:
+    """
+    Create a root-layout project for the package `mypkgxyz`
+
+    Declare the package in `pyproject.toml` and write `config` to `great-docs.yml`.
+    The build directory is `<root>/great-docs`.
+
+    Parameters
+    ----------
+    tmp_path :
+        The directory in which to create the project.
+    config :
+        The contents of `great-docs.yml`.
+
+    Returns
+    -------
+    :
+        The project configured for a package-root build.
+    """
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "mypkgxyz"\nversion = "1.0"\n', encoding="utf-8"
+    )
+    package = tmp_path / "mypkgxyz"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "great-docs.yml").write_text(config, encoding="utf-8")
+    return GreatDocs(project_path=str(tmp_path))
+
+
+def _build_mcp_candidates(gd: GreatDocs, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """
+    Run a site build and return the attempted MCP server module imports
+
+    Stub Quarto and stop the build at the first step after MCP discovery.
+
+    Parameters
+    ----------
+    gd :
+        The project to build.
+    monkeypatch :
+        The fixture that stubs Quarto and stops the build.
+
+    Returns
+    -------
+    :
+        The attempted imports ending in `mcp`, `mcp_server` or `server`, in order.
+    """
+
+    # BaseException bypasses the build's `except Exception` handlers so the build stops.
+    class McpStepPassed(BaseException):
+        pass
+
+    imported: list[str] = []
+    real_import = importlib.import_module
+
+    def record_import(name: str, package: str | None = None) -> types.ModuleType:
+        imported.append(name)
+        return real_import(name, package)
+
+    def stop_build() -> None:
+        raise McpStepPassed
+
+    monkeypatch.setattr("great_docs.core._ensure_quarto_installed", lambda: None)
+    monkeypatch.setattr(importlib, "import_module", record_import)
+    # The user guide is the first step after MCP discovery.
+    monkeypatch.setattr(gd, "_process_user_guide", stop_build)
+    with pytest.raises(McpStepPassed):
+        gd.build(refresh=False)
+
+    server_modules = {"mcp", "mcp_server", "server"}
+    return [name for name in imported if name.rpartition(".")[2] in server_modules]
+
+
 class TestDiscoverMcpServer:
-    """Cover the auto-discovery path in _discover_mcp_server."""
+    """MCP server selection from configuration and the documented package"""
 
-    def test_no_mcp_module_all_imports_fail(self, tmp_path, monkeypatch):
-        """no module configured, all candidates fail returns None."""
-        gd = _make_gd(tmp_path)
-        monkeypatch.setattr(type(gd._config), "mcp_module", property(lambda self: None))
+    def test_build_tries_only_the_documented_package(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """A root-layout build tries only the documented package's server modules"""
+        gd = _make_root_project(tmp_path)
 
-        real_import = importlib.import_module
+        candidates = _build_mcp_candidates(gd, monkeypatch)
 
-        def fail_import(name, *args, **kwargs):
-            if name.startswith("mypkg."):
-                raise ImportError(f"no {name}")
-            return real_import(name, *args, **kwargs)
+        assert candidates == ["mypkgxyz.mcp", "mypkgxyz.mcp_server", "mypkgxyz.server"]
+        assert not (gd.build_dir / "reference" / "mcp").exists()
 
-        with patch("importlib.import_module", side_effect=fail_import):
-            result = gd._discover_mcp_server()
+    def test_build_tries_configured_module_without_package_name(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """`module:` names the package to search when no package name is detected"""
+        for package in ("mypkgxyz", "helpers"):
+            (tmp_path / package).mkdir()
+            (tmp_path / package / "__init__.py").write_text("", encoding="utf-8")
+        (tmp_path / "great-docs.yml").write_text("module: mypkgxyz\n", encoding="utf-8")
+        gd = GreatDocs(project_path=str(tmp_path))
+        # Two package directories and no `pyproject.toml` leave the package name undetected.
+        assert gd._detect_package_name() is None
+
+        def no_terminal(prompt: str) -> str:
+            raise EOFError
+
+        # Closed standard input keeps the package-name prompt from blocking the test.
+        monkeypatch.setattr("builtins.input", no_terminal)
+        candidates = _build_mcp_candidates(gd, monkeypatch)
+
+        assert candidates == ["mypkgxyz.mcp", "mypkgxyz.mcp_server", "mypkgxyz.server"]
+
+    @pytest.mark.parametrize("module", ["mcp", "mcp_server", "server"])
+    def test_finds_server_module_in_package(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, module: str
+    ):
+        """Each conventional server module in the package is discovered and introspected"""
+        gd = _make_root_project(tmp_path)
+        (tmp_path / "mypkgxyz" / f"{module}.py").write_text("", encoding="utf-8")
+        monkeypatch.syspath_prepend(str(tmp_path))
+        server_info: dict[str, object] = {"name": "mypkgxyz", "tools": []}
+
+        with (
+            patch.dict(sys.modules),
+            patch("great_docs._mcp_docs.discover_mcp_server", return_value=server_info) as discover,
+        ):
+            result = gd._discover_mcp_server("mypkgxyz")
+
+        assert result == server_info
+        discover.assert_called_once_with(module_path=f"mypkgxyz.{module}", server_var=None)
+
+    def test_configured_module_wins(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """`mcp.module` takes precedence over conventional server modules"""
+        gd = _make_root_project(tmp_path, "mcp:\n  module: elsewhere.tools\n")
+        (tmp_path / "mypkgxyz" / "mcp.py").write_text("", encoding="utf-8")
+        monkeypatch.syspath_prepend(str(tmp_path))
+
+        with (
+            patch.dict(sys.modules),
+            patch("great_docs._mcp_docs.discover_mcp_server", return_value=None) as discover,
+        ):
+            gd._discover_mcp_server("mypkgxyz")
+
+        discover.assert_called_once_with(module_path="elsewhere.tools", server_var=None)
+
+    def test_without_package_reports_no_server(self, tmp_path: Path):
+        """With no package and no `mcp.module`, discovery introspects nothing and returns `None`"""
+        gd = _make_root_project(tmp_path)
+
+        with patch("great_docs._mcp_docs.discover_mcp_server") as discover:
+            result = gd._discover_mcp_server(None)
+
         assert result is None
-
-    def test_auto_discovers_mcp_module(self, tmp_path, monkeypatch):
-        """finds a candidate MCP module successfully."""
-        gd = _make_gd(tmp_path)
-        monkeypatch.setattr(type(gd._config), "mcp_module", property(lambda self: None))
-
-        fake_mcp_mod = types.ModuleType("mypkg.mcp")
-        real_import = importlib.import_module
-
-        def mock_import(name, *args, **kwargs):
-            if name == "mypkg.mcp":
-                return fake_mcp_mod
-            if name.startswith("mypkg."):
-                raise ImportError(f"no {name}")
-            return real_import(name, *args, **kwargs)
-
-        fake_discovery_result = {"name": "test-server", "tools": []}
-
-        with patch("importlib.import_module", side_effect=mock_import):
-            with patch(
-                "great_docs._mcp_docs.discover_mcp_server",
-                return_value=fake_discovery_result,
-            ) as mock_discover:
-                result = gd._discover_mcp_server()
-
-        assert result == fake_discovery_result
-        mock_discover.assert_called_once()
+        discover.assert_not_called()
 
 
 class TestUpdateSidebarWithMcp:
