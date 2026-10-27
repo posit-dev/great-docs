@@ -4301,6 +4301,58 @@ def term_import_cast(source: str, output: str) -> None:
     click.echo(f"  Duration: {recording.duration:.1f}s | Events: {len(recording.events)}")
 
 
+@click.command("import-tape")
+@click.argument("tape", type=click.Path(exists=True, dir_okay=False))
+@click.argument("output", type=click.Path(), required=False)
+@click.option("--record", "record_now", is_flag=True, help="Record the script once it's written")
+@click.option("--force", is_flag=True, help="Overwrite OUTPUT if it exists")
+def term_import_tape(tape: str, output: str | None, record_now: bool, force: bool) -> None:
+    """Convert a VHS .tape file to a .termshow.yml script with steps.
+
+    Each tape command becomes a step or a setting. Commands with no
+    Termshow equivalent, such as Output or Set FontSize, are listed, and
+    left as comments at the top of the script. OUTPUT defaults to
+    demo.termshow.yml for demo.tape.
+
+    Examples:
+      great-docs termshow import-tape demo.tape
+      great-docs termshow import-tape demo.tape docs/assets/demo.termshow.yml --record
+    """
+    from ._term_player.tape import TapeError, convert_tape
+
+    tape_path = Path(tape)
+    if output is None:
+        output_path = tape_path.with_name(tape_path.stem + ".termshow.yml")
+    elif output.endswith(".termshow.yml"):
+        output_path = Path(output)
+    else:
+        output_path = Path(output.removesuffix(".termshow") + ".termshow.yml")
+    if output_path.exists() and not force:
+        raise click.ClickException(f"{output_path} already exists (use --force to replace it)")
+
+    try:
+        script = convert_tape(tape_path)
+    except TapeError as e:
+        raise click.ClickException(f"{tape_path.name}, {e}") from None
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        script.to_yaml(source_name=tape_path.name, script_name=str(output_path)),
+        encoding="utf-8",
+    )
+
+    count = len(script.steps)
+    click.echo(f"✓ Converted {tape} → {output_path} ({count} step{'' if count == 1 else 's'})")
+    if script.skipped:
+        click.echo("  Not converted:")
+        for skipped in script.skipped:
+            click.echo(f"    line {skipped.line}: {skipped.text} ({skipped.reason})")
+
+    if record_now:
+        _record_steps(str(output_path), None, cols=None, rows=None, shell=None)
+    else:
+        click.echo(f"  Record it with: great-docs termshow record --steps {output_path}")
+
+
 @click.command("play")
 @click.argument("source", type=click.Path(exists=True))
 @click.option("--speed", type=float, default=1.0, help="Playback speed multiplier")
@@ -4671,6 +4723,7 @@ termshow.add_command(term_validate)
 termshow.add_command(term_check)
 termshow.add_command(term_assets)
 termshow.add_command(term_import_cast)
+termshow.add_command(term_import_tape)
 
 
 @click.command("edit")
