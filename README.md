@@ -40,7 +40,7 @@
 
 Great Docs turns your Python package into a polished documentation site in minutes. It auto-discovers your public API, detects your docstring format, generates structured reference pages, and renders a modern site, all from a single command. When you're ready to customize, there's a deep set of tools and options waiting for you.
 
-And it's battle-tested: every release runs against [300+ synthetic packages](https://posit-dev.github.io/gdg/) in the Great Docs Gauntlet, backed by a suite of 15,600+ tests.
+And it's battle-tested: every release runs against [300+ synthetic packages](https://posit-dev.github.io/gdg/) in the Great Docs Gauntlet, backed by a suite of 26,000+ tests.
 
 <p align="center">
 <img src="https://posit-dev.github.io/great-docs/assets/landing-demo.svg" alt="Great Docs in action: init, build, and preview a documentation site" width="720">
@@ -144,7 +144,7 @@ If your package ships an [MCP](https://modelcontextprotocol.io/) server, Great D
 
 ### Terminal Recordings
 
-Teach your CLI visually with Termshow: record terminal sessions, edit them in a browser-based visual editor, and embed the results as animated SVG players in your documentation. Recordings are lightweight, theme-aware, and play inline without JavaScript dependencies. It's incredibly useful in onboarding guides, tutorials, and landing pages.
+Teach your CLI visually with Termshow: record terminal sessions, edit them in a browser-based visual editor, and embed the results as animated SVG players in your documentation. Recordings are lightweight, theme-aware, and play inline without JavaScript dependencies. It's incredibly useful in onboarding guides, tutorials, and landing pages. For places that can't run the player, such as a GitHub README, `great-docs termshow export` writes the recording as a single animated SVG, with light and dark versions if you want them.
 
 ### Lightbox
 
@@ -173,13 +173,14 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 - Auto-discovers exports via `__all__`, `dir()`, or static analysis
 - Detects NumPy, Google, and Sphinx docstring formats
 - 13 object types with smart categorization
-- Click CLI documentation
+- CLI documentation (Python Click, Go, and Rust)
 - User Guide pages from `docs/user_guide/` directory
 - Custom sections (recipes, blog, tutorials, etc.)
 - Custom HTML pages with passthrough or raw layouts
 - Multi-version documentation with version selector
 - Video embeds (YouTube, Vimeo, local files)
-- Mermaid diagram pre-rendering (light + dark variants)
+- Interactive Marimo notebooks
+- Mermaid and D2 diagram pre-rendering (light + dark variants)
 - Freeze/cache support for expensive computations
 
 </td>
@@ -246,7 +247,7 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 - API diff between versions
 - Build timings reporting
 - Tested against 300+ synthetic packages via the [Great Docs Gauntlet](https://posit-dev.github.io/gdg/)
-- 15,600+ tests
+- 26,000+ tests
 
 </td>
 <td width="50%" valign="top">
@@ -269,7 +270,7 @@ A persistent dark mode toggle with flash-free loading. Your users' preference is
 
 - Color swatches (inline and grid)
 - Lightbox (zoom, galleries, annotations, before/after compare)
-- Terminal recordings (record, edit, embed)
+- Terminal recordings (record, edit, embed, export as animated SVG)
 - Collapsible details sections
 - Keyboard keys styling
 - Horizontal rules with accent colors
@@ -387,6 +388,7 @@ Beyond `init`, `build`, and `preview`, Great Docs includes a full suite of quali
 | `great-docs scan` | Preview discovered exports before building |
 | `great-docs lint` | Check for missing docstrings, broken cross-refs, style issues |
 | `great-docs proofread` | Catch spelling and grammar problems |
+| `great-docs check-examples` | Check that code examples in pages and docstrings run without errors |
 | `great-docs check-links` | Validate all links in the built site |
 | `great-docs seo` | Audit SEO health (sitemap, meta tags, structured data) |
 | `great-docs api-diff OLD NEW` | Show API changes between two versions |
@@ -396,6 +398,8 @@ Beyond `init`, `build`, and `preview`, Great Docs includes a full suite of quali
 | `great-docs freeze` | Execute specific pages and persist their freeze cache |
 | `great-docs timings` | Show page-level build timings from the last build |
 | `great-docs setup-github-pages` | Create CI workflow for GitHub Pages deployment |
+| `great-docs ci pr-comment` | Post or refresh a PR comment with the local-preview command (in CI) |
+| `great-docs ci notice` | Print a workflow log notice with the local-preview command (in CI) |
 | `great-docs config` | Generate a fully-documented config template |
 | `great-docs uninstall` | Remove great-docs from your project |
 | `great-docs skill install` | Install AI agent skills for your package |
@@ -405,6 +409,7 @@ Beyond `init`, `build`, and `preview`, Great Docs includes a full suite of quali
 | `great-docs termshow edit` | Open the browser-based visual editor for a recording |
 | `great-docs termshow play` | Preview a recording in the terminal |
 | `great-docs termshow render` | Render SVG frames without a full site build |
+| `great-docs termshow export` | Export a recording as one animated SVG for READMEs |
 | `great-docs termshow import-cast` | Import an asciinema `.cast` file |
 
 ## Recipes
@@ -462,6 +467,7 @@ The documentation includes 24 step-by-step recipes.
 | [Fix Common Build Errors](https://posit-dev.github.io/great-docs/recipes/fix-common-build-errors.html) | Troubleshoot build issues quickly          |
 | [Proofread Documentation](https://posit-dev.github.io/great-docs/recipes/proofread-documentation.html) | Catch spelling and grammar issues          |
 | [Use Freeze Cache](https://posit-dev.github.io/great-docs/recipes/use-freeze-cache.html)               | Cache expensive notebooks across builds    |
+| [Freeze a Page to Cache Outputs](https://posit-dev.github.io/great-docs/recipes/freeze-demo.html)      | See page-level freeze in action            |
 
 </details>
 
@@ -470,36 +476,71 @@ The documentation includes 24 step-by-step recipes.
 Full documentation is available at **[posit-dev.github.io/great-docs](https://posit-dev.github.io/great-docs/)**.
 
 <details>
-<summary><em>Full guide index (27 pages, click to expand)</em></summary>
+<summary><em>Full guide index (45 pages, click to expand)</em></summary>
 <br>
 
+**Getting Started**
+
+- [Welcome to Great Docs](https://posit-dev.github.io/great-docs/user-guide/introduction.html): what Great Docs does and what this guide covers
 - [Installation](https://posit-dev.github.io/great-docs/user-guide/installation.html): setup and requirements
 - [Quick Start](https://posit-dev.github.io/great-docs/user-guide/quickstart.html): first site in minutes
+- [Authoring QMD Files](https://posit-dev.github.io/great-docs/user-guide/authoring-qmd-files.html): Markdown, frontmatter, and Quarto features
+- [Writing Docstrings](https://posit-dev.github.io/great-docs/user-guide/writing-docstrings.html): docstrings that render into great reference pages
+
+**Config & Theming**
+
 - [Configuration](https://posit-dev.github.io/great-docs/user-guide/configuration.html): every option explained
-- [API Documentation](https://posit-dev.github.io/great-docs/user-guide/api-documentation.html): how API references are generated
-- [CLI Documentation](https://posit-dev.github.io/great-docs/user-guide/cli-documentation.html): documenting Click CLIs
-- [User Guides](https://posit-dev.github.io/great-docs/user-guide/user-guides.html): adding prose documentation
-- [Custom Sections](https://posit-dev.github.io/great-docs/user-guide/custom-sections.html): recipes, blog, tutorials
-- [Custom Pages](https://posit-dev.github.io/great-docs/user-guide/custom-pages.html): static HTML pages
 - [Theming & Appearance](https://posit-dev.github.io/great-docs/user-guide/theming.html): gradients, colors, dark mode
-- [Diagrams](https://posit-dev.github.io/great-docs/user-guide/diagrams.html): Mermaid diagram pre-rendering
-- [Videos](https://posit-dev.github.io/great-docs/user-guide/videos.html): embedding YouTube, Vimeo, and local videos
+- [Cross-Referencing](https://posit-dev.github.io/great-docs/user-guide/cross-referencing.html): linking between documented items and pages
 - [Internationalization](https://posit-dev.github.io/great-docs/user-guide/internationalization.html): 20+ language translations
-- [Deployment](https://posit-dev.github.io/great-docs/user-guide/deployment.html): GitHub Pages and beyond
-- [Multi-Version Docs](https://posit-dev.github.io/great-docs/user-guide/multi-version-docs.html): version selector and versioned builds
-- [API Evolution](https://posit-dev.github.io/great-docs/user-guide/api-evolution.html): tracking API changes across versions
-- [Freeze](https://posit-dev.github.io/great-docs/user-guide/freeze.html): caching expensive computations
-- [Scale to Fit](https://posit-dev.github.io/great-docs/user-guide/scale-to-fit.html): auto-shrink wide output
+- [Scale-to-Fit](https://posit-dev.github.io/great-docs/user-guide/scale-to-fit.html): auto-shrink wide output
+
+**Site Content**
+
+- [API Documentation](https://posit-dev.github.io/great-docs/user-guide/api-documentation.html): how API references are generated
+- [CLI Documentation](https://posit-dev.github.io/great-docs/user-guide/cli-documentation.html): documenting Click, Go, and Rust CLIs
+- [User Guides](https://posit-dev.github.io/great-docs/user-guide/user-guides.html): adding prose documentation
+- [Custom Sections](https://posit-dev.github.io/great-docs/user-guide/custom-sections.html): recipes, tutorials, and other sections
+- [Blog](https://posit-dev.github.io/great-docs/user-guide/blog.html): a dated, listing-based blog
+- [Diagrams](https://posit-dev.github.io/great-docs/user-guide/diagrams.html): Mermaid and D2 diagram pre-rendering
+- [Videos](https://posit-dev.github.io/great-docs/user-guide/videos.html): embedding YouTube, Vimeo, and local videos
+- [Custom Static Pages](https://posit-dev.github.io/great-docs/user-guide/custom-pages.html): static HTML pages
 - [Page Tags](https://posit-dev.github.io/great-docs/user-guide/page-tags.html): categorize pages with tags
 - [Page Status Badges](https://posit-dev.github.io/great-docs/user-guide/page-status-badges.html): lifecycle indicators
+- [Table Previews](https://posit-dev.github.io/great-docs/user-guide/table-previews.html): show what a dataset looks like
+- [Table Explorer](https://posit-dev.github.io/great-docs/user-guide/table-explorer.html): interactive data tables
+- [Horizontal Rules](https://posit-dev.github.io/great-docs/user-guide/horizontal-rules.html): styled section dividers
+- [Keyboard Keys](https://posit-dev.github.io/great-docs/user-guide/keyboard-keys.html): styled keyboard shortcuts
+- [Color Swatches](https://posit-dev.github.io/great-docs/user-guide/color-swatches.html): inline and grid color swatches
+- [Collapsible Details](https://posit-dev.github.io/great-docs/user-guide/collapsible-details.html): expandable sections for long pages
+- [Terminal Recordings](https://posit-dev.github.io/great-docs/user-guide/terminal-recordings.html): record, edit, embed, and export terminal sessions
+- [Termshow File Formats](https://posit-dev.github.io/great-docs/user-guide/termshow-file-formats.html): the recording and script file formats
+- [Lightbox](https://posit-dev.github.io/great-docs/user-guide/lightbox.html): full-screen image viewer with zoom, galleries, and annotations
+- [Marimo Notebooks](https://posit-dev.github.io/great-docs/user-guide/marimo-notebooks.html): interactive notebooks embedded in pages
+
+**Build & Deploy**
+
+- [Building & Previewing](https://posit-dev.github.io/great-docs/user-guide/building.html): the build command and local previews
+- [Deployment](https://posit-dev.github.io/great-docs/user-guide/deployment.html): GitHub Pages and beyond
+- [SEO Optimization](https://posit-dev.github.io/great-docs/user-guide/seo.html): search engine optimization
 - [Social Cards](https://posit-dev.github.io/great-docs/user-guide/social-cards.html): Open Graph and Twitter cards
-- [Agent Skills](https://posit-dev.github.io/great-docs/user-guide/agent-skills.html): AI coding agent integration
+- [Versioned Docs](https://posit-dev.github.io/great-docs/user-guide/multi-version-docs.html): version selector and versioned builds
+- [Freeze & Caching](https://posit-dev.github.io/great-docs/user-guide/freeze.html): caching expensive computations
+
+**Quality & Maintenance**
+
 - [Link Checker](https://posit-dev.github.io/great-docs/user-guide/link-checker.html): validate all links
 - [Proofreading](https://posit-dev.github.io/great-docs/user-guide/proofreading.html): spelling & grammar checks
-- [Linting](https://posit-dev.github.io/great-docs/user-guide/linting.html): documentation quality checks
-- [SEO](https://posit-dev.github.io/great-docs/user-guide/seo.html): search engine optimization
-- [Terminal Recordings](https://posit-dev.github.io/great-docs/user-guide/terminal-recordings.html): record, edit, and embed terminal sessions
-- [Lightbox](https://posit-dev.github.io/great-docs/user-guide/lightbox.html): full-screen image viewer with zoom, galleries, and annotations
+- [Changelog](https://posit-dev.github.io/great-docs/user-guide/changelog.html): a changelog page from GitHub Releases
+- [Community Files](https://posit-dev.github.io/great-docs/user-guide/community-files.html): contributing guides, codes of conduct, and more
+- [Docs Linting](https://posit-dev.github.io/great-docs/user-guide/linting.html): documentation quality checks
+- [API Evolution](https://posit-dev.github.io/great-docs/user-guide/api-evolution.html): tracking API changes across versions
+
+**AI & Agents**
+
+- [Agent Skills](https://posit-dev.github.io/great-docs/user-guide/agent-skills.html): AI coding agent integration
+- [llms.txt](https://posit-dev.github.io/great-docs/user-guide/llms-txt.html): making your docs readable by LLMs
+- [MCP Documentation](https://posit-dev.github.io/great-docs/user-guide/mcp-documentation.html): reference pages for MCP servers
 
 </details>
 

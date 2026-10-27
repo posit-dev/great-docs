@@ -4269,9 +4269,138 @@ def term_play(source: str, speed: float, script: str | None, no_script: bool) ->
         click.echo("\n✓ Playback stopped.")
 
 
+@click.command("export")
+@click.argument("source", type=click.Path(exists=True))
+@click.option(
+    "--svg",
+    "fmt",
+    flag_value="svg",
+    default=True,
+    help="Write an animated SVG (the default, and currently the only format)",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(dir_okay=False),
+    default=None,
+    help="Output file (default: the recording's name with .svg)",
+)
+@click.option(
+    "--script", type=click.Path(exists=True), default=None, help="Path to .termshow.yml script"
+)
+@click.option("--no-script", is_flag=True, help="Ignore any companion .termshow.yml script")
+@click.option("--no-loop", is_flag=True, help="Play once and stop on the last screen")
+@click.option(
+    "--end-pause",
+    type=float,
+    default=2.0,
+    show_default=True,
+    help="Seconds to hold the last screen before looping",
+)
+@click.option("--chapter-cards", is_flag=True, help="Show a title card at each chapter")
+@click.option("--no-annotations", is_flag=True, help="Leave out the script's annotations")
+@click.option(
+    "--font-file",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="Embed this .woff2/.woff/.ttf/.otf font for the terminal text",
+)
+def term_export(
+    source: str,
+    fmt: str,
+    output: str | None,
+    script: str | None,
+    no_script: bool,
+    no_loop: bool,
+    end_pause: float,
+    chapter_cards: bool,
+    no_annotations: bool,
+    font_file: str | None,
+) -> None:
+    """Export a recording as one self-contained animated SVG.
+
+    The SVG plays with CSS alone, so it works as an image in a GitHub or
+    GitLab README. The companion .termshow.yml script's cuts, speed changes,
+    chapters, and annotations are applied unless --no-script is given.
+
+    With a light/dark theme pair, two files are written (NAME-light.svg and
+    NAME-dark.svg), along with a <picture> snippet that picks one by the
+    reader's color scheme.
+
+    Examples:
+      great-docs termshow export demos/install.termshow
+      great-docs termshow export demos/install.termshow --svg -o install.svg
+    """
+    from ._term_player import apply_script, generate_manifest, parse_asciicast, parse_termshow
+    from ._term_player.export import SIZE_WARNING_BYTES, export_svg, picture_snippet
+    from ._term_player.script import load_script
+
+    if end_pause < 0:
+        raise click.BadParameter("can't be negative", param_hint="--end-pause")
+
+    source_path = Path(source)
+    if source_path.suffix == ".cast":
+        recording = parse_asciicast(source_path)
+    else:
+        recording = parse_termshow(source_path)
+
+    script_obj = None
+    if not no_script:
+        script_path = Path(script) if script else source_path.with_suffix(".termshow.yml")
+        if script_path.exists():
+            script_obj = load_script(script_path)
+            recording = apply_script(recording, script_obj)
+
+    manifest = generate_manifest(recording, script_obj)
+
+    out_path = Path(output) if output else source_path.with_suffix(f".{fmt}")
+    if manifest.dark is not None:
+        sides = [
+            (out_path.with_name(f"{out_path.stem}-light{out_path.suffix}"), False),
+            (out_path.with_name(f"{out_path.stem}-dark{out_path.suffix}"), True),
+        ]
+    else:
+        sides = [(out_path, False)]
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    for path, dark in sides:
+        try:
+            svg = export_svg(
+                manifest,
+                dark=dark,
+                loop=not no_loop,
+                end_pause=end_pause,
+                chapter_cards=chapter_cards,
+                annotations=not no_annotations,
+                font_file=font_file,
+            )
+        except ValueError as e:
+            raise click.ClickException(str(e)) from e
+        path.write_text(svg, encoding="utf-8")
+        size = len(svg.encode("utf-8"))
+        click.echo(f"✓ Exported {path} ({size / 1024:.1f} KB)")
+        if size > SIZE_WARNING_BYTES:
+            click.echo(
+                f"  Warning: over {SIZE_WARNING_BYTES // (1024 * 1024)} MB, which README "
+                "viewers can be slow to play. Cutting idle stretches or long scrolling "
+                "output (cuts, speed_map) in the script makes it smaller.",
+                err=True,
+            )
+
+    click.echo(
+        f"  Duration: {manifest.duration:.1f}s | Unique screens: {len(manifest.frames)}"
+        f" | Unique rows: {len(manifest.lines)}"
+    )
+    if len(sides) == 2:
+        alt = manifest.title or "Terminal recording"
+        click.echo("\nPaste this where the recording should appear:\n")
+        click.echo(picture_snippet(sides[0][0].name, sides[1][0].name, alt))
+
+
 termshow.add_command(term_record)
 termshow.add_command(term_render)
 termshow.add_command(term_play)
+termshow.add_command(term_export)
 termshow.add_command(term_import_cast)
 
 

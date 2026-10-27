@@ -1090,6 +1090,65 @@ the player data each page embeds:
 
 Both commands work with any `.termshow` file that has a companion `.termshow.yml` script.
 
+## Exporting an Animated SVG
+
+The player needs JavaScript, so it can't run in places like a GitHub or GitLab README. For those,
+export the recording as a single animated SVG file:
+
+```bash
+great-docs termshow export docs/assets/my-demo.termshow --svg -o my-demo.svg
+```
+
+The SVG animates with CSS alone, so it plays anywhere an image can go:
+
+```markdown
+![Installing the package](my-demo.svg)
+```
+
+The export applies the companion `.termshow.yml` the same way the player does: cuts and speed
+changes are taken out of the timeline, annotations fade in and out at their times, and the window
+chrome and chapter labels appear in the title bar. Highlights and copy buttons need the player, so
+they're left out. The file stays small because each distinct screen and each distinct row is stored
+once, however often it appears.
+
+These options shape the export:
+
+| Option | Effect |
+|--------|--------|
+| `-o`, `--output` | Output file. The default is the recording's name with `.svg`. |
+| `--chapter-cards` | Pause at each chapter to show its label as a full-screen title card. |
+| `--no-annotations` | Leave out the annotations. |
+| `--no-loop` | Play once and stop on the last screen. |
+| `--end-pause` | Seconds to hold the last screen before looping (default `2`). |
+| `--font-file` | Embed a `.woff2`, `.woff`, `.ttf`, or `.otf` font for the terminal text. |
+| `--script`, `--no-script` | Use a different script file, or ignore the script. |
+
+An SVG shown as an image can't load web fonts, so the terminal text uses the reader's own monospace
+font unless you embed one with `--font-file`. An embedded font isn't trimmed to the characters you
+use, so expect it to add its full file size.
+
+### Light and dark READMEs
+
+When the script sets a [light and dark pair](#light-and-dark-pairs), the export writes one file for
+each side, `my-demo-light.svg` and `my-demo-dark.svg`, and prints a snippet that shows the one that
+matches the reader's color scheme:
+
+```html
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="my-demo-dark.svg">
+  <img src="my-demo-light.svg" alt="Installing the package">
+</picture>
+```
+
+### Keeping the file small
+
+The command reports each file's size and warns past 2 MB, the point where README viewers start to
+struggle. Long stretches of scrolling output are what make an export big, because nearly every
+screen is new. [Cuts](#cuts) remove them from the file; speed changes only make them pass faster.
+
+Readers who have turned on reduced motion in their system settings see the last screen as a still
+image.
+
 ## Best Practices
 
 These guidelines help produce recordings that are clear, fast-loading, and pleasant to watch:
