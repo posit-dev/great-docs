@@ -435,7 +435,7 @@ class GreatDocs:
             if isinstance(section, dict) and isinstance(section.get("dir"), str)
         }
 
-    def _prepare_build_directory(self) -> None:  # pragma: no cover
+    def _prepare_build_directory(self) -> None:
         """
         Prepare the great-docs/ build directory with all necessary assets.
 
@@ -5356,7 +5356,7 @@ class GreatDocs:
             server_var=self._config.mcp_server_var,
         )
 
-    def _generate_mcp_reference_pages(self, mcp_info: dict) -> list[str | dict]:  # pragma: no cover
+    def _generate_mcp_reference_pages(self, mcp_info: dict) -> list[str | dict]:
         """
         Generate Quarto reference pages for MCP server tools/resources/prompts.
 
@@ -11603,7 +11603,7 @@ anchor-sections: true
 
         after_body.append(script_include("wide-layout.js"))
 
-    def _update_quarto_config(self) -> None:  # pragma: no cover
+    def _update_quarto_config(self) -> None:
         """
         Merge Great Docs settings into the build directory's _quarto.yml
 
@@ -13263,7 +13263,7 @@ anchor-sections: true
 
         self._write_quarto_yml(quarto_yml, config)
 
-    def _auto_save_snapshot(self) -> None:  # pragma: no cover
+    def _auto_save_snapshot(self) -> None:
         """
         Auto-save an API snapshot after a successful versioned build (Strategy C).
 
@@ -14971,7 +14971,7 @@ anchor-sections: true
             partials.append("metadata.html")
         html_config["template-partials"] = partials
 
-    def _prerender_term_player(self, log) -> None:  # pragma: no cover
+    def _prerender_term_player(self, log) -> None:
         """
         Pre-render `.termshow` recordings for the Quarto shortcode
 
@@ -15386,7 +15386,7 @@ anchor-sections: true
 
         return sum(1 for _ in freeze_dst.rglob("*") if _.is_file())
 
-    def _prepare_for_freeze(self) -> None:  # pragma: no cover
+    def _prepare_for_freeze(self) -> None:
         """Run the build preparation steps (1-14 + normalization) without rendering.
 
         This ensures the build directory contains files in exactly the same state as a full
@@ -15480,7 +15480,7 @@ anchor-sections: true
 
             click.echo(notice)
 
-    def build(  # pragma: no cover
+    def build(
         self,
         watch: bool = False,
         refresh: bool = True,
@@ -15718,7 +15718,7 @@ anchor-sections: true
         # Step counter
         step = 0
 
-        def run_streaming(cmd, env=None, progress_bar=None):  # pragma: no cover
+        def run_streaming(cmd, env=None, progress_bar=None):
             """Run a subprocess, stream output, optionally feeding a progress bar.
 
             Page-level timing is recorded automatically: each `[i/N] page.qmd` progress line from
@@ -16469,7 +16469,7 @@ anchor-sections: true
         self._print_layout_notice()
 
     @classmethod
-    def build_from_repo(  # pragma: no cover
+    def build_from_repo(
         cls,
         repo_url: str,
         *,
@@ -16713,7 +16713,7 @@ anchor-sections: true
                 pass  # Best-effort cleanup
 
     @staticmethod
-    def preview_site(  # pragma: no cover
+    def preview_site(
         site_dir: str | Path,
         port: int = 3000,
         *,
@@ -16899,7 +16899,7 @@ anchor-sections: true
 
         return "tags"
 
-    def preview(self, port: int = 3000) -> None:  # pragma: no cover
+    def preview(self, port: int = 3000) -> None:
         """
         Preview the documentation site locally.
 
@@ -16982,7 +16982,7 @@ anchor-sections: true
         finally:
             httpd.server_close()
 
-    def check_links(  # pragma: no cover
+    def check_links(
         self,
         include_source: bool = True,
         include_docs: bool = True,
@@ -17288,7 +17288,7 @@ anchor-sections: true
 
         return results
 
-    def proofread(  # pragma: no cover
+    def proofread(
         self,
         include_docs: bool = True,
         include_docstrings: bool = False,
