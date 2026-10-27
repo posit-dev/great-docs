@@ -1667,6 +1667,112 @@ A few guidelines:
 - **Preview at presentation resolution** (typically 1920×1080 or 1280×720) to verify the recording
   fits comfortably within the slide bounds.
 
+## Using the Player on Any Web Page
+
+Sites that aren't built with Quarto, such as MkDocs, Sphinx, Docusaurus, or hand-written HTML, can
+use the player as a `<termshow-player>` element. It's the same player as the shortcode, with the
+same controls, themes, and overlays.
+
+### Copy the player files
+
+The player is a script, a stylesheet, and two font files. Copy them into your site:
+
+```bash
+great-docs termshow assets site/player
+```
+
+The command prints the tags that load them. The fonts must stay next to `termshow.css`, which
+loads them by relative URL.
+
+### Render the recording
+
+Render the recording into the site as well:
+
+```bash
+great-docs termshow render my-demo.termshow -o site/termshow/my-demo
+```
+
+### Add the element
+
+Load the player in the page's `<head>`, and put a `<termshow-player>` where the recording should
+appear:
+
+```html
+<link rel="stylesheet" href="player/termshow.css">
+<script src="player/termshow.js"></script>
+
+<termshow-player src="termshow/my-demo" autoplay loop></termshow-player>
+```
+
+`src` is the render directory, and the player loads the `manifest.json` inside it. It can also be
+the URL of a manifest file. Paths are relative to the page.
+
+Most browsers won't load the manifest for a page opened straight from disk (a `file://` URL), so
+preview the page through a local server, such as `python -m http.server`. Or embed the manifest in
+the element, which needs no server:
+
+```html
+<termshow-player>
+  <script type="application/json" class="gd-tp-manifest">
+    …the contents of manifest.json…
+  </script>
+</termshow-player>
+```
+
+The build writes `manifest.json` so that it's safe to paste inside a `<script>` element.
+
+### Element attributes
+
+The attributes match the [shortcode options](#options):
+
+| Attribute | Default | Description |
+|-----------|---------|-------------|
+| `src` | (none) | Render directory or manifest URL |
+| `autoplay` | off | Start playing once loaded |
+| `loop` | off | Restart from the beginning at the end |
+| `speed` | `1` | Initial playback speed multiplier |
+| `pause-on-chapters` | off | Pause at each chapter |
+| `poster` | `0` | Time, in seconds, of the screen shown before playback |
+| `controls` | on | Show the control bar |
+| `theme` | `auto` | Player colors: `auto`, `dark`, or `light` |
+
+The on/off attributes are on when present, as in `<termshow-player autoplay>`, and off when set to
+`"false"`, which is how you hide the controls: `controls="false"`. Changing an attribute reloads the
+player with the new settings.
+
+Anything inside the element shows until the player starts, and stays if JavaScript is off. A
+rendered frame makes a good stand-in:
+
+```html
+<termshow-player src="termshow/my-demo">
+  <img src="termshow/my-demo/frame-000.svg" alt="Installing the package">
+</termshow-player>
+```
+
+### Controlling the player from a script
+
+The element has a small API, modeled on the HTML `<video>` element:
+
+| Member | Description |
+|--------|-------------|
+| `play()`, `pause()` | Start and stop playback. After the end, `play()` starts again from the beginning |
+| `seek(seconds)` | Jump to a time |
+| `currentTime` | The current time, in seconds. Setting it seeks |
+| `duration` | The length, in seconds (`NaN` until loaded) |
+| `paused` | Whether playback is stopped |
+
+It also fires `ready` once the recording has loaded, then `play`, `pause`, and `ended` as playback
+changes:
+
+```js
+const player = document.querySelector("termshow-player");
+player.addEventListener("ready", () => player.seek(12));
+player.addEventListener("ended", () => console.log("done"));
+```
+
+In a Quarto or Great Docs page, keep using the `termshow` shortcode: it embeds the manifest and a
+poster image in the page for you.
+
 ## Next Steps
 
 Terminal recordings bring CLI workflows to life with crisp, interactive playback directly in your
