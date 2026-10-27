@@ -545,6 +545,14 @@ class TestScreen:
         data["cuts"] = [{"from": 0.5, "to": 2.5}]
         assert _script_problems(data, events=events) == []
 
+    def test_match_sees_output_printed_during_a_cut(self):
+        # "hello" prints at 1.5s, inside the cut, so it's on screen from 1s of playback
+        events = [[0.0, "o", "$ "], [1.5, "o", "hello\r\n"], [2.5, "o", "$ "]]
+        data = {"highlights": [{"at": 1.2, "duration": 0.2, "target": {"match": "hello"}}]}
+        assert len(_warnings(_script_problems(data, events=events))) == 1
+        data["cuts"] = [{"from": 1.0, "to": 3.0}]
+        assert _script_problems(data, events=events) == []
+
     def test_highlight_row_match_uses_cells(self):
         # Row text is built cell by cell, so spaces between spans are kept
         data = {"highlights": [{"at": 1, "target": {"match": r"^\$ echo hello$"}}]}
