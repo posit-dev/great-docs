@@ -476,7 +476,7 @@ Only Git **tags** are accepted, not branches or arbitrary SHAs. This security re
 
 ### Strategy C: Automatic Snapshots
 
-A hybrid of the other two approaches: Great Docs automatically saves an API snapshot after every successful build. This creates a rolling archive so that by the time you tag a release, the snapshot already exists. You can also use the `--all-tags` flag to generate snapshots for all existing Git tags in one pass:
+A hybrid of the other two approaches: Great Docs automatically saves an API snapshot after every successful versioned build. This creates a rolling archive so that by the time you tag a release, the snapshot already exists. You can also use the `--all-tags` flag to generate snapshots for all existing Git tags in one pass:
 
 ```{.bash filename="Terminal"}
 great-docs api-snapshot --all-tags
