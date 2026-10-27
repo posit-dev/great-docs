@@ -5058,11 +5058,12 @@ def test_md_namespace_ug_nested_dirs():
     assert (ref / "initialize.md").exists(), "reference/initialize.md missing"
     assert (ref / "shutdown.md").exists(), "reference/shutdown.md missing"
 
-    # Total .md count: 10 content pages (all HTML pages minus homepage), plus
-    # skill.md files and MCP reference pages which are generated separately.
+    # Total .md count: 11 content pages, one per HTML page including the
+    # homepage, plus skill.md files and MCP reference pages which are generated
+    # separately.
     all_mds = list(site.rglob("*.md"))
     content_mds = [m for m in all_mds if "skill" not in m.name.lower() and "/mcp/" not in str(m)]
-    assert len(content_mds) == 10, f"Expected 10 content .md files, found {len(content_mds)}"
+    assert len(content_mds) == 11, f"Expected 11 content .md files, found {len(content_mds)}"
 
 
 @pytest.mark.dedicated
