@@ -5,6 +5,7 @@ Compare exit statuses, file changes, step skeletons, warnings, handled exception
 number of Python processes and calls to the stub `quarto`. Every difference fails the
 comparison, including a handled exception that disappears, so each change requires review.
 A failed test-side check also fails the comparison, even when the base fails the same check.
+Known gaps appear in a separate report section without changing the exit status.
 """
 
 from __future__ import annotations
@@ -41,12 +42,35 @@ class CaseResult:
         Report lines, one finding per line, with indented detail lines.
     checks :
         Failed test-side checks, each with the base side's result.
+    known_gaps :
+        Report lines for known gaps on either side, with indented details.
     """
 
     case: str
     status: str
     findings: list[str] = field(default_factory=list[str])
     checks: list[str] = field(default_factory=list[str])
+    known_gaps: list[str] = field(default_factory=list[str])
+
+
+@dataclass(frozen=True)
+class Gap:
+    """
+    A known defect observed in a case's output
+
+    Attributes
+    ----------
+    name :
+        Stable name used to match the gap across both sides.
+    summary :
+        One line stating what the output shows.
+    details :
+        Supporting evidence, such as affected file paths.
+    """
+
+    name: str
+    summary: str
+    details: tuple[str, ...] = ()
 
 
 @dataclass
@@ -372,6 +396,66 @@ def failed_checks(manifest: Mapping[str, Any]) -> list[str]:
     return failures
 
 
+def known_gaps(manifest: Mapping[str, Any]) -> list[Gap]:
+    """
+    Identify known gaps in one side's recorded output
+
+    Parameters
+    ----------
+    manifest :
+        The case's manifest.
+
+    Returns
+    -------
+    :
+        Observed gaps, or an empty list when none are present.
+    """
+    gaps: list[Gap] = []
+    order: list[str] = manifest.get("order", list(manifest["commands"]))
+    if "freeze" in order and "build" in order[: order.index("freeze")]:
+        # Freeze rebuilds the build directory from scratch, so every file it writes or removes
+        # after a build differs from what the build gave Quarto. A changelog, which freeze is
+        # meant to skip, would appear here too; the freeze case has none.
+        files = manifest["commands"]["freeze"].get("files", [])
+        if files:
+            gaps.append(
+                Gap(
+                    "freeze-steps",
+                    f"freeze prepares {len(files)} file{'' if len(files) == 1 else 's'} "
+                    "unlike build",
+                    tuple(f"{r['change']} {r['path']}" for r in files),
+                )
+            )
+    return gaps
+
+
+def gap_lines(old: Sequence[Gap], new: Sequence[Gap]) -> list[str]:
+    """
+    Format known gaps with their base-side results and details
+
+    Parameters
+    ----------
+    old, new :
+        Gaps of the base and test sides.
+
+    Returns
+    -------
+    :
+        Test-side gaps with their base-side results and indented details, followed by
+        a closure message for each gap found only on the base side.
+    """
+    base = {gap.name: gap for gap in old}
+    lines: list[str] = []
+    for gap in new:
+        before = base.get(gap.name)
+        known = "none" if before is None else "same" if before == gap else before.summary
+        lines.append(f"{gap.summary} [{gap.name}] (base: {known})")
+        lines += [f"    {detail}" for detail in gap.details]
+    shown = {gap.name for gap in new}
+    lines += [f"closed: {gap.summary} [{gap.name}]" for gap in old if gap.name not in shown]
+    return lines
+
+
 def compare_case(base: Path, test: Path, case: str) -> CaseResult:
     """
     Compare one build case between two recordings
@@ -407,7 +491,7 @@ def compare_case(base: Path, test: Path, case: str) -> CaseResult:
         for failure in failed_checks(new)
     ]
     status = "differ" if findings else "fail" if checks else "match"
-    return CaseResult(case, status, findings, checks)
+    return CaseResult(case, status, findings, checks, gap_lines(known_gaps(old), known_gaps(new)))
 
 
 def compare(base: Path, test: Path) -> Comparison:
@@ -495,6 +579,13 @@ def render(
         lines.append(f"{result.case}: {result.status.upper()}")
         lines += [f"  check failed: {c}" for c in result.checks]
         lines += [f"  {f}" for f in result.findings]
+        lines.append("")
+    gapped = [c for c in comparison.cases if c.known_gaps]
+    if gapped:
+        lines.append("KNOWN GAPS (reported only; they never fail the run)")
+        for result in gapped:
+            lines.append(f"  {result.case}: {result.known_gaps[0]}")
+            lines += [f"  {line}" for line in result.known_gaps[1:]]
         lines.append("")
     differ = [c.case for c in comparison.cases if c.status != "match"]
     verdict = (

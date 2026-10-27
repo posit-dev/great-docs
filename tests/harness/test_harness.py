@@ -232,3 +232,24 @@ def test_comparison_refuses_a_recording_from_another_harness_schema(tmp_path: Pa
 
     with pytest.raises(HarnessError, match="schema 1"):
         _ = compare(older, current)
+
+
+def test_freeze_after_build_reports_what_it_prepares_differently_as_a_known_gap(tmp_path: Path):
+    project = "docs/_quarto/default"
+    built = {f"{project}/_quarto.yml": "a", f"{project}/_inv/index.lua": "", f"{project}/x.qmd": ""}
+    frozen = {f"{project}/_quarto.yml": "b", f"{project}/_inv/index.lua": None}
+    base = _recording(tmp_path / "base", {"build": built, "freeze": frozen})
+    same = _recording(tmp_path / "same", {"build": built, "freeze": frozen})
+    fixed = _recording(tmp_path / "fixed", {"build": built, "freeze": {}})
+
+    result = compare(base, same)
+
+    assert result.matches
+    assert result.cases[0].known_gaps == [
+        "freeze prepares 2 files unlike build [freeze-steps] (base: same)",
+        f"    changed {project}/_quarto.yml",
+        f"    removed {project}/_inv/index.lua",
+    ]
+    assert compare(base, fixed).cases[0].known_gaps == [
+        "closed: freeze prepares 2 files unlike build [freeze-steps]"
+    ]

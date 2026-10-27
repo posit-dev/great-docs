@@ -66,6 +66,7 @@ SHOW_DATES_OVERLAY: Mapping[str, Any] = {
 COMMANDS: Mapping[str, tuple[str, ...]] = {
     "init": ("init", "--force"),
     "build": ("build",),
+    "freeze": ("freeze",),
 }
 
 # Where `great-docs` looks for an existing configuration, relative to the package root.
@@ -119,6 +120,15 @@ class BuildCase:
 # Cases beyond one per package; each follows its package in a catalogue.
 VARIANTS: tuple[BuildCase, ...] = (
     BuildCase("gdtest_kitchen_sink", "show_dates", SHOW_DATES_OVERLAY),
+    # Freeze one page after a build. Freeze prepares the build directory again, so its file
+    # changes show where freeze preparation departs from the build's. The package has a CLI
+    # reference and a user guide, and no changelog, which freeze is meant to skip.
+    BuildCase(
+        "gdtest_user_guide_cli",
+        "freeze",
+        commands=("init", "build", "freeze"),
+        arguments={"freeze": ("docs/user_guide/01-getting-started.qmd",)},
+    ),
 )
 
 
