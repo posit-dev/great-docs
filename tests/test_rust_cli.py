@@ -28,7 +28,6 @@ from great_docs._rust_cli import (
     detect_rust_cli_project,
     introspect_rust_cli,
 )
-from great_docs.core import GreatDocs
 
 # ---------------------------------------------------------------------------
 # Paths to committed fixtures
@@ -211,36 +210,6 @@ class TestDetectRustCliProject:
         """rust_cli_clap has no src/main.rs, so it should not be detected as a CLI."""
         result = detect_rust_cli_project(CLAP_FIXTURE)
         assert result is None
-
-
-# ---------------------------------------------------------------------------
-# GreatDocs._detect_rust_cli_project and _find_package_root
-# ---------------------------------------------------------------------------
-
-
-class TestGreatDocsRustIntegration:
-    def test_detect_rust_cli_project_on_hello_fixture(self):
-        gd = GreatDocs(project_path=str(HELLO_FIXTURE))
-        result = gd._detect_rust_cli_project()
-        assert result is not None
-        assert isinstance(result, RustCliProject)
-        assert result.package_name == "hello"
-
-    def test_detect_rust_cli_project_on_python_project(self, tmp_path: Path):
-        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'mypkg'\n")
-        gd = GreatDocs(project_path=str(tmp_path))
-        assert gd._detect_rust_cli_project() is None
-
-    def test_find_package_root_recognizes_cargo_toml(self, tmp_path: Path):
-        (tmp_path / "Cargo.toml").write_text('[package]\nname = "app"\nversion = "0.1.0"\n')
-        (tmp_path / "src").mkdir()
-        (tmp_path / "src" / "main.rs").write_text("fn main() {}\n")
-        gd = GreatDocs(project_path=str(tmp_path))
-        assert gd._find_package_root() == tmp_path
-
-    def test_find_package_root_on_hello_fixture(self):
-        gd = GreatDocs(project_path=str(HELLO_FIXTURE))
-        assert gd._find_package_root() == HELLO_FIXTURE
 
 
 # ---------------------------------------------------------------------------

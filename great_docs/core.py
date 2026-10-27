@@ -330,7 +330,7 @@ class GreatDocs:
         # The repository root, so the renderer can build source-link paths
         # relative to it (preserving `src/` and other non-flat layouts)
         # instead of griffe's package-parent-relative path, which 404s.
-        os.environ["PACKAGE_ROOT"] = str(self._find_package_root())
+        os.environ["PACKAGE_ROOT"] = str(self.layout.package_root)
         # Optional explicit source-path override for monorepos (source.path).
         # Cleared when unset so a previous project's override (same process) can't leak
         source_path = self._config.source_path
@@ -1505,7 +1505,7 @@ class GreatDocs:
         if self._config.module:
             return self._config.module
 
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
 
         # Check for .pyi stub files (common for PyO3/Rust/compiled extensions)
         # These indicate the actual module name for compiled packages
@@ -1636,7 +1636,7 @@ class GreatDocs:
         bool
             True if this appears to be a compiled extension package.
         """
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
 
         # Check for Cargo.toml (Rust/PyO3)
         if (package_root / "Cargo.toml").exists():
@@ -1652,46 +1652,6 @@ class GreatDocs:
 
         return False
 
-    def _find_package_root(self) -> Path:
-        """
-        Return the package root selected for this documentation project
-        """
-        return self.layout.package_root
-
-    def _detect_go_cli_project(self):
-        """Detect whether the project is a Go CLI project.
-
-        Delegates to `great_docs._go_cli.detect_go_cli_project` with the resolved project root. The
-        check is purely file-system based (reads `go.mod` and looks for `main.go` entry-points) and
-        never invokes the Go compiler.
-
-        Returns
-        -------
-        GoCliProject | None
-            A `~great_docs._go_cli.GoCliProject` instance when the project root contains a `go.mod`
-            and at least one main package, or `None` otherwise.
-        """
-        from great_docs._go_cli import detect_go_cli_project
-
-        return detect_go_cli_project(self._find_package_root())
-
-    def _detect_rust_cli_project(self):
-        """Detect whether the project is a Rust CLI project.
-
-        Delegates to `great_docs._rust_cli.detect_rust_cli_project` with the resolved project root.
-        The check is purely file-system based (reads `Cargo.toml` and looks for binary targets) and
-        never invokes the Rust compiler.
-
-        Returns
-        -------
-        RustCliProject | None
-            A `~great_docs._rust_cli.RustCliProject` instance when the project root contains a
-            `Cargo.toml` and at least one binary target, or `None` otherwise.
-        """
-        from great_docs._rust_cli import detect_rust_cli_project
-
-        return detect_rust_cli_project(self._find_package_root())
-
     def _griffe_search_paths(self) -> list[str | Path]:
         """Return search paths for griffe so it can find src/python/lib layouts.
 
@@ -1701,7 +1661,7 @@ class GreatDocs:
         """
         import sys
 
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
         extra: list[str | Path] = [package_root]
         for subdir in ("src", "python", "lib"):
             candidate = package_root / subdir
@@ -1733,7 +1693,7 @@ class GreatDocs:
         import sys
 
         env = os.environ.copy()
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
 
         # Look for a virtual environment in the project
         venv_paths = [
@@ -1799,7 +1759,7 @@ class GreatDocs:
             return cache
 
         metadata = {}
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
         pyproject_path = package_root / "pyproject.toml"
 
         # Read project metadata from pyproject.toml
@@ -3995,13 +3955,6 @@ class GreatDocs:
 
         return sources
 
-    @staticmethod
-    def _html_escape(text: str) -> str:
-        """Escape HTML-special characters in *text*."""
-        import html
-
-        return html.escape(text, quote=True)
-
     def _derive_page_title(self, path: Path) -> str:
         """Derive a human-readable title from a source filename."""
         name = path.stem.replace("-", " ").replace("_", " ")
@@ -4375,7 +4328,7 @@ class GreatDocs:
             The entry point name (e.g., `"great-docs"` from `"[project.scripts]"`), or `None` if not
             found.
         """
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
         pyproject_path = package_root / "pyproject.toml"
 
         if not pyproject_path.exists():
@@ -5354,30 +5307,6 @@ class GreatDocs:
         return discover_mcp_server(
             module_path=module_path,
             server_var=self._config.mcp_server_var,
-        )
-
-    def _generate_mcp_reference_pages(self, mcp_info: dict) -> list[str | dict]:
-        """
-        Generate Quarto reference pages for MCP server tools/resources/prompts.
-
-        Parameters
-        ----------
-        mcp_info
-            Server metadata from _discover_mcp_server().
-
-        Returns
-        -------
-        list[str | dict]
-            Sidebar items for the generated pages.
-        """
-        from ._mcp_docs import generate_mcp_reference_pages
-
-        mcp_ref_dir = self.build_dir / "reference" / "mcp"
-        return generate_mcp_reference_pages(
-            server_info=mcp_info,
-            output_dir=mcp_ref_dir,
-            categories=self._config.mcp_categories or None,
-            display_name=self._config.mcp_name,
         )
 
     def _update_sidebar_with_mcp(self, mcp_files: list[str | dict]) -> None:
@@ -6928,7 +6857,7 @@ class GreatDocs:
         import subprocess
         import time
 
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
 
         # First check if there's a configured branch in metadata
         metadata = self._get_package_metadata()
@@ -7010,7 +6939,7 @@ class GreatDocs:
         normalized_name = package_name.replace("-", "_")
 
         # First, try to get explicit package info from pyproject.toml
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
         pyproject_path = package_root / "pyproject.toml"
         explicit_packages = []
 
@@ -9155,7 +9084,7 @@ class GreatDocs:
         list[dict[str, str]]
             List of author dictionaries with name, email, and role fields.
         """
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
         pyproject_path = package_root / "pyproject.toml"
 
         if not pyproject_path.exists():
@@ -9897,7 +9826,7 @@ class GreatDocs:
             The margin content as a Markdown string (without the `::: {.column-margin}`
             wrapper). Empty string if no metadata is available.
         """
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
         metadata = self._get_package_metadata()
 
         # Determine which supporting pages exist (already created by _create_index_from_readme)
@@ -10378,7 +10307,7 @@ title: "Security Policy"
             If `True`, always rebuild `index.qmd` even if it exists. Used by the build command to
             sync with source file changes.
         """
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
 
         # Always create license.qmd if LICENSE file exists
         license_path = package_root / "LICENSE"
@@ -11910,11 +11839,15 @@ anchor-sections: true
             else:
                 package_name = self._detect_package_name()
                 if not package_name and self._config.go_cli_enabled:
-                    go_project = self._detect_go_cli_project()
+                    from great_docs._go_cli import detect_go_cli_project
+
+                    go_project = detect_go_cli_project(self.layout.package_root)
                     if go_project:
                         package_name = go_project.binary_name
                 if not package_name and self._config.rust_cli_enabled:
-                    rust_project = self._detect_rust_cli_project()
+                    from great_docs._rust_cli import detect_rust_cli_project
+
+                    rust_project = detect_rust_cli_project(self.layout.package_root)
                     if rust_project:
                         package_name = rust_project.binary_names[0]
                 if package_name:
@@ -13659,7 +13592,7 @@ anchor-sections: true
         if not self._config.skill_enabled:
             return
 
-        package_root = self._find_package_root()
+        package_root = self.layout.package_root
 
         # --- Multi-skill mode: skill.skills is configured ---
         if self._config.skill_skills:
@@ -13673,7 +13606,7 @@ anchor-sections: true
                 dest = self.build_dir / "skill.md"
                 shutil.copy2(src, dest)
                 print(f"Copied user SKILL.md from {src}")
-                self._place_well_known_skill(dest)
+                self._place_well_known_skills([(dest, None)])
                 self._generate_skills_page(dest, skill_dir=src.parent)
                 return
             else:
@@ -13692,7 +13625,7 @@ anchor-sections: true
                 dest = self.build_dir / "skill.md"
                 shutil.copy2(skills_path, dest)
                 print(f"Using curated skill from {skills_path}")
-                self._place_well_known_skill(dest)
+                self._place_well_known_skills([(dest, None)])
                 self._generate_skills_page(dest, skill_dir=skills_path.parent)
                 return
 
@@ -13867,7 +13800,7 @@ anchor-sections: true
         print(f"Created {skill_path}")
 
         # Place in .well-known if enabled
-        self._place_well_known_skill(skill_path)
+        self._place_well_known_skills([(skill_path, None)])
 
         # Generate the rendered skills.qmd page
         self._generate_skills_page(skill_path)
@@ -13906,6 +13839,7 @@ anchor-sections: true
             Optional list of additional `(skill_path, skill_dir)` tuples. Each entry is rendered as
             a switchable panel alongside the primary skill.
         """
+        import html
         import re
 
         from ._translations import get_translation
@@ -14199,8 +14133,8 @@ anchor-sections: true
                 active_cls = " gd-skill-pill--active" if idx == 0 else ""
                 selected = "true" if idx == 0 else "false"
                 tabindex = "0" if idx == 0 else "-1"
-                name = self._html_escape(meta["name"])
-                desc = self._html_escape(meta["description"])
+                name = html.escape(meta["name"])
+                desc = html.escape(meta["description"])
                 title_attr = f' title="{desc}"' if desc else ""
                 lines.append(
                     f'  <button class="gd-skill-pill{active_cls}" role="tab" '
@@ -14431,23 +14365,6 @@ anchor-sections: true
         primary_path, primary_dir = placed_skills[0]
         extra = placed_skills[1:] if len(placed_skills) > 1 else None
         self._generate_skills_page(primary_path, skill_dir=primary_dir, extra_skills=extra)
-
-    def _place_well_known_skill(self, skill_path: "Path") -> None:
-        """
-        Copy the SKILL.md to .well-known/ directories for auto-discovery.
-
-        Places the skill at two well-known locations:
-
-        1. `.well-known/agent-skills/{name}/SKILL.md` with an `index.json` discovery manifest: the
-        preferred path used by `npx skills add`.
-        2. `.well-known/skills/default/SKILL.md`: legacy fallback.
-
-        Parameters
-        ----------
-        skill_path
-            Path to the skill.md file to copy.
-        """
-        self._place_well_known_skills([(skill_path, None)])
 
     def _place_well_known_skills(
         self,
@@ -15580,7 +15497,7 @@ anchor-sections: true
             for sec in self._config.sections:
                 sec_dir_name = sec.get("dir", "")
                 if sec_dir_name:
-                    sec_dir = self._find_package_root() / sec_dir_name
+                    sec_dir = self.layout.package_root / sec_dir_name
                     if sec_dir.is_dir():
                         _page_dirs.append(sec_dir)
 
@@ -15850,10 +15767,10 @@ anchor-sections: true
             log.step_start(step, "Generate Go CLI reference")
             if self._config.go_cli_enabled:
                 try:
-                    from great_docs._go_cli import introspect_cobra_cli
+                    from great_docs._go_cli import detect_go_cli_project, introspect_cobra_cli
 
                     with _quiet_prints():
-                        go_project = self._detect_go_cli_project()
+                        go_project = detect_go_cli_project(self.layout.package_root)
                     if go_project:
                         with _quiet_prints():
                             cli_info = introspect_cobra_cli(go_project)
@@ -15884,10 +15801,10 @@ anchor-sections: true
             log.step_start(step, "Generate Rust CLI reference")
             if self._config.rust_cli_enabled:
                 try:
-                    from great_docs._rust_cli import introspect_rust_cli
+                    from great_docs._rust_cli import detect_rust_cli_project, introspect_rust_cli
 
                     with _quiet_prints():
-                        rust_project = self._detect_rust_cli_project()
+                        rust_project = detect_rust_cli_project(self.layout.package_root)
                     if rust_project:
                         with _quiet_prints():
                             cli_info = introspect_rust_cli(rust_project)
@@ -15927,8 +15844,15 @@ anchor-sections: true
                     with _quiet_prints():
                         mcp_info = self._discover_mcp_server(mcp_package)
                     if mcp_info:
+                        from ._mcp_docs import generate_mcp_reference_pages
+
                         with _quiet_prints():
-                            mcp_files = self._generate_mcp_reference_pages(mcp_info)
+                            mcp_files = generate_mcp_reference_pages(
+                                server_info=mcp_info,
+                                output_dir=self.build_dir / "reference" / "mcp",
+                                categories=self._config.mcp_categories or None,
+                                display_name=self._config.mcp_name,
+                            )
                         if mcp_files:
                             self._mcp_pages_generated = True
                             with _quiet_prints():
