@@ -255,6 +255,19 @@ class Config:
                 merged["enabled"] = bool(raw)
                 config[key] = merged
 
+        # Handle `changelog` separately: null keeps the defaults during merging,
+        # and only booleans are valid scalar shorthands for `enabled`.
+        raw = config.get("changelog")
+        if isinstance(raw, bool):
+            merged = copy.deepcopy(DEFAULT_CONFIG["changelog"])
+            merged["enabled"] = raw
+            config["changelog"] = merged
+        elif not isinstance(raw, dict):
+            raise ConfigError(
+                f"{self.config_path}: changelog: {raw!r} must be a mapping, true or false. "
+                "Use `changelog: {enabled: true}`, `changelog: true` or `changelog: false`."
+            )
+
         # `hero` is excluded from the loop above: its `enabled` sub-field
         # defaults to `None` (auto — enable when a logo exists), which the
         # bool-shorthand loop would collapse to `False`.

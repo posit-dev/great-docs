@@ -1534,6 +1534,28 @@ class TestParser:
             _make_config(tmp_path, "parser: auto\n")
 
 
+class TestChangelogShorthand:
+    def test_false_disables(self, tmp_path: Path):
+        cfg = _make_config(tmp_path, "changelog: false\n")
+        assert cfg.changelog_enabled is False
+        assert cfg.changelog_max_releases == DEFAULT_CONFIG["changelog"]["max_releases"]
+
+    def test_true_enables_with_default_max_releases(self, tmp_path: Path):
+        cfg = _make_config(tmp_path, "changelog: true\n")
+        assert cfg.changelog_enabled is True
+        assert cfg.changelog_max_releases == DEFAULT_CONFIG["changelog"]["max_releases"]
+
+    def test_null_keeps_defaults(self, tmp_path: Path):
+        cfg = _make_config(tmp_path, "changelog:\n")
+        assert cfg.changelog_enabled is DEFAULT_CONFIG["changelog"]["enabled"]
+        assert cfg.changelog_max_releases == DEFAULT_CONFIG["changelog"]["max_releases"]
+
+    @pytest.mark.parametrize("value", ["CHANGELOG.md", "5"])
+    def test_other_scalar_is_rejected(self, tmp_path: Path, value: str):
+        with pytest.raises(ConfigError, match="great-docs.yml.*changelog.*true or false"):
+            _make_config(tmp_path, f"changelog: {value}\n")
+
+
 class TestSeoShorthandNormalization:
     def test_sitemap_true_expands(self, tmp_path: Path):
         cfg = _make_config(tmp_path, "seo:\n  sitemap: true\n")
