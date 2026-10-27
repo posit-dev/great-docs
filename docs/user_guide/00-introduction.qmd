@@ -26,6 +26,7 @@ When you're ready for more, there's a lot here:
 - Narrative user guides and tutorials alongside your API reference
 - Blogs, recipe sections, custom pages, and additional content sections
 - Diagrams, videos, color swatches, and interactive table previews
+- Terminal recordings, image lightboxes, and live Marimo notebooks
 - Gradient themes, announcement banners, and custom branding
 - Internationalization across twenty-three languages
 
@@ -45,11 +46,13 @@ This User Guide covers everything you need to know to build and maintain great d
 
 **Configuration and theming**: Tuning site behavior through `great-docs.yml`, customizing appearance, setting up cross-references, internationalization, and responsive scaling.
 
-**Site content**: Auto-generated API and CLI references, narrative user guides, custom sections and static pages, blogs, diagrams, videos, tables, color swatches, and more.
+**Site content**: Auto-generated API and CLI references, narrative user guides, custom sections and static pages, blogs, diagrams, videos, tables, color swatches, terminal recordings, image lightboxes, Marimo notebooks, and more.
 
-**Building and deployment**: Previewing locally, publishing to GitHub Pages, SEO optimization, social cards, and multi-version documentation.
+**Building and deployment**: Previewing locally, publishing to GitHub Pages, SEO optimization, social cards, multi-version documentation, and caching expensive pages with freeze.
 
-**Quality and maintenance**: Link checking, proofreading, linting, changelogs, community files, page status badges, and tracking API evolution.
+**Quality and maintenance**: Link checking, proofreading, linting, changelogs, community files, and tracking API evolution.
+
+**AI and agents**: Agent Skills for coding assistants, `llms.txt` for language models, and reference pages for MCP servers.
 
 ## Next Steps
 
