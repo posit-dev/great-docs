@@ -15092,72 +15092,6 @@ def test_update_sidebar_no_api_reference():
         docs._update_sidebar_from_sections()
 
 
-def test_update_reference_index_frontmatter_no_file():
-    """Test _update_reference_index_frontmatter when index.qmd doesn't exist."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        # Should not raise
-        docs._update_reference_index_frontmatter()
-
-
-def test_update_reference_index_frontmatter_adds_page_nav():
-    """Test _update_reference_index_frontmatter adds page-navigation to existing frontmatter."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        ref_dir = docs.build_dir / "reference"
-        ref_dir.mkdir(parents=True, exist_ok=True)
-
-        index_qmd = ref_dir / "index.qmd"
-        index_qmd.write_text("---\ntitle: API Reference\n---\n\n# API\n", encoding="utf-8")
-
-        docs._update_reference_index_frontmatter()
-
-        content = index_qmd.read_text()
-
-        assert "page-navigation: false" in content
-
-
-def test_update_reference_index_frontmatter_no_frontmatter():
-    """Test _update_reference_index_frontmatter adds frontmatter when none exists."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        ref_dir = docs.build_dir / "reference"
-        ref_dir.mkdir(parents=True, exist_ok=True)
-
-        index_qmd = ref_dir / "index.qmd"
-        index_qmd.write_text("# API Reference\n\nSome content.\n", encoding="utf-8")
-
-        docs._update_reference_index_frontmatter()
-
-        content = index_qmd.read_text()
-
-        assert content.startswith("---\n")
-        assert "page-navigation: false" in content
-
-
-def test_update_reference_index_frontmatter_already_has_page_nav():
-    """Test _update_reference_index_frontmatter skips page-navigation when already present."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        docs = GreatDocs(project_path=tmp_dir)
-
-        ref_dir = docs.build_dir / "reference"
-        ref_dir.mkdir(parents=True, exist_ok=True)
-
-        index_qmd = ref_dir / "index.qmd"
-        original = "---\ntitle: API Reference\npage-navigation: false\nhtml-table-processing: none\n---\n\n# API\n"
-        index_qmd.write_text(original, encoding="utf-8")
-
-        docs._update_reference_index_frontmatter()
-
-        content = index_qmd.read_text()
-
-        # Should be unchanged
-        assert content == original
-
-
 def test_generate_llms_txt_no_quarto_yml():
     """Test _generate_llms_txt returns early when no _quarto.yml."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -16449,8 +16383,7 @@ def test_prepare_build_directory_creates_structure():
         # Mock _add_api_reference_config to avoid needing actual package
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                with patch.object(docs, "_update_reference_index_frontmatter"):
-                    docs._prepare_build_directory()
+                docs._prepare_build_directory()
 
         # Check directory structure
         assert docs.build_dir.exists()
@@ -16490,12 +16423,11 @@ def test_prepare_build_directory_can_retry_after_missing_header_include(tmp_path
 
     with patch.object(docs, "_add_api_reference_config"):
         with patch.object(docs, "_update_sidebar_from_sections"):
-            with patch.object(docs, "_update_reference_index_frontmatter"):
-                with pytest.raises(FileNotFoundError, match="Header include file not found"):
-                    docs._prepare_build_directory()
-
-                (tmp_path / "header.html").write_text('<meta name="retry">\n')
+            with pytest.raises(FileNotFoundError, match="Header include file not found"):
                 docs._prepare_build_directory()
+
+            (tmp_path / "header.html").write_text('<meta name="retry">\n')
+            docs._prepare_build_directory()
 
     assert (docs.build_dir / "_quarto.yml").exists()
     assert (docs.build_dir / "_includes" / "header.html").read_text() == ('<meta name="retry">\n')
@@ -16509,8 +16441,7 @@ def test_prepare_build_directory_writes_website_project(tmp_path):
 
     with patch.object(docs, "_add_api_reference_config"):
         with patch.object(docs, "_update_sidebar_from_sections"):
-            with patch.object(docs, "_update_reference_index_frontmatter"):
-                docs._prepare_build_directory()
+            docs._prepare_build_directory()
 
     config = read_yaml(docs.build_dir / "_quarto.yml")
     assert config["project"]["type"] == "website"
@@ -16561,8 +16492,7 @@ def test_prepare_build_directory_copies_js_files():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                with patch.object(docs, "_update_reference_index_frontmatter"):
-                    docs._prepare_build_directory()
+                docs._prepare_build_directory()
 
         # Core JS files should be present
         assert (docs.build_dir / "github-widget.js").exists()
@@ -16625,8 +16555,7 @@ def test_prepare_build_directory_copies_bibliography():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                with patch.object(docs, "_update_reference_index_frontmatter"):
-                    docs._prepare_build_directory()
+                docs._prepare_build_directory()
 
         # .bib copied into build dir by basename
         assert (docs.build_dir / "references.bib").exists()
@@ -16661,8 +16590,7 @@ def test_prepare_build_directory_copies_multiple_bib_and_csl():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                with patch.object(docs, "_update_reference_index_frontmatter"):
-                    docs._prepare_build_directory()
+                docs._prepare_build_directory()
 
         assert (docs.build_dir / "refs.bib").exists()
         assert (docs.build_dir / "software.bib").exists()
@@ -16691,8 +16619,7 @@ def test_prepare_build_directory_bibliography_missing_warns(capsys):
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                with patch.object(docs, "_update_reference_index_frontmatter"):
-                    docs._prepare_build_directory()
+                docs._prepare_build_directory()
 
         out = capsys.readouterr().out
         assert "Bibliography file not found" in out
@@ -16724,8 +16651,7 @@ def test_bibliography_does_not_set_reference_section_title():
         docs = GreatDocs(project_path=tmp_dir)
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                with patch.object(docs, "_update_reference_index_frontmatter"):
-                    docs._prepare_build_directory()
+                docs._prepare_build_directory()
 
         with open(docs.build_dir / "_quarto.yml", encoding="utf-8") as f:
             config = read_yaml(f)
@@ -16752,8 +16678,7 @@ def _prepared_quarto_config(lang: str) -> dict:
         docs = GreatDocs(project_path=tmp_dir)
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                with patch.object(docs, "_update_reference_index_frontmatter"):
-                    docs._prepare_build_directory()
+                docs._prepare_build_directory()
 
         with open(docs.build_dir / "_quarto.yml", encoding="utf-8") as f:
             return read_yaml(f)
@@ -16804,8 +16729,7 @@ def test_prepare_build_directory_optional_js_copy_page():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                with patch.object(docs, "_update_reference_index_frontmatter"):
-                    docs._prepare_build_directory()
+                docs._prepare_build_directory()
 
         assert (docs.build_dir / "copy-page.js").exists()
 
@@ -16830,8 +16754,7 @@ def test_prepare_build_directory_cleans_existing():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                with patch.object(docs, "_update_reference_index_frontmatter"):
-                    docs._prepare_build_directory()
+                docs._prepare_build_directory()
 
         # Stale file should be gone
         assert not stale_file.exists()
@@ -17363,8 +17286,6 @@ def test_create_api_sections_basic():
         categories["functions"] = ["create_widget", "destroy_widget"]
         categories["class_methods"] = {"Widget": 3}
         categories["class_method_names"] = {"Widget": ["render", "update", "close"]}
-        categories["all_classes"] = ["Widget"]
-        categories["all_functions"] = ["create_widget", "destroy_widget"]
 
         with patch.object(
             docs, "_get_package_exports", return_value=["Widget", "create_widget", "destroy_widget"]
@@ -17391,7 +17312,6 @@ def test_create_api_sections_large_class():
         categories["class_method_names"] = {
             "BigClass": ["m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10"]
         }
-        categories["all_classes"] = ["BigClass"]
 
         with patch.object(docs, "_get_package_exports", return_value=["BigClass"]):
             with patch.object(docs, "_categorize_api_objects", return_value=categories):
@@ -17440,17 +17360,6 @@ def test_create_api_sections_all_types():
         categories["other"] = ["misc_obj"]
         categories["class_methods"] = {}
         categories["class_method_names"] = {}
-        categories["all_classes"] = (
-            categories["classes"]
-            + categories["dataclasses"]
-            + categories["enums"]
-            + categories["exceptions"]
-            + categories["namedtuples"]
-            + categories["typeddicts"]
-            + categories["protocols"]
-            + categories["abstract_classes"]
-        )
-        categories["all_functions"] = categories["functions"] + categories["async_functions"]
 
         all_exports = (
             categories["classes"]
@@ -17770,10 +17679,7 @@ def test_empty_categories_structure():
         "other",
         "class_methods",
         "class_method_names",
-        "class_member_types",
         "cyclic_alias_count",
-        "all_classes",
-        "all_functions",
     ]
     for key in expected_keys:
         assert key in cats
@@ -20420,10 +20326,7 @@ def test_empty_categories_has_all_keys():
             "other",
             "class_methods",
             "class_method_names",
-            "class_member_types",
             "cyclic_alias_count",
-            "all_classes",
-            "all_functions",
         ]
         for key in expected_keys:
             assert key in cats
@@ -25142,43 +25045,6 @@ def test_categorize_api_objects_protocol():
         finally:
             sys.path.remove(tmp_dir)
             sys.modules.pop("protpkg", None)
-
-
-def test_categorize_api_objects_classmethod_staticmethod():
-    """Test _categorize_api_objects detects class/staticmethod decorators."""
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "decpkg"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "class Widget:\n"
-            '    """Widget class."""\n'
-            "    @classmethod\n"
-            "    def from_string(cls, s):\n"
-            '        """Create from string."""\n'
-            "        pass\n"
-            "    @staticmethod\n"
-            "    def validate(x):\n"
-            '        """Validate."""\n'
-            "        pass\n"
-            "    def normal(self):\n"
-            '        """Normal method."""\n'
-            "        pass\n",
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorize_api_objects("decpkg", ["Widget"])
-
-            assert "Widget" in result["classes"]
-            member_types = result["class_member_types"]
-            assert member_types.get("Widget.from_string") == "classmethod"
-            assert member_types.get("Widget.validate") == "staticmethod"
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("decpkg", None)
 
 
 def test_categorize_api_objects_not_in_members():
@@ -34328,7 +34194,6 @@ class TestEmptyCategories:
         assert "type_aliases" in cats
         assert "class_methods" in cats
         assert "class_method_names" in cats
-        assert "class_member_types" in cats
         assert "other" in cats
 
     def test_all_lists_empty(self):
@@ -34490,77 +34355,6 @@ class TestUpdateSidebarFromSections:
                 result = read_yaml(f)
             # Sidebar unchanged
             assert result["website"]["sidebar"][0]["id"] == "reference"
-
-
-class TestUpdateReferenceIndexFrontmatter:
-    """Tests for _update_reference_index_frontmatter."""
-
-    def test_injects_page_navigation_false(self):
-        """Adds page-navigation: false to existing frontmatter."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            ref_dir = docs.build_dir / "reference"
-            ref_dir.mkdir()
-            index_path = ref_dir / "index.qmd"
-            index_path.write_text("---\ntitle: API Reference\n---\n\nContent here.\n")
-            old_cwd = os.getcwd()
-            os.chdir(tmp_dir)
-            try:
-                docs._update_reference_index_frontmatter()
-            finally:
-                os.chdir(old_cwd)
-            content = index_path.read_text()
-            assert "page-navigation: false" in content
-
-    def test_adds_frontmatter_when_missing(self):
-        """Creates frontmatter wrapper if none exists."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            ref_dir = docs.build_dir / "reference"
-            ref_dir.mkdir()
-            index_path = ref_dir / "index.qmd"
-            index_path.write_text("# API Reference\n\nSome content.\n")
-            old_cwd = os.getcwd()
-            os.chdir(tmp_dir)
-            try:
-                docs._update_reference_index_frontmatter()
-            finally:
-                os.chdir(old_cwd)
-            content = index_path.read_text()
-            assert content.startswith(
-                "---\npage-navigation: false\nhtml-table-processing: none\n---\n"
-            )
-
-    def test_skips_if_already_has_page_navigation(self):
-        """Doesn't modify file if page-navigation and html-table-processing already set."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            ref_dir = docs.build_dir / "reference"
-            ref_dir.mkdir()
-            index_path = ref_dir / "index.qmd"
-            original = "---\ntitle: API\npage-navigation: false\nhtml-table-processing: none\n---\nContent.\n"
-            index_path.write_text(original)
-            docs._update_reference_index_frontmatter()
-            assert index_path.read_text() == original
-
-    def test_no_index_file_returns_early(self):
-        """Returns early when reference/index.qmd doesn't exist."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp = Path(tmp_dir)
-            (tmp / "pyproject.toml").write_text('[project]\nname = "mypkg"\n')
-            docs = GreatDocs(project_path=tmp_dir)
-            docs.build_dir.mkdir(parents=True, exist_ok=True)
-            # No reference dir at all
-            docs._update_reference_index_frontmatter()  # Should not raise
 
 
 class TestUpdateQuartoConfigScripts:
@@ -35177,56 +34971,6 @@ class TestStripFrontmatterBatch9:
         docs = GreatDocs()
         result = docs._strip_frontmatter("---\nno closing delimiter here")
         assert result == "---\nno closing delimiter here"
-
-
-class TestUpdateReferenceIndexFrontmatterBatch9:
-    """Additional _update_reference_index_frontmatter coverage."""
-
-    def test_adds_page_navigation_to_existing_frontmatter(self):
-        """Injects page-navigation: false into existing frontmatter."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            ref_dir = docs.build_dir / "reference"
-            ref_dir.mkdir(parents=True, exist_ok=True)
-            index_qmd = ref_dir / "index.qmd"
-            index_qmd.write_text("---\ntitle: API Reference\n---\n# Reference\n")
-            docs._update_reference_index_frontmatter()
-            content = index_qmd.read_text()
-            assert "page-navigation: false" in content
-
-    def test_adds_frontmatter_when_none_exists(self):
-        """Creates frontmatter block when index has none."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            ref_dir = docs.build_dir / "reference"
-            ref_dir.mkdir(parents=True, exist_ok=True)
-            index_qmd = ref_dir / "index.qmd"
-            index_qmd.write_text("# API Reference\nSome content.\n")
-            docs._update_reference_index_frontmatter()
-            content = index_qmd.read_text()
-            assert content.startswith(
-                "---\npage-navigation: false\nhtml-table-processing: none\n---\n"
-            )
-
-    def test_skips_when_already_has_page_navigation(self):
-        """Does not duplicate page-navigation if already present."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            ref_dir = docs.build_dir / "reference"
-            ref_dir.mkdir(parents=True, exist_ok=True)
-            index_qmd = ref_dir / "index.qmd"
-            original = "---\ntitle: API Reference\npage-navigation: false\n---\n# Reference\n"
-            index_qmd.write_text(original)
-            docs._update_reference_index_frontmatter()
-            content = index_qmd.read_text()
-            assert content.count("page-navigation") == 1
-
-    def test_noop_when_no_index(self):
-        """Does nothing when reference/index.qmd doesn't exist."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            docs = GreatDocs(project_path=tmp_dir)
-            docs._update_reference_index_frontmatter()
-            # Should not raise
 
 
 class TestBuildHeroSectionBatch9:
@@ -37532,8 +37276,7 @@ def test_prepare_build_directory_copies_video_embed_js():
 
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                with patch.object(docs, "_update_reference_index_frontmatter"):
-                    docs._prepare_build_directory()
+                docs._prepare_build_directory()
 
         assert (docs.build_dir / "video-embed.js").exists()
 
@@ -38795,24 +38538,6 @@ def test_keyboard_nav_scss_styles_exist():
     # Reduced motion
     assert ".gd-keyboard-overlay," in content
     assert ".gd-menu-overlay," in content
-
-
-# ── _tag_slug ──────────────────────────────────────────────────────────
-
-
-def test_tag_slug_spaces():
-    """Spaces become hyphens."""
-    assert GreatDocs._tag_slug("Machine Learning") == "machine-learning"
-
-
-def test_tag_slug_escaped_slash():
-    """Escaped slashes are unescaped then collapsed."""
-    assert GreatDocs._tag_slug("AI\\/LLM") == "ai-llm"
-
-
-def test_tag_slug_special_chars():
-    """Special characters are stripped."""
-    assert GreatDocs._tag_slug("C++ & Rust!") == "c-rust"
 
 
 # ── _tag_tooltip ───────────────────────────────────────────────────────
@@ -40951,8 +40676,7 @@ def test_prepare_build_dir_pre_render_script_exists(tmp_path):
 
     with patch.object(docs, "_add_api_reference_config"):
         with patch.object(docs, "_update_sidebar_from_sections"):
-            with patch.object(docs, "_update_reference_index_frontmatter"):
-                docs._prepare_build_directory()
+            docs._prepare_build_directory()
 
     # Script should be copied to scripts/ in the build dir
     assert (docs.build_dir / "scripts" / "prerender.py").exists()
@@ -40971,8 +40695,7 @@ def test_prepare_build_dir_css_file_warning(tmp_path):
     with redirect_stdout(out):
         with patch.object(docs, "_add_api_reference_config"):
             with patch.object(docs, "_update_sidebar_from_sections"):
-                with patch.object(docs, "_update_reference_index_frontmatter"):
-                    docs._prepare_build_directory()
+                docs._prepare_build_directory()
 
     assert "CSS" in out.getvalue() or "css" in out.getvalue().lower()
 
@@ -40986,8 +40709,7 @@ def test_prepare_build_dir_css_file_exists(tmp_path):
 
     with patch.object(docs, "_add_api_reference_config"):
         with patch.object(docs, "_update_sidebar_from_sections"):
-            with patch.object(docs, "_update_reference_index_frontmatter"):
-                docs._prepare_build_directory()
+            docs._prepare_build_directory()
 
     # CSS file should be in the build dir
     assert (docs.build_dir / "custom.css").exists()
@@ -41429,21 +41151,6 @@ def test_split_tag_parts_strips_whitespace():
 # ---------------------------------------------------------------------------
 # _tag_slug — static method
 # ---------------------------------------------------------------------------
-
-
-def test_tag_slug_simple():
-    assert GreatDocs._tag_slug("Python") == "python"
-
-
-def test_tag_slug_with_spaces():
-    result = GreatDocs._tag_slug("Machine Learning")
-    assert result == "machine-learning"
-
-
-def test_tag_slug_slash_becomes_hyphen():
-    result = GreatDocs._tag_slug("AI/Chat")
-    assert "/" not in result
-    assert "ai" in result
 
 
 # ---------------------------------------------------------------------------
@@ -42363,8 +42070,8 @@ def test_discover_package_exports_cyclic_alias_skipped(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_categorize_referenced_objects_with_methods():
-    """Classify dotted names (ClassName.method_name)."""
+def test_categorize_referenced_objects_method_ref_categorises_its_class():
+    """A `ClassName.method` reference puts its class under `classes`."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         pkg_dir = Path(tmp_dir) / "refpkg"
         pkg_dir.mkdir()
@@ -42372,20 +42079,7 @@ def test_categorize_referenced_objects_with_methods():
             "class MyClass:\n"
             "    def my_method(self):\n"
             '        """A method."""\n'
-            "        pass\n"
-            "    @classmethod\n"
-            "    def my_classmethod(cls):\n"
-            '        """A classmethod."""\n'
-            "        pass\n"
-            "    @staticmethod\n"
-            "    def my_staticmethod():\n"
-            '        """A staticmethod."""\n'
-            "        pass\n"
-            "    @property\n"
-            "    def my_property(self):\n"
-            '        """A property."""\n'
-            "        return 1\n"
-            "    my_attr: str = 'hello'\n",
+            "        pass\n",
             encoding="utf-8",
         )
 
@@ -42393,74 +42087,14 @@ def test_categorize_referenced_objects_with_methods():
         try:
             docs = GreatDocs(project_path=tmp_dir)
             result = docs._categorize_referenced_objects(
-                "refpkg",
-                [
-                    {
-                        "contents": [
-                            "MyClass",
-                            "MyClass.my_method",
-                            "MyClass.my_classmethod",
-                            "MyClass.my_staticmethod",
-                            "MyClass.my_property",
-                            "MyClass.my_attr",
-                        ]
-                    }
-                ],
+                "refpkg", [{"contents": ["MyClass.my_method"]}]
             )
 
-            assert "MyClass" in result["classes"]
-            assert result["class_member_types"].get("MyClass.my_method") == "method"
-            assert result["class_member_types"].get("MyClass.my_classmethod") == "classmethod"
-            assert result["class_member_types"].get("MyClass.my_staticmethod") == "staticmethod"
-            assert result["class_member_types"].get("MyClass.my_property") == "property"
+            assert result["classes"] == ["MyClass"]
+            assert result["other"] == []
         finally:
             sys.path.remove(tmp_dir)
             sys.modules.pop("refpkg", None)
-
-
-def test_categorize_referenced_objects_method_not_in_class():
-    """Method not found in class → defaults to 'method' type."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "refpkg2"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text(
-            "class MyClass:\n    def existing_method(self):\n        pass\n",
-            encoding="utf-8",
-        )
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorize_referenced_objects(
-                "refpkg2",
-                [{"contents": ["MyClass", "MyClass.nonexistent_method"]}],
-            )
-            # Method not found → defaults to "method"
-            assert result["class_member_types"].get("MyClass.nonexistent_method") == "method"
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("refpkg2", None)
-
-
-def test_categorize_referenced_objects_class_not_found():
-    """Class name not in pkg.members → skip."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        pkg_dir = Path(tmp_dir) / "refpkg3"
-        pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("def my_func(): pass\n", encoding="utf-8")
-
-        sys.path.insert(0, tmp_dir)
-        try:
-            docs = GreatDocs(project_path=tmp_dir)
-            result = docs._categorize_referenced_objects(
-                "refpkg3",
-                [{"contents": ["NonExistentClass.method"]}],
-            )
-            # Class not found → no entry in class_member_types
-            assert "NonExistentClass.method" not in result["class_member_types"]
-        finally:
-            sys.path.remove(tmp_dir)
-            sys.modules.pop("refpkg3", None)
 
 
 # ---------------------------------------------------------------------------

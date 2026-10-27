@@ -456,23 +456,6 @@ class TestGenerateTagsJson:
         assert data["page_tag_locations"]["docs/examples/ex.qmd"] == "bottom"
 
 
-# ── Tag Slug Tests ───────────────────────────────────────────────────────────
-
-
-class TestTagSlug:
-    def test_simple(self):
-        assert GreatDocs._tag_slug("Python") == "python"
-
-    def test_spaces(self):
-        assert GreatDocs._tag_slug("Getting Started") == "getting-started"
-
-    def test_hierarchical(self):
-        assert GreatDocs._tag_slug("Python/Testing") == "python-testing"
-
-    def test_special_chars(self):
-        assert GreatDocs._tag_slug("C++ & More!") == "c-more"
-
-
 # ── Tag Icon HTML Tests ─────────────────────────────────────────────────────
 
 

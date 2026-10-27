@@ -291,14 +291,7 @@ class GreatDocs:
         self._selected_config_path = Path(config_path).resolve() if config_path else None
         self.project_root = self.layout.package_root
         self.build_dir = self.layout.build_dir
-        try:
-            # Python 3.9+
-            self.package_path = Path(resources.files("great_docs"))
-        except AttributeError:  # pragma: no cover
-            # Fallback for older Python versions
-            import importlib_resources  # type: ignore[import-not-found]
-
-            self.package_path = Path(importlib_resources.files("great_docs"))
+        self.package_path = Path(resources.files("great_docs"))
         self.assets_path = self.package_path / "assets"
 
         # Load configuration from great-docs.yml
@@ -515,11 +508,6 @@ class GreatDocs:
                 self._copy_source_asset(css_src, self.build_dir / css_src.name)
             else:
                 print(f"Warning: CSS file not found: {css_path}")
-
-        # Copy qrenderer assets
-        renderer_src = self.assets_path / "_renderer.py"
-        if renderer_src.exists():
-            shutil.copy2(renderer_src, self.build_dir / "_renderer.py")
 
         # Copy SCSS theme file (contains all site styling)
         scss_src = self.assets_path / "great-docs.scss"
@@ -740,7 +728,6 @@ class GreatDocs:
         self._add_api_reference_config()
         if self._has_api_reference:
             self._update_sidebar_from_sections()
-            self._update_reference_index_frontmatter()
 
         # Build the homepage after the API reference configuration. Its metadata
         # margin can then include links to `llms.txt` and `llms-full.txt` when the
@@ -2912,13 +2899,6 @@ class GreatDocs:
             entries.append(inline_entry)  # pragma: no cover
 
         self._write_quarto_yml(quarto_yml, config)
-
-    @staticmethod
-    def _tag_slug(tag_name: str) -> str:
-        """Convert a tag name to a URL-friendly slug."""
-        # Unescape literal slashes first so "AI\/LLM" → "AI/LLM" → "ai-llm"
-        clean = tag_name.replace("\\/", "/")
-        return re.sub(r"[^a-z0-9]+", "-", clean.lower()).strip("-")
 
     @staticmethod
     def _get_tag_icon_html(tag_name: str, tag_icons: dict[str, str]) -> str:
@@ -7979,11 +7959,7 @@ class GreatDocs:
             # ── Metadata ──
             "class_methods": {},
             "class_method_names": {},
-            "class_member_types": {},
             "cyclic_alias_count": 0,
-            # ── Convenience unions ──
-            "all_classes": [],
-            "all_functions": [],
         }
 
     def _categorize_api_objects(self, package_name: str, exports: list) -> dict:
@@ -8004,7 +7980,7 @@ class GreatDocs:
         Returns
         -------
         dict
-            Dictionary with:
+            Dictionary with these keys:
             - classes: list of regular class names
             - dataclasses: list of dataclass names
             - enums: list of enum class names
@@ -8020,8 +7996,6 @@ class GreatDocs:
             - other: list of other object names
             - class_methods: dict mapping class name to method count
             - class_method_names: dict mapping class name to list of method names
-            - all_classes: list of ALL class-like names (union for compat)
-            - all_functions: list of ALL function-like names (union for compat)
         """
         try:
             import griffe
@@ -8108,8 +8082,6 @@ class GreatDocs:
                                 try:
                                     # Accessing member.kind can trigger alias resolution
                                     if member.kind.value in ("function", "method"):
-                                        # Sub-classify to detect classmethod/staticmethod/property
-                                        member_sub = self._sub_classify_function(member)
                                         # Get line number for source ordering. Dynamically inspected
                                         # members (PyO3 / .so extensions) often have `lineno=None`;
                                         # coerce to inf so sort() doesn't crash comparing
@@ -8127,15 +8099,6 @@ class GreatDocs:
                                                 _ = qd_obj.members
                                                 _ = qd_obj.kind
                                                 method_entries.append((member_name, lineno))
-                                                # Store sub-type for classmethod/staticmethod/property
-                                                if member_sub in (
-                                                    "classmethod",
-                                                    "staticmethod",
-                                                    "property",
-                                                ):
-                                                    categories["class_member_types"][
-                                                        f"{name}.{member_name}"
-                                                    ] = member_sub
                                             except Exception:  # pragma: no cover
                                                 # Method can't be documented by the renderer
                                                 skipped_methods.append(
@@ -8145,27 +8108,6 @@ class GreatDocs:
                                             method_entries.append(
                                                 (member_name, lineno)
                                             )  # pragma: no cover
-                                            # Store sub-type for classmethod/staticmethod/property
-                                            if member_sub in (  # pragma: no cover
-                                                "classmethod",
-                                                "staticmethod",
-                                                "property",
-                                            ):
-                                                categories[
-                                                    "class_member_types"
-                                                ][  # pragma: no cover
-                                                    f"{name}.{member_name}"
-                                                ] = member_sub
-                                    elif member.kind.value == "attribute":
-                                        # Check if this attribute is a @property descriptor
-                                        try:
-                                            member_labels = member.labels
-                                        except Exception:  # pragma: no cover
-                                            member_labels = set()  # pragma: no cover
-                                        if "property" in member_labels:  # pragma: no cover
-                                            categories["class_member_types"][  # pragma: no cover
-                                                f"{name}.{member_name}"
-                                            ] = "property"
                                 except (
                                     griffe.CyclicAliasError,
                                     griffe.AliasResolutionError,
@@ -8280,8 +8222,6 @@ class GreatDocs:
                                                 continue  # pragma: no cover
                                             try:
                                                 if meth.kind.value in ("function", "method"):
-                                                    # Sub-classify for descriptor types
-                                                    meth_sub = self._sub_classify_function(meth)
                                                     # `lineno` may be `None` for dynamically
                                                     # inspected (PyO3) methods.
                                                     lineno = getattr(meth, "lineno", None)
@@ -8296,17 +8236,6 @@ class GreatDocs:
                                                             method_entries.append(  # pragma: no cover
                                                                 (meth_name, lineno)
                                                             )
-                                                            # Store sub-type
-                                                            if meth_sub in (  # pragma: no cover
-                                                                "classmethod",
-                                                                "staticmethod",
-                                                                "property",
-                                                            ):
-                                                                categories[
-                                                                    "class_member_types"
-                                                                ][  # pragma: no cover
-                                                                    f"{qualified}.{meth_name}"
-                                                                ] = meth_sub
                                                         except Exception:  # pragma: no cover
                                                             # Dynamic failed; try static
                                                             try:
@@ -8322,52 +8251,12 @@ class GreatDocs:
                                                                 method_entries.append(
                                                                     (meth_name, lineno)
                                                                 )
-                                                                # Store sub-type
-                                                                if meth_sub in (
-                                                                    "classmethod",
-                                                                    "staticmethod",
-                                                                    "property",
-                                                                ):
-                                                                    categories[
-                                                                        "class_member_types"
-                                                                    ][
-                                                                        f"{qualified}.{meth_name}"
-                                                                    ] = meth_sub
                                                             except Exception:  # pragma: no cover
                                                                 pass  # pragma: no cover
                                                     else:
                                                         method_entries.append(
                                                             (meth_name, lineno)
                                                         )  # pragma: no cover
-                                                        # Store sub-type
-                                                        if meth_sub in (  # pragma: no cover
-                                                            "classmethod",
-                                                            "staticmethod",
-                                                            "property",
-                                                        ):
-                                                            categories[
-                                                                "class_member_types"
-                                                            ][  # pragma: no cover
-                                                                f"{qualified}.{meth_name}"
-                                                            ] = meth_sub
-                                                elif (
-                                                    meth.kind.value == "attribute"
-                                                ):  # pragma: no cover
-                                                    # Check if attribute is a @property
-                                                    try:  # pragma: no cover
-                                                        meth_labels = (
-                                                            meth.labels
-                                                        )  # pragma: no cover
-                                                    except Exception:  # pragma: no cover
-                                                        meth_labels = set()  # pragma: no cover
-                                                    if (
-                                                        "property" in meth_labels
-                                                    ):  # pragma: no cover
-                                                        categories[
-                                                            "class_member_types"
-                                                        ][  # pragma: no cover
-                                                            f"{qualified}.{meth_name}"
-                                                        ] = "property"
                                             except (
                                                 griffe.CyclicAliasError,
                                                 griffe.AliasResolutionError,
@@ -8453,19 +8342,6 @@ class GreatDocs:
                 print(
                     f"Note: Could not introspect {len(failed_introspection)} item(s), categorizing as 'Other'"
                 )
-
-            # Build convenience union keys for backward compatibility
-            categories["all_classes"] = (
-                categories["classes"]
-                + categories["dataclasses"]
-                + categories["enums"]
-                + categories["exceptions"]
-                + categories["namedtuples"]
-                + categories["typeddicts"]
-                + categories["protocols"]
-                + categories["abstract_classes"]
-            )
-            categories["all_functions"] = categories["functions"] + categories["async_functions"]
 
             return categories
 
@@ -8558,19 +8434,6 @@ class GreatDocs:
             else:
                 # Constants, type aliases, etc.
                 categories["constants"].append(name)
-
-        # Build convenience union keys
-        categories["all_classes"] = (
-            categories["classes"]
-            + categories["dataclasses"]
-            + categories["enums"]
-            + categories["exceptions"]
-            + categories["namedtuples"]
-            + categories["typeddicts"]
-            + categories["protocols"]
-            + categories["abstract_classes"]
-        )
-        categories["all_functions"] = categories["functions"] + categories["async_functions"]
 
         return categories
 
@@ -8899,15 +8762,11 @@ class GreatDocs:
 
         categories = self._empty_categories()
 
-        # Separate into top-level names and qualified names (Class.method)
+        # Reduce `ClassName.method` references to their class name
         top_level_names: set[str] = set()
-        method_refs: dict[str, list[str]] = {}  # class_name -> [method_name, ...]
         for name in referenced_names:
             if "." in name:
-                parts = name.split(".", 1)
-                class_name, method_name = parts[0], parts[1]
-                top_level_names.add(class_name)
-                method_refs.setdefault(class_name, []).append(method_name)
+                top_level_names.add(name.split(".", 1)[0])
             else:
                 top_level_names.add(name)
 
@@ -9042,59 +8901,6 @@ class GreatDocs:
             else:
                 # Package not installed — treat missing items as "other" (old behavior)
                 categories["other"].extend(missing_names)
-
-        # Classify explicitly-referenced methods (ClassName.method_name)
-        for class_name, methods in method_refs.items():
-            if class_name not in pkg.members:
-                continue
-            try:
-                class_obj = pkg.members[class_name]
-                if class_obj.kind.value != "class":
-                    continue
-            except Exception:
-                continue
-
-            for method_name in methods:
-                key = f"{class_name}.{method_name}"
-                if method_name not in class_obj.members:
-                    categories["class_member_types"][key] = "method"
-                    continue
-                try:
-                    member = class_obj.members[method_name]
-                    if member.kind.value in ("function", "method"):
-                        sub = self._sub_classify_function(member)
-                        if sub in ("classmethod", "staticmethod", "property"):
-                            categories["class_member_types"][key] = sub
-                        else:
-                            categories["class_member_types"][key] = "method"
-                    elif member.kind.value == "attribute":
-                        try:
-                            labels = member.labels
-                        except Exception:
-                            labels = set()
-                        if "property" in labels:
-                            categories["class_member_types"][key] = "property"
-                        else:
-                            categories["class_member_types"][key] = "attribute"
-                    else:
-                        categories["class_member_types"][key] = "method"
-                except (griffe.CyclicAliasError, griffe.AliasResolutionError):
-                    categories["class_member_types"][key] = "method"
-                except Exception:
-                    categories["class_member_types"][key] = "method"
-
-        # Build convenience unions
-        categories["all_classes"] = (
-            categories["classes"]
-            + categories["dataclasses"]
-            + categories["enums"]
-            + categories["exceptions"]
-            + categories["namedtuples"]
-            + categories["typeddicts"]
-            + categories["protocols"]
-            + categories["abstract_classes"]
-        )
-        categories["all_functions"] = categories["functions"] + categories["async_functions"]
 
         return categories
 
@@ -13457,7 +13263,7 @@ anchor-sections: true
 
     def _auto_save_snapshot(self) -> None:  # pragma: no cover
         """
-        Auto-save an API snapshot after a successful build (Strategy C).
+        Auto-save an API snapshot after a successful versioned build (Strategy C).
 
         Saves to `.great-docs/snapshots/<version>.json` where `<version>` is the current git tag (if
         exactly on one) or `dev`.
@@ -13564,35 +13370,6 @@ anchor-sections: true
 
         # Write back
         self._write_quarto_yml(quarto_yml, config)
-
-    def _update_reference_index_frontmatter(self) -> None:
-        """Ensure reference/index.qmd has proper frontmatter."""
-        index_path = self.build_dir / "reference" / "index.qmd"
-
-        if not index_path.exists():
-            return
-
-        # Read the current content
-        with open(index_path, "r") as f:
-            content = f.read()
-
-        # Check if frontmatter already exists; if so, inject page-navigation
-        if content.startswith("---"):
-            fm_section = content.split("---", 2)[1]
-            if "page-navigation:" not in fm_section:
-                content = content.replace("---\n", "---\npage-navigation: false\n", 1)
-            if "html-table-processing:" not in fm_section:
-                content = content.replace("---\n", "---\nhtml-table-processing: none\n", 1)
-            with open(index_path, "w") as f:
-                f.write(content)
-            return
-
-        # Add minimal frontmatter if none exists
-        content = f"---\npage-navigation: false\nhtml-table-processing: none\n---\n\n{content}"
-
-        # Write updated content
-        with open(index_path, "w") as f:
-            f.write(content)
 
     def _llms_txt_available(self) -> bool:
         """
@@ -15644,14 +15421,6 @@ anchor-sections: true
                 except Exception:
                     pass
                 try:
-                    self._generate_changelog()
-                except Exception:
-                    pass
-                try:
-                    self._generate_cli_reference()
-                except Exception:
-                    pass
-                try:
                     self._process_user_guide()
                 except Exception:
                     pass
@@ -15661,14 +15430,6 @@ anchor-sections: true
                     pass
                 try:
                     self._process_custom_pages()
-                except Exception:
-                    pass
-                try:
-                    self._process_page_tags()
-                except Exception:
-                    pass
-                try:
-                    self._process_page_status()
                 except Exception:
                     pass
                 try:
@@ -16686,13 +16447,6 @@ anchor-sections: true
                     n_frozen = self._persist_freeze_cache()  # pragma: no cover
                     if n_frozen is not None:  # pragma: no cover
                         log.detail(f"Saved freeze cache ({n_frozen} files)")  # pragma: no cover
-
-                    # ── Auto-save API snapshot (Strategy C) ────────────
-                    if self._config.has_versions:  # pragma: no cover
-                        try:  # pragma: no cover
-                            self._auto_save_snapshot()  # pragma: no cover
-                        except Exception as e:  # pragma: no cover
-                            log.warn(f"Snapshot auto-save failed: {e}")  # pragma: no cover
 
                     if self.layout.site_dir != self.build_dir / "_site":
                         record_site_ownership(self.layout.site_dir)
