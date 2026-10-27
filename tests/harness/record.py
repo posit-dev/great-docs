@@ -8,7 +8,10 @@ diagnosis, and `blobs/` with normalised file contents indexed by SHA-256 and sha
 A manifest records, for each command of the case: the exit status, every file the command
 added, changed or removed in the project, the step skeleton and `[!!]` warnings of its
 output, the census of exceptions that `great_docs` handled, and the calls that reached the
-stub `quarto`.
+stub `quarto`. A watch command also records whether its first build started the preview,
+whether a source edit reached another file and whether its output holds a traceback. The
+manifest also names the case's variant, the order of its commands and whether it expects an
+API reference.
 """
 
 from __future__ import annotations
