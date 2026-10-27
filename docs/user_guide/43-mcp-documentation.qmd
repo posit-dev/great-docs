@@ -147,8 +147,10 @@ mcp:
 ### `module` (optional)
 
 The dotted import path to the Python module containing your `mcp.server.Server` instance. If
-omitted, Great Docs auto-detects by checking `<package>.mcp`, `<package>.mcp_server`, and
-`<package>.server` in order.
+omitted, Great Docs tries `<package>.mcp`, `<package>.mcp_server` and `<package>.server` in order,
+where `<package>` is the top-level `module` setting or, without one, the package Great Docs detects
+in your project. Trying a candidate imports your package. When Great Docs finds no package, it
+looks for no server, so set `mcp.module` to document one.
 
 ### `server_var` (optional)
 
