@@ -1247,10 +1247,11 @@ lot. The check runs at the recording's size, whatever the script's `record` sect
 
 ## Importing Existing Recordings
 
+### From asciinema
+
 Already have terminal recordings from asciinema? Import them:
 
 ```bash
-# From asciinema (.cast files)
 great-docs termshow import-cast recording.cast docs/assets/my-demo
 ```
 
@@ -1259,6 +1260,102 @@ add chapters and annotations.
 
 The importer produces the same `.termshow` format, so all editing and rendering features work
 identically regardless of the original source.
+
+### From VHS tapes
+
+A [VHS](https://github.com/charmbracelet/vhs) tape is a list of steps too, so it converts to a
+script that Termshow can record:
+
+```bash
+great-docs termshow import-tape demo.tape
+```
+
+This writes `demo.termshow.yml` next to the tape. Give a second path to put it somewhere else,
+and add `--record` to record it straight away. Here's a tape and the script it becomes:
+
+:::: {.columns}
+
+::: {.column width="45%"}
+
+```{.text filename="demo.tape"}
+Output demo.gif
+Set Shell "bash"
+Set Width 1200
+Set Theme "Dracula"
+Set TypingSpeed 75ms
+
+Hide
+Type "cd examples && clear"
+Enter
+Show
+Type "pip install mypackage"
+Enter
+Wait@30s
+Sleep 500ms
+Type "mypackage --version"
+Enter
+Wait
+Sleep 2s
+```
+
+:::
+
+::: {.column width="55%"}
+
+```{.yaml filename="demo.termshow.yml"}
+settings:
+  theme: dracula
+
+record:
+  shell: bash --noprofile --norc
+  env:
+    PS1: '> '
+  prompt_pattern: '> $'
+  typing_delay: 0.075
+
+steps:
+  - hide
+  - type: 'cd examples && clear'
+  - enter
+  - show
+  - run: pip install mypackage
+    timeout: 30
+  - sleep: 0.5
+  - run: mypackage --version
+  - sleep: 2
+```
+
+:::
+
+::::
+
+Each `Type`, key press, `Sleep`, `Wait`, `Hide`, and `Show` becomes a step, and a `Type`,
+`Enter`, and `Wait` in a row become a single `run`. `Env` and the `Shell`, `TypingSpeed`,
+`WaitTimeout`, and `WaitPattern` settings go in the `record` section. `Theme` (when it's one of
+the [built-in themes](#themes), or a set of colors), `WindowBar`, `LineHeight`, `FontFamily`, and
+`PlaybackSpeed` go in `settings`.
+
+The script uses VHS's `> ` prompt, so a bare `Wait` in the tape still waits for the prompt. The
+shell starts without its startup files, as it does in VHS, so the prompt isn't replaced by yours.
+To use the `$ ` prompt that other scripts use, delete `PS1` and `prompt_pattern` from the
+`record` section.
+
+Some commands have no equivalent in Termshow. `Output`, `Screenshot`, `Source`, and `Require` are
+left out, and so are the settings that only change how VHS draws the video, such as `FontSize`
+and `Padding`. The terminal's size isn't converted either, because VHS gives it in pixels: set
+`record.cols` and `record.rows` instead. The command lists everything it left out, with line
+numbers, and the same list is kept as a comment at the top of the script:
+
+```
+✓ Converted demo.tape → demo.termshow.yml (8 steps)
+  Not converted:
+    line 1: Output demo.gif (the recording is saved next to the script; `termshow export` makes an SVG)
+    line 3: Set Width 1200 (VHS sizes the terminal in pixels; set `record.cols` instead)
+  Record it with: great-docs termshow record --steps demo.termshow.yml
+```
+
+Once it's recorded, the script works like any other: add chapters, annotations, and cuts, and use
+[`termshow check`](#checking-for-drift) to find out when the output changes.
 
 ## Rendering & Preview
 
